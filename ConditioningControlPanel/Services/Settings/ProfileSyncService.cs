@@ -838,7 +838,7 @@ namespace ConditioningControlPanel.Services
                             var body = await v2Response.Content.ReadAsStringAsync();
                             TryAdoptFromHeartbeatBody(body);
                             // Same body, second reading: a tier bought on the site (PayPal / Stripe)
-                            // unlocks here without a sign-in. Rises only; see EntitlementTierRule.
+                            // unlocks here without a sign-in; a confirmed drop ends the grace. See EntitlementTierRule.
                             EntitlementTierSync.Offer(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat");
                             // Third reading: an invite week redeemed on another device opens here too.
                             Invites.InviteGrantSync.Offer(Invites.InviteRules.ParseHeartbeatGrant(body), "heartbeat");
@@ -1196,7 +1196,7 @@ namespace ConditioningControlPanel.Services
                 }
 
                 ApplyServerCurveEpoch(user.CurveEpoch, "read-before-write");
-                // Tier is still not adopted wholesale here; only a RISE of the folded tier is offered.
+                // Tier is still not adopted wholesale here: a rise unlocks, a confirmed drop ends the grace.
                 EntitlementTierSync.Offer(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "read-before-write");
                 // A fresh server Patreon confirmation keeps the grace alive for a Discord sign-in.
                 EntitlementTierSync.OfferPatreon(new PatreonActiveReading(user.PatreonIsActive,
@@ -1316,7 +1316,7 @@ namespace ConditioningControlPanel.Services
                 {
                     if (settings != null)
                     {
-                        settings.PatreonPremiumValidUntil = DateTime.UtcNow.AddHours(25);
+                        EntitlementTierRule.ExtendPremiumTo(settings, DateTime.UtcNow.AddHours(25));
                     }
                     App.Patreon?.SetWhitelistStatus(true);
                     App.Logger?.Information("Boot heal (#293): whitelisted user — premium access applied via read-only fetch");
@@ -2202,7 +2202,7 @@ namespace ConditioningControlPanel.Services
                         if (v2Result?.PatreonIsWhitelisted == true)
                         {
                             // Refresh the cached premium access window (25h > sync interval)
-                            settings.PatreonPremiumValidUntil = DateTime.UtcNow.AddHours(25);
+                            EntitlementTierRule.ExtendPremiumTo(settings, DateTime.UtcNow.AddHours(25));
                             App.Settings?.Save();
 
                             // Set whitelist + tier on PatreonService so Lab access works
@@ -4776,6 +4776,8 @@ namespace ConditioningControlPanel.Services
             // Conversion rows (C9): machine-local stamps and the last server tier reading.
             // A restore must not bring back a stale reading or re-open a once-ever row.
             nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.GraceClosedTier),
+            nameof(AppSettings.GraceClosedAtUtc),
             nameof(AppSettings.InboxStamps),
             nameof(AppSettings.LastKnownEffectiveTier),
             // Free member fields mirror the server profile; the next profile read refills them.
@@ -4848,6 +4850,8 @@ namespace ConditioningControlPanel.Services
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
             restored.ServerTierSeen = current.ServerTierSeen;
+            restored.GraceClosedTier = current.GraceClosedTier;
+            restored.GraceClosedAtUtc = current.GraceClosedAtUtc;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;

@@ -282,19 +282,23 @@ namespace ConditioningControlPanel.Services
                     // No valid tokens - ensure cached premium access is cleared.
                     if (App.Settings?.Current != null)
                     {
-                        App.Settings.Current.PatreonTier = 0;
-
-                        // ...but the offline grace stamps are NOT Patreon-OAuth-shaped. A
-                        // Discord-linked or SubscribeStar account has no local Patreon tokens by
-                        // construction, and V2AuthService/SubscribeStarService are the only writers
-                        // of its stamp - so nulling here would wipe the grace window on every
-                        // launch for exactly the population it exists for, synchronously, before
-                        // any of those paths can re-stamp. Leave the stamps to expire on their own
-                        // 14-day window, or to be overwritten by the server's answer; a real logout
-                        // still clears both explicitly.
+                        // ...but neither the stored tier nor the grace stamps are Patreon-OAuth-shaped.
+                        // A Discord-linked or SubscribeStar account has no local Patreon tokens by
+                        // construction, and V2AuthService/SubscribeStarService are the only writers of its
+                        // stamp - so nulling here would wipe the grace window on every launch for exactly
+                        // the population it exists for, synchronously, before any of those paths can
+                        // re-stamp. Zeroing the stored tier made every launch read as a purchase and left
+                        // a lower server reading nothing to compare against (EntitlementTierRule). The
+                        // server's answer moves both; a real logout still clears them explicitly.
                         var hasUnifiedSession =
                             !string.IsNullOrWhiteSpace(App.Settings.Current.UnifiedId) ||
                             !string.IsNullOrWhiteSpace(App.Settings.Current.AuthToken);
+                        // The tier stays only where a reading can land: the entitlement sync needs both,
+                        // and the profile badge reads this value directly.
+                        var readingsCanLand =
+                            !string.IsNullOrWhiteSpace(App.Settings.Current.UnifiedId) &&
+                            !string.IsNullOrWhiteSpace(App.Settings.Current.AuthToken);
+                        if (!readingsCanLand) App.Settings.Current.PatreonTier = 0;
                         if (!hasUnifiedSession)
                         {
                             App.Settings.Current.PatreonPremiumValidUntil = null;
@@ -1135,6 +1139,8 @@ namespace ConditioningControlPanel.Services
                 App.Settings.Current.PatreonPremiumValidUntil = null;
                 App.Settings.Current.PatreonLabValidUntil = null;
                 App.Settings.Current.InviteGrantUntil = null; // the week belongs to the account, not the machine
+                App.Settings.Current.GraceClosedTier = null;
+                App.Settings.Current.GraceClosedAtUtc = null;
                 App.Settings.Current.PatreonTier = 0; // Clear cached tier
                 App.Settings.Save(); // Force save immediately
             }
