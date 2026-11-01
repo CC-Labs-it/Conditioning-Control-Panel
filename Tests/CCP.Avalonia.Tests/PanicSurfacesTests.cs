@@ -120,6 +120,7 @@ public sealed class PanicSurfacesTests
         "takeover",
         "program-session",
         "engine",
+        "browser-media",
         "flash",
         "pink-rush",
         "corner-gif",
