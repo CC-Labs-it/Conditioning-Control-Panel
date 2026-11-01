@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Threading;
+using System.Linq;
 using ConditioningControlPanel.Services;
 using Avalonia;
 using Avalonia.Animation;
@@ -265,6 +266,36 @@ public sealed class MandatoryVideoGentleTests
         public void Show(string path, bool strict) { }
         public double CloseAll() => overlay.CloseAll();
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => Verdicts.Add(verdict);
+    }
+
+    [Fact]
+    public async Task Grace_attention_and_controls_stay_above_the_opaque_entrance_cover()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.GentleVisuals = true;
+            var o = MandatoryVideoOverlay.Instance;
+            var surface = o.Build(null, false);
+            ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(surface);
+            try
+            {
+                var panel = Assert.IsType<Panel>(surface.Window.Content);
+                var cover = Assert.Single(panel.Children.OfType<Border>(), b => ReferenceEquals(b.Background, Brushes.Black));
+                Assert.Equal(1, cover.Opacity); // paused before a first frame: the entrance is still black
+                surface.Grace.IsVisible = true;
+                surface.Layer.Children.Add(new Border { Width = 20, Height = 20, Background = Brushes.Magenta });
+                var coverIndex = panel.Children.IndexOf(cover);
+                Assert.True(coverIndex < panel.Children.IndexOf(surface.Grace), "the grace card must draw above the black cover");
+                Assert.True(coverIndex < panel.Children.IndexOf(surface.Layer), "attention targets must draw above the black cover");
+                Assert.True(coverIndex < panel.Children.IndexOf(surface.Buttons.Row));
+                Assert.True(panel.Children.IndexOf(surface.Video) < coverIndex);
+            }
+            finally { o.CloseAll(); }
+            return Task.CompletedTask;
+        });
     }
 
     private static void EnsureApp()
