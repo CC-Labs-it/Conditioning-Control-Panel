@@ -45,6 +45,61 @@ public sealed class WindowDropTests
     });
 
     [Fact]
+    public Task VideoImportRefreshesTheDealtQueueAndAssetTree() => Run(async (shell, root, assets) =>
+    {
+        var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        var original = overlay.Scheduler;
+        var available = new[] { "old-a.mp4", "old-b.mp4" };
+        var scheduler = new MandatoryVideoScheduler(overlay, library: () => available);
+        overlay.Scheduler = scheduler;
+        try
+        {
+            Assert.NotNull(scheduler.PickNext()); // leaves one old clip in the dealt queue
+            var video = Path.Combine(root, "new.mp4");
+            File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
+            var imported = Path.Combine(assets, "videos", "new.mp4");
+            available = new[] { imported };
+            shell.ShowTab("assets"); // a drop while already on the library must refresh its tree
+
+            Drop(shell, video);
+            var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
+            Click(ask, "BtnOk");
+            var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault(d => d != ask));
+
+            Assert.Equal(imported, scheduler.PickNext());
+            var tab = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView>("AssetsTab")!;
+            Assert.Contains(tab.AssetTree, node => node.Name == "videos" && node.FileCount == 1);
+            done.Close();
+        }
+        finally { overlay.Scheduler = original; }
+    });
+
+    [Fact]
+    public Task ImageImportDoesNotResetTheVideoQueue() => Run(async (shell, root, _) =>
+    {
+        var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        var original = overlay.Scheduler;
+        var available = new[] { "old-a.mp4", "old-b.mp4" };
+        var scheduler = new MandatoryVideoScheduler(overlay, library: () => available);
+        overlay.Scheduler = scheduler;
+        try
+        {
+            var first = scheduler.PickNext();
+            available = Array.Empty<string>();
+            var image = Path.Combine(root, "image.png");
+            File.WriteAllBytes(image, new byte[] { 1, 2, 3 });
+
+            Drop(shell, image);
+            var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
+            var next = scheduler.PickNext();
+            Assert.NotNull(next);
+            Assert.NotEqual(first, next);
+            done.Close();
+        }
+        finally { overlay.Scheduler = original; }
+    });
+
+    [Fact]
     public Task MediaDropCancelledImportsNothing() => Run(async (shell, root, assets) =>
     {
         var video = Path.Combine(root, "clip.mp4");
