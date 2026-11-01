@@ -53,8 +53,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             else _ = Summon();
         }
 
+        // A tour must also wait when another entry point is still showing the mute prompt.
+        internal Task? PendingSummon { get; private set; }
+
         /// <summary>Bring her out. No-op when she is out or the feature is off.</summary>
-        public async Task Summon(string? why = null)
+        public Task Summon(string? why = null)
+        {
+            var task = SummonCore(why);
+            if (!task.IsCompleted) PendingSummon = task;
+            return task;
+        }
+
+        private async Task SummonCore(string? why)
         {
             try
             {

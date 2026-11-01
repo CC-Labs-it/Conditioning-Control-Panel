@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using global::Avalonia.Controls.ApplicationLifetimes;
 using global::Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
@@ -16,7 +17,7 @@ using Visual = global::Avalonia.Visual;
 // id, target name, tab key and order is WPF's. What this head changes is only how a step reaches the
 // app: TutorialHeadHooks (shell, demos, folder reveal) and the three prep helpers.
 //
-// not ported: EMI narrating a tour (WPF Services/EmiDesk/EmiTourNarrator.cs is not in Core).
+// Partially ported: shell tours summon EMI; the moment bus and speech player are still missing.
 // not ported: the short walk's one demo flash on "sw-flash" (no one-shot flash entry on this head;
 //             TutorialHeadHooks.FlashDemo is the seam, unassigned = the card reads the same, WPF's
 //             own fallback when the assets folder is empty).
@@ -236,6 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
     {
         private List<TutorialStep> _currentSteps;
         private int _currentStepIndex = 0;
+        private int _startVersion;
         private TutorialType _currentTutorialType = TutorialType.FullTour;
 
         // Callbacks for tab navigation
@@ -412,26 +414,45 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// </summary>
         public void Start(TutorialType type = TutorialType.FullTour)
         {
-            // A tutorial is nothing but spotlight cut-outs positioned over MainWindow's controls.
-            // If the window is minimized, or tucked in the tray by Settings > "Start hidden", every
-            // step resolves a target with no on-screen rectangle and the tour draws its boxes over
-            // the bare desktop, pointing at nothing (ccp-bugs #999). Restore the window first -
-            // before TutorialStarted fires, so the overlay measures against a real window.
-            EnsureMainWindowVisible();
+            ActivateFirstStep(BeginStart(type));
+        }
 
+        internal int StartVersion => _startVersion;
+
+        // WPF TutorialService.cs:354-361: its synchronous narrator finishes before the first step.
+        internal async Task<bool> StartAsync(TutorialType type, Func<Task> beforeFirstStep, Func<bool> canShow, Action<int> onStarted)
+        {
+            int version = BeginStart(type, onStarted);
+            try { await beforeFirstStep(); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Tutorial: EMI summon failed"); }
+            if (!IsActive || version != _startVersion) return false;
+            if (!canShow()) { Skip(); return false; }
+            return ActivateFirstStep(version);
+        }
+
+        private int BeginStart(TutorialType type, Action<int>? onStarted = null)
+        {
+            // Restore a hidden or minimized shell before measuring its tutorial targets (ccp-bugs #999).
+            EnsureMainWindowVisible();
+            int version = ++_startVersion; onStarted?.Invoke(version);
             _currentTutorialType = type;
             _currentSteps = GetStepsForTutorial(type);
             ApplyCallbacksToSteps();
-
             _currentStepIndex = 0;
             IsActive = true;
             TutorialStarted?.Invoke(this, EventArgs.Empty);
+            return version;
+        }
 
+        private bool ActivateFirstStep(int version)
+        {
+            if (!IsActive || version != _startVersion) return false;
             if (CurrentStep != null)
             {
                 CurrentStep.OnActivate?.Invoke();
                 StepChanged?.Invoke(this, CurrentStep);
             }
+            return IsActive && version == _startVersion;
         }
 
         /// <summary>
