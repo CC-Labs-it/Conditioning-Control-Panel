@@ -178,7 +178,13 @@ internal static class AccountSeed
         {
             sync.MarkLoaded(user.Achievements);
             sync.StartHeartbeat();
-            await sync.PushAsync("after load");
+            // WPF ProfileSyncService.cs:848,882,1146: if the push fails, a progressed
+            // profile cannot use the defaults heal. The load leaves an error for later syncs.
+            if (!await sync.PushAsync("after load") && sync.Loaded && ReferenceEquals(Sync, sync)
+                && ReferenceEquals(CoreSettings.Current, s) && !s.OfflineMode && CoreAccount.IsLoggedIn
+                && string.Equals(s.UnifiedId, id, StringComparison.Ordinal)
+                && (s.PlayerLevel > 1 || ProfileAdopt.TotalXp(s) >= ProfileAdopt.MeaningfulProgressXp))
+                sync.NoteProfileLoadFailure();
         }
         return true;
     }

@@ -33,6 +33,7 @@ public sealed partial class AccountSeedTests
         public HttpStatusCode SyncStatus = HttpStatusCode.OK;
         public string SyncReply = "{\"success\":true}";
         public TaskCompletionSource? Hold;   // a sync answer that waits until released
+        public readonly TaskCompletionSource SyncSeen = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly Queue<(HttpStatusCode, string)> Next = new();   // one-shot sync answers, then SyncStatus
         // A snapshot under the lock: the heartbeat LoadProfile starts can still be adding while a test reads.
         public IEnumerable<JObject> Syncs { get { lock (Seen) return Seen.Where(r => r.Path == "POST /v2/user/sync").Select(r => r.Body!).ToList(); } }
@@ -47,6 +48,7 @@ public sealed partial class AccountSeedTests
                     : new(HttpStatusCode.OK) { Content = new StringContent(Profile) };
             if (path == "POST /v2/user/sync")
             {
+                SyncSeen.TrySetResult();
                 var (status, reply) = Next.Count > 0 ? Next.Dequeue() : (SyncStatus, SyncReply);
                 if (Hold is { } hold) await hold.Task;
                 return new(status) { Content = new StringContent(reply) };
@@ -281,6 +283,87 @@ public sealed partial class AccountSeedTests
         local.Add("linux_only");
         Assert.True(await AccountSeed.LoadProfileAsync());
         Assert.Null(Assert.Single(wire.Syncs)["achievements"]);
+    });
+
+    [Fact]
+    public void AProgressedLoadWithARateLimitedPushSeedsOnlyLaterFailures() => WithFreshInstall(async () =>
+    {
+        // WPF ProfileSyncService.cs:848,882,1146: a progressed profile cannot take the defaults heal.
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        var now = T0;
+        sync.UtcNow = () => now;
+        wire.SyncStatus = (HttpStatusCode)429;
+        var counts = new List<int>();
+        sync.SyncHealthChanged += (_, count) => counts.Add(count);
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Equal(40, CoreSettings.Current.PlayerLevel);
+        Assert.Single(wire.Syncs);
+        Assert.Equal(0, sync.ConsecutiveSyncFailures);
+        Assert.Empty(counts);
+        Assert.False(await sync.PushAsync("cooldown"));
+        Assert.Single(wire.Syncs);
+        for (int i = 1; i <= 3; i++)
+        {
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            Assert.False(await sync.PushAsync("retry"));
+            Assert.Equal(i, sync.ConsecutiveSyncFailures);
+        }
+        Assert.Equal(new[] { 1, 2, 3 }, counts);
+        wire.SyncStatus = HttpStatusCode.OK;
+        now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+        Assert.True(await sync.PushAsync("recovered"));
+        Assert.Equal(new[] { 1, 2, 3, 0 }, counts);
+        wire.SyncStatus = (HttpStatusCode)429;
+        now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+        Assert.False(await sync.PushAsync("clean rate limit"));
+        Assert.Equal(new[] { 1, 2, 3, 0 }, counts);
+
+        // A readable default profile keeps health clean, like WPF's successful defaults heal.
+        sync.Reset();
+        ProgressionClear.Apply(CoreSettings.Current);
+        var (defaultsWire, defaultsSync, _) = SignIn("u2",
+            """{"user":{"unified_id":"u2","level":1,"xp":0,"current_season":"2026-08"}}""");
+        defaultsWire.SyncStatus = (HttpStatusCode)429;
+        now = T0;
+        defaultsSync.UtcNow = () => now;
+        var defaultsCounts = new List<int>();
+        defaultsSync.SyncHealthChanged += (_, count) => defaultsCounts.Add(count);
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Equal(1, CoreSettings.Current.PlayerLevel);
+        for (int i = 0; i < 3; i++)
+        {
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            Assert.False(await defaultsSync.PushAsync("default retry"));
+        }
+        Assert.Empty(defaultsCounts);
+
+        // A reply discarded after an account switch must not seed the old account's error.
+        defaultsSync.Reset();
+        ProgressionClear.Apply(CoreSettings.Current);
+        var (switchedWire, switchedSync, _) = SignIn("u3", L40Profile("u3"));
+        now = T0;
+        switchedSync.UtcNow = () => now;
+        switchedWire.SyncStatus = (HttpStatusCode)429;
+        var hold = switchedWire.Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var switchedCounts = new List<int>();
+        switchedSync.SyncHealthChanged += (_, count) => switchedCounts.Add(count);
+        try
+        {
+            var loading = AccountSeed.LoadProfileAsync();
+            await switchedWire.SyncSeen.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Single(switchedWire.Syncs);
+            CoreSettings.Current.UnifiedId = "other";
+            hold.SetResult();
+            Assert.True(await loading);
+            CoreSettings.Current.UnifiedId = "u3";
+            for (int i = 0; i < 3; i++)
+            {
+                now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+                Assert.False(await switchedSync.PushAsync("after switch"));
+            }
+            Assert.Empty(switchedCounts);
+        }
+        finally { hold.TrySetResult(); }
     });
 
     [Fact]

@@ -129,7 +129,11 @@ namespace ConditioningControlPanel.Services
         // WPF ProfileSyncService.cs:2655: count failures, not cooldown or backoff skips.
         public int ConsecutiveSyncFailures { get; private set; }
         public event EventHandler<int>? SyncHealthChanged;
-        private bool _syncErrorSet;
+        private volatile bool _syncErrorSet;
+
+        /// <summary>WPF ProfileSyncService.cs:882: a failed profile load leaves an error for later
+        /// syncs, but does not itself increment the sync failure count or raise its event.</summary>
+        public void NoteProfileLoadFailure() => _syncErrorSet = true;
 
         private void ReportSyncHealth(bool succeeded)
         {
