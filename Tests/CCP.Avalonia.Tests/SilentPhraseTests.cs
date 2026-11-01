@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -109,27 +111,70 @@ public class SilentPhraseTests
         return Task.CompletedTask;
     });
 
+    private static void WithWhispersHint(Action<SubliminalFeatureControl, TextBlock, Window> body)
+    {
+        var s = CoreSettings.Current;
+        var previous = (s.SubliminalPool, s.SubAudioEnabled);
+        var window = new Window();
+        try
+        {
+            s.SubliminalPool = new Dictionary<string, bool> { ["no-recording-s7b-unique"] = false };
+            s.SubAudioEnabled = true;
+            var control = new SubliminalFeatureControl();
+            window.Content = control;
+            body(control, control.FindControl<TextBlock>("TxtWhispersSilentHint")!, window);
+        }
+        finally
+        {
+            try { window.Close(); }
+            finally { (s.SubliminalPool, s.SubAudioEnabled) = previous; }
+        }
+    }
+
     [Fact]
     public Task Whispers_hint_requires_audio_and_an_enabled_silent_phrase() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
+        WithWhispersHint((control, hint, window) =>
+        {
+            var s = CoreSettings.Current;
+            Assert.False(hint.IsVisible);
+            Assert.Equal(new Thickness(0, 0, 0, 4), hint.Margin);
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            s.SubliminalPool["no-recording-s7b-unique"] = true;
+            // Exercise this control's real subscription without notifying unrelated mod listeners.
+            var subscription = ((EventHandler<ModPackage>)typeof(CoreMods)
+                .GetField(nameof(CoreMods.ModChanged), BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!)
+                .GetInvocationList().Cast<EventHandler<ModPackage>>().Single(x => ReferenceEquals(x.Target, control));
+            subscription(null, new ModPackage(new ModManifest(), null, false));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(hint.IsVisible);
+            s.SubAudioEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(hint.IsVisible);
+        });
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Whispers_hint_test_restores_settings_and_closes_window_after_failure() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
         var s = CoreSettings.Current;
-        s.SubliminalPool = new Dictionary<string, bool> { ["no-recording-s7b-unique"] = false };
-        s.SubAudioEnabled = true;
-        var control = new SubliminalFeatureControl();
-        var hint = control.FindControl<TextBlock>("TxtWhispersSilentHint")!;
-        Assert.False(hint.IsVisible);
-        var window = new Window { Content = control };
-        window.Show();
-        Dispatcher.UIThread.RunJobs();
-        s.SubliminalPool["no-recording-s7b-unique"] = true;
-        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
-        Dispatcher.UIThread.RunJobs();
-        Assert.True(hint.IsVisible);
-        s.SubAudioEnabled = false;
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(hint.IsVisible);
-        window.Close();
+        var previous = (s.SubliminalPool, s.SubAudioEnabled);
+        Window? host = null;
+        Assert.Throws<InvalidOperationException>(() => WithWhispersHint((_, _, window) =>
+        {
+            host = window;
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            throw new InvalidOperationException("cleanup probe");
+        }));
+        Assert.Same(previous.SubliminalPool, s.SubliminalPool);
+        Assert.Equal(previous.SubAudioEnabled, s.SubAudioEnabled);
+        Assert.NotNull(host);
+        Assert.False(host.IsVisible);
         return Task.CompletedTask;
     });
 }
