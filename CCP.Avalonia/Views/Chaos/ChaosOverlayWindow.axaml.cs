@@ -401,7 +401,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _revealTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
             _revealTimer.Tick += (_, _) =>
             {
-                if (_closed) return;
+                if (_closed || _onBoonPick == null) return;
                 if (_revealIndex >= _draftCards.Count)
                 {
                     _revealTimer?.Stop();
@@ -432,6 +432,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (dc.Boon.IsCurse) ChaosSfx.Play("sin_reveal", 0.55f);   // a sin lands with its own drone
             else ChaosSfx.PlayBoonReveal(dc.Boon.Rarity == ChaosRarity.Rare);
         }
+
+        internal void CancelDraft() { _onBoonPick = null; if (_draftPanel.IsVisible) HideDraft(); }
 
         private void HideDraft()
         {
@@ -495,7 +497,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _autoResumeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _autoResumeTimer.Tick += (_, _) =>
             {
-                if (_closed) return;
+                if (_closed || _onBoonPick == null) return;
                 _autoResumeRemainingSec--;
                 if (_selectionMade) { _autoResumeTimer?.Stop(); return; }
                 if (_autoResumeRemainingSec <= 0)
@@ -738,7 +740,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _confirmTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
             _confirmTimer.Tick += (_, _) =>
             {
-                if (_closed) return;
+                if (_closed || _onBoonPick == null) return;
                 _confirmTimer?.Stop();
                 _confirmTimer = null;
                 ChooseBoon(_selectedBoon);
@@ -1535,7 +1537,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     {
                         // Reject traversal before touching the disk, as ResolveAudioPath does.
                         if (rel.Contains("..") || System.IO.Path.IsPathRooted(rel)) continue;
-                        var path = ContentLocator.Resolve(System.IO.Path.Combine(
+                        var path = CoreModArt.AudioOverridePath(rel) ?? ContentLocator.Resolve(System.IO.Path.Combine(
                             "Resources", "sounds", rel.Replace('/', System.IO.Path.DirectorySeparatorChar)));
                         if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) continue;
                         CoreAudio.PlayOneShot(path, Volume(scale), "chaos-sfx");

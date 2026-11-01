@@ -527,7 +527,7 @@
                                         <ToggleButton Theme="{StaticResource Seg}" Tag="pink" Content="Pink Filter" Margin="0,0,6,6"/>
                                         <ToggleButton Theme="{StaticResource Seg}" Tag="spiral" Content="Spiral" Margin="0,0,6,6"/>
                                         <ToggleButton Theme="{StaticResource Seg}" Tag="braindrain" Content="BrainDrain" Margin="0,0,6,6"/>
-                                        <ToggleButton Theme="{StaticResource Seg}" Tag="bambifreeze" Content="Bambi Freeze" Margin="0,0,6,6"/>
+                                        <ToggleButton Theme="{StaticResource Seg}" Tag="bambifreeze" Content="Bambi Freeze" IsVisible="False" Margin="0,0,6,6"/>
                                         <ToggleButton Theme="{StaticResource Seg}" Tag="video" Content="Video" Margin="0,0,6,6"/>
                                         <ToggleButton Theme="{StaticResource Seg}" Tag="htlink" Content="Gif Rain" Margin="0,0,6,6"/>
                                     </WrapPanel>

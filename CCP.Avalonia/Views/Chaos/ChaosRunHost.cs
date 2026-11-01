@@ -97,10 +97,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests: stop the real 4 Hz timer so only stepped <see cref="Tick"/> calls move the clock (P08).</summary>
         internal static void StopTimerForTests() => _runTimer?.Stop();
 
+        // The pickup stays in the internal model until its WPF field visuals and screen shake land.
+        internal static ChaosRunConfig UserConfig()
+        {
+            var cfg = ChaosRunConfig.FromSettings();
+            cfg.EnabledVariants = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds()).Where(id => id != "bambifreeze").ToList();
+            return cfg;
+        }
+
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
-            var cfg = config ?? ChaosRunConfig.FromSettings();
+            var cfg = config ?? UserConfig();
             try
             {
                 _state = new ChaosRunState(cfg);
@@ -447,7 +455,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
             Pulse(Color.FromRgb(150, 200, 255), 0.30);
             _pendingWave = newWave;
-            ShowDraft();
+            _overlay?.ShowBoonDraft(_state.WaveIndex, DraftOptions(), OnBoonChosen,
+                _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
         }
 
         private static List<ChaosBoon> DraftOptions()
@@ -460,9 +469,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return options;
         }
 
-        private static void ShowDraft() => _overlay?.ShowBoonDraft(_state!.WaveIndex, DraftOptions(),
-            OnBoonChosen, _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
-
         // WPF ChaosModeService.cs:1516-1526.
         private static (List<ChaosBoon> options, int rerollsLeft)? RerollDraft()
         {
@@ -474,7 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // WPF ChaosModeService.cs:1529-1611; the overlay owns click/timeout selection.
         private static void OnBoonChosen(ChaosBoon? boon)
         {
-            if (!_active || !_draftPaused || _state == null) return;
+            if (!_active || !_spawning || !_draftPaused || _state == null) return;
             if (boon == null)
             {
                 _state.Shields++;
@@ -720,6 +726,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
             ChaosRunLessons.OnRunCompleted(_state.Shields, _state.Config.Difficulty, ranFullCourse);
             _spawning = false;
+            _overlay?.CancelDraft();
             _runTimer?.Stop();
             EndField();
             StopToys();
