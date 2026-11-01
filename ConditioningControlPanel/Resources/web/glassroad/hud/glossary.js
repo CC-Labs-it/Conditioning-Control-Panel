@@ -9,7 +9,7 @@
  * tests/glossary.test.mjs fails on a live item with no line, a weight-0 item with a line, and a row with no name.
  */
 import { ITEM_IDS, ITEMS, BUCKETS } from '../sim/itemTable.js';
-import { ITEM_NAMES, iconOf, ordinal } from './format.js';
+import { ITEM_NAMES, iconOf } from './format.js';
 import { itemTip } from './labels.js';
 
 /** How a press fires it, by ITEMS.use (itemUseMode: 'trap' always drops, a rear press drops anything but 'self'). */
@@ -38,7 +38,7 @@ export const GLOSSARY_LINES = Object.freeze({
     '. Pass it inside ' + g('tetherMaxS') + ' s and it spins. Nobody in range, you keep it.',
   snap: (g) => 'A ' + g('snapRadiusM') + ' m shockwave shoves nearby karts aside and breaks a Tether on you. For ' + g('snapGuardS') + ' s, throws and traps that reach you pop.',
   bigSpiral: (g) => 'Lands on the leader from above, or on 2nd if you lead. Top speed down ' + pct(g('bigSpiralCapMul')) + ' for ' + g('bigSpiralS') + ' s.',
-  tunnel: (g) => { const o = ordinal(g('tunnelStopPlace')); return 'A ' + g('tunnelS') + ' s ride up the pack that launches karts in the way. Nothing lands on you. It stops at ' + o.n + o.suf + ', never takes the lead.'; },
+  tunnel: (g) => 'Rides you to a kart in the top ' + g('tunnelTargetPlaces') + ' in up to ' + g('tunnelMaxS') + ' s, launching karts in the way. Nothing lands on you. Ends with a bump beside it, never in the lead.',
 });
 
 const REAL = Object.freeze({ ids: ITEM_IDS, items: ITEMS, names: ITEM_NAMES, lines: GLOSSARY_LINES });
@@ -70,10 +70,11 @@ export function whoGets(weights, totals) {
 export function glossaryRows(feel, { ids, items, names, lines } = REAL) {
   const g = (k) => feel.get('items.' + k);
   const live = ids.map((id) => [id, weightsOf(feel, id)]).filter(([, w]) => isLive(w));
-  const totals = BUCKETS.map((_, b) => live.reduce((sum, [, w]) => sum + (w[b] || 0), 0));
+  // Tunnel Vision is offered by place, not by bucket, so its tickets never thin anyone else's share
+  const totals = BUCKETS.map((_, b) => live.reduce((sum, [id, w]) => sum + (id === 'tunnel' ? 0 : w[b] || 0), 0));
   return live.map(([id, w]) => ({
     id, name: names[id] || 'Item', icon: iconOf(id), line: lines[id] ? lines[id](g) : '',
-    fire: FIRE_WORDS[items[id]?.use] || '', who: whoGets(w, totals),
+    fire: FIRE_WORDS[items[id]?.use] || '', who: id === 'tunnel' ? 'Last ' + g('tunnelLastPlaces') + ' places only' : whoGets(w, totals),
   }));
 }
 

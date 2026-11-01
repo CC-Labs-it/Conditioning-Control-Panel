@@ -16,7 +16,6 @@ export const MALUS_EVENTS = Object.freeze(['keep-gate-hit', 'keep-chain-hit', 'b
 
 const WORD_TAIL_S = 0.5;     // the burst's cards fade on their own clock; keep the canvas up a beat after durS
 const FLASH_IN_S = 0.12, FLASH_OUT_S = 0.25;
-const RIDE_WORDS_S = 8;      // a ride's stream is paced for the longest ride; tunnel-end fades it sooner on a shorter one
 
 export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand = Math.random } = {}) {
   const g = (k) => feel.get('payoff.' + k);
@@ -106,7 +105,7 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
   // Tunnel Vision: the words stream past the player for the ride (cascade only: no fog, no flash, the road stays clear)
   // (a ride lasts as long as its gap needs, so its length is known only when it ends)
   let rideWords = false;
-  function onTunnel(e) { if (e && e.racer === 0 && g('on')) { sayWords(RIDE_WORDS_S); rideWords = true; } }
+  function onTunnel(e) { if (e && e.racer === 0 && g('on')) { sayWords(feel.get('items.tunnelMaxS')); rideWords = true; } }
   function onTunnelEnd(e) {
     if (!e || e.racer !== 0 || !rideWords) return;
     rideWords = false;

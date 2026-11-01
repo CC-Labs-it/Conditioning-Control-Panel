@@ -50,7 +50,7 @@ test('online: a local ride shows effect tunnel in its record, a remote rider lau
   // a remote rider passing this kart: the victim's client applies the launch, once
   const u = createNetItems(track, feel, recorder(), {});
   const v = [100, 101].map((s, i) => ({ i, kind: i ? 'remote' : 'player', meta: { seat: i, isBot: false },
-    st: place(track, { s }), input: acts({ item: false, back: false }), item: {}, mods: {}, fxv: {}, finished: false }));
+    st: place(track, { s, speed: i ? 60 : 0 }), input: acts({ item: false, back: false }), item: {}, mods: {}, fxv: {}, finished: false }));
   v[1].fxv.effect = 'tunnel';
   const r2 = recorder();
   const w = createNetItems(track, feel, r2, {});

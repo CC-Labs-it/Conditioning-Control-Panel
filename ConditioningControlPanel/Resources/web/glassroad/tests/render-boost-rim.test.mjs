@@ -132,7 +132,8 @@ test('tunnel look: a boost never reaches ride level; every ride does, and a fast
   assert.ok(rideHeat(1.6) > 0.5, 'an ordinary ride is clearly above a boost: ' + rideHeat(1.6));
   assert.ok(rideHeat(2.2) > rideHeat(1.6) + 0.1, 'and climbs');
   assert.equal(rideHeat(R.pctTop), 1);
-  assert.equal(rideHeat(R.pctTop * 2), 1, 'clamped');
+  assert.equal(rideHeat(60), 1, 'a far ride (about 60 x top) stays at full');
+  assert.match(src('render/speedlines.js'), /Math\.min\(BOOST_RIM\.ride\.pctTop,/, 'and the speed field does not stretch with it');
   let last = -1;
   for (let p = 0.8; p < 3.4; p += 0.1) { const h = rideHeat(p); assert.ok(h >= last, 'monotonic at ' + p); last = h; }
   assert.equal(rideTarget({ tunnel: 0, speedPct: 3 }), 0, 'no ride, no ride level');

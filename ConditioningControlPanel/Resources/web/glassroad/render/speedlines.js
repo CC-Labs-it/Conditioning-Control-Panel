@@ -24,6 +24,7 @@
  * (windAmount). Motion Less halves them, Off and Gentle remove them. Static geometry: the frame cost is
  * three uniforms, no attribute upload.
  */
+import { BOOST_RIM } from './boostRimMath.js';
 import { Mesh, BufferGeometry, BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide, Color } from 'three/webgpu';
 import {
   attribute, uniform, fract, sin, vec2, vec3, vec4, step, float, abs, mix, select, smoothstep, max, clamp, normalize, length,
@@ -148,7 +149,7 @@ export function createSpeedLines(feel = null) {
   let tunHue = 0;
   /** Per frame (signature kept from polish 3; obj unused, the field follows the rendering camera). */
   function update(dt, kart, fx, obj, visibility = 1) {
-    const gentle = !!(feel && feel.get && feel.get('gentle.on')), pct = Math.max(0, kart[S.speedPct] || 0), mps = pct * top();
+    const gentle = !!(feel && feel.get && feel.get('gentle.on')), pct = Math.min(BOOST_RIM.ride.pctTop, Math.max(0, kart[S.speedPct] || 0)), mps = pct * top();
     const bk = kart[S.boostKind] | 0, rescue = kart[S.respawnPhase] > 0;
     const want = rescue ? 0 : fx ? Math.min(1, Math.max(0, fx.speedLines || 0)) : boostTarget(bk, BOOST);
     if (dt > 0) boost += (want - boost) * (1 - Math.exp(-dt / (want > boost ? P.boostRiseS : P.boostFallS)));

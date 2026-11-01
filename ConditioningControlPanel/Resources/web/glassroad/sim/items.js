@@ -12,7 +12,7 @@ import { wrap, damp, lerp, clamp } from '../core/math.js';
 import { grantBoost } from './grant.js';
 import { cancelDrift } from './drift.js';
 import { endBoost } from './boost.js';
-import { ITEMS, ITEM_IDS, bucketOf, rollItem, durationOf, makeRand, BUCKETS, SPIN_KINDS } from './itemTable.js';
+import { ITEMS, ITEM_IDS, bucketOf, rollItem, tunnelOffered, durationOf, makeRand, BUCKETS, SPIN_KINDS } from './itemTable.js';
 import { itemUseMode } from './itemUse.js';
 import { liftedNear } from './ramps.js';
 import { createTunnel } from './tunnel.js';
@@ -255,8 +255,8 @@ export function createItems(track, feel, events, { seed = 1, force = null } = {}
       updateLanding(fired, racer(target));
       projectiles.push(fired);
     } else if (mode === 'ride') {
-      // kept (refused) at place tunnelStopPlace or better, where the ride would end at once, and on a fork
-      if (standings.placeOf(r.i) <= g('tunnelStopPlace')) { events.emit('item-refused', { racer: r.i, id, reason: 'place' }); return; }
+      // kept (refused) in the lead, where there is nobody to catch, and on a fork
+      if (standings.placeOf(r.i) <= 1) { events.emit('item-refused', { racer: r.i, id, reason: 'place' }); return; }
       if (!startRide(r)) { events.emit('item-refused', { racer: r.i, id, reason: 'fork' }); return; }
     } else if (mode === 'wide') {
       const me = standings.progressOf(r.i);
@@ -379,7 +379,8 @@ export function createItems(track, feel, events, { seed = 1, force = null } = {}
       if (b.kind === 'box') {
         if (r.item.id || r.item.rolling || !(b.liftM ? liftedNear(r.st, b.v, boxR) : near(r, b.s, b.x, boxR))) continue;
         b.downT = g('boxRespawnS'); b.upT = 0;
-        const id = forced && r.i === 0 ? forced : rollItem(feel, bucketOf(feel, standings.placeOf(r.i), standings.gapToLeader(r.i)), rand);
+        const place = standings.placeOf(r.i), offer = tunnelOffered(feel, place, standings.order.length);
+        const id = forced && r.i === 0 ? forced : rollItem(feel, bucketOf(feel, place, standings.gapToLeader(r.i)), rand, offer);
         r.item.id = id; r.item.rolling = true; r.item.rollT = 0; r.item.heldT = 0;
         pop('box', 'box', b.s, b.x, b.liftM || 0);
         events.emit('item-box', { racer: r.i, box: b.v.i, p: b.v.p.slice() });

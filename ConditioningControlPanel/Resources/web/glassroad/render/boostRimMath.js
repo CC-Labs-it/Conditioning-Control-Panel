@@ -47,9 +47,9 @@ export const BOOST_RIM = Object.freeze({
   // reach, by a second level `ride` 0..1 that follows the live speed. ride 0 is the boost's look exactly.
   ride: Object.freeze({
     pctFrom: 1,             // speed.topMps share where a ride sits at `floor` (a ride starts about here)
-    pctTop: 3,              // the share where the colour is full (99 m/s, an 800 m gap in the 8 s limit)
+    pctTop: 3,              // the share where the colour is full (99 m/s); far rides reach about 60 x top and stay here
     floor: 0.3,             // the least a ride shows, however slow
-    curve: 0.8,             // under 1 lifts ordinary rides: today's 1.6 x top reads 0.57, 2.2 x top 0.77
+    curve: 0.8,             // under 1 lifts ordinary rides (53-80 m/s): 1.6 x top reads 0.57, 2.4 x top 0.81
     gentleMul: 0.45,        // Gentle's cap on ride (the base level is halved as well)
     clearBox: 0.42,         // at ride 1 the clear centre box (boost 0.6): road ahead, target kart and player stay clean
     cornerBias: 0.15,       // at ride 1 the whole frame takes colour, not just the corners (boost 0.55)

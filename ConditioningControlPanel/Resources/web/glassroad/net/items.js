@@ -56,7 +56,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   // Tunnel Vision: a local rider runs the same kinematic ride as offline (sim/tunnel.js) and shows effect 'tunnel' in
   // its records; each client launches only its OWN karts (a remote rider's ram is applied by the victim's client)
   const tunnel = createTunnel(track, feel, events, { sink });
-  const rideSeen = new Map(), rammed = new Set();
+  const rideSeen = new Map(), rideS = new Map(), rammed = new Set();
   // fires and takes waiting for the room's word, in send order (the room answers each in order: fired / took or an error)
   let pendingFires = [], pendingTakes = [], loose = [];   // loose: knocked-loose items { lid, id, s, x, fork, t, from }   // remote racer i -> riding last tick; 'rider:victim' rams done
   const bySeat = (seat) => list.find((r) => r.meta.seat === seat) || null;
@@ -214,8 +214,8 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     }
     if (mode === 'lob' && lobTarget(r.i, standings) < 0) return;            // alone on the road: keep it
     if (mode === 'tether' && !tetherable(r, standings)) return;            // nobody close ahead: keep it
-    if (mode === 'ride' && (standings.placeOf(r.i) <= g('tunnelStopPlace') || track.forkAtSeg?.(r.st[S.seg] | 0))) {
-      events.emit('item-refused', { racer: r.i, id, reason: standings.placeOf(r.i) <= g('tunnelStopPlace') ? 'place' : 'fork' });
+    if (mode === 'ride' && (standings.placeOf(r.i) <= 1 || track.forkAtSeg?.(r.st[S.seg] | 0))) {
+      events.emit('item-refused', { racer: r.i, id, reason: standings.placeOf(r.i) <= 1 ? 'place' : 'fork' });
       return;                                                               // keep it, as offline
     }
     // payback (sim/social.js): a throw names the mark when it is ahead in range; the room homes on it if it agrees
@@ -407,7 +407,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     loose = loose.filter((l) => { l.t += dt; if (l.t < g('knockLifeS')) return true; pop(l.id, 'fizzle', l.s, l.x); return false; });
     pendingFires = pendingFires.filter((f) => now - f.t < ANSWER_S); pendingTakes = pendingTakes.filter((p) => now - p.t < ANSWER_S);
     tunnel.tick(dt, racers, standings, rideOpts);
-    remoteRides(racers);
+    remoteRides(racers, standings);
     for (const w of waves) w.t += dt;
     waves = waves.filter((w) => w.t < WAVE_S);
     for (const p of pops) p.t += dt;
@@ -417,8 +417,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   const rideOpts = { free, canRam: local, nearOpenEdge: (s, m) => nearOpenEdge(s, m),
     onEnd: (r) => { const x = rs(r.i); x.snapGuard = x.guardMax = g('tunnelGuardS'); } };
   /** A remote seat riding (record effect 'tunnel'): start / end events for fx, and its rams on this client's karts. */
-  function remoteRides(racers) {
-    const rad = g('tunnelRamRadiusM');
+  function remoteRides(racers, standings) {
     for (const o of racers) {
       if (local(o)) continue;
       const on = o.fxv && o.fxv.effect === 'tunnel', was = rideSeen.get(o.i) || false;
@@ -427,11 +426,12 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
         events.emit(on ? 'tunnel-start' : 'tunnel-end', on ? { racer: o.i } : { racer: o.i, reason: 'time' });
         if (!on) for (const k of [...rammed]) if (k.startsWith(o.i + ':')) rammed.delete(k);
       }
-      if (!on) continue;
+      if (!on) { rideS.delete(o.i); continue; }
+      const fromS = rideS.has(o.i) ? rideS.get(o.i) : o.st[S.s];
+      rideS.set(o.i, o.st[S.s]);
+      const aim = tunnel.targetOf(o, racers, standings);   // the kart it lands beside is bumped, never launched
       for (const v of racers) {
-        if (!local(v) || !free(v) || rammed.has(o.i + ':' + v.i)) continue;
-        const dx = v.st[S.posX] - o.st[S.posX], dy = v.st[S.posY] - o.st[S.posY], dz = v.st[S.posZ] - o.st[S.posZ];
-        if (dx * dx + dy * dy + dz * dz > rad * rad) continue;
+        if (!local(v) || !free(v) || v === aim || rammed.has(o.i + ':' + v.i) || !tunnel.rams(o, v, fromS, o.st[S.s])) continue;
         rammed.add(o.i + ':' + v.i);
         tunnel.rammedBy(o, v, (s, m) => nearOpenEdge(s, m));
       }
@@ -502,7 +502,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     archRun.reset();
     now = 0; shotId = 1; ver++; flying = []; traps = []; waves = []; pops = []; R = []; links = [];
     for (const b of pick) { b.downT = 0; b.upT = 1e9; }
-    tunnel.reset(); rideSeen.clear(); rammed.clear(); pendingFires = []; pendingTakes = []; loose = [];
+    tunnel.reset(); rideSeen.clear(); rideS.clear(); rammed.clear(); pendingFires = []; pendingTakes = []; loose = [];
   }
 
   return { update, view, reset, nearOpenEdge, trapRows, lobTarget, onRoll, onPickupRefused, onFired, onHit, onFizzle, onRefused, onLoose, onTook, knock, state: rs, tunnel,
