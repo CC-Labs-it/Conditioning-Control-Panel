@@ -54,6 +54,21 @@ public sealed class IconGuardTests
         Ratchet("icon-emoji.count", perFile);
     }
 
+    [Theory]
+    [InlineData("\"star\" => (F.Gold, \"★\"),", "★")]
+    [InlineData("\"heart\" => (F.Pink, \"♥\"),", "♥")]
+    public void StickerArtworkExemptionsDoNotHideOtherIconSites(string sticker, string glyph)
+    {
+        const string file = "Views/Controls/Leash/LeashSelfCard.cs";
+        var source = Sources().Single(s => s.Rel == file);
+        var code = StripComments(file, string.Join("\n", source.Lines)).Split('\n');
+        Assert.Single(code, line => line.Contains(sticker, StringComparison.Ordinal));
+        Assert.Empty(IconClusters(Decode(Allowed(file, sticker, "emoji"))));
+        var otherSite = $"var icon = \"{glyph}\";";
+        Assert.Equal(new[] { glyph }, IconClusters(Decode(Allowed(file, otherSite, "emoji"))));
+        Assert.Equal(new[] { glyph }, IconClusters(Decode(Allowed("Views/Controls/Other.cs", sticker, "emoji"))));
+    }
+
     [Fact]
     public void IconPrefixedLocKeysRatchet()
     {

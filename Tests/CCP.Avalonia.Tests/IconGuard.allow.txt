@@ -17,6 +17,8 @@ Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: 
 Views/Windows/SessionCompleteWindow.axaml.cs :: SessionIcon = "🌀" :: render-sample SessionLog.SessionIcon, session data shown in a sentence (content (c).2, decision 4)
 Views/Dialogs/AwarenessPresetDetailDialog.axaml :: (e.g. 🎯) :: example of a user-chosen preset icon inside prose (content (c).2)
 Views/Tabs/AwarenessTabView.Presets.cs :: Icon = "✨", :: seed icon of a new user preset; the user edits it, so it is preset data (content (c).2)
+Views/Controls/Leash/LeashSelfCard.cs :: "star" => (F.Gold, "★"), :: star sticker content drawn as WPF LeashLook.cs:356, not an action icon
+Views/Controls/Leash/LeashSelfCard.cs :: "heart" => (F.Pink, "♥"), :: heart sticker content drawn as WPF LeashLook.cs:358, not an action icon
 
 # --- content (c).4: typography ---
 Views/Windows/ProgramsIntroPopup.axaml :: Text="●" :: list bullets beside prose rows, typography (content (c).4)
