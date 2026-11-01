@@ -19,7 +19,6 @@ using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 using IconKind = FluentIcons.Common.Symbol;
-
 namespace CCP.Avalonia.Tests;
 public class Sync7bTests
 {
@@ -30,10 +29,22 @@ public class Sync7bTests
         if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-    [Fact]
-    public Task DrawerHandleAndNavigationResetItsPushWidth() => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup();
+        var provider = CoreSettings.ServiceProvider;
+        try { Setup(); await body(); }
+        finally { CoreSettings.ServiceProvider = provider; }
+    });
+    [Fact]
+    public Task SettingsScopeRestoresProviderAfterFailure() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Run(() => { Assert.NotSame(provider, CoreSettings.ServiceProvider); throw new InvalidOperationException(); }));
+        Assert.Same(provider, CoreSettings.ServiceProvider);
+    });
+    [Fact]
+    public Task DrawerHandleAndNavigationResetItsPushWidth() => Run(() =>
+    {
         var drawer = new PageFavoritesDrawer();
         drawer.OnNavigated(ConditioningControlPanel.Services.UI.NavSections.Studio);
         Assert.True(drawer.IsVisible);
@@ -48,9 +59,8 @@ public class Sync7bTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task DrawerHandleFillsEdgeAndKeepsReferenceTypographyAndInk() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task DrawerHandleFillsEdgeAndKeepsReferenceTypographyAndInk() => Run(async () =>
     {
-        Setup();
         CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
         Assert.False(AmbientFxCanvas.Env.AllowTransitions);
         var drawer = new PageFavoritesDrawer();
@@ -83,15 +93,14 @@ public class Sync7bTests
             host.MouseUp(new Point(10,20), global::Avalonia.Input.MouseButton.Left); Assert.False(drawer.Handle.IsPressed); AssertNoChrome();
             Assert.Equal(ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.Lighten(hue,0.55), Assert.IsType<SolidColorBrush>(drawer.Chevron.Foreground).Color);
             host.MouseMove(new Point(110,20));
-            Assert.True(drawer.Handle.Focus()); Assert.Null(drawer.Handle.FocusAdorner);
+            Assert.True(drawer.Handle.Focus()); Assert.Null(drawer.Handle.FocusAdorner); Assert.Equal(new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand).ToString(), drawer.Handle.Cursor?.ToString());
             Assert.Equal(ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.Lighten(hue,0.55), Assert.IsType<SolidColorBrush>(drawer.Chevron.Foreground).Color);
         }
         finally { host.Close(); }
     });
     [Fact]
-    public Task DrawerSharesPinsPushesPageAndClosesOnNavigation() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task DrawerSharesPinsPushesPageAndClosesOnNavigation() => Run(() =>
     {
-        Setup();
         CoreSettings.Current.RailFavorites.Clear();
         var w = new MainShellWindow();
         try
@@ -119,13 +128,18 @@ public class Sync7bTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task VoiceSliderSeedsRestoresAndControlsSpokenGain() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task VoiceSliderSeedsRestoresAndControlsSpokenGain() => Run(() =>
     {
-        Setup();
         CoreSettings.Current.CompanionVoiceLevel = 40;
         var cell = new WorkshopBehaviorCell();
         var slider = cell.FindControl<Slider>("SliderVoiceLevelCompanion")!;
         Assert.Equal(40, slider.Value);
+        var panel = Assert.IsType<StackPanel>(slider.Parent); var index = panel.Children.IndexOf(slider);
+        var hint = Assert.IsType<TextBlock>(panel.Children[index + 1]);
+        Assert.True(panel.Children.IndexOf(cell.FindControl<Slider>("SliderBubbleDurationCompanion")!) < index);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_companion_voice_level_hint"), hint.Text); Assert.True(hint.IsVisible);
+        Assert.Equal(new Thickness(0,0,0,9), hint.Margin); Assert.Equal(new Thickness(0,4,0,2), slider.Margin);
+        Assert.Null(ToolTip.GetTip(slider)); Assert.Same(cell.FindResource("CmpCellHintStyle"), hint.Theme);
         slider.Value = 100;
         Assert.Equal(100, CoreSettings.Current.CompanionVoiceLevel);
         Assert.Equal("100", cell.FindControl<TextBlock>("TxtVoiceLevelCompanion")!.Text);
@@ -157,9 +171,8 @@ public class Sync7bTests
         public void Dispose() => Disposed = true;
     }
     [Fact]
-    public Task MantraMasterChangesDroneAndToneAndUnhooks() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task MantraMasterChangesDroneAndToneAndUnhooks() => Run(() =>
     {
-        Setup();
         var opener = MantraWindow.DroneOpener;
         var play = CoreAudio.PlayOneShotProvider;
         var drone = new Drone();

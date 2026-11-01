@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 using ConditioningControlPanel.Services.MediaFiles;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 public class MediaTempFileLedgerTests
 {
     [Fact]
@@ -30,7 +28,6 @@ public class MediaTempFileLedgerTests
         Assert.Contains("last", deleted);
         Assert.Equal(0, ledger.LiveCount);
     }
-
     [Fact]
     public void ReleaseAndRepeatedSweepsRetainRefusedFilesWithoutDuplicates()
     {
@@ -67,5 +64,4 @@ public class MediaTempFileLedgerTests
         Assert.Equal(release ? 0 : 1, ledger.LiveCount);
         Assert.DoesNotContain("new", deleted);
     }
-
 }

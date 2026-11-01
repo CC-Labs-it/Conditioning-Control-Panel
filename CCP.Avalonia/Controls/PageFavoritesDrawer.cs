@@ -14,7 +14,6 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.UI;
 
 namespace ConditioningControlPanel.Avalonia.Controls;
-
 // WPF d77b98ce0: a separate push drawer on non-Home pages, sharing Home's chip builder.
 public sealed class PageFavoritesDrawer : Grid
 {
@@ -38,6 +37,7 @@ public sealed class PageFavoritesDrawer : Grid
         SetRow(Chevron, 2); face.Children.Add(Chevron);
         _face = new Border { CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), Child = face };
         Handle = new Button { Content = _face, Padding = new Thickness(0), Margin = new Thickness(2,5), FocusAdorner = null,
+            Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch,
             Theme = new global::Avalonia.Styling.ControlTheme(typeof(Button)) { Setters = { new global::Avalonia.Styling.Setter(Button.TemplateProperty,

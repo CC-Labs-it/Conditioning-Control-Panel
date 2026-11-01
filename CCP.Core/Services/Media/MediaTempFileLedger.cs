@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
 namespace ConditioningControlPanel.Services.MediaFiles;
-
 public sealed class MediaTempFileLedger(int cap, Func<string, bool>? delete = null)
 {
     private readonly object _gate = new();
-    private readonly List<string> _live = new();
-    private readonly List<string> _held = new();
+    private readonly List<string> _live = new(), _held = new();
     private readonly int _cap = Math.Max(0, cap);
     private readonly Func<string, bool> _delete = delete ?? TryDeleteFile;
     public int HeldCount { get { lock (_gate) return _held.Count; } }
@@ -43,7 +40,6 @@ public sealed class MediaTempFileLedger(int cap, Func<string, bool>? delete = nu
         }
         DeleteOrHold(sweep);
     }
-
     public void SweepAll()
     {
         List<string> sweep;
@@ -56,7 +52,6 @@ public sealed class MediaTempFileLedger(int cap, Func<string, bool>? delete = nu
         }
         DeleteOrHold(sweep);
     }
-
     private void DeleteOrHold(List<string> paths)
     {
         // File I/O stays outside the gate: a slow disk must not block the next Track.
@@ -70,12 +65,9 @@ public sealed class MediaTempFileLedger(int cap, Func<string, bool>? delete = nu
         }
         if (refused == null) return;
         lock (_gate)
-        {
             foreach (var path in refused)
                 if (!_held.Contains(path)) _held.Add(path);
-        }
     }
-
     public static bool TryDeleteFile(string path)
     {
         try
@@ -84,10 +76,6 @@ public sealed class MediaTempFileLedger(int cap, Func<string, bool>? delete = nu
             File.Delete(path);
             return true;
         }
-        catch (Exception ex)
-        {
-            Serilog.Log.Debug("Temp file delete refused, will retry: {Error}", ex.Message);
-            return false;
-        }
+        catch (Exception ex) { Serilog.Log.Debug("Temp file delete refused, will retry: {Error}", ex.Message); return false; }
     }
 }
