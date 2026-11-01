@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -14,7 +15,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard audio and basic visual slice of WPF KeywordTriggerService. OCR and other actions remain a follow-up.</summary>
+/// <summary>Keyboard responses from WPF KeywordTriggerService. OCR and other actions remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -164,32 +165,68 @@ internal sealed class KeywordAudioRuntime
         }
         // WPF KeywordTriggerService.cs:1263-1269 holds dispatch during panic quiet.
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
-        var legacy = fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0);
-        // WPF :1681-1689: legacy HighlightOnly returns before audio or ducking.
-        if (legacy && fired[0].VisualEffect == KeywordVisualEffect.HighlightOnly) return;
-        // WPF :1286-1300 merges enabled effects by variant, in preset priority order.
-        var effects = fired.SelectMany(t => t.Actions ?? new()).OfType<VisualEffectAction>()
-            .Where(a => a.Enabled).Select(a => a.Effect).Distinct().ToList();
+        _ = Dispatch(fired);
+    }
+
+    private async Task Dispatch(List<KeywordTrigger> fired)
+    {
+        var first = fired[0];
+        var legacy = fired.Count == 1 && (first.Actions == null || first.Actions.Count == 0);
+        // WPF KeywordTriggerService.cs:1681-1689: legacy HighlightOnly returns before all responses.
+        if (legacy && first.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
+
+        var actions = new List<KeywordAction>();
         if (legacy)
-            effects.Add(fired[0].VisualEffect); // WPF :1236-1239 legacy fallback
-        // WPF merge: preset first, and only the first enabled PlayAudio action wins.
-        var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
-        if (audio == null && legacy)
         {
-            var t = fired[0];
-            audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
-                PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
+            actions.Add(new PlayAudioAction { FilePath = first.AudioFilePath, Volume = first.AudioVolume,
+                PlayCount = first.AudioPlayCount, DelayBetweenMs = first.AudioDelayBetweenMs, DuckSystemAudio = first.DuckAudio });
+            actions.Add(new VisualEffectAction { Effect = first.VisualEffect });
+            if (first.HapticEnabled) actions.Add(new HapticAction { Intensity = first.HapticIntensity });
+            if (first.XPAward > 0) actions.Add(new AddXpAction { Amount = first.XPAward });
         }
-        // WPF :1351-1354,1397-1399,1698-1700 holds audio while idle; visual responses still fire.
-        var running = CoreSession.IsEngineRunning || CoreSession.IsSessionRunning;
-        if (audio != null && running) Play(audio);
-        else if (!running && legacy && fired[0].DuckAudio && s.AudioDuckingEnabled)
+        else
         {
-            // WPF :1692-1695,1742-1745: legacy ducking still lasts 500ms with no audio.
-            CoreAudio.Duck(s.DuckingLevel);
+            // WPF :1271-1294 keeps every action for one trigger, but deduplicates merged fires
+            // by type (visual effects by variant), preserving the first action's position.
+            var seen = new HashSet<string>();
+            foreach (var trigger in fired)
+                foreach (var action in trigger.Actions ?? new())
+                {
+                    if (action == null || !action.Enabled) continue;
+                    var key = action is VisualEffectAction visual ? $"VisualEffect:{visual.Effect}" : action.GetType().Name;
+                    if (fired.Count == 1 || seen.Add(key)) actions.Add(action);
+                }
+        }
+
+        // WPF :1692-1695,1742-1745 ducks even an idle legacy response for 500ms.
+        if (legacy && !(CoreSession.IsEngineRunning || CoreSession.IsSessionRunning) &&
+            first.DuckAudio && CoreSettings.Current.AudioDuckingEnabled)
+        {
+            CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             _ = ReleaseLegacyDuck(CoreAudio.DuckGeneration);
         }
-        foreach (var effect in effects) FireVisual(effect, fired[0].Keyword);
+
+        // WPF :1363-1367,1491-1518 awaits the repeat gaps before the next action.
+        foreach (var action in actions)
+        {
+            switch (action)
+            {
+                case PlayAudioAction audio:
+                    if ((CoreSession.IsEngineRunning || CoreSession.IsSessionRunning) && !await Play(audio)) return;
+                    break;
+                case VisualEffectAction visual:
+                    FireVisual(visual.Effect, first.Keyword);
+                    break;
+                case HapticAction haptic:
+                    // WPF :1419-1424 uses the keyword pattern and its configured intensity.
+                    _ = CoreHaptics.Service?.TriggerKeywordPatternAsync(first.Keyword, haptic.Intensity);
+                    break;
+                case AddXpAction xp when xp.Amount > 0:
+                    // WPF :1426-1436 applies the multiplier only during a session.
+                    CoreProgression.AddXP(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1), "KeywordTrigger");
+                    break;
+            }
+        }
     }
 
     private async Task ReleaseLegacyDuck(long generation)
@@ -224,6 +261,11 @@ internal sealed class KeywordAudioRuntime
                 case KeywordVisualEffect.ImageFlash:
                     CoreFlash.ShowProvider?.Invoke();
                     break;
+                case KeywordVisualEffect.MindWipe:
+                    // WPF :1795-1798: it is audio, so hold it while idle and skip an empty pool.
+                    if (CoreMindWipe.ClipCount > 0 && (CoreSession.IsEngineRunning || CoreSession.IsSessionRunning))
+                        CoreMindWipe.TriggerOnce();
+                    break;
             }
         }
         catch (Exception ex) { Log.Debug(ex, "Keyword visual failed"); }
@@ -242,9 +284,9 @@ internal sealed class KeywordAudioRuntime
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio)
+    private async Task<bool> Play(PlayAudioAction audio)
     {
-        if (string.IsNullOrEmpty(audio.FilePath)) return;
+        if (string.IsNullOrEmpty(audio.FilePath)) return true;
         var path = audio.FilePath;
         if (!Path.IsPathRooted(path))
         {
@@ -252,7 +294,7 @@ internal sealed class KeywordAudioRuntime
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path)) return true;
         StopAudio();
         var cancellation = _audio = new CancellationTokenSource();
         var token = cancellation.Token;
@@ -261,29 +303,26 @@ internal sealed class KeywordAudioRuntime
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             _duckGeneration = CoreAudio.DuckGeneration;
         }
-        _ = Repeat();
-        async Task Repeat()
+        try
         {
-            try
+            var count = Math.Max(1, audio.PlayCount);
+            for (var i = 0; i < count; i++)
             {
-                var count = Math.Max(1, audio.PlayCount);
-                for (var i = 0; i < count; i++)
-                {
-                    if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
-                    token.ThrowIfCancellationRequested();
-                    _stop?.Invoke();
-                    var last = i == count - 1;
-                    _stop = CoreAudio.PlayStoppable(path,
-                        KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
-                        onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
-                        {
-                            try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
-                            catch (OperationCanceledException) { }
-                        }); });
-                }
+                if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
+                token.ThrowIfCancellationRequested();
+                _stop?.Invoke();
+                var last = i == count - 1;
+                _stop = CoreAudio.PlayStoppable(path,
+                    KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
+                    onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
+                    {
+                        try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
+                        catch (OperationCanceledException) { }
+                    }); });
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); }
+            return true;
         }
+        catch (OperationCanceledException) { return false; }
+        catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); return false; }
     }
 }

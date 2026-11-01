@@ -172,6 +172,116 @@ public sealed class KeywordAudioRuntimeTests
         finally { CoreFlash.ShowProvider = old; ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void KeywordHapticAndXpUseConfiguredValuesAndSessionMultiplier(bool legacy) => Run((engine, s, _) =>
+    {
+        var old = (CoreHaptics.Service, CoreProgression.AddXPProvider, s.KeywordSessionMultiplier, s.AwarenessLoopProtectionEnabled);
+        var hs = new HapticSettings { Enabled = true };
+        hs.EnsureV2Migrated();
+        hs.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.KeywordTrigger).Enabled = true;
+        hs.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.KeywordTrigger).Intensity = 1;
+        using var haptics = new ConditioningControlPanel.Services.HapticService(hs);
+        var pulses = new List<string>(); var xp = new List<(double, string)>();
+        haptics.HapticTriggered += (_, message) => { if (message.StartsWith("KeywordTrigger:")) pulses.Add(message); };
+        try
+        {
+            CoreHaptics.Service = haptics;
+            CoreProgression.AddXPProvider = (amount, source) => xp.Add((amount, source));
+            s.KeywordSessionMultiplier = 2; s.AwarenessLoopProtectionEnabled = false;
+            var t = s.KeywordTriggers[0];
+            t.Actions = legacy ? new() : new() { new HapticAction { Intensity = .4 }, new AddXpAction { Amount = 7 },
+                new HapticAction { Intensity = .8, Enabled = false }, new AddXpAction { Amount = 99, Enabled = false } };
+            t.VisualEffect = KeywordVisualEffect.None; t.HapticEnabled = true; t.HapticIntensity = .4; t.XPAward = 7; t.DuckAudio = false;
+            Type(engine, "sit");
+            Assert.Equal(new[] { "KeywordTrigger: 40%" }, pulses);
+            Assert.Equal(new[] { (7d, "KeywordTrigger") }, xp);
+            CoreSession.IsSessionRunningProvider = () => true;
+            var now = engine.Now(); engine.Now = () => now.AddMinutes(1);
+            Type(engine, "sit");
+            Assert.Equal(2, pulses.Count);
+            Assert.Equal((14d, "KeywordTrigger"), xp.Last());
+            if (legacy)
+            {
+                t.VisualEffect = KeywordVisualEffect.HighlightOnly;
+                engine.Now = () => now.AddMinutes(2);
+                Type(engine, "sit");
+                Assert.Equal(2, pulses.Count); Assert.Equal(2, xp.Count);
+            }
+        }
+        finally { (CoreHaptics.Service, CoreProgression.AddXPProvider, s.KeywordSessionMultiplier, s.AwarenessLoopProtectionEnabled) = old; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MindWipeRequiresAClipAndRunningEngineOrSession(bool legacy) => Run((engine, s, _) =>
+    {
+        var old = (CoreMindWipe.ClipCountProvider, CoreMindWipe.TriggerOnceProvider, s.AwarenessLoopProtectionEnabled);
+        var count = 0; var plays = 0; var engineRunning = false; var session = false;
+        try
+        {
+            CoreMindWipe.ClipCountProvider = () => count;
+            CoreMindWipe.TriggerOnceProvider = () => plays++;
+            CoreSession.IsEngineRunningProvider = () => engineRunning;
+            CoreSession.IsSessionRunningProvider = () => session;
+            s.AwarenessLoopProtectionEnabled = false;
+            var t = s.KeywordTriggers[0]; t.DuckAudio = false; t.HapticEnabled = false; t.XPAward = 0;
+            t.VisualEffect = KeywordVisualEffect.MindWipe;
+            t.Actions = legacy ? new() : new() { new VisualEffectAction { Effect = KeywordVisualEffect.MindWipe } };
+            var now = engine.Now();
+            void Fire() { engine.Now = () => now; Type(engine, "sit"); now = now.AddMinutes(1); }
+            Fire(); Assert.Equal(0, plays);
+            count = 1; Fire(); Assert.Equal(0, plays);
+            engineRunning = true; count = 0; Fire(); Assert.Equal(0, plays);
+            count = 1; Fire(); Assert.Equal(1, plays);
+            engineRunning = false; session = true; Fire(); Assert.Equal(2, plays);
+        }
+        finally { (CoreMindWipe.ClipCountProvider, CoreMindWipe.TriggerOnceProvider, s.AwarenessLoopProtectionEnabled) = old; }
+    });
+
+    [Fact]
+    public Task ActionOrderWaitsForRepeatGapsAndKeepsDuplicatesForSingleTrigger() => RunAsync(async (engine, s, played) =>
+    {
+        var old = (CoreFlash.ShowProvider, CoreProgression.AddXPProvider);
+        var events = new List<string>(); var gap = new TaskCompletionSource();
+        try
+        {
+            CoreFlash.ShowProvider = () => events.Add("flash");
+            CoreProgression.AddXPProvider = (amount, _) => events.Add($"xp:{amount}");
+            var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+            audio.PlayCount = 2; audio.DelayBetweenMs = 250;
+            engine.Delay = (ms, _) => { Assert.Equal(250, ms); return gap.Task; };
+            s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash }, audio,
+                new AddXpAction { Amount = 3 }, new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash }, new AddXpAction { Amount = 4 } };
+            Type(engine, "sit");
+            Assert.Equal(new[] { "flash" }, events); Assert.Single(played);
+            gap.SetResult(); await Task.Yield();
+            Assert.Equal(2, played.Count(p => p.Path != "stopped"));
+            Assert.Equal(new[] { "flash", "xp:3", "flash", "xp:4" }, events);
+        }
+        finally { (CoreFlash.ShowProvider, CoreProgression.AddXPProvider) = old; }
+    });
+
+    [Fact]
+    public void MergedActionsKeepFirstOfEachTypeInOrder() => Run((engine, s, _) =>
+    {
+        var old = (CoreFlash.ShowProvider, CoreProgression.AddXPProvider);
+        var events = new List<string>();
+        try
+        {
+            CoreFlash.ShowProvider = () => events.Add("flash");
+            CoreProgression.AddXPProvider = (amount, _) => events.Add($"xp:{amount}");
+            s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash }, new AddXpAction { Amount = 8 } };
+            s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:first", Keyword = "sit", Actions = new() {
+                new AddXpAction { Amount = 2 }, new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash } } });
+            Type(engine, "sit");
+            Assert.Equal(new[] { "xp:2", "flash" }, events);
+        }
+        finally { (CoreFlash.ShowProvider, CoreProgression.AddXPProvider) = old; }
+    });
+
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
 
     [Fact]
