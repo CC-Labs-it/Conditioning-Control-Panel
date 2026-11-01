@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Companion;
 using Serilog;
 using SkiaSharp;
 
@@ -34,8 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
-    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
-    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// <para>ponytail: not here yet, each a later branch - the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// the Pendulum motion style (Drift and Bounce is below), remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
@@ -55,6 +55,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static int _generation;
+        private static Action? _stopSound;
+        private static bool _soundPlayingForCurrentFlash;
+        private static readonly ShuffleBag<string> VoiceBag = new(p => p, Rng);
+        internal static Func<TimeSpan, Task> UnduckDelay = Task.Delay;
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
         internal static int Generation => _generation;
@@ -79,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
             _busy = true;
+            _soundPlayingForCurrentFlash = false;
             var generation = _generation;
             var scheduled = false;
             try
@@ -95,20 +100,93 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
 
+                // WPF FlashService.cs:992-1031, 1535-1568: the voice starts after the
+                // one-second announcement and the image lifetime follows its length.
+                var announcementDelay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                DispatcherTimer.RunOnce(() => announcementDelay.TrySetResult(), TimeSpan.FromSeconds(1));
+                await announcementDelay.Task;
+                if (_closed || generation != _generation) { foreach (var f in flashes) DisposeFrames(f.Frames); return; }
+                var soundLength = await StartVoice(s, NextVoice(s), generation);
+                if (_closed || generation != _generation) { foreach (var f in flashes) DisposeFrames(f.Frames); return; }
                 var clickable = s.FlashClickable;
-                var lifetime = Lifetime(s, ambient, durationMs);
+                var lifetime = Lifetime(s, ambient, soundLength.HasValue ? (int)soundLength.Value.TotalMilliseconds : durationMs);
                 var cap = Cap(s, ambient);
                 var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
                 var alpha = Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
 
-                // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
-                // staggers 300 ms per image.
-                Schedule(flashes, 1000, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
+                // The announcement delay has elapsed; stagger the pictures by 300 ms.
+                Schedule(flashes, 0, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
                     done: () => _busy = false);
                 scheduled = true;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
             finally { if (!scheduled) _busy = false; }
+        }
+
+        // WPF BuildVoiceLinePool / GetNextSound (FlashService.cs:4410-4465). The shared
+        // catalogue includes both content roots and phrase-library exclusions; add recursive
+        // category folders from the active mod, also respecting the asset and phrase exclusions.
+        internal static List<string> VoicePool(AppSettings s, IEnumerable<string> library, IEnumerable<string> extra)
+        {
+            var pool = library.ToList();
+            var seen = new HashSet<string>(pool.Select(p => Path.GetFileName(p)!), StringComparer.OrdinalIgnoreCase);
+            foreach (var file in AssetFolderExclusion.Enabled(extra.ToList(), CorePaths.EffectiveAssets, s))
+            {
+                var ext = Path.GetExtension(file);
+                if (!ext.Equals(".mp3", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".wav", StringComparison.OrdinalIgnoreCase)
+                    && !ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase)) continue;
+                var id = "VoiceLine:" + Path.GetFileNameWithoutExtension(file);
+                if (s.RemovedPhraseIds.Contains(id) || s.DisabledPhraseIds.Contains(id) || !seen.Add(Path.GetFileName(file))) continue;
+                pool.Add(file);
+            }
+            return pool;
+        }
+
+        private static string? NextVoice(AppSettings s)
+        {
+            try
+            {
+                var library = CompanionVoiceLines.GetRows(s).Where(r => r.IsEnabled && r.AudioFilePath != null).Select(r => r.AudioFilePath!);
+                var folder = CompanionVoiceLines.ResolveFolder().Absolute;
+                var extra = Directory.Exists(folder) ? Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories) : Enumerable.Empty<string>();
+                var pool = VoicePool(s, library, extra);
+                return VoiceBag.TryNext(pool, out var path) ? path : null;
+            }
+            catch (Exception ex) { Log.Debug("Flash: voice pool failed: {E}", ex.Message); return null; }
+        }
+
+        // WPF FlashService.cs:1535-1557, 4679-4717. Audio starts once per burst, never
+        // for hydra children. Stop and panic stop playback, but must not cancel the unduck.
+        internal static async Task<TimeSpan?> StartVoice(AppSettings s, string? path, int generation)
+        {
+            if (!s.FlashAudioEnabled || s.MasterVolume <= 0 || s.AvatarMuted || s.CompanionVoiceLinesMuted
+                || string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            _stopSound?.Invoke();
+            var started = new TaskCompletionSource<TimeSpan?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var master = s.MasterVolume / 100f;
+            var gain = CompanionVoiceGain.ApplyLevel(Math.Max(0.05f, (float)Math.Pow(master, 1.5)) * CompanionVoiceGain.BarkTrim, s.CompanionVoiceLevel);
+            // LibVLC refuses a zero gain, while WPF plays silently at voice level zero.
+            _stopSound = CoreAudio.PlayStoppable(path, Math.Max(gain, 0.000001f), "flash-voice",
+                length => started.TrySetResult(length > TimeSpan.Zero ? length : TimeSpan.FromSeconds(5)),
+                () => started.TrySetResult(null));
+            TimeSpan? duration;
+            try { duration = await started.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
+            catch (TimeoutException) { _stopSound?.Invoke(); _stopSound = null; return null; }
+            if (!duration.HasValue || generation != _generation || _closed) return null;
+            _soundPlayingForCurrentFlash = true;
+            if (s.AudioDuckingEnabled)
+            {
+                CoreAudio.Duck(s.DuckingLevel);
+                var duckGeneration = CoreAudio.DuckGeneration;
+                _ = ReleaseVoiceDuck(duration.Value + TimeSpan.FromMilliseconds(1500), duckGeneration);
+            }
+            return duration;
+        }
+
+        internal static async Task ReleaseVoiceDuck(TimeSpan delay, long generation)
+        {
+            await UnduckDelay(delay);
+            CoreAudio.Unduck(generation);
         }
 
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
@@ -162,7 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>What a shown flash pays (WPF FlashService.cs:1608, 1834-1877, 2165-2172): session
-        /// log and history, the lucky chime, XP (4: this head plays no flash sound; a hydra child with
+        /// log and history, the lucky chime, XP (8 with a voice, 4 without; a hydra child with
         /// independent timing pays less; x10 lucky), and the achievement + quest tick, which a linked
         /// hydra child skips only when timing is independent.</summary>
         internal static void Paid(string path, AppSettings s, int hydraGeneration, int multiplier)
@@ -170,7 +248,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
             if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed
-            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: false, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
+            CoreProgression.AddXP(FlashFxRules.Xp(_soundPlayingForCurrentFlash, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
             if (s.HydraLinkedTiming || hydraGeneration == 0)
             {
                 App.Achievements?.TrackFlashImage();   // WPF AchievementService.cs:388
@@ -365,6 +443,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _generation++;
             _closed |= final;
+            _stopSound?.Invoke();
+            _stopSound = null;
+            _soundPlayingForCurrentFlash = false;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
         }
