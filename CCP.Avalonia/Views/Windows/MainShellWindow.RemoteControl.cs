@@ -30,6 +30,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopSessionFromRemote()
         {
             _engineGen++;
+            // WPF SessionEngine.cs:384 and MainWindow.StartStop.cs:547 force all ducks off on stop.
+            if (App.Sessions?.IsRunning == true || CoreEngine.IsRunning)
+            {
+                try { Platform.LibVlcAudio.Instance?.ForceUnduck(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Remote stop: force unduck failed"); }
+            }
             if (App.Sessions is { IsRunning: true } runner) runner.Stop(completed: false);
             if (CoreEngine.IsRunning) StopEngine();
         }

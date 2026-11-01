@@ -71,7 +71,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The one relay client (WPF App.RemoteControl). Commands run through Core's gate and table.
         /// Tests swap in a fake-relay client before opening the shell.</summary>
-        internal static Lazy<RemoteRelay> Relay = new(() => new RemoteRelay(
+        internal static Lazy<RemoteRelay> Relay = NewRelay();
+
+        internal static Lazy<RemoteRelay> NewRelay() => new(() => new RemoteRelay(
             () => CoreSettings.Current.AuthToken, () => CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersion,
             ExecuteRemoteCommand, RemoteCommands.StopEffects));
 
