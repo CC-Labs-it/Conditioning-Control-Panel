@@ -156,6 +156,82 @@ public sealed class ProgramIgnitionTests
             ((ISolidColorBrush)F<Border>("ProgramsGraduatedCard").BorderBrush!).Color);
     });
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    public void DayCompleteBannerSpringsOncePerDayAndAgainForANewAttempt(MotionLevel motion) => WithRun(lastDay: false, (_, tab, svc, _) =>
+    {
+        CoreSettings.Current.MotionLevel = motion;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        var banner = tab.FindControl<Border>("TodayCompleteBanner")!;
+        var scale = (ScaleTransform)banner.RenderTransform!;
+        Assert.False(banner.IsVisible);
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.True(banner.IsVisible);
+        Assert.Equal(.9, scale.ScaleX, 3);
+        Assert.Equal(.9, scale.ScaleY, 3);
+        Step(.175);
+        Assert.Equal(1.0175, scale.ScaleX, 4); // WPF BackEase out, amplitude 0.6
+        Assert.Equal(scale.ScaleX, scale.ScaleY, 4);
+        tab.RefreshPrograms(); // a repaint must not restart the spring
+        Assert.Equal(1.0175, scale.ScaleX, 4);
+        Step(.175);
+        Assert.Equal(1, scale.ScaleX, 3);
+        tab.RefreshPrograms();
+        Assert.Equal(1, scale.ScaleX, 3);
+        svc.ActiveEnrollment!.AttemptNumber++;
+        tab.RefreshPrograms();
+        Assert.Equal(.9, scale.ScaleX, 3);
+    });
+
+    [Fact]
+    public void DayCompletedWithMotionOffDoesNotReplayWhenMotionReturns() => WithRun(lastDay: false, (_, tab, svc, _) =>
+    {
+        var scale = (ScaleTransform)tab.FindControl<Border>("TodayCompleteBanner")!.RenderTransform!;
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.Equal(1, scale.ScaleX, 3);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        tab.RefreshPrograms();
+        Step(.175);
+        Assert.Equal(1, scale.ScaleX, 3);
+    });
+
+    [Theory]
+    [InlineData("off")]
+    [InlineData("minimise")]
+    [InlineData("hide")]
+    [InlineData("leave")]
+    public void DayCompleteBannerSettlesWhenMotionStopsAndDoesNotReplay(string gate) => WithRun(lastDay: false, (shell, tab, svc, _) =>
+    {
+        var scale = (ScaleTransform)tab.FindControl<Border>("TodayCompleteBanner")!.RenderTransform!;
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.Equal(.9, scale.ScaleX, 3);
+        if (gate == "off")
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
+        else if (gate == "minimise") shell.WindowState = WindowState.Minimized;
+        else if (gate == "hide") tab.IsVisible = false;
+        else { svc.ActiveEnrollment!.State = ProgramEnrollmentState.Lapsed; tab.RefreshPrograms(); }
+        Assert.Equal(1, scale.ScaleX, 3);
+        Assert.Equal(1, scale.ScaleY, 3);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        shell.WindowState = WindowState.Normal;
+        tab.IsVisible = true;
+        if (gate == "leave") svc.ActiveEnrollment!.State = ProgramEnrollmentState.Active;
+        tab.RefreshPrograms();
+        Step(.175);
+        Assert.Equal(1, scale.ScaleX, 3);
+    });
+
     [Fact]
     public void TodaysPipBreathesOnTheBeatAndParksWithEveryGate() => WithRun(lastDay: true, (shell, tab, _, _) =>
     {

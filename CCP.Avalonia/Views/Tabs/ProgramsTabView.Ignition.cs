@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// rail comet, particles - plus the day / chapter / graduation moments. Ambient loops run only while
     /// the tab is visible and attached, Motion allows them and the shell is not minimised (WPF
     /// ProgramsFx.cs:818; focus loss only parks the particle canvas, which watches IsActive itself) (P01); the rig and generated rail nodes own cancellation groups, stopped on hide and on detach (P65). Display only: nothing is written.
-    /// ponytail: FireBurstAt sparks (task tick, seal, graduation) and the banner spring have no Avalonia twin yet. The live session sheen rides BeatLoop.
+    /// FireBurstAt sparks (task tick, seal, graduation) have no Avalonia twin yet. The live session sheen rides BeatLoop.
     /// </summary>
     public partial class ProgramsTabView
     {
@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _dayJustCompleted;
         private Window? _fxWindow;
         private CancellationTokenSource? _railPipCts;
+        private BeatLoop? _bannerPop;
         private readonly HashSet<ProgramDayPip> _ignitedPips = new();
 
         /// <summary>Tests read these: the heat tier last computed, and whether ambient clocks run.</summary>
@@ -100,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>One-shot moments are cancelled on hide/detach (and settle at rest via their done hooks).</summary>
         private void StopMoments()
         {
+            StopBannerPop();
             _momentCts?.Cancel();
             _momentCts?.Dispose();
             _momentCts = null;
@@ -116,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void SyncIgnition()
         {
             RefreshLiveSessionProgress();
+            if (!Env.AllowTransitions || Shell is { WindowState: WindowState.Minimized }) StopBannerPop();
             if (!IsVisible || VisualRoot is null) { StopIgnitionLoops(); StopMoments(); return; }
             if (_ignitionEnrollment != null && Find<StackPanel>("ProgramsRunPanel").IsVisible)
                 ApplyIgnition(_ignitionEnrollment);
@@ -459,6 +462,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (string.Equals(_dayCompletePopped, dayKey, StringComparison.Ordinal)) return;
             _dayCompletePopped = dayKey;
             _dayJustCompleted = tabVisible;
+        }
+
+        /// <summary>WPF ProgramsTab.cs:969-985,1833-1843: 0.9 to 1 in 350 ms, BackEase 0.6.</summary>
+        private void PopDayCompleteBanner()
+        {
+            StopBannerPop();
+            if (!Env.AllowTransitions || Shell is { WindowState: WindowState.Minimized }) return;
+            var scale = (ScaleTransform)Find<Border>("TodayCompleteBanner").RenderTransform!;
+            var ease = new global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude { Amplitude = 0.6 };
+            _bannerPop = new BeatLoop(this, t =>
+            {
+                var value = 0.9 + 0.1 * ease.Ease(Math.Min(t / 0.35, 1));
+                scale.ScaleX = scale.ScaleY = value;
+                if (t >= 0.35) StopBannerPop();
+            });
+            _bannerPop.OnParked = StopBannerPop;
+            _bannerPop.Start();
+        }
+
+        private void StopBannerPop()
+        {
+            _bannerPop?.Stop();
+            _bannerPop = null;
+            if (this.FindControl<Border>("TodayCompleteBanner")?.RenderTransform is ScaleTransform scale)
+                scale.ScaleX = scale.ScaleY = 1;
         }
 
         /// <summary>WPF PlayProgramDayCompleteMoment: an accent wave across the band and the day's real XP.</summary>
