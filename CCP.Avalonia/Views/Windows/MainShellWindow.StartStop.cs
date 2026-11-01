@@ -2,9 +2,8 @@
 // BtnStartMenu_Click, MenuStartNormal_Click, StartEngine (:294), StopEngine (:444) and
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
-// ponytail: still missing, each with no service on this head: the remote-control gate,
-// Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler, the Presets "running" label and the hero FX.
+// Still missing: Relapse, system-start counting, Brain Drain and Takeover lifecycle,
+// ramp and scheduler starts, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -29,9 +28,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async void BtnStart_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (RemoteControllerConnected) return;   // WPF StartStop.cs:43: a controller drives
-            if ((CoreEngine.IsRunning || App.Sessions?.IsRunning == true) && RefuseStopUnderLockdown()) return;
+            if (CoreEngine.IsRunning && RefuseStopUnderLockdown()) return;
             // WPF MainWindow.StartStop.cs:58: a running session asks first; declining keeps everything on.
-            if (App.Sessions?.IsRunning == true)
+            if (CoreEngine.IsRunning && App.Sessions?.IsRunning == true)
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body",
@@ -48,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StartEngineFromUser()
         {
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-            StartEngine();
+            StartEngine(resumeSession: true);
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -78,18 +77,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine()
+        internal void StartEngine(bool resumeSession = false)
         {
+            var parked = resumeSession && App.Sessions is { IsRunning: true, IsPaused: true } r ? r : null;
             var gen = ++_engineGen;
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
-                CoreEngine.Start();
+                if (parked != null && (!ReferenceEquals(App.Sessions, parked) || !parked.IsRunning || !parked.IsPaused)) return;
+                CoreEngine.Start(resumingSession: parked != null);
+                if (parked != null)
+                {
+                    parked.Resume();
+                    parked.ReassertScheduleAfterEngineStart();
+                }
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
+                if (parked != null) { SetPauseButton(false); OnSessionTick(); }
             });
         }
 

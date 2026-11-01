@@ -285,6 +285,23 @@ namespace ConditioningControlPanel.Services
             Log.Information("Session resumed");
         }
 
+        /// <summary>WPF SessionEngine.ReassertScheduleAfterEngineStart (SessionEngine.cs:614):
+        /// hold deferred effects off after the engine starts and keep global Mind Wipe out of a session.</summary>
+        public void ReassertScheduleAfterEngineStart()
+        {
+            if (!IsRunning || IsPaused || CurrentSession is not { } session) return;
+            if (_deferred.IsPending("flash")) CoreFlash.Stop();
+            if (_deferred.IsPending("subliminal")) CoreSubliminal.Stop();
+            if (_deferred.IsPending("bouncing text")) CoreBouncingText.Stop();
+            if (_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Stop();
+            else if (session.Settings.LockCardEnabled)
+            {
+                LockCardScheduler.Instance.Stop();
+                LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
+            }
+            CoreMindWipe.Stop();
+        }
+
         private void StartAt(string name, int minute, Action start, Action stop)
         {
             if (minute == 0) { start(); return; }
