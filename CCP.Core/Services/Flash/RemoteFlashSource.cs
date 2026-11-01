@@ -34,6 +34,8 @@ namespace ConditioningControlPanel.Services.Flash
         private const int PrefetchGapSeconds = 1;
         internal const int ClipMaxBytes = 40 * 1024 * 1024;
         internal const int PosterMaxBytes = 8 * 1024 * 1024;
+        // A head enables this only when it has a clip player. Poster-only heads spend no clip allowance.
+        internal static bool ClipConsumer;
         private static readonly RemoteFlashPool Pool = new();
         private static readonly object Lock = new();
         private static readonly RemoteClipFiles Clips = new();
@@ -86,19 +88,20 @@ namespace ConditioningControlPanel.Services.Flash
                 Func<string, bool> usable = url => Clips.TryUse(url, Environment.TickCount64, out var clip, out var poster) && File.Exists(poster) && File.Exists(clip);
                 var url = Pool.Take(rng, usable) ?? Pool.TakeShown(usable);
                 return url != null && Clips.TryUse(url, Environment.TickCount64, out var path, out var posterPath)
-                    ? new RemoteFlashItem(url, posterPath, path) : null;
+                    ? new RemoteFlashItem(url, posterPath, path == posterPath ? "" : path) : null;
             }
         }
         internal static string? ClipPath(string url)
         {
-            lock (Lock) return Clips.TryUse(url, Environment.TickCount64, out var path, out _) && File.Exists(path) ? path : null;
+            lock (Lock) return Clips.TryUse(url, Environment.TickCount64, out var path, out var poster) && path != poster && File.Exists(path) ? path : null;
         }
         internal static void CleanupCache()
         {
             List<string> dropped;
             lock (Lock)
             {
-                Cts.Cancel();
+                try { Cts.Cancel(); }
+                catch (Exception ex) { Log.Debug("[Flash] prefetch cancellation failed: {Type}", ex.GetType().Name); }
                 Cts = new CancellationTokenSource();
                 Pool.Clear();
                 dropped = Clips.TakeAll();
@@ -106,12 +109,17 @@ namespace ConditioningControlPanel.Services.Flash
             }
             foreach (var path in dropped) ReleaseClip(path);
         }
-        private static string OwnClip(string source)
+        private static string OwnClip(string url, string source)
         {
             var folder = CorePaths.MediaTemp();
             Directory.CreateDirectory(folder);
             var path = Path.Combine(folder, ScrolllerDiskCache.TempPrefix + Guid.NewGuid().ToString("N") + Path.GetExtension(source));
-            try { File.Copy(source, path); return path; }
+            try
+            {
+                File.Copy(source, path);
+                ScrolllerDiskCache.StampBorn(path, ScrolllerDiskCache.DownloadedUtcOf(url) ?? File.GetCreationTimeUtc(source));
+                return path;
+            }
             catch { ReleaseClip(path); throw; }
         }
         private static void ReleaseClip(string path)
@@ -137,6 +145,7 @@ namespace ConditioningControlPanel.Services.Flash
                     Log.Debug("Flash: remote fetch failed ({Error}); staying on the local pool", error);
                     return;
                 }
+                var consumeClips = ClipConsumer;
                 var warmed = 0;
                 foreach (var entry in entries)
                 {
@@ -155,20 +164,26 @@ namespace ConditioningControlPanel.Services.Flash
                     List<string>? dropped = null;
                     try
                     {
-                        if (path == null)
+                        if (path == null && consumeClips)
                         {
                             var cached = await Download(url, ClipMaxBytes, ct).ConfigureAwait(false);
                             if (cached == null) continue;
-                            path = OwnClip(cached);
+                            path = OwnClip(url, cached);
                             ours = true;
                         }
                         var poster = await Download(entry.PosterUrl!, PosterMaxBytes, ct).ConfigureAwait(false);
                         if (poster == null) continue;
+                        if (!consumeClips)
+                        {
+                            path = OwnClip(entry.PosterUrl!, poster);
+                            poster = path;
+                            ours = true;
+                        }
                         RefreshSelection();
                         lock (Lock)
                         {
                             if (ct.IsCancellationRequested || generation != Pool.Generation) return;
-                            dropped = Clips.Put(url, path, poster, Environment.TickCount64);
+                            dropped = Clips.Put(url, path!, poster, Environment.TickCount64);
                             ours = false;
                             if (Pool.Add(generation, url)) warmed++;
                         }

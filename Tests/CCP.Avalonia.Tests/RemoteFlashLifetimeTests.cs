@@ -47,7 +47,7 @@ public sealed class RemoteFlashLifetimeTests
     }
 
     [Fact]
-    public Task FinalCloseClosesWindowsEvenIfPrefetchCancellationThrows() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task FinalCloseCleansUpEvenIfPrefetchCancellationThrows() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
@@ -59,11 +59,14 @@ public sealed class RemoteFlashLifetimeTests
         window.Closed += (_, _) => { closed = true; FlashOverlay.Active.RemoveAll(a => a.Window == window); };
         window.Show();
         FlashOverlay.Active.Add((window, default));
+        var pool = (RemoteFlashPool)typeof(RemoteFlashSource).GetField("Pool", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        Assert.True(pool.Add(pool.Generation, "pending"));
         var cts = (CancellationTokenSource)typeof(RemoteFlashSource).GetField("Cts", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
         var registration = cts.Token.Register(() => throw new InvalidOperationException("cancellation probe"));
         try
         {
-            Assert.Throws<AggregateException>(() => FlashOverlay.CloseAll());
+            Assert.Null(Record.Exception(() => FlashOverlay.CloseAll()));
+            Assert.Equal(0, RemoteFlashSource.ReadyCount);
             Assert.True(closed);
         }
         finally

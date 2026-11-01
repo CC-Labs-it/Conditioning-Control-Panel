@@ -28,12 +28,13 @@ public sealed class RemoteFlashSourceTests
         Id = "test", Url = "https://example.invalid/clip.mp4?variant=1",
         PosterUrl = "https://example.invalid/poster.jpg", Origin = "online", Type = "video"
     };
-    private static async Task WithSource(Func<Task> body)
+    private static async Task WithSource(Func<Task> body, bool clipConsumer = true)
     {
-        var (settings, fetch, download) = (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download);
+        var (settings, fetch, download, consumer) = (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download, RemoteFlashSource.ClipConsumer);
         try
         {
             RemoteFlashSource.CleanupCache();
+            RemoteFlashSource.ClipConsumer = clipConsumer;
             RemoteFlashSource.Settings = () => new AppSettings { MediaSource = "online", RemoteMediaConsented = true };
             RemoteFlashSource.Fetch = _ => Task.FromResult((new List<FypAssetManifest.Entry> { Clip }, (string?)null));
             await body();
@@ -41,19 +42,29 @@ public sealed class RemoteFlashSourceTests
         finally
         {
             RemoteFlashSource.CleanupCache();
-            (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download) = (settings, fetch, download);
+            (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download, RemoteFlashSource.ClipConsumer) = (settings, fetch, download, consumer);
         }
     }
     [Fact]
     public Task OwnedClipSurvivesDeviceCacheEvictionAndIsReleasedByPanic() => WithSource(async () =>
     {
         var dir = Directory.CreateTempSubdirectory("ccp-clip-ownership-").FullName;
+        var (root, inline, clock) = (ScrolllerDiskCache.RootProvider, ScrolllerDiskCache.WarmInline, ScrolllerDiskCache.UtcNow);
         try
         {
-            var cached = Path.Combine(dir, "clip.mp4");
+            var cache = Directory.CreateDirectory(Path.Combine(dir, "cache")).FullName;
+            var cached = Path.Combine(cache, ScrolllerDiskCache.FileNameFor(Clip.Url));
             var poster = Path.Combine(dir, "poster.jpg");
             File.WriteAllBytes(cached, new byte[] { 1, 2, 3 });
             File.WriteAllBytes(poster, new byte[] { 4 });
+            var born = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+            ScrolllerDiskCache.UtcNow = () => born.AddHours(23);
+            var book = new ScrolllerCacheBook { FormatChecked = true };
+            book.Put(new ScrolllerCacheEntry(Clip.Url, cached, 3, born, new ScrolllerCacheMeta("clip"), born));
+            File.WriteAllText(Path.Combine(cache, ScrolllerDiskCache.IndexFileName), book.ToJson());
+            ScrolllerDiskCache.RootProvider = () => cache;
+            ScrolllerDiskCache.WarmInline = true;
+            Assert.Equal(born, ScrolllerDiskCache.DownloadedUtcOf(Clip.Url));
             int clips = 0;
             RemoteFlashSource.Download = (url, _, _) =>
             {
@@ -64,16 +75,52 @@ public sealed class RemoteFlashSourceTests
             await RemoteFlashSource.Prefetching;
             var item = RemoteFlashSource.TryTake(new Random(1))!.Value;
             Assert.NotEqual(cached, item.ClipPath);
+            Assert.Equal(born, File.GetLastWriteTimeUtc(item.ClipPath), TimeSpan.FromSeconds(1));
+            Assert.True(ScrolllerDiskCache.CopyDue(item.ClipPath, t => t == born));
             Assert.Equal(1, clips); // repeated URLs keep the same owned file
             File.Delete(cached); // the shared cache sweeps its own copy
             Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(item.ClipPath));
             Assert.Equal(item.ClipPath, RemoteFlashSource.ClipPath(Clip.Url));
-            RemoteFlashSource.CleanupCache();
+            var cts = (CancellationTokenSource)typeof(RemoteFlashSource).GetField("Cts", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+            using var registration = cts.Token.Register(() => throw new InvalidOperationException("cancellation probe"));
+            Assert.Null(Record.Exception(RemoteFlashSource.CleanupCache));
             Assert.False(File.Exists(item.ClipPath));
             Assert.True(File.Exists(poster)); // never delete device-cache files
         }
-        finally { Directory.Delete(dir, recursive: true); }
+        finally { ScrolllerDiskCache.RootProvider = root; ScrolllerDiskCache.WarmInline = inline; ScrolllerDiskCache.UtcNow = clock; Directory.Delete(dir, recursive: true); }
     });
+    [Fact]
+    public async Task PosterOnlyHeadNeverDownloadsClipsOrDeletesTheDevicePoster()
+    {
+        Assert.False(RemoteFlashSource.ClipConsumer);
+        await WithSource(async () =>
+        {
+            var dir = Directory.CreateTempSubdirectory("ccp-flash-posters-").FullName;
+            try
+            {
+                var poster = Path.Combine(dir, "poster.jpg");
+                File.WriteAllBytes(poster, new byte[] { 4, 5, 6 });
+                RemoteFlashSource.Download = (url, max, _) =>
+                {
+                    Assert.Equal(Clip.PosterUrl, url);
+                    Assert.Equal(RemoteFlashSource.PosterMaxBytes, max);
+                    return Task.FromResult<string?>(poster);
+                };
+                RemoteFlashSource.EnsurePrefetch();
+                await RemoteFlashSource.Prefetching;
+                var item = RemoteFlashSource.TryTake(new Random(1))!.Value;
+                Assert.Equal(Clip.Url, item.Url);
+                Assert.Equal("", item.ClipPath);
+                Assert.Null(RemoteFlashSource.ClipPath(Clip.Url));
+                Assert.NotEqual(poster, item.PosterPath);
+                Assert.Equal(new byte[] { 4, 5, 6 }, File.ReadAllBytes(item.PosterPath));
+                RemoteFlashSource.CleanupCache();
+                Assert.False(File.Exists(item.PosterPath));
+                Assert.True(File.Exists(poster));
+            }
+            finally { Directory.Delete(dir, recursive: true); }
+        }, clipConsumer: false);
+    }
     [Theory]
     [InlineData(0)] // poster failed
     [InlineData(1)] // poster threw cancellation
