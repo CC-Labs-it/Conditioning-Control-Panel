@@ -27,6 +27,25 @@ public class ChaosLiveBubbleTests
     }
 
     [Fact]
+    public void Pickup_freeze_holds_motion_and_fuses_but_allows_a_defuse_channel()
+    {
+        // WPF BubbleService.cs:3796,4531: channel runs even while frozen.
+        var (f, b, log) = Field(Live(5000));
+        f.FreezeChaos = true;
+        var before = (b.X, b.Y, b.FuseRemainingMs);
+        for (int i = 0; i < 100; i++) f.Step();
+        Assert.Equal(before, (b.X, b.Y, b.FuseRemainingMs));
+        f.PressLive(b, true, b.CenterX, b.CenterY);
+        for (int i = 0; i < 32; i++) f.Step();
+        Assert.Equal(new[] { "snap:held" }, log);
+        f.FreezeChaos = false;
+        var (_, other, _) = Field(Live(5000));
+        f.Bubbles.Add(other);
+        f.Step();
+        Assert.True(other.FuseRemainingMs < 5000);
+    }
+
+    [Fact]
     public void The_fuse_burns_32ms_a_step_and_fuse_out_detonates_once()
     {
         var (f, b, log) = Field(Live(320));

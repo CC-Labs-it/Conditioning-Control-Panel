@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -7,6 +8,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel;
 using Xunit;
@@ -138,6 +140,48 @@ public sealed class ChaosPopTextTests
                 BeatLoop.Time = clock;
                 ChaosPopText.PlatformCanShow = canShow;
                 CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task A_freeze_pop_shows_a_real_label_without_an_observer()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var prepare = ChaosPopText.Prepare;
+            var canShow = ChaosPopText.PlatformCanShow;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            var audio = ConditioningControlPanel.CoreAudio.PlayOneShotProvider;
+            int prepared = 0;
+            ChaosPopText.Prepare = (w, r) => { prepared++; w.Position = r.Position; return true; };
+            ChaosPopText.PlatformCanShow = () => true;
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
+            try
+            {
+                ChaosPopText.ShutdownPool();
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var b = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(ChaosBubbleVariants.All.Single(v => v.Id == "bambifreeze"), 1));
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Dispatcher.UIThread.RunJobs();
+                var w = Assert.Single(ChaosPopText.Pool.All);
+                Assert.True(w.IsVisible);
+                Assert.Equal("FREEZE", w.LabelText);
+                Assert.Equal(Color.FromRgb(170, 237, 255), ((ISolidColorBrush)w.LabelFill).Color);
+                Assert.Equal(1, prepared);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosPopText.ShutdownPool();
+                ChaosPopText.Prepare = prepare;
+                ChaosPopText.PlatformCanShow = canShow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+                CoreAudio.PlayOneShotProvider = audio;
             }
             return Task.CompletedTask;
         });

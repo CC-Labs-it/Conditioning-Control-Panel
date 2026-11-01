@@ -729,6 +729,38 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_freeze_pickup_plays_its_catch_and_flashes_its_effect_word(bool mod)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                log.Clear();
+                CoreSettings.Current.MasterVolume = 100;
+                CoreSettings.Current.BubblesVolume = 100;
+                CoreModArt.AudioOverridePathProvider = p => mod && p == "chaos/freeze_catch.mp3" ? System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "chime2.mp3") : null;
+                string? played = null;
+                float volume = 0;
+                CoreAudio.PlayOneShotProvider = (p, v, _, _, _) => { played = p; volume = v; log.Add("sfx"); };
+                ChaosRunHost.PopText = (_, _, word, color) => log.Add($"label:{word}:{color.ToUInt32():X8}");
+                var b = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(ChaosBubbleVariants.All.Single(v => v.Id == "bambifreeze"), 1));
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.Equal((mod ? "chime2.mp3" : "freeze_catch.mp3", 0.6f), (System.IO.Path.GetFileName(played), volume));
+                Assert.Equal(new[] { "label:FREEZE:FF8AE6FF", "sfx" }, log.Take(2));
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF Pulse/Shake (:1672) honour the run's flash and shake toggles; panic clears a live
     /// field without a label, cue or effect (EndChaosMode fires nothing).</summary>
     [Fact]
