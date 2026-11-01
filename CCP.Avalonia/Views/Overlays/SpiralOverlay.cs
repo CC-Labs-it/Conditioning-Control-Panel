@@ -44,6 +44,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _timer;
         private static int _index;
         private static bool _refused;
+        private static double? _sustainedOpacity;
+
+        // WPF OverlayService.cs:1109-1154: hold independently of the engine and saved flag.
+        // Decode may complete later; Refresh rechecks the hold before putting windows up.
+        internal static void ShowSustained(Visual host, double opacity)
+        {
+            _sustainedOpacity = Math.Clamp(opacity, 0, 1);
+            Refresh(host);
+        }
+
+        // WPF OverlayService.cs:1193: release ownership, retaining a running persistent spiral.
+        internal static void HideSustained(Visual host)
+        {
+            _sustainedOpacity = null;
+            Refresh(host);
+        }
 
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
@@ -79,17 +95,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
-        /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
-        /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(
-            Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+        /// <summary>WPF SessionEngine.cs:814: a running session's ramp replaces a voice hold's opacity; a paused
+        /// one does not (pause ran Overlay.Stop, SessionEngine.cs:530, and the ramp tick is stopped).
+        /// Otherwise use the hold or saved slider, clamped before WPF's #722 paint curve.</summary>
+        internal static double PaintedOpacity => SpiralFrames.Paint(Math.Clamp(
+            (App.Sessions is { IsRunning: true, IsPaused: false, SpiralOpacity: { } ramp } ? ramp / 100.0 : (double?)null)
+                ?? _sustainedOpacity ?? CoreSettings.Current.SpiralOpacity / 100.0, 0, 1));
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (_sustainedOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -108,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
                 if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
+                _sustainedOpacity = null;
                 CloseWindows();
                 return;
             }
@@ -129,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
                 Log.Debug("Spiral: no composited click-through overlay on this platform, so no spiral");
+                _sustainedOpacity = null; // WPF OverlayService.cs:1154: no window means no hold, but keep the run pick.
                 return;
             }
 
@@ -153,12 +173,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Windows.Add(w);
             }
             _shownOn = want;
+            if (Windows.Count == 0) _sustainedOpacity = null;
             QuestMinutes.Follow(Windows.Count > 0);
             if (video && Windows.Count > 0)
             {
                 try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
-                if (_videoPlayer == null) { CloseWindows(); return; }
+                if (_videoPlayer == null) { _sustainedOpacity = null; CloseWindows(); return; }
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
@@ -181,6 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _sustainedOpacity = null; // WPF OverlayService.cs:2151: stop/panic drops the hold.
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
@@ -220,8 +242,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Decoding = DecodeThenRefresh(host, path);
         }
 
+        // Tests hold decode completion across pause without relying on worker timing.
+        internal static Func<Task>? BeforeDecodeForTests;
+
         private static async Task DecodeThenRefresh(Visual host, string path)
         {
+            if (BeforeDecodeForTests is { } beforeDecode) await beforeDecode();
             var (frames, delay) = await Task.Run(() => Decode(path));
             if (frames.Count == 0) Log.Warning("Spiral: no frames decoded from {Path}; spiral not shown", path);
             foreach (var old in _frames) old.Dispose();
