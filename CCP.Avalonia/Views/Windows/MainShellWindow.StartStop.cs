@@ -7,6 +7,7 @@
 // ramp starts, the scheduler, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
+using System;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Media;
@@ -20,6 +21,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Bumped by every Stop, so a Start still waiting on the portal bind (up to 30 s) is dropped
         // if the user stopped or panicked meanwhile.
         private static int _engineGen;
+
+        // WPF MainWindow.xaml.cs:146 / MainWindow.StartStop.cs:607.
+        internal event EventHandler? EngineStopped;
 
         private void BtnStartMenu_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -115,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             LockCardWindow.ForceCloseAll();
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
+            EngineStopped?.Invoke(this, EventArgs.Empty);
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).
             if (App.Sessions?.IsRunning == true) { SetPauseButton(App.Sessions.IsPaused); return; }
             // WPF OnSessionStopped: the session button and the dials come back on every exit path.
