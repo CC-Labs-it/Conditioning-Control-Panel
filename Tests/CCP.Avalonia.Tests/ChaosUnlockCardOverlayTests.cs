@@ -173,7 +173,7 @@ public sealed class ChaosUnlockCardOverlayTests
             string cue = System.IO.Path.GetFileNameWithoutExtension(p);
             cues.Add(cue);
             if (cue.StartsWith("chime", StringComparison.Ordinal))
-                showerAtChime = ChaosRunHost.State!.RecentEvents.Contains("🚿 welcome shower — treats from above");
+                showerAtChime = ChaosRunHost.State!.RecentEvents.Contains(Feed("🚿", "Chaos_FeedWelcomeShower"));
         };
         ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
         ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
@@ -203,9 +203,9 @@ public sealed class ChaosUnlockCardOverlayTests
         typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
             | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null });
         Assert.Equal(shields + 1, state.Shields);
-        Assert.Single(state.RecentEvents, e => e == "♥ resisted → +1 resistance");
-        Assert.DoesNotContain("🚿 welcome shower — treats from above", state.RecentEvents);
-        Assert.DoesNotContain("🕳 the last loop.", state.RecentEvents);
+        Assert.Single(state.RecentEvents, e => e == Feed("♥", "Chaos_FeedResisted"));
+        Assert.DoesNotContain(Feed("🚿", "Chaos_FeedWelcomeShower"), state.RecentEvents);
+        Assert.DoesNotContain(Feed("🕳", "Chaos_FeedLastLoop"), state.RecentEvents);
         Assert.Equal(flashes, pulses.Contains((0xFF78DCA0u, 0.22)));
         Assert.Equal(("resistance", ChaosAnnounceKind.Willpower, ConditioningControlPanel.Localization.Loc.Get("Chaos_DraftResistance")),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
@@ -236,10 +236,10 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
         Assert.Single(cues, c => c.StartsWith("chime", StringComparison.Ordinal)); // WPF :1658
         Assert.Equal(false, showerAtChime); // the feed entry follows the chime
-        Assert.Equal("🕳 the last loop.", state.RecentEvents[0]);
-        Assert.Equal("🚿 welcome shower — treats from above", state.RecentEvents[1]);
-        Assert.Single(state.RecentEvents, e => e == "🕳 the last loop.");
-        Assert.Single(state.RecentEvents, e => e == "🚿 welcome shower — treats from above");
+        Assert.Equal(Feed("🕳", "Chaos_FeedLastLoop"), state.RecentEvents[0]);
+        Assert.Equal(Feed("🚿", "Chaos_FeedWelcomeShower"), state.RecentEvents[1]);
+        Assert.Single(state.RecentEvents, e => e == Feed("🕳", "Chaos_FeedLastLoop"));
+        Assert.Single(state.RecentEvents, e => e == Feed("🚿", "Chaos_FeedWelcomeShower"));
     });
 
     [Theory]
@@ -269,7 +269,7 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.True(reroll.IsVisible);
         reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(0, state.RerollsLeft);
-        Assert.Single(state.RecentEvents, e => e == "🎲 tempted fate again");
+        Assert.Single(state.RecentEvents, e => e == Feed("🎲", "Chaos_FeedReroll"));
         Assert.False(reroll.IsVisible);
         if (debut) Assert.Equal(((string?)null, ChaosAnnounceKind.Willpower, "you're allowed to refuse now."),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
@@ -298,9 +298,9 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal(curse ? ChaosOverlayWindow.CurseIcon : FluentIcons.Common.Symbol.Diamond, icon.Kind);
         Assert.Equal(FluentIcons.Common.IconVariant.Filled, icon.Variant);
         Assert.Equal(curse, state.SurrenderShieldUsed);
-        Assert.Equal(curse, state.RecentEvents.Contains("🕯 sin embraced (+0.20x)"));
-        Assert.Equal(curse, state.RecentEvents.Contains("🕯 the candle took the sting (no drawback)"));
-        Assert.Equal(curse, state.RecentEvents.Contains("🕯 you said yes. it gave back (+1 resistance)"));
+        Assert.Equal(curse, state.RecentEvents.Contains("🕯 " + ConditioningControlPanel.Localization.Loc.GetF("Chaos_FeedSinEmbraced", 0.2)));
+        Assert.Equal(curse, state.RecentEvents.Contains(Feed("🕯", "Chaos_FeedCandle")));
+        Assert.Equal(curse, state.RecentEvents.Contains(Feed("🕯", "Chaos_FeedSaidYes")));
         Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
         Assert.Equal(curse, ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
         Assert.True(ChaosLessons.IsComplete("draft4"));
@@ -338,12 +338,12 @@ public sealed class ChaosUnlockCardOverlayTests
             var sin = ChaosBoonPool.All.First(b => b.IsCurse);
             typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
                 | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { sin });
-            Assert.DoesNotContain(state.RecentEvents, e => e.StartsWith("🕯 sin embraced", StringComparison.Ordinal));
-            Assert.DoesNotContain("🕯 the candle took the sting (no drawback)", state.RecentEvents);
-            Assert.Equal(maxSurrender, state.RecentEvents.Contains("🕯 you said yes. it gave back (+1 resistance)"));
+            Assert.DoesNotContain(state.RecentEvents, e => e.StartsWith("🕯 " + ConditioningControlPanel.Localization.Loc.Get("Chaos_FeedSinEmbraced").Split("{0")[0], StringComparison.Ordinal));
+            Assert.DoesNotContain(Feed("🕯", "Chaos_FeedCandle"), state.RecentEvents);
+            Assert.Equal(maxSurrender, state.RecentEvents.Contains(Feed("🕯", "Chaos_FeedSaidYes")));
             overlay.FinishCountdown();
-            Assert.DoesNotContain("🚿 welcome shower — treats from above", state.RecentEvents);
-            Assert.DoesNotContain("🕳 the last loop.", state.RecentEvents);
+            Assert.DoesNotContain(Feed("🚿", "Chaos_FeedWelcomeShower"), state.RecentEvents);
+            Assert.DoesNotContain(Feed("🕳", "Chaos_FeedLastLoop"), state.RecentEvents);
         }
         finally
         {
@@ -469,6 +469,14 @@ public sealed class ChaosUnlockCardOverlayTests
                 (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = progression; }
             return Task.CompletedTask;
         });
+    }
+
+    /// <summary>A run event-feed entry: the code-side glyph, then the localized text.</summary>
+    private static string Feed(string glyph, string key)
+    {
+        string text = ConditioningControlPanel.Localization.Loc.Get(key);
+        Assert.NotEqual(key, text); // a missing key would make both sides the raw key
+        return $"{glyph} {text}";
     }
 
     private static void Step(SteppedClock clock, int ms)
