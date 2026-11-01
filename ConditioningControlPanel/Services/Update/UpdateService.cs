@@ -20,13 +20,37 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.2.0";
+        public const string AppVersion = "7.2.1";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.2.0 - Racing Thoughts
+        public const string CurrentPatchNotes = @"v7.2.1 - Racing Thoughts
+
+NEW IN 7.2.1
+
+RACING THOUGHTS
+- hazards now hit with what they draw, on all five courses. if it looks like it missed you, it did.
+- the floor warning under Boudoir's thumpers matches the real hit area.
+- the garage keeps moving while the race warms up behind it.
+- online races need this update: older versions are refused until they update.
+
+WALLPAPER
+- new in Studio > Effects: a wallpaper built from your own images. Static, Dynamic behind your icons, or one picture of your own.
+- it runs during a session, or the whole time with Run with CCP. your own wallpaper comes back after, and one panic takes it down.
+- thanks to McKenzi for this one.
+
+COMPANION
+- Slut Mode no longer repeats the same lines.
+- the switch for the companion's offers is back, under Companion > Permissions.
+
+FIXES
+- the Lobby shows every Remote Control tag, not just the first three.
+- the Mantra drone follows the master volume and its own dial at every stage, streaks included.
+- the quest sound follows the perk notification switch.
+- when a plan ends, Prime closes at the next check instead of lingering. paying again reopens it.
+- bug reports list the sounds that just played, to help track down stray ones.
 
 NEW IN 7.2.0
 
