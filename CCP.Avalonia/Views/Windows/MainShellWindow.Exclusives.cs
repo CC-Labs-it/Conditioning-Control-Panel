@@ -53,6 +53,7 @@
 //   private static ImageSource? LoadPackImage(…)
 
 using Avalonia.Controls;
+using Avalonia.Threading;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -80,6 +81,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             switch (key)
             {
                 case "gazeminigame": Named<Tabs.PlayTabView>("PlayTab")?.OpenGazeMinigame(); break;
+                // WPF MainWindow.Exclusives.cs:215-236: sign in before the game's own Lab gate;
+                // Focus Gaze is a switch on Play, so show the wall and bring its slot into view.
+                case "dtrh":
+                    if (!CoreAccount.IsLoggedIn) _ = OpenUnifiedLoginDialog();
+                    else Games.GameWindow.Launch(Games.GameWindow.DtrhId);
+                    break;
+                case "focusgaze":
+                    ShowTab("play");
+                    var slot = Named<Tabs.PlayTabView>("PlayTab")?.FindControl<Control>("SlotFocusGaze");
+                    if (slot != null) Dispatcher.UIThread.Post(() =>
+                    {
+                        try { slot.BringIntoView(); }
+                        catch (System.Exception ex) { Serilog.Log.Debug("Focus Gaze bring-into-view: {E}", ex.Message); }
+                    }, DispatcherPriority.Background);
+                    break;
                 default: ShowTab(key); break;
             }
         }

@@ -424,14 +424,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Open(row.Feature);
         }
 
-        /// <summary>
-        /// ponytail: "fyp" opens the feed and "justdrop" opens its GameWindow; "backroom" (WPF BtnStartBackRoom_Click) and main
-        /// 2e9080399's Breakout, Goon hosting, Down the Rabbit Hole and Arcademy have no host on this head, and
-        /// Focus Gaze's Play-wall switch is still inert (PlayTabView.ChkFocusGaze_Changed); add it back when that works.
-        /// Their cards stay visible but inert (no hand, honest tooltip) and never reach ShowTab or a bark.
-        /// </summary>
+        /// <summary>Cards with no host on this head stay inert and explain why.</summary>
         internal static bool IsOnThisBuild(string key) =>
-            key is not ("backroom" or "breakout" or "goon" or "dtrh" or "arcademy" or "focusgaze");
+            key is not ("backroom" or "breakout" or "goon" or "arcademy");
 
         /// <summary>WPF OpenExclusiveFeature: the card never blocks, the destination's own gate does.</summary>
         private void Open(ExclusiveFeature feature)
