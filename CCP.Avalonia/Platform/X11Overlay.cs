@@ -272,8 +272,7 @@ internal static class X11Overlay
             var attrs = Marshal.AllocHGlobal(XSetWindowAttributesSize);
             try
             {
-                for (var i = 0; i < XSetWindowAttributesSize; i += IntPtr.Size) Marshal.WriteIntPtr(attrs, i, IntPtr.Zero);
-                Marshal.WriteInt32(attrs, 88, topmost ? 1 : 0);
+                WriteOverrideRedirect(attrs);
                 _xErrored = false;
                 XChangeWindowAttributes(_display, xid, CWOverrideRedirect, attrs);
                 XSync(_display, false);
@@ -281,6 +280,14 @@ internal static class X11Overlay
             }
             finally { Marshal.FreeHGlobal(attrs); }
         }
+    }
+
+    // WPF ChaosWindowZ.cs:38-53 changes stacking, never the tool/no-activate window class.
+    // X11 must stay outside the WM even when RaiseActive is gated off (geometry contract above).
+    internal static void WriteOverrideRedirect(IntPtr attrs)
+    {
+        for (var i = 0; i < XSetWindowAttributesSize; i += IntPtr.Size) Marshal.WriteIntPtr(attrs, i, IntPtr.Zero);
+        Marshal.WriteInt32(attrs, 88, 1);
     }
 
     /// <summary>Back on top of everything (WPF ReassertTopmost: SetWindowPos HWND_TOPMOST). An

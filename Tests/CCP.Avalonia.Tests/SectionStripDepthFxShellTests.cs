@@ -31,16 +31,19 @@ public sealed class SectionStripDepthFxShellTests
     private static (MainShellWindow W, SectionTabStrip Strip) Open(string tab)
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var w = new MainShellWindow();
+        var strip = w.Named<SectionTabStrip>("SectionStrip")!;
+        // Park the automatic nine-second sweep before attachment. Each test opts in below.
+        strip.AmbientTierOverride = false;
         w.Show();
         w.ShowTab(tab);
         Dispatcher.UIThread.RunJobs();
         w.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
-        return (w, w.Named<SectionTabStrip>("SectionStrip")!);
+        return (w, strip);
     }
 
     [Fact]
@@ -173,6 +176,8 @@ public sealed class SectionStripDepthFxShellTests
                 // Sheen (wave 7): one sweep across the lit pill; the clock runs only on Full with
                 // an ambient tier while shown and attached (P01/P65).
                 w.UpdateLayout();
+                Assert.False(strip.SheenClockRunning);
+                Assert.Equal(0, strip.SheensRun);
                 Assert.True(strip.SweepSheen());
                 Assert.Equal(1, strip.SheensRun);
                 strip.AmbientTierOverride = true;
