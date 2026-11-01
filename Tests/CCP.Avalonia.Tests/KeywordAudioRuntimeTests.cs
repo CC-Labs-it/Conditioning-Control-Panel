@@ -31,6 +31,7 @@ public sealed class KeywordAudioRuntimeTests
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
             CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
+        ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -51,6 +52,7 @@ public sealed class KeywordAudioRuntimeTests
         finally
         {
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
                 CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
@@ -248,6 +250,89 @@ public sealed class KeywordAudioRuntimeTests
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous;
         }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1361-1367,1490-1518,1698-1713
+    public Task DrainWaitsForAudioRepeatsAndRespectsActionOrder() => RunAsync(async (engine, s, played) =>
+    {
+        var previous = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        var events = new List<string>();
+        ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = _ => events.Add("drain");
+        var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 50;
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        try
+        {
+            s.KeywordTriggers[0].Actions.Insert(0, new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain });
+            s.KeywordTriggers[0].Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain });
+            Type(engine, "sit");
+            Assert.Equal(new[] { "drain" }, events);
+            Assert.Single(played);
+            gap.SetResult();
+            await Task.Yield();
+            Assert.Equal(2, played.Count(x => x.Path != "stopped"));
+            Assert.Equal(new[] { "drain", "drain" }, events);
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous; }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1698-1713
+    public Task LegacyDrainWaitsForAudioRepeats() => RunAsync(async (engine, s, played) =>
+    {
+        var previous = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        int drains = 0;
+        ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = _ => drains++;
+        var t = s.KeywordTriggers[0];
+        t.AudioFilePath = ((PlayAudioAction)t.Actions[0]).FilePath;
+        t.AudioPlayCount = 2; t.AudioDelayBetweenMs = 50; t.DuckAudio = false;
+        t.Actions.Clear(); t.VisualEffect = KeywordVisualEffect.BrainDrain;
+        var gap = new TaskCompletionSource(); engine.Delay = (_, _) => gap.Task;
+        try
+        {
+            Type(engine, "sit"); Assert.Single(played); Assert.Equal(0, drains);
+            gap.SetResult(); await Task.Yield();
+            Assert.Equal(2, played.Count(x => x.Path != "stopped")); Assert.Equal(1, drains);
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous; }
+    });
+
+    [Fact]
+    public void FixtureClearsPanicQuietBeforeAndAfterUse()
+    {
+        ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+        Run((_, _, _) => Assert.False(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()));
+        Assert.False(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+    }
+
+    [Fact]
+    public void FixtureClearsPanicQuietAfterBody()
+    {
+        try
+        {
+            Run((_, _, _) => ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet());
+            Assert.False(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    }
+
+    [Fact] // WPF KeywordTriggerService.cs:1361-1367,1490-1518; panic interrupts this head's queued effects.
+    public Task PanicDuringRepeatCannotFireTheDelayedDrain() => RunAsync(async (engine, s, _) =>
+    {
+        var previous = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        int drains = 0;
+        ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = _ => drains++;
+        var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 50;
+        s.KeywordTriggers[0].Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain });
+        var gap = new TaskCompletionSource(); engine.Delay = (_, _) => gap.Task;
+        try
+        {
+            Type(engine, "sit"); engine.StopAudio();
+            gap.SetResult(); await Task.Yield();
+            Assert.Equal(0, drains);
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous; }
     });
 
 }
