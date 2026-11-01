@@ -100,8 +100,10 @@ public sealed class RemoteFlashSourceTests
             {
                 var poster = Path.Combine(dir, "poster.jpg");
                 File.WriteAllBytes(poster, new byte[] { 4, 5, 6 });
+                int downloads = 0;
                 RemoteFlashSource.Download = (url, max, _) =>
                 {
+                    downloads++;
                     Assert.Equal(Clip.PosterUrl, url);
                     Assert.Equal(RemoteFlashSource.PosterMaxBytes, max);
                     return Task.FromResult<string?>(poster);
@@ -114,6 +116,15 @@ public sealed class RemoteFlashSourceTests
                 Assert.Null(RemoteFlashSource.ClipPath(Clip.Url));
                 Assert.NotEqual(poster, item.PosterPath);
                 Assert.Equal(new byte[] { 4, 5, 6 }, File.ReadAllBytes(item.PosterPath));
+                var firstWarm = RemoteFlashSource.Prefetching;
+                // Step past the refill throttle without a wall-clock sleep; the first warm has finished.
+                typeof(RemoteFlashSource).GetField("_lastFetchUtc", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, DateTime.MinValue);
+                RemoteFlashSource.EnsurePrefetch();
+                await RemoteFlashSource.Prefetching;
+                Assert.NotSame(firstWarm, RemoteFlashSource.Prefetching);
+                Assert.Equal(new byte[] { 4, 5, 6 }, File.ReadAllBytes(item.PosterPath));
+                Assert.Equal(item.PosterPath, RemoteFlashSource.TryTake(new Random(2))!.Value.PosterPath);
+                Assert.Equal(1, downloads);
                 RemoteFlashSource.CleanupCache();
                 Assert.False(File.Exists(item.PosterPath));
                 Assert.True(File.Exists(poster));

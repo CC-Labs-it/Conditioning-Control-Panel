@@ -91,9 +91,10 @@ namespace ConditioningControlPanel.Services.Flash
                     ? new RemoteFlashItem(url, posterPath, path == posterPath ? "" : path) : null;
             }
         }
-        internal static string? ClipPath(string url)
+        internal static string? ClipPath(string url) => OwnedPath(url, posterOnly: false);
+        private static string? OwnedPath(string url, bool posterOnly)
         {
-            lock (Lock) return Clips.TryUse(url, Environment.TickCount64, out var path, out var poster) && path != poster && File.Exists(path) ? path : null;
+            lock (Lock) return Clips.TryUse(url, Environment.TickCount64, out var path, out var poster) && (path == poster) == posterOnly && File.Exists(path) ? path : null;
         }
         internal static void CleanupCache()
         {
@@ -158,7 +159,7 @@ namespace ConditioningControlPanel.Services.Flash
                     }
                     if (string.IsNullOrEmpty(entry.PosterUrl)) continue;
                     var url = entry.SmallUrl ?? entry.Url;
-                    var held = ClipPath(url);
+                    var held = OwnedPath(url, posterOnly: !consumeClips);
                     string? path = held;
                     bool ours = false;
                     List<string>? dropped = null;
@@ -171,13 +172,14 @@ namespace ConditioningControlPanel.Services.Flash
                             path = OwnClip(url, cached);
                             ours = true;
                         }
-                        var poster = await Download(entry.PosterUrl!, PosterMaxBytes, ct).ConfigureAwait(false);
+                        var poster = !consumeClips && held != null ? held
+                            : await Download(entry.PosterUrl!, PosterMaxBytes, ct).ConfigureAwait(false);
                         if (poster == null) continue;
                         if (!consumeClips)
                         {
-                            path = OwnClip(entry.PosterUrl!, poster);
+                            path ??= OwnClip(entry.PosterUrl!, poster);
                             poster = path;
-                            ours = true;
+                            ours = held == null;
                         }
                         RefreshSelection();
                         lock (Lock)
