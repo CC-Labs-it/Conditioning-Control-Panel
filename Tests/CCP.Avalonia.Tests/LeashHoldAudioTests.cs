@@ -10,6 +10,12 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class LeashHoldAudioTests
 {
+    private sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now = new(2040, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     [Fact]
     public void Tick_UsesModCueAndMasterGain_AndStaysSilentWhenMutedOrSuppressed()
     {
@@ -64,19 +70,25 @@ public sealed class LeashHoldAudioTests
             CoreAudio.PlayOneShotProvider = (path, gain, tag, _, _) => played.Add((path, gain, tag));
             CoreAudio.IsOutputSuppressedProvider = () => false;
             CoreSettings.Current.MasterVolume = 50;
-            var now = new DateTime(2040, 1, 1);
-            LeashSound.Cut(now);
+            var clock = new Clock();
+            LeashSound.Time = clock;
+            LeashSound.Cut();
             Assert.Equal((cue, 0.11f, "leash-cut"), Assert.Single(played));
-            LeashSound.Cut(now.AddSeconds(1));
+            clock.Now = new DateTimeOffset(2040, 1, 1, 0, 0, 1, TimeSpan.Zero);
+            LeashSound.Cut();
             Assert.Single(played);
             CoreSettings.Current.MasterVolume = 0;
-            LeashSound.Cut(now.AddSeconds(4));
+            clock.Now = new DateTimeOffset(2040, 1, 1, 0, 0, 4, TimeSpan.Zero);
+            LeashSound.Cut();
             CoreSettings.Current.MasterVolume = 100;
             CoreAudio.IsOutputSuppressedProvider = () => true;
-            LeashSound.Cut(now.AddSeconds(5));
+            clock.Now = new DateTimeOffset(2040, 1, 1, 0, 0, 5, TimeSpan.Zero);
+            LeashSound.Cut();
             Assert.Single(played);
             CoreAudio.IsOutputSuppressedProvider = () => false;
-            LeashSound.Cut(now.AddSeconds(6));
+            clock.Now = new DateTimeOffset(2040, 1, 1, 0, 0, 6, TimeSpan.Zero);
+            LeashSound.Cut();
+            Assert.Equal(2, played.Count);
             Assert.Equal((cue, 0.22f, "leash-cut"), played[1]);
         }
         finally

@@ -210,6 +210,7 @@ public sealed class LeashHoldTests
         var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
         svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
         (LeashHead.Service, MainShellWindow.LeashHoldTime) = (svc, clock);
+        LeashSound.Time = clock;
         (MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (() => true, Parked);
         (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (new Targets(), a => a());
         var cue = System.IO.Path.GetTempFileName();

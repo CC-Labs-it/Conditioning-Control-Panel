@@ -1,6 +1,8 @@
 using System.IO;
 using System.Linq;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Leash;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -10,6 +12,8 @@ namespace CCP.Avalonia.Tests;
 /// seams that leaked before (PLAYBOOK P02) and really puts each one back.</summary>
 public class TestIsolationTests
 {
+    private sealed class TestClock : System.TimeProvider { }
+
     /// <summary>The first test in a testhost decides the Avalonia platform for every later one. A setup
     /// with headless drawing (no Skia) made later text measure differently and bitmaps read garbage, so
     /// ChasterRaffleCardLayout, BlinkTrainerSession and EmiBookDemo failed only after it (flake-layout).</summary>
@@ -37,6 +41,8 @@ public class TestIsolationTests
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
+    [InlineData(typeof(LeashSound), nameof(LeashSound.Rules))]
+    [InlineData(typeof(LeashSound), nameof(LeashSound.Time))]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
@@ -47,6 +53,27 @@ public class TestIsolationTests
     [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay), "PanicListenerLive")]
     public void TheHookCoversEverySeamThatLeakedBefore(System.Type type, string member) =>
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
+
+    // WPF LeashFx.cs:227-228, 244-246: the process gate suppresses a second cut within three seconds.
+    [Fact]
+    public void LeashSoundGateIsFreshForEachTestAndRestoredAfterward()
+    {
+        var now = new System.DateTime(2035, 1, 1);
+        var previous = LeashSound.Rules;
+        Assert.True(previous.TryPlay(LeashCue.Cut, now, false, false));
+        var clock = new TestClock();
+        LeashSound.Time = clock;
+        var snapshot = ProcessStateSnapshot.Take();
+        IsolateProcessStateAttribute.ResetLeashSound(); // the assembly hook before each test
+        Assert.NotSame(previous, LeashSound.Rules);
+        Assert.Same(System.TimeProvider.System, LeashSound.Time);
+        Assert.True(LeashSound.Rules.TryPlay(LeashCue.Cut, now.AddSeconds(1), false, false));
+        Assert.False(LeashSound.Rules.TryPlay(LeashCue.Cut, now.AddSeconds(2), false, false));
+        snapshot.Restore();
+        Assert.Same(previous, LeashSound.Rules);
+        Assert.Same(clock, LeashSound.Time);
+        Assert.False(LeashSound.Rules.TryPlay(LeashCue.Cut, now.AddSeconds(1), false, false));
+    }
 
     [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()

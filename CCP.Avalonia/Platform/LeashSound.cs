@@ -9,11 +9,12 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 internal static class LeashSound
 {
-    private static readonly LeashSfxRules Rules = new();
+    internal static LeashSfxRules Rules = new();
+    internal static TimeProvider Time = TimeProvider.System;
 
     internal static void Tick(DateTime now) => Play(LeashCue.Tick, "chaos/countdown_tick.mp3", 0.10f, now);
 
-    internal static void Cut(DateTime now) => Play(LeashCue.Cut, "chaos/snap.mp3", 0.22f, now);
+    internal static void Cut() => Play(LeashCue.Cut, "chaos/snap.mp3", 0.22f, Time.GetUtcNow().UtcDateTime);
 
     private static void Play(LeashCue cue, string rel, float scale, DateTime now)
     {

@@ -55,6 +55,7 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
             Current = ProcessStateSnapshot.Take();
+            ResetLeashSound();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time = new ConditioningControlPanel.Avalonia.Platform.StartupLadder.TestClock();
@@ -86,6 +87,12 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             if (OpenWindows.OpenedSinceMark) { GC.Collect(); GC.WaitForPendingFinalizers(); }
             MemLog(methodUnderTest);
         });
+
+    internal static void ResetLeashSound()
+    {
+        ConditioningControlPanel.Avalonia.Platform.LeashSound.Rules = new ConditioningControlPanel.Services.Leash.LeashSfxRules();
+        ConditioningControlPanel.Avalonia.Platform.LeashSound.Time = TimeProvider.System;
+    }
 
     // Opt-in leak hunting (CCP_TEST_MEMLOG, CCP_TEST_HOLD_AT; docs/avalonia-decisions.html suite-memory): one line per test with RSS and the GC heap.
     private static readonly string? MemLogPath = Environment.GetEnvironmentVariable("CCP_TEST_MEMLOG");
