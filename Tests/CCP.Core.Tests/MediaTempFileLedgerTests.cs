@@ -42,8 +42,7 @@ public class MediaTempFileLedgerTests
         Assert.Equal(0, ledger.HeldCount);
     }
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false), InlineData(true)]
     public void HeldFilesAreRetriedBelowCapOnTrackOrAnotherRelease(bool release)
     {
         bool refused = true;

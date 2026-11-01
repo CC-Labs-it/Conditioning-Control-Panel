@@ -24,8 +24,7 @@ public sealed class MasterSoundTests
         public void Dispose() { Disposed = true; ended(); }
     }
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false), InlineData(true)]
     public async Task Stop_and_replacement_wait_for_start_publication(bool replace)
     {
         var audio = new LibVlcAudio(_ => "");
@@ -52,9 +51,7 @@ public sealed class MasterSoundTests
         finally { release.Set(); await start; if (other != null) await other; audio.StopSound(); if (first?.Disposed == false) first.Dispose(); if (second?.Disposed == false) second.Dispose(); }
     }
     [Theory]
-    [InlineData("panic")]
-    [InlineData("pause")]
-    [InlineData("shutdown")]
+    [InlineData("panic"), InlineData("pause"), InlineData("shutdown")]
     public void Stop_routes_release_sound_with_engine_off(string route)
     {
         var previous = (CoreSession.IsEngineRunningProvider, CoreAudio.StopSoundProvider);
