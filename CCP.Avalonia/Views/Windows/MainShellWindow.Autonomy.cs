@@ -79,7 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!on) CancelAutonomyPulses();
                 FollowTakeoverQuestTick(on);
                 SetTakeoverActiveUi(on);
-                UpdateAutonomyButtonState(on);
+                if (on) UpdateAutonomyButtonState(true); // WPF seeds the button from the saved enabled flag.
             });
             // WPF AnnounceAction: matching mod event audio, otherwise text-only.
             Autonomy.AnnouncementMade += (_, phrase) => Dispatcher.UIThread.Post(() =>
@@ -91,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF UiUpdates.cs:252-259,278: repaint after the palette handler on a mod switch.
             var closed = false;
             void OnModChanged(object? _, ConditioningControlPanel.Models.ModPackage __) =>
-                Dispatcher.UIThread.Post(() => { if (!closed) UpdateAutonomyButtonState(Autonomy.IsEnabled); }, DispatcherPriority.Background);
+                Dispatcher.UIThread.Post(() => { if (!closed) UpdateAutonomyButtonState(CoreSettings.Current.AutonomyModeEnabled); }, DispatcherPriority.Background);
             CoreMods.ModChanged += OnModChanged;
             Closed += (_, _) => { closed = true; CoreMods.ModChanged -= OnModChanged; CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };

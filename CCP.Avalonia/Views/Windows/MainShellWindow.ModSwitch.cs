@@ -49,7 +49,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshThemeAwareElements();
             LoadFeatureImages();
             CoreMods.ModChanged += OnModChangedFeatureImages;
-            Closed += (_, _) => CoreMods.ModChanged -= OnModChangedFeatureImages;
+            // WPF MainWindow.xaml.cs:3741-3753: even same-id package adoption retints the palette.
+            var closed = false;
+            void OnModChangedPalette(object? _, ModPackage __)
+            {
+                void Repaint()
+                {
+                    if (closed) return;
+                    RefreshThemeAwareElements();
+                    Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.UpdateModeButtons();
+                }
+                if (Dispatcher.UIThread.CheckAccess()) Repaint();
+                else Dispatcher.UIThread.Post(Repaint, DispatcherPriority.Normal);
+            }
+            CoreMods.ModChanged += OnModChangedPalette;
+            Closed += (_, _) => { closed = true; CoreMods.ModChanged -= OnModChangedPalette; CoreMods.ModChanged -= OnModChangedFeatureImages; };
             if (_hookedMods != mods)
             {
                 _hookedMods = mods;
