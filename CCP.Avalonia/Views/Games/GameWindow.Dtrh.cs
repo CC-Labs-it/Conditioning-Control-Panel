@@ -15,6 +15,7 @@
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray, and SeasonRecap TrackFeature.
 using System;
+using ConditioningControlPanel.Services.Sparkles;
 using System.IO;
 using System.Linq;
 using Avalonia.Threading;
@@ -180,6 +181,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var booking = DtrhRunWire.Book(o, hostElapsed);
+                if (!((bool?)o["abandoned"] ?? false))
+                    SparklesPending = DeliverSparkles(SparklesGameEnd.Claim("dtrh", "solo", SparklesResult.ForMedal(
+                        SparklesGameEnd.RatioMedal(booking.Score, 250.0 * (booking.DurationSec / 60.0) * booking.DiffMult)),
+                        TimeSpan.FromSeconds(booking.DurationSec), new JObject { ["difficulty"] = booking.Difficulty }, svc: SparklesHead.Service));
                 double skillMult = ChaosRunState.SkillMultProvider?.Invoke() ?? 1.0;
                 double finalXp = booking.BaseXp * skillMult;
                 long previousBest = ChaosMeta.State.BestScore;
