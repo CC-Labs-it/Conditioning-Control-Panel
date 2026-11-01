@@ -162,6 +162,7 @@ public sealed class ProgramIgnitionTests
     public void SavedCompletedDaySpringsOnFirstOpenAndDoesNotReplay(MotionLevel motion) =>
         WithRun(lastDay: false, (shell, tab, svc, _) =>
         {
+            Assert.Equal(motion, CoreSettings.Current.MotionLevel);
             var banner = tab.FindControl<Border>("TodayCompleteBanner")!;
             var scale = (ScaleTransform)banner.RenderTransform!;
             Assert.True(svc.TodayRecord!.DayCompleted);
@@ -403,7 +404,7 @@ public sealed class ProgramIgnitionTests
 
             var oldPrograms = AvApp.Programs;
             var settings = CoreSettings.Current;
-            var (motion, perf) = (settings.MotionLevel, settings.PerformanceMode);
+            var (oldMotion, perf) = (settings.MotionLevel, settings.PerformanceMode);
             var (seenTab, seenIntro) = (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro);
             settings.HasSeenProgramsTab = settings.HasSeenProgramsIntro = true;
             settings.MotionLevel = motion;
@@ -435,7 +436,7 @@ public sealed class ProgramIgnitionTests
                 Dispatcher.UIThread.RunJobs();
                 AvApp.Programs?.Dispose();
                 AvApp.Programs = oldPrograms;
-                (settings.MotionLevel, settings.PerformanceMode) = (motion, perf);
+                (settings.MotionLevel, settings.PerformanceMode) = (oldMotion, perf);
                 (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro) = (seenTab, seenIntro);
                 Directory.Delete(dir, true);
                 BeatLoop.Time = TimeProvider.System;
