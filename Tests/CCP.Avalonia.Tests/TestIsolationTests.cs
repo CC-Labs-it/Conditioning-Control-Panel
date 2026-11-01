@@ -43,6 +43,7 @@ public class TestIsolationTests
     [InlineData(typeof(CoreMods), nameof(CoreMods.MakeModAwareProvider))]
     [InlineData(typeof(AvApp), nameof(AvApp.Ai))]
     [InlineData(typeof(AvApp), nameof(AvApp.Brain))]
+    [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow), nameof(ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.WaylandPortalOverride))]
     [InlineData(typeof(ConditioningControlPanel.Services.LockdownService), nameof(ConditioningControlPanel.Services.LockdownService.Current))]
     [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay), "PanicListenerLive")]
     public void TheHookCoversEverySeamThatLeakedBefore(System.Type type, string member) =>

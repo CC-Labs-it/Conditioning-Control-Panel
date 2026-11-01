@@ -109,13 +109,16 @@ public class LockdownDoseEngineTests
             var bind = typeof(MainShellWindow).GetField("_portalBind", flags)!;
             var oldAllowed = allowed.GetValue(null); var oldFailed = failed.GetValue(null); var oldBind = bind.GetValue(null);
             var oldWayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            var oldPortalOverride = MainShellWindow.WaylandPortalOverride;
             var pending = new TaskCompletionSource();
             var ld = LockdownService.Current = new LockdownService();
             var shell = new MainShellWindow();
             shell.Show();
             try
             {
-                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "test");
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", null);
+                MainShellWindow.WaylandPortalOverride = true;
+                PortalPanicShortcut.SetSessionForTests(null, null);
                 allowed.SetValue(null, true); failed.SetValue(null, false); bind.SetValue(null, pending.Task);
                 ld.Activate(TimeSpan.FromMinutes(20));
                 shell.EnforceLockdownDoseEngine(true);
@@ -134,6 +137,7 @@ public class LockdownDoseEngineTests
                 PortalPanicShortcut.SetSessionForTests(null, null);
                 allowed.SetValue(null, oldAllowed); failed.SetValue(null, oldFailed); bind.SetValue(null, oldBind);
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);
+                MainShellWindow.WaylandPortalOverride = oldPortalOverride;
                 ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit();
             }
             return Task.CompletedTask;
@@ -145,7 +149,6 @@ public class LockdownDoseEngineTests
     [InlineData(true, true)]
     public async Task KeeperTickDoesNotSupersedeAUserStartWaitingForThePortal(bool keeperFirst, bool exitBeforePortal)
     {
-        Assert.SkipWhen(!OperatingSystem.IsLinux(), "The GlobalShortcuts portal is Linux-only.");
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             EnsureApp();
@@ -159,13 +162,15 @@ public class LockdownDoseEngineTests
             var bind = typeof(MainShellWindow).GetField("_portalBind", flags)!;
             var oldAllowed = allowed.GetValue(null); var oldFailed = failed.GetValue(null); var oldBind = bind.GetValue(null);
             var oldWayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            var oldPortalOverride = MainShellWindow.WaylandPortalOverride;
             var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var ld = LockdownService.Current = new LockdownService();
             var shell = new MainShellWindow();
             shell.Show();
             try
             {
-                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "test");
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", null);
+                MainShellWindow.WaylandPortalOverride = true;
                 PortalPanicShortcut.SetSessionForTests(null, null);
                 allowed.SetValue(null, true); failed.SetValue(null, false); bind.SetValue(null, pending.Task);
                 ld.Activate(TimeSpan.FromMinutes(20));
@@ -191,6 +196,50 @@ public class LockdownDoseEngineTests
                 PortalPanicShortcut.SetSessionForTests(null, null);
                 allowed.SetValue(null, oldAllowed); failed.SetValue(null, oldFailed); bind.SetValue(null, oldBind);
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);
+                MainShellWindow.WaylandPortalOverride = oldPortalOverride;
+            }
+        });
+    }
+
+    [Fact]
+    public async Task PortalOverrideDefersOnlyWhenEnabledAndLeavesTheDefaultUnchanged()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            EnsureApp();
+            CoreSettings.Current.PanicKeyEnabled = true;
+            var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+            var allowed = typeof(MainShellWindow).GetField("_portalAllowed", flags)!;
+            var failed = typeof(MainShellWindow).GetField("_portalFailed", flags)!;
+            var bind = typeof(MainShellWindow).GetField("_portalBind", flags)!;
+            var oldAllowed = allowed.GetValue(null); var oldFailed = failed.GetValue(null); var oldBind = bind.GetValue(null);
+            var oldWayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            var oldPortalOverride = MainShellWindow.WaylandPortalOverride;
+            var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var delayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var calls = 0;
+            try
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", null);
+                PortalPanicShortcut.SetSessionForTests(null, null);
+                allowed.SetValue(null, true); failed.SetValue(null, false); bind.SetValue(null, pending.Task);
+                MainShellWindow.WaylandPortalOverride = null;
+                MainShellWindow.StartEffect(() => calls++);
+                Assert.Equal(1, calls); // default: no Wayland display, so do not wait
+                MainShellWindow.WaylandPortalOverride = true;
+                MainShellWindow.StartEffect(() => { calls++; delayed.TrySetResult(); });
+                Assert.Equal(1, calls); // simulated portal: wait for its bind
+                pending.SetResult();
+                await delayed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(2, calls);
+            }
+            finally
+            {
+                pending.TrySetResult();
+                PortalPanicShortcut.SetSessionForTests(null, null);
+                allowed.SetValue(null, oldAllowed); failed.SetValue(null, oldFailed); bind.SetValue(null, oldBind);
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);
+                MainShellWindow.WaylandPortalOverride = oldPortalOverride;
             }
         });
     }
