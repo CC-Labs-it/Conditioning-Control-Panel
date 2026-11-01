@@ -86,6 +86,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
                 if (parked != null && (!ReferenceEquals(App.Sessions, parked) || !parked.IsRunning || !parked.IsPaused)) return;
                 CoreEngine.Start(resumingSession: parked != null);
+                // WPF StartStop.cs:365-367: an audio-only run forces the bed on.
+                if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
                 if (parked != null)
                 {
                     parked.Resume();
@@ -116,6 +118,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            // WPF StartStop.cs:533-547: keep a separately enabled bed, and restore ducked audio.
+            if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
+            Platform.LibVlcAudio.Instance?.ForceUnduck();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);
