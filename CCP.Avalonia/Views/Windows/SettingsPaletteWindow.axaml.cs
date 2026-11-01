@@ -95,11 +95,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>True while the palette is on screen.</summary>
         internal static bool IsOpen => _instance != null;
 
-        // X11 raw input can arrive after the focused palette handled the same Escape. Read the
-        // existing hand-off grace without consuming it; the panic ladder may still need it.
-        internal static bool OwnsGlobalEscape => IsOpen ||
-            (DateTime.UtcNow - _escapeClosedAtUtc).TotalMilliseconds <= EscapeGraceMs;
-
         // WPF takes only the first press of a held Ctrl+K (lParam bit 30, MainWindow.TabNavigation.cs:1102).
         // Avalonia reports no repeat flag, so a press counts as held until a K key-up in the shell or
         // the palette, or a second without a repeat (a release lost to another app), whichever is first.

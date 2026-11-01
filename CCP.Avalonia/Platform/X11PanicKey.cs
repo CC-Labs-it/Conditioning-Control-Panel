@@ -86,7 +86,7 @@ internal static class X11PanicKey
     /// <summary>The event loop shared by the XInput listener and its tests. A null event ends the
     /// injected stream; a negative code resets held-key state after an X keyboard mapping change.</summary>
     internal static void ListenRawEvents(Func<(bool Press, int Code, int EscapeCode)?> next,
-        Action onPanic, Action<int>? otherPress = null)
+        Action onPanic, Action<int>? otherPress = null, Func<ulong>? eventTime = null)
     {
         bool escapeDown = false, videoOwnsPress = false;
         while (next() is { } key)
@@ -105,7 +105,7 @@ internal static class X11PanicKey
                     if (!escapeDown)
                     {
                         escapeDown = true;
-                        try { videoOwnsPress = Win32Input.QueueVideoEscape(); }
+                        try { videoOwnsPress = Win32Input.QueueVideoEscape(eventTime?.Invoke()); }
                         catch (Exception ex)
                         {
                             // A failed ownership read must never prevent the configured panic key.
@@ -194,10 +194,12 @@ internal static class X11PanicKey
 
     // Tests inject a finite event stream at the native read boundary, through this same listener.
     internal static void Listen(IntPtr display, int opcode, Func<string?> currentKey, Action onPress,
-        Func<(bool Press, int Code, int EscapeCode)?>? injectedNext = null, Action<int>? injectedOther = null)
+        Func<(bool Press, int Code, int EscapeCode)?>? injectedNext = null, Action<int>? injectedOther = null,
+        Func<ulong>? injectedTime = null)
     {
         var ev = injectedNext == null ? Marshal.AllocHGlobal(XEventSize) : IntPtr.Zero;
         string? boundName = null;
+        ulong eventTime = 0;
         var escapeCode = injectedNext == null ? XKeysymToKeycode(display, KeysymOf("Escape")) : (byte)0;
         void Resolve()
         {
@@ -229,7 +231,11 @@ internal static class X11PanicKey
                     int keycode = -1;
                     var evType = Marshal.ReadInt32(ev, CookieEvType);
                     if (evType is XI_RawKeyPress or XI_RawKeyRelease)
-                        keycode = Marshal.ReadInt32(Marshal.ReadIntPtr(ev, CookieData), RawDetail);
+                    {
+                        var data = Marshal.ReadIntPtr(ev, CookieData);
+                        eventTime = (ulong)Marshal.ReadInt64(data, 40); // XIRawEvent.time, same X server clock as Avalonia
+                        keycode = Marshal.ReadInt32(data, RawDetail);
+                    }
                     XFreeEventData(display, ev);
                     if (keycode < 0) continue;
                     Resolve();
@@ -246,7 +252,8 @@ internal static class X11PanicKey
                 foreach (var k in toyKeys)
                     if (KeysymOf(k) is var ts and not 0 && keycode == XKeysymToKeycode(display, ts)) { toy(k); break; }
         }
-        try { ListenRawEvents(injectedNext ?? Next, onPress, injectedNext == null ? OtherPress : injectedOther); }
+        try { ListenRawEvents(injectedNext ?? Next, onPress, injectedNext == null ? OtherPress : injectedOther,
+            injectedNext == null ? () => eventTime : injectedTime); }
         finally { if (ev != IntPtr.Zero) Marshal.FreeHGlobal(ev); }
     }
 

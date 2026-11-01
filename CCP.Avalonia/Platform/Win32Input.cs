@@ -114,16 +114,18 @@ internal static class Win32Input
 
     // Small seams for the hook's snapshot and dispatch. Tests can run the listener without a decoder.
     internal static Func<(bool Video, bool LockCard, bool Palette)> EscapeState = () =>
-        (MandatoryVideoOverlay.Instance.WantsGlobalEscape, LockCardWindow.IsAnyOpen(), SettingsPaletteWindow.OwnsGlobalEscape);
+        (MandatoryVideoOverlay.Instance.WantsGlobalEscape, LockCardWindow.IsAnyOpen(), SettingsPaletteWindow.IsOpen);
     internal static Action<Action> PostEscape = action => Dispatcher.UIThread.Post(action);
     internal static Func<bool> TryVideoEscape = () => MandatoryVideoOverlay.Instance.TryEscapeFromGlobalKey();
 
     /// <summary>WPF MainWindow.xaml.cs:858-874: decide ownership at the key press, before panic or
     /// leash handling. The queued action only rechecks the video, not a palette that may have closed.</summary>
-    internal static bool QueueVideoEscape()
+    internal static bool QueueVideoEscape(ulong? timestamp = null)
     {
         var s = CoreSettings.Current;
         var (video, lockCard, palette) = EscapeState();
+        // Read after the snapshot: if a surface closed during that read, its raw key was recorded first.
+        if (EscapeClaim.SurfaceOwnsEscape(timestamp)) return false;
         if (!PanicPolicy.EscapeDismissesVideo(video, lockCard, palette,
                 s.PanicKeyEnabled, s.PanicKey, MainShellWindow.LockdownActive)) return false;
         PostEscape(EscapeDoor);

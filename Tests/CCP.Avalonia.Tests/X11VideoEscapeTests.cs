@@ -1,9 +1,11 @@
 using System;
-using System.Diagnostics;
-using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -15,6 +17,18 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class X11VideoEscapeTests
 {
+    private sealed class FrozenClock : TimeProvider
+    {
+        public override System.Threading.ITimer CreateTimer(System.Threading.TimerCallback callback, object? state,
+            TimeSpan dueTime, TimeSpan period) => new Timer();
+        private sealed class Timer : System.Threading.ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => default;
+        }
+    }
+
     [Fact]
     public void Raw_escape_routes_once_per_press_and_releases_without_consuming_other_keys()
     {
@@ -184,71 +198,141 @@ public sealed class X11VideoEscapeTests
         }
     }
 
-    [Fact]
-    public void Palette_escape_grace_is_visible_to_the_listener_after_the_window_closes()
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public void Surface_owns_only_its_original_escape_in_both_event_orders(bool palette, bool uiFirst) =>
+        AvaloniaTestDispatcher.Run(() =>
     {
-        var field = typeof(ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow)
-            .GetField("_escapeClosedAtUtc", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
-        var old = field.GetValue(null);
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        EscapeClaim.StartTracking();
+        var s = CoreSettings.Current;
+        var oldPanic = (s.PanicKeyEnabled, s.PanicKey);
+        var oldCode = X11PanicKey.BoundKeycode;
+        var oldState = Win32Input.EscapeState;
+        var oldPost = Win32Input.PostEscape;
+        var oldTry = Win32Input.TryVideoEscape;
         try
         {
-            field.SetValue(null, DateTime.UtcNow);
-            Assert.True(Win32Input.EscapeState().Palette);
-            field.SetValue(null, DateTime.UtcNow.AddSeconds(-2));
-            Assert.False(Win32Input.EscapeState().Palette);
+            (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape");
+            X11PanicKey.BindKeycodeForTest(9);
+            bool open = !uiFirst;
+            int video = 0, leash = 0, step = 0;
+            ulong stamp = 0, first = palette ? (uiFirst ? 1001UL : 3001UL) : (uiFirst ? 2001UL : 4001UL);
+            Window surface = palette ? new ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow()
+                : new ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow();
+            var root = typeof(TopLevel).GetProperty("InputRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(surface)!;
+            void FocusedEscape()
+            {
+                var assembly = typeof(AvaloniaObject).Assembly;
+                var keyType = assembly.GetType("Avalonia.Input.Raw.RawKeyEventArgs")!;
+                var device = Activator.CreateInstance(assembly.GetType("Avalonia.Input.KeyboardDevice")!)!;
+                var key = (RawInputEventArgs)Activator.CreateInstance(keyType, device, first, root,
+                    RawKeyEventType.KeyDown, Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null, KeyDeviceType.Keyboard)!;
+                var locator = assembly.GetType("Avalonia.AvaloniaLocator")!.GetProperty("Current")!.GetValue(null)!;
+                var inputType = assembly.GetType("Avalonia.Input.IInputManager")!;
+                var input = locator.GetType().GetMethod("GetService", new[] { typeof(Type) })!.Invoke(locator, new object[] { inputType })!;
+                var stream = inputType.GetProperty("PreProcess")!.GetValue(input)!;
+                stream.GetType().GetMethod("OnNext")!.Invoke(stream, new object[] { key });
+                Assert.True(EscapeClaim.SurfaceOwnsEscape(first));
+            }
+            Win32Input.EscapeState = () => (true, !palette && open, palette && open);
+            Win32Input.PostEscape = action => action();
+            Win32Input.TryVideoEscape = () => { video++; return true; };
+            (bool, int, int)? Next()
+            {
+                switch (step++)
+                {
+                    case 0:
+                        if (uiFirst) FocusedEscape();
+                        stamp = first; return (true, 9, 9);
+                    case 1:
+                        if (!uiFirst) FocusedEscape();
+                        open = false; stamp = first + 1; return (false, 9, 9);
+                    case 2:
+                        Assert.Equal(0, video); // first press belonged to the surface
+                        stamp = first + 2; return (true, 9, 9);
+                    case 3:
+                        stamp = first + 3; return (false, 9, 9);
+                    default: return null;
+                }
+            }
+            X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => leash++, Next, injectedTime: () => stamp);
+            Assert.Equal(1, video); // distinct second press belongs to the video, even within 350 ms
+            Assert.Equal(1, leash); // second press did not reach the leash
         }
-        finally { field.SetValue(null, old); }
-    }
+        finally
+        {
+            (s.PanicKeyEnabled, s.PanicKey) = oldPanic;
+            X11PanicKey.BindKeycodeForTest(oldCode);
+            Win32Input.EscapeState = oldState;
+            Win32Input.PostEscape = oldPost;
+            Win32Input.TryVideoEscape = oldTry;
+        }
+    });
 
     [Fact]
     public async Task Unfocused_escape_reaches_the_video_grace_door_without_stopping_the_engine()
     {
-        var dir = Directory.CreateTempSubdirectory("ccp-escape-").FullName;
-        var clip = Path.Combine(dir, "clip.mp4");
-        try
+        await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            try
-            {
-                using var ff = Process.Start(new ProcessStartInfo("ffmpeg",
-                    $"-v error -f lavfi -i testsrc=d=10:s=320x180:r=25 -pix_fmt yuv420p \"{clip}\"") { UseShellExecute = false })!;
-                ff.WaitForExit();
-            }
-            catch (Exception) { }
-            if (!File.Exists(clip)) Assert.Skip("ffmpeg unavailable");
-            try { _ = new LibVlcAudio("--aout=dummy"); }
-            catch (Exception e) { Assert.Skip("libvlc unavailable: " + e.Message); }
-
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var o = MandatoryVideoOverlay.Instance;
             var saved = o.Scheduler;
             var s = CoreSettings.Current;
             var original = (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll, s.AttentionChecksEnabled);
-            (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll, s.AttentionChecksEnabled) = (true, "F12", false, false);
-            var v = new MandatoryVideoScheduler(o, library: () => new[] { clip });
+            var oldAvailable = o.PlayerAvailableOverride;
+            var oldPause = o.SetPlayerPauseOverride;
+            var oldPost = Win32Input.PostEscape;
+            var surfaces = (System.Collections.Generic.List<MandatoryVideoOverlay.Surface>)typeof(MandatoryVideoOverlay)
+                .GetField("_surfaces", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(o)!;
+            var lastGrace = typeof(MandatoryVideoOverlay).GetField("_lastGraceUtc", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            var consumed = typeof(MandatoryVideoOverlay).GetField("_graceConsumed", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            var v = new MandatoryVideoScheduler(o, new FrozenClock(), library: () => new[] { "/v/clip.mp4" });
             o.Scheduler = v;
             try
             {
-                await AvaloniaTestDispatcher.RunAsync(async () =>
-                {
-                    if (Application.Current is null)
-                        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
-                            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-                    await MandatoryVideoOverlayTests.OpenClip(v, o, false);
-                    var sent = false;
-                    X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { }, () => sent ? null : (sent = true, 9, 9));
-                    await MandatoryVideoOverlayTests.Until(() => o.GracePaused);
-                    Assert.True(o.GracePaused);
-                    Assert.True(v.IsPlaying);
-                    v.Stop();
-                    Assert.Empty(o.Windows);
-                });
+                (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll, s.AttentionChecksEnabled) = (true, "F12", false, false);
+                lastGrace.SetValue(o, default(DateTime));
+                consumed.SetValue(o, false);
+                bool decoderPaused = false;
+                o.PlayerAvailableOverride = () => true;
+                o.SetPlayerPauseOverride = value => decoderPaused = value;
+                var layer = new Canvas();
+                var grace = new Border { IsVisible = false };
+                surfaces.Add(new MandatoryVideoOverlay.Surface(new Window(), new Image(), new Border(), new Image(),
+                    layer, grace, new TextBlock(), null!));
+                Assert.True(v.Trigger(false));
+                var sent = false;
+                X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { }, () => sent ? null : (sent = true, 9, 9));
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(o.GracePaused);
+                Assert.True(decoderPaused);
+                Assert.True(grace.IsVisible);
+                Assert.False(layer.IsHitTestVisible);
+                Assert.True(v.IsPlaying);
+                o.ResumeFromGrace("test");
+                Assert.False(decoderPaused);
+                Assert.False(o.GracePaused);
+                v.Stop();
+                Assert.Empty(o.Windows);
             }
             finally
             {
                 v.Stop();
+                o.PlayerAvailableOverride = oldAvailable;
+                o.SetPlayerPauseOverride = oldPause;
                 o.Scheduler = saved;
+                Win32Input.PostEscape = oldPost;
                 (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll, s.AttentionChecksEnabled) = original;
             }
-        }
-        finally { Directory.Delete(dir, true); }
+            return Task.CompletedTask;
+        });
     }
 }
