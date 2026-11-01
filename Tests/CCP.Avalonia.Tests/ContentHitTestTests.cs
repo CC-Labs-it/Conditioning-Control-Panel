@@ -13,6 +13,9 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -30,10 +33,7 @@ public sealed class ContentHitTestTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            Setup();
             var w = new MainShellWindow();
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
@@ -44,7 +44,7 @@ public sealed class ContentHitTestTests
             var misses = new List<string>();
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
-                w.ShowTab(tab);
+                ShowTabForHitTest(w, tab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -80,6 +80,98 @@ public sealed class ContentHitTestTests
             Assert.True(misses.Count == 0, string.Join("\n", misses));
             return Task.CompletedTask;
         });
+    }
+
+    [Fact]
+    public Task AwarenessHitTestRemainsStableAfterACompletedEntrance() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var (motion, gentle) = (settings.MotionLevel, settings.GentleVisuals);
+        var osProbe = UiMotionPreference.OsProbe;
+        var premium = CoreEntitlement.HasPremiumProvider;
+        MainShellWindow? window = null;
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            settings.GentleVisuals = false;
+            UiMotionPreference.OsProbe = () => true;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            var clock = new FrozenClock();
+            window = new MainShellWindow { TabClock = clock };
+            ToolTip.SetServiceEnabled(window, false);
+            window.Show();
+            ShowTabForHitTest(window, "studio");
+            window.ShowTab("awareness");
+            var tab = window.Named<Control>("AwarenessTab")!;
+            tab.FindControl<Border>("AwarenessGate")!.IsVisible = false;
+            Assert.Same(tab, window.EnteringTab);
+            void ProbeControls()
+            {
+                foreach (var name in new[] { "BtnAwarenessTutorial", "ChkAwarenessMaster" })
+                {
+                    var button = tab.FindControl<Button>(name)!;
+                    var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+                    var hit = window.InputHitTest(point) as Visual;
+                    bool pressed = false;
+                    void Swallow(object? sender, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
+                    button.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
+                    window.MouseDown(point, MouseButton.Left);
+                    window.MouseUp(point, MouseButton.Left);
+                    Dispatcher.UIThread.RunJobs();
+                    button.RemoveHandler(InputElement.PointerPressedEvent, (EventHandler<PointerPressedEventArgs>)Swallow);
+                    Assert.True((hit == button || (hit != null && button.IsVisualAncestorOf(hit))) && pressed,
+                        $"{name}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
+                }
+            }
+            // Exercise pointer input during the entrance with the frame and live tree in sync.
+            foreach (var ms in new[] { 75, 150 })
+            {
+                clock.Now = TimeSpan.FromMilliseconds(ms).Ticks;
+                window.TickTabTransition();
+                RenderLiveTree(window);
+                ProbeControls();
+            }
+            ShowTabForHitTest(window, "awareness");
+            RenderLiveTree(window);
+            // A late animation tick must not change the live geometry after the rendered frame.
+            window.StepTabTransition(150);
+            ProbeControls();
+            Assert.Null(window.EnteringTab);
+        }
+        finally
+        {
+            window?.Close();
+            (settings.MotionLevel, settings.GentleVisuals) = (motion, gentle);
+            UiMotionPreference.OsProbe = osProbe;
+            CoreEntitlement.HasPremiumProvider = premium;
+            UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
+    private static void Setup()
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
+
+    private static void ShowTabForHitTest(MainShellWindow window, string tab)
+    {
+        window.ShowTab(tab);
+        // Coordinates come from the live tree, but hit testing uses compositor readback. A
+        // transition tick between them would move the tree away from the rendered frame.
+        window.CompleteTabTransition();
+    }
+
+    private sealed class FrozenClock : TimeProvider
+    {
+        public long Now;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
     }
 
     /// <summary>Renders a frame holding the live tree. One forced tick is not that: while a batch is in
