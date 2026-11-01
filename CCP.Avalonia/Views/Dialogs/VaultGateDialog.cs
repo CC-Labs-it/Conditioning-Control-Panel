@@ -61,8 +61,9 @@ public sealed class VaultGateDialog : Window
     private readonly int _tier;
     private readonly Action _signIn;
     // WPF 5265111bc: prices from the plan list, dollars headline (the euro second line ports with sync7-conversion).
-    private readonly PriceCurrency _currency = VaultOffer.HeadlineCurrency();
+    private PriceCurrency _currency = VaultOffer.HeadlineCurrency();
     private readonly List<(StackPanel Slot, int Tier, bool Compact, bool Yearly)> _priceSlots = new();
+    private readonly List<(TextBlock Text, int Tier)> _yearlyHints = new();
     private bool _yearly;
     private StackPanel? _proofSlot, _codeSlot;
 
@@ -103,7 +104,7 @@ public sealed class VaultGateDialog : Window
         var dialog = new VaultGateDialog(feature, Math.Max(tier, feature?.Tier ?? 1), signIn);
         dialog.BuildOffer();
         Present(dialog, owner);
-        _ = dialog.FillSaleAsync();
+        _ = dialog.FillPlansAsync();
         _ = dialog.FillAsyncBits();
         return dialog;
     }
@@ -114,7 +115,7 @@ public sealed class VaultGateDialog : Window
         var dialog = new VaultGateDialog(null, 1, signIn);
         dialog.BuildEnding(grantUntilUtc);
         Present(dialog, owner);
-        _ = dialog.FillSaleAsync();
+        _ = dialog.FillPlansAsync();
         return dialog;
     }
 
@@ -132,6 +133,7 @@ public sealed class VaultGateDialog : Window
     {
         _body.Children.Clear();
         _priceSlots.Clear();
+        _yearlyHints.Clear();
         var lab = _tier >= 2;
         _body.Children.Add(Chip(Loc.Get(lab ? "vaultgate_chip_lab" : "vaultgate_chip_vault"), lab ? Gold : null));
         if (_feature != null) _body.Children.Add(Art(_feature.ArtResource));
@@ -147,7 +149,7 @@ public sealed class VaultGateDialog : Window
         _body.Children.Add(YearlyHint(_tier));
 
         var open = PrimaryButton(Loc.Get(lab ? "vaultgate_open_lab" : "vaultgate_open_vault"));
-        open.Click += (_, _) => { OpenPatreon("gate"); Close(); };
+        open.Click += (_, _) => { OpenPatreon(_tier, "gate"); Close(); };
         _body.Children.Add(open);
         _body.Children.Add(CardLink(lab, "gate"));
 
@@ -215,6 +217,26 @@ public sealed class VaultGateDialog : Window
         _codeSlot.Children.Add(link);
     }
 
+    // WPF VaultGateDialog.cs:248-267: fill the shared catalog before repainting the offer.
+    internal async Task FillPlansAsync()
+    {
+        try
+        {
+            var plans = await PlanCatalog.GetAsync();
+            _currency = VaultOffer.HeadlineCurrency(plans);
+            if (plans.FromServer)
+            {
+                Sale = plans.Sale;
+                _saleReadUtc = DateTime.UtcNow;
+                foreach (var (slot, tier, compact, yearly) in _priceSlots) PaintPrice(slot, tier, compact, yearly);
+                foreach (var (text, tier) in _yearlyHints) text.Text = YearlyHintText(tier);
+                return;
+            }
+        }
+        catch (Exception ex) { Log.Debug("[VaultGate] plans read failed: {E}", ex.GetType().Name); }
+        await FillSaleAsync();
+    }
+
     /// <summary>Reads the sale switch (cached five minutes); any failure means no sale.</summary>
     private async Task FillSaleAsync()
     {
@@ -246,6 +268,7 @@ public sealed class VaultGateDialog : Window
     {
         _body.Children.Clear();
         _priceSlots.Clear();
+        _yearlyHints.Clear();
         _body.Children.Add(Heading(Loc.Get("vaultgate_compare_title")));
         _body.Children.Add(BillingSwitch());
         var grid = new Grid { Margin = new Thickness(0, 12, 0, 0), ColumnDefinitions = new ColumnDefinitions("*,10,*") };
@@ -279,7 +302,7 @@ public sealed class VaultGateDialog : Window
         var choose = SmallButton(Loc.GetF("vaultgate_choose", tierName));
         choose.Margin = new Thickness(0, 12, 0, 0);
         choose.HorizontalAlignment = HorizontalAlignment.Stretch;
-        choose.Click += (_, _) => { OpenPatreon(lab ? "compare-lab" : "compare-vault"); Close(); };
+        choose.Click += (_, _) => { OpenPatreon(lab ? 2 : 1, lab ? "compare-lab" : "compare-vault"); Close(); };
         col.Children.Add(choose);
         col.Children.Add(CardLink(lab, lab ? "compare-lab" : "compare-vault"));
         return new Border { Background = RowBg, BorderBrush = lab ? Gold : Edge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(14), Child = col };
@@ -291,6 +314,7 @@ public sealed class VaultGateDialog : Window
     {
         _body.Children.Clear();
         _priceSlots.Clear();
+        _yearlyHints.Clear();
         _body.Children.Add(Chip(Loc.Get("vaultgate_ending_chip"), Warn));
         _body.Children.Add(Heading(Loc.Get("vaultgate_ending_title")));
         _body.Children.Add(new Border
@@ -304,7 +328,7 @@ public sealed class VaultGateDialog : Window
         _body.Children.Add(Price(1));
         _body.Children.Add(YearlyHint(1));
         var keep = PrimaryButton(Loc.Get("vaultgate_ending_keep"));
-        keep.Click += (_, _) => { OpenPatreon("ending"); Close(); };
+        keep.Click += (_, _) => { OpenPatreon(1, "ending"); Close(); };
         _body.Children.Add(keep);
         _body.Children.Add(CardLink(false, "ending"));
         var let = Link(Loc.Get("vaultgate_ending_let_close"));
@@ -316,10 +340,12 @@ public sealed class VaultGateDialog : Window
 
     // ============================== bits ==============================
 
-    private static void OpenPatreon(string from)
+    private static void OpenPatreon(int tier, string from)
     {
         Log.Information("[VaultGate] open Patreon from {From}", from);
-        if (!Launch(PatreonUrl)) Log.Warning("[VaultGate] Patreon link refused or failed");
+        var url = PlanCatalog.Current.For(tier).PatreonUrl;
+        AccountSeed.NoteCheckoutOpened(url);
+        if (!Launch(url)) Log.Warning("[VaultGate] Patreon link refused or failed");
     }
 
     /// <summary>The other way to pay, under every Patreon button: the site's card / PayPal checkout (WPF CardLink).</summary>
@@ -335,7 +361,9 @@ public sealed class VaultGateDialog : Window
     private static void OpenCard(string plan, string from)
     {
         Log.Information("[VaultGate] open card checkout ({Plan}) from {From}", plan, from);
-        if (!Launch(string.Format(CardUrlFormat, plan))) Log.Warning("[VaultGate] card checkout link refused or failed");
+        var url = PlanCatalog.WebUrlFor(PlanCatalog.Current.ForKey(plan) ?? PlanCatalog.Current.Basic);
+        AccountSeed.NoteCheckoutOpened(url);
+        if (!Launch(url)) Log.Warning("[VaultGate] card checkout link refused or failed");
     }
 
     private static Control Chip(string text, IBrush? tint) => new Border
@@ -440,9 +468,13 @@ public sealed class VaultGateDialog : Window
             slot.Children.Add(Para(Loc.GetF("vaultgate_sale_ends", ends), Dim, compact ? 11.5 : 12, new Thickness(0, 2, 0, 0)));
     }
 
+    private string YearlyHintText(int tier) => Loc.GetF("vaultgate_yearly_hint", VaultOffer.Money(VaultOffer.PriceFor(tier, _currency).YearlyCents, _currency));
     private Control YearlyHint(int tier)
-        => Para(Loc.GetF("vaultgate_yearly_hint", VaultOffer.Money(VaultOffer.PriceFor(tier, _currency).YearlyCents, _currency)),
-            Gold, 12, new Thickness(0, 0, 0, 10));
+    {
+        var text = Para(YearlyHintText(tier), Gold, 12, new Thickness(0, 0, 0, 10));
+        _yearlyHints.Add((text, tier));
+        return text;
+    }
 
     /// <summary>Monthly / Yearly pills on the compare face. Rebuilds the face on a switch.</summary>
     private Control BillingSwitch()

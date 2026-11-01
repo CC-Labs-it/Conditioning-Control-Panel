@@ -63,7 +63,8 @@ internal sealed partial class GameWindow
                 catch (Exception ex) { Log.Debug("[Funnel] beacon failed: {E}", ex.Message); }
             }
             // WPF BackRoomBridge.cs:245-249 counts after exit but never opens a checkout.
-            if (url == null || _closing || _shellExiting || !TakeFunnelOpenSlot(DateTime.UtcNow)) return;
+            if (url == null || _closing || _shellExiting || _breakoutMinimised || WindowState == global::Avalonia.Controls.WindowState.Minimized || !TakeFunnelOpenSlot(DateTime.UtcNow)) return;
+            AccountSeed.NoteCheckoutOpened(url);
             FunnelOpen(url);
         }
         catch (Exception ex) { Log.Debug("[Funnel] page message failed: {E}", ex.Message); }

@@ -66,6 +66,11 @@ export function postFunnel(event, a = '', b = '', env = globalThis, plan = '') {
       wv.postMessage(plan ? { type: 'funnel', event, a: ca, b: cb, plan } : { type: 'funnel', event, a: ca, b: cb });
       return 'host';
     }
+    if (env && typeof env.invokeCSharpAction === 'function') {
+      const [, , ca, cb] = line.split('|');
+      env.invokeCSharpAction(JSON.stringify(plan ? { type: 'funnel', event, a: ca, b: cb, plan } : { type: 'funnel', event, a: ca, b: cb }));
+      return 'host';
+    }
     const nav = env && env.navigator, loc = env && env.location;
     if (nav && typeof nav.sendBeacon === 'function' && loc && loc.protocol === 'https:') {
       nav.sendBeacon(FUNNEL_URL, line);

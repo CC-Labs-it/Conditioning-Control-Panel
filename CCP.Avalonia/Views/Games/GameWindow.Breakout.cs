@@ -17,6 +17,16 @@ internal sealed partial class GameWindow
 {
     private bool IsBreakout => Spec.Id is "breakout" or "breakoutdemo";
     private bool _breakoutSwitchPending;
+    private bool _breakoutMinimised;
+
+    // WPF BackRoomHostService.cs:572-577: a minimised room goes quiet until restored.
+    private void UpdateBreakoutSuspension()
+    {
+        var minimised = WindowState == global::Avalonia.Controls.WindowState.Minimized;
+        if (minimised == _breakoutMinimised) return;
+        _breakoutMinimised = minimised;
+        if (IsReady && !_closing) Post(new { type = "suspend", on = minimised, reason = "minimise" });
+    }
 
     // WPF BackRoomHostService.cs:295-325: focus, ask with No as default, then replace.
     internal static Func<GameWindow, Task<bool>> ConfirmBreakoutSwitch = owner =>

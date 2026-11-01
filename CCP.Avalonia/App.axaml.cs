@@ -398,6 +398,9 @@ namespace ConditioningControlPanel.Avalonia
         {
             AvaloniaXamlLoader.Load(this);
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
+            // WPF MainWindow.Patreon.cs:1275: an app window returning from checkout.
+            global::Avalonia.Controls.Window.WindowOpenedEvent.AddClassHandler<global::Avalonia.Controls.Window>((window, _) =>
+                window.Activated += (_, _) => { var ignored = Platform.AccountSeed.OnCheckoutActivatedAsync(DateTime.UtcNow); });
 
             // Load the language table before any view binds a string. The WPF head does this in
             // App.OnStartup; every head must, because LocalizationManager holds no language until
