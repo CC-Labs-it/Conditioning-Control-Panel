@@ -66,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _vibeRemainingSec;
         private static bool _afterglowApplied;
         private static bool _runPinOnTop;
+        private static int _vibeRaiseTick;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
@@ -110,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try
             {
                 _runPinOnTop = CoreSettings.Current.ChaosPinOnTop;   // WPF ChaosModeService.cs:323
+                _vibeRaiseTick = 0;
                 _state = new ChaosRunState(cfg);
                 _active = true;
                 _lastHeatTint = -1;
@@ -400,6 +402,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
+            // WPF ChaosModeService.cs:940-951: re-raise over a playing video once per second.
+            if (++_vibeRaiseTick >= 4)
+            {
+                _vibeRaiseTick = 0;
+                if (MandatoryVideoOverlay.Instance.Scheduler.IsPlaying) RaiseVibeTrailAboveVideo();
+            }
             // WPF ChaosModeService.cs:971: only the running clock spends the freeze.
             if (FreezeRemainingSec > 0)
             {
@@ -862,7 +870,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF UseToy: gate, cooldown and VibePopping (ChaosModeService.cs:2684-2709).
-        /// Other toy effects and first_play credit remain missing.</summary>
+        /// Other toy effects remain missing.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
@@ -877,6 +885,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosEffectBannerOverlay.Show("vibe", "VibePopping", Color.FromRgb(0xFF, 0xB0, 0x3A));
                 _state.PushEvent(Loc.Get("chaos_vibe_sweep"));
             }
+            if (r == ChaosToyRules.UseResult.Fired) ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);   // WPF :2780
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
         }
 

@@ -75,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         return;
                     }
                 }
-                if (!SkipPlatformChecksForTests) X11Overlay.Raise(w);   // un-hiding doesn't re-stack (WPF ChaosWindowZ.RaiseAboveVideo)
+                if (ChaosRunHost.RunPinOnTop) RaiseWindow(w);   // WPF ChaosWindowZ.cs:47-65
                 w.BeginFollow();
             }
             catch (Exception ex) { Log.Debug("ChaosVibeTrail.Start: {E}", ex.Message); }

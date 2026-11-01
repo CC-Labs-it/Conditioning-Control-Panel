@@ -116,6 +116,12 @@ public sealed class ChaosVibeTrailOverlayTests
             ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
             var meta = ChaosMeta.State;
             bool pinned = CoreSettings.Current.ChaosPinOnTop;
+            int sparks = meta.Sparks;
+            bool hadPlay = meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+            var videoHost = MandatoryVideoOverlay.Instance;
+            var savedScheduler = videoHost.Scheduler;
+            var playback = new MandatoryVideoScheduler(new MandatoryVideoToyInputTests.VideoHost(), new MandatoryVideoToyInputTests.StillTime());
+            videoHost.Scheduler = playback;
             var raise = ChaosVibeTrailOverlay.RaiseWindow;
             var schedule = MandatoryVideoOverlay.ScheduleTrailRaise;
             var kicks = new System.Collections.Generic.List<(System.Action Run, System.TimeSpan Delay)>();
@@ -146,10 +152,19 @@ public sealed class ChaosVibeTrailOverlayTests
                 state.ActiveToys.Add(toy);
                 state.ToyPower[toy.Id] = 1;
                 state.AfterglowSec = 0.5;
+                state.ActivesDisabled = true;
                 ChaosRunHost.OnToyKey("Q");
+                Assert.False(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+                Assert.Equal(sparks, meta.Sparks);
+                state.ActivesDisabled = false;
+                ChaosRunHost.OnToyKey("Q");
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+                Assert.Equal(sparks + 15, meta.Sparks);
                 Dispatcher.UIThread.RunJobs();
                 Assert.Same(trail, ChaosVibeTrailOverlay.Active);
                 Assert.True(trail.IsFollowing);
+                Assert.Equal(pinAtStart ? 1 : 0, raised);   // Start uses the same native raise seam.
+                raised = 0;
                 CoreSettings.Current.ChaosPinOnTop = !pinAtStart;   // change again during the active run
                 var video = new Window { Width = 200, Height = 200 };
                 try
@@ -190,11 +205,30 @@ public sealed class ChaosVibeTrailOverlayTests
                 Assert.False(trail.IsVisible);
                 Assert.False(toy.IsEffectActive);
                 toy.CooldownRemainingSec = 0;
+                state.ToyPower[toy.Id] = 20;
                 state.MaxedBoons.Add(toy.Id);
                 ChaosRunHost.UseToyById(toy.Id);
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(BubbleOverlay.VibeHoverPops);
                 Assert.True(trail.IsFollowing);
+                Assert.Equal(sparks + 15, meta.Sparks);   // repeat fire does not pay twice
+                CoreSettings.Current.ChaosPinOnTop = !pinAtStart;
+                for (int i = 0; i < 2; i++) ChaosRunHost.Tick();   // complete the second 4-tick period without video
+                int beforePeriodic = raised;
+                Assert.True(playback.Trigger(false, "test.mp4"));
+                for (int i = 0; i < 3; i++) ChaosRunHost.Tick();
+                Assert.Equal(beforePeriodic, raised);
+                ChaosRunHost.Tick();
+                Assert.Equal(beforePeriodic + (pinAtStart ? 1 : 0), raised);
+                ChaosRunHost.ToggleManualPause();
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Assert.Equal(beforePeriodic + (pinAtStart ? 1 : 0), raised);
+                ChaosRunHost.ToggleManualPause();
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Assert.Equal(beforePeriodic + (pinAtStart ? 2 : 0), raised);
+                playback.ForceCleanup();
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Assert.Equal(beforePeriodic + (pinAtStart ? 2 : 0), raised);
                 toy.CooldownRemainingSec = 0;
                 ChaosRunHost.UseToyById(toy.Id);   // panic before any queued Start could run
                 ChaosRunHost.ForceShutdown();
@@ -204,6 +238,11 @@ public sealed class ChaosVibeTrailOverlayTests
             }
             finally
             {
+                playback.ForceCleanup();
+                videoHost.Scheduler = savedScheduler;
+                meta.Sparks = sparks;
+                if (hadPlay) meta.FirstTimesAwarded.Add(ChaosFirstTimes.Play);
+                else meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
                 ChaosRunHost.ForceShutdown();
                 ChaosVibeTrailOverlay.SkipPlatformChecksForTests = false;
                 ChaosEffectBannerOverlay.SkipPlatformChecksForTests = false;
