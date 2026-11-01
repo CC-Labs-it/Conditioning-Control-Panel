@@ -28,8 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// are in IntakeHostWindow.Bridge.cs; window mode, duck and the heartbeat watchdog in
     /// IntakeHostWindow.Lifecycle.cs.
     /// ponytail: not ported yet - relaunch on a web-process crash (WebHost raises no process-failed),
-    /// the EmiDesk intakeRunning hold (this head's
-    /// EmiDeskService has no Fire/ReleaseHold director), the punch card. Next slices in
+    /// the punch card. Next slices in
     /// ~/ccp-port/briefs/intake-plan.md.
     /// </summary>
     internal sealed partial class IntakeHostWindow : Window
@@ -53,11 +52,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Content = Web;
             Web.WebMessage += OnPageMessage;
             // WPF DisposeAll: a closed window never leaves the mic open.
-            Opened += (_, _) => { lock (OpenWindows) OpenWindows.Add(this); StartLifecycle(); };
+            Opened += (_, _) =>
+            {
+                lock (OpenWindows) OpenWindows.Add(this);
+                EmiDesk.EmiDeskService.Instance.FireHold("intakeRunning"); // WPF IntakeHostService.cs:110-114
+                StartLifecycle();
+            };
             Closed += (_, _) =>
             {
                 _closed = true;
                 lock (OpenWindows) OpenWindows.Remove(this);
+                if (!IsAnyOpen()) EmiDesk.EmiDeskService.Instance.ReleaseHold("intakeRunning"); // WPF :1070-1077
                 StopSpeechBridge("closed", notifyPage: false);
                 EndLifecycle();
             };

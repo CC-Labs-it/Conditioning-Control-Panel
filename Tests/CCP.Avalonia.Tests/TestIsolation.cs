@@ -54,6 +54,7 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
@@ -78,6 +79,7 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             if (global::Avalonia.Application.Current?.Resources is { } res)
                 foreach (var k in new[] { "SectionInk", "SectionTint", "SectionRule", "SectionOutline" })
                 { res.Remove(k); res.Remove(k + "Brush"); }
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
             Current?.Restore();
             Current = null;
             // A closed window's Skia surfaces and render targets are native, freed by finalizers, and

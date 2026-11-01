@@ -24,6 +24,33 @@ public partial class EmiDeskWindow
     private bool _glassLive, _glassLanded, _glassMotion;
     private double _glassScale;
 
+    private DispatcherTimer? _holdFaceTimer;
+
+    // WPF EmiDeskWindow.Bubble.cs:545-577: a hold closes the channel and wears a quiet face.
+    internal void HoldFace(LineDraw line)
+    {
+        CancelHoldFace();
+        CloseGlass();
+        CancelChain();
+        StopIdleBeats();
+        EmiLineEngine.Instance.Ack(line.Id, spoke: false);
+        DrawFace(string.IsNullOrEmpty(line.Face) ? "-_-" : line.Face);
+        _holdFaceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(line.HoldMs > 0 ? line.HoldMs : 1400) };
+        _holdFaceTimer.Tick += (_, _) =>
+        {
+            CancelHoldFace();
+            DrawFace(EmiChains.RestFace);
+            RestartIdleBeats();
+        };
+        _holdFaceTimer.Start();
+    }
+
+    private void CancelHoldFace()
+    {
+        _holdFaceTimer?.Stop();
+        _holdFaceTimer = null;
+    }
+
     private static TimeSpan NextGlassIdle() => EmiDebug.IdleMs is int ms
         ? TimeSpan.FromMilliseconds(ms)
         : TimeSpan.FromSeconds(30 + GlassRng.NextDouble() * 30); // WPF EmiChannels.cs:74-82
@@ -55,6 +82,7 @@ public partial class EmiDeskWindow
     {
         _glassWatch?.Stop();
         _glassWatch = null;
+        CancelHoldFace();
         CloseGlass();
     }
 

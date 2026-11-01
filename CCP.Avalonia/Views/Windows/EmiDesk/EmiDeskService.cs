@@ -17,8 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// Dismiss :420, EnsureWindow :607, MaybeAskAboutMuting :1541, AvatarMuted :80. The dock chip,
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
-    /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
+    /// <para>ponytail: not here yet, each a named WPF member: the rest of the moment bus (speech, greeting,
+    /// backSoon/weekend/bedtime beats), the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off wiring (the <c>TubeDeskVisibility</c> rule itself is in
     /// CCP.Core; only the head call that hides/restores the desk is missing). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
@@ -97,6 +97,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 Log.Warning(ex, "[EmiDesk] Summon failed");
             }
+        }
+
+        // WPF EmiDeskService.cs:661-705,715-719,727-761. Only the safety hold half of Fire
+        // is wired here; ordinary moments wait for the speech and offer director.
+        internal void FireHold(string momentId)
+        {
+            try
+            {
+                var engine = EmiLineEngine.Instance;
+                if (!engine.IsHoldMoment(momentId)) return;
+                if (!IsOut) { engine.Draw(momentId); return; }
+                if (!Dispatcher.UIThread.CheckAccess())
+                {
+                    Dispatcher.UIThread.Post(() => { if (IsOut) FireHold(momentId); });
+                    return;
+                }
+                if (_window?.IsVisible != true || _window.PresentationActive) return;
+                var line = engine.Draw(momentId);
+                if (line != null) _window.HoldFace(line);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] hold {Moment} failed", momentId); }
+        }
+
+        internal void ReleaseHold(string momentId)
+        {
+            try { EmiLineEngine.Instance.ReleaseHold(momentId); }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] release {Moment} failed", momentId); }
         }
 
         /// <summary>Send her away. Safe to call when she is not out.</summary>

@@ -162,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return false;
             }
             Log.Information("Panic triggered by voice");
+            EmiDesk.EmiDeskService.Instance.FireHold("panicPressed"); // WPF MainWindow.RemoteControl.cs:1475-1479
             PanicSurfaces.StopAll("voice", this);
             ShowFromTray();
             return true;
