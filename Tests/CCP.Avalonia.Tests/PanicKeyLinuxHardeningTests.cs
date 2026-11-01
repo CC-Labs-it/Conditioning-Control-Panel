@@ -72,7 +72,7 @@ public sealed class PanicKeyLinuxHardeningTests
     public void RebindWhilePortalBound_RebindsAfterCapture_ARefusalIsTheNotice_LastEffectUnbinds() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var notices = global::ConditioningControlPanel.Avalonia.App.Notifications;
@@ -230,7 +230,7 @@ public sealed class PanicKeyLinuxHardeningTests
         public PortalScope()
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
