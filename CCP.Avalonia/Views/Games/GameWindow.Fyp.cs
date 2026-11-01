@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -13,6 +14,9 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.Fyp;
 using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Services.Webcam;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -22,8 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// The For You feed's host (WPF Services/Fyp/FypHostService.cs): <c>fyp/index.html</c> on the app's origin,
     /// the library through the asset gate every game uses, the rules in Core <see cref="FypRules"/> (shared
     /// with WPF). BRIGHT LINE: batches and probes go straight to the provider, media only when RemoteAllowed.
-    /// <para>ponytail: not on this head yet - eye control (init says off; a toggle gets eyeStatus "unsupported"),
-    /// ghost mode (WPF's own unavailable answer), calibrate and EMI's fypOpened/fypClosed.</para>
+    /// Ghost mode and EMI moments remain unported.
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -74,7 +77,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     };
                 }
                 var assets = FypAssets();
-                Post(FypRules.BuildInit(CoreSettings.Current, assets, eyeControl: false, FypStatsPath));
+                Post(FypRules.BuildInit(CoreSettings.Current, assets, eyeControl: true, FypStatsPath));
+                if (CoreSettings.Current.FypEyeControl) StartFypEyeControl();
                 Log.Information("[Game] fyp: page ready, init sent ({N} library clips)", assets.Count);   // WPF :124 "launched"
             }
             catch (Exception ex) { Log.Warning("[Game] fyp: init failed: {E}", ex.Message); }
@@ -150,11 +154,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "file-menu":
                     ShowFypFileMenu((string?)o["id"]);
                     return true;
+                case "calibrate":
+                    FypCalibrationTask = CalibrateFypGaze();
+                    return true;
                 case "settings-changed":
                     ApplyFypSetting((string?)o["key"], o["value"]);
                     return true;
                 default:
-                    return false;   // close / log / boot-error: the shell's; calibrate: see ponytail
+                    return false;   // close / log / boot-error: the shell's
             }
         }
 
@@ -193,23 +200,173 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Post(new { type = "ghost-unavailable", reason = "unsupported" });
                     break;
                 case FypRules.SettingEffect.EyeControlOn:
-                    // WPF FailEyeControl (:1278): stored off again, and the page told the truth - the camera
-                    // exists (WebcamTracker), this host just does not drive the feed from it yet.
-                    s.FypEyeControl = false;
-                    PostFypEyeStatus("unsupported");
+                    StartFypEyeControl();
                     break;
                 case FypRules.SettingEffect.EyeControlOff:
+                    DisableFypEyeControl();
+                    PostFypEyeStatus(null);
+                    break;
                 case FypRules.SettingEffect.EyeGazeChanged:
+                    SyncFypGaze();
                     PostFypEyeStatus(null);
                     break;
             }
         }
 
-        /// <summary>WPF PostEyeStatus: what is actually true, so the toggles render reality.</summary>
+        // WPF FypHostService.cs:924-1045: consent, off-thread start, and camera ownership.
+        private bool _fypEyeSubscribed, _fypGazeSubscribed, _fypStartedCamera, _fypEyeEnabling;
+        private int _fypEyeGeneration;
+        private DateTime _fypLastGaze = DateTime.MinValue;
+        internal Task? FypEyeTask { get; private set; }
+        internal Task? FypCalibrationTask { get; private set; }
+        // Test seams keep camera hardware and modal dialogs out of the headless suite.
+        internal Func<Task<bool>>? FypConsentOverride, FypStartCameraOverride;
+        internal Func<bool>? FypCameraRunningOverride;
+        internal Action? FypStopCameraOverride;
+        internal Func<Task>? FypCalibrationOverride;
+        private bool FypCameraRunning => FypCameraRunningOverride?.Invoke() ?? WebcamTracker.Instance.IsRunning;
+
+        private void StartFypEyeControl()
+        {
+            if (_closing || _fypEyeEnabling) return;
+            if (_fypEyeSubscribed) { SyncFypGaze(); PostFypEyeStatus(null); return; }
+            FypEyeTask = EnableFypEyeControl();
+        }
+
+        private async Task EnableFypEyeControl()
+        {
+            _fypEyeEnabling = true;
+            int generation = _fypEyeGeneration;
+            try
+            {
+                await Task.Yield(); // never show a modal dialog inside the web message callback
+                if (!FypEyeWanted(generation)) return;
+                if (!WebcamConsent.IsCurrent(CoreSettings.Current))
+                {
+                    bool consent;
+                    if (FypConsentOverride != null) consent = await FypConsentOverride();
+                    else
+                    {
+                        var dialog = new WebcamConsentDialog();
+                        var accepted = await dialog.ShowDialogSafe<bool?>(this);
+                        consent = accepted == true && dialog.ConsentGiven;
+                    }
+                    if (!FypEyeWanted(generation)) return;
+                    if (!consent) { FailFypEyeControl("consent"); return; }
+                }
+                if (!FypCameraRunning)
+                {
+                    PostFypEyeStatus("starting");
+                    bool started = await (FypStartCameraOverride?.Invoke() ?? WebcamTracker.Instance.StartAsync());
+                    if (!started)
+                    {
+                        if (FypEyeWanted(generation)) FailFypEyeControl(
+                            WebcamTracker.Instance.State == WebcamTrackingState.Error ? "error" : "no-camera");
+                        return;
+                    }
+                    _fypStartedCamera = true;
+                }
+                if (!FypEyeWanted(generation)) { DisableFypEyeControl(); return; }
+                var tracker = WebcamTracker.Instance;
+                tracker.OnBlink += OnFypBlink;
+                tracker.OnEyesClosedLong += OnFypEyesClosed;
+                _fypEyeSubscribed = true;
+                SyncFypGaze();
+                PostFypEyeStatus(null);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[Game] fyp: eye control failed");
+                if (FypEyeWanted(generation)) FailFypEyeControl("error");
+                else DisableFypEyeControl();
+            }
+            finally
+            {
+                _fypEyeEnabling = false;
+                // An off/on while a dialog or camera start was pending needs a fresh attempt.
+                if (generation != _fypEyeGeneration && !_closing && CoreSettings.Current.FypEyeControl)
+                    StartFypEyeControl();
+            }
+        }
+
+        private bool FypEyeWanted(int generation) => !_closing && generation == _fypEyeGeneration && CoreSettings.Current.FypEyeControl;
+
+        private void FailFypEyeControl(string reason)
+        {
+            CoreSettings.Current.FypEyeControl = false;
+            DisableFypEyeControl();
+            PostFypEyeStatus(reason);
+        }
+
+        private void DisableFypEyeControl()
+        {
+            _fypEyeGeneration++;
+            var tracker = WebcamTracker.Instance;
+            if (_fypEyeSubscribed) { tracker.OnBlink -= OnFypBlink; tracker.OnEyesClosedLong -= OnFypEyesClosed; }
+            if (_fypGazeSubscribed) tracker.OnGazeMove -= OnFypGaze;
+            _fypEyeSubscribed = _fypGazeSubscribed = false;
+            if (_fypStartedCamera)
+            {
+                _fypStartedCamera = false;
+                if (FypStopCameraOverride != null) FypStopCameraOverride();
+                else if (tracker.IsRunning) tracker.Stop();
+            }
+        }
+
+        private void SyncFypGaze()
+        {
+            var tracker = WebcamTracker.Instance;
+            bool want = _fypEyeSubscribed && CoreSettings.Current.FypEyeControl && CoreSettings.Current.FypEyeGaze && tracker.Calibration != null;
+            if (want == _fypGazeSubscribed) return;
+            if (want) tracker.OnGazeMove += OnFypGaze; else tracker.OnGazeMove -= OnFypGaze;
+            _fypGazeSubscribed = want;
+        }
+
+        // WPF :1050-1085: status describes the tracker and calibration, including after the dialog.
         private void PostFypEyeStatus(string? reason)
         {
             var s = CoreSettings.Current;
-            Post(new { type = "eyeStatus", enabled = s.FypEyeControl, gaze = s.FypEyeGaze, running = false, calibrated = false, reason });
+            Post(new { type = "eyeStatus", enabled = s.FypEyeControl, gaze = s.FypEyeGaze,
+                running = FypCameraRunning, calibrated = WebcamTracker.Instance.Calibration != null, reason });
+        }
+
+        private async Task CalibrateFypGaze()
+        {
+            if (WebcamCalibrationWindow.IsShowing) return;
+            if (!FypCameraRunning) { PostFypEyeStatus(null); return; }
+            try
+            {
+                if (FypCalibrationOverride != null) await FypCalibrationOverride();
+                else await WebcamCalibrationWindow.ShowDialogWithRecalibrate(this);
+                if (_closing) return;
+                SyncFypGaze();
+                PostFypEyeStatus(null);
+            }
+            catch (Exception ex) { Log.Warning(ex, "[Game] fyp: gaze calibration failed"); }
+        }
+
+        // WPF :1090-1150: tracker events arrive on the UI thread; gaze is capped at 10 Hz.
+        private void OnFypBlink() { try { Post(new { type = "blink" }); } catch (Exception ex) { Log.Debug("[Game] fyp: blink post: {E}", ex.Message); } }
+        private void OnFypEyesClosed() { try { Post(new { type = "eyesClosed" }); } catch (Exception ex) { Log.Debug("[Game] fyp: eyesClosed post: {E}", ex.Message); } }
+        private void OnFypGaze(Point p)
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                if ((now - _fypLastGaze).TotalMilliseconds < 100 || Web.Bounds.Width <= 0 || Web.Bounds.Height <= 0) return;
+                var bounds = WebcamTracker.Instance.Calibration?.MonitorBounds;
+                double calScale = bounds is { DpiScale: > 0.25 and < 8.0 } ? bounds.DpiScale : 1.0;
+                double originX = bounds?.DeviceName != null ? bounds.X : 0;
+                double originY = bounds?.DeviceName != null ? bounds.Y : 0;
+                var webOrigin = Web.PointToScreen(new Point(0, 0));
+                double scale = TopLevel.GetTopLevel(Web)?.RenderScaling ?? 1.0;
+                double x = (p.X * calScale + originX - webOrigin.X) / scale / Web.Bounds.Width;
+                double y = (p.Y * calScale + originY - webOrigin.Y) / scale / Web.Bounds.Height;
+                bool inside = x >= 0 && x <= 1 && y >= 0 && y <= 1;
+                _fypLastGaze = now;
+                Post(new { type = "gaze", x = Math.Clamp(x, 0, 1), y = Math.Clamp(y, 0, 1), inside });
+            }
+            catch (Exception ex) { Log.Debug("[Game] fyp: gaze post: {E}", ex.Message); }
         }
 
         /// <summary>WPF ServeRemoteBatch (:360): one batch per ask, single-flight, refused quietly without RemoteAllowed.</summary>
