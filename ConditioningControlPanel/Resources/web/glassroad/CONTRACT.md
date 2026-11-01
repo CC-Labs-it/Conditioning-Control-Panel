@@ -308,6 +308,7 @@ go to the world screens (every face `selectScrolllerSlots` picks) and the flash 
 shared owners `media.setSource(id, { kind: 'canvas', el, borrowed: true, credit: 'scrolller' })` and `media.swapStill`.
 One decode at a time, long edge at most 640 px, one upload per picture under the tier's upload budget, owners =
 `mediaClipLimit(memoryTier)` (phone 3), each owner changes picture every 7 s (Gentle 14 s), nothing moves while paused.
+Clips (2026-11-01, desktop): `caps.scrolller.clips: true` lets the feed carry `{ url, kind: 'video' }` rows from the same origin; without it the guard refuses them, so the phone stays on stills. Every second owner plays one (muted, looping, half speed on Gentle, paused whenever nothing draws the world), via `media.setSource(id, { kind: 'video', el, borrowed: true })` and `media.swapSource`, at the tier's video upload rate. Its first frame stays in the owner's canvas for flash cards and pickup fronts.
 Page -> host `set-setting { key: 'media.remoteConsent', value: true, ask: true }` under this origin only, from the
 player's own press of Scrolller (the host may show its sheet); nothing else ever sends `ask`, and the page never raises
 this consent by itself. An echo of false to a pending ask turns the course's pick off. Rows ending in `.svg` are refused.
