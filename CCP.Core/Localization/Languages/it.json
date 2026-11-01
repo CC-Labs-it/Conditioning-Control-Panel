@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charged": "⚡ Carico: i prossimi {0} scoppi conducono",
+  "chaos_estim_charged_chain": "⚡ Carico: i prossimi {0} scoppi si concatenano",
+  "chaos_estim_arc": "⚡ La corrente salta: {0} rimasti",
+  "chaos_estim_spent": "⚡ Carica esaurita",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

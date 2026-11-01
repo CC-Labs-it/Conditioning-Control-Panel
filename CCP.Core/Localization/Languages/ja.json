@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charged": "⚡ 充電: 次の{0}回の破裂で放電",
+  "chaos_estim_charged_chain": "⚡ 充電: 次の{0}回の破裂で連鎖",
+  "chaos_estim_arc": "⚡ 放電: 残り{0}回",
+  "chaos_estim_spent": "⚡ 充電終了",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

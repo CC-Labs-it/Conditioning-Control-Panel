@@ -302,6 +302,65 @@ namespace ConditioningControlPanel.Services
         /// <summary>A live chaos bubble was snapped (held to the end, or swept).</summary>
         public Action<AmbientBubble>? ChaosDefused;
 
+        // WPF BubbleService.cs:342-442: charge is spent only when a clicked treat has a conductor.
+        public int EStimChargesLeft { get; private set; }
+        private bool _estimFork;
+
+        public void ArmEStim(int charges, bool fork)
+        {
+            EStimChargesLeft = Math.Max(1, charges);
+            _estimFork = fork;
+        }
+
+        public void ResetEStim() { EStimChargesLeft = 0; _estimFork = false; }
+
+        public List<(AmbientBubble From, AmbientBubble Target, int DelayMs)> ConductEStim(AmbientBubble source)
+        {
+            var hits = new List<(AmbientBubble From, AmbientBubble Target, int DelayMs)>();
+            var spec = source.Spec;
+            if (EStimChargesLeft <= 0 || HoldChaos || spec == null || spec.IsLive || spec.IsDarter || spec.IsFreeze
+                || spec.IsTease || spec.IsBrittle) return hits;
+
+            static double DistSq(AmbientBubble a, AmbientBubble b)
+            {
+                double dx = a.CenterX - b.CenterX, dy = a.CenterY - b.CenterY;
+                return dx * dx + dy * dy;
+            }
+            // Chaperone pair/shield state is not on this head; do not snap a potentially shielded live.
+            var pool = Bubbles.FindAll(b => !ReferenceEquals(b, source) && !b.Popping && b.Spec is
+                { IsDarter: false, IsFreeze: false, IsTease: false, IsBrittle: false, IsChaperoneLive: false });
+            const double rangeSq = 600 * 600;
+            if (!_estimFork)
+            {
+                pool.Sort((a, b) => DistSq(a, source).CompareTo(DistSq(b, source)));
+                foreach (var target in pool)
+                {
+                    if (hits.Count == 3 || DistSq(target, source) > rangeSq) break;
+                    hits.Add((source, target, 70 * (hits.Count + 1)));
+                }
+            }
+            else
+            {
+                var frontier = new Queue<(AmbientBubble Bubble, int Depth)>();
+                var taken = new HashSet<AmbientBubble> { source };
+                frontier.Enqueue((source, 0));
+                while (frontier.Count > 0 && hits.Count < 40)
+                {
+                    var (current, depth) = frontier.Dequeue();
+                    foreach (var target in pool)
+                    {
+                        if (taken.Contains(target) || DistSq(target, current) > rangeSq) continue;
+                        taken.Add(target);
+                        hits.Add((current, target, 70 * (depth + 1)));
+                        frontier.Enqueue((target, depth + 1));
+                        if (hits.Count == 40) break;
+                    }
+                }
+            }
+            if (hits.Count > 0 && --EStimChargesLeft == 0) _estimFork = false;
+            return hits;
+        }
+
         /// <summary>A press on a live bubble (WPF OnPlayerPress): starts its channel, or sets it off.</summary>
         public void PressLive(AmbientBubble b, bool canChannel, double cursorX, double cursorY)
         {

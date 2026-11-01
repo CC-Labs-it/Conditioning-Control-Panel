@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -150,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = 0;
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnEStimArc);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
@@ -624,14 +625,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys' toy loop. ponytail: no toy effect runs on this head yet (they
-        /// live with the bubble field), so the glow state drops on the next tick.</summary>
+        /// <summary>WPF TickActiveToys: E-Stim glows while any charged clicks remain.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
-            foreach (var t in _state.ActiveToys) t.IsEffectActive = false;
+            foreach (var t in _state.ActiveToys) t.IsEffectActive = t.Id == "e_stim" && BubbleOverlay.Field.EStimChargesLeft > 0;
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -651,13 +651,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// freeze, DVD, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
+        /// <summary>WPF UseToy: E-Stim is wired; the other toy effects and first_play award remain.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+            if (r != ChaosToyRules.UseResult.Fired || toy.Id != "e_stim") return;
+            // WPF ChaosModeService.cs:2761-2775: the Overload boon doubles this charge.
+            double power = _state.ToyPower.TryGetValue(toy.Id, out var value) ? value : 0;
+            int charges = Math.Max(1, (int)power) * Math.Max(1, _state.EStimChargeMult);
+            bool maxed = _state.MaxedBoons.Contains(toy.Id);
+            BubbleOverlay.Field.ArmEStim(charges, maxed);
+            ChaosEStimOverlay.Arm();
+            ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
+            ChaosEffectBannerOverlay.Show("estim", "E-Stim", Color.FromRgb(0x9C, 0x5C, 0xFF));
+            Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
+            _state.PushEvent(Loc.GetF(maxed ? "chaos_estim_charged_chain" : "chaos_estim_charged", charges));
+        }
+
+        // WPF ChaosModeService.cs:2785-2798: the last successful arc drops the halo and banner.
+        private static void OnEStimArc(int chargesLeft)
+        {
+            if (_state == null) return;
+            ChaosOverlayWindow.ChaosSfx.Play("estim_zap", 0.6f);
+            Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
+            if (chargesLeft > 0) _state.PushEvent(Loc.GetF("chaos_estim_arc", chargesLeft));
+            else
+            {
+                ChaosEffectBannerOverlay.End("estim");
+                ChaosEStimOverlay.Disarm();
+                _state.PushEvent(Loc.Get("chaos_estim_spent"));
+            }
         }
 
         private static void RunAgain()

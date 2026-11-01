@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charged": "⚡ 충전: 다음 {0}번 터뜨리면 전류가 흐릅니다",
+  "chaos_estim_charged_chain": "⚡ 충전: 다음 {0}번 터뜨리면 연쇄됩니다",
+  "chaos_estim_arc": "⚡ 전류 발생: {0}회 남음",
+  "chaos_estim_spent": "⚡ 충전 소진",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",

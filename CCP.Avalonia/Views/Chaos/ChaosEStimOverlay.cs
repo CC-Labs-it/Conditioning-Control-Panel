@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosEStimOverlay.cs (ChaosEStimOverlay + ChaosEStimGlow).
 // The maths (bolt path, strike timeline, halo follow and pulse) is Core's ChaosEStimMath; this file only draws.
 //
-// Remaining caller work: e_stim activation and charged-pop discharge (WPF ChaosModeService
-// :2761-2798, BubbleService :342-442), plus the mandatory-video layer raise (:741-779).
+// Charged-pop callers: ChaosRunHost and BubbleOverlay (WPF ChaosModeService :2761-2798,
+// BubbleService :342-442). The mandatory-video layer raise is still missing (:741-779).
 // The e-stim DEVICE output is untouched here.
 
 using System;

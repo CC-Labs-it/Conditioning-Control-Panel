@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charged": "⚡ Geladen: Die nächsten {0} Treffer leiten",
+  "chaos_estim_charged_chain": "⚡ Geladen: Die nächsten {0} Treffer verketten",
+  "chaos_estim_arc": "⚡ Strom springt über: {0} übrig",
+  "chaos_estim_spent": "⚡ Ladung verbraucht",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

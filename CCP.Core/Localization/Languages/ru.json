@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charged": "⚡ Заряд: следующие {0} пузырей проводят ток",
+  "chaos_estim_charged_chain": "⚡ Заряд: следующие {0} пузырей вызовут цепь",
+  "chaos_estim_arc": "⚡ Разряд: осталось {0}",
+  "chaos_estim_spent": "⚡ Заряд исчерпан",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

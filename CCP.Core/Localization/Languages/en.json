@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charged": "⚡ Charged: next {0} pops conduct",
+  "chaos_estim_charged_chain": "⚡ Charged: next {0} pops chain",
+  "chaos_estim_arc": "⚡ Current arcs: {0} left",
+  "chaos_estim_spent": "⚡ Charge spent",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

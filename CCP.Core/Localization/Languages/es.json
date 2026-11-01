@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charged": "⚡ Cargado: los próximos {0} estallidos conducen",
+  "chaos_estim_charged_chain": "⚡ Cargado: los próximos {0} estallidos encadenan",
+  "chaos_estim_arc": "⚡ Salta la corriente: quedan {0}",
+  "chaos_estim_spent": "⚡ Carga agotada",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",
