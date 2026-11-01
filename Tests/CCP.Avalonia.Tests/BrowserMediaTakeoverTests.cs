@@ -4,11 +4,13 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -86,6 +88,78 @@ public sealed class BrowserMediaTakeoverTests
             }
         });
     }
+
+    // WPF BrowserMediaService.cs:248-257 claims the queue for user playback even with
+    // protection off. VideoService.cs:2948-2959 and BubbleCountService.cs:424-431 defer.
+    private static void WithDesktopBrowser(Action<WebHost> check)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var app = Application.Current!;
+            // SetupWithoutStarting freezes the public setter; replace and restore the backing field
+            // only for this headless test so Current follows a real desktop lifetime.
+            var lifetimeField = typeof(Application).GetField("_applicationLifetime",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var oldLifetime = lifetimeField.GetValue(app);
+            var settings = CoreSettings.Current;
+            var oldProtect = settings.ProtectBrowserVideoPlayback;
+            var lifetime = new ClassicDesktopStyleApplicationLifetime();
+            var shell = new MainShellWindow();
+            WebHost? host = null;
+            try
+            {
+                lifetimeField.SetValue(app, lifetime);
+                lifetime.MainWindow = shell;
+                settings.ProtectBrowserVideoPlayback = false;
+                var tab = shell.Named<SettingsTabView>("SettingsTab")!;
+                host = tab.FindControl<WebHost>("BrowserWebHost")!;
+                check(host);
+            }
+            finally
+            {
+                host?.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+                shell.Close();
+                lifetimeField.SetValue(app, oldLifetime);
+                settings.ProtectBrowserVideoPlayback = oldProtect;
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+    }
+
+    [Fact]
+    public void BrowserPlaybackReachesScheduledVideoHost() => WithDesktopBrowser(host =>
+    {
+        var video = MandatoryVideoOverlay.Instance;
+        Assert.False(video.BrowserMediaActive);
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+        Assert.True(video.BrowserMediaActive);
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+        Assert.False(video.BrowserMediaActive);
+    });
+
+    [Fact]
+    public void BrowserPlaybackQueuesBubbleCountUntilItStops() => WithDesktopBrowser(host =>
+    {
+        var clock = new BubbleCountQueueTests.Clock();
+        var bubbleHost = BubbleCountHost.Instance;
+        var game = new BubbleCountScheduler(bubbleHost, clock, () => new[] { "/none/clip.mp4" });
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            game.Trigger(forceTest: true);
+            Assert.True(game.IsQueued);
+            Assert.False(game.IsBusy);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            clock.Advance(BubbleCountScheduler.QueuePoll);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(game.IsQueued);
+            Assert.True(game.IsBusy);
+        }
+        finally { game.ForceCleanup(); }
+    });
 
     [Fact]
     public void HeartbeatsKeepPlaybackBusyAndTimeoutOrNavigationReleasesIt()

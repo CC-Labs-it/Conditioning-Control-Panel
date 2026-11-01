@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _autonomyHooked = true;
             Autonomy.CanPerform = CanPerformAutonomy;
             // WPF CanTakeAction: never over a fullscreen interaction (InteractionQueue.IsBusy).
-            Autonomy.IsBusy = () => BrowserPage?.BrowserMediaPlaying == true
+            Autonomy.IsBusy = () => BrowserMediaPlaying
                                     || CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen()
                                     || BubbleCountWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen();
             Autonomy.Perform = (a, announced) => Dispatcher.UIThread.Post(() => PerformAutonomy(a, announced));

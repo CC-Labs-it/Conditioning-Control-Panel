@@ -75,6 +75,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// so its generated fields are never assigned (MainShellWindow.TabNavigation.cs).</summary>
         private Tabs.SettingsTabView? BrowserPage => Named<Tabs.SettingsTabView>("SettingsTab");
 
+        internal bool BrowserMediaPlaying => BrowserPage?.BrowserMediaPlaying == true;
+
         private WebHost? BrowserView => BrowserPage?.FindControl<WebHost>("BrowserWebHost");
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on

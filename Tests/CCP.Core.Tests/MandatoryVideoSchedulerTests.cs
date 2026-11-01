@@ -16,6 +16,7 @@ public sealed class MandatoryVideoSchedulerTests
     private sealed class Host : IMandatoryVideoHost
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
+        public bool BrowserMediaActive { get; set; }
         public int Closes;
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
@@ -476,6 +477,24 @@ public sealed class MandatoryVideoSchedulerTests
         clock.Advance(TimeSpan.FromSeconds(1.3));
         Assert.Equal(new[] { ("/ai/named.mp4", false) }, host.Shown);
         Assert.False(v.Trigger(path: "/ai/other.mp4"));      // one already playing
+    });
+
+    [Fact]   // WPF VideoService.cs:2948-2959: skip and retry in 30 s, without queueing.
+    public void BrowserPlaybackDefersScheduledVideoAndRetriesSoon() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BrowserMediaActive = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            v.Start();
+            clock.Advance(TimeSpan.FromSeconds(217)); // VideosPerHour clamps to 20, first tick by 216 s.
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            host.BrowserMediaActive = false;
+            clock.Advance(TimeSpan.FromSeconds(MandatoryVideoScheduler.SkipRetrySeconds + 5));
+            Assert.Single(host.Shown);
+        }
+        finally { v.Stop(); }
     });
 
     [Fact]   // WPF VideoService :3007: a do-not-disturb app in front reschedules (SkipRetrySeconds), never drops

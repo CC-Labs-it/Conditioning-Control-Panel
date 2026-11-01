@@ -7,8 +7,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SettingsTabView
     {
         // WPF BrowserService.cs:332-457 and BrowserMediaService.cs:230-277, :301-375,
-        // :491-543. This head has no interaction queue; this tracks the Home browser for
-        // Takeover's busy gate only. The reporter is injected after navigation because WebHost
+        // :491-543. This head has no interaction queue; the Home browser state feeds Takeover,
+        // scheduled mandatory video and Bubble Count gates. The reporter is injected after navigation because WebHost
         // cannot inject at document creation, and can observe only the top document.
         internal bool BrowserMediaPlaying { get; private set; }
         internal Func<DateTime> BrowserMediaClock = () => DateTime.UtcNow;
