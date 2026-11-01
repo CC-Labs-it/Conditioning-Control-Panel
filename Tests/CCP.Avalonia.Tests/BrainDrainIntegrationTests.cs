@@ -28,7 +28,7 @@ public sealed class BrainDrainIntegrationTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         BrainDrainOverlay.CloseAll(); var owner = new Window(); owner.Show();
         CoreSession.IsEngineRunningProvider = () => true; var settings = CoreSettings.Current; settings.BrainDrainEnabled = true; settings.BrainDrainBlurStrength = 100; settings.DualMonitorEnabled = true; settings.BrainDrainKeepPicturesClear = false;
-        BrainDrainOverlay.Prepare = _ => supported; BrainDrainOverlay.Capture = (_, _) => { };
+        BrainDrainOverlay.Prepare = _ => supported; BrainDrainOverlay.Capture = (_, _) => true;
         BrainDrainOverlay.Alpha = (w, a) => w.Opacity = a;
         BrainDrainOverlay.Screens = _ => new[] {
             (new PixelRect(0, 0, 800, 600), 1.0, true),
@@ -108,16 +108,16 @@ public sealed class BrainDrainIntegrationTests
     [InlineData(true)]
     public Task CaptureAffinityFollowsCreationToggleAndReplacement(bool allow) => Run(owner =>
     {
-        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
-        service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 50; service.Current.AllowOverlayCapture = allow;
-        var calls = new List<(uint Flag, bool Visible)>(); BrainDrainOverlay.Capture = (w, flag) => calls.Add((flag, w.IsVisible));
+        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service; service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 50; service.Current.AllowOverlayCapture = allow;
+        var calls = new List<(uint Flag, bool Visible)>(); bool protectedCapture = true, failVisible = false; int shownUnprotected = 0; BrainDrainOverlay.Capture = (w, flag) => { calls.Add((flag, w.IsVisible)); if (flag != 0 && !protectedCapture && !w.IsVisible) w.Opened += (_, _) => shownUnprotected++; return flag == 0 || (protectedCapture && (!failVisible || !w.IsVisible)); };
         BrainDrainOverlay.Start(owner);
-        Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag));
-        Assert.Contains(calls, x => !x.Visible); Assert.Contains(calls, x => x.Visible);
-        calls.Clear(); service.Current.AllowOverlayCapture = !allow;
-        Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0x11u : 0u, x.Flag));
-        calls.Clear(); service.RestoreFrom(new() { BrainDrainEnabled = true, BrainDrainBlurStrength = 50, AllowOverlayCapture = allow });
-        Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag)); return Task.CompletedTask;
+        Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag)); Assert.Contains(calls, x => !x.Visible); Assert.Contains(calls, x => x.Visible);
+        calls.Clear(); service.Current.AllowOverlayCapture = !allow; Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0x11u : 0u, x.Flag));
+        calls.Clear(); service.RestoreFrom(new() { BrainDrainEnabled = true, BrainDrainBlurStrength = 50, AllowOverlayCapture = allow }); Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag));
+        protectedCapture = false; service.Current.AllowOverlayCapture = false; BrainDrainOverlay.Reconcile(); Assert.Empty(BrainDrainOverlay.Active); calls.Clear(); BrainDrainOverlay.Reconcile(DateTime.UtcNow.AddMinutes(2)); Assert.NotEmpty(calls); Assert.All(calls, x => Assert.False(x.Visible)); Assert.Equal(0, shownUnprotected);
+        service.Current.AllowOverlayCapture = true; Assert.NotEmpty(BrainDrainOverlay.Active); service.Current.AllowOverlayCapture = false; Assert.Empty(BrainDrainOverlay.Active);
+        protectedCapture = true; failVisible = true; int prepares = 0; BrainDrainOverlay.Prepare = _ => { prepares++; return true; }; calls.Clear(); BrainDrainOverlay.Reconcile(DateTime.UtcNow.AddMinutes(4)); Assert.Empty(BrainDrainOverlay.Active); Assert.Contains(calls, x => x.Flag != 0 && x.Visible); Assert.Equal(0, prepares);
+        if (!OperatingSystem.IsWindows()) { BrainDrainOverlay.Capture = global::ConditioningControlPanel.Avalonia.Platform.Win32Overlay.SetCaptureAffinity; service.Current.AllowOverlayCapture = true; Assert.NotEmpty(BrainDrainOverlay.Active); service.Current.AllowOverlayCapture = false; Assert.Empty(BrainDrainOverlay.Active); } return Task.CompletedTask;
     });
     [Fact]
     public Task SameOriginResolutionAndDpiChangesRecreateFullMonitorHosts() => Run(owner =>
