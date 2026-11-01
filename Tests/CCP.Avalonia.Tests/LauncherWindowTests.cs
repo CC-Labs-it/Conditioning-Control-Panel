@@ -1137,6 +1137,42 @@ public sealed class LauncherWindowTests
     });
 
     [Fact]
+    public void EngineStoppedOutsideLauncher_ImmediatelyRefreshesThePanelCard() => Run(shell =>
+    {
+        var oldHook = CoreEngine.StoppedHook;
+        CoreEngine.StoppedHook = shell.OnEngineStopped;
+        try
+        {
+            shell.StartEngine();
+            Assert.True(CoreEngine.IsRunning);
+            LauncherWindow.BackToLauncher(shell);
+            var w = LauncherWindow.Instance!;
+            Assert.True(w.FindControl<Button>("StopLink")!.IsVisible);
+            Assert.Equal(Loc.Get("launcher_panel_open"), Text(w, "PanelCtaText"));
+
+            CoreEngine.Stop(); // session or panic path, not the launcher's Stop button
+            Assert.False(w.FindControl<Button>("StopLink")!.IsVisible);
+            Assert.Equal(Loc.Get("launcher_panel_idle"), Text(w, "StatusText"));
+            Assert.Equal(Loc.Get("launcher_panel_launch"), Text(w, "PanelCtaText"));
+        }
+        finally { CoreEngine.StoppedHook = oldHook; CoreEngine.Stop(); }
+    });
+
+    [Fact]
+    public void BreakoutDemoTile_UsesTheBuiltInCover() => Run(shell =>
+    {
+        LauncherWindow.BackToLauncher(shell);
+        var w = LauncherWindow.Instance!;
+        var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children.Single(c => (string?)c.Tag == "breakoutdemo");
+        var body = Assert.IsType<Grid>(((Border)tile).Child);
+        var plate = Assert.IsType<Panel>(body.Children[0]);
+        var artHost = Assert.IsType<Panel>(plate.Children[0]); // the art sits in the sliding art host
+        var cover = Assert.Single(artHost.Children.OfType<Image>());
+        Assert.Same(ConditioningControlPanel.Avalonia.Helpers.BreakoutCardArt.Demo, cover.Source);
+        Assert.Equal(global::Avalonia.Media.Stretch.UniformToFill, cover.Stretch);
+    });
+
+    [Fact]
     public void ModPill_ReadsTheActiveMod_ASwitchRepaintsThePillAndRedrawsTheTiles() => Run(shell =>
     {
         var snapshot = new CoreModsSnapshot();
