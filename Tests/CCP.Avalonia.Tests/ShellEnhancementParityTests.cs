@@ -124,4 +124,41 @@ public sealed class ShellEnhancementParityTests
         }
         return Task.CompletedTask;
     });
+    // WPF BubbleService.cs:3447-3451,3477-3517,3791-3808: only the image rotates and grows.
+    [Fact]
+    public Task Sparkle_position_and_size_ignore_the_popping_sprite_transform() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldImage = BubbleOverlay.Image;
+        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 240, 240), 1) { Width = 240, Height = 240 };
+        var b = new AmbientBubble { X = 100, Y = 100, Size = 40, Popping = true, Lucky = true, Fade = 0.65,
+            Sparkles = [new AmbientBubble.SparkleParticle { X = 65, Y = 15, Size = 8, Alpha = 1 }] };
+        BubbleOverlay.Field.Bubbles.Add(b);
+        try
+        {
+            BubbleOverlay.Image = null;
+            w.Show(); Dispatcher.UIThread.RunJobs();
+            byte[] SparkleRegion()
+            {
+                using var frame = new RenderTargetBitmap(new PixelSize(240, 240));
+                frame.Render((Control)w.Content!);
+                var bytes = new byte[20 * 20 * 4];
+                var pinned = GCHandle.Alloc(bytes, GCHandleType.Pinned);
+                try { frame.CopyPixels(new PixelRect(175, 125, 20, 20), pinned.AddrOfPinnedObject(), bytes.Length, 20 * 4); }
+                finally { pinned.Free(); }
+                return bytes;
+            }
+            var before = SparkleRegion();
+            // The particle is centered at (185, 135), with the same 8 DIP diameter throughout.
+            Assert.True(before[(10 * 20 + 10) * 4 + 3] > 0);
+            Assert.Equal(8, Enumerable.Range(0, 20).Count(x => before[(10 * 20 + x) * 4 + 3] > 0));
+            Assert.Equal(8, Enumerable.Range(0, 20).Count(y => before[(y * 20 + 10) * 4 + 3] > 0));
+            b.Scale = 1.75; b.Angle = 90;
+            var after = SparkleRegion();
+            Assert.Equal(before, after);
+        }
+        finally { w.Close(); BubbleOverlay.Field.Bubbles.Remove(b); BubbleOverlay.Image = oldImage; }
+        return Task.CompletedTask;
+    });
+
 }

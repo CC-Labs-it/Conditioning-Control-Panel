@@ -508,33 +508,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
-                    using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
                         if (b.LuckyGlowBlur > 0)
                         {
                             var glow = b.LuckyGlowBlur <= 18 ? BalancedGlow : QualityGlow;
                             using (dc.PushEffect(glow, new Rect(cx - size, cy - size, size * 2, size * 2)))
-                                DrawBubble(dc, b, img, cx, cy, size, k);
+                                DrawBubble(dc, b, img, cx, cy, size, k, m);
                         }
-                        else DrawBubble(dc, b, img, cx, cy, size, k);
+                        else DrawBubble(dc, b, img, cx, cy, size, k, m);
                     }
                 }
             }
 
-            private static void DrawBubble(DrawingContext dc, AmbientBubble b, Bitmap? img, double cx, double cy, double size, double k)
+            private static void DrawBubble(DrawingContext dc, AmbientBubble b, Bitmap? img, double cx, double cy, double size, double k, Matrix transform)
             {
-                if (b.Spec != null)
+                // WPF BubbleService.cs:3447-3451,3477-3517: only the sprite transforms.
+                using (dc.PushTransform(transform))
                 {
-                    var (fill, pen) = TintPaint(b.Spec.Tint);
-                    dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                }
-                if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
-                else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                if (b.FuseTotalMs > 0 && !b.Popping)
-                {
-                    double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
-                    dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
+                    if (b.Spec != null)
+                    {
+                        var (fill, pen) = TintPaint(b.Spec.Tint);
+                        dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                    }
+                    if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                    else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                    if (b.FuseTotalMs > 0 && !b.Popping)
+                    {
+                        double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
+                        dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
+                    }
                 }
                 foreach (var sp in b.Sparkles)
                 {
