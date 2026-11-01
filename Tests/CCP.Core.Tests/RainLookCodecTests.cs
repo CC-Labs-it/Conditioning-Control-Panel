@@ -1,4 +1,5 @@
-using ConditioningControlPanel.Services.Companion.Rain; using Xunit;
+using ConditioningControlPanel.Services.Companion;
+using Xunit;
 namespace CCP.Core.Tests;
 public sealed class RainLookCodecTests
 {

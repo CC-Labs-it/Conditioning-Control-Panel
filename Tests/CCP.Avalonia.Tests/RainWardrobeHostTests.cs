@@ -1,4 +1,19 @@
-using System; using System.Linq; using System.IO; using System.Collections.Generic; using System.Threading.Tasks; using Avalonia; using Avalonia.Controls; using Avalonia.Headless; using Avalonia.Interactivity; using CCP.Avalonia.Testing; using ConditioningControlPanel; using ConditioningControlPanel.Avalonia.Platform; using ConditioningControlPanel.Avalonia.Views.AvatarTube; using ConditioningControlPanel.Avalonia.Views.Windows; using Newtonsoft.Json.Linq; using Xunit;
+using System;
+using System.Linq;
+using System.IO;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Interactivity;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.AvatarTube;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using Newtonsoft.Json.Linq;
+using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class RainWardrobeHostTests
 {
@@ -45,6 +60,10 @@ public sealed class RainWardrobeHostTests
         {
             tube = new AvatarTubeWindow(); CoreMods.ActiveModIdProvider = () => "builtin-ccp-default"; CoreSettings.Current.AvatarGeneration = "v2"; tube.UpdateQuickMenuState();
             var door = tube.FindControl<MenuItem>("MenuItemRainWardrobe")!; Assert.True(door.IsVisible); Assert.Equal("section_rain_wardrobe", Assert.IsType<ConditioningControlPanel.Avalonia.Controls.IconLabel>(door.Header).Key);
+            var menu = tube.FindControl<ContextMenu>("AvatarContextMenu")!;
+            var mute = tube.FindControl<MenuItem>("MenuItemMute"); Assert.NotNull(mute);
+            Assert.Equal(menu.Items.IndexOf(mute) + 1, menu.Items.IndexOf(door));
+            Assert.Same(tube.FindControl<MenuItem>("MenuItemTalkToBambi"), menu.Items[0]);
             door.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); var host = RainWardrobeHost.Active; Assert.NotNull(host);
             door.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Assert.Same(host, RainWardrobeHost.Active);
             Assert.Contains("host=ccp", host.Web.Source!.Query);

@@ -44,7 +44,7 @@ public class RainWardrobeTests
     [Fact]
     public void Catalog_LocksEverySellableItem_UntilItsGrant()
     {
-        var none = RainWardrobeCatalog.LockedKeys(null);
+        var none = RainWardrobeCatalog.LockedKeys(null, new AppRainProgressSource());
         Assert.Equal(RainWardrobeCatalog.Items.Count + 4, none.Count);      // + the four level / achievement unlocks (items.json)
         Assert.Contains("dress:rose-flare", none);
         Assert.Contains("dress:hazmat-yellow", none);           // rain.suit.* sits in the dress slot
@@ -54,12 +54,12 @@ public class RainWardrobeTests
         foreach (var free in new[] { "dress:satin-original", "hair:original-blonde", "accessories:hoops-original", "shoes:original-boots", "skin:original" })
             Assert.DoesNotContain(free, none);
 
-        var some = RainWardrobeCatalog.LockedKeys(new[] { "cos.rain.dress.rose-flare", "cos.rain.acc.silver-drops", "backroom.x" });
+        var some = RainWardrobeCatalog.LockedKeys(new[] { "cos.rain.dress.rose-flare", "cos.rain.acc.silver-drops", "backroom.x" }, new AppRainProgressSource());
         Assert.DoesNotContain("dress:rose-flare", some);
         Assert.DoesNotContain("accessories:silver-drops", some);
         Assert.Contains("dress:midnight-cocktail", some);
-        Assert.True(RainWardrobeCatalog.IsLocked("hair", "ink-sleek", null));
-        Assert.False(RainWardrobeCatalog.IsLocked("hair", "ink-sleek", new[] { "cos.rain.hair.ink-sleek" }));
+        Assert.True(RainWardrobeCatalog.IsLocked("hair", "ink-sleek", null, new AppRainProgressSource()));
+        Assert.False(RainWardrobeCatalog.IsLocked("hair", "ink-sleek", new[] { "cos.rain.hair.ink-sleek" }, new AppRainProgressSource()));
     }
 
     [Fact]
@@ -77,13 +77,13 @@ public class RainWardrobeTests
     [Fact]
     public void Clamp_TakesOffWhatIsNotOwned_KeepsTheRest()
     {
-        var clamped = JObject.Parse(RainWardrobeCatalog.Clamp(Look, grants: null));
+        var clamped = JObject.Parse(RainWardrobeCatalog.Clamp(Look, grants: null, new AppRainProgressSource()));
         Assert.Null(clamped["items"]!["dress"]);                         // rose-flare not owned: back to default
         Assert.Equal("original-blonde", (string)clamped["items"]!["hair"]!);
         Assert.Equal(new[] { "hoops-original" }, clamped["items"]!["accessories"]!.Select(t => (string)t!));
         Assert.Equal("#aa3366", (string)clamped["colors"]!["fabric"]!);  // colours are free
 
-        var owned = JObject.Parse(RainWardrobeCatalog.Clamp(Look, new[] { "cos.rain.dress.rose-flare", "cos.rain.acc.silver-drops" }));
+        var owned = JObject.Parse(RainWardrobeCatalog.Clamp(Look, new[] { "cos.rain.dress.rose-flare", "cos.rain.acc.silver-drops" }, new AppRainProgressSource()));
         Assert.Equal("rose-flare", (string)owned["items"]!["dress"]!);
         Assert.Equal(2, owned["items"]!["accessories"]!.Count());
     }

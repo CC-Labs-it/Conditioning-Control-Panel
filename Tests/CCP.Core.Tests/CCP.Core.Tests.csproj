@@ -36,6 +36,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\ConditioningControlPanel.Tests\RainItemAccessTests.cs" Link="RainItemAccessTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\SourceRoots.cs" Link="SourceRoots.cs" />
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
     <Compile Include="..\ConditioningControlPanel.Tests\HostNetPathRuleTests.cs" Link="HostNetPathRuleTests.cs" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />

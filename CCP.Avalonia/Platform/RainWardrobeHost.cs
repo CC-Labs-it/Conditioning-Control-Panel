@@ -1,6 +1,14 @@
-using System; using System.Collections.Generic; using System.IO; using System.Linq;
-using Avalonia.Controls; using Avalonia.Threading; using ConditioningControlPanel.Avalonia.Views.Controls; using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Services.Companion.Rain; using Newtonsoft.Json; using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Avalonia.Controls;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Companion;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class RainWardrobeHost : IRainGrantSource, IRainProgressSource, IDisposable
 {
@@ -11,12 +19,12 @@ internal sealed class RainWardrobeHost : IRainGrantSource, IRainProgressSource, 
     public IReadOnlyCollection<string> UnlockedAchievements => App.Achievements?.Progress?.UnlockedAchievements?.ToArray() ?? Array.Empty<string>();
     public bool IsGranted(string grant) => PrizeOwnership.IsGranted(grant);
     RainItemAccess Access => new(RainItemManifest.Shipped, this, this);
-    internal static string AssetsDir => Environment.GetEnvironmentVariable("CCP_RAIN_ASSETS_DIR") is { } dir && !string.IsNullOrWhiteSpace(dir)
-        ? Path.GetFullPath(dir.Trim()) : Path.Combine(CorePaths.UserData, "rain-assets");
+    internal static string AssetsDir => RainWardrobeAssets.ResolveDir(
+        Environment.GetEnvironmentVariable(RainWardrobeAssets.EnvVar), CorePaths.UserData);
     internal static void Open(Window? owner)
     {
         if (Active != null) { Active.Window.Activate(); return; }
-        if (!File.Exists(Path.Combine(AssetsDir, "avatar.glb")) || !File.Exists(Path.Combine(AssetsDir, "pelvis-data.js")))
+        if (RainWardrobeAssets.Missing(AssetsDir).Count != 0)
         { App.Notifications?.Show(Loc.Get("rain_wardrobe_missing")); return; }
         try { Active = new RainWardrobeHost(Path.Combine(AppContext.BaseDirectory, "Resources", "web"), AssetsDir); if (owner == null) Active.Window.Show(); else Active.Window.Show(owner); }
         catch { Active?.Dispose(); throw; }
