@@ -1,4 +1,6 @@
 {
+  "chaos_snap_live": "✋ 터졌다. 살아 있는 버블이 모두 풀렸다",
+  "chaos_snap_all": "✋ 터졌다. 모두",
   "chaos_estim_charge": "⚡ 충전됨. 다음 {0}번은 전류가 흐름",
   "chaos_estim_chain": "⚡ 충전됨. 다음 {0}번은 연쇄 반응",
   "chaos_estim_left": "⚡ 전류가 흐름. {0}번 남음",

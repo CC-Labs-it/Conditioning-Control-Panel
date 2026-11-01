@@ -673,7 +673,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.5f);
                 _snapFlashRemainingSec = 1.0;
                 Pulse(Color.FromRgb(150, 220, 255), 0.35);
-                _state.PushEvent(maxed ? "✋ snapped. all of it." : "✋ snapped. every live one let go");
+                _state.PushEvent(Loc.Get(maxed ? "chaos_snap_all" : "chaos_snap_live"));
             }
             else if (toy.Id == "e_stim")
             {
