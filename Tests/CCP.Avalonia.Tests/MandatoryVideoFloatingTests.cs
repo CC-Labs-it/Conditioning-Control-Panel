@@ -147,6 +147,7 @@ public sealed class MandatoryVideoFloatingTests
                 Assert.Equal(-1, o.FirstFrameMs);
                 Assert.InRange(paused.Window.Opacity, double.Epsilon, 0.001);
                 Assert.False(paused.Window.IsHitTestVisible);
+                o.ReadyAgeOverrideMs = 0;
                 Assert.True(o.TryGracePause(fromPanicKey: true));
                 Assert.True(o.GracePaused && paused.Grace.IsVisible);
                 Assert.Equal(1, paused.Window.Opacity);
@@ -155,12 +156,40 @@ public sealed class MandatoryVideoFloatingTests
                 Assert.True(resume.IsEffectivelyVisible && resume.IsEffectivelyEnabled);
                 resume.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.False(o.GracePaused || paused.Grace.IsVisible);
-                Assert.True(paused.Window.IsHitTestVisible);
-                Assert.Equal(1, paused.Window.Opacity);
-                Assert.Equal(40, o.PlayerVolume);
+                Assert.InRange(paused.Window.Opacity, double.Epsilon, 0.001);
+                Assert.False(paused.Window.IsHitTestVisible);
                 o.UpdateVolume();
-                Assert.Equal(40, o.PlayerVolume); // the veil must not leave the resumed clip muted
+                Assert.Equal(0, o.PlayerVolume); // showing the pause card did not admit the video
+                var reveal = typeof(MandatoryVideoOverlay).GetMethod("CheckFloatingReveal",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                reveal.Invoke(o, new object[] { false });
+                Assert.InRange(paused.Window.Opacity, double.Epsilon, 0.001);
+                reveal.Invoke(o, new object[] { true });
+                Assert.Equal(1, paused.Window.Opacity);
+                Assert.True(paused.Window.IsHitTestVisible);
+                Assert.Equal(40, o.PlayerVolume); // only frame admission restores playback volume
                 graceScheduler.ForceCleanup();
+
+                // Auto-resume must also preserve a pending veil and the no-play timeout.
+                clock.Advance(TimeSpan.FromSeconds(1));
+                Assert.True(graceScheduler.Trigger(strictOverride: false, path: clip));
+                o.Show(clip, strict: false);
+                var stalled = Assert.Single(o.Surfaces);
+                Assert.Null(o.ReadyAgeOverrideMs); // a fresh clip gets a fresh budget
+                o.ReadyAgeOverrideMs = FloatingRevealGate.ReadyBudgetMs;
+                Assert.True(o.TryGracePause(fromPanicKey: true));
+                o.GuardTick();
+                Assert.True(graceScheduler.IsPlaying && stalled.Grace.IsVisible);
+                clock.Advance(TimeSpan.FromSeconds(61));
+                o.GraceTick();
+                Assert.False(o.GracePaused || stalled.Grace.IsVisible);
+                Assert.InRange(stalled.Window.Opacity, double.Epsilon, 0.001);
+                Assert.False(stalled.Window.IsHitTestVisible);
+                Assert.Equal(0, o.PlayerVolume);
+                o.GuardTick();
+                Assert.False(graceScheduler.IsPlaying);
+                Assert.Empty(o.Windows);
+                Assert.False(stalled.Window.IsVisible);
                 (o.Scheduler, o.Time) = previous;
 
                 // Strict always covers the screen, and keeps its attention checks.
@@ -193,7 +222,9 @@ public sealed class MandatoryVideoFloatingTests
     // Trigger marks the scheduler live, but Show is driven synchronously before any frame can reveal it.
     private sealed class HeldPreroll : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        private DateTimeOffset _now = new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public void Advance(TimeSpan by) => _now += by;
+        public override DateTimeOffset GetUtcNow() => _now;
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) => new HeldTimer();
         private sealed class HeldTimer : ITimer
         {

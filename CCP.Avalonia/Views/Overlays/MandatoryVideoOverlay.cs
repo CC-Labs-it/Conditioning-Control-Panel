@@ -73,6 +73,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private double _capSpent;
         /// <summary>Test seam (like <see cref="FrameTs"/>): seconds added to this play's clip clock; reset per play.</summary>
         internal double PlayedSkew { get; set; }
+        /// <summary>Test seam: fixed floating ready age; null uses the live clock. Reset per play.</summary>
+        internal long? ReadyAgeOverrideMs { get; set; }
         private DateTime _lastGraceUtc, _gracePausedAt;
         /// <summary>The grace pause's wall clock (dedup, countdown, auto-resume); tests step it.</summary>
         internal TimeProvider Time { get; set; } = TimeProvider.System;
@@ -136,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sinceShow.Restart();
             _sinceFrame.Reset();
             PlayedSkew = 0;
+            ReadyAgeOverrideMs = null;
             FirstFrameMs = -1;
             _watchedMs = 0;
             FillMs = FillCount = 0;
@@ -472,7 +475,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sinceShow.Stop();
             _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
-            if (Floating && !_floatingRevealed) RevealFloating();
+            if (Floating) ApplyFloatingVisibility();
             SetCountdown(MandatoryVideoScheduler.GraceWindowSeconds);
             _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _graceTimer.Tick += (_, _) => GraceTick();
@@ -503,6 +506,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceTimer?.Stop();
             _graceTimer = null;
             foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; }
+            if (Floating) ApplyFloatingVisibility();
             if (_firstPlayedMs >= 0) _floatingPlaying.Start();
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
@@ -546,7 +550,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_floatingPlaying.IsRunning && _firstPlayedMs < 0) _firstPlayedMs = at;
             var verdict = FloatingRevealGate.Decide(painted,
                 _floatingPlaying.IsRunning ? _floatingPlaying.ElapsedMilliseconds : null,
-                _firstPlayedMs < 0 || FirstFrameMs < 0 ? 0 : at - _firstPlayedMs, _sinceShow.ElapsedMilliseconds);
+                _firstPlayedMs < 0 || FirstFrameMs < 0 ? 0 : at - _firstPlayedMs, ReadyAgeOverrideMs ?? _sinceShow.ElapsedMilliseconds);
             if (verdict == FloatingRevealGate.Verdict.Skip) { Scheduler.End(); return false; }
             if (verdict != FloatingRevealGate.Verdict.Reveal) return true;
             RevealFloating();
@@ -556,8 +560,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private void RevealFloating()
         {
             _floatingRevealed = true;
-            foreach (var x in _surfaces) { x.Window.Opacity = 1; x.Window.IsHitTestVisible = true; }
+            ApplyFloatingVisibility();
             UpdateVolume();
+        }
+
+        private void ApplyFloatingVisibility()
+        {
+            // The grace card shares the window, but showing it never admits the video.
+            var shown = _floatingRevealed || _gracePaused;
+            foreach (var x in _surfaces)
+            {
+                x.Window.Opacity = shown ? 1 : 0.001;
+                x.Window.IsHitTestVisible = shown;
+            }
         }
 
         private static void Place(Window w, global::Avalonia.Platform.Screen? screen)
