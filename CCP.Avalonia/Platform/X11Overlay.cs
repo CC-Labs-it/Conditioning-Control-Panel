@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -78,6 +79,9 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
     [DllImport(LibX11)] private static extern int XDefaultScreen(IntPtr display);
     [DllImport(LibX11)] private static extern int XSetInputFocus(IntPtr display, IntPtr window, int revertTo, nuint time);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct XWindowChanges { public int X, Y, Width, Height, BorderWidth; public IntPtr Sibling; public int StackMode; }
+    [DllImport(LibX11)] private static extern int XConfigureWindow(IntPtr display, IntPtr window, nuint mask, ref XWindowChanges changes);
     [DllImport(LibX11)] private static extern int XRaiseWindow(IntPtr display, IntPtr window);
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
 
@@ -351,6 +355,51 @@ internal static class X11Overlay
             XRaiseWindow(_display, xid);
             XFlush(_display);
             return true;
+        }
+    }
+
+    // Order override-redirect windows around the managed windows' root frames. The WM
+    // handles raises of its own windows; a child XID cannot be an XConfigureWindow sibling.
+    internal static void RestackLayer(IReadOnlyList<(Window window, bool managed)> layers)
+    {
+        if (layers.Count == 0 || !TryGetXid(layers[0].window, out _)) return;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return;
+            var root = XDefaultRootWindow(_display);
+            if (XQueryTree(_display, root, out _, out _, out var children, out var count) == 0) return;
+            try
+            {
+                var frames = new IntPtr[layers.Count];
+                var order = new int[layers.Count];
+                for (int n = 0; n < layers.Count; n++)
+                {
+                    if (!layers[n].managed || !TryGetXid(layers[n].window, out var child)) continue;
+                    for (int hop = 0; hop < 8 && child != IntPtr.Zero; hop++)
+                    {
+                        for (int i = 0; i < count; i++)
+                            if (Marshal.ReadIntPtr(children, i * IntPtr.Size) == child) { frames[n] = child; order[n] = i; break; }
+                        if (frames[n] != IntPtr.Zero) break;
+                        if (XQueryTree(_display, child, out _, out var parent, out var kids, out _) == 0) break;
+                        if (kids != IntPtr.Zero) XFree(kids);
+                        if (parent == root) break;
+                        child = parent;
+                    }
+                }
+                for (int n = 0; n < layers.Count; n++)
+                {
+                    if (layers[n].managed || !TryGetXid(layers[n].window, out var xid)) continue;
+                    int lowest = (int)count;
+                    IntPtr sibling = IntPtr.Zero;
+                    for (int i = n + 1; i < layers.Count; i++)
+                        if (frames[i] != IntPtr.Zero && order[i] < lowest) { lowest = order[i]; sibling = frames[i]; }
+                    if (sibling == IntPtr.Zero) continue;
+                    var changes = new XWindowChanges { Sibling = sibling, StackMode = 1 /* Below */ };
+                    XConfigureWindow(_display, xid, (1u << 5) | (1u << 6), ref changes);
+                }
+                XFlush(_display);
+            }
+            finally { if (children != IntPtr.Zero) XFree(children); }
         }
     }
 

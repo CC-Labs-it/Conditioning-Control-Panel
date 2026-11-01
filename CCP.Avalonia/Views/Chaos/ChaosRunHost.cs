@@ -101,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
+            ChaosSkiaFxOverlay.ResetForRun();
             var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {

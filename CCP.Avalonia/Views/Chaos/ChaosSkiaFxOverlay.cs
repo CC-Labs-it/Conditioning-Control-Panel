@@ -52,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Func<Window, bool> ManagedClickThrough = w => SkipPlatformChecksForTests || X11Overlay.SetManagedClickThrough(w);
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
         private static bool _refused;
+        internal static void ResetForRun() => OnUi(() => _refused = false);
 
         /// <summary>WPF HideGrace: the window stays up this long after the field empties, so the next pop
         /// reuses the presented surface instead of re-mapping a stage-wide window.</summary>
@@ -108,11 +109,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (Active == null && Create() is { } w) Active = w;
                     if (Active == null) return;
                     act(Active);
-                    // X11 override-redirect has no topmost band; Windows only re-raises during video as WPF does.
-                    if (Active is { IsVisible: true, Topmost: true } current && (X11NeedsRaise(current) || VideoPlaying())) Raise(current);
+                    if (Active is { IsVisible: true, Topmost: true } current)
+                    {
+                        if (X11NeedsRaise(current)) RaiseLayer(current);
+                        else if (VideoPlaying()) Raise(current); // WPF RaiseAboveVideo
+                    }
                 }
                 catch (Exception ex) { Log.Debug("ChaosSkiaFx: {E}", ex.Message); }
             });
+        }
+
+        // WPF ChaosModeService.cs:751-775: sparkle FX below chrome, bubbles, then GIFs and flashes.
+        private static void RaiseLayer(Window fx)
+        {
+            var layers = new List<(Window window, bool managed)>();
+            void RaiseVisible(Window? w, bool managed = false)
+            { if (w?.IsVisible == true) { layers.Add((w, managed)); Raise(w); } }
+            RaiseVisible(ChaosFieldFxOverlay.Active);
+            RaiseVisible(fx);
+            foreach (var w in ChaosPopText.Pool.All) RaiseVisible(w);
+            RaiseVisible(ChaosDvdOverlay.Window);
+            RaiseVisible(ChaosEffectBannerOverlay.Active);
+            RaiseVisible(ChaosAnnouncerOverlay.Active, managed: true);
+            RaiseVisible(ChaosCursorGlowOverlay.Active, managed: true);
+            RaiseVisible(ChaosEStimOverlay.Active);
+            RaiseVisible(ChaosEStimGlow.Active);
+            RaiseVisible(ChaosVibeTrailOverlay.Active, managed: true);
+            RaiseVisible(ChaosRunHost.Fx, managed: true);
+            RaiseVisible(ChaosWaveTimerWindow.Active, managed: true);
+            RaiseVisible(ChaosRunHost.BoonBar, managed: true);
+            RaiseVisible(ChaosRunHost.Hud, managed: true);
+            foreach (var w in ChaosRunHost.ToyButtons) RaiseVisible(w, managed: true);
+            foreach (var w in BubbleOverlay.Surfaces) RaiseVisible(w);
+            RaiseVisible(ChaosGifCascadeOverlay.Active);
+            foreach (var w in ChaosFlashOverlay.Shown) RaiseVisible(w);
+            foreach (var (w, _) in FlashOverlay.Active) RaiseVisible(w);
+            foreach (var w in FlashOverlay.Exiting) RaiseVisible(w);
+            X11Overlay.RestackLayer(layers);
         }
 
         /// <summary>The window, or null when the platform cannot host a transparent click-through overlay.</summary>
@@ -266,7 +299,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             Fx.Update(TimeSpan.FromSeconds(dt));
             // A click can put an override-redirect window below another app while particles are live.
-            if (Fx.IsActive && Topmost && X11NeedsRaise(this)) Raise(this);
+            if (Fx.IsActive && Topmost && X11NeedsRaise(this)) RaiseLayer(this);
             (Content as Control)?.InvalidateVisual();
 
             if (!Fx.IsActive)

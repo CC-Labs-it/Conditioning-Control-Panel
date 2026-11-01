@@ -106,16 +106,25 @@ public sealed class ChaosSkiaFxPinTests
                 if (throws) throw new InvalidOperationException("native failure");
                 return false;
             };
+            ChaosRunHost.StartRun(new ConditioningControlPanel.Services.Chaos.ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            Assert.True(ChaosRunHost.IsActive);
             ChaosSkiaFxOverlay.ArmCursorGlow();
             Assert.NotNull(attempted);
             Assert.False(attempted.IsVisible);
             Assert.Null(ChaosSkiaFxOverlay.Active);
             attempted = null;
             ChaosSkiaFxOverlay.ArmCursorGlow();
-            Assert.Null(attempted); // do not retry a refused full-screen surface
+            Assert.Null(attempted); // do not retry a refused full-screen surface in this run
+            ChaosRunHost.ForceShutdown();
+            ChaosRunHost.StartRun(new ConditioningControlPanel.Services.Chaos.ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            Assert.True(ChaosRunHost.IsActive);
+            ChaosSkiaFxOverlay.ManagedClickThrough = _ => true;
+            ChaosSkiaFxOverlay.ArmCursorGlow();
+            Assert.NotNull(ChaosSkiaFxOverlay.Active); // a later run can recover
         }
         finally
         {
+            ChaosRunHost.ForceShutdown();
             ChaosSkiaFxOverlay.CloseActive();
             refused.SetValue(null, oldRefused);
             ChaosSkiaFxOverlay.ManagedClickThrough = managed;

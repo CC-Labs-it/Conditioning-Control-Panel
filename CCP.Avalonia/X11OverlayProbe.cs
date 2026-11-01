@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 
 namespace ConditioningControlPanel.Avalonia
 {
@@ -155,6 +156,8 @@ namespace ConditioningControlPanel.Avalonia
             other.Show();
             ChaosSkiaFxOverlay.ArmCursorGlow();
             int fails = 0;
+            ChaosFxWindow? chrome = null;
+            var chromeField = typeof(ChaosRunHost).GetField("_fx", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
             void Check(bool ok, string label) { Console.WriteLine($"{(ok ? "PASS" : "FAIL")} {label}"); if (!ok) fails++; }
             DispatcherTimer.RunOnce(async () =>
             {
@@ -216,6 +219,44 @@ namespace ConditioningControlPanel.Avalonia
                     XSync(display, false);
                     Check(OverrideRedirect(display, pinnedId, out mapped) && mapped, "pinned overlay retains override-redirect and is mapped");
                     Check(InputRects(display, pinnedId).Length == 0, "pinned client input shape is empty");
+                    ChaosWaveTimerWindow.EnsureCreated(); // create in reverse order to exercise managed restacking
+                    var timer = ChaosWaveTimerWindow.Active;
+                    if (timer == null) { Check(false, "wave timer opened"); return; }
+                    timer.Content = null; // stacking needs no text or test-machine fonts
+                    chrome = new ChaosFxWindow();
+                    if (!X11Overlay.SetClickThrough(chrome, true)) { Check(false, "chrome click-through prepared"); return; }
+                    chrome.Show();
+                    if (!X11Overlay.SetManagedClickThrough(chrome)) { Check(false, "chrome frame prepared"); return; }
+                    chromeField.SetValue(null, chrome);
+                    ChaosFieldFxOverlay.Ripple(new Point(200, 200), 100, 60000);
+                    ChaosDvdOverlay.Launch(other, 60, 1, 1);
+                    BubbleOverlay.BeginChaos(other, _ => { });
+                    ChaosGifCascadeOverlay.ShowWithFiles(new System.Collections.Generic.List<string> { "/tmp/ccp-probe-missing.png" }, 0.1, 10, 100, 1, 1, 1);
+                    var bubbles = BubbleOverlay.Surfaces.Count > 0 ? BubbleOverlay.Surfaces[0] : null;
+                    var gif = ChaosGifCascadeOverlay.Active;
+                    var field = ChaosFieldFxOverlay.Active; var dvd = ChaosDvdOverlay.Window;
+                    if (bubbles == null || gif == null || field == null || dvd == null)
+                    { Check(false, "field, DVD, bubble and gif surfaces opened"); return; }
+                    var flash = new FlashOverlayWindow();
+                    if (!X11Overlay.SetClickThrough(flash, true) || !X11Overlay.SetOverrideRedirect(flash, stage))
+                    { flash.Close(); Check(false, "flash surface prepared"); return; }
+                    flash.Show(); FlashOverlay.Active.Add((flash, stage));
+                    var bubbleId = Xid(bubbles); var gifId = Xid(gif); var flashId = Xid(flash); var chromeId = Xid(chrome);
+                    var fieldId = Xid(field); var dvdId = Xid(dvd); var timerId = Xid(timer);
+                    void CheckLayers(string phase)
+                    {
+                        int f = IndexOf(display, root, pinnedId), b = IndexOf(display, root, bubbleId), g = IndexOf(display, root, gifId);
+                        int c = IndexOf(display, root, chromeId), d = IndexOf(display, root, dvdId);
+                        Check(IndexOf(display, root, otherId) < IndexOf(display, root, fieldId) && IndexOf(display, root, fieldId) < f,
+                            phase + ": ordinary app below field and sparkle FX");
+                        Check(f >= 0 && d > f && c > d, phase + ": DVD between sparkle FX and chrome");
+                        int t = IndexOf(display, root, timerId);
+                        Check(f >= 0 && c > f && t > c && b > t, phase + ": chrome and wave timer below bubbles");
+                        Check(f >= 0 && b > f, phase + ": bubbles above sparkle FX");
+                        Check(b >= 0 && g > b, phase + ": gif above bubbles");
+                        int a = IndexOf(display, root, flashId);
+                        Check(g >= 0 && a > g && a > f, phase + ": flash above gif and sparkle FX");
+                    }
                     XLowerWindow(display, pinnedId);
                     XWarpPointer(display, IntPtr.Zero, root, 0, 0, 0, 0, x, y);
                     XTestFakeButtonEvent(display, 1, true, 0);
@@ -225,11 +266,13 @@ namespace ConditioningControlPanel.Avalonia
                     Check(IndexOf(display, root, otherId) > IndexOf(display, root, pinnedId), "other covers pinned overlay after a click");
                     await System.Threading.Tasks.Task.Delay(200); // let the real animation frame run
                     Check(IndexOf(display, root, pinnedId) > IndexOf(display, root, otherId), "active pinned overlay returns above the clicked target");
+                    CheckLayers("active frame");
                     XLowerWindow(display, pinnedId);
                     XSync(display, false);
                     ChaosSkiaFxOverlay.TrailDot(new Point(x, y), 0.4);
                     System.Threading.Thread.Sleep(200);
                     Check(IndexOf(display, root, pinnedId) > IndexOf(display, root, otherId), "next effect raises the pinned overlay");
+                    CheckLayers("next effect");
 
                     ChaosSkiaFxOverlay.DisarmCursorGlow();
                     for (int i = 0; i < 200; i++) { time += TimeSpan.FromMilliseconds(16); pinned!.OnFrame(time); }
@@ -242,10 +285,16 @@ namespace ConditioningControlPanel.Avalonia
                     Check(ReferenceEquals(pinned, ChaosSkiaFxOverlay.Active) && pinned.IsVisible, "pinned activity re-shows the same window");
                     Check(OverrideRedirect(display, pinnedId, out mapped) && mapped, "re-shown pinned overlay is mapped");
                     Check(IndexOf(display, root, pinnedId) > IndexOf(display, root, otherId), "re-shown pinned overlay is above the target");
+                    CheckLayers("re-show");
                 }
                 catch (Exception ex) { Console.Error.WriteLine(ex); fails++; }
                 finally
                 {
+                    chromeField.SetValue(null, null); chrome?.Close(); ChaosWaveTimerWindow.CloseActive();
+                    BubbleOverlay.EndChaos();
+                    ChaosFieldFxOverlay.CloseActive(); ChaosDvdOverlay.CloseActive();
+                    FlashOverlay.CloseAll(final: false); FlashOverlay.Active.Clear();
+                    ChaosGifCascadeOverlay.CloseActive();
                     ChaosSkiaFxOverlay.CloseActive();
                     settings.ChaosSkiaFxEnabled = oldEnabled;
                     settings.ChaosPinOnTop = oldPin;
