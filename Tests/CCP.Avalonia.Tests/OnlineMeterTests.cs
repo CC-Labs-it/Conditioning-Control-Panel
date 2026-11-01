@@ -27,38 +27,42 @@ public sealed class OnlineMeterTests
         FriendsLanding.World = () => Session;   // the spent notice waits; this test is about the pill and card
         var tab = shell.Named<AssetsTabView>("AssetsTab")!;
         void Refresh() { shell.RefreshOnlineMeterPill(); tab.RefreshOnlineMeter(); }
-        ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes * 42 / 100);
-        Refresh();
+        ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes * 42 / 100); Refresh();
         var (pill, pillText) = (shell.Named<Border>("OnlineMeterPill")!, shell.Named<TextBlock>("TxtOnlineMeterPill")!);
-        Assert.True(pill.IsVisible);
-        Assert.Equal(string.Format(Loc.Get("online_pill"), ScrolllerAllowance.Percent), pillText.Text);
-        Assert.True(tab.OnlineMeterCard.IsVisible);
-        Assert.Equal(string.Format(Loc.Get("online_meter_pct"), ScrolllerAllowance.Percent), tab.TxtOnlineMeterPct.Text);
-        Assert.Equal(ScrolllerAllowance.Percent, shell.OnlinePillRing!.Percent);
-        Assert.Equal(OnlineMeterTone.Pink, shell.OnlinePillRing.Tone);
+        Assert.True(pill.IsVisible); Assert.Equal(string.Format(Loc.Get("online_pill"), ScrolllerAllowance.Percent), pillText.Text);
+        Assert.True(tab.OnlineMeterCard.IsVisible); Assert.Equal(string.Format(Loc.Get("online_meter_pct"), ScrolllerAllowance.Percent), tab.TxtOnlineMeterPct.Text);
+        Assert.Equal(ScrolllerAllowance.Percent, shell.OnlinePillRing!.Percent); Assert.Equal(OnlineMeterTone.Pink, shell.OnlinePillRing.Tone);
         Assert.True(tab.BtnOnlineMeterPlans.IsVisible);
         var inlines = tab.TxtOnlineMeterLine.Inlines!;
         Assert.Same(tab.TxtOnlineMeterExplanation, inlines[0]);
         Assert.Same(tab.BtnOnlineMeterPlans, inlines.OfType<global::Avalonia.Controls.Documents.InlineUIContainer>().Single().Child);
+        var link = tab.BtnOnlineMeterPlans; var label = Assert.IsType<TextBlock>(link.Content);
+        Assert.Equal(global::Avalonia.Media.FontWeight.SemiBold, label.FontWeight); Assert.True(label.TextDecorations is null || label.TextDecorations.Count == 0);
+        Assert.Equal(new Cursor(StandardCursorType.Hand).ToString(), link.Cursor?.ToString());
+        Assert.True(Application.Current!.TryFindResource("PinkBrush", Application.Current.ActualThemeVariant, out var pink)); Assert.Same(pink, label.Foreground);
+        link.Transitions = null; link.ApplyTemplate(); Dispatcher.UIThread.RunJobs();
+        var presenter = link.GetVisualDescendants().OfType<global::Avalonia.Controls.Presenters.ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
+        foreach (var state in new[] { ":pointerover", ":pressed" })
+        {
+            ((global::Avalonia.Controls.IPseudoClasses)link.Classes).Set(state, true); Dispatcher.UIThread.RunJobs();
+            Assert.True(presenter.Background is null || presenter.Background is global::Avalonia.Media.ISolidColorBrush b && b.Color == global::Avalonia.Media.Colors.Transparent, state);
+            Assert.Equal(default(Thickness), presenter.BorderThickness); Assert.True(label.TextDecorations is null || label.TextDecorations.Count == 0);
+            Assert.Equal(Matrix.Identity, link.RenderTransform?.Value ?? Matrix.Identity);
+            ((global::Avalonia.Controls.IPseudoClasses)link.Classes).Set(state, false); Dispatcher.UIThread.RunJobs();
+        }
         tab.BtnOnlineMeterPlans.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.NotNull(global::ConditioningControlPanel.Avalonia.Views.Dialogs.VaultGateDialog.Open);
         global::ConditioningControlPanel.Avalonia.Views.Dialogs.VaultGateDialog.Open!.Close();
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes * 40 / 100);
         shell.RefreshOnlineMeterPill();
         Assert.Equal(OnlineMeterTone.Amber, shell.OnlinePillRing.Tone);
-        (s.RemoteMediaConsented, s.FypOnlineConsented) = (false, false);
-        Refresh();
+        (s.RemoteMediaConsented, s.FypOnlineConsented) = (false, false); Refresh();
+        Assert.False(pill.IsVisible); Assert.False(tab.OnlineMeterCard.IsVisible);
+        (s.RemoteMediaConsented, s.MediaSource) = (true, "local"); Refresh();
         Assert.False(pill.IsVisible);
-        Assert.False(tab.OnlineMeterCard.IsVisible);
-        (s.RemoteMediaConsented, s.MediaSource) = (true, "local");
-        Refresh();
-        Assert.False(pill.IsVisible);
-        s.MediaSource = "mixed";
-        ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);
-        Dispatcher.UIThread.RunJobs();
-        Refresh();
-        Assert.True(pill.IsVisible);
-        Assert.Equal(Loc.Get("online_pill_done"), pillText.Text);
+        s.MediaSource = "mixed"; ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);
+        Dispatcher.UIThread.RunJobs(); Refresh();
+        Assert.True(pill.IsVisible); Assert.Equal(Loc.Get("online_pill_done"), pillText.Text);
         Assert.Equal(string.Format(Loc.Get("online_meter_spent"), string.Format(Loc.Get("online_meter_hours"), 6)),
             tab.TxtOnlineMeterExplanation.Text!.Split("   ")[0]);
         Assert.Equal(OnlineMeterTone.Spent, shell.OnlinePillRing!.Tone);
@@ -67,21 +71,17 @@ public sealed class OnlineMeterTests
         Assert.Contains(shell.OnlineMeterHover.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("online_see_plans"));
         var body = shell.OnlineMeterHover.Child!.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == Loc.Get("online_hover_body"));
         var press = new PointerPressedEventArgs(body, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), shell, new Point(400, 400), 0, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 2);
-        body.RaiseEvent(press);
-        Assert.True(press.Handled);
+        body.RaiseEvent(press); Assert.True(press.Handled);
         shell.ShowTab("dashboard");
         Dispatcher.UIThread.RunJobs();
         pill.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
         Dispatcher.UIThread.RunJobs();
-        Assert.True(tab.IsVisible);
-        Assert.False(shell.OnlineMeterHover.IsOpen);
+        Assert.True(tab.IsVisible); Assert.False(shell.OnlineMeterHover.IsOpen);
         shell.OpenOnlineMeterHover();
         LocalizationManager.Instance.SetLanguage("de");
         Dispatcher.UIThread.RunJobs();
-        Assert.False(shell.OnlineMeterHover.IsOpen);
-        Assert.Equal(Loc.Get("online_pill_done"), pillText.Text);
-        LocalizationManager.Instance.SetLanguage("en");
-        ScrolllerAllowance.PlanProvider = () => ScrolllerPlan.Prime;
+        Assert.False(shell.OnlineMeterHover.IsOpen); Assert.Equal(Loc.Get("online_pill_done"), pillText.Text);
+        LocalizationManager.Instance.SetLanguage("en"); ScrolllerAllowance.PlanProvider = () => ScrolllerPlan.Prime;
         tab.RefreshOnlineMeter();
         Assert.False(tab.BtnOnlineMeterPlans.IsVisible);
     });
@@ -111,8 +111,7 @@ public sealed class OnlineMeterTests
         ring.Arrange(new Rect(0, 0, 36, 36));
         byte[] Frame(int percent, OnlineMeterTone tone)
         {
-            ring.Percent = percent;
-            ring.Tone = tone;
+            ring.Percent = percent; ring.Tone = tone;
             using var frame = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(36, 36));
             frame.Render(ring);
             var pixels = new byte[36 * 36 * 4];
@@ -123,8 +122,7 @@ public sealed class OnlineMeterTests
         }
         var (empty, pink) = (Frame(0, OnlineMeterTone.Pink), Frame(42, OnlineMeterTone.Pink));
         var (amber, spent) = (Frame(82, OnlineMeterTone.Amber), Frame(100, OnlineMeterTone.Spent));
-        Assert.False(empty.SequenceEqual(pink));
-        Assert.False(pink.SequenceEqual(amber));
+        Assert.False(empty.SequenceEqual(pink)); Assert.False(pink.SequenceEqual(amber));
         Assert.False(amber.SequenceEqual(spent));
         Assert.True(spent.SequenceEqual(Frame(0, OnlineMeterTone.Spent)));
         Assert.Contains(spent.Where((_, i) => i % 4 == 3), a => a > 200);
@@ -148,8 +146,7 @@ public sealed class OnlineMeterTests
         toast.Tick(4_000);
         if (hold)
         {
-            holding = true;
-            toast.Tick(50);
+            holding = true; toast.Tick(50);
             Assert.Empty(host.Children);
             Assert.False(queue.TryRelease(now, true));
             Assert.True(queue.TryRelease(now, false));
