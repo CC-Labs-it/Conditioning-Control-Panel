@@ -35,9 +35,15 @@ public sealed class LockdownVeilTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+            {
+                var fonts = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+                var mappings = new Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+                mappings["Segoe UI"] = mappings["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+                fonts.FontFamilyMappings = mappings; // bundled fonts also let this fixture run alone on Linux
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
+            }
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
@@ -485,6 +491,13 @@ public sealed class LockdownVeilTests
 
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Milliseconds;
+        public override long GetTimestamp() => Milliseconds;
+        public override long TimestampFrequency => 1000;
+    }
+
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
     /// (Lab.cs:1147/1203/1254): Activate turns window, title bar, accent brushes and the Lockdown card
     /// blood-red and drops a crimson veil that fades out over 600 ms; Deactivate gives every one back.</summary>
@@ -500,6 +513,8 @@ public sealed class LockdownVeilTests
         var card = shell.Named<LockdownTabView>("LockdownTab")!.LockdownCardBorder;
         var root = shell.Named<Grid>("RootGrid")!;
         Assert.Null(shell.LockdownFlash);
+        var clock = new FlashClock();
+        shell.LockdownFlashTime = clock; // rendering time must not spend the 600 ms under test
 
         ld.Activate(TimeSpan.FromMinutes(30));
         Frame();
@@ -510,12 +525,19 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        Assert.Equal(1, flash.Opacity);
+        clock.Milliseconds = 300;
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Milliseconds = 599;
+        shell.TickLockdownFlash();
+        Assert.Same(flash, shell.LockdownFlash);
+        Assert.Contains(flash, root.Children);
+        clock.Milliseconds = 600;
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
