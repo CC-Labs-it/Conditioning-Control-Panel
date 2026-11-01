@@ -4,10 +4,10 @@ using System.Linq;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
-using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -667,7 +667,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
             ChaosEffectBannerOverlay.Show("estim", "E-Stim", Color.FromRgb(0x9C, 0x5C, 0xFF));
             Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
-            _state.PushEvent(Loc.GetF(maxed ? "chaos_estim_charged_chain" : "chaos_estim_charged", charges));
+            // The HUD separates the toy glyph into an IconGlyph; keep translated text bare.
+            _state.PushEvent($"{toy.Glyph} {IconText.BareLoc(maxed ? "chaos_estim_charged_chain" : "chaos_estim_charged", charges)}");
         }
 
         // WPF ChaosModeService.cs:2785-2798: the last successful arc drops the halo and banner.
@@ -676,12 +677,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state == null) return;
             ChaosOverlayWindow.ChaosSfx.Play("estim_zap", 0.6f);
             Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
-            if (chargesLeft > 0) _state.PushEvent(Loc.GetF("chaos_estim_arc", chargesLeft));
+            string glyph = ChaosLifetimeBoons.ById("e_stim")?.Glyph ?? "";
+            if (chargesLeft > 0) _state.PushEvent($"{glyph} {IconText.BareLoc("chaos_estim_arc", chargesLeft)}");
             else
             {
                 ChaosEffectBannerOverlay.End("estim");
                 ChaosEStimOverlay.Disarm();
-                _state.PushEvent(Loc.Get("chaos_estim_spent"));
+                _state.PushEvent($"{glyph} {IconText.BareLoc("chaos_estim_spent")}");
             }
         }
 

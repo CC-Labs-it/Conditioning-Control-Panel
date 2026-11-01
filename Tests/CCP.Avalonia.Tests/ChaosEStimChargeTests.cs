@@ -6,11 +6,14 @@ using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -22,6 +25,15 @@ public sealed class ChaosEStimChargeTests
         Spec = new EffectBubbleSpec { IsLive = live, FuseMs = 10000 },
         FuseTotalMs = 10000, FuseRemainingMs = 10000
     };
+
+    private static void AssertFeed(ChaosRunState state, string expected)
+    {
+        var split = IconText.Split(state.RecentEvents[0]);
+        Assert.Equal(new[] { "⚡" }, split.Icons);
+        Assert.Equal(expected, split.Rest);
+        Assert.True(IconMap.TryGet(split.Icons[0], out var icon));
+        Assert.Equal(IconKind.Flash, icon.Kind);
+    }
 
     [Fact]
     public void Equipped_toy_charges_clicks_snaps_live_bubbles_and_cancels_old_hops() => AvaloniaTestDispatcher.Run(() =>
@@ -40,6 +52,7 @@ public sealed class ChaosEStimChargeTests
         var read = ChaosEStimGlow.ReadPointer;
         var firer = EffectPayload.Firer;
         var audio = CoreAudio.PlayOneShotProvider;
+        string language = LocalizationManager.Instance.CurrentLanguage;
         var pending = new List<(int Delay, Action Run)>();
         var cues = new List<string>();
         meta.ActiveLifetimeBoons.Clear();
@@ -56,6 +69,7 @@ public sealed class ChaosEStimChargeTests
         CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(Path.GetFileName(path));
         try
         {
+            LocalizationManager.Instance.SetLanguage("en");
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
             ChaosRunHost.Overlay!.FinishCountdown();
             ChaosRunHost.StopTimerForTests();
@@ -71,6 +85,7 @@ public sealed class ChaosEStimChargeTests
             Assert.True(ChaosEStimGlow.Active!.IsVisible);
             Assert.True(ChaosEffectBannerOverlay.Active!.Strip.IsLive("estim"));
             Assert.Contains("toy_ready.mp3", cues);
+            AssertFeed(state, "Charged: next 2 pops conduct");
 
             // Empty space holds the charge; a direct sweep pop is not a player click.
             var field = BubbleOverlay.Field;
@@ -102,6 +117,7 @@ public sealed class ChaosEStimChargeTests
             Assert.Equal(new[] { 70, 140 }, pending.Select(x => x.Delay));
             Assert.True(ChaosEStimGlow.Active!.IsVisible);
             Assert.Contains("estim_zap.mp3", cues);
+            AssertFeed(state, "Current arcs: 1 left");
             Assert.False(live.Popping || treat.Popping);
             var (focus, defused) = (state.Focus, state.Defused);
             pending[0].Run();
@@ -124,9 +140,14 @@ public sealed class ChaosEStimChargeTests
             Assert.Equal(0, field.EStimChargesLeft);
             Assert.False(ChaosEStimGlow.Active!.IsVisible);
             Assert.False(ChaosEffectBannerOverlay.Active!.Strip.IsLive("estim"));
+            AssertFeed(state, "Charge spent");
             ChaosRunHost.Tick();
             Assert.False(toy.IsEffectActive);
             var staleHop = pending[2].Run;
+            toy.CooldownRemainingSec = 0;
+            state.MaxedBoons.Add("e_stim");
+            ChaosRunHost.UseToyById("e_stim");
+            AssertFeed(state, "Charged: next 2 pops chain");
             ChaosRunHost.ForceShutdown();
             Assert.Equal(0, field.EStimChargesLeft);
             Assert.Null(ChaosEStimGlow.Active);
@@ -150,6 +171,7 @@ public sealed class ChaosEStimChargeTests
             ChaosEStimGlow.ReadPointer = read;
             EffectPayload.Firer = firer;
             CoreAudio.PlayOneShotProvider = audio;
+            LocalizationManager.Instance.SetLanguage(language);
             settings.ChaosSkiaFxEnabled = skia;
             meta.ToyPockets = pockets;
             meta.ActiveLifetimeBoons.Clear();
