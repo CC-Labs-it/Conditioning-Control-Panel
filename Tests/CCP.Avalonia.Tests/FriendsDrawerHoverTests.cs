@@ -1,6 +1,9 @@
+using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -175,6 +178,75 @@ public sealed class FriendsDrawerHoverTests
         {
             window.Close(); settings.MotionLevel = previous; settings.GentleVisuals = gentle;
             UiMotionPreference.OsProbe = probe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
+
+    // Avalonia 12 keeps IClock internal. As in SharedDeeperThemeTests, pulse its clock explicitly.
+    private sealed class StepClock
+    {
+        private const BindingFlags Any = BindingFlags.Public | BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+        private static readonly MethodInfo Pulse = Base.GetMethod("Pulse", Any | BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(Animatable)
+            .GetField("ClockProperty", Any | BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
+
+    // WPF FriendsDrawer.Juice.cs:104-133: quadratic sweep from -90 to max(width, 200)+20.
+    [Theory]
+    [InlineData("friends-row:u_on", false, 520)]
+    [InlineData("friends-row:u_on", true, 1040)]
+    [InlineData("friends-request-in:u_req", false, 520)]
+    [InlineData("friends-request-in:u_req", true, 1040)]
+    public Task SheenMovesAcrossTheRowInTheWpfDuration(string tag, bool reduced, double duration) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldGentle = settings.GentleVisuals;
+        var oldProbe = UiMotionPreference.OsProbe;
+        using var svc = FriendsDrawerTests.Service().Svc;
+        await svc.RefreshAsync();
+        var drawer = new FriendsDrawer(svc);
+        var window = new Window { Width = 420, Height = 650, Content = drawer };
+        try
+        {
+            settings.MotionLevel = reduced ? ConditioningControlPanel.Models.MotionLevel.Reduced : ConditioningControlPanel.Models.MotionLevel.Full;
+            settings.GentleVisuals = false;
+            UiMotionPreference.OsProbe = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var row = Row(drawer, tag);
+            var clock = new StepClock();
+            row.SetValue(StepClock.Property, clock.Instance);
+            Pointer(row, true);
+            var band = row.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Rectangle>()
+                .Single(x => x.Tag as string == "friends-sheen");
+            Assert.Same(clock.Instance, band.GetValue(StepClock.Property));
+            var slide = Assert.IsType<TranslateTransform>(band.RenderTransform);
+            double end = Math.Max(row.Bounds.Width, 200) + 20;
+            double distance = end + 90;
+            Assert.Equal(-90, slide.X, 4);
+            clock.Step(0);
+            clock.Step(duration / 4);
+            Assert.Equal(-90 + distance * 0.125, slide.X, 4);
+            clock.Step(duration / 2);
+            Assert.Equal(-90 + distance * 0.5, slide.X, 4);
+            // Avalonia removes a non-filled animation at completion, so check its final visible frame.
+            clock.Step(duration - 1);
+            Assert.InRange(slide.X, end - 0.01, end + 0.01);
+            Assert.Contains(band, row.GetLogicalDescendants());
+            clock.Step(duration);
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(band, row.GetLogicalDescendants());
+        }
+        finally
+        {
+            window.Close(); settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
         }
     });
 
