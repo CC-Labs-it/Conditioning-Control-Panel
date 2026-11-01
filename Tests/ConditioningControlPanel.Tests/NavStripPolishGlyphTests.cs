@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -32,6 +33,19 @@ public class NavStripPolishGlyphTests
         strip.Arrange(new Rect(0, 0, width, strip.DesiredSize.Height));
         strip.UpdateLayout();
         return strip;
+    }
+
+    [Fact]
+    public async Task ATimeoutKeepsTheSameBootstrapUntilItCompletes()
+    {
+        int starts = 0;
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gate = new WpfBootstrapGate(() => { System.Threading.Interlocked.Increment(ref starts); return ready.Task; });
+        Assert.Throws<TimeoutException>(() => gate.Wait(TimeSpan.Zero));
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => Assert.Throws<TimeoutException>(() => gate.Wait(TimeSpan.Zero)))));
+        Assert.Equal(1, starts);
+        ready.SetResult(); gate.Wait(TimeSpan.FromSeconds(1));
+        Assert.Equal(1, starts);
     }
 
     [Fact]

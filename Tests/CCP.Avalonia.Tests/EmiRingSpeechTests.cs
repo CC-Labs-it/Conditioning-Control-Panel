@@ -24,133 +24,105 @@ public sealed class EmiRingSpeechTests
                 .SetupWithoutStarting();
     }
 
-    [Fact]
-    public Task BubbleDodgesBookOnBothSidesAndStaysInTheWorkArea() => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task WithDesk(Action<EmiDeskWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        Setup();
-        var desk = new EmiDeskWindow();
-        try
+        Setup(); var desk = new EmiDeskWindow();
+        try { desk.Show(); body(desk); }
+        finally { desk.ShutDown(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BubbleDodgesBookOnBothSidesAndStaysInTheWorkArea() => WithDesk(desk =>
+    {
+        var area = desk.Screens.Primary!.WorkingArea; var scale = desk.RenderScaling;
+        void MoveBodyTo(double x)
         {
-            desk.Show();
-            var area = desk.Screens.Primary!.WorkingArea;
-            var scale = desk.RenderScaling;
-            void MoveBodyTo(double x)
-            {
-                desk.Position = new PixelPoint((int)(x - (EmiDeskWindow.OverlayPadX + desk.BodyWidth / 2) * scale), area.Y + 250);
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                // The headless Position setter does not raise the widget's drag-only Moved event.
-                if (desk.Book is { } book)
-                    Assert.IsAssignableFrom<System.Reflection.MethodInfo>(typeof(EmiBookWindow).GetMethod("OnOwnerMoved", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))
-                        .Invoke(book, new object?[] { desk, EventArgs.Empty });
-            }
-            Border Bubble() => Assert.Single(desk.BubbleHost.Children.OfType<Border>());
-            double Left() => Canvas.GetLeft(Bubble());
-            double Centre() => EmiDeskWindow.OverlayPadX + desk.BodyWidth / 2;
-            void InsideWorkArea()
-            {
-                var bubble = Bubble();
-                var x = desk.PointToScreen(new Point(Left(), 0)).X;
-                Assert.True(x >= area.X, $"bubble starts off screen at {x}");
-                Assert.True(x + bubble.DesiredSize.Width * scale <= area.Right + 1, "bubble ends off screen");
-            }
-            MoveBodyTo(area.X + area.Width / 2);
-            desk.Say("short line");
+            desk.Position = new PixelPoint((int)(x - (EmiDeskWindow.OverlayPadX + desk.BodyWidth / 2) * scale), area.Y + 250);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            // The headless Position setter does not raise the widget's drag-only Moved event.
+            if (desk.Book is { } book)
+                Assert.IsAssignableFrom<System.Reflection.MethodInfo>(typeof(EmiBookWindow).GetMethod("OnOwnerMoved", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))
+                    .Invoke(book, new object?[] { desk, EventArgs.Empty });
+        }
+        Border Bubble() => Assert.Single(desk.BubbleHost.Children.OfType<Border>());
+        double Left() => Canvas.GetLeft(Bubble());
+        double Centre() => EmiDeskWindow.OverlayPadX + desk.BodyWidth / 2;
+        void InsideWorkArea()
+        {
+            var bubble = Bubble(); var x = desk.PointToScreen(new Point(Left(), 0)).X;
+            Assert.True(x >= area.X, $"bubble starts off screen at {x}");
+            Assert.True(x + bubble.DesiredSize.Width * scale <= area.Right + 1, "bubble ends off screen");
+        }
+        MoveBodyTo(area.X + area.Width / 2);
+        desk.Say("short line"); desk.OpenBook();
+        Assert.Equal(1, desk.Book!.SideOfHer);
+        Assert.True(Left() + Bubble().DesiredSize.Width / 2 < Centre());
+        desk.CloseBook();
+        Assert.True(Left() > Centre()); // closing is also a side change
+        desk.OpenBook();
+        MoveBodyTo(area.Right - 250 * scale);
+        Assert.Equal(-1, desk.Book!.SideOfHer);
+        Assert.True(Left() > Centre()); // live bubble moved after the book changed side
+        InsideWorkArea();
+        desk.CloseBook(); MoveBodyTo(area.X + area.Width / 2); desk.OpenBook();
+        Assert.True(Left() + Bubble().DesiredSize.Width / 2 < Centre());
+        desk.Book!.Close(); // external close must restore the preference too
+        Assert.True(Left() > Centre());
+        foreach (var edge in new[] { area.X + 110 * scale, area.Right - 110 * scale })
+        {
+            MoveBodyTo(edge);
+            desk.Say(new string('w', 100));
+            desk.StepSpeech(); desk.StepSpeech(); desk.StepSpeech();
             desk.OpenBook();
-            Assert.Equal(1, desk.Book!.SideOfHer);
-            Assert.True(Left() + Bubble().DesiredSize.Width / 2 < Centre());
-            desk.CloseBook();
-            Assert.True(Left() > Centre()); // closing is also a side change
-            desk.OpenBook();
-            MoveBodyTo(area.Right - 250 * scale);
-            Assert.Equal(-1, desk.Book!.SideOfHer);
-            Assert.True(Left() > Centre()); // live bubble moved after the book changed side
             InsideWorkArea();
             desk.CloseBook();
-            MoveBodyTo(area.X + area.Width / 2);
-            desk.OpenBook();
-            Assert.True(Left() + Bubble().DesiredSize.Width / 2 < Centre());
-            desk.Book!.Close(); // external close must restore the preference too
-            Assert.True(Left() > Centre());
-            foreach (var edge in new[] { area.X + 110 * scale, area.Right - 110 * scale })
-            {
-                MoveBodyTo(edge);
-                desk.Say(new string('w', 100));
-                desk.StepSpeech(); desk.StepSpeech(); desk.StepSpeech();
-                desk.OpenBook();
-                InsideWorkArea();
-                desk.CloseBook();
-            }
         }
-        finally { desk.ShutDown(); }
-        return Task.CompletedTask;
     });
 
     [Fact]
-    public Task SayUsesCoreCadenceAndCancellationDropsTheContinuation() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task SayUsesCoreCadenceAndCancellationDropsTheContinuation() => WithDesk(desk =>
     {
-        Setup();
-        var desk = new EmiDeskWindow();
-        try
+        bool done = false; desk.Say("a card stays when you pin it.", done: () => done = true);
+        foreach (var expected in new[] { ".", "..", "...", "a card stays when you pin it." })
         {
-            desk.Show();
-            bool done = false;
-            desk.Say("a card stays when you pin it.", done: () => done = true);
-            foreach (var expected in new[] { ".", "..", "...", "a card stays when you pin it." })
-            {
-                Assert.True(desk.ChainLive);
-                Assert.Contains(desk.BubbleHost.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == expected);
-                desk.StepSpeech();
-            }
+            Assert.True(desk.ChainLive);
+            Assert.Contains(desk.BubbleHost.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == expected);
             desk.StepSpeech();
-            Assert.True(done);
-            Assert.False(desk.ChainLive);
-            Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
-            done = false;
-            desk.Say("cancelled", done: () => done = true);
-            desk.CancelChain(); desk.StepSpeech();
-            Assert.False(done);
-            Assert.False(desk.ChainLive);
-            Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
-            desk.Say("hidden"); desk.Hide();
-            Assert.False(desk.ChainLive);
         }
-        finally { desk.ShutDown(); }
-        return Task.CompletedTask;
+        desk.StepSpeech();
+        Assert.True(done);
+        Assert.False(desk.ChainLive);
+        Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
+        done = false; desk.Say("cancelled", done: () => done = true);
+        desk.CancelChain(); desk.StepSpeech();
+        Assert.False(done);
+        Assert.False(desk.ChainLive);
+        Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
+        desk.Say("hidden"); desk.Hide();
+        Assert.False(desk.ChainLive);
     });
 
     [Fact]
-    public Task HoldCutsSpeechAndReturnsToRest() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task HoldCutsSpeechAndReturnsToRest() => WithDesk(desk =>
     {
-        Setup();
-        var desk = new EmiDeskWindow();
-        try
-        {
-            desk.Show(); desk.Say("stop this");
-            var engine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
-            Assert.False(desk.SpeakRingLine(new LineDraw("h", "h", "", "-_-", null, 3, true, 100), engine));
-            Assert.False(desk.ChainLive);
-            Assert.Equal("-_-", desk.Face);
-            Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
-            desk.EndHold();
-            Assert.Equal(EmiChains.RestFace, desk.Face);
-        }
-        finally { desk.ShutDown(); }
-        return Task.CompletedTask;
+        desk.Say("stop this");
+        var engine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
+        Assert.False(desk.SpeakRingLine(new LineDraw("h", "h", "", "-_-", null, 3, true, 100), engine));
+        Assert.False(desk.ChainLive);
+        Assert.Equal("-_-", desk.Face);
+        Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
+        desk.EndHold(); Assert.Equal(EmiChains.RestFace, desk.Face);
     });
 
     [Fact]
     public Task RealRingFiresOpenDismissAndThirdIgnoreAndPanicCutsSpeech() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup();
-        var service = EmiDeskService.Instance;
-        service.Window?.ShutDown();
-        CoreSettings.Current.EmiDeskEnabled = true;
-        CoreSettings.Current.EmiDeskMuteAvatar = false;
+        Setup(); var service = EmiDeskService.Instance; service.Window?.ShutDown();
+        CoreSettings.Current.EmiDeskEnabled = true; CoreSettings.Current.EmiDeskMuteAvatar = false;
         EmiState.Current.RingIgnoreStreak = 0;
-        var oldEngine = service.LineEngine;
-        service.LineEngine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
-        var moments = new List<string>();
-        EventHandler<EmiMoment> observer = (_, m) => moments.Add(m.Id);
+        var oldEngine = service.LineEngine; service.LineEngine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
+        var moments = new List<string>(); EventHandler<EmiMoment> observer = (_, m) => moments.Add(m.Id);
         service.MomentFired += observer;
         try
         {
@@ -192,9 +164,7 @@ public sealed class EmiRingSpeechTests
         }
         finally
         {
-            service.MomentFired -= observer;
-            service.Window?.ShutDown();
-            service.LineEngine = oldEngine;
+            service.MomentFired -= observer; service.Window?.ShutDown(); service.LineEngine = oldEngine;
         }
     });
 }

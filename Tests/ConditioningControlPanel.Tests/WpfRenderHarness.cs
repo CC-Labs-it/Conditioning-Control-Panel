@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -126,7 +127,7 @@ internal static class WpfRenderHarness
     };
 
     private static readonly object Gate = new();
-    private static bool _ready;
+    private static readonly WpfBootstrapGate Bootstrap = new(StartBootstrap);
     private static Dispatcher? _dispatcher;
 
     /// <summary>The app theme, parked while no render body is running.</summary>
@@ -137,16 +138,20 @@ internal static class WpfRenderHarness
 
     /// <summary>
     /// Brings up the STA thread and the themed Application. Safe to call from every test; the first
-    /// call does the work and the rest are a lock and a bool.
+    /// call starts the work and later calls share that attempt, even after a timeout.
     /// </summary>
     internal static void EnsureApplication()
     {
+        try { Bootstrap.Wait(TimeSpan.FromMinutes(2)); }
+        catch (TimeoutException ex) { throw new InvalidOperationException("WPF render harness: Application bootstrap timed out", ex); }
+    }
+
+    private static Task StartBootstrap()
+    {
         lock (Gate)
         {
-            if (_ready) return;
-
             Exception? escaped = null;
-            using var ready = new ManualResetEventSlim(false);
+            var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var pump = new Thread(() =>
             {
@@ -188,7 +193,11 @@ internal static class WpfRenderHarness
                     _dispatcher = Dispatcher.CurrentDispatcher;
                 }
                 catch (Exception ex) { escaped = ex; }
-                finally { ready.Set(); }
+                finally
+                {
+                    if (escaped == null) ready.TrySetResult();
+                    else ready.TrySetException(new InvalidOperationException("WPF render harness: Application bootstrap failed", escaped));
+                }
 
                 // Keep the Application's dispatcher alive for the rest of the run, so anything
                 // reaching for Application.Current.Dispatcher finds a pump and not a dead thread.
@@ -198,13 +207,7 @@ internal static class WpfRenderHarness
             pump.SetApartmentState(ApartmentState.STA);
             pump.IsBackground = true;   // never keeps the test host alive
             pump.Start();
-
-            if (!ready.Wait(TimeSpan.FromSeconds(30)))
-                throw new InvalidOperationException("WPF render harness: Application bootstrap timed out");
-            if (escaped != null)
-                throw new InvalidOperationException("WPF render harness: Application bootstrap failed", escaped);
-
-            _ready = true;
+            return ready.Task;
         }
     }
 
@@ -237,4 +240,11 @@ internal static class WpfRenderHarness
         if (escaped != null)
             throw new Xunit.Sdk.XunitException(escaped.ToString());
     }
+}
+
+/// <summary>Share one bootstrap, including after a caller times out.</summary>
+internal sealed class WpfBootstrapGate(Func<Task> start)
+{
+    private readonly Lazy<Task> _attempt = new(start);
+    internal void Wait(TimeSpan timeout) => _attempt.Value.WaitAsync(timeout).GetAwaiter().GetResult();
 }
