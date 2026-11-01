@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 using ConditioningControlPanel.Localization;
@@ -263,6 +264,72 @@ public sealed class FirstShowStageTests
         }
         finally { fx.Dispose(); service.SaveImmediate(); CoreSettings.ServiceProvider = old; }
     });
+
+    /// <summary>WPF FirstShowEffects.cs:121-127, 275-282, 323-326: each drain phase
+    /// owns a capture, paints its latest frame with fading edges, and stops it at the boundary.</summary>
+    [Fact]
+    public Task DrainCaptureFollowsBothBeatsAndStops() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var service = new SettingsService(); var old = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        var fx = new FirstShowEffects(_ => { }) { Width = 80, Height = 80, Particles = () => false };
+        var started = new List<bool>(); int stopped = 0;
+        using var pixels = new SkiaSharp.SKBitmap(16, 16);
+        pixels.Erase(SkiaSharp.SKColors.Red);
+        using var image = SkiaSharp.SKImage.FromBitmap(pixels);
+        using var encoded = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        byte[]? next = encoded.ToArray();
+        fx.StartCapture = melt => { started.Add(melt); return (() => { var frame = next; next = null; return frame; }, () => stopped++); };
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            fx.Tick(S.DrainAt - .01, .016); Assert.Empty(started);
+            fx.Tick(S.DrainAt, .016); Assert.Equal(new[] { false }, started); Assert.True(fx.HasDrainFrame); Assert.Equal(0, fx.DrainAlpha);
+            fx.Tick(S.DrainAt + .3, .016); Assert.True(fx.DrainAlpha > .2);
+            var host = new Window { Width = 80, Height = 80, Content = fx }; host.Show(); Dispatcher.UIThread.RunJobs();
+            if (OperatingSystem.IsLinux()) Assert.False(FirstShowCapture.CanCapture(host));
+            using (var shot = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(80, 80)))
+            using (var stream = new MemoryStream())
+            {
+                shot.Render(fx); shot.Save(stream); stream.Position = 0;
+                using var drawn = SkiaSharp.SKBitmap.Decode(stream);
+                var pixel = drawn.GetPixel(40, 40);
+                Assert.True(pixel.Red > pixel.Blue * 2); // the captured red image, not the fallback veil
+                Assert.InRange(pixel.Alpha, (byte)175, (byte)200); // WPF blur alpha, then pink tint
+            }
+            host.Content = null; host.Close();
+            fx.Tick(S.DrainDeepAt, .016); Assert.Equal(new[] { false, true }, started); Assert.Equal(1, stopped);
+            Assert.False(fx.HasDrainFrame); Assert.Equal(0, fx.DrainAlpha);
+            fx.Tick(S.WordsAt, .016); Assert.Equal(2, stopped); Assert.Equal(0, fx.DrainAlpha);
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            fx.Tick(S.DrainDeepAt + .5, .016); Assert.False(started[^1]);
+            fx.Dispose(); Assert.Equal(3, stopped); Assert.False(fx.HasDrainFrame);
+        }
+        finally { fx.Dispose(); service.SaveImmediate(); CoreSettings.ServiceProvider = old; }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF BrainDrainCapturePump.cs:431-477, 500-527: GDI BGRX is opaque,
+    /// blurred and channel-correct, and the second phase displaces the image over time.</summary>
+    [Fact]
+    public void DrainFrameBlursOpaqueGdiPixelsAndMeltMoves()
+    {
+        Assert.False(FirstShowCapture.CanCaptureStyle(0));
+        Assert.True(FirstShowCapture.CanCaptureStyle(0x80000));
+        using var rawPixels = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(96, 96, SkiaSharp.SKColorType.Rgb888x, SkiaSharp.SKAlphaType.Opaque));
+        for (int y = 0; y < 96; y++) for (int x = 0; x < 96; x++)
+            System.Runtime.InteropServices.Marshal.WriteInt32(rawPixels.GetPixels(), (y * 96 + x) * 4, x < 48 ? 0x000000ff : 0x00ff0000);
+        using var raw = FirstShowCapture.WrapPixels(96, 96, rawPixels.GetPixels()); Assert.NotNull(raw);
+        using var still = SkiaSharp.SKBitmap.Decode(FirstShowCapture.RenderFrame(raw, null, 0));
+        Assert.Equal(new SkiaSharp.SKColor(0, 0, 255, 255), still.GetPixel(12, 48));
+        Assert.Equal(new SkiaSharp.SKColor(255, 0, 0, 255), still.GetPixel(84, 48));
+        var edge = still.GetPixel(47, 48); Assert.True(edge.Red > 0 && edge.Blue > 0);
+        using var tile = FirstShowCapture.MakeNoise(); Assert.NotNull(tile);
+        var first = FirstShowCapture.RenderFrame(raw, tile, 0);
+        var later = FirstShowCapture.RenderFrame(raw, tile, 1);
+        Assert.NotNull(first); Assert.NotNull(later); Assert.False(first.SequenceEqual(later));
+    }
 
     /// <summary>WPF Guide.cs: verdict -> "Show me around" walks Core WelcomeSteps on the real shell, rings the
     /// first unlocked feature card's help button (lit as a preview), and "sessions" closes on the Presets tab.</summary>
