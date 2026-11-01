@@ -643,10 +643,18 @@ end;
 // Called after installation completes successfully
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  SelectedAssetsPath: String;
+  SelectedAssetsPath, UserDataPath: String;
 begin
   if CurStep = ssPostInstall then
   begin
+    // The WPF updater uses /SILENT (UpdateService.cs:914, ReleaseFeed.cs:432),
+    // which skips InfoBeforeFile. Leave a notice for the new head to show on launch.
+    UserDataPath := ExpandConstant('{localappdata}\ConditioningControlPanel');
+    if WizardSilent and DirExists(UserDataPath + '\browser_data') and
+       not DirExists(UserDataPath + '\browser_data_avalonia') then
+      if not SaveStringToFile(UserDataPath + '\browser-reset.pending', 'pending', False) then
+        Log('Could not write browser reset notice marker');
+
     // ALWAYS save the selected assets path to registry (read by app on startup)
     // This ensures the user's choice is respected, whether new or existing install
     SelectedAssetsPath := AssetsPathEdit.Text;

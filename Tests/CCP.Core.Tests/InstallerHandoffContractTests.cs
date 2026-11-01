@@ -202,6 +202,21 @@ public class InstallerHandoffContractTests
     }
 
     [Fact]
+    public void SilentUpgradeLeavesNoticeOnlyForAnExistingWpfBrowserProfile()
+    {
+        var installer = Read("installer-avalonia.iss");
+        var postInstall = installer.Split("procedure CurStepChanged(CurStep: TSetupStep);")[1]
+            .Split("// Clean uninstall")[0];
+        Assert.Contains("if CurStep = ssPostInstall then", postInstall);
+        Assert.Contains(@"ExpandConstant('{localappdata}\ConditioningControlPanel')", postInstall);
+        Assert.Contains(@"if WizardSilent and DirExists(UserDataPath + '\browser_data') and", postInstall);
+        Assert.Contains(@"not DirExists(UserDataPath + '\browser_data_avalonia') then", postInstall);
+        Assert.Contains(@"SaveStringToFile(UserDataPath + '\browser-reset.pending', 'pending', False)", postInstall);
+        Assert.Contains("BrowserResetMarker = \"browser-reset.pending\"", Read("CCP.Avalonia/Platform/AppUpdater.cs"));
+        Assert.Contains("/SILENT /SUPPRESSMSGBOXES /NORESTART", Read("CCP.Core/Services/Update/ReleaseFeed.cs"));
+    }
+
+    [Fact]
     public void WpfInstallerUsesProjectPublishOutputAndIcon()
     {
         var project = XDocument.Parse(Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));

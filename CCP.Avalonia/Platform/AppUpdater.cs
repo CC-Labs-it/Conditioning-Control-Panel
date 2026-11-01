@@ -167,6 +167,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 await Task.Delay(500);
+                if (File.Exists(Path.Combine(UserData, BrowserResetMarker)))
+                {
+                    var noticeOwnerClosed = false;
+                    shell.Closed += (_, _) => noticeOwnerClosed = true;
+                    while (!noticeOwnerClosed && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible || StartupModalOpen()))
+                        await Task.Delay(500);
+                    if (noticeOwnerClosed) return;
+                    await ShowBrowserResetNoticeAsync(shell, UserData);
+                    if (noticeOwnerClosed) return;
+                }
                 var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
                 if (outcome is { Succeeded: false })
                     UpdateFailedDialog.ShowFor(shell, Loc.Get("title_update_failed"),
@@ -186,6 +196,26 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 Log.Warning(ex, "Background update check failed");
             }
+        }
+
+        internal const string BrowserResetMarker = "browser-reset.pending";
+        internal static MessageDialog? BrowserResetDialog { get; private set; }
+
+        // The installer page is skipped by WPF's silent updater. Keep the marker until the user
+        // acknowledges the same localized notice, including if the window or app is closed.
+        internal static async Task ShowBrowserResetNoticeAsync(Window owner, string userData)
+        {
+            var marker = Path.Combine(userData, BrowserResetMarker);
+            if (!File.Exists(marker)) return;
+            var notice = Loc.Get("installer_avalonia_upgrade_notice").Split(new[] { "\n\n" }, 2, StringSplitOptions.None);
+            var dialog = BrowserResetDialog = new MessageDialog(notice[0], notice.Length > 1 ? notice[1] : notice[0], false);
+            try
+            {
+                if (await dialog.ShowDialogSafe<bool?>(owner) == true)
+                    File.Delete(marker);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Browser reset notice failed"); }
+            finally { BrowserResetDialog = null; }
         }
 
         private static bool StartupModalOpen() =>
