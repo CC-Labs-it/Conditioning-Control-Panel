@@ -80,6 +80,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused, _lessonCardsAfterDraft;
         private static int _pendingWave;
         private static readonly List<ChaosUnlockCardInfo> _pendingDraftCards = new();
+        // WPF ChaosModeService.cs:1476-1479: defer cards until their advertised effects are hosted.
+        private static readonly string[] DraftableBoons = { "defuse_chain", "golden_touch", "extra_shield", "welcome_shower", "hair_trigger" };
+        // The HUD splits the marker from the localized feed text for its IconGlyph.
+        private static void PushLocalizedEvent(string key, params object[] args) =>
+            _state?.PushEvent(ConditioningControlPanel.Localization.Loc.GetF(key, args));
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
@@ -182,7 +187,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _state.FuseTimeMult, ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
             }
             BubbleOverlay.PlayChime(0.25f);
-            _state.PushEvent(ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("chaos_welcome_shower_event"));
+            PushLocalizedEvent("chaos_welcome_shower_event");
         }
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
         internal static void SpawnTick()
@@ -472,7 +477,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var state = _state!;
             var taken = state.ActiveBoons.Concat(state.ActiveCurses).Select(b => b.Id).ToHashSet();
             var options = ChaosBoonPool.Draft(state.Config.AllowCurses, state.Config.DraftChoices,
-                state.MaxedBoons.Contains("surrender"), taken, state.Config.SinChance);
+                state.MaxedBoons.Contains("surrender"), taken, state.Config.SinChance, DraftableBoons);
             foreach (var option in options) ChaosMeta.MarkDiscovered("boon:" + option.Id);
             return options;
         }
@@ -481,7 +486,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (_state == null || _state.RerollsLeft <= 0) return null;
             _state.RerollsLeft--;
-            _state.PushEvent(IconText.BareLoc("chaos_draft_reroll_event"));
+            PushLocalizedEvent("chaos_draft_reroll_event");
             return (DealDraft(), _state.RerollsLeft);
         }
 
@@ -505,13 +510,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (_state.SinExtraMult > 0)
                     {
                         _state.BoonMult += _state.SinExtraMult;
-                        _state.PushEvent(IconText.BareLoc("chaos_draft_sin_bonus_event", _state.SinExtraMult));
+                        PushLocalizedEvent("chaos_draft_sin_bonus_event", _state.SinExtraMult);
                     }
-                    if (shielded) _state.PushEvent(IconText.BareLoc("chaos_draft_shielded_sin_event"));
+                    if (shielded) PushLocalizedEvent("chaos_draft_shielded_sin_event");
                     if (_state.MaxedBoons.Contains("surrender"))
                     {
                         _state.Shields++;
-                        _state.PushEvent(IconText.BareLoc("chaos_draft_surrender_event"));
+                        PushLocalizedEvent("chaos_draft_surrender_event");
                         Pulse(Color.FromRgb(120, 220, 160), 0.22);
                     }
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f);
@@ -521,7 +526,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else
             {
                 _state.Shields++;
-                _state.PushEvent(IconText.BareLoc("chaos_draft_skip_event"));
+                PushLocalizedEvent("chaos_draft_skip_event");
                 Pulse(Color.FromRgb(120, 220, 160), 0.22);
                 ChaosAnnouncerOverlay.Announce(IconText.BareLoc("chaos_draft_skip_announce"), ChaosAnnounceKind.Willpower, artKey: "resistance");
             }

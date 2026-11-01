@@ -391,16 +391,18 @@ public static class ChaosBoonPool
     /// <see cref="ChaosBoon.Unique"/> cards already taken (<paramref name="takenIds"/>)
     /// sit the rest of the run out. <paramref name="sinChance"/> is the dedicated sin-slot
     /// roll (<c>ChaosRunConfig.SinChance</c> — the happy path ramps it in over the early runs).
+    /// Pass <paramref name="availableIds"/> to deal only effects hosted by the caller.
     /// </summary>
     public static List<ChaosBoon> Draft(bool allowCurses = true, int choices = 3, bool guaranteeCurse = false,
-                                        IReadOnlyCollection<string>? takenIds = null, double sinChance = 0.5)
+                                        IReadOnlyCollection<string>? takenIds = null, double sinChance = 0.5, IReadOnlyCollection<string>? availableIds = null)
     {
         choices = Math.Clamp(choices, 2, 4);
         // A requirement id may name a lifetime boon (skill/accessory/charm) OR a trained habit
         // (e.g. Focus here → the pendulum_swing habit).
         static bool ReqMet(string id) => ChaosMeta.IsBoonActive(id) || ChaosMeta.IsUpgradeActive(id);
         bool Draftable(ChaosBoon b) =>
-            (b.RequiresAny == null || b.RequiresAny.Any(ReqMet))
+            (availableIds == null || availableIds.Contains(b.Id))
+            && (b.RequiresAny == null || b.RequiresAny.Any(ReqMet))
             && (b.RequiresAll == null || b.RequiresAll.All(ReqMet))
             && !(b.Unique && takenIds != null && takenIds.Contains(b.Id));
         var boons = All.Where(b => !b.IsCurse && Draftable(b)).OrderBy(_ => _rng.Next()).ToList();

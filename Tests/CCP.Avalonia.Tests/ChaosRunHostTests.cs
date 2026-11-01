@@ -405,7 +405,7 @@ public sealed class ChaosRunHostTests
     [Fact]
     public async Task Fall_in_starts_a_run_and_its_end_banks_the_wpf_payout()
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             Setup();
             FreshMeta();
@@ -420,22 +420,35 @@ public sealed class ChaosRunHostTests
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.True(ChaosRunHost.IsActive);
                 Assert.Equal(ChaosPlayMode.Story, ChaosRunHost.State!.Config.PlayMode);
-                ChaosRunHost.State.Config.BoonDraftEnabled = false; // exercise the draftless full-course payout
+                Assert.True(ChaosRunHost.State.Config.BoonDraftEnabled);
 
-                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 var state = ChaosRunHost.State!;
                 state.Score = 1234;
                 var meta = ChaosMeta.State;
                 int gold0 = meta.Gold;
-                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) ChaosRunHost.Tick();
-                Assert.False(ChaosRunHost.IsDescending);
+                int drafts = 0;
+                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) {
+                    ChaosRunHost.Tick(); var overlay = ChaosRunHost.Overlay!;
+                    if (!overlay.FindControl<Border>("DraftPanel")!.IsVisible) continue;
+                    var card = (Border)overlay.FindControl<StackPanel>("BoonCardHost")!.Children[0];
+                    var pick = ((StackPanel)card.Child!).Children.OfType<Button>().Single(); Assert.True(pick.IsEnabled);
+                    pick.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                    var deadline = DateTime.UtcNow.AddSeconds(6);
+                    while (overlay.FindControl<Border>("DraftPanel")!.IsVisible && DateTime.UtcNow < deadline) await Task.Delay(50);
+                    Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+                    overlay.FinishCountdown();
+                    while (ChaosUnlockCardOverlay.IsShowing) ChaosUnlockCardOverlay.Active!.Close();
+                    drafts++;
+                }
+                Assert.False(ChaosRunHost.IsDescending); Assert.Equal(state.WaveCount - 1, drafts);
 
                 double durMin = state.RunDurationSec / 60.0, diff = state.Config.DifficultyMult;
                 var paid = Assert.Single(xp);
                 Assert.Equal("Chaos", paid.Source);
                 Assert.Equal(Math.Min(1234, 250.0 * durMin * diff), paid.Amount, 6);
                 int sparks = (int)Math.Round((1.5 * Math.Sqrt(1234) + 35.0 * diff * Math.Min(1.0, durMin / 3.0))
-                                             * state.Config.SparkGainMult) + ChaosMeta.FIRST_FALL_BONUS;
+                                             * state.Config.SparkGainMult) + ChaosMeta.FIRST_FALL_BONUS + ChaosFirstTimes.Amounts[ChaosFirstTimes.Whisper];
                 Assert.Equal(sparks, meta.Sparks);
                 Assert.Equal((1, 1234L), (meta.RunsCompleted, meta.BestScore));
                 // One loop tip per loop (the last on the full course), each >= 2 x round(3 x diff) clean.
@@ -444,7 +457,6 @@ public sealed class ChaosRunHostTests
                 Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
             }
             finally { ChaosRunHost.ForceShutdown(); hub?.Close(); FreshMeta(); }
-            return Task.CompletedTask;
         });
     }
 
@@ -601,7 +613,8 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var state = ChaosRunHost.State!;
                 state.Focus = 100;
-                state.DefuseInvulnMs = 900;
+                state.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == "defuse_chain"));
+                Assert.Equal(900, state.DefuseInvulnMs);
                 var t = DateTime.UnixEpoch;
                 BubbleOverlay.Field.Clock = () => t;
                 BubbleOverlay.SpawnChaos(LiveSpec());
