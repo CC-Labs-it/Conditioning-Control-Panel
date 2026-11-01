@@ -124,8 +124,8 @@ public sealed partial class ChasterService
             var bytes = Encoding.UTF8.GetBytes(html);
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.ContentLength64 = bytes.Length;
-            await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
-            context.Response.Close();
+            context.Response.KeepAlive = false; // The listener is disposed as soon as this reply finishes.
+            await Task.Run(() => context.Response.Close(bytes, willBlock: true)).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or System.IO.IOException)
         {

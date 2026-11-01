@@ -74,8 +74,7 @@ public sealed class RequiredNameTests
 
     // WPF DisplayNameDialog.xaml.cs:44-62,105-166,201-205.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false), InlineData(true)]
     public Task RequiredModeValidatesRetriesAndIgnoresAnAnswerAfterClose(bool throws) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
@@ -133,9 +132,7 @@ public sealed class RequiredNameTests
 
     // WPF MainWindow.DisplayNameAsk.cs:25-30,58-59,78-108.
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" ")]
+    [InlineData(null), InlineData(""), InlineData(" ")]
     public Task SignInGateAndOwnNameSaveChangeBeforeAnyAvailabilityCheck(string? missingName) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
@@ -210,9 +207,7 @@ public sealed class RequiredNameTests
 
     // WPF DisplayNameAsk.cs:34-59: profile arrival, one ask, dismissal, next launch, hold at show.
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
+    [InlineData(false, false), InlineData(true, false), InlineData(false, true)]
     public Task RestoredProfileAsksOncePerLaunchAndReoffersAfterAHold(bool defer, bool modeless) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -281,6 +276,4 @@ public sealed class RequiredNameTests
             FriendsLanding.World = world;
         }
     });
-
-
 }

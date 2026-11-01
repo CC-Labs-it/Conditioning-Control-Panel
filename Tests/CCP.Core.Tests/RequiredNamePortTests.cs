@@ -10,16 +10,13 @@ namespace CCP.Core.Tests;
 public sealed class RequiredNamePortTests
 {
     [Theory]
-    [InlineData(true, null, false, false)]
-    [InlineData(true, "Old", true, true)]
-    [InlineData(true, null, null, true)]
-    [InlineData(false, null, true, false)]
+    [InlineData(true, null, false, false), InlineData(true, "Old", true, true)]
+    [InlineData(true, null, null, true), InlineData(false, null, true, false)]
     public void ServerFlagWins(bool signedIn, string? name, bool? flag, bool ask) =>
         Assert.Equal(ask, NeedsDisplayNameRule.ShouldAsk(signedIn, name, flag));
 
     [Theory]
-    [InlineData("ab", DisplayNameShape.TooShort)]
-    [InlineData("Own Name", DisplayNameShape.Ok)]
+    [InlineData("ab", DisplayNameShape.TooShort), InlineData("Own Name", DisplayNameShape.Ok)]
     [InlineData("a@b", DisplayNameShape.BadChars)]
     public void ShapeMatchesRequiredMode(string name, DisplayNameShape shape) =>
         Assert.Equal(shape, NeedsDisplayNameRule.Check(name));
