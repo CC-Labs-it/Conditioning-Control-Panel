@@ -1,5 +1,7 @@
 using System.IO;
 using System.Linq;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
@@ -29,6 +31,17 @@ public class TestIsolationTests
                     .Select(_ => Path.GetFileName(f));
             }).ToList();
         Assert.Empty(bad);
+    }
+
+    [Fact]
+    public void EveryTestHostResolvesTheBundledDisplayFace()
+    {
+        Assert.True(FontManager.Current.TryGetGlyphTypeface(
+            new Typeface(new FontFamily("Fredoka, Segoe UI"),
+                FontStyle.Normal, FontWeight.DemiBold), out var face));
+        Assert.True(FontManager.Current.TryGetGlyphTypeface(
+            new Typeface(new FontFamily(AppFonts.Fredoka), FontStyle.Normal, FontWeight.DemiBold), out var bundled));
+        Assert.Equal(bundled!.FamilyName, face!.FamilyName);
     }
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
