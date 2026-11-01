@@ -1,0 +1,91 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Styling;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using CCP.Avalonia.Testing;
+using Xunit;
+
+namespace CCP.Avalonia.Tests;
+
+public sealed class InputMenuThemeTests
+{
+    [Fact]
+    public Task ContextMenuUsesHouseSurfaceAndRespectsLocalValues() => Run(window =>
+    {
+        var button = new Button();
+        var menu = new ContextMenu { Items = { new MenuItem { Header = new Border() } } };
+        button.ContextMenu = menu;
+        window.Content = button;
+        window.Show();
+        menu.Open(button);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(Application.Current!.FindResource("InputContextMenuTheme"), menu.Theme);
+        Assert.Equal(Colour(window, "ElevatedSurfaceBrush"), ((ISolidColorBrush)menu.Background!).Color);
+        Assert.Equal(Colour(window, "TransparentPink20Brush"), ((ISolidColorBrush)menu.BorderBrush!).Color);
+        Assert.Equal(new Thickness(1), menu.BorderThickness);
+        Assert.Equal(new CornerRadius(10), menu.CornerRadius);
+        Assert.Equal(new Thickness(4), menu.Padding);
+        var presenter = menu.GetVisualDescendants().OfType<ItemsPresenter>().Single(p => p.Name == "PART_ItemsPresenter");
+        Assert.Equal(new Thickness(0), presenter.Margin);
+
+        menu.Background = Brushes.Red;
+        menu.CornerRadius = new CornerRadius(8);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Colors.Red, ((ISolidColorBrush)menu.Background).Color);
+        Assert.Equal(new CornerRadius(8), menu.CornerRadius);
+        menu.Close();
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task MenuSeparatorUsesTheKeyedWpfInset() => Run(window =>
+    {
+        var standalone = new Separator();
+        var divider = new Separator();
+        var button = new Button();
+        var menu = new ContextMenu { Items = { new MenuItem { Header = new Border() }, divider } };
+        button.ContextMenu = menu;
+        window.Content = new StackPanel { Children = { standalone, button } };
+        window.Show();
+        menu.Open(button);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.NotSame(Application.Current!.FindResource("InputSeparatorTheme"), standalone.Theme);
+        Assert.Same(Application.Current.FindResource("InputSeparatorTheme"), divider.Theme);
+        Assert.Equal(1, divider.Height);
+        Assert.Equal(new Thickness(6, 4), divider.Margin);
+        Assert.Equal(Colour(window, "GlassBorderBrush"), ((ISolidColorBrush)divider.Background!).Color);
+        var line = divider.GetVisualDescendants().OfType<Border>().Single();
+        Assert.Equal(1, line.Bounds.Height);
+        Assert.Equal(Colour(window, "GlassBorderBrush"), ((ISolidColorBrush)line.Background!).Color);
+        divider.Background = Brushes.Red;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Colors.Red, ((ISolidColorBrush)line.Background!).Color);
+        menu.Close();
+        return Task.CompletedTask;
+    });
+
+    private static Color Colour(Window window, string key) => ((ISolidColorBrush)window.FindResource(key)!).Color;
+
+    private static Task Run(Func<Window, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var window = new Window { Width = 500, Height = 400 };
+        try { await body(window); }
+        finally
+        {
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+}
