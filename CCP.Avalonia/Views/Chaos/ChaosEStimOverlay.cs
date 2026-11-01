@@ -1,9 +1,9 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosEStimOverlay.cs (ChaosEStimOverlay + ChaosEStimGlow).
 // The maths (bolt path, strike timeline, halo follow and pulse) is Core's ChaosEStimMath; this file only draws.
 //
-// ponytail: nothing calls Strike/Arm yet. WPF fires them from BubbleService (charged pops, :440/:478/:1726)
-// and ChaosModeService's e_stim toy (:2770/:2800); neither the bubble field nor the toys exist on this head
-// (ChaosRunHost header). The e-stim DEVICE output is untouched here.
+// Remaining caller work: e_stim activation and charged-pop discharge (WPF ChaosModeService
+// :2761-2798, BubbleService :342-442), plus the mandatory-video layer raise (:741-779).
+// The e-stim DEVICE output is untouched here.
 
 using System;
 using System.Collections.Generic;
@@ -239,6 +239,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static ChaosEStimGlow? Active => _active;
         internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
 
+        // WPF ChaosEStimOverlay.cs:329-350. Realize once before gameplay, idle hidden.
+        public static void EnsureCreated() => ChaosEStimOverlay.OnUi(() =>
+        {
+            try
+            {
+                if (_active != null || ChaosEStimOverlay.Refused || !ChaosEStimOverlay.CanShow()) return;
+                var w = new ChaosEStimGlow();
+                if (!w.Prepare()) { ChaosEStimOverlay.Refused = true; w.Close(); return; }
+                // Do not flash the halo at the window's initial position during realization.
+                w.Opacity = 0;
+                w.Show();
+                w.Hide();
+                w.Opacity = 1;
+                _active = w;
+            }
+            catch (Exception ex) { Log.Debug("ChaosEStimGlow.EnsureCreated: {E}", ex.Message); }
+        });
+
+        // WPF ChaosEStimOverlay.cs:397. Never show an idle halo just to re-stack it.
+        internal static Func<Window, bool> RaiseWindow = w => X11Overlay.Raise(w);
+        public static void RaiseActive()
+        {
+            if (_active is { IsVisible: true } w) RaiseWindow(w);
+        }
+
         /// <summary>Charges armed: show the halo and follow the cursor. Safe from any thread.</summary>
         public static void Arm() => ChaosEStimOverlay.OnUi(() =>
         {
@@ -254,7 +279,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _active._start = ChaosEStimOverlay.Clock.GetTimestamp();
                 _active.Step();   // snap to the cursor before the first frame
                 if (!_active.IsVisible) _active.Show();
-                X11Overlay.Raise(_active);
+                RaiseActive();
                 _active._follow.Start();
             }
             catch (Exception ex) { Log.Debug("ChaosEStimGlow.Arm: {E}", ex.Message); }
