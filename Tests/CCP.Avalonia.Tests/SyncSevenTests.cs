@@ -27,19 +27,7 @@ namespace CCP.Avalonia.Tests;
 
 public class SyncSevenTests
 {
-    private static void Setup()
-    {
-        if (Application.Current == null)
-        {
-            var fonts = AppFonts.Options(systemEmoji: false);
-            ((System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>)fonts.FontFamilyMappings!)["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(AppFonts.Inter);
-            ((System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>)fonts.FontFamilyMappings!)["Segoe UI"] = new global::Avalonia.Media.FontFamily(AppFonts.Inter);
-            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().WithInterFont()
-                .With(fonts).ConfigureFonts(AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        }
-    }
+    private static void Setup() => ShellTestPlatform.Ensure();
 
     [Theory]
     [InlineData(0)]
@@ -119,14 +107,16 @@ public class SyncSevenTests
     public Task InviteNewsPresentsAModelessCardWithDismissalAndAction(string action) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        StartupLadder.ResetForTests();
-        CoreTutorial.IsActiveProvider = () => false;
-        CoreSession.IsSessionRunningProvider = () => false;
-        CoreSettings.Current.UnifiedId = "sync-seven";
-        CoreSettings.Current.InboxStamps.Clear();
-        var shell = new MainShellWindow();
+        var providers = (CoreTutorial.IsActiveProvider, CoreSession.IsSessionRunningProvider);
+        MainShellWindow? shell = null;
         try
         {
+            StartupLadder.ResetForTests();
+            CoreTutorial.IsActiveProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            CoreSettings.Current.UnifiedId = "sync-seven";
+            CoreSettings.Current.InboxStamps.Clear();
+            shell = new MainShellWindow();
             shell.Show();
             shell.ShowTab("settings");
             shell.ApplyInviteTicket(new InviteMine(true, new InviteSnapshot(new[] {
@@ -154,7 +144,11 @@ public class SyncSevenTests
             Assert.True(shell.IsEnabled);
             Assert.Equal(action == "invites", shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("ExclusivesTab")!.IsVisible);
         }
-        finally { InboxNoticeCard.Open?.Close(); shell.Close(); StartupLadder.ResetForTests(); }
+        finally
+        {
+            try { InboxNoticeCard.Open?.Close(); shell?.Close(); StartupLadder.ResetForTests(); }
+            finally { (CoreTutorial.IsActiveProvider, CoreSession.IsSessionRunningProvider) = providers; }
+        }
         return Task.CompletedTask;
     });
 
@@ -166,19 +160,23 @@ public class SyncSevenTests
     public Task SpentIntakeToastOpensBasicPricedCard(bool reconnect, bool locked) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        CoreAccount.IsLoggedInProvider = () => true;
-        CoreAccount.HasPremiumAccessProvider = () => false;
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
-        CoreSettings.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
-        CoreSettings.Current.IntakePassSpentUtc = DateTime.UtcNow;
-        var shell = new MainShellWindow();
-        var reconnects = 0;
-        TierGate.ReconnectIsTheAnswerProvider = () => reconnect;
-        shell.ReconnectFromGateOverride = () => { reconnects++; return Task.CompletedTask; };
-        var lockdown = LockdownService.Current = new LockdownService();
+        var providers = (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider,
+            CoreSettings.ServiceProvider, TierGate.ReconnectIsTheAnswerProvider, LockdownService.Current);
+        MainShellWindow? shell = null;
+        LockdownService? lockdown = null;
         try
         {
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreAccount.HasPremiumAccessProvider = () => false;
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            CoreSettings.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
+            CoreSettings.Current.IntakePassSpentUtc = DateTime.UtcNow;
+            shell = new MainShellWindow();
+            var reconnects = 0;
+            TierGate.ReconnectIsTheAnswerProvider = () => reconnect;
+            shell.ReconnectFromGateOverride = () => { reconnects++; return Task.CompletedTask; };
+            lockdown = LockdownService.Current = new LockdownService();
             shell.Show();
             if (locked) lockdown.Activate(TimeSpan.FromMinutes(30));
             ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(shell.FindControl<StackPanel>("NotificationHost")!);
@@ -195,7 +193,15 @@ public class SyncSevenTests
             }
             Assert.Equal(reconnect && !locked ? 1 : 0, reconnects);
         }
-        finally { lockdown.Deactivate(); VaultGateDialog.Open?.Close(); shell.Close(); }
+        finally
+        {
+            try { lockdown?.Deactivate(); VaultGateDialog.Open?.Close(); shell?.Close(); }
+            finally
+            {
+                (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider,
+                    CoreSettings.ServiceProvider, TierGate.ReconnectIsTheAnswerProvider, LockdownService.Current) = providers;
+            }
+        }
         return Task.CompletedTask;
     });
 }
