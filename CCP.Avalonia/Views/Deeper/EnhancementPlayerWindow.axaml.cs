@@ -103,9 +103,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> EnhancementAudioPlayer (NAudio), WebcamTracking and the editor jump
-    ///         still live in the WPF head, so every handler that reached them is a stub.
-    ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
+    ///   <item><b>Services.</b> EnhancementAudioPlayer (NAudio) lives in the WPF head. The
+    ///         player does not yet connect the Avalonia webcam tracker or the editor preview.
+    ///         EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. The
     ///         host's <c>Bind</c> and the rule engine are in Core too, but this head has no
@@ -151,6 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // One per window so EnhancementFetcher's per-session cache is worth having; disposed in
         // Window_Closing because it owns an HttpClient and its guarded handler.
         private EnhancementFetcher? _fetcher;
+        private EnhancementLibrary? _library;
+        private DispatcherTimer? _hintTimer;
 
         // Tracks WHICH branch supplied the current enhancement. Drives the source badge.
         private enum DiscoverySource { Manual, Library, Sidecar, Embedded, Url, PromotedFromEmbedded }
@@ -176,7 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private readonly TextBlock _statusPillText, _txtEnhName, _txtEnhPath,
                                    _txtEnhMetadata, _txtEnhSource, _txtAudioPath, _txtVideoStatus,
                                    _txtNowRegion, _txtMiniTimelineReadout, _txtMiniHoverTime, _txtCurrent, _txtTotal,
-                                   _txtStatus,
+                                   _txtStatus, _txtHint,
                                    _txtFilterCountAll, _txtFilterCountActions, _txtFilterCountEngine,
                                    _txtFilterCountErrors;
         private readonly Button _btnOpenInEditor, _btnChange, _btnCreateNewEnhancement,
@@ -250,6 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _txtCurrent = this.FindControl<TextBlock>("TxtCurrent")!;
             _txtTotal = this.FindControl<TextBlock>("TxtTotal")!;
             _txtStatus = this.FindControl<TextBlock>("TxtStatus")!;
+            _txtHint = this.FindControl<TextBlock>("TxtHint")!;
             _txtPlayPauseGlyph = this.FindControl<IconGlyph>("TxtPlayPauseGlyph")!;
             _txtCollapseGlyph = this.FindControl<IconGlyph>("TxtCollapseGlyph")!;
             _txtFilterCountAll = this.FindControl<TextBlock>("TxtFilterCountAll")!;
@@ -598,26 +601,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
-        /// <summary>
-        /// Core's EnhancementResolver ladder (embedded -> sidecar -> library), as WPF calls it.
-        ///
-        /// ponytail: this head leaves EnhancementResolver.LibraryMatchProvider unset, so the library
-        /// tier never hits; the auto-promotion of an embedded enhancement into the library and its
-        /// 6 s toast need an EnhancementLibrary instance (Core) this head does not construct yet. A media file whose enhancement
-        /// lives only in the library lands in the "nothing found" branch and offers Create-new.
-        /// </summary>
+        /// <summary>WPF EnhancementPlayerWindow.xaml.cs:472-551: embedded wins over
+        /// sidecar and library, with embedded promotion and an in-memory fallback.</summary>
         private void TryAutoLoadEnhancement(string mediaPath)
         {
             _lastMediaPathForCreateNew = mediaPath;
             _btnCreateNewEnhancement.IsVisible = false;
+            ClearHint();
             try
             {
                 var resolved = EnhancementResolver.ResolveForLocalMedia(mediaPath);
+                var mediaType = DeeperPreview.IsLocalVideoFile(mediaPath) ? MediaTypes.Video : MediaTypes.Audio;
                 switch (resolved.Source)
                 {
                     case EnhancementDiscoverySource.Embedded:
+                        var embedded = resolved.Enhancement!;
+                        _library ??= new EnhancementLibrary();
+                        if (_library.FindMatch(mediaPath, mediaType) == null)
+                        {
+                            var saved = _library.PromoteToLibrary(embedded, mediaPath);
+                            if (!string.IsNullOrEmpty(saved))
+                            {
+                                _lastDiscoverySource = DiscoverySource.PromotedFromEmbedded;
+                                LoadEnhancementFile(saved);
+                                ShowHint(Loc.GetF("deeper_player_promoted_to_library_fmt", System.IO.Path.GetFileName(saved)), 6);
+                                return;
+                            }
+                        }
                         _lastDiscoverySource = DiscoverySource.Embedded;
-                        LoadEnhancementInMemory(resolved.Enhancement!, "embedded:" + System.IO.Path.GetFileName(mediaPath));
+                        LoadEnhancementInMemory(embedded, "embedded:" + System.IO.Path.GetFileName(mediaPath));
                         return;
 
                     case EnhancementDiscoverySource.Sidecar:
@@ -631,15 +643,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                         return;
                 }
 
-                // Nothing found — offer to author against this media.
+                // The desktop head does not seed the resolver's global library provider. Use
+                // the same library here after the resolver has checked embedded and sidecar.
+                _library ??= new EnhancementLibrary();
+                var match = _library.FindMatch(mediaPath, mediaType);
+                if (match != null)
+                {
+                    _lastDiscoverySource = DiscoverySource.Library;
+                    LoadEnhancementFile(match.FilePath);
+                    return;
+                }
+
                 _btnCreateNewEnhancement.IsVisible = true;
-                _txtStatus.Text = Loc.Get("deeper_player_no_enh_for_media");
+                ShowHint(Loc.Get("deeper_player_no_enh_for_media"), null);
             }
             catch (Exception ex)
             {
-                // WPF swallowed IO errors here too: the button stays hidden and no status is set.
                 Log.Debug("EnhancementPlayer: auto-load enhancement failed: {Error}", ex.Message);
             }
+        }
+
+        // WPF EnhancementPlayerWindow.xaml.cs:554-592: hints are independent of transport status.
+        private void ShowHint(string text, double? seconds)
+        {
+            ClearHint();
+            _txtHint.Text = text;
+            _txtHint.IsVisible = true;
+            if (seconds is > 0)
+            {
+                _hintTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds.Value) };
+                _hintTimer.Tick += (_, _) => ClearHint();
+                _hintTimer.Start();
+            }
+        }
+
+        private void ClearHint()
+        {
+            _hintTimer?.Stop();
+            _hintTimer = null;
+            _txtHint.Text = "";
+            _txtHint.IsVisible = false;
         }
 
         private void BtnCreateNewEnhancement_Click()
@@ -836,21 +879,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnEyeTracking_Click()
         {
-            // ponytail: needs WebcamTrackingService (start/stop, IsConsentCurrent), which is
-            // head-only at ConditioningControlPanel/Services/Webcam/WebcamTrackingService.cs.
-            // Left whole rather than half-restored ON PURPOSE: the portable half of this button is
-            // the label and the pill, and a button that reads "eye tracking: on" with no camera
-            // open is worse than a button that does nothing. Restore the consent gate and the
-            // camera together or not at all.
-            //
-            // ONE HALF OF THE OLD REASON IS NOW WRONG and is corrected rather than deleted, because
-            // it is the kind of claim that gets copied: "the first-time consent prompt this head
-            // has no MessageBox for". Views/Dialogs/MessageDialog exists and ConfirmAsync is
-            // exactly that prompt. The prompt is not the blocker; the tracker is. Note also that
-            // the gate must be AWAITED - a straight transcription of the WPF prompt flips the
-            // toggle before the answer lands, which turns a consent gate into a no-op.
-            // Keys the WPF prompts use: deeper_player_eye_tracking_unavailable / _first_time /
-            // _confirm_start / _start_failed_fmt.
+            // The tracker and consent check already exist in Platform/WebcamTracker.cs:98,236.
+            // The player still needs WPF's awaited consent prompt, banner, and session ownership
+            // before it can safely start or stop that shared tracker (WPF xaml.cs:756-919,2682).
             Log.Debug("EnhancementPlayer(Avalonia): eye tracking toggle is a stub");
         }
 
@@ -1069,6 +1100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void UpdateHostUi(Enhancement? enh, string? path)
         {
+            ClearHint();
             _loadedEnhancement = enh;
             _loadedFilePath = path;
 
@@ -1757,6 +1789,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _pollDisabled = true;
             try { _fetcher?.Dispose(); } catch { }
             _fetcher = null;
+            ClearHint();
+            _library?.Dispose();
+            _library = null;
             // ponytail: the WPF teardown also unsubscribed the player/webcam singletons, stopped a
             // webcam this session had started, disposed the video time source and force-closed the
             // borderless fullscreen host. Those are the head services' and WebView2's; none of them
