@@ -44,6 +44,31 @@ public sealed class ExternalOpenerTests
     }
 
     [Fact]
+    public async Task FailedLaunchNeverLogsTheSessionUrlOrPin()
+    {
+        const string url = "http://127.0.0.1:9/session#fake-pin-7391";
+        var oldShell = ExternalOpener.Shell;
+        var oldLog = Serilog.Log.Logger;
+        var sink = new Capture();
+        Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        ExternalOpener.Shell = target => throw new InvalidOperationException("cannot open " + target);
+        try
+        {
+            Assert.False(ExternalOpener.Open(url));
+            Assert.False(await ExternalOpener.OpenAsync(null, url));
+            Assert.NotEmpty(sink.Events);
+            Assert.DoesNotContain(sink.Events, e => e.Contains(url) || e.Contains("fake-pin-7391"));
+        }
+        finally { ExternalOpener.Shell = oldShell; Serilog.Log.Logger = oldLog; }
+    }
+
+    private sealed class Capture : Serilog.Core.ILogEventSink
+    {
+        public readonly List<string> Events = new();
+        public void Emit(Serilog.Events.LogEvent e) => Events.Add(e.RenderMessage() + e.Exception);
+    }
+
+    [Fact]
     public void LocalFoldersStillOpen()
     {
         var launched = new List<string>();
