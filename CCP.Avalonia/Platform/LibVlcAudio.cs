@@ -66,7 +66,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static LibVLC? Shared { get; private set; }
 
         /// <summary>Throws when libvlc is not installed; the caller then leaves CoreAudio unseeded.</summary>
-        public LibVlcAudio(params string[] options)
+        public LibVlcAudio(params string[] options) : this(true, options) { }
+
+        // A show owns its instance, so its fixed pre-output gain cannot affect the app's shared audio.
+        private LibVlcAudio(bool share, params string[] options)
         {
             // Windows ships libvlc beside the exe; a single-file publish has no
             // assembly location for LibVLCSharp to probe from, so point it there as WPF's VideoService does. Linux: system libvlc.
@@ -78,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
             _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
-            Shared ??= _vlc;
+            if (share) Shared ??= _vlc;
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
 
@@ -193,6 +196,70 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (!player.Play()) Finish();
             // Off the caller's thread: libvlc's Stop must never run inside one of its own events.
             return () => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Stop(); });
+        }
+
+        /// <summary>WPF FirstShowAudio.cs:31-46: one cue, with gain in place before Play and Stop completed
+        /// before a replacement or close. The show owns this LibVLC independently of the shared backend.</summary>
+        internal sealed class FirstShowCue : IDisposable
+        {
+            private readonly object _gate = new();
+            private readonly string[] _options;
+            private LibVlcAudio? _audio;
+            private MediaPlayer? _player;
+            private Media? _media;
+            private float _gain = -1;
+            private bool _disposed;
+            // Test seams: inspect the native player and hold a stop before executing it.
+            internal Action<MediaPlayer>? PlayerCreated;
+            internal Action<Action> StopPlayer = stop => stop();
+            internal FirstShowCue(params string[] options) { _options = options; }
+
+            internal Action Play(string path, float gain, string tag)
+            {
+                lock (_gate)
+                {
+                    if (_disposed) return static () => { };
+                    StopCurrent();
+                    gain = Math.Clamp(gain, 0, 1);
+                    if (_audio == null || _gain != gain)
+                    {
+                        _audio?._vlc.Dispose(); _audio = null;
+                        // LibVLC's linear pipeline gain is active for the first sample. Player.Volume is
+                        // applied too late by the normal backend, after its output has begun playing.
+                        var options = _options.Append("--gain=" + gain.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                        _audio = new LibVlcAudio(false, options); _gain = gain;
+                    }
+                    var media = new Media(_audio._vlc, path, FromType.FromPath);
+                    try
+                    {
+                        media.AddOption(NoVideo);
+                        var player = new MediaPlayer(media);
+                        _media = media; _player = player;
+                        PlayerCreated?.Invoke(player);
+                        if (!player.Play()) StopCurrent();
+                        return () => { lock (_gate) { if (ReferenceEquals(_player, player)) StopCurrent(); } };
+                    }
+                    catch { if (ReferenceEquals(_media, media)) StopCurrent(); else media.Dispose(); throw; }
+                }
+            }
+            private void StopCurrent()
+            {
+                if (_player is not { } player) return;
+                var media = _media;
+                // Stop may block; never invoke this from a LibVLC event callback. It must finish before
+                // a new cue starts or the stage closes, including when the output is still starting.
+                StopPlayer(player.Stop);
+                _player = null; _media = null;
+                try { player.Dispose(); } finally { media?.Dispose(); }
+            }
+            public void Dispose()
+            {
+                lock (_gate)
+                {
+                    if (_disposed) return;
+                    StopCurrent(); _disposed = true; _audio?._vlc.Dispose(); _audio = null;
+                }
+            }
         }
 
         /// <summary>A clip the caller can re-volume and stop (mind wipe). A loop is WPF's overlap

@@ -569,7 +569,7 @@ public sealed class FirstShowStageTests
             Assert.True(ConditioningControlPanel.Avalonia.App.TryStartFirstShowPreview(desktop));
             var stage = Assert.IsType<FirstShowStageWindow>(desktop.MainWindow);
             int played = 0, stopped = 0;
-            stage.Audio.CreatePreviewPlayer = () => (_, volume, _) =>
+            stage.Audio.CreateCuePlayer = () => (_, volume, _) =>
             { Assert.Equal(.208f, volume); played++; return () => stopped++; };
             stage.Audio.Cue("click"); Assert.Equal(1, played);
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;

@@ -27,7 +27,7 @@ public sealed class FirstShowPreviewAudioTests
             int created = 0, played = 0, stopped = 0;
             float volume = 0;
             using var audio = new FirstShowAudio(preview: true);
-            audio.CreatePreviewPlayer = () =>
+            audio.CreateCuePlayer = () =>
             {
                 created++;
                 return (p, v, tag) => { Assert.Equal(path, p); Assert.Equal("first-show-cue", tag); volume = v; played++; return () => stopped++; };
@@ -58,6 +58,33 @@ public sealed class FirstShowPreviewAudioTests
     }
 
     [Fact]
+    public void AFailedStopDoesNotStartAReplacement()
+    {
+        var path = Path.GetTempFileName();
+        var settings = CoreSettings.ServiceProvider; var overridePath = CoreModArt.AudioOverridePathProvider;
+        var suppressed = CoreAudio.IsOutputSuppressedProvider; var stoppable = CoreAudio.PlayStoppableProvider;
+        var oneShot = CoreAudio.PlayOneShotProvider;
+        try
+        {
+            CoreSettings.ServiceProvider = null; CoreModArt.AudioOverridePathProvider = _ => path;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayStoppableProvider = null; CoreAudio.PlayOneShotProvider = null;
+            int played = 0, attempts = 0;
+            using var audio = new FirstShowAudio(preview: true);
+            audio.CreateCuePlayer = () => (_, _, _) => { played++; return () => { attempts++; throw new IOException("stop failed"); }; };
+            audio.Cue("click"); audio.Cue("click");
+            Assert.Equal(1, played); Assert.Equal(1, attempts);
+            audio.Dispose(); Assert.Equal(2, attempts);
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = settings; CoreModArt.AudioOverridePathProvider = overridePath;
+            CoreAudio.IsOutputSuppressedProvider = suppressed; CoreAudio.PlayStoppableProvider = stoppable;
+            CoreAudio.PlayOneShotProvider = oneShot; File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void NonPreviewWithoutSettingsIsSilentAndPreviewUsesAnExistingBackend()
     {
         var path = Path.GetTempFileName();
@@ -75,7 +102,7 @@ public sealed class FirstShowPreviewAudioTests
             using var regular = new FirstShowAudio();
             regular.Cue("click"); Assert.Equal(0, played);
             using var preview = new FirstShowAudio(preview: true);
-            preview.CreatePreviewPlayer = () => throw new Exception("Existing backend should be used");
+            preview.CreateCuePlayer = () => throw new Exception("Existing backend should be used");
             preview.Cue("click"); Assert.Equal(1, played);
         }
         finally

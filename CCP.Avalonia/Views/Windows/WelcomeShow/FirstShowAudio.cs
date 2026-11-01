@@ -15,19 +15,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 internal sealed class FirstShowAudio : IDisposable
 {
     private readonly bool _preview;
-    private Action? _stopCue;
-    private Func<string, float, string, Action>? _previewPlay;
+    private Action? _stopCue, _disposeCue;
+    private Func<string, float, string, Action>? _cuePlay;
     private bool _disposed;
-    internal FirstShowAudio(bool preview = false) { _preview = preview; }
-    // Preview bypasses normal startup (WPF App.xaml.cs:1996-2003), but WPF's MediaPlayer is independent of App.Audio.
-    // Create a local player only if needed; do not seed global audio or the ducking service.
-    internal Func<Func<string, float, string, Action>> CreatePreviewPlayer = () =>
+    internal FirstShowAudio(bool preview = false)
     {
-        var audio = new LibVlcAudio();
-        return (path, volume, tag) => audio.PlayOneShot(path, volume, tag, null, null);
-    };
+        _preview = preview;
+        // WPF preview bypasses service startup, but its MediaPlayer still plays (App.xaml.cs:1996-2003).
+        CreateCuePlayer = () =>
+        {
+            var player = new LibVlcAudio.FirstShowCue();
+            _disposeCue = player.Dispose;
+            return player.Play;
+        };
+        // Seed() installs this method group for the normal show. Use the same safe cue player there;
+        // other providers keep their own playback path (WPF FirstShowAudio.cs:31-39).
+        Play = (path, volume, tag) => CoreAudio.PlayStoppableProvider?.Target is LibVlcAudio
+            ? (_cuePlay ??= CreateCuePlayer())(path, volume, tag)
+            : CoreAudio.PlayStoppable(path, volume, tag);
+    }
+    internal Func<Func<string, float, string, Action>> CreateCuePlayer;
     /// <summary>Test seam: (path, volume, tag) -> stop.</summary>
-    internal Func<string, float, string, Action> Play = (path, volume, tag) => CoreAudio.PlayStoppable(path, volume, tag);
+    internal Func<string, float, string, Action> Play;
     // WPF FirstShowAudio.cs:18: an isolated preview uses 65 only when settings are absent.
     private double Volume => Math.Clamp((CoreSettings.Service?.Current.MasterVolume ?? (_preview ? 65 : 0)) / 100.0, 0, 1);
     public void Cue(string name)
@@ -38,21 +47,23 @@ internal sealed class FirstShowAudio : IDisposable
             var rel = FirstShowScript.CueAsset(name).Replace('/', Path.DirectorySeparatorChar);
             var path = CoreModArt.AudioOverridePath(rel) ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel));
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
-            Stop();
+            if (!Stop()) return;
             var play = _preview && CoreAudio.PlayStoppableProvider == null && CoreAudio.PlayOneShotProvider == null
-                ? _previewPlay ??= CreatePreviewPlayer() : Play;
+                ? _cuePlay ??= CreateCuePlayer() : Play;
             _stopCue = play(path, (float)(Volume * FirstShowScript.CueScale), "first-show-cue");
         }
         catch (Exception ex) { Log.Debug(ex, "First show cue unavailable"); }
     }
-    private void Stop()
+    private bool Stop()
     {
-        var stop = _stopCue; _stopCue = null;
-        try { stop?.Invoke(); } catch (Exception ex) { Log.Debug(ex, "First show cue stop failed"); }
+        try { _stopCue?.Invoke(); _stopCue = null; return true; }
+        catch (Exception ex) { Log.Debug(ex, "First show cue stop failed"); return false; }
     }
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true; Stop();
+        try { _disposeCue?.Invoke(); } catch (Exception ex) { Log.Debug(ex, "First show cue audio cleanup failed"); }
+        _disposeCue = null; _cuePlay = null; _stopCue = null;
     }
 }
