@@ -133,6 +133,42 @@ public class BrainDrainTests {
         Assert.Equal(TimeSpan.FromMilliseconds(high ? 500 : 5000), clock.Period); player.Stop();
     });
     [Fact]
+    public void Session_drives_player_presence_ramp_and_pause() => Run(_ => {
+        using var rpc = AvApp.DiscordRpc = new DiscordRichPresenceService();
+        var s = CoreSettings.Current; s.BrainDrainEnabled = false; s.BrainDrainIntensity = 70;
+        var voices = new List<Voice>();
+        var player = new BrainDrainPlayer((_, _, _, _) => { var v = new Voice(); voices.Add(v); return v; }, new Clock(), () => .04);
+        player.Seed(); var runner = new SessionRunner(new SessionLogService());
+        var session = new ConditioningControlPanel.Models.Session { Name = "Brain test", DurationMinutes = 4 };
+        var ss = session.Settings; ss.BrainDrainEnabled = true; ss.BrainDrainStartMinute = 1;
+        ss.BrainDrainEndMinute = 3; ss.BrainDrainStartIntensity = 20; ss.BrainDrainEndIntensity = 100;
+        ss.RampCurve = ConditioningControlPanel.Models.RampCurve.Linear;
+        try {
+            runner.Start(session); Assert.False(player.IsRunning);
+            runner.Tick(TimeSpan.FromMinutes(1)); Assert.True(player.IsRunning);
+            Assert.Equal("Brain drain active", rpc.CurrentDetails); player.Tick(); Assert.Empty(voices);
+            runner.Tick(TimeSpan.FromMinutes(2.5)); player.Tick(); Assert.Single(voices);
+            runner.Pause(); Assert.True(voices[0].Disposed); Assert.Equal("Exploring the app", rpc.CurrentDetails);
+            runner.Resume(); Assert.True(player.IsRunning); Assert.Equal("Brain drain active", rpc.CurrentDetails);
+            runner.Tick(TimeSpan.FromMinutes(3)); Assert.False(player.IsRunning);
+            Assert.Equal("Exploring the app", rpc.CurrentDetails);
+            runner.Stop(); Assert.False(s.BrainDrainEnabled); Assert.Equal(70, s.BrainDrainIntensity);
+        }
+        finally { runner.Stop(); CoreEngine.Stop(); }
+    });
+    [Fact]
+    public void Session_ramp_changes_real_player_probability_without_writing_settings() => Run(_ => {
+        var s = CoreSettings.Current; s.BrainDrainIntensity = 20;
+        var voices = new List<Voice>(); double roll = .04;
+        var player = new BrainDrainPlayer((_, _, _, end) => { var v = new Voice { End = end }; voices.Add(v); return v; }, new Clock(), () => roll);
+        player.Seed(); player.Start(); player.Tick(); Assert.Empty(voices); // 20 / 100 / 12
+        CoreEngine.SetBrainDrainIntensity!(60); player.Tick(); Assert.Single(voices); // 60 / 100 / 12
+        Assert.Equal(20, s.BrainDrainIntensity);
+        voices[0].End(); s.BrainDrainIntensity = 30; player.Tick(); Assert.Single(voices); // live slider resets ramp
+        CoreEngine.SetBrainDrainIntensity!(80); player.Stop(); player.Start(); player.Tick();
+        Assert.Single(voices); // restart reads the saved intensity, not the prior ramp
+    });
+    [Fact]
     public void Restore_rebinds_live_volume_and_stop_unsubscribes() => Run(_ => {
         var service = CoreSettings.Service!; var old = service.Current; var voice = new Voice();
         Func<int> listeners = () => ((Delegate?)typeof(SettingsService).GetField(nameof(SettingsService.CurrentReplaced),

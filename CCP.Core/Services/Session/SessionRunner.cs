@@ -71,6 +71,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF _cornerHandbackOwed: we took the corner, so the first terminal close
         /// re-queues the standalone slots. A hide-only close (pause, live edit) keeps the debt.</summary>
         private bool _cornerHandbackOwed;
+        private bool _brainDrainActive;
 
         /// <summary>Where the crash journal goes (<see cref="SessionSettingsJournal"/>); the head seeds
         /// CorePaths.UserData. Null (tests, renders) writes none.</summary>
@@ -228,6 +229,16 @@ namespace ConditioningControlPanel.Services
             }
             else LockCardScheduler.Instance.Stop();
 
+            // WPF SessionEngine.cs:1484-1495: the session owns both halves, even when disabled.
+            _brainDrainActive = ss.BrainDrainEnabled && ss.BrainDrainStartMinute == 0;
+            s.BrainDrainEnabled = _brainDrainActive;
+            if (_brainDrainActive)
+            {
+                s.BrainDrainIntensity = ss.BrainDrainStartIntensity;
+                CoreEngine.StartBrainDrain?.Invoke();
+            }
+            else CoreEngine.StopBrainDrain?.Invoke();
+
             // SessionEngine.cs:1627: pop quiz is a user-level toggle (AppSettings), not per-session.
             if (s.PopQuizEnabled) CoreEngine.PopQuiz?.Start();
             else CoreEngine.PopQuiz?.Stop();
@@ -263,6 +274,7 @@ namespace ConditioningControlPanel.Services
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
             CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
+            CoreEngine.StopBrainDrain?.Invoke();   // WPF SessionEngine.cs:529
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
@@ -284,6 +296,7 @@ namespace ConditioningControlPanel.Services
             // WPF SessionEngine.cs:575 resumes with plain Start, not StartSession.
             if (ss.MindWipeEnabled && !_deferred.IsPending("mind wipe"))
                 CoreMindWipe.Start(ss.MindWipeBaseMultiplier, ss.MindWipeVolume / 100.0);
+            if (ss.BrainDrainEnabled && _brainDrainActive) CoreEngine.StartBrainDrain?.Invoke(); // WPF :579
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
             var minutes = Elapsed.TotalMinutes;
@@ -345,7 +358,23 @@ namespace ConditioningControlPanel.Services
                     Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
                 }
             }
-            TickCornerGif(session.Settings, minutes);
+            // WPF SessionEngine.cs:969-990: start then end, including a clock jump past both.
+            var ss = session.Settings;
+            if (ss.BrainDrainEnabled && !_brainDrainActive && ss.BrainDrainStartMinute > 0
+                && minutes >= ss.BrainDrainStartMinute)
+            {
+                _brainDrainActive = true;
+                s.BrainDrainEnabled = true;
+                s.BrainDrainIntensity = ss.BrainDrainStartIntensity;
+                CoreEngine.StartBrainDrain?.Invoke();
+            }
+            if (_brainDrainActive && ss.BrainDrainEndMinute > 0 && minutes >= ss.BrainDrainEndMinute)
+            {
+                _brainDrainActive = false;
+                s.BrainDrainEnabled = false;
+                CoreEngine.StopBrainDrain?.Invoke();
+            }
+            TickCornerGif(ss, minutes);
             Ticked?.Invoke();
         }
 
@@ -370,6 +399,15 @@ namespace ConditioningControlPanel.Services
             {
                 var pink = RampCurves.ApplyCurve((minutes - PinkStartMinute) / (total - PinkStartMinute), curve);
                 PinkOpacity = Lerp(ss.PinkFilterStartOpacity, ss.PinkFilterEndOpacity, pink);
+            }
+
+            // WPF SessionEngine.cs:843-856: ramp the service, not the saved preference.
+            if (ss.BrainDrainEnabled && _brainDrainActive && ss.BrainDrainStartIntensity != ss.BrainDrainEndIntensity
+                && minutes >= ss.BrainDrainStartMinute)
+            {
+                var duration = Math.Max(0.01, total - ss.BrainDrainStartMinute);
+                var brain = RampCurves.ApplyCurve(Math.Clamp((minutes - ss.BrainDrainStartMinute) / duration, 0, 1), curve);
+                CoreEngine.SetBrainDrainIntensity?.Invoke(Lerp(ss.BrainDrainStartIntensity, ss.BrainDrainEndIntensity, brain));
             }
 
             // SessionEngine.cs:731: only when the session actually ramps, so a constant one leaves the
@@ -489,6 +527,8 @@ namespace ConditioningControlPanel.Services
             _timer = null;
             _deferred.Clear();
             CoreMindWipe.Stop();   // WPF SessionEngine.cs:368
+            if (_brainDrainActive) CoreEngine.StopBrainDrain?.Invoke(); // WPF SessionEngine.cs:377-380
+            _brainDrainActive = false;
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:372
             CloseCornerGif(handBack: true);   // SessionEngine.cs:356
 

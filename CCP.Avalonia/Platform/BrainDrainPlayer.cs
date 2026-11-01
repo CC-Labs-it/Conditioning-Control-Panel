@@ -18,6 +18,7 @@ internal sealed class BrainDrainPlayer {
     private string[] _clips = [];
     private ITimer? _timer;
     private TimeSpan _interval;
+    private double? _sessionIntensity;
     private MindWipePlayer.IVoice? _voice;
     private bool _running, _building;
     private int _generation;
@@ -34,7 +35,9 @@ internal sealed class BrainDrainPlayer {
     internal void Seed() {
         Instance = this;
         CoreEngine.StartBrainDrain = Start;
-        CoreEngine.StopBrainDrain = Stop; }
+        CoreEngine.StopBrainDrain = Stop;
+        CoreEngine.SetBrainDrainIntensity = SetIntensity; }
+    private void SetIntensity(double intensity) { lock (_gate) _sessionIntensity = Math.Clamp(intensity, 1, 100); }
     private static IEnumerable<string> Clips(string folder) {
         try { return Directory.GetFiles(folder).Where(p => new[] { ".mp3", ".wav", ".ogg" }
             .Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)).ToArray(); }
@@ -47,7 +50,7 @@ internal sealed class BrainDrainPlayer {
     internal void Start() {
         lock (_gate) {
             if (_running || !CoreSettings.Current.BrainDrainEnabled) return;
-            Reload(); _running = true;
+            Reload(); _running = true; _sessionIntensity = null;
             _service = CoreSettings.Service;
             if (_service != null) _service.CurrentReplaced += RebindSettings;
             RebindSettings();
@@ -68,6 +71,7 @@ internal sealed class BrainDrainPlayer {
         * Math.Clamp(CoreSettings.Current.BrainDrainVolume, 0, 100) / 100.0;
     private void SettingsChanged(object? sender, PropertyChangedEventArgs e) {
         lock (_gate) {
+            if (e.PropertyName == nameof(AppSettings.BrainDrainIntensity)) _sessionIntensity = null;
             if (e.PropertyName is nameof(AppSettings.MasterVolume) or nameof(AppSettings.BrainDrainVolume))
                 if (_voice != null) _voice.Volume = Volume; // WPF BrainDrainService.cs:435-441
         }
@@ -78,7 +82,7 @@ internal sealed class BrainDrainPlayer {
         bool wasRunning;
         lock (_gate) {
             wasRunning = _running;
-            _running = false; ++_generation;
+            _running = false; _sessionIntensity = null; ++_generation;
             voice = _voice; _voice = null;
             timer = _timer; _timer = null;
             if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
@@ -93,7 +97,7 @@ internal sealed class BrainDrainPlayer {
         string path; int generation;
         lock (_gate) {
             if (!_running || _building || _voice != null || _clips.Length == 0) return;
-            var probability = Math.Clamp(CoreSettings.Current.BrainDrainIntensity, 0, 100) / 100.0
+            var probability = (_sessionIntensity ?? Math.Clamp(CoreSettings.Current.BrainDrainIntensity, 0, 100)) / 100.0
                 / (60 / _interval.TotalSeconds); // WPF BrainDrainService.cs:285
             if (_roll() >= probability) return;
             path = _clips[_random.Next(_clips.Length)];

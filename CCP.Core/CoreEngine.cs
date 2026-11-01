@@ -32,6 +32,7 @@ namespace ConditioningControlPanel
         // Head-owned Brain Drain audio (WPF StartStop.cs:410-413,531).
         public static volatile Action? StartBrainDrain;
         public static volatile Action? StopBrainDrain;
+        public static volatile Action<double>? SetBrainDrainIntensity;
 
         /// <summary>The head's pop-quiz scheduler (it owns the <see cref="IPopQuizHost"/>); null
         /// on a head with no pop-quiz window.</summary>
