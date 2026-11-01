@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using System.Collections.Concurrent;
-using ConditioningControlPanel.Services.Telemetry;
+using ConditioningControlPanel.Services.Funnel;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -329,7 +329,8 @@ public sealed class VaultGateTests
     private static void EnsureAvalonia()
     {
         if (global::Avalonia.Application.Current is not null) return;
-        global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+        global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+            .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false))
             .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 

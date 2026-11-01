@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace ConditioningControlPanel.Services.Telemetry;
+namespace ConditioningControlPanel.Services.Funnel;
 
 /// <summary>
 /// Aggregate funnel counters (contract C5 / C8): <c>POST /v2/public/funnel</c> with a
@@ -42,6 +42,7 @@ public static class FunnelBeacon
         {
             var body = Body(evt, a, b);
             if (body == null) return;
+            // Offline Mode promises no outside connections: the count is not worth breaking that.
             if (CoreSettings.Current.OfflineMode) return;
             var root = BaseUrlOverride ?? BackRoom.BackRoomApi.BaseUrl;
             if (string.IsNullOrWhiteSpace(root)) return;
@@ -54,10 +55,10 @@ public static class FunnelBeacon
                     using var content = new StringContent(body, Encoding.UTF8, "text/plain");
                     using var res = await Http.PostAsync(url, content).ConfigureAwait(false);
                 }
-                catch (Exception ex) { Serilog.Log.Debug(ex, "Funnel beacon failed"); }
+                catch (Exception ex) { Diag.Swallowed(ex, "funnel beacon"); }
             });
         }
-        catch (Exception ex) { Serilog.Log.Debug(ex, "Funnel beacon failed"); }
+        catch (Exception ex) { Diag.Swallowed(ex, "funnel beacon"); }
     }
 
     /// <summary>

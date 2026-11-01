@@ -19,7 +19,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Invites;
 using ConditioningControlPanel.Services.Vault;
 using Serilog;
-using ConditioningControlPanel.Services.Telemetry;
+using ConditioningControlPanel.Services.Funnel;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 
