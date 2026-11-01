@@ -40,16 +40,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
-    /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
+    /// milestones, most lessons and first-times, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
     /// announcer callers remain missing even though the announcer overlay is now present.
-    /// The FX window drives heat tint; colour pulse and screen shake calls retain WPF's values
-    /// through the unseeded <see cref="PulseFx"/>/<see cref="ShakeFx"/> hooks
-    /// (chaos-payout-fallin-d). FreezeBurst and edge-hold callers remain missing.
+    /// The FX window drives heat tint and colour pulses. Screen shake calls retain WPF's values
+    /// through the unseeded <see cref="ShakeFx"/> hook (chaos-payout-fallin-d).
+    /// FreezeBurst and edge-hold callers remain missing.
     /// The hold and the Snap Chain window run on wall time (<c>BubbleOverlay.Field.Clock</c>),
     /// as WPF does (:4531, ChaosModeService :2000).</para>
     ///
@@ -345,7 +345,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Pulse (:1672): gated by the run's colour-flash toggle.</summary>
         private static void Pulse(Color color, double strength)
         {
-            if (_state?.Config.ColorFlashesEnabled == true) PulseFx?.Invoke(color, strength);
+            if (_state?.Config.ColorFlashesEnabled == true)
+            {
+                _fx?.Pulse(color, strength);
+                PulseFx?.Invoke(color, strength);
+            }
         }
 
         /// <summary>WPF Shake (:1676): gated and scaled by the run's shake settings.</summary>
@@ -651,7 +655,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy: E-Stim is wired; the other toy effects and first_play award remain.</summary>
+        /// <summary>WPF UseToy: E-Stim and its first-play award are wired; other toy effects remain.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
@@ -669,6 +673,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
             // The HUD separates the toy glyph into an IconGlyph; keep translated text bare.
             _state.PushEvent($"{toy.Glyph} {IconText.BareLoc(maxed ? "chaos_estim_charged_chain" : "chaos_estim_charged", charges)}");
+            ChaosFirstTimes.TryAward(ChaosFirstTimes.Play); // WPF ChaosModeService.cs:2779-2780
         }
 
         // WPF ChaosModeService.cs:2785-2798: the last successful arc drops the halo and banner.

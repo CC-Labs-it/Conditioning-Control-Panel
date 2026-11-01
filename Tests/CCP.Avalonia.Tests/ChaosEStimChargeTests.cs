@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -35,8 +36,22 @@ public sealed class ChaosEStimChargeTests
         Assert.Equal(IconKind.Flash, icon.Kind);
     }
 
-    [Fact]
-    public void Equipped_toy_charges_clicks_snaps_live_bubbles_and_cancels_old_hops() => AvaloniaTestDispatcher.Run(() =>
+    private static void AssertPulse(ChaosFxWindow fx, SteppedTime clock, bool enabled)
+    {
+        clock.Advance(TimeSpan.FromMilliseconds(40));
+        fx.Frame();
+        Assert.Equal(enabled ? 0.345 : 0, fx.VignetteLayer.Opacity, 3);
+        if (enabled) Assert.Equal(Color.FromRgb(0x9C, 0x5C, 0xFF), ((IRadialGradientBrush)fx.VignetteLayer.Background!).GradientStops[2].Color);
+        else Assert.Null(fx.VignetteLayer.Background);
+        clock.Advance(TimeSpan.FromMilliseconds(300));
+        fx.Frame();
+        Assert.Equal(0, fx.VignetteLayer.Opacity, 3);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Equipped_toy_charges_clicks_snaps_live_bubbles_and_cancels_old_hops(bool flashes) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -52,6 +67,11 @@ public sealed class ChaosEStimChargeTests
         var read = ChaosEStimGlow.ReadPointer;
         var firer = EffectPayload.Firer;
         var audio = CoreAudio.PlayOneShotProvider;
+        var fxAccept = ChaosFxWindow.Accept;
+        var fxClock = ChaosFxWindow.Clock;
+        var clock = new SteppedTime();
+        int sparks = meta.Sparks;
+        bool hadPlay = meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
         string language = LocalizationManager.Instance.CurrentLanguage;
         var pending = new List<(int Delay, Action Run)>();
         var cues = new List<string>();
@@ -64,21 +84,33 @@ public sealed class ChaosEStimChargeTests
         ChaosEStimOverlay.CanShow = () => true;
         ChaosEStimOverlay.SkipPlatformChecksForTests = true;
         ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+        ChaosFxWindow.Accept = _ => true;
+        ChaosFxWindow.Clock = clock;
         ChaosEStimGlow.ReadPointer = () => (new PixelPoint(500, 300), false, false);
         EffectPayload.Firer = _ => { };
         CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(Path.GetFileName(path));
         try
         {
             LocalizationManager.Instance.SetLanguage("en");
-            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, ColorFlashesEnabled = flashes });
             ChaosRunHost.Overlay!.FinishCountdown();
             ChaosRunHost.StopTimerForTests();
             var state = ChaosRunHost.State!;
             var toy = Assert.Single(state.ActiveToys);
             Assert.Equal("e_stim", toy.Id);
+            var fx = Assert.IsType<ChaosFxWindow>(ChaosRunHost.Fx);
             state.ToyPower["e_stim"] = 1;
             state.EStimChargeMult = 2;
+            state.ActivesDisabled = true;
             ChaosRunHost.UseToyById("e_stim");
+            Assert.Equal(sparks, meta.Sparks);
+            Assert.False(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+            Assert.Null(fx.VignetteLayer.Background);
+            state.ActivesDisabled = false;
+            ChaosRunHost.UseToyById("e_stim");
+            Assert.Equal(sparks + 15, meta.Sparks);
+            Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+            AssertPulse(fx, clock, flashes);
             Assert.Equal(2, BubbleOverlay.Field.EStimChargesLeft);
             Assert.Equal(30, toy.CooldownRemainingSec);
             Assert.True(toy.IsEffectActive);
@@ -117,6 +149,7 @@ public sealed class ChaosEStimChargeTests
             Assert.Equal(new[] { 70, 140 }, pending.Select(x => x.Delay));
             Assert.True(ChaosEStimGlow.Active!.IsVisible);
             Assert.Contains("estim_zap.mp3", cues);
+            AssertPulse(fx, clock, flashes);
             AssertFeed(state, "Current arcs: 1 left");
             Assert.False(live.Popping || treat.Popping);
             var (focus, defused) = (state.Focus, state.Defused);
@@ -148,6 +181,7 @@ public sealed class ChaosEStimChargeTests
             state.MaxedBoons.Add("e_stim");
             ChaosRunHost.UseToyById("e_stim");
             AssertFeed(state, "Charged: next 2 pops chain");
+            Assert.Equal(sparks + 15, meta.Sparks);
             ChaosRunHost.ForceShutdown();
             Assert.Equal(0, field.EStimChargesLeft);
             Assert.Null(ChaosEStimGlow.Active);
@@ -166,6 +200,8 @@ public sealed class ChaosEStimChargeTests
             BubbleOverlay.Field.Bubbles.Clear();
             BubbleOverlay.ScheduleEStimHit = schedule;
             ChaosEStimOverlay.CanShow = canShow;
+            ChaosFxWindow.Accept = fxAccept;
+            ChaosFxWindow.Clock = fxClock;
             ChaosEStimOverlay.SkipPlatformChecksForTests = false;
             ChaosEffectBannerOverlay.SkipPlatformChecksForTests = false;
             ChaosEStimGlow.ReadPointer = read;
@@ -174,6 +210,8 @@ public sealed class ChaosEStimChargeTests
             LocalizationManager.Instance.SetLanguage(language);
             settings.ChaosSkiaFxEnabled = skia;
             meta.ToyPockets = pockets;
+            meta.Sparks = sparks;
+            if (hadPlay) meta.FirstTimesAwarded.Add(ChaosFirstTimes.Play); else meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
             meta.ActiveLifetimeBoons.Clear();
             foreach (var id in active) meta.ActiveLifetimeBoons.Add(id);
             meta.LifetimeBoonLevels.Clear();
