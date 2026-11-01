@@ -48,6 +48,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
 
+        internal static bool CanShowSpiral(TopLevel host) => !_refused
+            && X11Overlay.BackendOf(host.TryGetPlatformHandle()) != OverlayBackend.None
+            && X11Overlay.IsAvailable && X11Overlay.IsCompositing;
+
         /// <summary>Refresh calls so far (tests: the session tick only refreshes on a change).</summary>
         internal static int Refreshes { get; private set; }
 

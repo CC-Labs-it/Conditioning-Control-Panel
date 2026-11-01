@@ -18,6 +18,7 @@ public sealed class OverlayBackendDispatchTests
     [InlineData("HWND", 0, "None")]   // not opened yet
     [InlineData("XID", 0, "None")]
     [InlineData("NSWindow", 42, "None")]
+    [InlineData("Wayland", 42, "None")]
     public void Descriptor_PicksBackend(string descriptor, long handle, string expected)
         => Assert.Equal(expected, X11Overlay.BackendOf(new PlatformHandle(new IntPtr(handle), descriptor)).ToString());
 

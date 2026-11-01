@@ -6089,7 +6089,7 @@
   "lockdown_badge_label": "CONFINEMENT",
   "lockdown_badge_end": "Terminer",
   "lockdown_badge_tooltip": "Le Lockdown est en cours. Cliquez pour ouvrir l'onglet Lockdown.",
-  "lockdown_dose_engine_warning": "Le verrouillage démarre ou redémarre le moteur, choisit des fonctions si aucune n'est active et les réactive si vous les désactivez toutes.",
+  "lockdown_dose_engine_warning": "Si des fonctions sont disponibles, le verrouillage démarre ou redémarre le moteur et en choisit si toutes sont désactivées.",
   "lockdown_poss_safety_dose": "Rien ne tourne ? Le verrouillage choisit pour toi",
   "lockdown_poss_safety_dose_tip": "Un verrouillage refuse de tourner à vide. Moteur éteint au départ : il est lancé pour toi. Rien d'activé (ou tu coupes tout en cours de route) : la gardienne active des fonctions, une de plus à chaque fois, et rend tout à la fin du minuteur.",
   "st4_braindrain_audio_rate": "Fréquence audio",

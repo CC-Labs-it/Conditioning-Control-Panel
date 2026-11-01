@@ -17,7 +17,8 @@ public sealed class RemoteWearerWiringTests
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "App.axaml.cs"));
         int recover = app.IndexOf("LockdownService.RecoverIfNeeded();", StringComparison.Ordinal);
         int heal = app.IndexOf("RemoteWearer.HealOnLaunch();", StringComparison.Ordinal);
-        Assert.True(recover > 0 && heal > recover, "RemoteWearer.HealOnLaunch must run after LockdownService.RecoverIfNeeded");
+        int both = app.IndexOf("RecoverRemoteAndDose();", StringComparison.Ordinal);
+        Assert.True(recover > 0 && both > recover && heal > both, "Lockdown recovery must precede Remote and Dose recovery");
     }
 
     [Fact]

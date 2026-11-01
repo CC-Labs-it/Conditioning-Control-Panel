@@ -525,12 +525,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
                 LockdownService.RecoverIfNeeded();
-                Views.Windows.MainShellWindow.RecoverLockdownDose(); // WPF App.xaml.cs:3479
-                // WPF App.xaml.cs (main 4adc4c476): a Remote Control session the app died in hands the
-                // controller's strict lock (and any held value) back to the wearer's own. After Lockdown's
-                // recovery, which can put a controller's strict lock back first (RemoteHoldings).
-                try { ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch(); }
-                catch (Exception ex) { Serilog.Log.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+                RecoverRemoteAndDose(); // WPF App.xaml.cs:3449-3457,3479
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
@@ -1080,6 +1075,14 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:4858: pending-outcome report + background update check.
                 Dispatcher.UIThread.Post(async () => await Platform.AppUpdater.StartupAsync(shell));
             }
+        }
+
+        // Remote may have borrowed a Dose toggle. Hand it back before Dose restores its own snapshot.
+        internal static void RecoverRemoteAndDose()
+        {
+            try { ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+            Views.Windows.MainShellWindow.RecoverLockdownDose();
         }
 
         /// <summary>Stops every desktop overlay and its schedule. <paramref name="final"/> is the shell
