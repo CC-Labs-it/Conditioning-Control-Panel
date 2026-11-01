@@ -12,6 +12,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -36,8 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
     /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
-    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
-    /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
+    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, and the achievement
     /// (no AchievementService on this head; quests are credited).</para>
     /// </summary>
     internal static class BubbleOverlay
@@ -302,6 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void Pop(AmbientBubble b)
         {
             if (b.Spec != null) { PopChaos(b); return; }
+            if (b.Popping) return;
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s, out var luckyRoll);
             // WPF SkillTreeService.cs:216-223 fires before BubbleService.cs:1085-1108 pays the bucket.
@@ -309,17 +310,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
             XpBudgetChanged?.Invoke();
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped
-            var master = s.MasterVolume / 100f;
-            var vol = (float)Math.Pow(master * (s.BubblesVolume / 100f), 1.5);
-            var dir = Path.Combine(AppContext.BaseDirectory, "Resources", "sounds");
-            var path = b.Lucky
-                ? Path.Combine(dir, $"chime{Field.Random.Next(1, 4)}.mp3")   // lucky: a chime replaces the pop, at 0.35x
-                : Path.Combine(dir, "bubbles", new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)]);
-            if (b.Lucky) vol *= 0.35f;
-            CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
+            var tier = AmbientFxCanvas.Env.CurrentTier;
+            b.LuckyGlowBlur = b.Lucky && AmbientFxCanvas.Env.AllowGlow(tier)
+                ? Math.Min(50, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)) : 0;
+            PlayPopSound(b.Lucky, s);
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+        }
+
+        // WPF BubbleService.cs:2191-2227: a muted or missing chime falls through to a pop.
+        private static void PlayPopSound(bool lucky, AppSettings s)
+        {
+            var vol = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5);
+            string Resolve(string name) => CoreModArt.AudioOverridePath(name)
+                ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", name.Replace('/', Path.DirectorySeparatorChar)));
+            if (lucky && !s.SuppressPerkNotifications)
+            {
+                var chime = Resolve($"chime{Field.Random.Next(1, 4)}.mp3");
+                if (File.Exists(chime)) { CoreAudio.PlayOneShot(chime, Math.Min(vol * 0.35f, 1f), "bubble-pop"); return; }
+            }
+            var name = new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)];
+            var pop = Resolve("bubbles/" + name);
+            if (File.Exists(pop)) CoreAudio.PlayOneShot(pop, Math.Min(vol, 1f), "bubble-pop");
         }
 
         internal static void OnFrame(TimeSpan now)
@@ -362,6 +375,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        private static readonly IBrush GoldSparkle = new SolidColorBrush(Color.FromRgb(255, 215, 0));
+        private static readonly IBrush PinkSparkle = new SolidColorBrush(Color.FromRgb(255, 105, 180));
+        private static readonly DropShadowEffect QualityGlow = new() { Color = Color.FromRgb(255, 215, 0), BlurRadius = 24, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
+        private static readonly DropShadowEffect BalancedGlow = new() { Color = Color.FromRgb(255, 215, 0), BlurRadius = 18, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -494,19 +511,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
-                        if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
+                        if (b.LuckyGlowBlur > 0)
                         {
-                            var (fill, pen) = TintPaint(b.Spec.Tint);
-                            dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                            var glow = b.LuckyGlowBlur <= 18 ? BalancedGlow : QualityGlow;
+                            using (dc.PushEffect(glow, new Rect(cx - size, cy - size, size * 2, size * 2)))
+                                DrawBubble(dc, b, img, cx, cy, size, k);
                         }
-                        if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
-                        else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                        if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
-                        {
-                            double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
-                            dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
-                        }
+                        else DrawBubble(dc, b, img, cx, cy, size, k);
                     }
+                }
+            }
+
+            private static void DrawBubble(DrawingContext dc, AmbientBubble b, Bitmap? img, double cx, double cy, double size, double k)
+            {
+                if (b.Spec != null)
+                {
+                    var (fill, pen) = TintPaint(b.Spec.Tint);
+                    dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                }
+                if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                if (b.FuseTotalMs > 0 && !b.Popping)
+                {
+                    double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
+                    dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
+                }
+                foreach (var sp in b.Sparkles)
+                {
+                    if (sp.Alpha <= 0) continue;
+                    using (dc.PushOpacity(Math.Clamp(sp.Alpha, 0, 1)))
+                        dc.DrawEllipse(b.Lucky ? GoldSparkle : PinkSparkle, null,
+                            new Point(cx + sp.X * k, cy + sp.Y * k), sp.Size * k / 2, sp.Size * k / 2);
                 }
             }
         }

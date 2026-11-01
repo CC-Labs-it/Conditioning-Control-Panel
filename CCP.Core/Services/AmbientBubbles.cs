@@ -56,6 +56,22 @@ namespace ConditioningControlPanel.Services
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
         public bool Clickable, Popping, Lucky;
+        // WPF BubbleService.cs:4430-4470: offsets from the bubble center in DIPs.
+        public struct SparkleParticle { public double X, Y, VelX, VelY, Size, Alpha; }
+        public SparkleParticle[] Sparkles = Array.Empty<SparkleParticle>();
+        public double LuckyGlowBlur; // sampled by the head when the pop starts
+
+        internal void SpawnSparkles(Random random, bool gold)
+        {
+            Sparkles = new SparkleParticle[gold ? 16 : 8];
+            for (int i = 0; i < Sparkles.Length; i++)
+            {
+                double angle = random.NextDouble() * Math.PI * 2;
+                double speed = 2 + random.NextDouble() * 4;
+                Sparkles[i] = new SparkleParticle { VelX = Math.Cos(angle) * speed,
+                    VelY = Math.Sin(angle) * speed, Size = gold ? 4 + random.NextDouble() * 4 : 3 + random.NextDouble() * 3, Alpha = 1 };
+            }
+        }
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
@@ -246,6 +262,12 @@ namespace ConditioningControlPanel.Services
                 Scale += Deflating ? -0.03 : 0.04;
                 Fade -= Lucky ? 0.044 : 0.066;
                 Angle += 2;
+                for (int i = 0; i < Sparkles.Length; i++)
+                {
+                    ref var sp = ref Sparkles[i];
+                    sp.X += sp.VelX; sp.Y += sp.VelY; sp.VelY += 0.15;
+                    sp.Alpha -= Lucky ? 0.04 : 0.06;
+                }
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
@@ -333,6 +355,8 @@ namespace ConditioningControlPanel.Services
             luckyRoll = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05;
             var paid = AmbientBubbleXp.Take(s, luckyRoll ? 100 : 5);
             b.Lucky = luckyRoll && paid > 0;
+            if (b.Lucky || (s.FlashGlowEnabled && SkillTreeRules.GetSparkleBoostTier(s) > 0))
+                b.SpawnSparkles(Random, b.Lucky);
             return paid;
         }
 
