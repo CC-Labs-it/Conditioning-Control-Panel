@@ -91,6 +91,28 @@ public sealed class AwarenessFinishRuntimeTests
     });
 
     [Fact]
+    public Task TypedCommentStillWorksWithMainEngineAndSessionOff() => Run((engine, s, lines) =>
+    {
+        var oldEngine = CoreSession.IsEngineRunningProvider;
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        try
+        {
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            s.KeywordTriggers = new() { new() { Keyword = "sit", Actions = new() {
+                new AvatarCommentAction { FallbackPhraseCategory = "PuppyPraise" } } } };
+            foreach (var c in "sit") engine.Character(c);
+            Assert.Equal(("custom praise", false), Assert.Single(lines));
+        }
+        finally
+        {
+            CoreSession.IsEngineRunningProvider = oldEngine;
+            CoreSession.IsSessionRunningProvider = oldSession;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TypedMergedCommentsUseFirstEnabledActionOnce() => Run((engine, s, lines) =>
     {
         s.KeywordTriggers = new() {

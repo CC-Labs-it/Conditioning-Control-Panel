@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Content;
+using ConditioningControlPanel.Services.Safety;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -162,6 +163,9 @@ internal sealed class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
+        // WPF KeywordTriggerService.cs:1196-1200,1263: record the match before holding all actions.
+        if (PanicAftermath.TriggersSilenced()) return;
+
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
         if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
@@ -170,7 +174,8 @@ internal sealed class KeywordAudioRuntime
             audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
-        if (audio != null) Play(audio);
+        // WPF KeywordTriggerService.cs:1398,1700,1847: audio needs the main engine or a session.
+        if (audio != null && (CoreSession.IsEngineRunning || CoreSession.IsSessionRunning)) Play(audio);
         // WPF KeywordTriggerService.cs:1272,1345,1363: all enabled actions for one trigger;
         // :1283-1293: only the first enabled comment when multiple triggers merge.
         var comments = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().Where(a => a.Enabled);
