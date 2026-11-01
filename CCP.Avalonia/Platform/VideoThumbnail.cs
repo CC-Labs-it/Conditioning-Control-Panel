@@ -3,14 +3,61 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Services;
+using LibVLCSharp.Shared;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>First video frame for the Library when ffmpeg is available. A missing decoder or
-/// unreadable video leaves the existing placeholder, like WPF's failed shell thumbnail.</summary>
+/// <summary>First video frame via the shared LibVLC; ffmpeg is a fallback if it is unavailable.
+/// An unreadable video leaves the placeholder, like WPF's failed shell thumbnail.</summary>
 internal static class VideoThumbnail
 {
-    internal static Task<byte[]?> ReadAsync(string path) => ReadAsync(path, "ffmpeg");
+    // WPF ShellThumbnailHelper.cs:73-98 asks the platform decoder for a 100px thumbnail.
+    // Windows bundles LibVLC; Linux uses the same system library as the video player.
+    internal static async Task<byte[]?> ReadAsync(string path)
+    {
+        if (LibVlcAudio.Shared is { } vlc)
+        {
+            var bytes = await ReadVlcAsync(path, vlc).ConfigureAwait(false);
+            if (bytes != null) return bytes;
+        }
+        return await ReadAsync(path, "ffmpeg").ConfigureAwait(false);
+    }
+
+    private static async Task<byte[]?> ReadVlcAsync(string path, LibVLC vlc)
+    {
+        VlcFrameSink? sink = null;
+        try
+        {
+            using var media = new Media(vlc, path, FromType.FromPath);
+            using var player = new MediaPlayer(vlc);
+            media.AddOption(LibVlcSilence.NoAudioOption);
+            var frame = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            player.EncounteredError += (_, _) => frame.TrySetResult(null);
+            sink = new VlcFrameSink(player, () => media, _ => { }, () =>
+            {
+                try
+                {
+                    if (sink?.Bitmap is not { } bitmap) return;
+                    using var output = new MemoryStream();
+                    bitmap.Save(output);
+                    frame.TrySetResult(output.ToArray());
+                }
+                catch { frame.TrySetResult(null); }
+            }, maxDimension: 100);
+            try
+            {
+                if (!player.Play(media)) return null;
+                return await frame.Task.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+            }
+            finally
+            {
+                try { player.Stop(); } catch { }
+                sink.Free(); // Stop joins the callbacks before the native frame buffer is freed.
+            }
+        }
+        catch { return null; }
+    }
 
     // Executable is injectable for exercising the process boundary without an installed decoder.
     internal static async Task<byte[]?> ReadAsync(string path, string executable)

@@ -9,7 +9,7 @@
 //
 // PORTED to the tab itself (CCP.Avalonia/Views/Tabs/AssetsTabView.axaml.cs, entered from
 // OnTabShown "assets"): RefreshAssetTree (local images/videos), BuildFolderTree, the folder and
-// thumbnail checks, Select/Deselect All, thumbnails (images and pack videos when ffmpeg is available), preview
+// thumbnail checks, Select/Deselect All, thumbnails (images and pack videos when a decoder is available), preview
 // and reveal, the asset counts and the preset combo + Save As/Update/Delete. AssetPresetService
 // .OnlineChannelsReset is seeded in App startup (main 03af6e8bb). The Content Packs node, encrypted
 // image thumbnails, pack checks/counts and preview live in AssetsTabView.Packs.cs, using ContentPackStore.
