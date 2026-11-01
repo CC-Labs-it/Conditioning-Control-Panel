@@ -48,7 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// announcer callers remain missing even though the announcer overlay is now present.
     /// The FX window drives heat tint; colour pulse and screen shake calls retain WPF's values
     /// through the unseeded <see cref="PulseFx"/>/<see cref="ShakeFx"/> hooks
-    /// (chaos-payout-fallin-d). Freeze pickup behavior is in the additive freeze lane.
+    /// (chaos-payout-fallin-d). FreezeBurst and edge-hold callers remain missing.
     /// The hold and the Snap Chain window run on wall time (<c>BubbleOverlay.Field.Clock</c>),
     /// as WPF does (:4531, ChaosModeService :2000).</para>
     ///
@@ -167,7 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
-                // Freeze pickup spawning is reviewed in the additive freeze lane.
+                // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
                 IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
                     .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
                                  && v.PayloadKind != EffectBubblePayloadKind.BambiFreeze)).ToList();

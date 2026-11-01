@@ -298,12 +298,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CoreAudio.PlayOneShot(Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "bubbles", pop), Math.Min(vol, 1f), "bubble-pop");
         }
 
-        /// <summary>WPF BubbleService.PlayChime (:2061): a random chime at (master x bubbles)^1.5 x scale.</summary>
+        /// <summary>WPF BubbleService.PlayChime (:2061): ResolveAudioPath (mod, install, pack), silent when absent.</summary>
         internal static void PlayChime(float scale)
         {
+            var rel = $"chime{Field.Random.Next(1, 4)}.mp3";
+            var path = CoreModArt.AudioOverridePath(rel) ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel));
+            if (!File.Exists(path)) return;
             var s = CoreSettings.Current;
             var vol = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5) * scale;
-            CoreAudio.PlayOneShot(Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", $"chime{Field.Random.Next(1, 4)}.mp3"), Math.Min(vol, 1f), "bubble-chime");
+            CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-chime");
         }
 
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>

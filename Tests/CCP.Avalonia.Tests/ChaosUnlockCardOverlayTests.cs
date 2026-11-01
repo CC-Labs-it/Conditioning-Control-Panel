@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 using ConditioningControlPanel;
@@ -226,6 +227,29 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
         Assert.Single(cues, c => c.StartsWith("chime", StringComparison.Ordinal)); // WPF :1658
     });
+
+    [Fact] // WPF BubbleService.cs:2066 ResolveAudioPath: a pack-only install chimes from the pack; a miss is silent
+    public void Welcome_chime_resolves_from_a_pack_only_install()
+    {
+        var (install, pack) = (ContentLocator.InstallRoot, ContentLocator.ContentRoot);
+        string Chime(string root, int i, string ext = ".mp3") => System.IO.Path.Combine(root, "Resources", "sounds", $"chime{i}{ext}");
+        var (audio, played) = (CoreAudio.PlayOneShotProvider, new System.Collections.Generic.List<string>());
+        CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => played.Add(p);
+        try
+        {
+            Assert.StartsWith(TestUserDataProfile.Root, pack); // never the real profile
+            for (int i = 1; i <= 3; i++) System.IO.File.Move(Chime(install, i), Chime(install, i, ".aside"));
+            BubbleOverlay.PlayChime(0.25f); Assert.Empty(played);
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Chime(pack, 1))!);
+            for (int i = 1; i <= 3; i++) System.IO.File.WriteAllBytes(Chime(pack, i), new byte[1]);
+            BubbleOverlay.PlayChime(0.25f); Assert.StartsWith(pack, Assert.Single(played));
+        }
+        finally
+        {
+            CoreAudio.PlayOneShotProvider = audio;
+            for (int i = 1; i <= 3; i++) { if (System.IO.File.Exists(Chime(install, i, ".aside"))) System.IO.File.Move(Chime(install, i, ".aside"), Chime(install, i)); System.IO.File.Delete(Chime(pack, i)); }
+        }
+    }
 
     [Theory]
     [InlineData(0, false), InlineData(0, true)]
