@@ -20,74 +20,58 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.2.0";
+        public const string AppVersion = "7.2.1";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.2.0 - Racing Thoughts
+        public const string CurrentPatchNotes = @"v7.2.1 - Racing Thoughts
 
-NEW IN 7.2.0
+RACING THOUGHTS
 
-RACING THOUGHTS, NOW IN 3D
-- the race is rebuilt in 3D. the old 2D race is retired and every door opens the new one.
-- five courses: Threshold, The Keep, Mainframe, GOONWORKS and Boudoir. the song lays the road and its words, and the floor plays along.
-- Prime only, solo included. without Prime the door stays visible, with a lock.
-- Customize track under each course sets its pictures and niches. your own files stay on your PC.
-- Time Trial, medals, ghosts, achievements and a record of your races. Escape pauses, panic ends it, Gentle visuals calm it down.
+the race is rebuilt in 3D, and the song drives it. it lays the road, drops the words in your path and plays the floor under your wheels. you race through the lyrics, and they count.
 
-RACING ONLINE
-- host a room and pick the course, or join an open table in the Lobby. every table shows its course.
-- the host presses Start, and the start waits for everyone to load. people wear a pink name tag, bots don't.
-- invite a friend into your room until the race starts. the invite says which course. a friend without Prime can't join, and you are told.
+five courses: Threshold, The Keep, Mainframe, GOONWORKS and Boudoir. each has its own song, its own traps and its own idea of a good time.
 
-KARTS
-- the ten karts now drive differently: speed, acceleration, handling and stability, each with its own trade-offs. no kart beats another on every stat.
-- stat bars and a type word (All-rounder, Easy, Drifter, Heavy, Fast) show in the garage and at the Prize Counter, locked karts included.
-- Lovebomb is free. the rest come from the Prize Counter, and two can also be earned by achievement.
-- the garage wears the CCP colours now, with bubbles to pop while you choose.
+ten karts that really drive differently, from easy to heavy to fast. no kart beats another on every stat. Lovebomb is free, the rest are earned or bought.
 
-ON THE ROAD
-- jump ramps on all five courses, some with power-ups hanging in the air, and EMI does a trick on the long jumps. drive-through boost arches on GOONWORKS, Boudoir and The Keep.
-- a new 1-2-3 guide: race the song, drift and boost, pop and throw. real pictures, and the controls for your device.
-- a Power-ups card lists all nine: what each does, how it fires, who tends to get it. open it from the guide or the pause card.
+jump ramps, boost arches, nine power-ups, and EMI doing tricks off the long jumps.
 
-TOYS IN THE RACE
-- a connected toy plays the race: a steady buzz while you race clean, surges on boosts, a thud and then silence when you get hit. levels are a first pass, tell us in #bug-reports.
-- a new Racing Thoughts row in the haptics settings starts at 60%. Options in the race picks Full, Moments or Off. your own limits apply and panic stops it.
+race online: host a room, pick the course, invite a friend or fill it from the Lobby. the start waits for everyone to load, and first place online pays five times solo.
 
-PRIZE COUNTER
-- a 3D counter in the desktop app. it takes Sparkles and nothing else.
-- kart bodies, outfits, paints and the lace umbrella; chess skins, banners and insignias; profile frames and pictures; hats and toys for EMI's desk; a Back Room shelf and a Prime shelf.
-- open it from the wallet chip on the launcher or the panel, from the garage or chess, or walk up to the Back Room counter and press E.
-- stock changes every week and items come back. what you own stays on the shelf, stamped.
-- a buy asks once to confirm. no refunds, no gifts. Prime items need Prime to buy and stay yours after.
+your own pictures on the screens, or Scrolller with online media on. a connected toy plays the race with you: a steady buzz while you race clean, surges on boosts, a thud and then silence when you get hit. your limits apply and panic stops it.
+
+Time Trial, medals, ghosts, achievements and a record of your races. Escape pauses, panic ends it, Gentle visuals calm it down.
+
+Racing Thoughts is for Prime, solo included. without Prime the door stays visible, with a lock.
+
+WALLPAPER, FREE FOR EVERYONE
+a wallpaper built from your own images, in Studio > Effects. Static, Dynamic behind your icons, or one picture of your own. your own wallpaper comes back after, and one panic takes it down. thanks to McKenzi for this one.
+
+THE PRIZE COUNTER
+a 3D shop on desktop, the website and the phone, with one wallet that takes Sparkles and nothing else. kart bodies, outfits, chess skins, profile frames, things for EMI's desk. what you buy carries across, stock changes every week, and what you own stays on the shelf. a buy asks once to confirm. no refunds, no gifts.
 
 SPARKLES IN EVERY GAME
-- Racing Thoughts, chess, Goon, Breakout, Arcademy, Down the Rabbit Hole, the Caucus race and Intake pay Sparkles by finishing place or medal. Back Room tables keep their own bank.
-- online pays five times solo once two real players race. first of 8: 20 solo, 100 online. a solo race of one lap pays a third, three laps all of it.
-- a small slip shows what you earned. quit early and it pays nothing.
-- solo pay tapers after five rounds of one game in a day, and solo and online each have a daily ceiling. the day turns over at midnight UTC.
+Racing Thoughts, chess, Goon, Breakout, Arcademy, Down the Rabbit Hole, the Caucus race and Intake all pay by finishing place or medal. the website's Goon and Intake don't pay yet, and solo pay tapers after five rounds of one game in a day.
 
-OTHER GAMES
+ALSO
 - Piece by Piece: watch public games from the Lobby, react from the stands, and climb a rating and a Ladder.
-- Down the Rabbit Hole is calmer: dock toys wake on their own, and a detonation dips sound and colour instead of flashing.
-- Escape pauses Arcademy, Goon, the Back Room, Intake, chess and Breakout. Goon toys react during matches, never above your own slider.
-
-SINCE 7.1.0
-- a new rail: seven sections plus Settings, Ctrl+1 to Ctrl+7, each with its own colour and tab bar. the Tonight Board sits on Home, and Ctrl+K forgives typos.
-- friend links: Copy link in the Friends drawer, good for 7 days or 25 uses. the Leash has a small ? next to every command.
-- online media: each plan gets a daily share, shown in percent in the title bar, back at midnight your time. what you've seen stays on your PC for 24 hours and replays free. everything carries a via Scrolller mark.
-- mandatory videos can float, up to four windows at once, with a mute button and a close X (never on strict videos or in Lockdown).
-- the Deeper page has a playlist for your own audio. the companion has an AI page and a personality studio, and idle lines stay quiet while the engine is off.
-- Gentle visuals, for light-sensitive eyes: one switch in Settings > Performance. Italiano (beta) under Settings > Language.
-- nothing comes back on its own after a panic, the voice panic follows the panic key rules, and a session that crashes leaves your settings as they were.
+- Down the Rabbit Hole moves to Basic, and it is calmer.
+- Escape pauses Arcademy, Goon, the Back Room, Intake, chess and Breakout.
 
 FIXES
+- Slut Mode no longer repeats the same lines.
+- the switch for the companion's offers is back, under Companion > Permissions.
+- the Lobby shows every Remote Control tag, not just the first three.
+- the Mantra drone follows the master volume and its own dial at every stage, streaks included.
+- the quest sound follows the perk notification switch.
+- when a plan ends, Prime closes at the next check instead of lingering. paying again reopens it.
+- bug reports list the sounds that just played, to help track down stray ones.
 - Goon: a refused game card comes back with a reason.
 - Circe's Tab: a lock that ended or ran out no longer hides the credit behind a raffle day slip-up.
-every 7.1.x fix is in here too. coming from 7.0.x or older? read the 7.1.0 notes on the release";
+
+online races need 7.2.1 or newer. every 7.1.x fix is in here too. coming from 7.0.x or older? read the 7.1.0 notes on the release";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
