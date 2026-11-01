@@ -21,6 +21,7 @@ public sealed class RainApplyTests : IDisposable
     private readonly List<JObject> _posted = new();
     private string _look = "", _hash = "";
     private int _commits, _failures;
+    private readonly List<RainBakeProgress?> _progress = new();
 
     public void Dispose()
     {
@@ -54,6 +55,7 @@ public sealed class RainApplyTests : IDisposable
         Clips = () => new[] { "idle", "greeting", "jump" },
         Commit = (look, hash) => { _look = look; _hash = hash; _commits++; },
         OnFailed = () => _failures++,
+        Progress = p => _progress.Add(p),
     });
 
     private static JObject Look(string dress) =>
@@ -88,7 +90,7 @@ public sealed class RainApplyTests : IDisposable
         var hash = (string)bake["lookHash"]!;
         Assert.Equal(RainLookHash.Compute(RainLookCodec.Normalize(Look("rose-flare").ToString(Formatting.None))), hash);
         Assert.Equal(new[] { "idle", "greeting", "jump" }, bake["clips"]!.Values<string>());
-        Assert.Equal((15, 192, 309), ((int)bake["fps"]!, (int)bake["w"]!, (int)bake["h"]!));
+        Assert.Equal((15, 384, 618), ((int)bake["fps"]!, (int)bake["w"]!, (int)bake["h"]!));
         Assert.Equal(0, _commits);
 
         PageBakes(c, hash, skip: "jump");
@@ -210,6 +212,101 @@ public sealed class RainApplyTests : IDisposable
         var priced = RainApplyController.BuildInit("", null, 1, null, "en", "full", false, new Dictionary<string, int> { [RoseFlare] = 730 });
         Assert.Equal(JTokenType.Null, priced["look"]!.Type);
         Assert.Equal(730, (int)priced["prices"]![RoseFlare]!);
+    }
+
+    private List<JObject> Baking() => _posted.Where(p => (string?)p["type"] == "rain-baking").ToList();
+
+    [Fact]
+    public void A_bake_counts_its_clips_to_the_page_and_the_hook_then_clears_on_commit()
+    {
+        var c = Controller(RoseFlare);
+        c.Handle(Msg(new { type = "rain-apply", look = Look("rose-flare") }));
+        var hash = (string)Last("rain-bake")["lookHash"]!;
+        var first = Baking().Single();
+        Assert.Equal((hash, 0, 3, 1, 0.0), ((string)first["lookHash"]!, (int)first["done"]!, (int)first["total"]!, (int)first["shown"]!, (double)first["fraction"]!));
+
+        // Halfway into idle: one third of a third.
+        c.Handle(Msg(new { type = "rain-bake-progress", clip = "idle", frame = 5, of = 10, lookHash = hash }));
+        Assert.Equal(0.167, (double)Baking().Last()["fraction"]!, 3);
+        // The same percent again posts nothing (a bake reports every frame).
+        int before = Baking().Count;
+        c.Handle(Msg(new { type = "rain-bake-progress", clip = "idle", frame = 5, of = 10, lookHash = hash }));
+        Assert.Equal(before, Baking().Count);
+        // Another look's frames and broken frames never move it.
+        c.Handle(Msg(new { type = "rain-bake-progress", clip = "idle", frame = 9, of = 10, lookHash = new string('0', 64) }));
+        c.Handle(Msg(new { type = "rain-bake-progress", clip = "idle", frame = "x", of = 10, lookHash = hash }));
+        c.Handle(Msg(new { type = "rain-bake-progress", clip = "idle", frame = 3, of = 0, lookHash = hash }));
+        Assert.Equal(before, Baking().Count);
+
+        PageBakes(c, hash, finish: false, skip: "jump");
+        var last = Baking().Last();
+        Assert.Equal((3, 3, 3, 1.0), ((int)last["done"]!, (int)last["total"]!, (int)last["shown"]!, (double)last["fraction"]!));
+        Assert.Equal(1.0, _progress.Last()!.Value.Fraction);
+
+        c.Handle(Msg(new { type = "rain-bake-done", all = true, lookHash = hash }));
+        Assert.Equal(1, _commits);
+        Assert.Null(_progress.Last());
+    }
+
+    [Fact]
+    public void A_clip_done_twice_counts_once_and_the_fraction_never_runs_back()
+    {
+        var c = Controller(RoseFlare);
+        c.Handle(Msg(new { type = "rain-apply", look = Look("rose-flare") }));
+        var hash = (string)Last("rain-bake")["lookHash"]!;
+        c.Handle(Msg(new { type = "rain-bake-done", clip = "idle", frames = 0, skipped = true, lookHash = hash }));
+        c.Handle(Msg(new { type = "rain-bake-done", clip = "idle", frames = 0, skipped = true, lookHash = hash }));
+        c.Handle(Msg(new { type = "rain-bake-done", clip = "wave", frames = 0, skipped = true, lookHash = hash }));   // not asked for
+        Assert.Equal(1, (int)Baking().Last()["done"]!);
+        // A late progress frame for a clip already in does not add to the next clip.
+        c.Handle(Msg(new { type = "rain-bake-progress", clip = "idle", frame = 9, of = 10, lookHash = hash }));
+        Assert.Equal(0.333, (double)Baking().Last()["fraction"]!, 3);
+        var fractions = _progress.Where(p => p != null).Select(p => p!.Value.Fraction).ToList();
+        Assert.Equal(fractions.OrderBy(f => f), fractions);
+    }
+
+    [Fact]
+    public void Panic_cancel_and_an_error_clear_the_progress()
+    {
+        var c = Controller(RoseFlare);
+        c.Handle(Msg(new { type = "rain-apply", look = Look("rose-flare") }));
+        var hash = (string)Last("rain-bake")["lookHash"]!;
+        c.Handle(Msg(new { type = "rain-bake-progress", clip = "idle", frame = 1, of = 4, lookHash = hash }));
+        Assert.NotNull(_progress.Last());
+        c.Abort();   // the window's close and panic funnel
+        Assert.Null(_progress.Last());
+        Assert.False(c.IsBaking);
+
+        c.Handle(Msg(new { type = "rain-apply", look = Look("rose-flare") }));
+        c.Handle(Msg(new { type = "rain-bake-done", all = true, cancelled = true, lookHash = hash }));
+        Assert.Null(_progress.Last());
+
+        c.Handle(Msg(new { type = "rain-apply", look = Look("rose-flare") }));
+        c.Handle(Msg(new { type = "rain-bake-done", all = true, error = "readback", lookHash = hash }));
+        Assert.Null(_progress.Last());
+        Assert.Equal(0, _commits);
+    }
+
+    [Fact]
+    public void A_cached_look_never_reports_progress()
+    {
+        var first = Controller(RoseFlare);
+        first.Handle(Msg(new { type = "rain-apply", look = Look("rose-flare") }));
+        PageBakes(first, (string)Last("rain-bake")["lookHash"]!);
+        _posted.Clear(); _progress.Clear();
+        Controller(RoseFlare).Handle(Msg(new { type = "rain-apply", look = Look("rose-flare") }));
+        Assert.Empty(Baking());
+        Assert.Empty(_progress);
+    }
+
+    [Fact]
+    public void Init_carries_the_hosts_page_lines_and_drops_blanks()
+    {
+        var init = RainApplyController.BuildInit("", null, 1, null, "it", "full", false, null,
+            new Dictionary<string, string> { ["baking"] = "Cambio in corso: {n} di {total}", ["bakeHint"] = " " });
+        Assert.Equal("Cambio in corso: {n} di {total}", (string?)init["strings"]!["baking"]);
+        Assert.Null(init["strings"]!["bakeHint"]);
+        Assert.Null(RainApplyController.BuildInit("", null, 1, null, "en", "full", false, null)["strings"]);
     }
 
     [Fact]

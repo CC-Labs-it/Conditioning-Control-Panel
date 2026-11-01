@@ -107,11 +107,11 @@ public class FunnelPageMessageTests
 
     [Theory]
     [InlineData(false, false, true, true)]
-    [InlineData(false, true, true, false)]    // a Prime grant of its own
+    [InlineData(false, true, true, false)]    // a Basic or Prime grant of its own
     [InlineData(false, false, false, false)]  // not a gift day
     [InlineData(true, false, true, false)]    // capture rig
-    public void ADtrhRunCameFromTheDailyGift(bool testMode, bool hasLab, bool freeToday, bool expected)
-        => Assert.Equal(expected, DtrhHostService.RunCameFromDailyGift(testMode, hasLab, freeToday));
+    public void ADtrhRunCameFromTheDailyGift(bool testMode, bool hasPremium, bool freeToday, bool expected)
+        => Assert.Equal(expected, DtrhHostService.RunCameFromDailyGift(testMode, hasPremium, freeToday));
 
     private static string AppDir()
     {
@@ -128,7 +128,7 @@ public class FunnelPageMessageTests
         var at = src.IndexOf("type = \"payout-result\"", StringComparison.Ordinal);
         Assert.True(at > 0);
         var body = src.Substring(at, 700);
-        Assert.Contains("plan = dailyGift ? \"prime\" : null", body);
+        Assert.Contains("plan = dailyGift ? \"basic\" : null", body);
         Assert.Contains("daily_gift = dailyGift", body);
     }
 

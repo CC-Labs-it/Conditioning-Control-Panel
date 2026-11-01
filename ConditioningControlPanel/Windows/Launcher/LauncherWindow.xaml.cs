@@ -236,6 +236,15 @@ public partial class LauncherWindow : Window
 
     private void AccountChip_Click(object sender, RoutedEventArgs e) => OpenPanelTab("appsettings");
 
+    /// <summary>The wallet chip opens the Prize Counter over the launcher: the same door as the
+    /// panel's SparkleWallet (owner, 2026-10-29). The counter is its own window; the launcher stays.</summary>
+    private void WalletChip_Click(object sender, RoutedEventArgs e)
+    {
+        LauncherSfx.Click();
+        try { Services.PrizeCounter.PrizeCounterHostService.Launch(from: "launcher"); }
+        catch (Exception ex) { Log.Warning(ex, "[Launcher] Prize Counter failed to open"); }
+    }
+
     // ------------------------------------------------------------------ mod pill
 
     /// <summary>The pill reads the active mod's name. ModChanged is the authoritative signal

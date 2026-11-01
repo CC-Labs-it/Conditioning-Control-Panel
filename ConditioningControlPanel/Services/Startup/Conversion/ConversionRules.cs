@@ -84,6 +84,16 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
             return row == LapseRow.None ? LapseReading.Nothing : new LapseReading(row, tier, end, days);
         }
 
+        /// <summary>
+        /// <see cref="DecideLapse"/> for this install. A window a confirmed reading closed is the
+        /// closed row on its own day, whatever the stamps say by now: a kept Basic renews, and a Prime
+        /// window can have no Lab stamp at all. The caller checks live coverage, it needs the tier first.
+        /// </summary>
+        public static LapseReading DecideLapseFor(Models.AppSettings s, DateTime nowUtc)
+            => EntitlementTierRule.ClosedTierNow(s, nowUtc) is int closed
+                ? new LapseReading(LapseRow.Closed, closed >= 2 ? 2 : 1, s.GraceClosedAtUtc!.Value, 0)
+                : DecideLapse(s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, nowUtc, liveCoversIt: false);
+
         // ------------------------------------------------------------------ outside the moment (proposal 7)
 
         public const string KeyCompanionCap = "companion_cap";

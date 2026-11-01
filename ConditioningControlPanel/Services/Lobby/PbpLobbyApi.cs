@@ -74,7 +74,7 @@ public sealed class PbpLobbyApi
             var pid = Str(p["id"]);
             if (string.IsNullOrEmpty(pid)) continue;
             var (init, inc) = Tc(p["time_control"]);
-            open.Add(new PbpOpenSeat(pid, Name(p), init, inc, Long(p["since_ms"])));
+            open.Add(new PbpOpenSeat(pid, Name(p), init, inc, Long(p["since_ms"])) { Look = PlayerLook.From(p["cosmetics"]) });
         }
 
         var playing = new List<PbpPlayingGame>();

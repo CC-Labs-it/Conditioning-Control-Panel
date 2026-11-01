@@ -595,6 +595,7 @@ namespace ConditioningControlPanel.Models
             Ly(HapticLayer.Video, _videoEnabled, 1.0);
             Ly(HapticLayer.AudioSync, _audioSync?.Enabled ?? false, 1.0);
             Ly(HapticLayer.Dtrh, _dtrhEnabled, 1.0);
+            Ly(HapticLayer.Race, true, RaceHapticDirector.DefaultScale);
             Ly(HapticLayer.Luminance, false, 1.0);   // Phase F, off until it exists
             Ly(HapticLayer.Session, true, 1.0);
             Ly(HapticLayer.Manual, true, 1.0);
@@ -828,7 +829,7 @@ namespace ConditioningControlPanel.Models
                 foreach (HapticLayer layer in Enum.GetValues(typeof(HapticLayer)))
                 {
                     var key = layer.ToString();
-                    if (!Layers.ContainsKey(key)) Layers[key] = new HapticLayerRule();
+                    if (!Layers.ContainsKey(key)) Layers[key] = NewLayerRule(layer);
                 }
                 foreach (var key in new[] { "mock", "lovense", "buttplug" })
                     if (!Providers.ContainsKey(key)) Providers[key] = new HapticProviderConfig();
@@ -847,6 +848,10 @@ namespace ConditioningControlPanel.Models
             }
         }
 
+        /// <summary>A row a settings file does not have yet. The race starts at the owner's 60% (2026-10-31).</summary>
+        private static HapticLayerRule NewLayerRule(HapticLayer layer)
+            => layer == HapticLayer.Race ? new HapticLayerRule { Intensity = RaceHapticDirector.DefaultScale } : new HapticLayerRule();
+
         public HapticLayerRule Rule(HapticLayer layer)
         {
             var key = layer.ToString();
@@ -854,7 +859,7 @@ namespace ConditioningControlPanel.Models
             lock (_gate)
             {
                 Layers ??= new Dictionary<string, HapticLayerRule>();
-                if (!Layers.TryGetValue(key, out var row) || row == null) Layers[key] = row = new HapticLayerRule();
+                if (!Layers.TryGetValue(key, out var row) || row == null) Layers[key] = row = NewLayerRule(layer);
                 return row;
             }
         }

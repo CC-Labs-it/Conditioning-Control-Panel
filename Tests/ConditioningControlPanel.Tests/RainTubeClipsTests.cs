@@ -84,8 +84,8 @@ public class RainTubeClipsTests
         {
             using var d = ConditioningControlPanel.EmoteClipPlayer.Decode(File.ReadAllBytes(file));
             Assert.NotNull(d);
-            Assert.Equal(192, d!.Canvas.Width);
-            Assert.Equal(309, d.Canvas.Height);
+            Assert.Equal(384, d!.Canvas.Width);   // 2x the tube (~190x306 DIP), like the 7.2 bake
+            Assert.Equal(618, d.Canvas.Height);
             Assert.InRange(d.Durations.Length, 85, 95);
             Assert.InRange(d.Durations.Sum(), 5800, 6200);
             bool clear = false, solid = false;

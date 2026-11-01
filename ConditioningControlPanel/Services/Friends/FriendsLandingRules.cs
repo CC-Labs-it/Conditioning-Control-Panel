@@ -224,6 +224,13 @@ public static class LandingRules
         return true;
     }
 
+    /// <summary>The invite's destination name, followed by the room's course when it names one.</summary>
+    public static string WithCourse(string destination, string? track)
+    {
+        var course = Lobby.RaceOpenApi.TrackName(track);
+        return course.Length > 0 ? destination + ", " + course : destination;
+    }
+
     /// <summary>The picture a knock card shows, as a path under Resources/.</summary>
     public static string KnockArt(InboxItem item)
     {

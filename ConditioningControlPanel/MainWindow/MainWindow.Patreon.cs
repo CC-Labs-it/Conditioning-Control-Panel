@@ -1193,6 +1193,17 @@ namespace ConditioningControlPanel
             }
         }
 
+        /// <summary>A confirmed reading ended a grace window: the same repaint as a tier change,
+        /// with no celebration card. A session or a game never runs during this (HoldGraceClose).</summary>
+        private void OnGraceClosed()
+        {
+            UpdatePatreonUI();
+            UpdateUnlockablesVisibility(App.Settings?.Current?.PlayerLevel ?? 1);
+            RefreshProfileBubble();
+            if (ProgramsTab != null) RefreshProgramsUI();
+            RefreshDashboardRail();
+        }
+
         private void OnPatreonTierChanged(object? sender, PatreonTier tier)
         {
             Dispatcher.Invoke(() =>
@@ -1359,6 +1370,7 @@ namespace ConditioningControlPanel
             // after any server tier reading that moved the stored lapse signal.
             Activated += (_, __) => MaybePostConversionRows();
             EntitlementTierSync.ReadingApplied += MaybePostConversionRows;
+            EntitlementTierSync.GraceClosed += OnGraceClosed;
             EntitlementTierSync.ExtrasApplied += MaybePostConversionRows;
             Services.Startup.Conversion.ConversionSignals.CompanionCapHit += OnCompanionCapHit;
             Services.Invites.InviteGrantSync.ArmExpiry();

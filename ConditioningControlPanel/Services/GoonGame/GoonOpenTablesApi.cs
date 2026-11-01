@@ -23,7 +23,11 @@ public sealed record OpenTable(
     bool Song,
     int CardSec,
     bool Pictures,
-    int WaitingSec);
+    int WaitingSec)
+{
+    /// <summary>The host's frame/avatar off an optional <c>cosmetics</c> (server-clamped); none when absent.</summary>
+    public PlayerLook Look { get; init; } = PlayerLook.None;
+}
 
 /// <summary>What <c>/open</c> answered. <see cref="Empty"/> stands in for "nothing to show":
 /// a proxy without the route yet (404), a signed-out app, a network fault.</summary>
@@ -139,7 +143,7 @@ public sealed class GoonOpenTablesApi
                     Bool(r["song"]),
                     Math.Max(0, Int(r["cardSec"]) ?? 0),
                     Bool(r["pictures"]),
-                    Math.Max(0, Int(r["waitingSec"]) ?? 0)));
+                    Math.Max(0, Int(r["waitingSec"]) ?? 0)) { Look = PlayerLook.From(r["cosmetics"]) });
             }
 
         int? ago = Int(o["lastOpenedAgoSec"]);

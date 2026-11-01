@@ -703,6 +703,7 @@ namespace ConditioningControlPanel.Services
             Setting("enable_deeper", "setting_deeper_enable", "🌊", "general",
                     new[] { "ChkEnableDeeper" }, "set2_section_general", "deeper enable tab");
 
+
             // Devices - webcam
             Setting("webcam_device", "set2_palette_webcam_device", "📷", "devices",
                     new[] { "CmbWebcamDevice" }, "set2_section_devices", "webcam camera device select");
@@ -901,6 +902,10 @@ namespace ConditioningControlPanel.Services
             Rack("subliminal", "section_subliminals_2", "💭", "subliminal subliminals words");
             Rack("spiral", "label_spiral_overlay", "🌀", "spiral overlay");
             Rack("pinkfilter", "label_pink_filter", "💗", "pink filter tint");
+            Rack("wallpaper", "set2_section_wallpaper", "🖼️",
+                 "wallpaper desktop background collage live wallpaper engine static dynamic moving animated gif webp " +
+                 "own image pick my own picture browse file rotate new wallpaper every interval seconds " +
+                 "run with ccp always on all the time while open keep");
             Rack("visuals", "section_visuals", "👁", "visuals");
             Rack("bubbles", "label_bubble_pop", "🫧", "bubbles bubble pop");
             Rack("bubblecount", "label_bubble_count", "🔢", "bubble count counting");

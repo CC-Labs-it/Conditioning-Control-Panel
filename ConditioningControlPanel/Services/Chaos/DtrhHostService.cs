@@ -648,11 +648,11 @@ internal static class DtrhHostService
 
     /// <summary>
     /// Whether a finished run was opened by the Daily Gift: today's server-named free key is
-    /// <c>dtrh</c> and the account holds no Prime grant of its own. The capture rig never counts.
+    /// <c>dtrh</c> and the account holds no Basic or Prime grant of its own. The capture rig never counts.
     /// Drives the <c>plan</c> / <c>daily_gift</c> fields of payout-result (contract C10).
     /// </summary>
-    internal static bool RunCameFromDailyGift(bool testMode, bool hasLabAccess, bool dtrhFreeToday)
-        => !testMode && !hasLabAccess && dtrhFreeToday;
+    internal static bool RunCameFromDailyGift(bool testMode, bool hasPremiumAccess, bool dtrhFreeToday)
+        => !testMode && !hasPremiumAccess && dtrhFreeToday;
 
     /// <summary>run-ended -> XP payout (C#-owned formula, identical to the WPF EndRun) +
     /// meta banking via the shared AwardRunRewards, answered with payout-result.</summary>
@@ -791,7 +791,7 @@ internal static class DtrhHostService
             }
             catch (Exception ex) { App.Logger?.Debug("DtrhHost session-metrics record: {E}", ex.Message); }
 
-            bool dailyGift = RunCameFromDailyGift(_testMode, App.Patreon?.HasLabAccess == true,
+            bool dailyGift = RunCameFromDailyGift(_testMode, App.Patreon?.HasPremiumAccess == true,
                 App.DailyFree?.IsFreeToday("dtrh") == true);
             _host?.Post(new
             {
@@ -803,9 +803,9 @@ internal static class DtrhHostService
                 previousBest,
                 rankUp = rankUp?.ToString(),
                 dryRun = _testMode,
-                // End card (contract C10): a run opened by the Daily Gift, not by a Prime grant,
-                // gets "Open today. Prime keeps it open." under the result.
-                plan = dailyGift ? "prime" : null,
+                // End card (contract C10): a run opened by the Daily Gift, not by a paid grant,
+                // gets "Open today. Basic keeps it open." under the result.
+                plan = dailyGift ? "basic" : null,
                 daily_gift = dailyGift,
             });
             App.Logger?.Information(

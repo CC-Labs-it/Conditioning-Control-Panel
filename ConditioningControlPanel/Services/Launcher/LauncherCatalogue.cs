@@ -191,6 +191,12 @@ public static class LauncherCatalogue
     private static bool Always() => true;
     private static bool Never() => false;
 
+    private static bool PremiumOk(string titleKey, string dailyKey)
+    {
+        try { return TierGate.RequiresPremium(Loc.Get(titleKey), dailyKey).Allowed; }
+        catch (Exception ex) { Log.Debug(ex, "[Launcher] premium probe failed"); return false; }
+    }
+
     private static bool LabOk(string titleKey, string? dailyKey)
     {
         try
@@ -246,15 +252,16 @@ public static class LauncherCatalogue
             () => Glassroad.GlassroadHostService.Launch(),
             () => Glassroad.GlassroadHostService.IsActive);
 
-        // Down the Rabbit Hole: Lab tier. The Play handler gates it; Launch does not, so the tile
-        // asks the gate itself and lets DemandLab paint the refusal.
+        // Down the Rabbit Hole: Basic since 2026-10-31 (Racing Thoughts 3D is the Prime game now). The
+        // Play handler gates it; Launch does not, so the tile asks the gate itself and lets
+        // DemandPremium paint the refusal. A server drop day still opens it for free accounts.
         G("dtrh", "features/dtrh.png", "▼", Tile(0x8C, 0xF5, 0xC8), Always,
-            () => !LabOk("launcher_game_dtrh_title", "dtrh"),
+            () => !PremiumOk("launcher_game_dtrh_title", "dtrh"),
             () =>
             {
-                var gate = TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh");
+                var gate = TierGate.RequiresPremium(Loc.Get("launcher_game_dtrh_title"), "dtrh");
                 if (gate.Allowed) Chaos.DtrhHostService.Launch();
-                else TierGate.DemandLab(Loc.Get("launcher_game_dtrh_title"), "dtrh");
+                else TierGate.DemandPremium(Loc.Get("launcher_game_dtrh_title"), "dtrh");
             },
             () => Chaos.DtrhHostService.IsActive);
 

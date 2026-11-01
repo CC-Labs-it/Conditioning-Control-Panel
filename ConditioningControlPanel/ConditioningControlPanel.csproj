@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>ConditioningControlPanel</AssemblyName>
     <RootNamespace>ConditioningControlPanel</RootNamespace>
-    <Version>7.1.15</Version>
+    <Version>7.2.1</Version>
     <Company>CodeBambi</Company>
     <Product>Conditioning Control Panel</Product>
     <Description>A professional visual conditioning application with gamification features.</Description>
@@ -86,7 +86,13 @@
          CPU SKElement path is used for now (reliable on AllowsTransparency layered windows);
          native libSkiaSharp extracts via IncludeNativeLibrariesForSelfExtract for single-file. -->
     <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.8" />
-    
+
+    <!-- Dynamic wallpaper (DynamicWallpaperService): Direct3D11 + Direct2D + DirectComposition bindings.
+         Managed-only (no native DLLs), bundled inside the signed single-file exe like the other libs. -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+    <PackageReference Include="Vortice.Direct2D1" Version="3.6.2" />
+    <PackageReference Include="Vortice.DirectComposition" Version="3.6.2" />
+
     <!-- MVVM Framework -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     
@@ -235,6 +241,17 @@
          are ever loaded, so those would ship as dead weight - keep them out of the build. -->
     <Content Include="Resources\cosmetics\**\*.png;Resources\cosmetics\*.json"
              Exclude="Resources\cosmetics\**\*_28.png;Resources\cosmetics\**\*_104.png;Resources\cosmetics\**\*_guide.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <!-- profile.avatar.rain-portrait is Rain-derived (CC BY 4.0): its attribution ships beside it. -->
+    <Content Include="Resources\cosmetics\shop\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- EMI desk Prize Counter items (Resources\emi\desk-items\<id>\over-body-*.png, Astra's ten-pose
+         over-layer sheets): read off disk by Services\EmiDesk\EmiDeskItems like the outfit overlays.
+         The registry.json beside them already ships through the Resources\emi\**\*.json Content below. -->
+    <None Remove="Resources\emi\desk-items\**\*.png" />
+    <Content Include="Resources\emi\desk-items\**\*.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
@@ -597,7 +614,11 @@
       Resources\web\piecebypiece\package.json;
       Resources\web\dtrh\tests\**\*;
       Resources\web\rain-wardrobe\tests\**\*;
-      Resources\web\intake\tests\**\*
+      Resources\web\intake\tests\**\*;
+      Resources\web\prizecounter\tests\**\*;
+      Resources\web\prizecounter\mock\**\*;
+      Resources\web\prizecounter\dev.html;
+      Resources\web\prizecounter\**\*.md
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
          flash): its node tests ride along so the vendored copy stays checkable, but they are
@@ -630,7 +651,11 @@
       $(MSBuildProjectDirectory)\Resources\web\piecebypiece\package.json;
       $(MSBuildProjectDirectory)\Resources\web\dtrh\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\rain-wardrobe\tests\**\*;
-      $(MSBuildProjectDirectory)\Resources\web\intake\tests\**\*
+      $(MSBuildProjectDirectory)\Resources\web\intake\tests\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\prizecounter\tests\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\prizecounter\mock\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\prizecounter\dev.html;
+      $(MSBuildProjectDirectory)\Resources\web\prizecounter\**\*.md
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>
 

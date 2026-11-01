@@ -13,7 +13,11 @@ namespace ConditioningControlPanel.Services.Lobby;
 /// <summary>An open Racing Thoughts 3D (Glassroad) room off <c>GET /v2/race/open</c>.
 /// <paramref name="StartsInSec"/> is null while the room waits for no countdown.</summary>
 public sealed record RaceOpenRoom(string RoomId, string Track, string HostName, int Seats, int Filled,
-    int Laps, bool Staked, int? StartsInSec, bool Friend);
+    int Laps, bool Staked, int? StartsInSec, bool Friend)
+{
+    /// <summary>The host's frame/avatar off an optional <c>cosmetics</c> (server-clamped); none when absent.</summary>
+    public PlayerLook Look { get; init; } = PlayerLook.None;
+}
 
 /// <summary>The race answer. <paramref name="Error"/> is the server's code (<c>tier</c>,
 /// <c>preview</c>, <c>auth</c>, <c>rate</c>) or null. A <c>tier</c> refusal is an answer, not a fault.</summary>
@@ -96,7 +100,8 @@ public sealed class RaceOpenApi
                 ? (int)Math.Clamp(Long(r["startsIn"]), 0, 86400)
                 : null;
             list.Add(new RaceOpenRoom(roomId!, Str(r["track"]) ?? "", string.IsNullOrEmpty(host) ? "someone" : host!,
-                seats, filled, (int)Math.Clamp(Long(r["laps"]), 0, 99), Bool(r["staked"]), startsIn, Bool(r["friend"])));
+                seats, filled, (int)Math.Clamp(Long(r["laps"]), 0, 99), Bool(r["staked"]), startsIn, Bool(r["friend"]))
+                { Look = PlayerLook.From(r["cosmetics"]) });
         }
         return new RaceOpenReply(list, true);
     }

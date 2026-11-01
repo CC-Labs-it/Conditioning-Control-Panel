@@ -618,8 +618,9 @@ public class PlayDoorRenderTests
             // the wrong price. (The diamond Rabbit Hole hero left for the launcher, 2026-09-18.)
             Assert.Equal(1, page.PlayBadgeFyp.Tier);
             Assert.Equal(1, page.PlayBadgeRemote.Tier);
-            // Diamond on the two Lab games rehomed from the Premium page (nav rework 2026-10-06).
-            Assert.Equal(2, page.PlayBadgeDtrh.Tier);
+            // The Rabbit Hole moved to Basic (owner 2026-10-31).
+            Assert.Equal(1, page.PlayBadgeDtrh.Tier);
+            // Diamond on the Lab game rehomed from the Premium page (nav rework 2026-10-06).
             Assert.Equal(2, page.PlayBadgeArcademy.Tier);
             // Racing Thoughts 3D is Prime only (owner 2026-10-29).
             Assert.Equal(2, page.PlayBadgeRacingThoughts.Tier);

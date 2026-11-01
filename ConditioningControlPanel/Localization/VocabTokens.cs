@@ -25,6 +25,10 @@ namespace ConditioningControlPanel.Localization
         public const string PetNameToken = "{petname}";
         public const string CollectiveToken = "{collective}";
 
+        /// <summary>The V2 avatar's name for the active mod (<see cref="Services.Companion.CompanionName"/>):
+        /// Bambi, Bimbo or Emi. Never "Rain", which is only the 3D model's name.</summary>
+        public const string CompanionToken = "{companion}";
+
         // ---------------------------------------------------------------------------------
         // VANILLA DEFAULTS — owner-locked 2026-08-12: "sweetie"/"sweeties"
         // (planning/one-descent/DECISIONS.md). Nothing else in the codebase hard-codes either
@@ -48,6 +52,7 @@ namespace ConditioningControlPanel.Localization
             public ModManifest? Source;
             public string PetName = VanillaPetName;
             public string Collective = VanillaCollective;
+            public string Companion = Services.Companion.CompanionName.Fallback;
         }
 
         private static Resolved _cache = new();
@@ -70,12 +75,14 @@ namespace ConditioningControlPanel.Localization
 
             var hasPet = text.Contains(PetNameToken, StringComparison.Ordinal);
             var hasCollective = text.Contains(CollectiveToken, StringComparison.Ordinal);
-            if (!hasPet && !hasCollective) return text;
+            var hasCompanion = text.Contains(CompanionToken, StringComparison.Ordinal);
+            if (!hasPet && !hasCollective && !hasCompanion) return text;
 
             var resolved = Current();
             var result = text;
             if (hasPet) result = result.Replace(PetNameToken, resolved.PetName, StringComparison.Ordinal);
             if (hasCollective) result = result.Replace(CollectiveToken, resolved.Collective, StringComparison.Ordinal);
+            if (hasCompanion) result = result.Replace(CompanionToken, resolved.Companion, StringComparison.Ordinal);
             return result;
         }
 
@@ -103,7 +110,7 @@ namespace ConditioningControlPanel.Localization
             var cached = _cache;
             if (ReferenceEquals(cached.Source, manifest)) return cached;
 
-            var fresh = new Resolved { Source = manifest };
+            var fresh = new Resolved { Source = manifest, Companion = Services.Companion.CompanionName.ForActiveMod() };
             try
             {
                 fresh.PetName = App.Mods?.GetPetNameOverride() ?? VanillaPetName;

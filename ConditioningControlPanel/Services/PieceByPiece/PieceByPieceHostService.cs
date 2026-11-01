@@ -252,6 +252,7 @@ internal static partial class PieceByPieceHostService
 
             StartHeartbeatWatch();
             ArmBootDeadline();
+            HookOwnership(true);
             // Keyboard focus does not land in the WebView2 child until a click; claim it now so
             // the board's own keys work from the first frame.
             _host.FocusWeb();
@@ -284,6 +285,8 @@ internal static partial class PieceByPieceHostService
             _identityPosted = false;
             _pinged = false;
             bool had = _host != null;
+            HookOwnership(false);
+            StopCounterWatch();
             DisposeOnlineMedia();
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
@@ -314,6 +317,9 @@ internal static partial class PieceByPieceHostService
             PostMediaState();
             StartOnlineMedia();
             PostFriendIntent();
+            // The wardrobe (PieceByPieceHostService.Wardrobe.cs): grants + saved look, then the synced copy.
+            PostWardrobe();
+            _ = PullEquipAsync();
         }
         catch (Exception ex) { App.Logger?.Warning("PieceByPieceHostService.OnPageReady: {E}", ex.Message); }
     }
@@ -425,6 +431,14 @@ internal static partial class PieceByPieceHostService
 
                 case "pbp:friend-challenge":
                     OnFriendChallenge(o);
+                    break;
+
+                case PbpLookRules.LookType:
+                    RunOnUi(() => OnLookPicked(o));
+                    break;
+
+                case PbpLookRules.CounterType:
+                    OnOpenCounter(o);
                     break;
 
                 case "pbp:game-over":

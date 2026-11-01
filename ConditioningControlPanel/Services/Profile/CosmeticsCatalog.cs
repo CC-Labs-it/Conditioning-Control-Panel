@@ -156,6 +156,28 @@ namespace ConditioningControlPanel.Services
         /// <summary>Ids of every preset avatar this build ships. Feeds Sanitize.</summary>
         public static ISet<string> AvatarIds => _avatarIds;
 
+        /// <summary>Preset avatars plus the Prize Counter's shop avatars (<see cref="ShopCosmetics"/>).</summary>
+        public static ISet<string> AllAvatarIds()
+        {
+            var all = new HashSet<string>(_avatarIds, StringComparer.Ordinal);
+            all.UnionWith(ShopCosmetics.AvatarIds());
+            return all;
+        }
+
+        /// <summary>Shop item id to grant, for Sanitize's ownership clamp. Null when nothing is listed.</summary>
+        public static IReadOnlyDictionary<string, string>? ShopGrants()
+        {
+            var map = ShopCosmetics.Items.ToDictionary(i => i.Id, i => i.Grant, StringComparer.Ordinal);
+            return map.Count == 0 ? null : map;
+        }
+
+        /// <summary>The art for a Prize Counter frame id, or null (unknown, missing, or none worn).</summary>
+        public static ImageSource? GetFrameImage(string? id)
+        {
+            var item = ShopCosmetics.Find(id);
+            return item != null && item.IsFrame ? ShopCosmetics.GetImage(item.Id) : null;
+        }
+
         /// <summary>
         /// Decode cap for preset-avatar art. The bubble renders at 104px (208 at 200% DPI); the
         /// source PNGs are 512. 256 keeps the circle crisp without holding 1MB per browsed tile.
@@ -179,7 +201,11 @@ namespace ConditioningControlPanel.Services
                 ImageSource? built = null;
                 try
                 {
-                    if (_avatarIds.Contains(id!))
+                    if (!_avatarIds.Contains(id!) && ShopCosmetics.Find(id) is { IsAvatar: true } shop)
+                    {
+                        built = ShopCosmetics.GetImage(shop.Id);
+                    }
+                    else if (_avatarIds.Contains(id!))
                     {
                         var path = Path.Combine(AppContext.BaseDirectory,
                             "Resources", "cosmetics", "avatars", id + ".png");
@@ -323,16 +349,18 @@ namespace ConditioningControlPanel.Services
             }
             catch { /* no achievement service yet (early boot / tests) - skip the unlock filter */ }
 
-            return ProfileCosmetics.Sanitize(raw, BannerIds, AchievementIds, unlocked, DecoIds(), CharmIds(), AvatarIds,
-                WardrobeCatalog.AchievementGates());
+            return ProfileCosmetics.Sanitize(raw, BannerIds, AchievementIds, unlocked, DecoIds(), CharmIds(), AllAvatarIds(),
+                WardrobeCatalog.AchievementGates(), ShopCosmetics.FrameIds(), ShopGrants(), ShopCosmetics.KnownGrants());
         }
 
         /// <summary>
         /// Sanitize for SOMEONE ELSE's card. Their unlock list is not knowable from /user/lookup,
-        /// so the unlock filter is skipped - ids the app recognises still render.
+        /// so the unlock filter is skipped - ids the app recognises still render. Their grants are not
+        /// knowable either: the server clamps shop frames and avatars before they reach us.
         /// </summary>
         public static ProfileCosmetics SanitizeViewed(ProfileCosmetics? raw)
-            => ProfileCosmetics.Sanitize(raw, BannerIds, AchievementIds, null, DecoIds(), CharmIds(), AvatarIds);
+            => ProfileCosmetics.Sanitize(raw, BannerIds, AchievementIds, null, DecoIds(), CharmIds(), AllAvatarIds(),
+                null, ShopCosmetics.FrameIds());
 
         // ---------------------------------------------------------------------------------
 

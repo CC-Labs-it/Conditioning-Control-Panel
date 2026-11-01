@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Services
     /// any given day (promo days, DtRH drops) via <c>/config/daily-feature</c>.
     ///
     /// <para><b>Curated pool, not the whole paid catalogue.</b> The owner controls the list;
-    /// heavyweight tier-2 content (DtRH) only ever appears through a server override, never
+    /// heavyweight content (DtRH) only ever appears through a server override, never
     /// through the local rotation.</para>
     ///
     /// <para><b>Enforcement:</b> <see cref="TierGate"/>'s keyed overloads OR
@@ -42,9 +42,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// What the SERVER may name, which is wider than what the wheel spins: the live pool,
         /// the two benched features whose unlock plumbing remains in place, and "dtrh" - the
-        /// off-pool T2 drop (owner, 2026-08-11: promo Saturdays). DtRH is wired through
-        /// TierGate's keyed Lab overloads at all four gate sites, but the WHEEL never lands on
-        /// it: T2 content is only ever given away on a day the owner explicitly names.
+        /// off-pool drop (owner, 2026-08-11: promo Saturdays). DtRH is wired through
+        /// TierGate's keyed premium overloads at every gate site (it moved to Basic on 2026-10-31),
+        /// but the WHEEL never lands on it: it is only ever given away on a day the owner names.
         /// </summary>
         private static readonly string[] OverridableKeys = { "takeover", "awareness", "fyp", "remote", "haptics", "voice", "dtrh" };
 

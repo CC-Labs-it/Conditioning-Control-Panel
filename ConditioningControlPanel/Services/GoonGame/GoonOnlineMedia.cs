@@ -246,6 +246,15 @@ namespace ConditioningControlPanel.Services.GoonGame
         public static GoonOnlineMedia ForGame(string tenantPrefix, Action<Snapshot> onSnapshot)
             => new(onSnapshot, tenantPrefix);
 
+        /// <summary>The same deck with no clips: a page that only draws stills never pays the share for a clip.</summary>
+        public static GoonOnlineMedia ForGameStills(string tenantPrefix, Action<Snapshot> onSnapshot)
+            => new(onSnapshot, tenantPrefix, stillsOnly: true);
+
+        private GoonOnlineMedia(Action<Snapshot> onSnapshot, string tenantPrefix, bool stillsOnly) : this(onSnapshot, tenantPrefix)
+        {
+            if (stillsOnly) _clipTarget = 0;
+        }
+
         private GoonOnlineMedia(Action<Snapshot> onSnapshot, string tenantPrefix) : this(onSnapshot)
             => _prefix = string.IsNullOrWhiteSpace(tenantPrefix) ? "game" : tenantPrefix.Trim();
 
