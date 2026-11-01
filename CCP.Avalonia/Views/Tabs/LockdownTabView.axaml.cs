@@ -257,8 +257,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ponytail: ported: premium gate, double warning, Activate, panel swap, clock, the secret
         // phrase, the Emergency Exit breath; the title-bar badge, blood-red theme and activation flash
         // are MainShellWindow.Lockdown.cs; the Strict toggles grey themselves (HoldWhileLockdown).
-        // Not on this head: the Possession haunt/readout (no director yet), the Dose keeper and
-        // the system-key hook (Linux has none, so the warning does not promise it).
+        // Not on this head: the Possession haunt/readout and Dose feature selection.
+        // The system-key hook runs on Windows only.
 
         /// <summary>The head's live Lockdown (null in renders and tests that set none).</summary>
         internal static LockdownService? Lockdown => LockdownService.Current;
@@ -320,9 +320,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ld.Activate(TimeSpan.FromMinutes(minutes));
         }
 
-        /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper,
-        /// Possession: none run here; system keys off Windows, where nothing blocks them) and with the
-        /// platform's safety valve.</summary>
+        /// <summary>WPF consent, limited to the Dose engine behavior implemented here. Possession and
+        /// feature selection are not hosted; system keys are blocked only on Windows.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg, bool windows)
@@ -333,6 +332,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (cfg.LockdownDisablePanicKey) warn.Append("- Panic Key will be DISABLED\n");
             // WPF MainWindow.Lab.cs:80; Platform/Win32PanicKey enforces it on Windows only.
             if (windows && cfg.LockdownBlockSystemKeys) warn.Append("- Alt+F4, Alt+Tab, the Windows key and Ctrl+Esc will be BLOCKED\n");
+            if (cfg.LockdownDoseKeeperEnabled)
+                warn.Append("- ").Append(Loc.Get("lockdown_dose_engine_warning")).Append('\n');
             warn.Append("- You CANNOT close the application (minimizing still works)\n");
             warn.Append("- The only escape is waiting for the timer to expire\n");
             warn.Append(windows

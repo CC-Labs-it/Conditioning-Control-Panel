@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Bumped by every Stop, so a Start still waiting on the portal bind (up to 30 s) is dropped
         // if the user stopped or panicked meanwhile.
         private static int _engineGen;
+        private static int? _pendingUserEngineGen;
 
         private void BtnStartMenu_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -77,13 +78,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine()
+        internal void StartEngine(bool systemInitiated = false)
         {
             var gen = ++_engineGen;
+            if (!systemInitiated) _pendingUserEngineGen = gen;
             StartEffect(() =>
             {
-                if (gen != _engineGen || CoreEngine.IsRunning) return;
-                CoreEngine.Start();
+                if (!systemInitiated && _pendingUserEngineGen == gen) _pendingUserEngineGen = null;
+                if (gen != _engineGen || CoreEngine.IsRunning
+                    || (systemInitiated && !CanStartLockdownDoseEngine())) return;
+                CoreEngine.Start(systemInitiated);
+                if (systemInitiated) _doseEngineStarted = true;
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
@@ -97,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopEngine()
         {
             _engineGen++;
+            _pendingUserEngineGen = null;
             App.Sessions?.Pause();
             CoreEngine.Stop();
         }
