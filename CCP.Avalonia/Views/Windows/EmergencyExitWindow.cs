@@ -59,7 +59,6 @@ internal sealed class EmergencyExitWindow : Window
         }
         catch (Exception ex) { Log.Warning(ex, "Emergency Exit open failed"); window.Close(); }
     }
-
     private static void ResetSession() { _attempt = 0; _last = ""; }
 
     // RenderProof constructs every view with sample data. Keep this service inactive and
@@ -95,7 +94,6 @@ internal sealed class EmergencyExitWindow : Window
             if (ReferenceEquals(Current, this)) Current = null;
         };
     }
-
     private void OnEnded()
     {
         if (!_verdict) Dispatcher.UIThread.Post(() => { if (!_closed) Close(); });
@@ -137,30 +135,19 @@ internal sealed class EmergencyExitWindow : Window
                 break;
         }
     }
-
     private async void Post(object message)
     {
         try { await _web.PostJsonAsync(JsonConvert.SerializeObject(message)); }
         catch (Exception ex) { Log.Debug(ex, "Emergency Exit post failed"); }
     }
-
     private static object Mod()
     {
         var mod = App.Mods?.ActiveMod;
         var id = App.Mods?.ActiveModId ?? "";
         var name = mod?.Manifest?.Name ?? "";
-        var (honorific, subject) = id switch
-        {
-            "builtin-bambisleep" => ("good girl", "Bambi"),
-            "builtin-sissyhypno" => ("sissy", "sissy"),
-            "builtin-locked" => ("pet", "pet"),
-            "" or "builtin-ccp-default" => ("sweetie", "sweetie"),
-            _ => (string.IsNullOrWhiteSpace(mod?.Manifest?.Identity?.PetName) ? "sweetie" : mod.Manifest.Identity.PetName.Trim(),
-                  string.IsNullOrWhiteSpace(name) ? "sweetie" : name)
-        };
+        var (honorific, subject) = EmergencyExitRules.Address(id, name, mod?.Manifest?.Identity?.PetName);
         return new { id, name = string.IsNullOrWhiteSpace(name) ? id : name, honorific, subject };
     }
-
     private static string[] Gifs()
     {
         try

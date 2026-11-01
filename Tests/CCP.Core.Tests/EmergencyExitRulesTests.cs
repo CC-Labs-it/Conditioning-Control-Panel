@@ -1,6 +1,7 @@
 using System;
 using ConditioningControlPanel.Services;
 using Xunit;
+using ConditioningControlPanel.Localization;
 
 namespace CCP.Core.Tests;
 public class EmergencyExitRulesTests
@@ -19,6 +20,18 @@ public class EmergencyExitRulesTests
         }
         Assert.Equal(4, seen.Count);
     }
+    [Theory]
+    [InlineData("builtin-bambisleep", "ignored", "ignored", "good girl", "Bambi")]
+    [InlineData("builtin-sissyhypno", null, null, "sissy", "sissy")]
+    [InlineData("builtin-locked", null, null, "pet", "pet")]
+    [InlineData("", "ignored", "ignored", VocabTokens.VanillaPetName, VocabTokens.VanillaPetName)]
+    [InlineData("builtin-ccp-default", "ignored", "ignored", VocabTokens.VanillaPetName, VocabTokens.VanillaPetName)]
+    [InlineData("creator", "  Mod Name  ", "  pet name  ", "pet name", "  Mod Name  ")]
+    [InlineData("creator", null, null, VocabTokens.VanillaPetName, VocabTokens.VanillaPetName)]
+    [InlineData("creator", "  ", "  ", VocabTokens.VanillaPetName, VocabTokens.VanillaPetName)]
+    public void AddressPreservesWpfOverridesAndFallbacks(string id, string? name, string? petName, string honorific, string subject) =>
+        Assert.Equal((honorific, subject), EmergencyExitRules.Address(id, name, petName));
+
     [Theory]
     [InlineData("labyrinth", "completed", .999, true)]
     [InlineData("password", "completed", .33, false)]

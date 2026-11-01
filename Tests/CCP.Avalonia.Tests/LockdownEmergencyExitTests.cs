@@ -12,9 +12,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class LockdownEmergencyExitTests
 {
     [Theory]
@@ -57,7 +55,6 @@ public sealed class LockdownEmergencyExitTests
             return Task.CompletedTask;
         });
     }
-
     [Fact]
     public async Task AbandonPanicAndExternalEndCannotApplyALateVerdict()
     {
@@ -93,7 +90,6 @@ public sealed class LockdownEmergencyExitTests
             return Task.CompletedTask;
         });
     }
-
     [Fact]
     public async Task MissingOutroStillClosesTheWindow()
     {
@@ -116,7 +112,6 @@ public sealed class LockdownEmergencyExitTests
             finally { w.Close(); ld.Deactivate(); }
         });
     }
-
     [Fact]
     public async Task ReloadReadyThroughWebHostRefreshesInitWithoutReapplyingVerdict()
     {
@@ -167,7 +162,6 @@ public sealed class LockdownEmergencyExitTests
             return Task.CompletedTask;
         });
     }
-
     [Fact]
     public async Task RenderConstructorDoesNotTouchLiveLockdown()
     {
@@ -197,7 +191,6 @@ public sealed class LockdownEmergencyExitTests
             return Task.CompletedTask;
         });
     }
-
     private static void EnsureApp()
     {
         if (Application.Current == null)
