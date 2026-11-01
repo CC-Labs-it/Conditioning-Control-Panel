@@ -52,7 +52,12 @@ public sealed class ExclusivesVaultTests
                 int Head(string g) => items.FindIndex(i => i is ExclusiveGroupRow h && h.Group.ToString() == g);
                 Assert.InRange(At("fyp"), Head("Basic"), Head("Prime"));
                 Assert.InRange(At("gradedintake"), Head("Basic"), Head("Prime"));   // untagged, any paid tier since 2a1fd1e88
-                Assert.InRange(At("dtrh"), Head("Prime"), Head("Free"));
+                // WPF 7.2 (bc242aeb6): DTRH belongs to Basic, with the keyed daily-free gate.
+                Assert.InRange(At("dtrh"), Head("Basic") + 1, Head("Prime") - 1);
+                var dtrh = Assert.Single(rows, r => r.Feature.Key == "dtrh");
+                Assert.Equal(1, dtrh.Feature.Tier);
+                Assert.Equal("dtrh", dtrh.Feature.DailyFreeKey);
+                Assert.True(dtrh.IsLocked);
                 Assert.True(At("backroom") > Head("Free"));
                 var basic = items.OfType<ExclusiveGroupRow>().First();
                 // WPF ArrangeVaultShelf counts the group's cards (Graded Intake, untagged, sits in Basic since 5ce1a6cd1).
@@ -60,6 +65,15 @@ public sealed class ExclusivesVaultTests
                     expected.Single(g => g.Group == ConditioningControlPanel.Services.UI.PremiumGroup.Basic).Items.Count), basic.Count);
                 Assert.True(basic.HasSign);
                 Assert.False(items.OfType<ExclusiveGroupRow>().Last().HasSign);
+
+                CoreEntitlement.IsFreeTodayProvider = key => key == "dtrh";
+                view.RefreshVault();
+                var dailyDtrh = Assert.Single(Rows(view), r => r.Feature.Key == "dtrh");
+                Assert.False(dailyDtrh.IsLocked);
+                Assert.True(dailyDtrh.BadgeFreeToday);
+                CoreEntitlement.IsFreeTodayProvider = null;
+                view.RefreshVault();
+                rows = Rows(view);
 
                 // WPF binds the shelf words live (BindVaultLoc): a language switch rebuilds the rows (P09).
                 // The group lines are not translated yet on main; the rows are rebuilt (new ItemsSource) and re-read.
