@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
@@ -14,6 +15,20 @@ internal static class PointerTestFrame
     internal sealed class Clock : TimeProvider
     {
         public override long GetTimestamp() => 0;
+    }
+
+    // A forced timer tick may service an older compositor batch without delivering this frame.
+    internal static void Next(TopLevel top)
+    {
+        var delivered = false;
+        top.RequestAnimationFrame(_ => delivered = true);
+        var deadline = Stopwatch.StartNew();
+        while (!delivered)
+        {
+            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the animation frame was never delivered");
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
     internal static void Render(MainShellWindow shell)
