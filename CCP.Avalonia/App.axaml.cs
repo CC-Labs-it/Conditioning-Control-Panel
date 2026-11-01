@@ -890,9 +890,11 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 WireAchievementUnlocks(Achievements);
+                var chatBackfillWasComplete = Achievements.Progress.CompanionChatBackfilled;
                 var dirtyBeforeChatBackfill = Achievements.IsDirty;
                 BackfillCompanionChatCount(Achievements, Brain);   // WPF GamificationBridge.Start:132
                 DeferEmptyBackfillSave(Achievements, dirtyBeforeChatBackfill);
+                SaveNonEmptyChatBackfill(Achievements, chatBackfillWasComplete);
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
                 // Its loss must not cost the launch.
@@ -1300,6 +1302,15 @@ namespace ConditioningControlPanel.Avalonia
         {
             if (!dirtyBeforeBackfill && engine.Progress.CompanionChatBackfilled && engine.Progress.CompanionMessages == 0)
                 engine.IsDirty = false;
+        }
+
+        /// <summary>WPF AchievementService.cs:98-105 autosaves dirty progress every 30 seconds.
+        /// This head saves a non-empty backfill now; a failed write remains dirty for exit retry.</summary>
+        internal static void SaveNonEmptyChatBackfill(AchievementEngine engine, bool wasBackfilled)
+        {
+            if (!wasBackfilled && engine.Progress.CompanionChatBackfilled
+                && engine.Progress.CompanionMessages > 0 && engine.IsDirty)
+                engine.Save();
         }
 
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)

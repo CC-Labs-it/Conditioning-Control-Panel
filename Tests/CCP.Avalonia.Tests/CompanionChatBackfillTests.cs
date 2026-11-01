@@ -113,6 +113,7 @@ public sealed class CompanionChatBackfillTests
         var wasDirty = engine.IsDirty;
         AvApp.BackfillCompanionChatCount(engine, brain);
         AvApp.DeferEmptyBackfillSave(engine, wasDirty);
+        AvApp.SaveNonEmptyChatBackfill(engine, wasBackfilled: false);
 
         Assert.True(engine.Progress.CompanionChatBackfilled);
         Assert.False(engine.IsDirty);
@@ -164,6 +165,75 @@ public sealed class CompanionChatBackfillTests
     }
 
     [Fact]
+    public void StartupSavesRecoveredCountBeforeChatHistoryIsCleared()
+    {
+        using var f = new Fixture();
+        f.SaveTurns(TurnKind.UserChat, TurnKind.AssistantChat);
+        Assert.True(f.Engine().TryUnlock("pleased_to_meet_you"));
+        var engine = f.Engine(); // first-chat achievement already persisted, count still zero
+        using var brain = f.OpenBrain();
+        var wasBackfilled = engine.Progress.CompanionChatBackfilled;
+        var wasDirty = engine.IsDirty;
+
+        AvApp.BackfillCompanionChatCount(engine, brain);
+        AvApp.DeferEmptyBackfillSave(engine, wasDirty);
+        Assert.True(engine.IsDirty);
+        Assert.Equal(0, f.Engine().Progress.CompanionMessages);
+        AvApp.SaveNonEmptyChatBackfill(engine, wasBackfilled);
+
+        Assert.False(engine.IsDirty);
+        brain.Session.Clear();
+        f.ForgetSavedTurns();
+        var saved = f.Engine().Progress; // read from disk before any desktop exit
+        Assert.Equal(1, saved.CompanionMessages);
+        Assert.True(saved.CompanionChatBackfilled);
+        Assert.True(saved.IsUnlocked("pleased_to_meet_you"));
+    }
+
+    [Fact]
+    public void FailedStartupBackfillSaveStaysDirtyForTheExitRetry()
+    {
+        using var f = new Fixture();
+        f.SaveTurns(TurnKind.UserChat);
+        using var brain = f.OpenBrain();
+        var blocker = f.PathInProfile("blocked");
+        File.WriteAllText(blocker, "block directory creation");
+        var path = Path.Combine(blocker, "achievements.json");
+        var engine = new AchievementEngine(new AchievementStore(path));
+        engine.Progress.Unlock("pleased_to_meet_you");
+        var wasBackfilled = engine.Progress.CompanionChatBackfilled;
+        var wasDirty = engine.IsDirty;
+
+        AvApp.BackfillCompanionChatCount(engine, brain);
+        AvApp.DeferEmptyBackfillSave(engine, wasDirty);
+        AvApp.SaveNonEmptyChatBackfill(engine, wasBackfilled);
+        Assert.True(engine.IsDirty);
+        Assert.False(File.Exists(path));
+
+        File.Delete(blocker);
+        if (engine.IsDirty) engine.Save(); // the existing desktop exit retry
+        Assert.False(engine.IsDirty);
+        var saved = new AchievementStore(path).Load();
+        Assert.Equal(1, saved.CompanionMessages);
+        Assert.True(saved.CompanionChatBackfilled);
+    }
+
+    [Fact]
+    public void PreviouslyBackfilledProgressIsNotWrittenByTheStartupSave()
+    {
+        using var f = new Fixture();
+        var engine = f.Engine();
+        engine.Progress.CompanionChatBackfilled = true;
+        engine.Progress.CompanionMessages = 1;
+        engine.TrackFlashImage();
+
+        AvApp.SaveNonEmptyChatBackfill(engine, wasBackfilled: true);
+
+        Assert.True(engine.IsDirty);
+        Assert.False(f.HasAchievementFile);
+    }
+
+    [Fact]
     public void DesktopStartupCallsBackfillAfterBrainAndAchievementsAreReady()
     {
         var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Here())!, "..", ".."));
@@ -171,7 +241,9 @@ public sealed class CompanionChatBackfillTests
         var brain = source.IndexOf("Brain = new ConditioningControlPanel.Services.Companion.Brain.CompanionBrain(Ai)", StringComparison.Ordinal);
         var engine = source.IndexOf("Achievements = new AchievementEngine(", StringComparison.Ordinal);
         var call = source.IndexOf("BackfillCompanionChatCount(Achievements, Brain);", StringComparison.Ordinal);
+        var save = source.IndexOf("SaveNonEmptyChatBackfill(Achievements, chatBackfillWasComplete);", StringComparison.Ordinal);
         Assert.True(brain >= 0 && engine > brain && call > engine);
+        Assert.True(save > call);
     }
 
     private static string Here([CallerFilePath] string path = "") => path;
@@ -193,6 +265,8 @@ public sealed class CompanionChatBackfillTests
         }
 
         internal bool HasAchievementFile => File.Exists(Path.Combine(_dir, "achievements.json"));
+        internal string PathInProfile(string name) => Path.Combine(_dir, name);
+        internal void ForgetSavedTurns() => Store().Wipe();
         internal AchievementEngine Engine() => new(new AchievementStore(Path.Combine(_dir, "achievements.json")));
 
         internal void SaveTurns(params TurnKind[] kinds) => Store().Save(
