@@ -52,7 +52,8 @@ public sealed class ExclusivesVaultTests
                 int Head(string g) => items.FindIndex(i => i is ExclusiveGroupRow h && h.Group.ToString() == g);
                 Assert.InRange(At("fyp"), Head("Basic"), Head("Prime"));
                 Assert.InRange(At("gradedintake"), Head("Basic"), Head("Prime"));   // untagged, any paid tier since 2a1fd1e88
-                Assert.InRange(At("dtrh"), Head("Prime"), Head("Free"));
+                Assert.InRange(At("dtrh"), Head("Basic"), Head("Prime"));   // WPF bc242aeb6: DTRH moved to Basic
+                Assert.Equal(1, rows.Single(r => r.Feature.Key == "dtrh").Feature.Tier);
                 Assert.True(At("backroom") > Head("Free"));
                 var basic = items.OfType<ExclusiveGroupRow>().First();
                 // WPF ArrangeVaultShelf counts the group's cards (Graded Intake, untagged, sits in Basic since 5ce1a6cd1).
@@ -97,6 +98,7 @@ public sealed class ExclusivesVaultTests
                 Assert.All(heads, h => Assert.Equal(shelfBox.Bounds.Width - 1, h.Bounds.Width));
                 Assert.All(heads.Skip(1), h => Assert.Equal(0, h.Bounds.X));
                 Assert.True(rows.Single(r => r.Feature.Key == "fyp").IsLocked);
+                Assert.True(rows.Single(r => r.Feature.Key == "dtrh").IsLocked);
                 Assert.False(rows.Single(r => r.Feature.Key == "backroom").IsLocked);
                 Assert.True(rows.Single(r => r.Feature.Key == "gradedintake").IsLocked);
                 Assert.True(rows.Single(r => r.Feature.Key == "haptics").HasArt);
@@ -121,6 +123,13 @@ public sealed class ExclusivesVaultTests
                 Assert.True(fyp.BadgeFreeToday);   // tiered: the badge re-stamps, no pill
                 Assert.False(view.FindControl<Border>("SpotVeil")!.IsVisible);
 
+                // A server drop can make DTRH free for the day (WPF bc242aeb6).
+                CoreEntitlement.IsFreeTodayProvider = key => key == "dtrh";
+                view.RefreshVault();
+                var dtrh = Rows(view).Single(r => r.Feature.Key == "dtrh");
+                Assert.False(dtrh.IsLocked);
+                Assert.True(dtrh.BadgeFreeToday);
+
                 // Open doors lead their shelf: today's free Haptics jumps ahead of the locked Basic doors. Graded
                 // Intake sits in Basic since 5ce1a6cd1 and its unspent pass is an open door (WPF IsVaultDoorOpen), so
                 // it leads, then Haptics (roster order within the open half).
@@ -144,6 +153,7 @@ public sealed class ExclusivesVaultTests
                 Assert.All(rows.Where(r => r.Feature.Key != "gradedintake" && r.Feature.Tier < 2), r => Assert.False(r.IsLocked));
                 Assert.All(rows.Where(r => r.Feature.Tier == 2), r => Assert.True(r.IsLocked));
                 Assert.False(rows.Single(r => r.Feature.Key == "gradedintake").IsLocked);   // any paid tier since 2a1fd1e88
+                Assert.False(rows.Single(r => r.Feature.Key == "dtrh").IsLocked);
                 Assert.False(rows.Single(r => r.Feature.Key == "fyp").FreeToday);
             }
             finally
