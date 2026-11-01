@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             SyncFocusGazeToggle(CoreSettings.Current.FocusGazeEnabled);
             CoreMods.ModChanged += OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged += OnIntakePassStateChanged;
-            LocalizationManager.Instance.LanguageChanged += OnIntakePassStateChanged;
+            LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             RefreshPlayCards();
         }
 
@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Gaze.ActiveChanged -= OnGazeActiveChanged;
             CoreMods.ModChanged -= OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged -= OnIntakePassStateChanged;
-            LocalizationManager.Instance.LanguageChanged -= OnIntakePassStateChanged;
+            LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -79,7 +79,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null) RefreshPlayCards();
+            if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null)
+            {
+                RefreshPlayCards();
+                RefreshWebcamStatus();
+            }
         }
 
         internal void RefreshWebcamStatus()
@@ -95,6 +99,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnIntakePassStateChanged(object? sender, EventArgs e) =>
             Dispatcher.UIThread.Post(RefreshPlayCards);
 
+        private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
+        {
+            RefreshPlayCards();
+            RefreshWebcamStatus();
+        });
+
         /// <summary>
         /// Every card hero, WPF's <c>PlayTabView.xaml</c> table restated: the Border that owns the
         /// plate, the Resources-relative art, and the Stretch each one was authored with.
@@ -105,6 +115,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static readonly (string Plate, string Art, Stretch Fit, int? DecodeWidth)[] HeroPlates =
         {
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill, 512),
+            ("PlayBackRoomHeroPlate",  "features/backroom.png",         Stretch.UniformToFill, 512),
+            ("PlayDtrhHeroPlate",      "features/dtrh.png",             Stretch.UniformToFill, 512),
+            ("PlayArcademyHeroPlate",  "features/arcademy.png",         Stretch.UniformToFill, 512),
+            ("PlayRacingThoughtsHeroPlate", "features/race.png",       Stretch.UniformToFill, 512),
+            ("PlayWebAppHeroPlate",    "billboard/webapp.png",          Stretch.UniformToFill, 512),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill, null),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill, 768),
             ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill, 512),
@@ -183,6 +198,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+                PlayLockDtrh.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh").Allowed;
+                PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
+                PlayLockRacingThoughts.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
                 PlayLockFocusGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed;
                 PlayLockRemote.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed;
@@ -192,6 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 // FREE TODAY (WPF :145): only on a door that is otherwise shut - an owner gets no gift.
                 bool premium = CoreEntitlement.HasPremium;
+                PlayBadgeDtrh.FreeToday = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
 
@@ -224,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // Launch shims (WPF PlayTabView.Cards.cs). Every name below is the MainWindow handler the
         // WPF card forwards to. GAMES: the Breakout demo and Piece by Piece open their GameWindow
         // as the launcher does (LauncherWindow.Destinations); full Breakout uses that host with
-        // its Tier 2 gate. Goon stays disabled until its host lands.
+        // its Tier 2 gate. DtRH and Web App use their existing doors; unavailable hosts stay disabled.
         // ==================================================================================
 
         // ---- GAMES -----------------------------------------------------------------------
@@ -240,6 +259,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
+
+        // WPF MainWindow.Exclusives.cs:217-222: sign in before the launcher gate.
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e)
+        {
+            if (!CoreAccount.IsLoggedIn) { if (Owner is { } owner) _ = owner.OpenUnifiedLoginDialog(); return; }
+            if (Games.GameWindow.DtrhGate()) LaunchGame(Games.GameWindow.DtrhId);
+        }
+
+        private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
 
         // ---- TOGETHER --------------------------------------------------------------------
 
