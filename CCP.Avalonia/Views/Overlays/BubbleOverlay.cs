@@ -12,6 +12,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -181,6 +182,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
         private static Action<AmbientBubble>? _chaosPopped;
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
+        private static Action<int>? _chaosEStimArc;
+        private static int _eStimCharges, _eStimGeneration;
+        private static bool _eStimFork;
+        internal static int EStimChargesLeft => _chaosPopped == null ? 0 : _eStimCharges;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
         private static void AnchorPop(AmbientBubble b) { ChaosLastPopX = b.CenterX; ChaosLastPopY = b.CenterY; }
@@ -189,7 +194,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
         internal static void Press(AmbientBubble b, double x, double y)
         {
-            if (!b.IsLiveThreat) { Pop(b); return; }
+            if (!b.IsLiveThreat)
+            {
+                bool wasPopping = b.Popping;
+                Pop(b);
+                if (!wasPopping && b.Popping) EStimClick(b);
+                return;
+            }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -214,10 +225,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// if the ambient field is not already running.</summary>
         internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
-            Func<AmbientBubble, bool>? canChannel = null)
+            Func<AmbientBubble, bool>? canChannel = null, Action<int>? onEStimArc = null)
         {
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
+            _chaosEStimArc = onEStimArc;
+            _eStimCharges = 0;
+            _eStimFork = false;
+            _eStimGeneration++;
             Field.Held = false;
             Field.ChaosDefused = onDefuse == null ? null : b =>
             {
@@ -246,6 +261,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
+            _chaosEStimArc = null;
+            _eStimCharges = 0;
+            _eStimFork = false;
+            _eStimGeneration++;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
@@ -300,6 +319,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 else if (includeTreats) PopChaos(b);
             }
             RequestFrame();
+        }
+
+        /// <summary>WPF BubbleService.cs:351-442: only a landed player treat click conducts.
+        /// Delayed hops go through the same paid pop and snap paths as other toy sweeps.</summary>
+        internal static void ArmEStim(int charges, bool fork)
+        {
+            if (_chaosPopped == null) return;
+            _eStimCharges = Math.Max(1, charges);
+            _eStimFork = fork;
+        }
+
+        private static void EStimClick(AmbientBubble source)
+        {
+            if (_chaosPopped == null || _eStimCharges <= 0 || source.Spec is not { } spec
+                || spec.IsLive || spec.IsDarter || spec.IsFreeze || spec.IsTease || spec.IsBrittle) return;
+            var hits = Field.EStimTargets(source, _eStimFork);
+            if (hits.Count == 0) return;
+            _eStimCharges--;
+            if (_eStimCharges == 0) _eStimFork = false;
+            PixelPoint CenterPx(AmbientBubble b)
+            {
+                double scale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                return new PixelPoint((int)Math.Round(b.CenterX * scale), (int)Math.Round(b.CenterY * scale));
+            }
+            ChaosEStimOverlay.Strike(hits.Select(h => (CenterPx(h.From), CenterPx(h.Target))).ToList());
+            int generation = _eStimGeneration;
+            foreach (var (_, target, delay) in hits)
+                DispatcherTimer.RunOnce(() =>
+                {
+                    if (generation != _eStimGeneration || _chaosPopped == null || Field.HoldChaos
+                        || !Field.Bubbles.Contains(target) || target.Popping || target.Spec is not { } t
+                        || t.IsDarter || t.IsFreeze || t.IsTease || t.IsBrittle || t.IsChaperoneLive) return;
+                    if (target.IsLiveThreat)
+                    {
+                        if (target.Snap()) Field.ChaosDefused?.Invoke(target);
+                    }
+                    else PopChaos(target);
+                    RequestFrame();
+                }, TimeSpan.FromMilliseconds(delay));
+            _chaosEStimArc?.Invoke(_eStimCharges);
         }
 
         private static string ChaosCuePath(string name) =>

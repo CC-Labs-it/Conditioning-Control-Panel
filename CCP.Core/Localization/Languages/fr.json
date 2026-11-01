@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charge": "⚡ chargé. les {0} prochaines bulles conduisent",
+  "chaos_estim_chain": "⚡ chargé. les {0} prochaines bulles créent une chaîne",
+  "chaos_estim_left": "⚡ le courant jaillit. reste {0}",
+  "chaos_estim_spent": "⚡ charge épuisée",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

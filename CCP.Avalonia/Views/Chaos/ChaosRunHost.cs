@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -149,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = 0;
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnEStimArc);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
@@ -623,7 +624,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys (:2948, :3021): Snap Field glows for one run-clock second.</summary>
+        /// <summary>WPF TickActiveToys (:2948, :3021): Snap Field flashes for one second;
+        /// E-Stim stays active while charges remain.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
@@ -631,7 +633,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
             _snapFlashRemainingSec = Math.Max(0, _snapFlashRemainingSec - ChaosRunEngine.TICK_SEC);
             foreach (var t in _state.ActiveToys)
-                t.IsEffectActive = t.Id == "snap_field" && _snapFlashRemainingSec > 0;
+                t.IsEffectActive = t.Id switch
+                {
+                    "snap_field" => _snapFlashRemainingSec > 0,
+                    "e_stim" => BubbleOverlay.EStimChargesLeft > 0,
+                    _ => false,
+                };
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -651,21 +658,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy (:2735-2750, :2780): Snap Field and its first-play award.
-        /// Part B: vibe sweep, freeze, DVD, rabbits and e-stim effects.</summary>
+        /// <summary>WPF ChaosModeService.cs:2735-2750,2765-2780: Snap Field and E-Stim.
+        /// The remaining toys still need their effects.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
-            if (r != ChaosToyRules.UseResult.Fired || toy.Id != "snap_field") return;
+            if (r != ChaosToyRules.UseResult.Fired) return;
             bool maxed = _state.MaxedBoons.Contains(toy.Id);
-            BubbleOverlay.SnapChaosField(maxed);
-            ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.5f);
-            _snapFlashRemainingSec = 1.0;
-            Pulse(Color.FromRgb(150, 220, 255), 0.35);
-            _state.PushEvent(maxed ? "✋ snapped. all of it." : "✋ snapped. every live one let go");
+            if (toy.Id == "snap_field")
+            {
+                BubbleOverlay.SnapChaosField(maxed);
+                ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.5f);
+                _snapFlashRemainingSec = 1.0;
+                Pulse(Color.FromRgb(150, 220, 255), 0.35);
+                _state.PushEvent(maxed ? "✋ snapped. all of it." : "✋ snapped. every live one let go");
+            }
+            else if (toy.Id == "e_stim")
+            {
+                double power = _state.ToyPower.TryGetValue(toy.Id, out var p) ? p : 0;
+                int charges = Math.Max(1, (int)power) * Math.Max(1, _state.EStimChargeMult);
+                BubbleOverlay.ArmEStim(charges, maxed);
+                ChaosEStimOverlay.Arm();
+                ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
+                ChaosEffectBannerOverlay.Show("estim", "E-Stim", Color.FromRgb(0x9C, 0x5C, 0xFF));
+                Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
+                _state.PushEvent(Loc.GetF(maxed ? "chaos_estim_chain" : "chaos_estim_charge", charges));
+            }
+            else return;
             if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
+        }
+
+        /// <summary>WPF ChaosModeService.cs:2784-2803: report a discharge and end the halo at zero.</summary>
+        private static void OnEStimArc(int left)
+        {
+            if (_state == null) return;
+            ChaosOverlayWindow.ChaosSfx.Play("estim_zap", 0.6f);
+            Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
+            if (left == 0) { ChaosEffectBannerOverlay.End("estim"); ChaosEStimOverlay.Disarm(); }
+            _state.PushEvent(left > 0 ? Loc.GetF("chaos_estim_left", left) : Loc.Get("chaos_estim_spent"));
         }
 
         private static void RunAgain()

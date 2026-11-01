@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charge": "⚡ заряжено. следующие {0} хлопка проводят ток",
+  "chaos_estim_chain": "⚡ заряжено. следующие {0} хлопка запускают цепь",
+  "chaos_estim_left": "⚡ ток разрядился. осталось {0}",
+  "chaos_estim_spent": "⚡ заряд исчерпан",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

@@ -1,4 +1,8 @@
 {
+  "chaos_estim_charge": "⚡ 충전됨. 다음 {0}번은 전류가 흐름",
+  "chaos_estim_chain": "⚡ 충전됨. 다음 {0}번은 연쇄 반응",
+  "chaos_estim_left": "⚡ 전류가 흐름. {0}번 남음",
+  "chaos_estim_spent": "⚡ 충전 소진",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",
