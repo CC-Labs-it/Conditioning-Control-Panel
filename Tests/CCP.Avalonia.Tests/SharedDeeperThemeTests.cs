@@ -181,6 +181,82 @@ public sealed class SharedDeeperThemeTests
         await Task.CompletedTask;
     });
 
+    // WPF Controls.xaml:278-290,295-314: OFF leaves the scale clock alone; ON starts at 0.4.
+    [Fact]
+    public Task ToggleSparkGrowthContinuesOnOffAndRestartsOnEachOn() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var toggle = new CheckBox { Theme = Theme("ToggleStyle"), Width = 44, Height = 22 };
+        var window = new Window { Content = toggle, Width = 200, Height = 100 };
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var spark = toggle.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>().Single(b => b.Name == "spark");
+            var clock = new StepClock();
+            spark.SetValue(StepClock.Property, clock.Instance);
+            void Click()
+            {
+                window.MouseDown(new Point(100, 50), MouseButton.Left);
+                window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            }
+            double Scale() => spark.RenderTransform!.Value.M11;
+            Click(); clock.Step(0); clock.Step(100);
+            Assert.Equal(0.4 + 2.6 * (1 - Math.Pow(350.0 / 450, 2)), Scale(), 4);
+            Click(); clock.Step(200);
+            Assert.Equal(0.4 + 2.6 * (1 - Math.Pow(250.0 / 450, 2)), Scale(), 4);
+            Click(); clock.Step(200);
+            Assert.Equal(0.4, Scale(), 4);
+            clock.Step(425);
+            Assert.Equal(2.35, Scale(), 4);
+            clock.Step(650);
+            Assert.Equal(3, Scale(), 4);
+            Click(); clock.Step(900);
+            Assert.Equal(3, Scale(), 4);
+        }
+        finally { window.Close(); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BlinkTrainerIncludeVideosUsesTheSparkOnItsLiveToggle() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var old = settings.BlinkTrainerIncludeVideos;
+        var premium = CoreEntitlement.HasPremiumProvider;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        settings.BlinkTrainerIncludeVideos = false;
+        var tab = new BlinkTrainerTabView { IsVisible = false };
+        var window = new Window { Content = tab, Width = 1400, Height = 1800 };
+        try
+        {
+            window.Show(); tab.IsVisible = true; Dispatcher.UIThread.RunJobs();
+            var toggle = tab.FindControl<CheckBox>("ToggleBlinkTrainerIncludeVideos")!;
+            Assert.Same(Theme("ToggleStyle"), toggle.Theme);
+            Assert.True(toggle.Focus());
+            var spark = toggle.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>().Single(b => b.Name == "spark");
+            var clock = new StepClock();
+            spark.SetValue(StepClock.Property, clock.Instance);
+            void Press()
+            {
+                window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+                window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+                Dispatcher.UIThread.RunJobs();
+            }
+            Press(); Assert.True(settings.BlinkTrainerIncludeVideos);
+            clock.Step(0); clock.Step(100);
+            Press(); Assert.False(settings.BlinkTrainerIncludeVideos);
+            clock.Step(200);
+            Assert.Equal(0.4 + 2.6 * (1 - Math.Pow(250.0 / 450, 2)), spark.RenderTransform!.Value.M11, 4);
+        }
+        finally
+        {
+            window.Close(); CoreEntitlement.HasPremiumProvider = premium;
+            settings.BlinkTrainerIncludeVideos = old;
+        }
+        await Task.CompletedTask;
+    });
+
     /// <summary>Hand-stepped animation clock, so transitions advance only when the test says so. Avalonia 12 made
     /// IClock internal, and the headless render clock is real time, so this reaches Avalonia's own ClockBase by
     /// reflection; a rename there fails loudly here instead of silently passing.</summary>
