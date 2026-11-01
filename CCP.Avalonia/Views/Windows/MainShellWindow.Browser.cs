@@ -6,7 +6,7 @@
 //
 // WebHost supplies a script channel and navigation completion. Video autoplay uses that
 // completion as its earliest available signal; WPF also has an earlier DOM-ready signal.
-// The media reporter, queue ownership, playlist autoplay and native fullscreen rig are missing.
+// The media reporter, queue ownership, playlist lifecycle and native fullscreen rig are missing.
 // The offline-block toast uses App.Notifications (WPF MainWindow.Browser.cs:489-494).
 //
 // THE MUTE PAIR is ported onto the card itself (Views/Tabs/SettingsTabView.BrowserCard.cs) over the WebHost
@@ -24,7 +24,7 @@
 //   * WebView2 itself (36): the init/teardown chain (InitializeBrowserAsync, InitAndNavigateAsync,
 //     TearDownBrowserForReinit, NavigateWhenBrowserReadyAsync, BrowserLoadingText_Click,
 //     OpenUrlExternallyAfterBrowserFailure, _browserInitializing, _browserCorePending); the
-//     media integration (AutoPlayBambiCloudPlaylistAsync, EndWebVideoTakeover, OnBrowserWebMessageReceived,
+//     media integration (playlist lifecycle, EndWebVideoTakeover, OnBrowserWebMessageReceived,
 //     HandleBrowserMediaMessage, the four HandleAudioSync* members, HookHapticAudioSyncRearm,
 //     OnHapticConnectionChangedForAudioSync, _hapticAudioSyncConnHooked); the pop-out and
 //     fullscreen rig (BtnPopOutBrowser_Click, FocusBrowserSurface's pop-out half,
@@ -132,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             })();
             """;
 
-        private void ArmVideoAutoPlay(WebHost host)
+        private void ArmVideoAutoPlay(WebHost host, bool playlist)
         {
             var request = _browserRequestGeneration;
             void OnFinished(Uri completedUrl, bool success)
@@ -140,18 +140,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 host.NavigationFinished -= OnFinished;
                 _pendingVideoHost = null;
                 _pendingVideoAutoPlay = null;
-                if (success) _ = PlayVideoAfterLoadAsync(host, request);
+                if (success) _ = PlayVideoAfterLoadAsync(host, request, playlist);
             }
             _pendingVideoHost = host;
             _pendingVideoAutoPlay = OnFinished;
             host.NavigationFinished += OnFinished;
         }
 
-        private async Task PlayVideoAfterLoadAsync(WebHost host, int request)
+        private async Task PlayVideoAfterLoadAsync(WebHost host, int request, bool playlist)
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
-            await host.InvokeScriptAsync(VideoAutoPlayScript);
+            await host.InvokeScriptAsync(playlist ? PlaylistAutoPlayScript : VideoAutoPlayScript);
         }
 
         // WPF MainWindow.Browser.cs:843-955: poll for the player, play, request fullscreen,
@@ -195,6 +195,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             })();
             """;
 
+        // WPF MainWindow.Browser.cs:1017-1038,1067-1069: playlists have audio, so click
+        // the hydrated play button instead of looking for a video or requesting fullscreen.
+        // Panic also stops the poll, like the video path above.
+        internal const string PlaylistAutoPlayScript = """
+            (async function() {
+                window._ccpTakeoverStopped = false;
+                let btn = document.querySelector('button.play-action');
+                for (let i = 0; i < 20 && !btn; i++) {
+                    await new Promise(r => setTimeout(r, 250));
+                    if (window._ccpTakeoverStopped) return;
+                    btn = document.querySelector('button.play-action');
+                }
+                if (btn && !window._ccpTakeoverStopped) btn.click();
+            })();
+            """;
+
         /// <summary>Points the web view at a URL. A missing host returns false.</summary>
         private bool NavigateBrowser(string url, bool autoPlayFullscreen = false)
         {
@@ -204,9 +220,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var host = BrowserView;
                 if (host == null) return false;
                 var target = new Uri(url);
-                if (autoPlayFullscreen && host.HasEngine &&
-                    !url.Contains("bambicloud.com/playlist/", StringComparison.OrdinalIgnoreCase))
-                    ArmVideoAutoPlay(host);
+                if (autoPlayFullscreen && host.HasEngine)
+                    ArmVideoAutoPlay(host, url.Contains("bambicloud.com/playlist/", StringComparison.OrdinalIgnoreCase));
                 host.Navigate(target);   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
@@ -264,7 +279,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
         /// <param name="autoPlayFullscreen">Requests video playback and fullscreen after navigation.
-        /// Playlist autoplay and the browser media session remain unported.</param>
+        /// Playlist playback is requested too; the browser media session remains unported.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (string.IsNullOrWhiteSpace(url) || BrowserBlockedOffline(userInitiated))

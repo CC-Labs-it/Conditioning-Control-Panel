@@ -95,7 +95,57 @@ public sealed class CompanionVideoAutoPlayTests
             host.OnNavigationCompleted(new Uri("https://127.0.0.1/other"));
             Assert.True(shell.NavigateToUrlInBrowser("https://bambicloud.com/playlist/1", true));
             host.OnNavigationCompleted(new Uri("https://bambicloud.com/playlist/1"));
+            Assert.Equal(2, waits);
+            Assert.DoesNotContain(MainShellWindow.VideoAutoPlayScript, scripts);
+            Assert.Single(scripts, s => s == MainShellWindow.PlaylistAutoPlayScript);
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
+    public Task PlaylistWaitsForSuccessAndDelayAndIsCancelledByPanic() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        (settings.Current.Welcomed, settings.Current.HasAcceptedAgeVerification,
+            settings.Current.WhatMovedCardShown, settings.Current.AvatarEnabled) = (true, true, 1, false);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var host = shell.Named<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            var scripts = new List<string>();
+            host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+            var delay = new TaskCompletionSource();
+            var waits = 0;
+            shell.BrowserAutoPlayDelay = () => { waits++; return delay.Task; };
+            var playlist = new Uri("https://BAMBICLOUD.com/playlist/1");
+
+            Assert.True(shell.NavigateToUrlInBrowser(playlist.ToString(), true));
+            host.OnNavigationCompleted(playlist, success: false);
+            host.OnNavigationCompleted(playlist);
+            Assert.Equal(0, waits);
+            Assert.True(shell.NavigateToUrlInBrowser(playlist.ToString(), true));
+            host.OnNavigationCompleted(playlist);
+            host.OnNavigationCompleted(playlist);
             Assert.Equal(1, waits);
+            Assert.DoesNotContain(MainShellWindow.PlaylistAutoPlayScript, scripts);
+            shell.StopBrowserMediaForPanic();
+            delay.SetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(MainShellWindow.PlaylistAutoPlayScript, scripts);
+
+            Assert.True(shell.NavigateToUrlInBrowser(playlist.ToString(), true));
+            host.OnNavigationCompleted(playlist);
+            Assert.Single(scripts, s => s == MainShellWindow.PlaylistAutoPlayScript);
             Assert.DoesNotContain(MainShellWindow.VideoAutoPlayScript, scripts);
             return Task.CompletedTask;
         }
