@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using BindingFlags = System.Reflection.BindingFlags;
+using Avalonia.Media.Immutable;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -23,6 +25,19 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    [Theory]
+    [InlineData("MenuRed", "#FF6347")]
+    [InlineData("MenuGreen", "#90EE90")]
+    [InlineData("MenuPatreon", "#9B59B6")]
+    [InlineData("MenuLocked", "#606070")]
+    public async Task SharedMenuColorsAreSafeAcrossThreads(string name, string expected)
+    {
+        var brush = typeof(AvatarTubeWindow).GetField(name, BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
+        // Immutable constants remain usable regardless of which thread first calls a pure tube helper.
+        var color = await Task.Run(() => Assert.IsType<ImmutableSolidColorBrush>(brush).Color);
+        Assert.Equal(global::Avalonia.Media.Color.Parse(expected), color);
+    }
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
