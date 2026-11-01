@@ -234,10 +234,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF AnimatedWebp.cs:62-84: bound native decode memory across concurrent callers.
         private static readonly SemaphoreSlim DecodeGate = new(2, 2);
 
-        internal static T RunGatedDecode<T>(Func<T> decode)
+        internal static T RunGatedDecode<T>(Func<T> decode, CancellationToken cancellationToken = default)
         {
-            DecodeGate.Wait();
-            try { return decode(); }
+            DecodeGate.Wait(cancellationToken);
+            try { cancellationToken.ThrowIfCancellationRequested(); return decode(); }
             finally { DecodeGate.Release(); }
         }
 
@@ -251,12 +251,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <param name="maxDecodedFrames">When positive, bound the frames visited, including discarded frames.</param>
         /// <param name="maxSourcePixels">When positive, reject larger source canvases before allocating them.</param>
         /// <param name="averageFrameDelay">Use WPF AnimatedWebp timing for cascade frames.</param>
+        /// <param name="cancellationToken">Cancel a removed cascade faller's pending decode.</param>
         internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
-            long maxMemoryBytes = 0, int maxDecodedFrames = 0, long maxSourcePixels = 0, bool averageFrameDelay = false) =>
-            RunGatedDecode(() => DecodeCore(path, fitLongSide, maxFrames, maxMemoryBytes, maxDecodedFrames, maxSourcePixels, averageFrameDelay));
+            long maxMemoryBytes = 0, int maxDecodedFrames = 0, long maxSourcePixels = 0, bool averageFrameDelay = false,
+            CancellationToken cancellationToken = default) =>
+            RunGatedDecode(() => DecodeCore(path, fitLongSide, maxFrames, maxMemoryBytes, maxDecodedFrames, maxSourcePixels,
+                averageFrameDelay, cancellationToken), cancellationToken);
 
         private static (List<Bitmap> Frames, TimeSpan Delay) DecodeCore(string path, int fitLongSide, int maxFrames,
-            long maxMemoryBytes, int maxDecodedFrames, long maxSourcePixels, bool averageFrameDelay)
+            long maxMemoryBytes, int maxDecodedFrames, long maxSourcePixels, bool averageFrameDelay, CancellationToken cancellationToken)
         {
             var frames = new List<Bitmap>();
             try
@@ -298,6 +301,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 long durationTotalMs = 0; int durationSamples = 0;
                 for (var i = 0; i < decodeCount && frames.Count < plan.Frames; i++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     // canvas holds frame i-1. Reuse it only when that is the frame i builds on; otherwise
                     // (restore-previous disposal) the codec decodes the required frame itself.
                     var required = i < info.Length ? info[i].RequiredFrame : -1;
@@ -309,6 +313,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         new PixelSize(plan.Width, plan.Height), new Vector(96, 96), scaled.RowBytes));
                     if (i < info.Length && info[i].Duration > 0) { durationTotalMs += info[i].Duration; durationSamples++; }
                 }
+                cancellationToken.ThrowIfCancellationRequested();
                 Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, path);
                 // WPF AnimatedWebp.cs:235-244: average kept frames, then account for the stride.
                 double delay = plan.DelayMs;
@@ -319,6 +324,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     delay = Math.Clamp(average * plan.Step, 20, 2000);
                 }
                 return (frames, TimeSpan.FromMilliseconds(delay));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                throw;
             }
             catch (Exception ex)
             {
