@@ -18,6 +18,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
@@ -622,6 +623,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                             var saved = _library.PromoteToLibrary(embedded, mediaPath);
                             if (!string.IsNullOrEmpty(saved))
                             {
+                                // WPF's LibraryChanged refreshes the visible Deeper tab on save.
+                                if (Owner is MainShellWindow shell) shell.OnDeeperLibraryChanged();
                                 _lastDiscoverySource = DiscoverySource.PromotedFromEmbedded;
                                 LoadEnhancementFile(saved);
                                 ShowHint(Loc.GetF("deeper_player_promoted_to_library_fmt", System.IO.Path.GetFileName(saved)), 6);
@@ -1100,7 +1103,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void UpdateHostUi(Enhancement? enh, string? path)
         {
-            ClearHint();
             _loadedEnhancement = enh;
             _loadedFilePath = path;
 
@@ -1118,6 +1120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 return;
             }
 
+            ClearHint(); // WPF xaml.cs:1262: a new enhancement clears the hint; unload does not.
             _txtEnhPath.Text = path ?? "";
             _btnUnloadEnhancement.IsVisible = true;
             _btnCreateNewEnhancement.IsVisible = false;

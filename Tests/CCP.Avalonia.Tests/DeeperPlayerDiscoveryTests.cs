@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
@@ -61,7 +62,7 @@ public sealed class DeeperPlayerDiscoveryTests
 
     // WPF :494-528,554-557: promote the embedded enhancement and show the banner.
     [Fact]
-    public Task EmbeddedPromotion() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task EmbeddedPromotion() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var dir = Directory.CreateTempSubdirectory("ccp-player-embedded-").FullName;
@@ -81,9 +82,12 @@ public sealed class DeeperPlayerDiscoveryTests
             var hint = w.FindControl<TextBlock>("TxtHint")!;
             Assert.True(hint.IsVisible);
             Assert.Equal(Loc.GetF("deeper_player_promoted_to_library_fmt", Path.GetFileName(promoted)), hint.Text);
+            w.FindControl<Button>("BtnUnloadEnhancement")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(hint.IsVisible);
+            await Task.Delay(TimeSpan.FromSeconds(6.5));
+            Assert.False(hint.IsVisible);
         }
         finally { w.Close(); File.Delete(promoted); Directory.Delete(dir, true); }
-        return Task.CompletedTask;
     });
 
     // WPF :503-528: an existing match prevents a duplicate but the embedded version wins.
@@ -170,8 +174,12 @@ public sealed class DeeperPlayerDiscoveryTests
         try
         {
             w.Show();
+            w.LoadEnhancementFromMemory(Video("Previous", media), "test");
             w.OpenLocalMediaFile(media);
             var hint = w.FindControl<TextBlock>("TxtHint")!;
+            Assert.True(hint.IsVisible);
+            Assert.Equal(Loc.Get("deeper_player_no_enh_for_media"), hint.Text);
+            w.FindControl<Button>("BtnUnloadEnhancement")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True(hint.IsVisible);
             Assert.Equal(Loc.Get("deeper_player_no_enh_for_media"), hint.Text);
             Assert.True(w.FindControl<Button>("BtnCreateNewEnhancement")!.IsVisible);
