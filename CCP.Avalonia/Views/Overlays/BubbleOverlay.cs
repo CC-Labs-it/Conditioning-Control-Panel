@@ -303,7 +303,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (b.Spec != null) { PopChaos(b); return; }
             var s = CoreSettings.Current;
-            var paid = Field.Pop(b, s);
+            var paid = Field.Pop(b, s, out var luckyRoll);
+            // WPF SkillTreeService.cs:216-223 fires before BubbleService.cs:1085-1108 pays the bucket.
+            if (luckyRoll) global::ConditioningControlPanel.Avalonia.Views.Windows.LuckyToast.Proc(App.Mods?.GetLuckyBubbleLabel() ?? global::ConditioningControlPanel.Localization.Loc.Get("skill_lucky_bubble"), 20);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
             XpBudgetChanged?.Invoke();
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped

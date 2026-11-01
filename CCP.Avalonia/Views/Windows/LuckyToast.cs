@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// the lucky XP toast. ONE window, built on the first proc and reused (ccp-bugs #1312, Core
     /// <see cref="LuckyToastRule"/>): a proc while it is up only refreshes text and hold; a game owning the screen or the
     /// perk opt-out skips it. Fades in 200 ms, holds 3 s after the LAST proc, fades out 300 ms and hides; closed for
-    /// real when the shell closes. Raised where this head rolls the proc (FlashOverlay, WPF RollLuckyFlash).
+    /// real when the shell closes. Raised where this head rolls the proc (FlashOverlay and BubbleOverlay).
     /// </summary>
     internal static class LuckyToast
     {

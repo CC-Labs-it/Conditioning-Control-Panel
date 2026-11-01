@@ -14,8 +14,7 @@
 //   SkillCard_Click (+ CelebrateEnhancementPurchase, UpdateTrophyCaseColumns) - purchasing is
 //     ProfileSync.PurchaseSkillAsync, a server call with auth recovery and a sync retry, not ported;
 //     purchasable nodes draw their WPF state but do not take a click.
-// Lucky flash toast: LuckyToast.cs, raised by FlashOverlay.Show, closed by App shutdown.
-// Lucky bubble proc remains missing (WPF SkillTreeService.cs:212-222).
+// Lucky flash and bubble toasts: LuckyToast.cs, raised by FlashOverlay and BubbleOverlay, closed by App shutdown.
 //   The prestige rank-up burst (_prestigeRowBorder) rides on the purchase above.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
