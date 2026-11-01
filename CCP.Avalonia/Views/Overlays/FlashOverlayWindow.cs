@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -29,6 +30,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed class FlashOverlayWindow : Window
     {
         private readonly Image _image;
+        private readonly List<Bitmap> _frames;
+        private readonly TimeSpan _frameDelay;
+        private long _frameStart;
+        private bool _picturesReleased;
+        internal int FrameIndex { get; private set; }
+        internal bool HasAnimation => _frames.Count > 1;
+
+        // WPF FlashService.cs:119-125 and 1773-1776: speed is snapshotted at spawn,
+        // then the safety setting can lengthen the delay further.
+        internal static TimeSpan ScaleFrameDelay(TimeSpan source, double speed)
+        {
+            double ms = source.TotalMilliseconds;
+            if (!double.IsFinite(ms) || ms <= 0) ms = 100;
+            if (!double.IsFinite(speed) || speed <= 0) speed = 1;
+            return TimeSpan.FromMilliseconds(Math.Max(10, ms / Math.Clamp(speed, 0.25, 4)));
+        }
+
+        internal void StartFrames(long start) => _frameStart = start;
+        internal void AdvanceFrames(long now)
+        {
+            if (_picturesReleased || !HasAnimation) return;
+            int index = (int)(FlashOverlay.Clock.GetElapsedTime(_frameStart, now).TotalMilliseconds / _frameDelay.TotalMilliseconds % _frames.Count);
+            if (index == FrameIndex) return;
+            FrameIndex = index;
+            _image.Source = _frames[index];
+        }
+
+        internal void ReleasePictures()
+        {
+            if (_picturesReleased) return;
+            _picturesReleased = true;
+            _image.Source = null;
+            FlashOverlay.DisposeFrames(_frames);
+        }
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
         private readonly Panel _card, _root;
         private readonly Border _glow, _whiten;
@@ -322,8 +357,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Height = 300;
         }
 
-        public FlashOverlayWindow(Bitmap picture)
+        public FlashOverlayWindow(Bitmap picture, List<Bitmap>? frames = null, TimeSpan frameDelay = default)
         {
+            _frames = frames ?? new List<Bitmap> { picture };
+            var delay = ScaleFrameDelay(frameDelay, CoreSettings.Current.FlashGifSpeedMultiplier);
+            if (Services.Safety.GentleVisuals.On)
+                delay = TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.ScaleDelayMs(delay.TotalMilliseconds));
+            _frameDelay = delay;
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
@@ -345,7 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; picture.Dispose(); };
+            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; ReleasePictures(); };
         }
 
         /// <summary>

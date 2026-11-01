@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -14,6 +16,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
 using Serilog;
+using SkiaSharp;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -33,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
-    /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
+    /// the Pendulum motion style (Drift and Bounce is below), remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
     {
@@ -111,21 +114,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
-        private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
+        internal static void Schedule(List<(List<Bitmap> Frames, TimeSpan Delay, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
             int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
             var refused = false;
             for (var i = 0; i < flashes.Count; i++)
             {
-                var (bmp, rect, path, screen) = flashes[i];
+                var (frames, delay, rect, path, screen) = flashes[i];
                 var last = i == flashes.Count - 1;
                 DispatcherTimer.RunOnce(() =>
                 {
                     try
                     {
-                        if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
-                        refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
+                        if (refused || _closed || generation != _generation || Active.Count >= cap) { DisposeFrames(frames); return; }
+                        refused = !Show(frames[0], rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion, frames, delay);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
                     finally { if (last) done?.Invoke(); }
@@ -136,20 +139,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>One flash on screen plus what WPF SpawnFlashWindow pays for it: the lucky roll
         /// before the show (FlashService.cs:1851) and its glow (1881-1967).</summary>
         internal static bool Show(Bitmap bmp, PixelRect rect, string path, Screen screen, double alpha, TimeSpan fade,
-            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null)
+            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null,
+            List<Bitmap>? frames = null, TimeSpan frameDelay = default)
         {
             var s = CoreSettings.Current;
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
-            var w = new FlashOverlayWindow(bmp)
+            var w = new FlashOverlayWindow(bmp, frames, frameDelay)
             {
                 HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
-            if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
-            Paid(path, s, hydraGeneration, multiplier);
-            return true;
+            try
+            {
+                if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable))
+                { w.ReleasePictures(); return false; }
+                Paid(path, s, hydraGeneration, multiplier);
+                return true;
+            }
+            catch { w.ReleasePictures(); w.Close(); throw; }
         }
 
         /// <summary>What a shown flash pays (WPF FlashService.cs:1608, 1834-1877, 2165-2172): session
@@ -242,10 +251,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Active.Add(entry);
             w.Show();
             w.Run(alpha, fade, lifetime);
+            StartAnimation(w);
             var motion = BuildMotion(rect, screen, CoreSettings.Current, Rng, w.InheritMotion);
             w.MotionStyle = motion?.Style ?? FlashMotionStyle.Still;
             if (motion != null) StartDrift(w, motion);
             return true;
+        }
+
+        // WPF FlashService.cs:1771-1777, 3330-3338: one heartbeat for all live GIFs,
+        // indexed from real elapsed time so a late tick does not slow the animation.
+        internal static readonly List<FlashOverlayWindow> Animated = new();
+        private static DispatcherTimer? _animationTimer;
+        internal static bool AnimationRunning => _animationTimer != null;
+
+        internal static void StartAnimation(FlashOverlayWindow w)
+        {
+            if (!w.HasAnimation) return;
+            w.StartFrames(Clock.GetTimestamp());
+            Animated.Add(w);
+            w.Closed += (_, _) => StopAnimation(w);
+            if (_animationTimer != null) return;
+            _animationTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => AnimationTick());
+            _animationTimer.Start();
+        }
+
+        internal static void StopAnimation(FlashOverlayWindow w)
+        {
+            Animated.Remove(w);
+            if (Animated.Count == 0) { _animationTimer?.Stop(); _animationTimer = null; }
+        }
+
+        internal static void AnimationTick()
+        {
+            var now = Clock.GetTimestamp();
+            foreach (var w in Animated) w.AdvanceFrames(now);
         }
 
         // ---- Flashes v2 motion: Drift and Bounce (WPF FlashService.SpawnLayerVisual + FlashLayer tick) ----
@@ -381,6 +420,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (w.IsFadingOut || w.Exit != null || w.Shatter != null || !Active.Any(e => e.Window == w)) return;
             Active.RemoveAll(e => e.Window == w);
+            StopAnimation(w);
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
@@ -425,7 +465,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var s = CoreSettings.Current;
                 var occupied = Active.Select(a => a.Rect).ToList();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
-                if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
+                if (generation != _generation) { foreach (var f in flashes) DisposeFrames(f.Frames); return; }
                 Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
                     parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
@@ -449,6 +489,105 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// record, and a failed decrypt falls back to the folder.</summary>
         internal static string? NextFlashPath(IReadOnlyList<string> files) => PackImages.TryDraw(files.Count) ?? NextPath(files);
 
+        internal static void DisposeFrames(IEnumerable<Bitmap> frames)
+        {
+            foreach (var frame in frames) frame.Dispose();
+        }
+
+        // WPF AnimatedWebp.cs:62-84 bounds concurrent native composition canvases.
+        internal static readonly SemaphoreSlim DecodeGate = new(2, 2);
+
+        /// <summary>WPF FlashService.cs:1419-1475 and AnimatedWebp.cs:167-244: GIF/WebP
+        /// frames are composed in order, kept at display size with a 60-frame / 30 MB budget,
+        /// then timed at the average kept delay times the stride. Static decode is the fallback.</summary>
+        internal static (List<Bitmap> Frames, TimeSpan Delay) DecodePicture(string path, int maxDimension)
+        {
+            DecodeGate.Wait();
+            try { return DecodePictureCore(path, maxDimension); }
+            finally { DecodeGate.Release(); }
+        }
+
+        private static (List<Bitmap> Frames, TimeSpan Delay) DecodePictureCore(string path, int maxDimension)
+        {
+            var frames = new List<Bitmap>();
+            int stillWidth = Math.Max(1, maxDimension);
+            try
+            {
+                using var codec = SKCodec.Create(path);
+                if (codec != null && codec.Info.Width > 0 && codec.Info.Height > 0)
+                {
+                    double fit = Math.Min(1, stillWidth / (double)Math.Max(codec.Info.Width, codec.Info.Height));
+                    stillWidth = Math.Max(1, (int)Math.Round(codec.Info.Width * fit));
+                }
+                if (codec != null && codec.FrameCount > 1 &&
+                    (Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase) ||
+                     Path.GetExtension(path).Equals(".webp", StringComparison.OrdinalIgnoreCase)))
+                {
+                    int count = codec.FrameCount, sw = codec.Info.Width, sh = codec.Info.Height;
+                    if (sw > 0 && sh > 0 && (long)sw * sh <= 4096L * 4096L)
+                    {
+                        double scale = Math.Min(1, Math.Max(1, maxDimension) / (double)Math.Max(sw, sh));
+                        int tw = Math.Max(1, (int)Math.Round(sw * scale)), th = Math.Max(1, (int)Math.Round(sh * scale));
+                        long bytes = (long)tw * th * 4;
+                        double estimatedMb = bytes * (double)count / (1024 * 1024);
+                        int keep = estimatedMb > 30 ? Math.Max(10, (int)(count * 30 / estimatedMb)) : count;
+                        keep = Math.Min(keep, 60);
+                        int step = Math.Max(1, (int)Math.Ceiling(count / (double)keep));
+                        int decodeCount = Math.Min(count, 600);
+                        var info = codec.FrameInfo;
+                        var full = new SKImageInfo(sw, sh, SKColorType.Bgra8888, SKAlphaType.Premul);
+                        using var canvas = new SKBitmap(full);
+                        using var scaled = new SKBitmap(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul));
+                        var pixels = canvas.GetPixels();
+                        byte[]? restore = null;
+                        int restoreIndex = -1, durationSamples = 0;
+                        long durationTotal = 0;
+                        for (int i = 0; i < decodeCount && frames.Count < keep; i++)
+                        {
+                            int prior = -1;
+                            if (i > 0 && info[i].RequiredFrame >= 0)
+                            {
+                                if (info[i - 1].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious) prior = i - 1;
+                                else if (restore != null && restoreIndex >= info[i].RequiredFrame)
+                                { Marshal.Copy(restore, 0, pixels, restore.Length); prior = restoreIndex; }
+                            }
+                            var result = codec.GetPixels(full, pixels, prior >= 0 ? new SKCodecOptions(i, prior) : new SKCodecOptions(i));
+                            if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput) break;
+                            if (i + 1 < decodeCount && info[i].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious
+                                && info[i + 1].DisposalMethod == SKCodecAnimationDisposalMethod.RestorePrevious)
+                            {
+                                restore ??= new byte[canvas.ByteCount];
+                                canvas.GetPixelSpan().CopyTo(restore);
+                                restoreIndex = i;
+                            }
+                            if (i % step != 0) continue;
+                            canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+                            frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
+                                new PixelSize(tw, th), new Vector(96, 96), scaled.RowBytes));
+                            int duration = info[i].Duration;
+                            if (duration > 0) { durationTotal += duration; durationSamples++; }
+                        }
+                        if (frames.Count >= 2)
+                        {
+                            double avg = durationSamples > 0 ? (double)durationTotal / durationSamples : 100;
+                            if (avg < 20) avg = 100;
+                            return (frames, TimeSpan.FromMilliseconds(Math.Clamp(avg * step, 20, 2000)));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Debug("Flash: animated decode failed for {Path}: {E}", path, ex.Message); }
+            DisposeFrames(frames);
+            frames.Clear();
+            try
+            {
+                using var stream = File.OpenRead(path);
+                frames.Add(Bitmap.DecodeToWidth(stream, stillWidth));
+            }
+            catch (Exception ex) { Log.Debug("Flash: still decode failed for {Path}: {E}", path, ex.Message); }
+            return (frames, TimeSpan.FromMilliseconds(100));
+        }
+
         private static string ImagesPath() => Path.Combine(CorePaths.EffectiveAssets, "images");
 
         /// <summary>
@@ -458,12 +597,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// from the header size alone, so each picture is decoded AT its display size like WPF's
         /// decode-at-display-size - never a full-resolution source held per window.
         /// </summary>
-        private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
+        internal static List<(List<Bitmap> Frames, TimeSpan Delay, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
             int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
         {
             var root = CorePaths.EffectiveAssets;
             var dir = Path.Combine(root, "images");
-            var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
+            var result = new List<(List<Bitmap>, TimeSpan, PixelRect, string, Screen)>(count);
             if (targets.Length == 0) return result;
 
             var files = Directory.Exists(dir)
@@ -485,8 +624,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     }
                     var screen = screens[targets[Rng.Next(targets.Length)]];
                     var rect = Place(screen.Bounds, screen.Scaling, info.Width, info.Height, s, Rng, occupied, size);
-                    using var stream = File.OpenRead(path);
-                    result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, path, screen));
+                    var (frames, delay) = DecodePicture(path, Math.Max(rect.Width, rect.Height));
+                    if (frames.Count == 0) continue;
+                    result.Add((frames, delay, rect, path, screen));
                     occupied.Add(rect);
                 }
                 catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
