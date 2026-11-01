@@ -1,11 +1,17 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
@@ -164,17 +170,30 @@ public sealed class EmiDeskChainTests
         finally { desk.Close(); }
     });
 
-    [Fact]
-    public Task DismissDuringStartupCannotBeOvertakenByWake() => Run(async () =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DismissDuringStartupCannotBeOvertakenByWake(bool afterReveal) => Run(async () =>
     {
         var desk = new EmiDeskWindow();
         try
         {
             int summoned = 0, dismissed = 0;
             desk.RunSummon(() => summoned++);
+            var body = desk.FindControl<Control>("BodyRoot")!;
+            var crt = (ScaleTransform)typeof(EmiDeskWindow).GetField("_crtScale", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(desk)!;
+            Assert.False(body.IsVisible);
+            if (afterReveal) await PumpUntil(() => body.IsVisible);
             desk.RunDismiss(() => dismissed++);
             Assert.True(desk.IsVisible);
+            Assert.True(body.IsVisible);
+            Assert.Equal(1, crt.ScaleX);
+            Assert.Equal(1, crt.ScaleY);
             Assert.Equal("^_^", desk.Face);
+            await Task.Delay(100);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(body.IsVisible);
+            Assert.Equal(1, crt.ScaleY);
             await PumpUntil(() => dismissed == 1);
             Assert.False(desk.IsVisible);
             Assert.False(desk.ChainLive);
@@ -206,6 +225,92 @@ public sealed class EmiDeskChainTests
         }
         finally { desk.Close(); }
     });
+
+    [Fact]
+    public Task PanicDuringDismissKeepsTheOutroAndClearsTheService() => Run(async () =>
+    {
+        var previous = ConditioningControlPanel.CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        ConditioningControlPanel.CoreSettings.ServiceProvider = () => settings;
+        var service = EmiDeskService.Instance;
+        try
+        {
+            settings.Current.EmiDeskEnabled = true;
+            settings.Current.EmiDeskMuteAvatar = false;
+            await service.Summon("test");
+            var desk = service.Window!;
+            Assert.True(service.IsOut);
+            desk.Say("A line");
+            Assert.Equal(".", desk.TourSpeechText);
+            PanicSurfaces.All.Single(surface => surface.Id == "emi-desk-feedback").Stop(null);
+            Assert.Null(desk.TourSpeechText);
+            Assert.False(desk.ChainLive);
+            service.Dismiss();
+            Assert.True(desk.ChainLive);
+            Assert.True(desk.InputLocked);
+            PanicSurfaces.StopAll("test");
+            Assert.True(desk.ChainLive);
+            await PumpUntil(() => !service.IsOut);
+            Assert.False(desk.IsVisible);
+            Assert.False(desk.InputLocked);
+        }
+        finally
+        {
+            service.Window?.ShutDown();
+            ConditioningControlPanel.CoreSettings.ServiceProvider = previous;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            EmiLineEngine.Instance.ResetForTests();
+        }
+    });
+
+    [Fact]
+    public Task RightClickDuringDizzyKeepsTheChainAndOpensTheRing() => Run(() =>
+    {
+        var desk = new EmiDeskWindow();
+        try
+        {
+            desk.Show();
+            int done = 0;
+            desk.PlayChain("dizzy", () => done++);
+            RightClickBody(desk);
+            Assert.True(desk.RingOpen);
+            Assert.True(desk.ChainLive);
+            Assert.Equal("@_@", desk.Face);
+            for (int i = 0; i < EmiChains.Get("dizzy")!.Seq.Count; i++) desk.AdvanceChain();
+            Assert.Equal(1, done);
+        }
+        finally { desk.ShutDown(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task RightClickDuringWakeStillFinishesTheSummonAndOpensTheRing() => Run(async () =>
+    {
+        var desk = new EmiDeskWindow();
+        try
+        {
+            int done = 0;
+            desk.RunSummon(() => done++);
+            await PumpUntil(() => desk.ChainLive && !desk.Transiting);
+            RightClickBody(desk);
+            Assert.True(desk.RingOpen);
+            Assert.False(desk.ChainLive);
+            Assert.Equal(1, done);
+        }
+        finally { desk.ShutDown(); }
+    });
+
+    private static void RightClickBody(EmiDeskWindow desk)
+    {
+        // Freeze the live frame while the headless ring is built; the click still goes through the real handler.
+        ((DispatcherTimer)typeof(EmiDeskWindow).GetField("_chainTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(desk)!).Stop();
+        Dispatcher.UIThread.RunJobs();
+        var body = desk.FindControl<Control>("BodyRoot")!;
+        var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), desk)!.Value;
+        desk.MouseDown(point, MouseButton.Right);
+        desk.MouseUp(point, MouseButton.Right);
+        Dispatcher.UIThread.RunJobs();
+    }
 
     [Fact]
     public Task EndingPresentationCancelsItsPendingEntrance() => Run(async () =>

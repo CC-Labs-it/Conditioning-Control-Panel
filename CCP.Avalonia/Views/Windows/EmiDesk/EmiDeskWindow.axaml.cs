@@ -954,6 +954,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
 
+        // WPF EmiDeskWindow.Fx.cs:143-171: the wink owns the callback that finishes dismissal.
+        internal void StopFeedbackForPanic()
+        {
+            if (!_transiting || _wordlessChain?.Id != "wink") { CancelChain(); return; }
+            StopPatFeedback();
+            StopTourSpeech();
+        }
+
         // ponytail: the five canon body moves (bounce, thud, nod, droop, shiver) were WPF
         // DoubleAnimations on _crtScale / _moveShift. Their Avalonia animations remain unported.
         private void RunBodyMove(string move)
@@ -1344,8 +1352,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 // The two buttons agree about the entrance: if the left one may cut it, so may this
                 // one, or the ring would open over a chain that is still animating her body.
-                FinishSummon();
-                CancelChain();
+                if (_summonChainLive) { FinishSummon(); CancelChain(); }
 
                 RaiseActivity();
                 PlayClickSquash();
@@ -2313,6 +2320,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 try { OnTearDownCore(); }
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] tear-down seam threw"); }
 
+                // WPF Fx.cs:139-143: show the wink; a cancelled summon can leave the body hidden or scaled down.
+                _bodyRoot.IsVisible = true;
+                SetCrt(1, 1);
                 PlayChain("wink", () =>
                 {
                     if (_closingForGood) { FinishDismiss(done); return; }
