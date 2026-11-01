@@ -84,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and
             // grace-pause rungs below return before the stop pass ("chaster-hold"). A game's pause above is no panic.
             PanicChasterHold.Open("panic key");
+            try { EmiDesk.EmiDeskService.Instance.StopRingSpeechForPanic(); } catch (Exception ex) { Serilog.Log.Debug(ex, "EMI panic silence failed"); } // WPF xaml.cs:1620
             // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
             // or a Lines task reopens the card the press just dismissed. fromKey: only this physical press may be the
             // Escape that closes the Ctrl+K palette (the stop pass's own "leash-task" never skips).

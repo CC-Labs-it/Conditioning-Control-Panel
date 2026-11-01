@@ -21,9 +21,15 @@ public sealed class PanicKeyChasterHoldTests
     public void APressSpentOnALockCard_StillOpensTheHold() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var emi = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        var oldEngine = emi.LineEngine;
+        emi.LineEngine = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.FromJson("""
+            {"moments":{"panicPressed":{"hold":true,"tailMs":300000}},"pools":{}}
+            """);
+        Assert.False(emi.LineEngine.HoldActive);
         var s = CoreSettings.Current;
         var old = (s.PanicKeyEnabled, s.PanicKey);
         var (oldAll, oldService) = (PanicSurfaces.All, PanicChasterHold.Service);
@@ -43,11 +49,13 @@ public sealed class PanicKeyChasterHoldTests
 
             Assert.False(LockCardWindow.IsAnyOpen());
             Assert.Empty(stops);          // the lock-card rung returned before the stop pass
+            Assert.True(emi.LineEngine.HoldActive); // the stop registry was never reached
             Assert.Equal(1, holds);       // ...and the hold opened anyway
         }
         finally
         {
             if (LockCardWindow.IsAnyOpen()) LockCardWindow.ForceCloseAll();
+            emi.LineEngine = oldEngine;
             (PanicSurfaces.All, PanicChasterHold.Service) = (oldAll, oldService);
             shell.Close();
             (s.PanicKeyEnabled, s.PanicKey) = old;

@@ -68,8 +68,8 @@ public sealed class PresetsFocalFxTests
     {
         // Turn motion off with a fresh entrance still in flight, before testing the snap.
         view.IsVisible = false; view.IsVisible = true;
-        var entrance = (System.Threading.CancellationTokenSource)typeof(PresetsTabView)
-            .GetField("_entranceCancellation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(view)!;
+        var entrance = Assert.IsType<System.Threading.CancellationTokenSource>(
+            Assert.IsAssignableFrom<System.Reflection.FieldInfo>(typeof(PresetsTabView).GetField("_entranceCancellation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)).GetValue(view));
         var token = entrance.Token;
         Assert.False(token.IsCancellationRequested);
         CoreSettings.Current.MotionLevel = MotionLevel.Off;

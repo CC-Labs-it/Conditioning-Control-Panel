@@ -26,6 +26,7 @@ public partial class EmiDeskWindow
     private void StartSpeech(string? line, string face, Action? done)
     {
         CancelChain();
+        CancelHold();
         if (PresentationActive) return;
         _speechFrames = EmiChains.MakeSay(line, face, EmiChains.SayHoldMs(line)).Seq;
         _speechIndex = 0;
@@ -43,8 +44,8 @@ public partial class EmiDeskWindow
         if (!_speechHooked)
         {
             _speechHooked = true;
-            Closed += (_, _) => CancelSpeech();
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) CancelSpeech(); };
+            Closed += (_, _) => { CancelSpeech(); CancelHold(); };
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) { CancelSpeech(); CancelHold(); } };
             Resized += (_, _) => PlaceSpeechBubble();
             Moved += (_, _) => PlaceSpeechBubble();
         }
@@ -82,17 +83,19 @@ public partial class EmiDeskWindow
     private void CancelSpeech()
     {
         _speechTimer?.Stop();
-        _holdTimer?.Stop();
-        _holdTimer = null;
         _speechDone = null;
         _speechFrames = Array.Empty<EmiFrame>();
         HideSpeechBubble();
     }
 
+    // WPF Bubble.cs:573: a chain cancellation must not steal the hold's return to rest.
+    private void CancelHold() { _holdTimer?.Stop(); _holdTimer = null; }
+
     /// <summary>WPF SpeakLine: acknowledge only once the first dot reaches the widget.</summary>
     internal bool SpeakRingLine(LineDraw line, EmiLineEngine engine)
     {
         if (PresentationActive || !IsVisible) return false;
+        CancelHold();
         if (line.Hold)
         {
             HookSpeechLifetime();

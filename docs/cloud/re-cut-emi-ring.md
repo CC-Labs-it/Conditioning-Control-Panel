@@ -36,19 +36,7 @@ No new language keys. No safety or Scrolller code imported from old lanes. Core 
 - git diff --check: passed.
 Focused tests: Tests/CCP.Avalonia.Tests/EmiRingSpeechTests.cs:89 (cadence, cancellation and hide), :122 (hold cut and rest), :142 (ring events, live engine draw, first-dot cooldown acknowledgement, panic surface and away hold).
 Fail-proof: temporarily removed frame bubble painting, the hold face draw, and the ringOpen emission. All three EmiRingSpeechTests failed at their corresponding assertions (3 failed, 0 passed). Both implementation files were restored immediately. No tests were skipped or weakened.
-## Changed files
-- CCP.Avalonia/CCP.Avalonia.csproj
-- CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskService.RingMoments.cs
-- CCP.Avalonia/Views/Windows/EmiDesk/EmiBookWindow.axaml.cs
-- CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskService.cs
-- CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.Ring.cs
-- CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.Speech.cs
-- CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.axaml.cs
-- CCP.Avalonia/Views/Windows/PanicSurfaces.cs
-- Tests/CCP.Avalonia.Tests/EmiRingSpeechTests.cs
-- Tests/CCP.Avalonia.Tests/PanicSurfacesTests.cs
-- docs/avalonia-parity.html
-- docs/cloud/re-cut-emi-ring.md
+Changed files from the initial cut: CCP.Avalonia/CCP.Avalonia.csproj, CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskService.RingMoments.cs, CCP.Avalonia/Views/Windows/EmiDesk/EmiBookWindow.axaml.cs, CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskService.cs, CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.Ring.cs, CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.Speech.cs, CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.axaml.cs, CCP.Avalonia/Views/Windows/PanicSurfaces.cs, Tests/CCP.Avalonia.Tests/EmiRingSpeechTests.cs, Tests/CCP.Avalonia.Tests/PanicSurfacesTests.cs, docs/avalonia-parity.html, docs/cloud/re-cut-emi-ring.md.
 ## Review follow-up
 P2 accepted: WPF Windows/EmiDesk/EmiDeskWindow.Bubble.cs:356 reads EmiBook.SideOfHer, with the Core screen-edge rule retaining final say. WPF Windows/EmiDesk/EmiBookWindow.xaml.cs:1093 announces placement changes; Services/EmiDesk/EmiBook.cs:147,179,190 announces open/close changes. Avalonia EmiDeskWindow.Speech.cs:166 now reads its owned book; EmiBookWindow.axaml.cs:1183 notifies its owner on placement side changes, and EmiDeskWindow.axaml.cs relayouts on open and both close paths. No new language keys or WPF/Core changes.
 Focused test: EmiRingSpeechTests.BubbleDodgesBookOnBothSidesAndStaysInTheWorkArea checks a live bubble across right/left book placement, opening and both close paths, and clamps long lines at both monitor edges.
@@ -66,3 +54,9 @@ CI fail-proof: the Off test now also asserts cancellation of the fresh entrance 
 Full Linux shard 0/2 attempts hit fatal glyphTypeface initialization failures (Inter/Segoe UI Black/Consolas) in other test bootstraps; testhosts were stopped after the fatal errors, so these are not passing shard results. No test or assertion was disabled. Windows CI still needs to run the pushed fix.
 
 Final restored Release targeted run, including the cancellation assertion: Failed 0, Passed 15, Skipped 0, Total 15.
+
+Local second gate: both panic P2s accepted. WPF Bubble.cs:548-573 keeps CancelHold separate from CancelChain; Avalonia now preserves the hold timer through the full stop registry and clears it explicitly on new speech/hold, hide, and close. WPF MainWindow.xaml.cs:1617-1620 arms silence before early rungs; Avalonia PanicKey.cs now does so beside PanicChasterHold.Open. Tests exercise the complete StopAll with a real hold row and the lock-card early return. Reflection-note lookups now use assignability assertions, so renames fail as assertions.
+
+Second-gate fail-proofs: canceling the hold in CancelSpeech failed EmiRingSpeechTests.cs:182 (rest expected, -_- actual); removing the early call failed PanicKeyChasterHoldTests.cs:52. Each run: 1 failed, 0 passed. Both files restored. Release builds: 0 errors; Core: 4636 passed, 5 skips, 0 failed; initial focused Avalonia run: 17 passed, 0 skipped/failed.
+
+Restored second-gate Release run, including existing panic-key and aftermath regressions: Failed 0, Passed 31, Skipped 0, Total 31. Core guards passed; avalonia_docs self-check OK; git diff --check passed.

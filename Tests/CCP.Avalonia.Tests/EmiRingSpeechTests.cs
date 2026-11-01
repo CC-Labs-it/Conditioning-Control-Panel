@@ -40,7 +40,7 @@ public sealed class EmiRingSpeechTests
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 // The headless Position setter does not raise the widget's drag-only Moved event.
                 if (desk.Book is { } book)
-                    typeof(EmiBookWindow).GetMethod("OnOwnerMoved", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    Assert.IsAssignableFrom<System.Reflection.MethodInfo>(typeof(EmiBookWindow).GetMethod("OnOwnerMoved", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))
                         .Invoke(book, new object?[] { desk, EventArgs.Empty });
             }
             Border Bubble() => Assert.Single(desk.BubbleHost.Children.OfType<Border>());
@@ -167,15 +167,19 @@ public sealed class EmiRingSpeechTests
             Assert.Equal(0, EmiState.Current.RingIgnoreStreak);
             service.LineEngine = EmiLineEngine.FromJson("""
                 {"moments":{"ringOpen":{"pools":["ring"],"priority":3,"cooldownMs":60000},
-                "panicPressed":{"hold":true,"tailMs":300000}},
-                "pools":{"ring":[{"id":"ring.1","t":"a card stays","face":"^_^","spice":0}]}}
+                "panicPressed":{"hold":true,"pools":["quiet"],"tailMs":300000}},
+                "pools":{"ring":[{"id":"ring.1","t":"a card stays","face":"^_^","spice":0}],
+                "quiet":[{"id":"quiet.1","t":"","face":"-_-"}]}}
                 """);
             service.Fire("ringOpen");
             Assert.True(desk.ChainLive);
             Assert.Null(service.LineEngine.Draw("ringOpen")); // first dot acknowledged the cooldown
             desk.StepSpeech(); desk.StepSpeech(); desk.StepSpeech();
             Assert.Contains(desk.BubbleHost.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "a card stays");
-            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "emi-speech").Stop(null);
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.StopAll("test");
+            Assert.Equal("-_-", desk.Face);
+            desk.EndHold();
+            Assert.Equal(EmiChains.RestFace, desk.Face);
             Assert.False(desk.ChainLive);
             Assert.Contains("panicPressed", moments);
             Assert.True(service.LineEngine.HoldActive);
