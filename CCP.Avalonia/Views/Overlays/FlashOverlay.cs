@@ -56,9 +56,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static int _generation;
         private static Action? _stopSound;
+        private static TaskCompletionSource<TimeSpan?>? _voiceLength;
         private static bool _soundPlayingForCurrentFlash;
         private static readonly ShuffleBag<string> VoiceBag = new(p => p, Rng);
         internal static Func<TimeSpan, Task> UnduckDelay = Task.Delay;
+        internal static Action<string> ShowVoice = path => Views.AvatarTube.AvatarTubeWindow.Live?.ShowFlashVoice(path);
+        internal static TimeProvider VoiceClock = TimeProvider.System;
+        internal static long WhisperBusyUntil;
+        private static int _voiceAwaitingLength;
+        internal static bool IsWhisperPlaying => Volatile.Read(ref _voiceAwaitingLength) != 0 ||
+            VoiceClock.GetUtcNow().UtcTicks < Interlocked.Read(ref WhisperBusyUntil);
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
         internal static int Generation => _generation;
@@ -162,25 +169,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!s.FlashAudioEnabled || s.MasterVolume <= 0 || s.AvatarMuted || s.CompanionVoiceLinesMuted
                 || string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
             _stopSound?.Invoke();
-            var started = new TaskCompletionSource<TimeSpan?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var began = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var lengthKnown = _voiceLength = new TaskCompletionSource<TimeSpan?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var master = s.MasterVolume / 100f;
             var gain = CompanionVoiceGain.ApplyLevel(Math.Max(0.05f, (float)Math.Pow(master, 1.5)) * CompanionVoiceGain.BarkTrim, s.CompanionVoiceLevel);
-            // LibVLC refuses a zero gain, while WPF plays silently at voice level zero.
+            // Zero voice level still plays silently and keeps its audio-linked length, as WPF.
             _stopSound = CoreAudio.PlayStoppable(path, Math.Max(gain, 0.000001f), "flash-voice",
-                length => started.TrySetResult(length > TimeSpan.Zero ? length : TimeSpan.FromSeconds(5)),
-                () => started.TrySetResult(null));
-            TimeSpan? duration;
-            try { duration = await started.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
-            catch (TimeoutException) { _stopSound?.Invoke(); _stopSound = null; return null; }
-            if (!duration.HasValue || generation != _generation || _closed) return null;
+                length => { began.TrySetResult(true); if (length > TimeSpan.Zero) lengthKnown.TrySetResult(length); },
+                () => { began.TrySetResult(false); lengthKnown.TrySetResult(null); });
+            bool playing;
+            try { playing = await began.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
+            catch (TimeoutException) { _stopSound?.Invoke(); _stopSound = null; playing = false; }
+            if (generation != _generation || _closed) { _voiceLength = null; return null; }
+
+            // WPF PlaySound returns 5 seconds even on failure, then still marks the whisper,
+            // shows the filename, ducks and pays sound XP (FlashService.cs:1537-1557, 4719-4726).
+            var beganAt = VoiceClock.GetUtcNow();
+            Volatile.Write(ref _voiceAwaitingLength, 1);
             _soundPlayingForCurrentFlash = true;
-            if (s.AudioDuckingEnabled)
-            {
-                CoreAudio.Duck(s.DuckingLevel);
-                var duckGeneration = CoreAudio.DuckGeneration;
-                _ = ReleaseVoiceDuck(duration.Value + TimeSpan.FromMilliseconds(1500), duckGeneration);
-            }
-            return duration;
+            ShowVoice(path);
+            long duckGeneration = 0;
+            var ducked = s.AudioDuckingEnabled;
+            if (ducked) { CoreAudio.Duck(s.DuckingLevel); duckGeneration = CoreAudio.DuckGeneration; }
+            var duration = playing ? await lengthKnown.Task : null;
+            _voiceLength = null;
+            duration ??= TimeSpan.FromSeconds(5);
+            var remaining = duration.Value - (VoiceClock.GetUtcNow() - beganAt);
+            if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
+            var until = (VoiceClock.GetUtcNow() + remaining + TimeSpan.FromMilliseconds(250)).UtcTicks;
+            long previous;
+            do { previous = Interlocked.Read(ref WhisperBusyUntil); }
+            while (until > previous && Interlocked.CompareExchange(ref WhisperBusyUntil, until, previous) != previous);
+            Volatile.Write(ref _voiceAwaitingLength, 0);
+            if (ducked) _ = ReleaseVoiceDuck(remaining + TimeSpan.FromMilliseconds(1500), duckGeneration);
+            // The picture starts only once metadata is known. Subtract time already played
+            // so its +1 second lifetime still ends on WPF's original sound timeline.
+            return generation == _generation && !_closed ? (playing ? remaining : duration.Value) : null;
         }
 
         internal static async Task ReleaseVoiceDuck(TimeSpan delay, long generation)
@@ -445,6 +469,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closed |= final;
             _stopSound?.Invoke();
             _stopSound = null;
+            _voiceLength?.TrySetResult(null);
             _soundPlayingForCurrentFlash = false;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();

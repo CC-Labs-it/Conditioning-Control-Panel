@@ -24,7 +24,9 @@ public sealed class TubeSpeechQueueTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -228,4 +230,57 @@ public sealed class TubeSpeechQueueTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task FlashVoiceShowsFilenameWithoutSoundAndDoesNotReplaceAPlayingBubble() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var (muted, enabled, detached, audio) = (s.AvatarMuted, s.AvatarEnabled, s.AvatarTubeDetached, CoreAudio.PlayStoppableProvider);
+        var played = 0;
+        s.AvatarEnabled = true; s.AvatarTubeDetached = true;
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            s.AvatarMuted = true;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { played++; return () => { }; };
+            tube.Show();
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            tube.ShowFlashVoice("/voices/muted.wav");
+            Assert.False(tube.IsSpeaking);
+            s.AvatarMuted = false;
+            s.AvatarEnabled = false;
+            tube.ShowFlashVoice("/voices/disabled.wav");
+            Assert.False(tube.IsSpeaking);
+            s.AvatarEnabled = true;
+            tube.ShowFlashVoice("/voices/good_girl.mp3");
+            Assert.Equal("good_girl", text.Text);
+            Assert.Equal(0, played);
+            tube.Giggle("queued");
+            Assert.Equal(1, tube.QueuedSpeechCount);
+            tube.ShowFlashVoice("/voices/other.wav");
+            Assert.Equal("good_girl", text.Text);
+            Assert.Equal(1, tube.QueuedSpeechCount);
+        }
+        finally
+        {
+            tube.Close();
+            (s.AvatarMuted, s.AvatarEnabled, s.AvatarTubeDetached, CoreAudio.PlayStoppableProvider) = (muted, enabled, detached, audio);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FlashVoiceSkipsAnAttachedTubeWithHiddenParent() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var (enabled, detached) = (s.AvatarEnabled, s.AvatarTubeDetached);
+        s.AvatarEnabled = true; s.AvatarTubeDetached = false;
+        var parent = new Window();
+        var tube = new AvatarTubeWindow(parent);
+        try { tube.ShowFlashVoice("/voices/hidden.wav"); Assert.False(tube.IsSpeaking); }
+        finally { tube.Close(); parent.Close(); (s.AvatarEnabled, s.AvatarTubeDetached) = (enabled, detached); }
+        return Task.CompletedTask;
+    });
+
 }
