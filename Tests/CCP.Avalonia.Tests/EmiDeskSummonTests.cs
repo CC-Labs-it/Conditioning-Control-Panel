@@ -178,8 +178,8 @@ public sealed class EmiDeskSummonTests
         Assert.Equal(1, done);
         window.FinishSummon();
         Assert.Equal(1, done);
-        Assert.False(window.ChainLive);
-        Assert.False(window.InputLocked);
+        Assert.Equal(global::ConditioningControlPanel.Services.EmiDesk.EmiChains.RestFace, window.Face);
+        Assert.Equal((false, false, "idle"), (window.ChainLive, window.InputLocked, (string)typeof(EmiDeskWindow).GetField("_pose", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!));
     });
 
     /// <summary>WPF ShowGiggle (Speech.cs:461): with EMI out and the mute accepted, the tube does not speak.</summary>
