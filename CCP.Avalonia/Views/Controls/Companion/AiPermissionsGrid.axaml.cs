@@ -99,7 +99,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         // Providers raise this off the UI thread (a poll or a sign-in callback).
         private void OnTierChanged(object? sender, global::ConditioningControlPanel.Models.PatreonTier tier) => Dispatcher.UIThread.Post(() =>
         {
-            if (VisualRoot is null) return;
+            if (VisualRoot is not null) RefreshTierState();
+        });
+
+        internal void RefreshTierState()
+        {
             if (_isPreview) { ApplyTierGate(); return; }
             // WPF MainWindow.UiUpdates.cs:915-928: repaint the effective value, never the saved choice.
             var wasLoading = _isLoading;
@@ -112,7 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
             finally { _isLoading = wasLoading; }
             ApplyTierGate();
-        });
+        }
 
         protected override void OnDetachedFromVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {

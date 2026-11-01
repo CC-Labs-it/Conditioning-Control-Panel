@@ -62,7 +62,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnDetachedFromVisualTree(e);
         }
 
-        private void OnTierChanged(object? sender, Models.PatreonTier tier) => OnProgramChanged(sender, EventArgs.Empty);
+        // WPF Patreon.cs:1127 -> ProgramsTab.cs:469-478 refreshes the dashboard even while this tab is hidden.
+        private void OnTierChanged(object? sender, Models.PatreonTier tier) => Dispatcher.UIThread.Post(() =>
+        {
+            if (VisualRoot is null) return;
+            RefreshPrograms();
+            (TopLevel.GetTopLevel(this) as MainShellWindow)?.SettingsPage?.RefreshProgramTodayCard();
+        });
 
         private void OnModChanged(object? sender, ConditioningControlPanel.Models.ModPackage e) => OnLanguageChanged(sender, EventArgs.Empty);
 
