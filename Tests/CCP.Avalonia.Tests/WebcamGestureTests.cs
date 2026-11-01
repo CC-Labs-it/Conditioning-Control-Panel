@@ -2,28 +2,20 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
-using ConditioningControlPanel.Avalonia.Views.Windows;
-using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Webcam;
 using OpenCvSharp;
 using Xunit;
-using AvApp = ConditioningControlPanel.Avalonia.App;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class WebcamGestureTests
 {
-    // Synthetic lips: a 20x(20*MAR) rectangle. All remaining lip-ring points lie inside it.
     private static float[][] Lips(float mar)
     {
         var lm = Enumerable.Range(0, 468).Select(_ => new[] { 20f, 20f }).ToArray();
@@ -32,15 +24,12 @@ public sealed class WebcamGestureTests
         foreach (int i in new[] { 178, 14, 402 }) lm[i] = new[] { 20f, 20 + 10 * mar };
         return lm;
     }
-
     [Theory]
     [InlineData(0.1)]
     [InlineData(0.6)]
     public void MarUsesThreeVerticalChordsNormalizedByWidth(double mar)
         => Assert.Equal(mar, MouthOpenDetector.ComputeMar(Lips((float)mar)), 5);
-
-    [Fact]
-    public void DegenerateMouthIsNotOpen()
+    [Fact] public void DegenerateMouthIsNotOpen()
     {
         var lm = Lips(0.6f); lm[308] = lm[78];
         Assert.Equal(0, MouthOpenDetector.ComputeMar(lm));
@@ -48,7 +37,6 @@ public sealed class WebcamGestureTests
         foreach (var p in lm) { p[0] = -100; p[1] = -100; }
         Assert.Equal(0, WebcamTracker.TongueRatio(bgr, lm));
     }
-
     [Theory]
     [InlineData(0, 0, 200, 1)]    // red/pink
     [InlineData(200, 0, 0, 0)]    // blue counts as other
@@ -58,10 +46,13 @@ public sealed class WebcamGestureTests
     {
         using var bgr = new Mat(40, 40, MatType.CV_8UC3, new Scalar(b, g, r));
         Assert.Equal(expected, WebcamTracker.TongueRatio(bgr, Lips(0.6f)));
+        Assert.Equal(expected, TongueDetector.Ratio(bgr, Lips(0.6f), out int tongue, out int teeth, out int shadow, out int other));
+        int[] counts = { tongue, other, teeth, shadow };
+        int category = r == 200 ? 0 : b == 200 ? 1 : b == 255 ? 2 : 3;
+        Assert.True(counts[category] > 0);
+        Assert.Equal(counts[category], counts.Sum());
     }
-
-    [Fact]
-    public void PinkPixelsOutsideTheLipPolygonDoNotCount()
+    [Fact] public void PinkPixelsOutsideTheLipPolygonDoNotCount()
     {
         int[] lip = { 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82 };
         var lm = Lips(0.6f);
@@ -71,16 +62,11 @@ public sealed class WebcamGestureTests
             lm[lip[i]] = new[] { (float)(20 + 10 * Math.Cos(angle)), (float)(20 + 8 * Math.Sin(angle)) };
         }
         using var bgr = new Mat(40, 40, MatType.CV_8UC3, new Scalar(0, 0, 200));
-        // Blue covers the complete lip polygon; pink remains in its bounding-box corners.
         Cv2.Ellipse(bgr, new OpenCvSharp.Point(20, 20), new OpenCvSharp.Size(11, 9), 0, 0, 360,
             new Scalar(200, 0, 0), -1);
         Assert.Equal(0, WebcamTracker.TongueRatio(bgr, lm));
     }
-
-    /// <summary>Counts detector fires, not events: an idle tracker never delivers (pinned by
-    /// WebcamCalibrationTests.Tracker_UsesCoreMarAndDropsStoppedRunEvents).</summary>
-    [Fact]
-    public void RealPixelPathFiresMouthThenTongueOnceAndFaceLossCancelsHold() => AvaloniaTestDispatcher.Run(() =>
+    [Fact] public void RealPixelPathFiresMouthThenTongueOnceAndFaceLossCancelsHold() => AvaloniaTestDispatcher.Run(() =>
     {
         var tracker = new WebcamTracker();
         int mouth = 0, tongue = 0, delivered = 0;
@@ -107,9 +93,7 @@ public sealed class WebcamGestureTests
         }
         finally { CoreSettings.Current.WebcamSensitivity = sensitivity; }
     });
-
-    [Fact]
-    public void DevicesDiagnosticsSubscribeOnceAndDetachWhenHidden() => AvaloniaTestDispatcher.Run(() =>
+    [Fact] public void DevicesDiagnosticsSubscribeOnceAndDetachWhenHidden() => AvaloniaTestDispatcher.Run(() =>
     {
         LabWebcamStatusTests.Setup();
         var section = new DevicesSettingsSection();
@@ -141,7 +125,6 @@ public sealed class WebcamGestureTests
         }
         finally { owner.Close(); }
     });
-
     [Theory]
     [InlineData("en", "Mouth-open #1", "Tongue-out #1")]
     [InlineData("de", "Mund geöffnet #1", "Zunge herausgestreckt #1")]
@@ -175,13 +158,8 @@ public sealed class WebcamGestureTests
         }
         finally { owner.Close(); LocalizationManager.Instance.SetLanguage("en"); }
     });
-
-    /// <summary>The status pill carries {loc:Str rf_webcam_stopped}; the live state is a bound key, so a
-    /// language change shows the current state in the new language, not a frozen or reverted text.</summary>
-    [Fact]
-    public void DevicesStatusFollowsTheLanguageWhileTracking() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
+    [Fact] public void DevicesStatusFollowsTheLanguageWhileTracking() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
     {
-        // Parked in Read: blank frames would race the assertion into "Face lost".
         var source = new ParkedSource();
         WebcamTracker.SourceFactory = () => source;
         var section = new DevicesSettingsSection();
@@ -200,9 +178,7 @@ public sealed class WebcamGestureTests
         }
         finally { LocalizationManager.Instance.SetLanguage("en"); owner.Close(); source.Release.Set(); tracker.Stop(); }
     });
-
-    [Fact]
-    public void TongueDeliveryRequiresTheSameLiveRun() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
+    [Fact] public void TongueDeliveryRequiresTheSameLiveRun() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
     {
         var source = new ParkedSource();
         WebcamTracker.SourceFactory = () => source;
@@ -228,8 +204,6 @@ public sealed class WebcamGestureTests
             tracker.ProcessMouthLandmarks(Lips(0.6f), now.AddSeconds(10));
             tracker.ProcessTongue(bgr, Lips(0.6f), now.AddSeconds(10));
             tracker.ProcessTongue(bgr, Lips(0.6f), now.AddSeconds(11));
-            // Release the fake driver before joining it (WPF WebcamTrackingService.cs:939,970).
-            // Stop still runs before the dispatcher delivers the queued tongue event.
             source.Release.Set();
             tracker.Stop();
             Assert.False(tracker.IsClosing, "The fake capture worker must exit before another test can start tracking.");
@@ -238,7 +212,6 @@ public sealed class WebcamGestureTests
         }
         finally { tracker.OnTongueOut -= handler; source.Release.Set(); tracker.Stop(); }
     });
-
     private sealed class ParkedSource : IFrameSource
     {
         public readonly ManualResetEventSlim Entered = new(), Release = new();
@@ -246,18 +219,13 @@ public sealed class WebcamGestureTests
         public bool Read(Mat bgr) { Entered.Set(); Release.Wait(); return false; }
         public void Dispose() { }
     }
-
-    /// <summary>WPF :1505: a panic while the camera is still opening abandons the open; the failed
-    /// start reads as stopped, not as "no camera".</summary>
-    [Fact]
-    public void PanicDuringCameraOpenReadsAsStoppedNotNoCamera() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
+    [Fact] public void PanicDuringCameraOpenReadsAsStoppedNotNoCamera() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
     {
         WebcamTracker.SourceFactory = () => new PanicOnOpen(tracker);
         Assert.False(tracker.Start());
         Assert.True(tracker.StartWasStopped, tracker.LastError);
         Assert.Equal("Webcam tracking was stopped before the camera finished opening.", tracker.LastError);
     });
-
     private sealed class PanicOnOpen(WebcamTracker tracker) : IFrameSource
     {
         public bool Open() { tracker.Stop(); return false; }   // panic mid-open bumps the generation

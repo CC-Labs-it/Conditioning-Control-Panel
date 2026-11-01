@@ -163,15 +163,13 @@ public sealed partial class AccountSeedTests
                 Dispatcher.UIThread.RunJobs();
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
-                // Settle layout before measuring the target, as the headless mouse helpers do.
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 w.UpdateLayout();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
                 // WPF MainWindow.Leaderboard.cs:938: a row double-click opens that trainer's card.
-                // Headless mouse helpers pump renders against a real stopwatch. Explicit pointer
-                // click counts/timestamps keep CI render time out of the gesture, like AssetsTabTests.
+                // Explicit click counts keep CI render time out of the gesture, like AssetsTabTests.
                 var target = Assert.IsAssignableFrom<Control>(w.InputHitTest(at));
                 Assert.Same(row, target.FindAncestorOfType<ListBoxItem>(includeSelf: true));
                 var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);

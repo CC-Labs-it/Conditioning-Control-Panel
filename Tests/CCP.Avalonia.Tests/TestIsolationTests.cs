@@ -33,8 +33,7 @@ public class TestIsolationTests
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
-    [Fact]
-    public void EveryTestStartsWithTheProductionFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    [Fact] public void EveryTestStartsWithTheProductionFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         Assert.IsType<AvApp>(global::Avalonia.Application.Current);
         Assert.NotNull(new global::Avalonia.Media.Typeface("fonts:Inter#Inter").GlyphTypeface);
