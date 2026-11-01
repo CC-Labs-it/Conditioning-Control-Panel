@@ -35,7 +35,7 @@ public sealed class LockdownVeilTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -499,6 +499,10 @@ public sealed class LockdownVeilTests
         var windowBefore = Hex(shell.Background);
         var card = shell.Named<LockdownTabView>("LockdownTab")!.LockdownCardBorder;
         var root = shell.Named<Grid>("RootGrid")!;
+        // Freeze elapsed time before activation. A real render can outlast the 600 ms flash.
+        // Start away from zero to prove that each flash measures from its own activation.
+        var clock = new FlashClock { Now = TimeSpan.FromHours(1).Ticks };
+        shell.LockdownFlashClock = clock;
         Assert.Null(shell.LockdownFlash);
 
         ld.Activate(TimeSpan.FromMinutes(30));
@@ -510,12 +514,18 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
+        Assert.Equal(1, flash.Opacity);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        clock.Now += TimeSpan.FromMilliseconds(300).Ticks;
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Now += TimeSpan.FromMilliseconds(299).Ticks;
+        shell.TickLockdownFlash();
+        Assert.Same(flash, shell.LockdownFlash);
+        clock.Now += TimeSpan.FromMilliseconds(1).Ticks;
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
@@ -528,6 +538,13 @@ public sealed class LockdownVeilTests
         Assert.IsAssignableFrom<global::Avalonia.Media.ILinearGradientBrush>(card.BorderBrush);
         Assert.False(shell.LockdownThemed);
     });
+
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now;
+    }
 
     /// <summary>WPF OnLockdownActivated / Deactivated (Lab.cs:640-656 / 726-739): the Studio rack's
     /// Video Strict toggle is greyed while Lockdown forces Strict Lock; Bubble Count's only when
