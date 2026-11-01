@@ -66,7 +66,9 @@ public sealed class EmiDeskSummonTests
             Assert.True(heard);
 
             Click();
-            await Pump(2000);   // wink + CRT off + burst sweep
+            await Pump(700);
+            Assert.True(svc.IsOut); // the wink has not finished
+            await Pump(2300);   // remaining wink + CRT off + burst sweep
             Assert.False(svc.IsOut);
             Assert.False(svc.Window!.IsVisible);
             Assert.False(heard);
@@ -186,7 +188,7 @@ public sealed class EmiDeskSummonTests
             await svc.Summon();
             Assert.True(svc.IsOut);
             section.FindControl<CheckBox>("ChkEnabled")!.IsChecked = false;
-            await Pump(2000);
+            await Pump(3000);
             Assert.False(svc.IsOut);
             Assert.False(svc.Window!.IsVisible);
         }
@@ -212,7 +214,7 @@ public sealed class EmiDeskSummonTests
         win.RestorePlacement();
         Assert.Equal(moved, win.Position);
         svc.Dismiss();
-        await Pump(2000);
+        await Pump(3000);
     });
 
     /// <summary>WPF EmiDock.Refresh :150-163: while she is out the chip's mini face mirrors the
@@ -235,7 +237,7 @@ public sealed class EmiDeskSummonTests
             Assert.Equal(">_<", mini.Face);
 
             svc.Dismiss();
-            await Pump(2000);
+            await Pump(3000);
             Assert.False(svc.IsOut);
             Assert.Equal("0_0", mini.Face);
             svc.Window!.DrawFace("^_^");

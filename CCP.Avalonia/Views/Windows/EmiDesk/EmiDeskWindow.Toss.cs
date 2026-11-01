@@ -11,10 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 // EmiFlingDetector, shared with WPF.
 //
 // The "land" chain's faces play here (PlayLandFace); its "celebration" body frame does not.
-// ponytail: WPF also plays the "dizzy" chain, the land body frame, and fires the moment bus ("dragged",
-// "dropped", "flung" with zoneRow / flings20 / flings50). Both need the chain player and
-// EmiDeskService.Fire, neither on this head (folded into row win-emi-desk); PlayChain is the
-// head's no-op stub until then.
+// The dizzy face chain is played on a throw. WPF also plays the land body frame and fires the
+// moment bus ("dragged", "dropped", "flung" with zoneRow / flings20 / flings50); those remain unported.
 public partial class EmiDeskWindow
 {
     /// <summary>The throw clock; tests step it.</summary>

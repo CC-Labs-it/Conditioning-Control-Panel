@@ -29,11 +29,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// (<c>.Alive</c>, <c>.Bubble</c>, <c>.Glass</c>, <c>.Props</c>, <c>.Ring</c>) are still ahead,
     /// so every member this file calls into them is a one-line <c>ponytail:</c> stub below rather
     /// than an invention. Two are exceptions and are REAL here. <c>.React</c>'s physical half - the
-    /// click squash and the drag wobble - needs nothing that is not already here, and only its pat
-    /// (a chain) is still a stub. <c>.Fx</c> - the summon and the dismiss - is whole: it plays two
-    /// chains that no-op on this head and is otherwise self-contained, so she arrives and leaves
-    /// with the smoke, the CRT stutter and the sparkle scatter. Nothing CALLS either of those two
-    /// entry points yet; that is <c>EmiDeskService</c>'s job. The
+    /// click squash and the drag wobble - is live, as are pat faces. <c>.Fx</c> runs the summon
+    /// and dismiss through <c>EmiDeskService</c>, including the wordless face chains. The
     /// <c>partial void ...Core(...)</c> seams are kept VERBATIM: with no implementing partial they
     /// compile to nothing, which is exactly what B2 and B3 need to plug into later without editing
     /// this file.</para>
@@ -264,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>True while a chain is on screen.</summary>
         // WPF React.cs:134,307 and EmiDeskWindow.xaml.cs:1828: speech owns the face, too.
-        public bool ChainLive => _patFeedback is not null || _tourSpeech is not null;
+        public bool ChainLive => _patFeedback is not null || _tourSpeech is not null || _wordlessChain is not null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -884,26 +881,73 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         // ---------------------------------------------------------------- chains
 
-        /// <summary>Play a canon chain by id. Unknown ids are ignored.</summary>
-        // ponytail: needs EmiChainPlayer (WPF head) - the frame clock and the
-        // Draw/Bubble/BodyFrame/Fx/Move hook set. The chain table (EmiChains) is in Core; wired
-        // when the chain player moves to Core.
+        private DispatcherTimer? _chainTimer;
+        private EmiChain? _wordlessChain;
+        private int _chainFrame;
+        private Action? _chainDone;
+        internal int ChainInterval => (int)(_chainTimer?.Interval.TotalMilliseconds ?? 0);
+
+        // WPF EmiDeskWindow.xaml.cs:1012-1062 and EmiChainPlayer.cs:40-115.
+        // The reachable chains here are wordless. Bubble frames and chain FX/moves remain unported.
         public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
         {
-            done?.Invoke();
+            var chain = EmiChains.Get(chainId);
+            if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
+            foreach (var frame in chain.Seq) if (frame.SetsBubble) return;
+            CancelChain();
+            StopIdleBeats();
+            _wordlessChain = chain;
+            _chainDone = done;
+            _chainFrame = 0;
+            var pose = EmiChains.FrameKey(bodyFrameOverride) ?? EmiChains.FrameKey(chain.BodyFrame);
+            if (pose != null) SetPose(pose);
+            if (!string.IsNullOrEmpty(chain.Move)) RunBodyMove(chain.Move);
+            PaintChainFrame();
+        }
+
+        private void PaintChainFrame()
+        {
+            var chain = _wordlessChain!;
+            var frame = chain.Seq[_chainFrame];
+            DrawFace(frame.Text, frame.Small, chain.Flat);
+            if (_chainFrame == 0 && !string.IsNullOrEmpty(chain.Fx)) OnChainFxCore(chain.Fx);
+            _chainTimer ??= new DispatcherTimer();
+            _chainTimer.Tick -= OnChainTick;
+            _chainTimer.Tick += OnChainTick;
+            _chainTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, frame.Ms));
+            _chainTimer.Start();
+        }
+
+        private void OnChainTick(object? sender, EventArgs e) => AdvanceChain();
+        internal void AdvanceChain()
+        {
+            _chainTimer?.Stop();
+            if (_wordlessChain == null) return;
+            if (++_chainFrame < _wordlessChain.Seq.Count) { PaintChainFrame(); return; }
+            var done = _chainDone;
+            _wordlessChain = null;
+            _chainDone = null;
+            SetPose("idle");
+            DrawFace(EmiChains.RestFace);
+            RestartIdleBeats();
+            try { done?.Invoke(); }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] chain done failed"); }
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: EmiChains.MakeSay / SayHoldMs / FrameForFace are in Core now; still needs
-        // EmiChainPlayer (WPF head) to play the result.
+        // WPF EmiDeskWindow.xaml.cs:1071-1077.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
         {
-            done?.Invoke();
+            if (PresentationActive) return;
+            SayTourLine(line ?? string.Empty, reactionFace, done);
         }
 
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
+            _chainTimer?.Stop();
+            _wordlessChain = null;
+            _chainDone = null;
             StopPatFeedback();
             StopTourSpeech();
             try { OnBubbleTextCore(null); }
@@ -911,9 +955,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         // ponytail: the five canon body moves (bounce, thud, nod, droop, shiver) were WPF
-        // DoubleAnimations on _crtScale / _moveShift. Reachable only through a chain, and nothing on
-        // this head can start one, so the animation is left out rather than ported blind - the
-        // upgrade is an Avalonia.Animation.Animation with KeyFrames on the same two transforms.
+        // DoubleAnimations on _crtScale / _moveShift. Their Avalonia animations remain unported.
         private void RunBodyMove(string move)
         {
             bool handled = false;
@@ -926,7 +968,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
         private bool Busy()
         {
-            // ChainLive is the WPF gate's `_player.IsLive` (pat feedback or tour speech).
+            // ChainLive is the WPF gate's `_player.IsLive` (pat feedback, tour speech or a wordless chain).
             if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
@@ -2153,6 +2195,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private bool _summonChainLive;
 
         private Action? _summonDone;
+        private int _summonEpoch;
 
         /// <summary>
         /// Bring her in: smoke bomb, CRT power-on, then the <c>wake</c> chain. Input is locked for
@@ -2163,6 +2206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_closingForGood) return;
+                int epoch = ++_summonEpoch;
                 _transiting = true;
                 InputLocked = true;
 
@@ -2187,6 +2231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 After(SmokeLeadMs, () =>
                 {
+                    if (epoch != _summonEpoch) return;
                     SetPose("idle");
                     DrawFace("-_-");
                     _bodyRoot.IsVisible = true;
@@ -2194,6 +2239,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                     After(CrtOnMs + 20, () =>
                     {
+                        if (epoch != _summonEpoch) return;
                         _transiting = false;
                         InputLocked = false;
 
@@ -2248,6 +2294,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
+                _summonEpoch++;
+                _summonChainLive = false;
+                _summonDone = null;
                 if (!IsVisible)
                 {
                     done?.Invoke();
@@ -2556,7 +2605,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_transiting || InputLocked) return;
-                if (ChainLive) return;   // WPF React.cs:132-137: a live chain eats the click (summon-cut is -b)
+                if (ChainLive)
+                {
+                    if (!_summonChainLive || _wordlessChain?.Id != "wake") return;
+                    FinishSummon();
+                    CancelChain();
+                }
                 DisarmPet();
                 _petArmed = true;
                 RaiseActivity();
@@ -2670,6 +2724,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelChain();
             }
             catch (Exception ex)
             {

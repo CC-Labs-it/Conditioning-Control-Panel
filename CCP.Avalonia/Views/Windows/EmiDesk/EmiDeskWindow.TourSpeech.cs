@@ -13,6 +13,7 @@ public partial class EmiDeskWindow
     private DispatcherTimer? _tourSpeechTimer;
     private EmiChain? _tourSpeech;
     private int _tourSpeechFrame;
+    private Action? _tourSpeechDone;
     private Border? _tourBubble;
     private Polygon? _tourBubbleTail;
     private bool _tourBubbleRelayoutPending;
@@ -22,10 +23,11 @@ public partial class EmiDeskWindow
     internal int TourSpeechInterval => (int)(_tourSpeechTimer?.Interval.TotalMilliseconds ?? 0);
 
     // WPF EmiDeskWindow.xaml.cs:1071-1077 and Core EmiChains.MakeSay:519-531.
-    internal void SayTourLine(string text, string face)
+    internal void SayTourLine(string text, string face, Action? done = null)
     {
         CancelChain();
         _tourSpeech = EmiChains.MakeSay(text, face, EmiChains.SayHoldMs(text));
+        _tourSpeechDone = done;
         _tourSpeechFrame = 0;
         _tourSpeechTimer ??= new DispatcherTimer();
         _tourSpeechTimer.Tick -= AdvanceTourSpeech;
@@ -38,7 +40,17 @@ public partial class EmiDeskWindow
     {
         _tourSpeechTimer?.Stop();
         if (_tourSpeech == null) return;
-        if (++_tourSpeechFrame >= _tourSpeech.Seq.Count) { StopTourSpeech(); return; }
+        if (++_tourSpeechFrame >= _tourSpeech.Seq.Count)
+        {
+            var done = _tourSpeechDone;
+            StopTourSpeech();
+            SetPose("idle");
+            DrawFace(EmiChains.RestFace);
+            RestartIdleBeats();
+            try { done?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] speech done failed"); }
+            return;
+        }
         PaintTourSpeech();
     }
 
@@ -123,6 +135,7 @@ public partial class EmiDeskWindow
     {
         _tourSpeechTimer?.Stop();
         _tourSpeech = null;
+        _tourSpeechDone = null;
         if (_tourBubble != null) _tourBubble.IsVisible = false;
         if (_tourBubbleTail != null) _tourBubbleTail.IsVisible = false;
     }
