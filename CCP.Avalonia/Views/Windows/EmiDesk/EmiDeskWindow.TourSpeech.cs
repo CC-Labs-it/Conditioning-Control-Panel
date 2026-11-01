@@ -25,6 +25,7 @@ public partial class EmiDeskWindow
     // WPF EmiDeskWindow.xaml.cs:1071-1077 and Core EmiChains.MakeSay:519-531.
     internal void SayTourLine(string text, string face, Action? done = null)
     {
+        if (DismissWinkLive) return;
         CancelChain();
         _tourSpeech = EmiChains.MakeSay(text, face, EmiChains.SayHoldMs(text));
         _tourSpeechDone = done;

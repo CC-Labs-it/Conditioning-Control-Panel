@@ -885,6 +885,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private EmiChain? _wordlessChain;
         private int _chainFrame;
         private Action? _chainDone;
+        internal bool DismissWinkLive => _transiting && _wordlessChain?.Id == "wink";
         internal int ChainInterval => (int)(_chainTimer?.Interval.TotalMilliseconds ?? 0);
 
         // WPF EmiDeskWindow.xaml.cs:1012-1062 and EmiChainPlayer.cs:40-115.
@@ -892,7 +893,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
         {
             var chain = EmiChains.Get(chainId);
-            if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
+            if (chain == null || DismissWinkLive || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
             foreach (var frame in chain.Seq) if (frame.SetsBubble) return;
             CancelChain();
             StopIdleBeats();
@@ -942,9 +943,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             SayTourLine(line ?? string.Empty, reactionFace, done);
         }
 
-        /// <summary>Kill the running chain without firing its done hook.</summary>
+        /// <summary>Kill the chain; an interrupted wake first finishes summon bookkeeping.</summary>
         public void CancelChain()
         {
+            if (!_closingForGood && _summonChainLive && _wordlessChain?.Id == "wake") FinishSummon();
             _chainTimer?.Stop();
             _wordlessChain = null;
             _chainDone = null;
@@ -954,10 +956,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
 
-        // WPF EmiDeskWindow.Fx.cs:143-171: the wink owns the callback that finishes dismissal.
+        // WPF EmiDeskWindow.Fx.cs:46,109,143: wake and wink own transition callbacks.
         internal void StopFeedbackForPanic()
         {
-            if (!_transiting || _wordlessChain?.Id != "wink") { CancelChain(); return; }
+            if (!DismissWinkLive && !(_summonChainLive && _wordlessChain?.Id == "wake")) { CancelChain(); return; }
             StopPatFeedback();
             StopTourSpeech();
         }

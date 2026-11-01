@@ -10,6 +10,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Tours;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -298,6 +299,96 @@ public sealed class EmiDeskChainTests
             Assert.Equal(1, done);
         }
         finally { desk.ShutDown(); }
+    });
+
+    [Theory]
+    [InlineData("tour")]
+    [InlineData("speech")]
+    [InlineData("chain")]
+    public Task ReplacementDuringDismissKeepsTheWink(string source) => Run(async () =>
+    {
+        var previous = ConditioningControlPanel.CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        ConditioningControlPanel.CoreSettings.ServiceProvider = () => settings;
+        var service = EmiDeskService.Instance;
+        var state = EmiState.Current;
+        var (summons, boot) = (state.SummonCount, state.FirstBootSeen);
+        var seen = state.SeenByPool;
+        bool hadSeen = seen.TryGetValue("tourStarted", out var rows);
+        var before = rows?.ToArray() ?? Array.Empty<string>();
+        EmiLineEngine.Instance.ResetForTests();
+        try
+        {
+            settings.Current.EmiDeskEnabled = true;
+            settings.Current.EmiDeskMuteAvatar = false;
+            await service.Summon("test");
+            var desk = service.Window!;
+            service.Dismiss();
+            ((DispatcherTimer)typeof(EmiDeskWindow).GetField("_chainTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(desk)!).Stop();
+            if (source == "tour")
+            {
+                var tutorial = new TutorialService();
+                using var narrator = new EmiTourNarrator(tutorial, service.SpeakTourMoment, _ => false);
+                tutorial.Start(TutorialType.GettingStarted);
+                Assert.True(tutorial.IsActive);
+            }
+            else if (source == "speech") desk.Say("A line");
+            else desk.PlayChain("dizzy");
+            Assert.Null(desk.TourSpeechText);
+            Assert.True(desk.ChainLive);
+            Assert.Equal("^_^", desk.Face);
+            Assert.Equal(before, seen.TryGetValue("tourStarted", out var after) ? after.ToArray() : Array.Empty<string>());
+            for (int i = 0; i < EmiChains.Get("wink")!.Seq.Count; i++) desk.AdvanceChain();
+            await PumpUntil(() => !service.IsOut);
+            Assert.False(desk.IsVisible);
+            Assert.False(desk.InputLocked);
+        }
+        finally
+        {
+            if (hadSeen) seen["tourStarted"] = before.ToList(); else seen.Remove("tourStarted");
+            service.Window?.ShutDown(); state.SummonCount = summons; state.FirstBootSeen = boot;
+            ConditioningControlPanel.CoreSettings.ServiceProvider = previous;
+            EmiLineEngine.Instance.ResetForTests();
+        }
+    });
+
+    [Fact]
+    public Task PanicDuringWakeKeepsItsCompletionAndLaterSpeech() => Run(async () =>
+    {
+        var desk = new EmiDeskWindow();
+        var service = EmiDeskService.Instance;
+        var field = typeof(EmiDeskService).GetField("_window", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var previous = field.GetValue(service); var state = EmiState.Current;
+        var (opens, streak, gist) = (state.RingOpens, state.RingIgnoreStreak, state.RingGistGot);
+        try
+        {
+            field.SetValue(service, desk);
+            int done = 0;
+            desk.RunSummon(() => done++);
+            await PumpUntil(() => desk.ChainLive && !desk.Transiting);
+            ((DispatcherTimer)typeof(EmiDeskWindow).GetField("_chainTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(desk)!).Stop();
+            PanicSurfaces.StopAll("test");
+            Assert.True(desk.ChainLive);
+            for (int i = 0; i < EmiChains.Get("wake")!.Seq.Count; i++) desk.AdvanceChain();
+            Assert.Equal(1, done);
+            Assert.Equal(EmiChains.RestFace, desk.Face);
+            desk.RunSummon(() => done++);
+            await PumpUntil(() => desk.ChainLive && !desk.Transiting);
+            desk.Say("A line");
+            Assert.Equal(2, done);
+            Assert.Equal(".", desk.TourSpeechText);
+            ((DispatcherTimer)typeof(EmiDeskWindow).GetField("_tourSpeechTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(desk)!).Stop();
+            RightClickBody(desk);
+            Assert.True(desk.RingOpen);
+            Assert.Equal(".", desk.TourSpeechText);
+        }
+        finally
+        {
+            field.SetValue(service, previous);
+            desk.ShutDown(); state.RingOpens = opens; state.RingIgnoreStreak = streak; state.RingGistGot = gist;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            EmiLineEngine.Instance.ResetForTests();
+        }
     });
 
     private static void RightClickBody(EmiDeskWindow desk)

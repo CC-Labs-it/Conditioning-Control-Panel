@@ -104,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
-                if (!IsOut || _window is not { IsVisible: true, PresentationActive: false } win) return;
+                if (!IsOut || _window is not { IsVisible: true, PresentationActive: false, DismissWinkLive: false } win) return;
                 var engine = EmiLineEngine.Instance;
                 var line = engine.Draw(moment);
                 if (line == null || line.Hold || string.IsNullOrWhiteSpace(line.Text)) return;
