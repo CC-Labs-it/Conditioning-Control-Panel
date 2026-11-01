@@ -10,6 +10,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
@@ -29,11 +30,13 @@ public class EmiDeskGlassTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
+        var language = LocalizationManager.Instance.CurrentLanguage;
         var section = new EmiDeskSettingsSection();
         var host = new Window { Content = section };
         var desk = new EmiDeskWindow();
         try
         {
+            LocalizationManager.Instance.SetLanguage("en");
             EmiState.Current.BedtimeUntil = DateTime.MinValue;
             CoreSettings.Current.EmiDeskGlass = false;
             host.Show(); desk.Show(); Dispatcher.UIThread.RunJobs();
@@ -68,6 +71,7 @@ public class EmiDeskGlassTests
         finally
         {
             desk.ShutDown(); host.Close(); EmiState.Current.BedtimeUntil = savedBedtime;
+            LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
         }
         return Task.CompletedTask;
@@ -151,5 +155,52 @@ public class EmiDeskGlassTests
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
+    });
+    // WPF EmiChannels.Screensavers.cs:371-389: retain the English card copy.
+    [Fact]
+    public Task OffAirUsesTheSelectedLanguage() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var old = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var savedBedtime = EmiState.Current.BedtimeUntil;
+        var desk = new EmiDeskWindow();
+        try
+        {
+            EmiState.Current.BedtimeUntil = DateTime.MinValue;
+            CoreSettings.Current.EmiDeskGlass = true;
+            desk.Show(); Dispatcher.UIThread.RunJobs();
+            var labels = new (string lang, string brb, string signal)[]
+            {
+                ("en", "brb", "NO SIGNAL"), ("de", "gleich da", "KEIN SIGNAL"),
+                ("es", "vuelvo", "SIN SEÑAL"), ("fr", "de retour", "PAS DE SIGNAL"),
+                ("it", "torno subito", "NESSUN SEGNALE"), ("pt-BR", "já volto", "SEM SINAL"),
+                ("ru", "скоро вернусь", "НЕТ СИГНАЛА"), ("ja", "すぐ戻る", "信号なし"),
+                ("ko", "곧 돌아옴", "신호 없음"), ("zh-CN", "马上回来", "无信号")
+            };
+            foreach (var (lang, brb, signal) in labels)
+            {
+                LocalizationManager.Instance.SetLanguage(lang);
+                desk.NoteGlassActivity();
+                var flip = DateTime.UtcNow.AddSeconds(61);
+                desk.PollGlass(flip);
+                desk.AdvanceGlass(flip.AddMilliseconds(220));
+                var layer = Assert.IsType<Canvas>(Assert.Single(desk.GlassHost.Children));
+                Assert.Contains(layer.Children.OfType<TextBlock>(), t => t.Text == brb);
+                Assert.Contains(layer.Children.OfType<TextBlock>(), t => t.Text == signal);
+            }
+        }
+        finally
+        {
+            desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
+            LocalizationManager.Instance.SetLanguage(language);
+            CoreSettings.ServiceProvider = old;
+        }
+        return Task.CompletedTask;
     });
 }
