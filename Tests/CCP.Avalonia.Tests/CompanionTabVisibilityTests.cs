@@ -165,6 +165,66 @@ public sealed class CompanionTabVisibilityTests
         return Task.CompletedTask;
     });
 
+    // WPF ShowTab -> SyncCompanionTabUI -> SyncHero, even without a visibility edge.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ReselectingCompanionRefreshesTheConversationHero(bool mute) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AwarenessModeEnabled = false;
+        s.AvatarEnabled = true;
+        s.AvatarMuted = false;
+
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            var page = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
+            Assert.True(page.Vm.CompanionShown);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_v2_mute"), page.Vm.VoiceLabel);
+
+            // Another surface changes the settings while this tab stays selected.
+            if (mute) s.AvatarMuted = true;
+            else s.AvatarEnabled = false;
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            if (mute)
+            {
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_v2_unmute"), page.Vm.VoiceLabel);
+                Assert.True(s.AvatarMuted);
+            }
+            else
+            {
+                Assert.False(page.Vm.CompanionShown);
+                Assert.True(page.Vm.CompanionHidden);
+                Assert.False(s.AvatarEnabled);
+            }
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
     /// <summary>Found by the real-profile migration test: quitting without ever opening the
     /// Companion tab wrote the room's default (closed) drawers over the saved ones. WPF restores
     /// the drawers at load, so its exit write is the saved state.</summary>
