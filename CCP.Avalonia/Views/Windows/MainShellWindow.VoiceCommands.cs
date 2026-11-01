@@ -126,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             "bubbles_on" when CoreBubbles.StartAction != null => CoreBubbles.Start,
             "bubbles_off" when CoreBubbles.StopAction != null => CoreBubbles.Stop,
-            "video_on" when CoreEngine.Video != null => () => CoreEngine.Video?.Trigger(),
+            "video_on" when CoreEngine.Video != null => () => CoreEngine.Video?.Trigger(userEarned: false),
             "video_off" when CoreEngine.Video != null => () => CoreEngine.Video?.Stop(),
             "flash_once" when CoreFlash.ShowProvider != null => () => CoreFlash.ShowProvider?.Invoke(),
             "subliminals_on" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Start,
