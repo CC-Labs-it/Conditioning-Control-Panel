@@ -42,6 +42,9 @@ public sealed class ShopProfileTests
             """);
         var item = Assert.Single(items);
         Assert.Equal("cos.frame", item.Grant);
+        Assert.True(item.IsFrame);
+        Assert.False(item.IsAvatar);
+        Assert.Equal("shop_item_frame_name", item.NameKey);
         Assert.True(item.NeedsPrime);
         Assert.False(ShopCosmeticsRegistry.IsOwned(item, null));
         Assert.True(ShopCosmeticsRegistry.IsOwned(item, new[] { item.Grant }));
