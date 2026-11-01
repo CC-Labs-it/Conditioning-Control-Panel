@@ -289,7 +289,10 @@ public sealed class TubeChatParityTests
     [InlineData("remote")]
     public void AskCardsWaitForTheUserToBeFree(string owner) => AvaloniaTestDispatcher.Run(() =>
     {
-        CompanionPickerHostTests.Setup();
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         CoreSettings.Current.AvatarEnabled = true;
         CoreSettings.Current.CompanionAsksEnabled = true;
         CoreTutorial.IsActiveProvider = () => false;

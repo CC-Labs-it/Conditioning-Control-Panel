@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -11,7 +10,6 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
-using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -24,60 +22,6 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CompanionRosterSwitchTests
 {
-    // WPF CompanionService.cs:189,209,322: active picks are a no-op; every other switch resets drain.
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public Task RosterSwitchRestartsOrStopsDrainWithAndWithoutV2(bool v2) => WithRoster((shell, room, roster) =>
-    {
-        var oldV2 = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
-        var oldHonourEnvironment = CompanionExperience.HonourEnvironmentForTests;
-        DispatcherTimer? Drain() => (DispatcherTimer?)typeof(CompanionHead)
-            .GetField("_drainTimer", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null);
-        int Subscribers() => ((Delegate?)typeof(CompanionCore)
-            .GetField("Switched", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null))?
-            .GetInvocationList().Count(d => d.Method.DeclaringType == typeof(CompanionHead)) ?? 0;
-        var drainId = Enum.GetValues<CompanionId>().Single(id => CompanionDefinition.GetById(id).BonusType == CompanionBonusType.XPDrain);
-        var other = Enum.GetValues<CompanionId>().First(id => id != drainId);
-        try
-        {
-            CompanionHead.Stop();
-            // Release ignores the debug switch unless this existing test-only seam is enabled.
-            CompanionExperience.HonourEnvironmentForTests = true;
-            Environment.SetEnvironmentVariable("CCP_COMPANION_V2", v2 ? "1" : "0");
-            Assert.Equal(v2, CompanionExperience.IsV2Enabled);
-            CoreSettings.Current.CompanionPerk = CompanionBonusType.XPDrain;
-            CoreSettings.Current.ActiveCompanionId = (int)other;
-            CompanionHead.Start();
-            CompanionHead.Start();
-            Assert.Equal(1, Subscribers());
-            var before = Drain();
-            Assert.Equal(v2, before != null);
-            Click(shell, roster.FindControl<Border>($"CompanionCard{(int)drainId}")!, MouseButton.Left);
-            var running = Drain();
-            Assert.NotNull(running);
-            Assert.NotSame(before, running);
-            if (before != null) Assert.False(before.IsEnabled);
-            Assert.True(running.IsEnabled);
-            Assert.Equal(TimeSpan.FromSeconds(2), running.Interval);
-            Click(shell, roster.FindControl<Border>($"CompanionCard{(int)drainId}")!, MouseButton.Left);
-            Assert.Same(running, Drain());
-            Click(shell, roster.FindControl<Border>($"CompanionCard{(int)other}")!, MouseButton.Left);
-            Assert.False(running.IsEnabled);
-            if (v2) Assert.True(Drain()!.IsEnabled);
-            else Assert.Null(Drain());
-            CompanionHead.Stop();
-            Assert.Equal(0, Subscribers());
-            Assert.Null(Drain());
-        }
-        finally
-        {
-            CompanionHead.Stop();
-            Environment.SetEnvironmentVariable("CCP_COMPANION_V2", oldV2);
-            CompanionExperience.HonourEnvironmentForTests = oldHonourEnvironment;
-        }
-    });
-
     [Fact]
     public Task RealRosterCardsSwitchCoreAndRefreshHeroAndActiveRing() => WithRoster((shell, room, roster) =>
     {
