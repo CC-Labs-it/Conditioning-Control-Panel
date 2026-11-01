@@ -101,6 +101,63 @@ public sealed class PackMediaPoolTests : IDisposable
         Assert.Null(bubble.PickNext());
     }
 
+    // WPF VideoService.cs:1568-1574 and BubbleCountService.cs:986-990.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ReloadingSchedulersResetsPackCyclesAndDeletesDecrypts(bool useVideo)
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.mp4", "video"), ("b.mp4", "video"), ("c.mp4", "video"));
+        var store = NewStore();
+        var rng = new CountingRandom();
+        var pack = new PackMediaPool(ContentPackStore.VideoType, rng, () => store);
+        var video = new MandatoryVideoScheduler(null!, library: () => Array.Empty<string>()) { PackVideos = pack };
+        var bubble = new BubbleCountScheduler(null!, library: () => Array.Empty<string>()) { PackVideos = pack };
+        var temp = (useVideo ? video.PickNext() : bubble.PickNext())!;
+        Assert.True(File.Exists(temp));
+        if (useVideo) video.ReloadAssets(); else bubble.ReloadAssets();
+        // The next roll weighs all three pack clips, not the two left in the old cycle.
+        pack.TryDraw(20, remaining: true);
+        Assert.Equal(23, rng.LastMaximum);
+        Assert.False(File.Exists(temp));
+        Assert.Equal(0, pack.TempCount);
+        Assert.Equal(3, store.GetAllActivePackVideos().Count);
+    }
+
+    // WPF VideoService.cs:8553-8556: a file still in use stays tracked for the next cleanup.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RefusedPackTempDeletionIsRetried(bool checkIdentity)
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.mp4", "video"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        var temp = pool.TryDraw(0)!;
+        var dir = Path.GetDirectoryName(temp)!;
+        var mode = File.GetUnixFileMode(dir);
+        try
+        {
+            File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            pool.Reset();
+            Assert.True(File.Exists(temp));
+            if (checkIdentity) Assert.True(store.TryGetSourceKey(temp, out _));
+            else Assert.Equal(1, pool.TempCount);
+        }
+        finally { File.SetUnixFileMode(dir, mode); }
+        pool.Reset();
+        Assert.False(File.Exists(temp));
+        Assert.Equal(0, pool.TempCount);
+        Assert.False(store.TryGetSourceKey(temp, out _));
+    }
+
+    private sealed class CountingRandom : Random
+    {
+        public int LastMaximum { get; private set; }
+        public override int Next(int maxValue) { LastMaximum = maxValue; return 0; }
+    }
+
     [Fact]
     public void QueueCallers_WeighThePackClipsLeftThisCycle()
     {

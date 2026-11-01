@@ -328,7 +328,11 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF BubbleCountService.ReloadAssets: drop the dealt queue so the next game re-reads
         /// the enabled library (#130).</summary>
-        public void ReloadAssets() => _queue = new Queue<string>();
+        public void ReloadAssets()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.Reset();
+        }
 
         internal string? PickNext()
         {

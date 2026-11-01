@@ -16,6 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -67,8 +68,10 @@ public sealed class FriendNoticesTests
         var oldLevel = settings.MotionLevel;
         var oldGentle = settings.GentleVisuals;
         var oldProbe = UiMotionPreference.OsProbe;
+        var oldTime = BeatLoop.Time;
         try
         {
+            BeatLoop.Time = new SteppedTime();
             UiMotionPreference.OsProbe = () => true;
             UiMotionPreference.CacheStamp = long.MinValue;
             settings.MotionLevel = level;
@@ -106,7 +109,45 @@ public sealed class FriendNoticesTests
         }
         finally
         {
-            FriendNotices.CloseAll();
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF FriendNotices.cs:101-108,395-411: motion begins with this arrival, not the preceding tick.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DelayedBeatStartsArrivalAndRepeatAtTheirOwnTimes(bool repeat) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var oldTime = BeatLoop.Time;
+        var (oldLevel, oldGentle, oldProbe) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe);
+        var time = new SteppedTime();
+        try
+        {
+            BeatLoop.Time = time;
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = false;
+            FriendNotice Notice(string id) => new(NoticeKind.Poke, id, "Friend", DateTimeOffset.UtcNow, 30000);
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            var w = FriendNotices.Current!;
+            Assert.True(w.IsVisible);
+            Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, w));
+            time.Advance(TimeSpan.FromSeconds(5)); // no beat since the first card appeared
+            FriendNotices.Present(null, Notice(repeat ? "a" : "b"), new NoticeLook());
+            var card = ((StackPanel)w.Content!).Children.OfType<Border>().First();
+            time.Advance(TimeSpan.FromMilliseconds(110));
+            BeatLoop.StepAll();
+            Assert.Equal(repeat ? 1 : 0.55, card.Opacity, 5);
+            Assert.NotEqual(0, ((TranslateTransform)card.RenderTransform!).X);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
             settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
             UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
         }

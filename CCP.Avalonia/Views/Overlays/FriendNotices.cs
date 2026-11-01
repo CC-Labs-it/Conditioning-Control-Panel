@@ -39,6 +39,7 @@ internal sealed class FriendNotices : Window
     private MotionLevel _enterLevel;
     private bool _enterFolded;
     private double _enterMs;
+    private long _enterStarted;
     internal FriendNotices()
     {
         WindowDecorations = WindowDecorations.None;
@@ -61,7 +62,16 @@ internal sealed class FriendNotices : Window
                 Win32Overlay.SetOverrideRedirect(this, handle.Handle, passive: true);
         };
         // Lifetimes count real elapsed time on the window's shared beat (P40, AmbientBeatLoopsTests).
-        _beat = new BeatLoop(this, t => { Advance((t - _lastT) * 1000); _lastT = t; });
+        _beat = new BeatLoop(this, t =>
+        {
+            if (_enterCard != null)
+            {
+                _enterMs = Math.Max(0, BeatLoop.Time.GetElapsedTime(_enterStarted).TotalMilliseconds);
+                StepEnter(0);
+            }
+            Tick((t - _lastT) * 1000);
+            _lastT = t;
+        });
         Closed += (_, _) => { _beat.Stop(); if (ReferenceEquals(Current, this)) Current = null; };
     }
     internal static void Present(Window? anchor, FriendNotice notice, NoticeLook look)
@@ -87,9 +97,9 @@ internal sealed class FriendNotices : Window
         w.Stack.Clear();
         w.Close();
     }
-    internal void Advance(double ms)
+    internal void Advance(double ms) { StepEnter(ms); Tick(ms); }
+    private void Tick(double ms)
     {
-        StepEnter(ms);
         var gone = Stack.Tick(ms);
         foreach (var n in Stack.Visible)
             if (_drawn.TryGetValue(n, out var d)) { d.Bar.ScaleX = n.Fraction; d.Ago.Text = Ago(n); }
@@ -219,6 +229,7 @@ internal sealed class FriendNotices : Window
         _enterLevel = level;
         _enterFolded = folded;
         _enterMs = 0;
+        _enterStarted = BeatLoop.Time.GetTimestamp();
         StepEnter(0);
     }
 

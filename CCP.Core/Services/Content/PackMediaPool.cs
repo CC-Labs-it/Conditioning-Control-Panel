@@ -105,17 +105,29 @@ namespace ConditioningControlPanel.Services
             return temp;
         }
 
+        /// <summary>WPF VideoService.cs:1568-1574 and BubbleCountService.cs:986-990: forget the
+        /// dealt pack cycle and clean up its decrypted files on an asset reload.</summary>
+        public void Reset()
+        {
+            lock (_lock) _bag.Reset();
+            CleanupTemps();
+        }
+
         /// <summary>WPF CleanupTempPackFiles: delete every decrypt this pool has on record.</summary>
         public void CleanupTemps()
         {
             List<string> all;
             lock (_lock) { all = new List<string>(_temps); _temps.Clear(); }
             var store = _store();
+            var refused = new List<string>();
             foreach (var p in all)
             {
                 if (store != null) store.DeleteTempFile(p);
                 else try { System.IO.File.Delete(p); } catch { }
+                if (System.IO.File.Exists(p)) refused.Add(p);
             }
+            // WPF VideoService.cs:8553-8556 retries files still held by a player.
+            if (refused.Count > 0) lock (_lock) _temps.AddRange(refused);
         }
 
         // Caller holds _lock.
