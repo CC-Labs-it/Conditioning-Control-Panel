@@ -151,10 +151,10 @@ export function createContact(track, feel, events) {
     const n = racers.length;
     for (let i = 0; i < n; i++) {
       const ra = racers[i];
-      if (ra.fxv.ghost) continue;
+      if (ra.fxv.ghost || ra.fxv.effect === 'tunnel') continue;   // a Tunnel Vision rider only rams (sim/tunnel.js); its bump comes as it lands
       for (let j = i + 1; j < n; j++) {
         const rb = racers[j];
-        if (rb.fxv.ghost) continue;
+        if (rb.fxv.ghost || rb.fxv.effect === 'tunnel') continue;
         const shieldA = ra.fxv.shield === 'glass' || ra.fxv.shield === 'golden';
         const shieldB = rb.fxv.shield === 'glass' || rb.fxv.shield === 'golden';
         const R2 = (shieldA ? BUBBLE_RAM.radiusM : radius) + (shieldB ? BUBBLE_RAM.radiusM : radius);

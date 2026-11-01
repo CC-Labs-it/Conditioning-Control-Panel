@@ -433,12 +433,16 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.tetherWeights` [0, 2, 3]: Tether draw weights (never in front).
 - `items.snapWeights` [3, 1, 0]: Snap draw weights (front and middle).
 - `items.bigSpiralWeights` [0, 0, 2]: Big Spiral draw weights (back only).
-- `items.tunnelWeights` [0, 0, 3]: Tunnel Vision draw weights (back only).
-- `items.tunnelS` 4: Tunnel Vision: the ride lasts this long (sim/tunnel.js), longer only while it waits for solid railed road.
-- `items.tunnelSpeedMul` 1.6: Tunnel Vision ride pace, share of top speed (at least the leader's speed plus tunnelLeadMps).
+- `items.tunnelWeights` [7, 5.7, 5.3]: Tunnel Vision draw weights, read only for the last places (about 1 box in 4 in every bucket, whatever the gap).
+- `items.tunnelLastPlaces` 2: a box offers Tunnel Vision to this many places from the back, never the leader (`tunnelOffered`).
+- `items.tunnelTargetPlaces` 4: the ride aims for the nearest kart ahead in places 1 to this.
+- `items.tunnelMaxS` 8: Tunnel Vision: most seconds to reach the target and land (sim/tunnel.js), longer only while it waits for safe road beside the target.
+- `items.tunnelBrakeMps2` 60: Tunnel Vision: the least braking into the target; a bigger gap brakes harder.
+- `items.tunnelLandDvMps` 4: Tunnel Vision: the sideways closing speed handed over beside the target, for a normal bump (under `contact.hardBumpDvMps`).
+- `items.tunnelSpeedMul` 1.6: Tunnel Vision ride pace floor, share of top speed (at least the leader's speed plus tunnelLeadMps); a bigger gap rides faster.
 - `items.tunnelLeadMps` 6: Tunnel Vision: the ride runs at least this much faster than the leader.
 - `items.tunnelHoverM` 0.6: Tunnel Vision: the riding kart hovers this high over the road.
-- `items.tunnelStopPlace` 2: Tunnel Vision ends early at this place or better: it never takes the lead.
+- `items.tunnelStopPlace` 2: Tunnel Vision safety: a ride from behind this place ends at this place or better; one that starts here or better ends only at the lead. It never takes the lead.
 - `items.tunnelGuardS` 1.0: Tunnel Vision: guard after the ride (throws, lobs and traps pop, as Snap's guard).
 - `items.tunnelRamRadiusM` 2.0: Tunnel Vision: a kart this close to the ride is launched (tunnel-ram).
 - `items.pendulumS` 1.5: Pendulum hit: the kart swings left and right this long. No screen cover.

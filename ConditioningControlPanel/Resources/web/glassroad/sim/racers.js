@@ -159,9 +159,10 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
       if (r.assist) o['gentle.on'] = true; else delete o['gentle.on'];
 
       if (live && items?.tunnel?.riding(r.i)) {
-        // Tunnel Vision: the ride moves the kart itself (sim/tunnel.js): no kart sim, no hazards, no rescue
-        items.tunnel.step(r, dt);
-        r.progress.update(r.st, r.raceView);
+        // Tunnel Vision: the ride moves the kart itself (sim/tunnel.js): no kart sim, no hazards, no rescue.
+        // A fast tick goes in slices: progress.js credits a lap line only for a driving-sized step.
+        const slices = items.tunnel.slicesFor(r, dt);
+        for (let k = 0; k < slices; k++) { items.tunnel.step(r, dt / slices); r.progress.update(r.st, r.raceView); }
         continue;
       }
       if (live) {

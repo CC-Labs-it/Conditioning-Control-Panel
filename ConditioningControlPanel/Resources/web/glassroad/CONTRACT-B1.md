@@ -137,7 +137,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) /* -> Items 
 
 **Item rules (sim/items.js).** Boxes and bubbles come from `track.items` (`{ kind: 'box'|'bubble', node, x, ds, s }`).
 - Pickup: grounded or below `pickHeightM`, within `boxRadiusM` along and across of a live box, slot empty and not rolling:
-  box gone for `boxRespawnS`; draw now with a seeded rand from `bucketOf(place, gapToLeader)`; slot rolls `rollS`
+  box gone for `boxRespawnS`; draw now with a seeded rand from `bucketOf(place, gapToLeader)` (`tunnel` joins the draw only for `tunnelOffered(place, field)`); slot rolls `rollS`
   (`item-box`), then shows (`item-roll`). Bubbles: within `bubbleRadiusM`: `grantBoost(bubbleAmount, bubbleHoldS, 'bubble')`, gone `bubbleRespawnS` (`bubble-pop`).
 - Use (`input.item` edge, item shown): `back` held drops any throw or lob item as a trap `dropBehindM` behind (same kind);
   melt is always a trap behind; otherwise by `use`:

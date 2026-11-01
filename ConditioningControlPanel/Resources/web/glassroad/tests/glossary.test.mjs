@@ -42,8 +42,8 @@ test('guard: a row naming an id ITEM_NAMES lacks fails', () => {
   assert.ok(glossaryProblems(feel, { ...REAL, lines: { ...GLOSSARY_LINES, nosuch: () => 'x' } }).includes('nosuch: a glossary row for an id ITEM_IDS lacks'));
 });
 
-test('rows: the nine live items, in table order, under their shown names', () => {
-  assert.deepEqual(glossaryRows(feel).map((r) => r.name), ['Fog', 'Melt', 'Surge', 'Bubble Shield', 'Pendulum', 'Disc', 'Tether', 'Snap', 'Big Spiral']);
+test('rows: the ten live items, in table order, under their shown names', () => {
+  assert.deepEqual(glossaryRows(feel).map((r) => r.name), ['Fog', 'Melt', 'Surge', 'Bubble Shield', 'Pendulum', 'Disc', 'Tether', 'Snap', 'Big Spiral', 'Tunnel Vision']);
 });
 
 test('rows: every live item has a real icon of its own', () => {
@@ -74,9 +74,10 @@ test('sim: the words hold against the sim', () => {
   for (const r of glossaryRows(feel)) {
     const use = ITEMS[r.id].use;
     assert.equal(r.fire === 'Drop behind', itemUseMode(r.id, false) === 'drop', r.id + ' drop word follows a plain press');
-    assert.equal(r.fire === 'On yourself', use === 'self', r.id + ' self word follows the table');
+    const own = use === 'self' || use === 'ride';
+    assert.equal(r.fire === 'On yourself', own, r.id + ' self word follows the table');
     // the foot line: anything not used on yourself can go behind as a trap
-    assert.equal(itemUseMode(r.id, true) === 'drop', use !== 'self', r.id);
+    assert.equal(itemUseMode(r.id, true) === 'drop', !own, r.id);
   }
   assert.equal(fire('melt'), 'Drop behind');
   assert.equal(fire('glass'), 'On yourself');
@@ -90,7 +91,7 @@ test('sim: the words hold against the sim', () => {
 test('who: derived from the weights as a share of each bucket', () => {
   const who = Object.fromEntries(glossaryRows(feel).map((r) => [r.id, r.who]));
   assert.deepEqual(who, { pink: 'Mostly middle and back', melt: 'Mostly leader and middle', surge: 'Mostly leader and back', glass: 'Mostly leader',
-    pendulum: 'Mostly middle and back', disc: 'Mostly middle and back', tether: 'Mostly middle and back', snap: 'Mostly leader and middle', bigSpiral: 'Back only' });
+    pendulum: 'Mostly middle and back', disc: 'Mostly middle and back', tether: 'Mostly middle and back', snap: 'Mostly leader and middle', bigSpiral: 'Back only', tunnel: 'Last 2 places only' });
   assert.equal(glossaryRows(feelWith({ glassWeights: [0, 0, 7] })).find((r) => r.id === 'glass').who, 'Back only', 'retuning the weights moves the word, no copy edit');
   assert.equal(whoGets([1, 1, 1], [3, 3, 3]), 'Anyone');
   assert.equal(whoGets([2, 0, 0], [5, 5, 5]), 'Leader only');
@@ -101,19 +102,19 @@ test('tunnel: optional, listed only once the id exists', () => {
   assert.ok(OPTIONAL_ROWS.includes('tunnel'));
   assert.ok(!ITEM_IDS.includes('tunnel') ? !glossaryRows(feel).some((r) => r.id === 'tunnel') : true, 'no id, no row, and no guard failure either');
   const tables = { ids: [...ITEM_IDS, 'tunnel'], items: { ...ITEMS, tunnel: { use: 'ride' } }, names: { ...ITEM_NAMES, tunnel: 'Tunnel Vision' }, lines: GLOSSARY_LINES };
-  const f = feelWith({ tunnelWeights: [0, 0, 3], tunnelS: 4, tunnelStopPlace: 2 });
+  const f = feelWith({ tunnelMaxS: 6, tunnelTargetPlaces: 3, tunnelLastPlaces: 2 });
   const row = glossaryRows(f, tables).find((r) => r.id === 'tunnel');
   assert.equal(row.name, 'Tunnel Vision');
   assert.equal(row.fire, 'On yourself');
-  assert.equal(row.who, 'Back only');
-  assert.ok(row.line.includes('4 s') && row.line.includes('2nd'), row.line);
+  assert.equal(row.who, 'Last 2 places only');
+  assert.ok(row.line.includes('6 s') && row.line.includes('top 3'), row.line);
   assert.deepEqual(glossaryProblems(f, tables), []);
   assert.ok(glossaryProblems(f, { ...tables, names: { ...ITEM_NAMES, tunnel: undefined } }).includes('tunnel: a row with no name in ITEM_NAMES'));
 });
 
 test('html: one row each, device-aware foot line, escaped', () => {
   const html = glossaryHtml(feel, { last: 'pad', pad: { family: 'ps' } });
-  assert.equal((html.match(/class="gl-row"/g) || []).length, 9);
+  assert.equal((html.match(/class="gl-row"/g) || []).length, 10);
   assert.ok(html.includes('Square throw. Triangle drop behind.'), 'the pad names its own buttons');
   assert.ok(glossaryHtml(feel, { last: 'touch' }).includes('Throw uses it. Drop leaves it behind.'));
   assert.ok(glossaryHtml(feel).includes('E / Enter throw. R / Backspace behind.'));

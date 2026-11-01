@@ -52,21 +52,25 @@ function setup({ feel = {}, track = {}, karts = [{ s: 100 }] } = {}) {
   return { tr, f, rec, items, list, std, tick, fire };
 }
 
-test('table: Tunnel Vision is the last id, a ride, back bucket only, on the wire and in the effects', () => {
+test('table: Tunnel Vision is the last id, a ride, only when offered, on the wire and in the effects', () => {
   const f = makeFeel();
   assert.equal(ITEM_IDS[ITEM_IDS.length - 1], 'tunnel');
   assert.equal(ITEMS.tunnel.use, 'ride');
   assert.equal(ITEMS.tunnel.view, null);
   assert.equal(itemUseMode('tunnel', true), 'ride', 'a rear press still rides');
-  assert.ok(!weightsFor(f, 'front').some(([id]) => id === 'tunnel') && !weightsFor(f, 'middle').some(([id]) => id === 'tunnel'));
-  assert.ok(weightsFor(f, 'back').some(([id]) => id === 'tunnel'));
+  for (const b of ['front', 'middle', 'back']) {
+    assert.ok(!weightsFor(f, b).some(([id]) => id === 'tunnel'), b + ' never by bucket alone');
+    assert.ok(weightsFor(f, b, true).some(([id]) => id === 'tunnel'), b + ' when offered');
+  }
   assert.equal(WIRE_ITEMS[WIRE_ITEMS.length - 1], 'tunnel');
   assert.ok(EFFECTS.includes('tunnel') && EFFECTS.length <= 15, 'fits the 4 bit effect field');
   assert.ok(MODES.includes('ride'));
 });
 
-test('a press rides: fast, hovering, hands off, effect shown; ends on time with the guard', () => {
-  const t = setup({ karts: [{ s: 100, speed: 20 }, { s: 3000 }, { s: 3100 }] });
+test('with no target it rides fast, hovering, hands off, effect shown; ends on time with the guard', () => {
+  // the only kart ahead has finished, so there is nobody to land beside
+  const t = setup({ karts: [{ s: 100, speed: 20 }, { s: 3000 }] });
+  t.list[1].finished = true; t.list[1].finishS = 1;
   t.fire(0);
   t.list[0].speed = 0;   // the harness stops rolling it on after the ride
   assert.equal(t.rec.all('tunnel-start').length, 1);
@@ -82,27 +86,31 @@ test('a press rides: fast, hovering, hands off, effect shown; ends on time with 
   const end = t.rec.all('tunnel-end').map((e) => e.payload);
   assert.equal(end.length, 1);
   assert.equal(end[0].reason, 'time');
-  assert.ok(t.rec.t >= t.f.get('items.tunnelS'), 'rode the whole time');
+  assert.ok(t.rec.t >= t.f.get('items.tunnelMaxS'), 'rode the whole time');
   assert.ok(!t.items.tunnel.riding(0));
   assert.equal(t.list[0].st[S.height], 0);
   assert.ok(t.list[0].st[S.engineV] >= top * 1.5, 'leaves at full speed');
   assert.ok(t.items.view().guards.some((g) => g.racer === 0), 'the guard follows the ride');
 });
 
-test('it stops at place 2: never takes the lead', () => {
+test('it lands beside its target and never takes the lead, from place 2 too', () => {
   const t = setup({ karts: [{ s: 100 }, { s: 300, speed: 20 }, { s: 140, speed: 10 }] });
   t.fire(0);
   t.tick(6);
   const end = t.rec.all('tunnel-end').map((e) => e.payload);
   assert.equal(end.length, 1);
-  assert.equal(end[0].reason, 'place');
-  t.std.refresh();
-  assert.equal(t.std.placeOf(0), 2);
+  assert.equal(end[0].reason, 'target');
+  assert.ok(t.std.placeOf(0) >= 2, 'place ' + t.std.placeOf(0));
   assert.ok(t.list[1].st[S.s] > t.list[0].st[S.s], 'the leader is still ahead');
+  const u = setup({ karts: [{ s: 100 }, { s: 300, speed: 20 }] });
+  u.fire(0);
+  assert.ok(u.items.tunnel.riding(0), 'second of two rides, at the leader');
+  for (let k = 0; k < 600 && u.items.tunnel.riding(0); k++) { u.tick(); assert.equal(u.std.placeOf(0), 2); }
+  assert.equal(u.rec.all('tunnel-end')[0].payload.reason, 'target');
 });
 
 test('karts in the way are launched once (tunnel-ram), the rider is immune to traps', () => {
-  const t = setup({ karts: [{ s: 100, speed: 20 }, { s: 130 }, { s: 3000 }, { s: 3100 }] });
+  const t = setup({ karts: [{ s: 100, speed: 20 }, { s: 130 }, { s: 3000 }, { s: 3100 }, { s: 3200 }, { s: 3300 }] });
   t.fire(0);
   t.list[0].speed = 0;
   t.tick(1.2);
@@ -112,8 +120,8 @@ test('karts in the way are launched once (tunnel-ram), the rider is immune to tr
   assert.ok(t.list[1].st[S.airborne] === 1 && t.list[1].st[S.stalled] === 0, 'launched, no stall');
   assert.equal(t.list[1].fxv.spinRad, 0);
   // a trap on the line does nothing to the rider
-  t.list[3].item.id = 'melt'; t.list[3].input.item = true; t.tick(); t.list[3].input.item = false;
-  const trapS = t.list[3].st[S.s];
+  t.list[1].item.id = 'melt'; t.list[1].input.item = true; t.tick(); t.list[1].input.item = false;
+  const trapS = t.list[1].st[S.s];
   const before = t.rec.all('item-hit').length;
   for (let k = 0; k < 120 && t.items.tunnel.riding(0); k++) t.tick();
   assert.equal(t.rec.all('item-hit').filter((e) => e.payload.victim === 0).length, 0, 'no hit on the rider (trap at ' + trapS + ')');
@@ -121,26 +129,27 @@ test('karts in the way are launched once (tunnel-ram), the rider is immune to tr
 });
 
 test('the end waits for solid railed road', () => {
+  // the only kart ahead has finished: the ride runs out of time inside the open stretch
   const open = (seg) => (seg >= 60 && seg < 75 ? [] : ['rail']);   // 600..750 m has no rails
-  const t = setup({ track: { flags: open }, karts: [{ s: 450 }, { s: 3000 }, { s: 3100 }] });
+  const t = setup({ track: { flags: open }, karts: [{ s: 450 }, { s: 3000 }] });
+  t.list[1].finished = true; t.list[1].finishS = 1;
   t.fire(0);
-  // 4 s at ~1.6 x top ends near 450 + 4 * v: make sure the time runs out inside the open stretch
   const v = t.f.get('speed.topMps') * t.f.get('items.tunnelSpeedMul');
-  t.f.set('items.tunnelS', (650 - 450) / v);
+  t.f.set('items.tunnelMaxS', (650 - 450) / v);
   t.tick(8);
   const end = t.rec.all('tunnel-end');
   assert.equal(end.length, 1);
   assert.ok(t.list[0].st[S.s] > 750, 'released past the open stretch: ' + t.list[0].st[S.s]);
 });
 
-test('a rider is never hit by a throw; at place 2 or better the press keeps the item', () => {
+test('a rider is never hit by a throw; in the lead the press keeps the item', () => {
   const t = setup({ karts: [{ s: 100 }, { s: 90 }, { s: 3000 }, { s: 3100 }] });
   t.fire(0);
   assert.ok(t.items.tunnel.riding(0));
   t.fire(1, 'pendulum');
   t.tick(1);
   assert.equal(t.rec.all('item-hit').filter((e) => e.payload.victim === 0).length, 0);
-  const u = setup({ karts: [{ s: 100 }, { s: 3000 }] });
+  const u = setup({ karts: [{ s: 3000 }, { s: 100 }] });
   u.fire(0);
   assert.equal(u.list[0].item.id, 'tunnel');
   assert.equal(u.rec.all('item-refused')[0].payload.reason, 'place');
