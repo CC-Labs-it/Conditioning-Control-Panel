@@ -1075,6 +1075,54 @@ public sealed partial class GameWindowTests
         }
     });
 
+    // WPF DtrhHostService.cs:923-934 dispatches disposal and the fallback together;
+    // GameSurfaces.cs:50-51 stops the run and the web host on panic.
+    // Stop route: full panic, Chaos shutdown, or the games surface alone.
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(2, 0)]
+    [InlineData(0, 1)]
+    [InlineData(2, 1)]
+    [InlineData(0, 2)]
+    [InlineData(2, 2)]
+    public void Dtrh_pending_boot_fallback_is_cancelled_by_panic_or_shutdown(int completed, int stop) => RunDtrh(true, (shell, _, _, _) =>
+    {
+        try
+        {
+            ChaosMeta.Init();
+            ChaosMeta.State.RunsCompleted = completed;
+            ChaosMeta.Save();
+            LauncherWindow.Instance!.Play(LauncherCards.Find("dtrh")!);
+            Assert.True(GameWindow.IsAnyOpen());
+            var game = GameWindow.Launch("dtrh")!;
+            game.Web.OnNavigationCompleted(game.PageUrl!);
+            game.Web.OnWebMessage("{\"type\":\"boot-error\"}");
+            Assert.True(GameWindow.IsAnyOpen()); // the queued handoff still owns the screen
+            Assert.False(ChaosRunHost.IsActive);
+            Assert.Null(ChaosHubWindow.Current);
+
+            if (stop == 0) PanicSurfaces.StopAll("test", shell);
+            else if (stop == 1) ChaosRunHost.ForceShutdown();
+            else PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(ChaosRunHost.IsActive);
+            Assert.Null(ChaosHubWindow.Current);
+
+            // A later, deliberate launch is still allowed to fall back.
+            var retry = GameWindow.Launch("dtrh")!;
+            retry.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            if (completed == 0) Assert.True(ChaosRunHost.IsActive);
+            else Assert.True(Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current).IsVisible);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosRunHost.ForceShutdown();
+        }
+    });
+
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
     /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in
     /// <c>&lt;assets&gt;/.temp</c> re-post the manifest with them as asset urls; a closed window stops listening.</summary>

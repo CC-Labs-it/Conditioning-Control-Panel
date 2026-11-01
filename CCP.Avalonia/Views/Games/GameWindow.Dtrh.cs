@@ -31,6 +31,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     internal sealed partial class GameWindow
     {
         internal const string DtrhId = "dtrh";
+        private static int _dtrhFallbackGeneration;
+
+        // ForceShutdown also runs on app exit and when no run exists yet.
+        internal static void CancelPendingDtrhFallbacks() => System.Threading.Interlocked.Increment(ref _dtrhFallbackGeneration);
 
         /// <summary>WPF LauncherCatalogue.cs:241: Lab tier, or the server's daily-free DtRH drop; refused with
         /// the tier toast (TierGate.DemandLab).</summary>
@@ -93,10 +97,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     OnDtrhRunEnded(o, fromTeardown: false);
                     return true;
                 case "boot-error":
-                    // WPF DtrhHostService.cs:923-954: dispose the failed web host before
-                    // falling back to the first descent or the existing/new hub.
-                    Close();
-                    Dispatcher.UIThread.Post(LaunchDtrhFallback);
+                    // WPF DtrhHostService.cs:923-954 queues disposal and fallback together.
+                    // Closing the host on panic, or ForceShutdown on exit, cancels the handoff.
+                    int generation = System.Threading.Volatile.Read(ref _dtrhFallbackGeneration);
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (_closing) return;
+                        Close();
+                        if (generation == System.Threading.Volatile.Read(ref _dtrhFallbackGeneration))
+                            LaunchDtrhFallback();
+                    });
                     return true;
                 case "exit":
                     _dtrhExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
