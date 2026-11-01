@@ -74,9 +74,15 @@ public class UiThreadStackCaptureTests
         }
     }
 
-    // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    // The fixture's named frame must physically exist in Release too: NoInlining alone
+    // does not prohibit tail-call optimization. Keep work after the wait and disable
+    // optimization of this one fixture, rather than relaxing the real stack-walk assertion.
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+    private static void ParkedInAKnownFrame(ManualResetEvent release)
+    {
+        try { release.WaitOne(); }
+        finally { GC.KeepAlive(release); }
+    }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()
