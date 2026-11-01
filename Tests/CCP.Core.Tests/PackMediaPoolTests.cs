@@ -102,6 +102,30 @@ public sealed class PackMediaPoolTests : IDisposable
     }
 
     [Fact]
+    public void VideoReloadRestartsPackShuffleAndKeepsExistingDecrypts()
+    {
+        // WPF RefreshVideosPath clears both queues but leaves its temp files alone.
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.mp4", "video"), ("b.mp4", "video"), ("c.mp4", "video"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, new ZeroRandom(), () => store);
+        var video = new MandatoryVideoScheduler(null!, null, () => Array.Empty<string>()) { PackVideos = pool };
+        var first = video.PickNext()!;
+
+        video.ReloadAssets();
+
+        var after = video.PickNext()!;
+        Assert.Equal(Plain(first), Plain(after)); // fresh shuffle can start with the same clip
+        Assert.True(File.Exists(first));
+        Assert.Equal(2, pool.TempCount);
+        pool.CleanupTemps();
+    }
+
+    private sealed class ZeroRandom : Random
+    {
+        public override int Next(int maxValue) => 0;
+    }
+
+    [Fact]
     public void QueueCallers_WeighThePackClipsLeftThisCycle()
     {
         ContentPackStoreTests.WritePack(_root, "p1", "One", Enumerable.Range(0, 10).Select(i => ($"{i}.png", "image")).ToArray());
