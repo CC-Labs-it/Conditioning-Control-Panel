@@ -456,7 +456,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_draftPaused || _state == null || _state.RerollsLeft <= 0) return null;
             _state.RerollsLeft--;
-            _state.PushEvent(Loc.Get("chaos_draft_rerolled"));
+            _state.PushEvent("🎲 " + Loc.Get("chaos_draft_rerolled"));
             return (DealDraft(), _state.RerollsLeft);
         }
 
@@ -476,16 +476,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (boon.Id == "extra_shield") Pulse(Color.FromRgb(120, 220, 160), 0.22);
                 if (boon.IsCurse)
                 {
+                    const string candle = "🕯 ";
                     if (_state.SinExtraMult > 0)
                     {
                         _state.BoonMult += _state.SinExtraMult;
-                        _state.PushEvent(Loc.GetF("chaos_draft_sin_embraced", _state.SinExtraMult));
+                        _state.PushEvent(candle + Loc.GetF("chaos_draft_sin_embraced", _state.SinExtraMult));
                     }
-                    if (shielded) _state.PushEvent(Loc.Get("chaos_draft_sin_shielded"));
+                    if (shielded) _state.PushEvent(candle + Loc.Get("chaos_draft_sin_shielded"));
                     if (_state.MaxedBoons.Contains("surrender"))
                     {
                         _state.Shields++;
-                        _state.PushEvent(Loc.Get("chaos_draft_sin_resistance"));
+                        _state.PushEvent(candle + Loc.Get("chaos_draft_sin_resistance"));
                         Pulse(Color.FromRgb(120, 220, 160), 0.22);
                     }
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f);
@@ -496,7 +497,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else
             {
                 _state.Shields++;
-                _state.PushEvent(Loc.Get("chaos_draft_resisted"));
+                _state.PushEvent("♥ " + Loc.Get("chaos_draft_resisted"));
                 Pulse(Color.FromRgb(120, 220, 160), 0.22);
                 ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_draft_resistance_announce"), ChaosAnnounceKind.Willpower, artKey: "resistance");
             }

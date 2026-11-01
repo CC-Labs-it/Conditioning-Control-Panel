@@ -1,7 +1,7 @@
 {
-  "chaos_draft_rerolled": "🎲 tempted fate again", "chaos_draft_sin_embraced": "🕯 sin embraced (+{0:0.00}x)",
-  "chaos_draft_sin_shielded": "🕯 the candle took the sting (no drawback)", "chaos_draft_sin_resistance": "🕯 you said yes. it gave back (+1 resistance)",
-  "chaos_draft_resisted": "♥ resisted → +1 resistance", "chaos_draft_resistance_announce": "+1 RESISTANCE",
+  "chaos_draft_rerolled": "tempted fate again", "chaos_draft_sin_embraced": "sin embraced (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "the candle took the sting (no drawback)", "chaos_draft_sin_resistance": "you said yes. it gave back (+1 resistance)",
+  "chaos_draft_resisted": "resisted → +1 resistance", "chaos_draft_resistance_announce": "+1 RESISTANCE",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

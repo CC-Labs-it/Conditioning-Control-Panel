@@ -1,7 +1,7 @@
 {
-  "chaos_draft_rerolled": "🎲 le destin est tenté à nouveau", "chaos_draft_sin_embraced": "🕯 péché accepté (+{0:0.00}x)",
-  "chaos_draft_sin_shielded": "🕯 la bougie a ôté la morsure (sans contrepartie)", "chaos_draft_sin_resistance": "🕯 tu as dit oui. elle a rendu la pareille (+1 résistance)",
-  "chaos_draft_resisted": "♥ tu as résisté → +1 résistance", "chaos_draft_resistance_announce": "+1 RÉSISTANCE",
+  "chaos_draft_rerolled": "le destin est tenté à nouveau", "chaos_draft_sin_embraced": "péché accepté (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "la bougie a ôté la morsure (sans contrepartie)", "chaos_draft_sin_resistance": "tu as dit oui. elle a rendu la pareille (+1 résistance)",
+  "chaos_draft_resisted": "tu as résisté → +1 résistance", "chaos_draft_resistance_announce": "+1 RÉSISTANCE",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

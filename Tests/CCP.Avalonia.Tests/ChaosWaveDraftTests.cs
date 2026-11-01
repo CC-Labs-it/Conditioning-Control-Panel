@@ -188,9 +188,9 @@ public sealed class ChaosWaveDraftTests
             Assert.DoesNotContain("{0", Loc.GetF("chaos_draft_sin_embraced", 0.4));
             if (language == "en")
             {
-                Assert.Equal("🕯 sin embraced (+{0:0.00}x)", loc.GetEnglish("chaos_draft_sin_embraced"));
-                Assert.Equal("🕯 the candle took the sting (no drawback)", loc.GetEnglish("chaos_draft_sin_shielded"));
-                Assert.Equal("🕯 you said yes. it gave back (+1 resistance)", loc.GetEnglish("chaos_draft_sin_resistance"));
+                Assert.Equal("sin embraced (+{0:0.00}x)", loc.GetEnglish("chaos_draft_sin_embraced"));
+                Assert.Equal("the candle took the sting (no drawback)", loc.GetEnglish("chaos_draft_sin_shielded"));
+                Assert.Equal("you said yes. it gave back (+1 resistance)", loc.GetEnglish("chaos_draft_sin_resistance"));
             }
             Start();
             var state = ChaosRunHost.State!;

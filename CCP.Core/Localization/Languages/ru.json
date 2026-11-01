@@ -1,7 +1,7 @@
 {
-  "chaos_draft_rerolled": "🎲 снова испытала судьбу", "chaos_draft_sin_embraced": "🕯 грех принят (+{0:0.00}x)",
-  "chaos_draft_sin_shielded": "🕯 свеча сняла боль (без недостатков)", "chaos_draft_sin_resistance": "🕯 ты сказала да. она ответила тем же (+1 сопротивление)",
-  "chaos_draft_resisted": "♥ сопротивление → +1 сопротивление", "chaos_draft_resistance_announce": "+1 СОПРОТИВЛЕНИЕ",
+  "chaos_draft_rerolled": "снова испытала судьбу", "chaos_draft_sin_embraced": "грех принят (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "свеча сняла боль (без недостатков)", "chaos_draft_sin_resistance": "ты сказала да. она ответила тем же (+1 сопротивление)",
+  "chaos_draft_resisted": "сопротивление → +1 сопротивление", "chaos_draft_resistance_announce": "+1 СОПРОТИВЛЕНИЕ",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",
