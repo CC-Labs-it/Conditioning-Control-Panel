@@ -126,17 +126,95 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             var logout = Assert.Single(sent);
             Assert.Equal("owned", (string?)logout["type"]);
-            Assert.Empty((JArray)logout["grants"]!);
+            Assert.Equal(JTokenType.Null, logout["accountId"]!.Type);
+            Assert.Null(logout["grants"]);
             Assert.Null(PrizeOwnership.Grants());
             sent.Clear();
             CoreAccount.UnifiedUserId = "other";
             Dispatcher.UIThread.RunJobs();
-            Assert.Empty((JArray)Assert.Single(sent)["grants"]!);
+            var switchFrame = Assert.Single(sent);
+            Assert.Equal("other", (string?)switchFrame["accountId"]);
+            Assert.Null(switchFrame["grants"]);
             CoreAccount.UnifiedUserId = "discord:12";
             Assert.Null(PrizeOwnership.Grants());
         }
         finally { PrizeOwnership.ResetHeld(); (s.UnifiedId, s.OfflineMode) = (id, offline); }
     });
+
+    private sealed class DelayedRaceReply : System.Net.Http.HttpMessageHandler
+    {
+        internal readonly System.Threading.Tasks.TaskCompletionSource<System.Net.Http.HttpResponseMessage> Reply = new();
+        internal readonly System.Threading.Tasks.TaskCompletionSource Started = new();
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        { Started.TrySetResult(); return Reply.Task; }
+    }
+
+    [Fact]
+    public void Glassroad_OldProfileReply_IsRejectedAfterAccountSwitchEvenBackToSameAccount() => RunGlassroad("1", (_, _, _) =>
+    {
+        var oldHttp = GameWindow.PbpHttpClient;
+        var handler = new DelayedRaceReply();
+        using var http = new System.Net.Http.HttpClient(handler);
+        try
+        {
+            GameWindow.PbpHttpClient = () => http;
+            var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            w.HandleMessage("{\"type\":\"net\",\"id\":\"old\",\"method\":\"GET\",\"path\":\"/v2/race/profile\"}");
+            Assert.True(handler.Started.Task.Wait(TimeSpan.FromSeconds(10)));
+            CoreAccount.UnifiedUserId = "other";
+            CoreAccount.UnifiedUserId = "discord:12";
+            handler.Reply.SetResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                { Content = new System.Net.Http.StringContent("{\"grants\":[\"cos.kart.body.petal\"]}") });
+            Assert.True(w.GlassroadPending.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            var reply = sent.Single(x => (string?)x["id"] == "old");
+            Assert.Equal(0, (int)reply["status"]!);
+            Assert.Equal("", (string?)reply["body"]);
+        }
+        finally { GameWindow.PbpHttpClient = oldHttp; }
+    });
+
+    [Fact]
+    public void Glassroad_DelayedSnapshot_CannotReplaceNewAccount()
+    {
+        var s = CoreSettings.Current;
+        var (oldId, oldOffline, oldAccount) = (s.UnifiedId, s.OfflineMode, CoreAccount.UnifiedUserId);
+        var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        using var entered = new System.Threading.ManualResetEventSlim();
+        using var resume = new System.Threading.ManualResetEventSlim();
+        System.Threading.Tasks.Task? late = null;
+        try
+        {
+            (s.UnifiedId, s.AuthToken, s.OfflineMode, CoreAccount.UnifiedUserId) = ("a", "test", false, "a");
+            PrizeOwnership.ResetHeld();
+            PrizeOwnership.BeforeSnapshotLock = () => { entered.Set(); resume.Wait(); };
+            late = System.Threading.Tasks.Task.Run(() => PrizeOwnership.ApplySnapshot("a", 99, new[] { "cos.kart.body.a" }));
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            PrizeOwnership.BeforeSnapshotLock = null;
+            (s.UnifiedId, CoreAccount.UnifiedUserId) = ("b", "b");
+            PrizeOwnership.ApplySnapshot("b", 1, new[] { "cos.kart.body.b" });
+            resume.Set();
+            Assert.True(late.Wait(TimeSpan.FromSeconds(10)));
+            Assert.Equal(new[] { "cos.kart.body.b" }, PrizeOwnership.Grants());
+        }
+        finally
+        {
+            resume.Set(); late?.Wait(TimeSpan.FromSeconds(10));
+            PrizeOwnership.BeforeSnapshotLock = null;
+            PrizeOwnership.ResetHeld();
+            CoreAccount.UnifiedUserId = oldAccount;
+            (s.UnifiedId, s.OfflineMode) = (oldId, oldOffline);
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
+        }
+    }
 
     // WPF GlassroadHostService.cs:170-192: init sees the current account; changed snapshots push while open.
     [Fact]

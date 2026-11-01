@@ -25,13 +25,34 @@ export function createOwned({ storage = defaultStorage(), uid = null } = {}) {
   let account = idOf(uid);
   const read = () => {
     if (!account) return [];
-    try { const o = JSON.parse(storage?.getItem(OWNED_KEY) || 'null'); return o && o.uid === account ? cleanGrants(o.grants) || [] : []; } catch (e) { return []; }
+    try {
+      const o = JSON.parse(storage?.getItem(OWNED_KEY) || 'null');
+      if (o && o.uid === account) return cleanGrants(o.grants) || [];
+      return cleanGrants(JSON.parse(storage?.getItem(OWNED_KEY + '.' + account) || 'null')) || [];
+    } catch (e) { return []; }
   };
-  let grants = read();
+  let grants = read(), accountVersion = -1;
   return {
     get grants() { return grants; },
     /** The signed-in account (init identity); a different one swaps to its own remembered snapshot. */
     setAccount(id) { const next = idOf(id); if (next !== account) { account = next; grants = read(); } },
+    /** Avalonia account-tagged frame. Untagged WPF frames retain their original behavior. */
+    receive(frame) {
+      if (Object.prototype.hasOwnProperty.call(frame || {}, 'accountId')) {
+        if (Number.isSafeInteger(frame.accountVersion)) {
+          if (frame.accountVersion < accountVersion) return false;
+          accountVersion = frame.accountVersion;
+        }
+        const next = idOf(frame.accountId);
+        if (next !== account) {
+          if (account) try { storage?.setItem(OWNED_KEY + '.' + account, JSON.stringify(grants)); } catch (e) { /* private window */ }
+          account = next;
+          grants = read();
+        }
+        if (!Array.isArray(frame.grants)) return true;
+      }
+      return this.adopt(frame?.grants);
+    },
     /** Adopt a full snapshot; junk is ignored. @returns {boolean} true when adopted */
     adopt(list) {
       const next = cleanGrants(list);

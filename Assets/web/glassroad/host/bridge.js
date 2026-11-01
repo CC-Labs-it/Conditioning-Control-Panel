@@ -117,7 +117,7 @@ export function createBridge({ win = globalThis.window } = {}) {
     search: win?.location?.search || '',
     coarse: !!win?.matchMedia?.('(pointer: coarse)')?.matches,
   });
-  let resolveInit, beat = 0, waitT = 0;
+  let resolveInit, beat = 0, waitT = 0, accountVersion = null;
   const init = new Promise((res) => { resolveInit = res; });
 
   function send(msg) {
@@ -127,6 +127,8 @@ export function createBridge({ win = globalThis.window } = {}) {
   function dispatch(m) {
     if (!m || typeof m.type !== 'string') return;
     if (m.type === 'ping') { send({ type: 'pong', t: m.t }); return; }
+    if (m.type === 'owned' && Number.isSafeInteger(m.accountVersion) && (accountVersion === null || m.accountVersion > accountVersion))
+      accountVersion = m.accountVersion;
     if (m.type === 'init') { if (waitT) win.clearTimeout(waitT); resolveInit(mergeInit(base, m)); }
     const set = handlers.get(m.type);
     if (set && set.size) for (const fn of [...set]) { try { fn(m); } catch (e) { console.warn('[bridge]', m.type, e); } }
@@ -163,6 +165,7 @@ export function createBridge({ win = globalThis.window } = {}) {
 
   return {
     hosted: !!webview, protocol: PROTOCOL, init, on, send, log,
+    get accountVersion() { return accountVersion; },
     ready() { send({ type: 'ready', protocol: PROTOCOL }); },
     runStarted(data = {}) { send({ type: 'run-started', ...data }); },
     runEnded({ timeS, laps } = {}) { send({ type: 'run-ended', timeS, laps }); },

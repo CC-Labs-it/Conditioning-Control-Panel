@@ -92,10 +92,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var s = CoreSettings.Current;
-                var uid = CoreAccount.UnifiedUserId;
-                bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
-                Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants()));
+                var ownership = PrizeOwnership.Frame();
+                bool online = !string.IsNullOrEmpty(ownership.Account) && !string.IsNullOrEmpty(PbpAuthToken());
+                Post(GlassroadHostRules.InitFrame(online ? ownership.Account : null, s.UserDisplayName, GlassroadTier(),
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, ownership.Grants));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
@@ -103,7 +103,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // WPF GlassroadHostService.cs:187-192: a counter snapshot lifts owned garage karts.
         private void OnGlassroadOwnershipChanged()
         {
-            void Send() { if (_grOpen && !_closing) Post(GlassroadHostRules.OwnedFrame(PrizeOwnership.Grants() ?? Array.Empty<string>())); }
+            void Send()
+            {
+                if (!_grOpen || _closing) return;
+                var ownership = PrizeOwnership.Frame();
+                var frame = new JObject { ["type"] = "owned", ["accountId"] = ownership.Account, ["accountVersion"] = ownership.Version };
+                if (ownership.Grants is { } grants) frame["grants"] = GlassroadHostRules.KartGrants(grants);
+                Post(frame);
+            }
             if (Dispatcher.UIThread.CheckAccess()) Send();
             else Dispatcher.UIThread.Post(Send);
         }
@@ -208,7 +215,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var baseUrl = PbpServerBase();
             if (string.IsNullOrEmpty(baseUrl)) { ReplyGlassroadNet(id, 0, ""); return; }   // a sandbox with no loopback
             // Signed first (the host names the caller), then the SIGNED path is judged on its built Uri.
-            if (!GlassroadHostRules.TrySign(method, path, body, CoreAccount.UnifiedUserId, out var signedPath, out var signedBody)
+            var version = PrizeOwnership.IdentityVersion;
+            var account = CoreAccount.UnifiedUserId;
+            if (!GlassroadHostRules.TrySign(method, path, body, account, out var signedPath, out var signedBody)
                 || !HostNetPathRule.TryBuild(baseUrl, signedPath, GlassroadHostRules.AllowedPathPrefix, out var target)
                 || target is null)
             {
@@ -238,7 +247,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     (status, reply) = (0, "");
                     Log.Debug("Glassroad: net {Method} {Path} failed: {E}", method, path, ex.Message);
                 }
-                Dispatcher.UIThread.Post(() => ReplyGlassroadNet(id, status, reply));
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (version != PrizeOwnership.IdentityVersion || account != CoreAccount.UnifiedUserId)
+                        ReplyGlassroadNet(id, 0, "");
+                    else ReplyGlassroadNet(id, status, reply);
+                });
             });
         }
 

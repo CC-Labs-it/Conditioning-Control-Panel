@@ -26,19 +26,24 @@ export function fetchTransport({ base = '', headers = {}, fetchImpl = globalThis
 
 export function hostTransport(bridge, { timeoutMs = 15000, timers = globalThis } = {}) {
   const wait = new Map();
-  let next = 1;
+  let next = 1, accountVersion = bridge.accountVersion ?? null;
+  // WPF's untagged frames leave this null. Avalonia invalidates requests across account changes.
+  bridge.on('owned', m => {
+    if (Number.isSafeInteger(m?.accountVersion) && (accountVersion === null || m.accountVersion > accountVersion))
+      accountVersion = m.accountVersion;
+  });
   bridge.on('net-reply', (m) => {
     const w = wait.get(m.id);
     if (!w) return;
     wait.delete(m.id); timers.clearTimeout(w.t);
     let b = m.body;
     if (typeof b === 'string') { try { b = JSON.parse(b); } catch (e) { b = null; } }
-    w.res({ status: m.status | 0, body: b });
+    w.res(w.accountVersion !== accountVersion ? { status: 0, body: null } : { status: m.status | 0, body: b });
   });
   return (method, path, body) => new Promise((res) => {
     const id = 'race' + next++;
     const t = timers.setTimeout(() => { wait.delete(id); res({ status: 0, body: { error: 'timeout' } }); }, timeoutMs);
-    wait.set(id, { res, t });
+    wait.set(id, { res, t, accountVersion });
     bridge.send({ type: 'net', id, method, path, body: body === undefined ? null : body });
   });
 }
