@@ -12,6 +12,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -25,11 +26,20 @@ public sealed class LegacyCalibrationNoticeTests
     [InlineData("named", false)]
     [InlineData("null-name", true)]
     [InlineData("empty-name", true)]
-    public Task ShellOffersRecalibrationOnlyForLegacyBounds(string calibration, bool expected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task ShellOffersRecalibrationOnlyForLegacyBounds(string calibration, bool expected) =>
+        CheckNotice(calibration, expected, "en", "Your calibration needs updating for multi-monitor support.", "Recalibrate");
+
+    [Fact]
+    public Task FrenchLegacyNoticeUsesLocalizedCopy() => CheckNotice("null-name", true, "fr",
+        "Ton étalonnage doit être mis à jour pour prendre en charge plusieurs écrans.", "Réétalonner");
+
+    private static Task CheckNotice(string calibration, bool expected, string language, string message, string action) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var oldSettingLanguage = CoreSettings.Current.Language;
         var tracker = WebcamTracker.Instance;
         var oldCal = tracker.Calibration;
         var notices = AvApp.Notifications;
@@ -39,6 +49,8 @@ public sealed class LegacyCalibrationNoticeTests
         MainShellWindow? shell = null;
         try
         {
+            CoreSettings.Current.Language = language;
+            LocalizationManager.Instance.SetLanguage(language);
             tracker.Calibration = calibration switch
             {
                 "none" => null,
@@ -53,13 +65,13 @@ public sealed class LegacyCalibrationNoticeTests
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             var toast = host.Children.OfType<Border>().SingleOrDefault(b => b.Child is Grid g &&
-                g.Children.OfType<TextBlock>().Any(t => t.Text == "Your calibration needs updating for multi-monitor support."));
+                g.Children.OfType<TextBlock>().Any(t => t.Text == message));
             Assert.Equal(expected, toast != null);
             if (!expected) return;
             Assert.Equal(Color.Parse("#FFB347"), ((ISolidColorBrush)toast!.BorderBrush!).Color);
             var button = ((Grid)toast.Child!).Children.OfType<StackPanel>().Single().Children.OfType<Button>()
                 .Single(b => b.Name == "ToastAction");
-            Assert.Equal("Recalibrate", ((TextBlock)button.Content!).Text);
+            Assert.Equal(action, ((TextBlock)button.Content!).Text);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             for (int i = 0; i < 100 && !shell.OwnedWindows.OfType<WebcamCalibrationWindow>().Any(); i++)
             { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
@@ -75,6 +87,9 @@ public sealed class LegacyCalibrationNoticeTests
             notices.AttachHost(new StackPanel());
             if (hadDismissal) dismissed.Add(WebcamCalibrationWindow.LegacyNoticeKey);
             tracker.Calibration = oldCal;
+            CoreSettings.Current.Language = oldSettingLanguage;
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+            Dispatcher.UIThread.RunJobs();
         }
     });
 }

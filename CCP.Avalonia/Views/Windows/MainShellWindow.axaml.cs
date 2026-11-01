@@ -49,6 +49,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -177,8 +178,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var cal = Platform.WebcamTracker.Instance.Calibration;
                     if (cal?.MonitorBounds != null && string.IsNullOrEmpty(cal.MonitorBounds.DeviceName))
                         App.Notifications.ShowSticky(WebcamCalibrationWindow.LegacyNoticeKey,
-                            "Your calibration needs updating for multi-monitor support.", Helpers.NotificationType.Warning,
-                            "Recalibrate", async () =>
+                            Loc.Get("toast_legacy_calibration"), Helpers.NotificationType.Warning,
+                            Loc.Get("toast_legacy_calibration_action"), async () =>
                             {
                                 try { await WebcamCalibrationWindow.ShowDialogWithRecalibrate(this); }
                                 catch (Exception ex) { Serilog.Log.Warning(ex, "Recalibrate toast: failed to open calibration window"); }
