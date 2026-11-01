@@ -359,6 +359,7 @@ public sealed class GameWindowFypTests
             tracker.RaiseGazeForTest(new Point(10, 10));
             Assert.Empty(sent);
             GameWindow.CloseAllForPanic();
+            Wait(GameWindow.FypCameraStopTask);
             Assert.Equal(1, stops);
             sent.Clear();
             tracker.RaiseBlinkForTest();
@@ -400,6 +401,7 @@ public sealed class GameWindowFypTests
         running = true;
         pending.SetResult(true);
         Wait(w.FypEyeTask!);
+        Wait(GameWindow.FypCameraStopTask);
         Assert.Equal(1, stops);
         Assert.False(running);
     });
@@ -486,6 +488,7 @@ public sealed class GameWindowFypTests
         Assert.Equal(1, stops);
         Assert.True(running);
         GameWindow.CloseAllForPanic();
+        Wait(GameWindow.FypCameraStopTask);
         Assert.Equal(2, stops);
     });
 
@@ -513,6 +516,123 @@ public sealed class GameWindowFypTests
         Wait(w.FypEyeTask!);
         Assert.False(s.FypEyeControl);
         Assert.Equal("no-camera", (string?)sent.Last()["reason"]);
+    });
+
+    [Fact]
+    public void EyeControl_PanicContinuesWhileOwnedCameraStopIsBlocked() => Run((shell, _) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var s = CoreSettings.Current;
+        s.WebcamConsentGiven = true;
+        s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+        s.FypEyeControl = false;
+        var w = GameWindow.Launch(GameWindow.FypId)!;
+        var entered = new System.Threading.ManualResetEventSlim();
+        var release = new System.Threading.ManualResetEventSlim();
+        bool running = false, laterSurface = false;
+        var panicStop = new TaskCompletionSource();
+        w.FypCameraRunningOverride = () => running;
+        w.FypStartCameraOverride = () => { running = true; return Task.FromResult(true); };
+        w.FypStopCameraOverride = () => { entered.Set(); release.Wait(TimeSpan.FromSeconds(10)); running = false; };
+        var surfaces = PanicSurfaces.All;
+        try
+        {
+            w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
+            Wait(w.FypEyeTask!);
+            PanicSurfaces.All = new[] { surfaces.Single(x => x.Id == "games"),
+                new PanicSurfaces.Surface("after-games", _ => laterSurface = true),
+                new PanicSurfaces.Surface("camera", _ => MainShellWindow.StopCameraForPanic()) };
+            PanicSurfaces.StopAll("fyp test", shell);
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+            Assert.True(laterSurface);
+            Assert.True(running); // the camera stop is still blocked when the next surface runs
+            GameWindow.TrackFypCameraStop(panicStop.Task); // the second stop completes before the first
+            panicStop.SetResult();
+            var reopened = GameWindow.Launch(GameWindow.FypId)!;
+            bool restarted = false;
+            reopened.FypCameraRunningOverride = () => running;
+            reopened.FypStartCameraOverride = () => { restarted = running = true; return Task.FromResult(true); };
+            reopened.FypStopCameraOverride = () => running = false;
+            reopened.HandleMessage("{\"type\":\"ready\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(reopened.FypEyeTask!.IsCompleted);
+            Assert.False(restarted);
+            release.Set();
+            Wait(reopened.FypEyeTask!);
+            Assert.True(restarted);
+            reopened.Close();
+        }
+        finally { release.Set(); panicStop.TrySetResult(); Wait(GameWindow.FypCameraStopTask); PanicSurfaces.All = surfaces; }
+    });
+
+    [Fact]
+    public void EyeControl_ReopenWhileCameraStarts_TransfersThePendingStart() => Run((_, _) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var s = CoreSettings.Current;
+        s.WebcamConsentGiven = true;
+        s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+        s.FypEyeControl = true;
+        var first = GameWindow.Launch(GameWindow.FypId)!;
+        var pending = new TaskCompletionSource<bool>();
+        int starts = 0, stops = 0;
+        bool running = false;
+        first.FypCameraRunningOverride = () => running;
+        first.FypStartCameraOverride = () => { starts++; return pending.Task; };
+        first.FypStopCameraOverride = () => { stops++; running = false; };
+        first.HandleMessage("{\"type\":\"ready\"}");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, starts);
+        var firstTask = first.FypEyeTask!;
+        try
+        {
+            first.Close();
+            var second = GameWindow.Launch(GameWindow.FypId)!;
+            second.FypCameraRunningOverride = () => running;
+            second.FypStartCameraOverride = () => { starts++; return Task.FromResult(false); };
+            second.FypStopCameraOverride = () => { stops++; running = false; };
+            var sent = new List<JObject>();
+            second.Posted += json => sent.Add(JObject.Parse(json));
+            second.HandleMessage("{\"type\":\"ready\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, starts);
+            running = true;
+            pending.SetResult(true);
+            Wait(firstTask);
+            Wait(second.FypEyeTask!);
+            Assert.True(s.FypEyeControl);
+            Assert.True(running);
+            Assert.Equal(0, stops);
+            Assert.True((bool)sent.Last()["running"]!);
+            second.Close();
+            Wait(GameWindow.FypCameraStopTask);
+            Assert.Equal(1, stops);
+
+            // Both visits can close before the shared start completes: release it once.
+            var late = new TaskCompletionSource<bool>();
+            var third = GameWindow.Launch(GameWindow.FypId)!;
+            third.FypCameraRunningOverride = () => running;
+            third.FypStartCameraOverride = () => late.Task;
+            third.FypStopCameraOverride = () => { stops++; running = false; };
+            third.HandleMessage("{\"type\":\"ready\"}");
+            Dispatcher.UIThread.RunJobs();
+            var thirdTask = third.FypEyeTask!;
+            third.Close();
+            var fourth = GameWindow.Launch(GameWindow.FypId)!;
+            fourth.FypCameraRunningOverride = () => running;
+            fourth.FypStopCameraOverride = () => { stops++; running = false; };
+            fourth.HandleMessage("{\"type\":\"ready\"}");
+            Dispatcher.UIThread.RunJobs();
+            var fourthTask = fourth.FypEyeTask!;
+            fourth.Close();
+            running = true;
+            late.SetResult(true);
+            Wait(thirdTask);
+            Wait(fourthTask);
+            Wait(GameWindow.FypCameraStopTask);
+            Assert.Equal(2, stops);
+        }
+        finally { pending.TrySetResult(false); Wait(firstTask); }
     });
 
     private static void Wait(Task t)
