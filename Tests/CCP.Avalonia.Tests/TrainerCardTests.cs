@@ -1,14 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -154,8 +159,10 @@ public sealed partial class AccountSeedTests
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                ToolTip.SetServiceEnabled(w, false);
                 w.Show();
                 w.ShowTab("leaderboard");
+                w.CompleteTabTransition();
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
                 Dispatcher.UIThread.RunJobs();
@@ -163,12 +170,35 @@ public sealed partial class AccountSeedTests
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
+                row.BringIntoView();
+                ContentHitTestTests.RenderLiveTree(w);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                var target = Assert.IsAssignableFrom<Control>(w.InputHitTest(at));
+                Assert.Same(row, target.FindAncestorOfType<ListBoxItem>(includeSelf: true));
+                // Headless mouse helpers timestamp input with a stopwatch. Freeze it so a slow
+                // render between actual clicks cannot turn a double-click into two singles.
+                var clicks = new List<int>();
+                row.AddHandler(InputElement.PointerPressedEvent, (_, e) => clicks.Add(e.ClickCount),
+                    RoutingStrategies.Bubble, handledEventsToo: true);
+                var inputClock = (Stopwatch)w.PlatformImpl!.GetType()
+                    .GetField("_st", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w.PlatformImpl)!;
+                inputClock.Stop();
+                try
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    for (var i = 0; i < 2; i++)
+                    {
+                        w.MouseDown(at, MouseButton.Left);
+                        w.MouseUp(at, MouseButton.Left);
+                        if (i == 0)
+                        {
+                            Assert.Same(row.DataContext, list.SelectedItem);
+                            Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                            await Task.Delay(750); // Exercise a dispatch gap longer than the double-click interval.
+                        }
+                    }
                 }
+                finally { inputClock.Start(); }
+                Assert.Equal(new[] { 1, 2 }, clicks);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;

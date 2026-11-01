@@ -4,10 +4,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -188,8 +190,13 @@ public sealed class CompanionEditorsTests
     {
         Setup();
         var service = new SettingsService();
+        service.Current.Welcomed = true;
+        service.Current.HasAcceptedAgeVerification = true;
+        service.Current.WhatMovedCardShown = 1;
+        service.Current.MotionLevel = MotionLevel.Full;
         CoreSettings.ServiceProvider = () => service;
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
@@ -197,6 +204,9 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.NotNull(shell.EnteringTab);
+            shell.CompleteTabTransition();
+            Assert.Null(shell.EnteringTab);
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
@@ -205,8 +215,11 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                ContentHitTestTests.RenderLiveTree(shell);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == button || (hit is not null && button.IsVisualAncestorOf(hit)),
+                    $"The prompt link must receive the pointer, hit {hit?.GetType().Name} instead");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
