@@ -5,12 +5,14 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
+using ConditioningControlPanel.Services.UI;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -164,7 +166,6 @@ public sealed class LeashIncomingAskTests
     public void WaylandWithoutPortalShowsTheAvailableCutButtonOnTheOwnCard(string? display, string? session) =>
         LeashGateCardTests.Run(true, (shell, _, service) =>
         {
-            if (!OperatingSystem.IsLinux()) return;
             var old = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
             var oldSession = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
             try
@@ -176,7 +177,9 @@ public sealed class LeashIncomingAskTests
                 shell.ShowTab("leash");
                 var page = shell.Named<LeashTabView>("LeashTab")!;
                 var hint = page.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Tag as string == "leash-self-hold");
-                Assert.Equal(Loc.Get("leash_self_cut_wayland"), hint.Text);
+                var expected = OperatingSystem.IsLinux() ? Loc.Get("leash_self_cut_wayland")
+                    : Loc.GetF("leash_self_hold_hint", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey));
+                Assert.Equal(expected, hint.Text);
                 Assert.NotEqual("leash_self_cut_wayland", hint.Text);
                 var cut = page.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag as string == "leash-cut");
                 LeashGateCardTests.Click(cut);
@@ -195,7 +198,6 @@ public sealed class LeashIncomingAskTests
     public void WaylandWithoutPortalExplainsTheAvailableCutRouteBeforeAccepting(string? display, string? session) =>
         LeashGateCardTests.Run(false, (_, _, _) =>
         {
-            if (!OperatingSystem.IsLinux()) return;
             var old = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
             var oldSession = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
             try
@@ -206,13 +208,59 @@ public sealed class LeashIncomingAskTests
                 var card = new LeashAskCard();
                 var line = card.GetLogicalDescendants().OfType<Grid>().Single(c => c.Tag as string == "leash-explain-line:cut");
                 var text = line.Children.OfType<TextBlock>().Single().Text;
-                Assert.Equal(Loc.Get("leash_explain_cut_wayland"), text);
+                var expected = OperatingSystem.IsLinux() ? Loc.GetF("leash_explain_cut_wayland", Loc.Get("nav_tab_leash"))
+                    : Loc.GetF("leash_explain_leashed_cut", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey));
+                Assert.Equal(expected, text);
                 Assert.NotEqual("leash_explain_cut_wayland", text);
             }
             finally
             {
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", old);
                 Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", oldSession);
+            }
+        });
+
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-CN")]
+    [InlineData("ja")]
+    [InlineData("ko")]
+    [InlineData("es")]
+    [InlineData("pt-BR")]
+    [InlineData("fr")]
+    [InlineData("it")]
+    [InlineData("de")]
+    [InlineData("ru")]
+    public void WaylandAskNamesTheActualNavigationTabInEveryLanguage(string language) =>
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            var loc = LocalizationManager.Instance;
+            var oldLanguage = loc.CurrentLanguage;
+            var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
+            try
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "wayland-test");
+                Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", null);
+                loc.SetLanguage(language);
+                var tab = NavSections.Find(NavSections.Social)!.Tabs.Single(t => t.Key == "leash");
+                Assert.Equal("nav_tab_leash", tab.LabelKey);
+                var label = Loc.Get(tab.LabelKey);
+                Assert.NotEqual(tab.LabelKey, label);
+                Assert.Contains("{0}", Loc.Get("leash_explain_cut_wayland"));
+                var waylandText = Loc.GetF("leash_explain_cut_wayland", label);
+                Assert.Contains(label, waylandText);
+                var card = new LeashAskCard();
+                var line = card.GetLogicalDescendants().OfType<Grid>().Single(c => c.Tag as string == "leash-explain-line:cut");
+                var expected = OperatingSystem.IsLinux() ? waylandText
+                    : Loc.GetF("leash_explain_leashed_cut", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey));
+                Assert.Equal(expected, line.Children.OfType<TextBlock>().Single().Text);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", display);
+                Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", session);
+                loc.SetLanguage(oldLanguage);
             }
         });
 
