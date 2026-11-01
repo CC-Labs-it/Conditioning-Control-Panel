@@ -149,9 +149,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF AutonomyService.VoiceCommandHost.cs:96 -> KeywordTriggerService.cs:193.
             // Stop the runtime and its clip, leaving the saved Awareness switch alone.
             "keyword_off" => Platform.KeywordTriggerHead.Stop,
-            // WPF VoiceCommandHost.cs:95: start the runtime only (idempotent, behind awareness access);
-            // the saved switch and the keyboard source stay as the Awareness page set them.
-            "keyword_on" => Platform.KeywordTriggerHead.Start,
+            // WPF VoiceCommandHost.cs:95: start the runtime (idempotent, behind awareness access) and give
+            // back the key source keyword_off took; the saved Awareness switch never changes.
+            "keyword_on" when Platform.KeywordTriggerHead.HasKeyboardInput => () =>
+            {
+                Platform.KeywordTriggerHead.Start();
+                Platform.KeywordTriggerHead.AttachKeyboard();
+            },
             "mantra" => () => { }, // Core returns this intent to the existing spoken-mantra funnel.
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,

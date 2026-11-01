@@ -20,6 +20,11 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
+    // OS input seams: tests can drive Win32PanicKey.OnDown without installing a native hook.
+    internal static bool? KeyboardSupportedForTests;
+    internal static Func<int, char?>? TranslateForTests;
+    internal static bool HasKeyboardInput => KeyboardSupportedForTests ?? (OperatingSystem.IsWindows() &&
+        string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
     private static bool _subscribed;
     private static int _generation;
     internal static void Sync()
@@ -27,15 +32,18 @@ internal static class KeywordTriggerHead
         if (CoreSettings.Current.KeywordTriggersEnabled && KeywordAudioRuntime.HasAccess)
         {
             Engine.Start();
-            if (!_subscribed && OperatingSystem.IsWindows() &&
-                string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
-            {
-                Win32PanicKey.KeyDown += OnKey;
-                _subscribed = true;
-                Win32PanicKey.EnsureListening(); // shares the existing hook and its panic binding
-            }
+            AttachKeyboard();
         }
         else Stop();
+    }
+
+    // WPF MainWindow.Awareness.cs:480-499: the keyboard toggle does not start the service.
+    internal static void AttachKeyboard()
+    {
+        if (!CoreSettings.Current.KeywordTriggersEnabled || _subscribed || !HasKeyboardInput) return;
+        Win32PanicKey.KeyDown += OnKey;
+        _subscribed = true;
+        if (KeyboardSupportedForTests != true) Win32PanicKey.EnsureListening(); // shared panic hook
     }
 
     // WPF KeywordTriggerService.cs:176-185: start is idempotent and requires awareness access.
@@ -74,7 +82,7 @@ internal static class KeywordTriggerHead
                 _ => null,
             };
             var generation = Volatile.Read(ref _generation);
-            var ch = special == null ? Translate(vk) : null;
+            var ch = special == null ? (TranslateForTests is { } translate ? translate(vk) : Translate(vk)) : null;
             uint processId = 0;
             // WPF KeywordTriggerService.cs:618-622: sample even in Everywhere mode, at most every 2 s.
             var needsForeground = Engine.NeedsForeground(DateTime.UtcNow);
