@@ -41,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
-    /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
+    /// the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// announcer callers remain missing even though the announcer overlay is now present.
     /// The FX window drives heat tint; colour pulse and screen shake calls retain WPF's values
     /// through the unseeded <see cref="PulseFx"/>/<see cref="ShakeFx"/> hooks
-    /// (chaos-payout-fallin-d). FreezeBurst and edge-hold callers remain missing.
+    /// (chaos-payout-fallin-d). The freeze pickup remains missing.
     /// The hold and the Snap Chain window run on wall time (<c>BubbleOverlay.Field.Clock</c>),
     /// as WPF does (:4531, ChaosModeService :2000).</para>
     ///
@@ -64,7 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
-        private static double _snapFlashRemainingSec;
+        private static double _snapFlashRemainingSec, _freezeRemainingSec;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
@@ -159,7 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
         internal static void SpawnTick()
         {
-            if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
+            if (!_spawning || _state == null || _manualPaused || _lessonCardPaused || _freezeRemainingSec > 0) return;
             if (_overlay is not { IsVisible: true }) return;   // P01
             var cfg = _state.Config;
             double intensity = _state.RunIntensity;
@@ -230,7 +230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
         private static bool CanChannelDefuse(AmbientBubble b) =>
-            _state != null && _state.Focus >= ChaosTuning.DEFUSE_COST;
+            _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
 
         /// <summary>WPF OnDefused (:1984): the core snap (cost, counts, score, Drip Feed), the Snap
         /// Chain window and Playing with Fire's brink gold. Pendulum is 1.0 until its boon lands.</summary>
@@ -242,7 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
-                b.DefusedViaChannel, free: false, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
+                b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
             ShowPopScore(pts);
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
@@ -376,6 +376,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _spawnTimer?.Stop();
             _spawnTimer = null;
+            if (_freezeRemainingSec > 0) EndFreeze();
             BubbleOverlay.EndChaos();
         }
 
@@ -386,6 +387,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
+            if (_freezeRemainingSec > 0)
+            {
+                _freezeRemainingSec -= ChaosRunEngine.TICK_SEC;
+                if (_freezeRemainingSec <= 0) EndFreeze();
+            }
             TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
             if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
@@ -636,6 +642,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 t.IsEffectActive = t.Id switch
                 {
                     "snap_field" => _snapFlashRemainingSec > 0,
+                    "freeze_trigger" => _freezeRemainingSec > 0,
                     "e_stim" => BubbleOverlay.EStimChargesLeft > 0,
                     _ => false,
                 };
@@ -658,7 +665,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF ChaosModeService.cs:2735-2750,2765-2780: Snap Field and E-Stim.
+        /// <summary>WPF ChaosModeService.cs:2711-2719,2735-2750,2765-2780: Freeze, Snap Field and E-Stim.
         /// The remaining toys still need their effects.</summary>
         private static void UseToy(ChaosToyState toy)
         {
@@ -667,7 +674,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
             if (r != ChaosToyRules.UseResult.Fired) return;
             bool maxed = _state.MaxedBoons.Contains(toy.Id);
-            if (toy.Id == "snap_field")
+            if (toy.Id == "freeze_trigger")
+            {
+                ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.6f);
+                ActivateFreeze();
+                if (maxed) BubbleOverlay.SnapChaosField(false);
+                _state.PushEvent(Loc.Get("chaos_freeze_trigger"));
+            }
+            else if (toy.Id == "snap_field")
             {
                 BubbleOverlay.SnapChaosField(maxed);
                 ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.5f);
@@ -688,6 +702,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             else return;
             if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
+        }
+
+        /// <summary>WPF ChaosModeService.cs:3030-3064: a 3.5 second freeze, on the run clock.</summary>
+        private static void ActivateFreeze()
+        {
+            _freezeRemainingSec = 3.5;
+            BubbleOverlay.Field.FreezeChaos = true;
+            EffectPayload.GlobalDurationMult = 2.5;
+            ChaosEffectBannerOverlay.Show("freeze", "Freeze", Color.FromRgb(0x96, 0xD2, 0xFF));
+            if (_state?.Config.ColorFlashesEnabled == true)
+            {
+                var color = Color.FromRgb(150, 210, 255);
+                _fx?.FreezeBurst(color);
+                _fx?.BeginEdgeHold(color, 0.5);
+            }
+            Shake(0.3, 200);
+        }
+
+        private static void EndFreeze()
+        {
+            _freezeRemainingSec = 0;
+            BubbleOverlay.Field.FreezeChaos = false;
+            EffectPayload.GlobalDurationMult = 1.0;
+            ChaosEffectBannerOverlay.End("freeze");
+            ChaosOverlayWindow.ChaosSfx.Play("freeze_shatter", 0.5f);
+            _fx?.EndEdgeHold();
         }
 
         /// <summary>WPF ChaosModeService.cs:2784-2803: report a discharge and end the halo at zero.</summary>

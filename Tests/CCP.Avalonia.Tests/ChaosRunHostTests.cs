@@ -91,6 +91,100 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>WPF ChaosModeService.cs:2711-2719, 3030-3064: charges, freeze, free snaps and thaw.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Freeze_trigger_holds_the_field_until_its_clock_finishes(bool maxed)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var log = Juice();
+            var language = LocalizationManager.Instance.CurrentLanguage;
+            LocalizationManager.Instance.SetLanguage("en");
+            try
+            {
+                var meta = ChaosMeta.State;
+                meta.ToyPockets = 1;
+                meta.ActiveLifetimeBoons.Add("freeze_trigger");
+                meta.LifetimeBoonLevels["freeze_trigger"] = 1;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                if (maxed) state.MaxedBoons.Add("freeze_trigger");
+                var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy;
+                int charges = toy.ChargesLeft;
+                var live = BubbleOverlay.SpawnChaos(LiveSpec());
+                var treat = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "flash" });
+                state.Focus = 0;
+                ChaosRunHost.UseToyById("freeze_trigger");
+                Assert.Equal(charges - 1, toy.ChargesLeft);
+                Assert.Equal(3, toy.CooldownRemainingSec);
+                Assert.True(toy.IsEffectActive);
+                Assert.True(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(2.5, EffectPayload.GlobalDurationMult);
+                Assert.Equal(maxed, live.Popping);
+                Assert.False(treat.Popping);
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+                Assert.Equal("❄ everything holds still", state.RecentEvents.First());
+                foreach (var (code, expected) in new[]
+                {
+                    ("en", "❄ everything holds still"), ("de", "❄ alles steht still"),
+                    ("es", "❄ todo queda inmóvil"), ("fr", "❄ tout reste immobile"),
+                    ("it", "❄ tutto si ferma"), ("ja", "❄ すべてが静止する"),
+                    ("ko", "❄ 모든 것이 멈춘다"), ("pt-BR", "❄ tudo fica imóvel"),
+                    ("ru", "❄ всё замирает"), ("zh-CN", "❄ 一切静止")
+                })
+                {
+                    LocalizationManager.Instance.SetLanguage(code);
+                    Assert.Equal(expected, Loc.Get("chaos_freeze_trigger"));
+                }
+                LocalizationManager.Instance.SetLanguage("en");
+                Assert.Contains("sfx:freeze_trigger", log);
+                Assert.Contains("shake:0.240/200", log);
+                int count = BubbleOverlay.ChaosCount;
+                ChaosRunHost.SpawnTick();
+                Assert.Equal(count, BubbleOverlay.ChaosCount);
+                if (!maxed)
+                {
+                    var now = DateTime.UtcNow;
+                    BubbleOverlay.Field.Clock = () => now;
+                    BubbleOverlay.Press(live, live.CenterX, live.CenterY);
+                    Assert.True(live.Channeling);
+                    now = now.AddMilliseconds(ChaosTuning.DEFUSE_HOLD_MS + 1);
+                    BubbleOverlay.Field.Step();
+                    Assert.True(live.Popping);
+                    Assert.Equal(0, state.Focus);
+                }
+                ChaosRunHost.ToggleManualPause();
+                Ticks(16);
+                Assert.True(BubbleOverlay.Field.FreezeChaos);
+                ChaosRunHost.ToggleManualPause();
+                Ticks(13);
+                Assert.True(toy.IsEffectActive);
+                Ticks(1);
+                Assert.False(toy.IsEffectActive);
+                Assert.False(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(1, EffectPayload.GlobalDurationMult);
+                Assert.Contains("sfx:freeze_shatter", log);
+                toy.ChargesLeft = 1; toy.CooldownRemainingSec = 0;
+                ChaosRunHost.UseToyById("freeze_trigger");
+                Assert.True(BubbleOverlay.Field.FreezeChaos);
+                ChaosRunHost.ForceShutdown();
+                Assert.False(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(1, EffectPayload.GlobalDurationMult);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow;
+                LocalizationManager.Instance.SetLanguage(language); Unjuice(); FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF ChaosModeService.cs:2735-2750, :2780, :2948, :3021:
     /// snap pays lives, capstone pays treats too, and a successful use awards first play once.</summary>
     [Theory]

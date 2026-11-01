@@ -1,4 +1,5 @@
 {
+  "chaos_freeze_trigger": "❄ 모든 것이 멈춘다",
   "chaos_snap_live": "✋ 터졌다. 살아 있는 버블이 모두 풀렸다",
   "chaos_snap_all": "✋ 터졌다. 모두",
   "chaos_estim_charge": "⚡ 충전됨. 다음 {0}번은 전류가 흐름",
