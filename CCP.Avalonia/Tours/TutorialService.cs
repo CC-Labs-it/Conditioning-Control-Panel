@@ -16,7 +16,7 @@ using Visual = global::Avalonia.Visual;
 // id, target name, tab key and order is WPF's. What this head changes is only how a step reaches the
 // app: TutorialHeadHooks (shell, demos, folder reveal) and the three prep helpers.
 //
-// not ported: EMI narrating a tour (WPF Services/EmiDesk/EmiTourNarrator.cs is not in Core).
+// Partially ported: shell tours summon EMI; the moment bus and speech player are still missing.
 // not ported: the short walk's one demo flash on "sw-flash" (no one-shot flash entry on this head;
 //             TutorialHeadHooks.FlashDemo is the seam, unassigned = the card reads the same, WPF's
 //             own fallback when the assets folder is empty).

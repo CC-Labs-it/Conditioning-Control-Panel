@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using Window = global::Avalonia.Controls.Window;
 
 namespace ConditioningControlPanel.Avalonia.Tours
@@ -97,7 +98,20 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 showDeeper: () => shell.ShowTab("deeper"),
                 showTab: key => shell.ShowTab(key));
 
-            Service.Start(type);
+            // WPF MainWindow.Settings.cs:565-573 attaches before Start; EmiTourNarrator.cs:119-140
+            // summons enabled, away EMI from TutorialStarted, before the first StepChanged.
+            void SummonForTour(object? sender, EventArgs e)
+            {
+                try
+                {
+                    var desk = EmiDeskService.Instance;
+                    if (!desk.IsOut && CoreSettings.Current.EmiDeskEnabled) _ = desk.Summon("tour");
+                }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "Tutorial: EMI summon failed"); }
+            }
+            Service.TutorialStarted += SummonForTour;
+            try { Service.Start(type); }
+            finally { Service.TutorialStarted -= SummonForTour; }
             if (!Service.IsActive) return;
 
             var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
