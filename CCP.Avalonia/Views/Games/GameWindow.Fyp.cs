@@ -169,8 +169,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var open = new MenuItem { Header = Loc.Get("fyp_menu_open_file") };
             open.Click += (_, _) => { if (File.Exists(path)) ExternalOpener.Open(path); };
             var reveal = new MenuItem { Header = Loc.Get("fyp_menu_show_in_folder") };
-            // ponytail: the cross-platform opener reveals the containing folder, without selection.
-            reveal.Click += (_, _) => { if (File.Exists(path)) ExternalOpener.Open(Path.GetDirectoryName(path)); };
+            // WPF FypFileMenu.cs:28: select the file, or open its folder if it has gone.
+            reveal.Click += (_, _) => ExternalOpener.Reveal(path);
             var menu = new ContextMenu { Placement = PlacementMode.Pointer, ItemsSource = new[] { open, reveal } };
             FypFileMenu = menu;
             menu.Open(Web);
