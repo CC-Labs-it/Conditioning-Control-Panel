@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -216,6 +217,86 @@ public sealed class ChaosGifCascadeOverlayTests
                 try { Assert.Single(frames); }
                 finally { foreach (var frame in frames) frame.Dispose(); }
                 return Task.CompletedTask;
+            });
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData(1, 3, 9, 0, 60)]
+    [InlineData(40, 3, 9, 0, 120)] // 120 frames, every second kept
+    [InlineData(1, 1, 1, 0, 100)] // bogus average below 20 ms
+    public async Task CascadeUsesAverageKeptFrameDuration(int repeats, byte first, byte second, byte third, int expectedMs)
+    {
+        var data = BuildGif(4, repeats);
+        var controls = Enumerable.Range(0, data.Length - 7)
+            .Where(i => data[i] == 0x21 && data[i + 1] == 0xF9 && data[i + 2] == 0x04).ToArray();
+        byte[] delays = { first, second, third }; // GIF delays are hundredths of a second
+        for (int i = 0; i < controls.Length; i++) { data[controls[i] + 4] = delays[i % 3]; data[controls[i] + 5] = 0; }
+        var path = Path.Combine(Path.GetTempPath(), "ccp-cascade-timing-" + Guid.NewGuid().ToString("N") + ".gif");
+        File.WriteAllBytes(path, data);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var (frames, delay) = ChaosGifCascadeOverlay.Decode(path, 400, true);
+                try { Assert.True(frames.Count > 1); Assert.Equal(TimeSpan.FromMilliseconds(expectedMs), delay); }
+                finally { foreach (var frame in frames) frame.Dispose(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CascadeDecodeWaitsForTheSharedTwoPermitGate(bool animated)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ccp-cascade-gate-" + Guid.NewGuid().ToString("N") + ".gif");
+        File.WriteAllBytes(path, Convert.FromBase64String(TinyGif));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                using var entered = new CountdownEvent(2);
+                using var release = new ManualResetEventSlim();
+                using var started = new ManualResetEventSlim();
+                Task Hold() => Task.Factory.StartNew(() => SpiralOverlay.RunGatedDecode(() =>
+                {
+                    entered.Signal(); release.Wait(); return 0;
+                }), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                var first = Hold(); var second = Hold();
+                Task<(System.Collections.Generic.List<global::Avalonia.Media.Imaging.Bitmap> Frames, TimeSpan Delay)>? decode = null;
+                try
+                {
+                    Assert.True(entered.Wait(TimeSpan.FromSeconds(10)), "two decodes should enter the gate");
+                    decode = Task.Factory.StartNew(() =>
+                    {
+                        started.Set();
+                        return ChaosGifCascadeOverlay.Decode(path, 400, animated);
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+                    Assert.False(decode.Wait(TimeSpan.FromMilliseconds(300)), "a third decode must wait");
+                }
+                finally
+                {
+                    release.Set();
+                    await Task.WhenAll(first, second);
+                    if (decode != null)
+                    {
+                        var result = await decode;
+                        foreach (var frame in result.Frames) frame.Dispose();
+                    }
+                }
             });
         }
         finally { File.Delete(path); }

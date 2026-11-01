@@ -308,13 +308,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (animate)
             {
-                var decoded = SpiralOverlay.Decode(path, px, MaxFrames, MaxFrameBytes, MaxDecodedFrames, MaxSourcePixels);
+                var decoded = SpiralOverlay.Decode(path, px, MaxFrames, MaxFrameBytes, MaxDecodedFrames, MaxSourcePixels, averageFrameDelay: true);
                 if (decoded.Frames.Count > 0) return decoded;
             }
             try
             {
-                using var stream = File.OpenRead(path);
-                return (new List<Bitmap> { Bitmap.DecodeToWidth(stream, Math.Max(1, px)) }, default);
+                return SpiralOverlay.RunGatedDecode(() =>
+                {
+                    using var stream = File.OpenRead(path);
+                    return (new List<Bitmap> { Bitmap.DecodeToWidth(stream, Math.Max(1, px)) }, TimeSpan.Zero);
+                });
             }
             catch (Exception ex)
             {

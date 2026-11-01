@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -230,6 +231,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Refresh(host);   // the user may have stopped the engine or unticked it mid-decode
         }
 
+        // WPF AnimatedWebp.cs:62-84: bound native decode memory across concurrent callers.
+        private static readonly SemaphoreSlim DecodeGate = new(2, 2);
+
+        internal static T RunGatedDecode<T>(Func<T> decode)
+        {
+            DecodeGate.Wait();
+            try { return decode(); }
+            finally { DecodeGate.Release(); }
+        }
+
         /// <summary>WPF DecodeGifFrames on SkiaSharp: every frame composited in order (so partial GIF
         /// frames are correct), the kept ones scaled to the <see cref="SpiralFrames.Plan"/> size.</summary>
         /// <param name="fitLongSide">When &gt; 0, frames are scaled further so the long side is at most this many
@@ -239,8 +250,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <param name="maxMemoryBytes">When positive, cap kept frames by their scaled byte size (minimum ten).</param>
         /// <param name="maxDecodedFrames">When positive, bound the frames visited, including discarded frames.</param>
         /// <param name="maxSourcePixels">When positive, reject larger source canvases before allocating them.</param>
+        /// <param name="averageFrameDelay">Use WPF AnimatedWebp timing for cascade frames.</param>
         internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
-            long maxMemoryBytes = 0, int maxDecodedFrames = 0, long maxSourcePixels = 0)
+            long maxMemoryBytes = 0, int maxDecodedFrames = 0, long maxSourcePixels = 0, bool averageFrameDelay = false) =>
+            RunGatedDecode(() => DecodeCore(path, fitLongSide, maxFrames, maxMemoryBytes, maxDecodedFrames, maxSourcePixels, averageFrameDelay));
+
+        private static (List<Bitmap> Frames, TimeSpan Delay) DecodeCore(string path, int fitLongSide, int maxFrames,
+            long maxMemoryBytes, int maxDecodedFrames, long maxSourcePixels, bool averageFrameDelay)
         {
             var frames = new List<Bitmap>();
             try
@@ -279,6 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 using var canvas = new SKBitmap(full);
                 using var scaled = new SKBitmap(new SKImageInfo(plan.Width, plan.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
                 var decodeCount = maxDecodedFrames > 0 ? Math.Min(count, maxDecodedFrames) : count;
+                long durationTotalMs = 0; int durationSamples = 0;
                 for (var i = 0; i < decodeCount && frames.Count < plan.Frames; i++)
                 {
                     // canvas holds frame i-1. Reuse it only when that is the frame i builds on; otherwise
@@ -290,9 +307,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
                     frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
                         new PixelSize(plan.Width, plan.Height), new Vector(96, 96), scaled.RowBytes));
+                    if (i < info.Length && info[i].Duration > 0) { durationTotalMs += info[i].Duration; durationSamples++; }
                 }
                 Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, path);
-                return (frames, TimeSpan.FromMilliseconds(plan.DelayMs));
+                // WPF AnimatedWebp.cs:235-244: average kept frames, then account for the stride.
+                double delay = plan.DelayMs;
+                if (averageFrameDelay)
+                {
+                    double average = durationSamples > 0 ? (double)durationTotalMs / durationSamples : 100;
+                    if (average < 20) average = 100;
+                    delay = Math.Clamp(average * plan.Step, 20, 2000);
+                }
+                return (frames, TimeSpan.FromMilliseconds(delay));
             }
             catch (Exception ex)
             {
