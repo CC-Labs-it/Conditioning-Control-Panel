@@ -18,6 +18,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -55,7 +57,8 @@ public sealed class ChasterMenuTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -194,6 +197,64 @@ public sealed class ChasterMenuTests
             }
         }
         await Task.CompletedTask;
+    // WPF ChasterTabView.xaml.cs:283-303, 1193-1206 and Fx.cs:206-248.
+    [Fact]
+    public Task EmptyMenuHintFindsTheKeysAndTracksRealRowChanges() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, fake, tab, w) =>
+    {
+        fake.Locks = Locked;
+        await chaster.RefreshLockAsync();
+        var settings = CoreSettings.Current;
+        settings.ChasterPrices = new List<string>();
+        settings.PerformanceMode = false;
+        settings.AutoPerformanceMode = false;
+        settings.GentleVisuals = false;
+        settings.MotionLevel = MotionLevel.Full;
+        w.Height = 700;
+        tab.Refresh();
+        Dispatcher.UIThread.RunJobs();
+        var hint = tab.FindControl<TextBlock>("SetupHint")!;
+        var glow = tab.FindControl<Border>("KeysGlow")!;
+        var scroll = tab.FindControl<ScrollViewer>("PageScroll")!;
+        Assert.Equal(Loc.Get("chaster_setup_nothing"), hint.Text);
+        Assert.Equal(Color.FromRgb(0xE0, 0xB0, 0x52), ((ISolidColorBrush)hint.Foreground!).Color);
+        Assert.Equal(new Cursor(StandardCursorType.Hand).ToString(), hint.Cursor?.ToString());
+        Assert.True(glow.IsVisible);
+        Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
+
+        Click(w, hint);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(scroll.Offset.Y > 0);
+        // The row's actual click must clear the hint immediately, not at the 30 s tick.
+        var row = tab.PriceRows["attention"];
+        row.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
+        Click(w, row);
+        Assert.Contains("attention", settings.ChasterPrices!);
+        Assert.False(hint.IsVisible);
+        Assert.False(glow.IsVisible);
+        Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tab);
+        Click(w, row);
+        Assert.Empty(settings.ChasterPrices!);
+        Assert.True(hint.IsVisible);
+        Assert.True(glow.IsVisible);
+        settings.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(glow.IsVisible);
+        Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tab);
+        settings.PerformanceMode = true;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(glow.IsVisible);
+        Assert.Equal(1, tab.FindControl<Control>("PresetRow")!.Opacity);
+        settings.PerformanceMode = false;
+        settings.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
+        tab.IsVisible = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tab);
+        tab.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
     }));
 
     [Fact]
