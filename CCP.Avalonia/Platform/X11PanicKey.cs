@@ -83,17 +83,44 @@ internal static class X11PanicKey
         return true;
     }
 
-    /// <summary>Route the raw key to panic first, then one video Esc per physical press. XInput raw
-    /// events do not consume the key from its focused client.</summary>
-    internal static void RouteRawKey(bool press, int keycode, int escapeCode, ref bool escapeDown,
-        Action onPanic, Action onVideoEscape)
+    /// <summary>The event loop shared by the XInput listener and its tests. A null event ends the
+    /// injected stream; a negative code resets held-key state after an X keyboard mapping change.</summary>
+    internal static void ListenRawEvents(Func<(bool Press, int Code, int EscapeCode)?> next,
+        Action onPanic, Action<int>? otherPress = null)
     {
-        Route(press, keycode, onPanic);
-        if (escapeCode == 0 || keycode != escapeCode) return;
-        if (!press) { escapeDown = false; return; }
-        if (escapeDown) return;
-        escapeDown = true;
-        onVideoEscape();
+        bool escapeDown = false, videoOwnsPress = false;
+        while (next() is { } key)
+        {
+            try
+            {
+                if (key.Code < 0) { escapeDown = videoOwnsPress = false; continue; }
+                if (key.EscapeCode != 0 && key.Code == key.EscapeCode)
+                {
+                    if (!key.Press)
+                    {
+                        escapeDown = videoOwnsPress = false;
+                        Route(false, key.Code, onPanic);
+                        continue;
+                    }
+                    if (!escapeDown)
+                    {
+                        escapeDown = true;
+                        try { videoOwnsPress = Win32Input.QueueVideoEscape(); }
+                        catch (Exception ex)
+                        {
+                            // A failed ownership read must never prevent the configured panic key.
+                            videoOwnsPress = false;
+                            Log.Warning(ex, "Global Esc: ownership check failed; panic proceeds");
+                        }
+                    }
+                    // A video-owned press returns before WPF's panic and leash branches, including repeats.
+                    if (videoOwnsPress) { otherPress?.Invoke(key.Code); continue; }
+                }
+                Route(key.Press, key.Code, onPanic);
+                if (key.Press) otherPress?.Invoke(key.Code);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Panic key: listener event failed"); }
+        }
     }
 
     [DllImport(LibX11)] private static extern int XQueryKeymap(IntPtr display, byte[] keys);
@@ -165,12 +192,13 @@ internal static class X11PanicKey
         }
     }
 
-    private static void Listen(IntPtr display, int opcode, Func<string?> currentKey, Action onPress)
+    // Tests inject a finite event stream at the native read boundary, through this same listener.
+    internal static void Listen(IntPtr display, int opcode, Func<string?> currentKey, Action onPress,
+        Func<(bool Press, int Code, int EscapeCode)?>? injectedNext = null, Action<int>? injectedOther = null)
     {
-        var ev = Marshal.AllocHGlobal(XEventSize);
+        var ev = injectedNext == null ? Marshal.AllocHGlobal(XEventSize) : IntPtr.Zero;
         string? boundName = null;
-        var escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
-        bool escapeDown = false;
+        var escapeCode = injectedNext == null ? XKeysymToKeycode(display, KeysymOf("Escape")) : (byte)0;
         void Resolve()
         {
             var name = currentKey();
@@ -180,48 +208,46 @@ internal static class X11PanicKey
             _boundCode = sym == 0 ? 0 : XKeysymToKeycode(display, sym);
             if (_boundCode == 0) Log.Warning("Panic key: '{Key}' has no X keycode; only the tray can panic", name);
         }
-        Resolve();
-        while (true)
+        if (injectedNext == null) Resolve();
+        (bool Press, int Code, int EscapeCode)? Next()
         {
-            try
+            while (true)
             {
-                XNextEvent(display, ev);
-                if (Marshal.ReadInt32(ev) == MappingNotify)
+                try
                 {
-                    // Layout/keymap change: refresh Xlib's cache and re-resolve the keycode.
-                    XRefreshKeyboardMapping(ev);
-                    boundName = null;
-                    escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
-                    escapeDown = false;
+                    XNextEvent(display, ev);
+                    if (Marshal.ReadInt32(ev) == MappingNotify)
+                    {
+                        XRefreshKeyboardMapping(ev);
+                        boundName = null;
+                        escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
+                        Resolve();
+                        return (false, -1, escapeCode);
+                    }
+                    if (Marshal.ReadInt32(ev) != GenericEvent || Marshal.ReadInt32(ev, CookieExtension) != opcode) continue;
+                    if (!XGetEventData(display, ev)) continue;
+                    int keycode = -1;
+                    var evType = Marshal.ReadInt32(ev, CookieEvType);
+                    if (evType is XI_RawKeyPress or XI_RawKeyRelease)
+                        keycode = Marshal.ReadInt32(Marshal.ReadIntPtr(ev, CookieData), RawDetail);
+                    XFreeEventData(display, ev);
+                    if (keycode < 0) continue;
                     Resolve();
-                    continue;
+                    return (evType == XI_RawKeyPress, keycode, escapeCode);
                 }
-                if (Marshal.ReadInt32(ev) != GenericEvent || Marshal.ReadInt32(ev, CookieExtension) != opcode) continue;
-                if (!XGetEventData(display, ev)) continue;
-                int keycode = -1;
-                var evType = Marshal.ReadInt32(ev, CookieEvType);
-                if (evType is XI_RawKeyPress or XI_RawKeyRelease)
-                    keycode = Marshal.ReadInt32(Marshal.ReadIntPtr(ev, CookieData), RawDetail);
-                XFreeEventData(display, ev);
-                if (keycode < 0) continue;
-
-                Resolve();
-                var press = evType == XI_RawKeyPress;
-                // WPF MainWindow.xaml.cs:858: Esc reaches a non-strict video even when it is unfocused.
-                RouteRawKey(press, keycode, escapeCode, ref escapeDown, onPress, Win32Input.QueueVideoEscape);
-                if (!press) continue;
-                // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
-                if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
-                    && keycode == XKeysymToKeycode(display, ps)) ptt();
-                if (ToyKey is { } toy && ToyKeys?.Invoke() is { } toyKeys)
-                    foreach (var k in toyKeys)
-                        if (KeysymOf(k) is var ts and not 0 && keycode == XKeysymToKeycode(display, ts)) { toy(k); break; }
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Panic key: listener event failed");
+                catch (Exception ex) { Log.Warning(ex, "Panic key: listener event failed"); }
             }
         }
+        void OtherPress(int keycode)
+        {
+            if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
+                && keycode == XKeysymToKeycode(display, ps)) ptt();
+            if (ToyKey is { } toy && ToyKeys?.Invoke() is { } toyKeys)
+                foreach (var k in toyKeys)
+                    if (KeysymOf(k) is var ts and not 0 && keycode == XKeysymToKeycode(display, ts)) { toy(k); break; }
+        }
+        try { ListenRawEvents(injectedNext ?? Next, onPress, injectedNext == null ? OtherPress : injectedOther); }
+        finally { if (ev != IntPtr.Zero) Marshal.FreeHGlobal(ev); }
     }
 
     // WPF/Avalonia Key names (the setting stores Key.ToString()) whose X keysym name differs.

@@ -112,25 +112,32 @@ internal static class Win32Input
         if (Win32PanicKey.SuppressSystemKeys != want) Win32PanicKey.SuppressSystemKeys = want;
     }
 
-    /// <summary>Queue only while a non-strict video is visible; EscapeDoor rechecks on the UI thread.</summary>
-    internal static void QueueVideoEscape()
+    // Small seams for the hook's snapshot and dispatch. Tests can run the listener without a decoder.
+    internal static Func<(bool Video, bool LockCard, bool Palette)> EscapeState = () =>
+        (MandatoryVideoOverlay.Instance.WantsGlobalEscape, LockCardWindow.IsAnyOpen(), SettingsPaletteWindow.OwnsGlobalEscape);
+    internal static Action<Action> PostEscape = action => Dispatcher.UIThread.Post(action);
+    internal static Func<bool> TryVideoEscape = () => MandatoryVideoOverlay.Instance.TryEscapeFromGlobalKey();
+
+    /// <summary>WPF MainWindow.xaml.cs:858-874: decide ownership at the key press, before panic or
+    /// leash handling. The queued action only rechecks the video, not a palette that may have closed.</summary>
+    internal static bool QueueVideoEscape()
     {
-        if (MandatoryVideoOverlay.Instance.WantsGlobalEscape) Dispatcher.UIThread.Post(EscapeDoor);
+        var s = CoreSettings.Current;
+        var (video, lockCard, palette) = EscapeState();
+        if (!PanicPolicy.EscapeDismissesVideo(video, lockCard, palette,
+                s.PanicKeyEnabled, s.PanicKey, MainShellWindow.LockdownActive)) return false;
+        PostEscape(EscapeDoor);
+        return true;
     }
 
-    /// <summary>WPF OnGlobalKeyPressed's first branch (MainWindow.xaml.cs:885): a plain Esc reaches a
-    /// non-strict mandatory video that lost focus. When Esc is the panic key and the panic can run, the
-    /// press is the panic's (PanicPolicy.EscapeDismissesVideo); a lock card or the palette owns Esc first.</summary>
     internal static void EscapeDoor()
     {
         try
         {
-            var s = CoreSettings.Current;
-            var video = MandatoryVideoOverlay.Instance;
-            if (!PanicPolicy.EscapeDismissesVideo(video.WantsGlobalEscape, LockCardWindow.IsAnyOpen(), SettingsPaletteWindow.IsOpen,
-                    s.PanicKeyEnabled, s.PanicKey, MainShellWindow.LockdownActive)) return;
-            if (video.TryEscapeFromGlobalKey()) Log.Information("Global Esc: unfocused video dismissed or grace-paused");
+            if (!EscapeState().Video) return; // WPF TryEscapeFromGlobalKey rechecks after dispatch
+            if (TryVideoEscape()) Log.Information("Global Esc: unfocused video dismissed or grace-paused");
         }
         catch (Exception ex) { Log.Warning(ex, "Global Esc: video dismiss failed"); }
     }
+
 }
