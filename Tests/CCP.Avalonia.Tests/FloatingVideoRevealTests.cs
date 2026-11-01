@@ -86,17 +86,75 @@ public class FloatingVideoRevealTests
         });
     }
 
+    private static (MandatoryVideoOverlay Overlay, Window Window, FloatingVideoReveal Reveal) FloatingSurface()
+    {
+        EnsureApp();
+        var overlay = (MandatoryVideoOverlay)System.Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        typeof(MandatoryVideoOverlay).GetField("<Floating>k__BackingField", flags)!.SetValue(overlay, true);
+        typeof(ConditioningControlPanel.Services.MandatoryVideoScheduler).GetField("_playing", flags)!.SetValue(overlay.Scheduler, true);
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 80;
+        ConditioningControlPanel.CoreSettings.Current.VideoVolume = 100;
+        var window = new Window { ShowActivated = false };
+        var reveal = new FloatingVideoReveal(window, overlay.HoldRevealAudio);
+        var surfaces = (System.Collections.Generic.List<MandatoryVideoOverlay.Surface>)typeof(MandatoryVideoOverlay)
+            .GetField("_surfaces", flags)!.GetValue(overlay)!;
+        surfaces.Add(new(window, new Image(), new Border(), new Image(), new Canvas(), new Border(), new TextBlock(),
+            new MandatoryVideoOverlay.VideoButtons(() => { }, () => { }), reveal));
+        return (overlay, window, reveal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Hidden_clips_never_capture_escape_or_grace_and_both_reveal_paths_enable_them(bool fallback)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var (overlay, window, reveal) = FloatingSurface();
+            try
+            {
+                Assert.False(overlay.OnScreen);
+                Assert.False(overlay.WantsGlobalEscape);
+                Assert.False(overlay.TryEscapeFromGlobalKey());
+                Assert.False(overlay.TryGracePause(fromPanicKey: true));
+                Assert.False(overlay.GracePaused);
+                Assert.Equal(ConditioningControlPanel.Services.GraceDecision.FallThrough, overlay.EvaluateGraceRequest(true, double.MaxValue));
+                if (fallback)
+                    Assert.Equal(ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Wait, overlay.UpdateFloatingReveal(3.999, true));
+                else
+                    typeof(MandatoryVideoOverlay).GetField("<FirstFrameMs>k__BackingField",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(overlay, 0L);
+                Assert.Equal(ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Reveal,
+                    overlay.UpdateFloatingReveal(fallback ? 4 : 0, true));
+                Assert.True(window.IsVisible);
+                Assert.True(overlay.Scheduler.IsPlaying);
+                Assert.True(overlay.OnScreen);
+                Assert.True(overlay.WantsGlobalEscape);
+                Assert.Equal(ConditioningControlPanel.Services.GraceDecision.Pause, overlay.EvaluateGraceRequest(true, double.MaxValue));
+                Assert.True(overlay.Surfaces[0].Buttons.Row.IsVisible);
+                Assert.True(overlay.EffectivePlayerVolume > 0);
+                overlay.CloseAll();
+                Assert.False(overlay.OnScreen);
+                Assert.False(overlay.WantsGlobalEscape);
+            }
+            finally { reveal.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
-    public async Task Grace_pause_before_the_first_frame_freezes_the_ready_budget_until_resume()
+    public async Task Playback_clocks_freeze_while_a_visible_clip_is_paused()
     {
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
-            var overlay = (MandatoryVideoOverlay)System.Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+            var (overlay, _, reveal) = FloatingSurface();
             var ready = (System.Diagnostics.Stopwatch)typeof(MandatoryVideoOverlay)
                 .GetField("_sinceReady", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
             try
             {
-                Assert.Equal(-1, overlay.FirstFrameMs);
+                overlay.UpdateFloatingReveal(4, true);
+                Assert.True(overlay.OnScreen);
                 overlay.ResumePlaybackClocks();
                 Assert.True(ready.IsRunning);
                 await Task.Delay(25);
@@ -108,8 +166,7 @@ public class FloatingVideoRevealTests
                 overlay.ResumePlaybackClocks();
                 Assert.True(ready.IsRunning);
             }
-            finally { overlay.PausePlaybackClocks(); }
+            finally { overlay.PausePlaybackClocks(); reveal.Close(); }
         });
     }
-
 }

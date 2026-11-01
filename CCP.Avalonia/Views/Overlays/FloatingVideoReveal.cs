@@ -3,7 +3,8 @@ using Avalonia.Controls;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
-/// <summary>A floating LibVLC window has no pixels, input region or sound until a frame is copied.</summary>
+/// <summary>A floating LibVLC window has no pixels, input region or sound until reveal,
+/// permitted by a copied frame or the playing timeout.</summary>
 internal sealed class FloatingVideoReveal
 {
     private readonly Window _window;
