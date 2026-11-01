@@ -38,6 +38,14 @@ internal static class KeywordTriggerHead
         else Stop();
     }
 
+    // WPF KeywordTriggerService.cs:176-185: start is idempotent and requires awareness access.
+    // It does not change the saved master switch or install a keyboard hook.
+    internal static void Start()
+    {
+        if (Engine.IsActive || !KeywordAudioRuntime.HasAccess) return;
+        Engine.Start();
+    }
+
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
     internal static void Stop() { DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
 
