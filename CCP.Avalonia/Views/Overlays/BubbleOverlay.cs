@@ -240,6 +240,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF BubbleService.cs:2251: silently clear the field at a draft boundary.</summary>
+        internal static void ClearAll()
+        {
+            Field.Held = false;
+            Field.Bubbles.Clear();
+            foreach (var w in Windows) w.Sync();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {

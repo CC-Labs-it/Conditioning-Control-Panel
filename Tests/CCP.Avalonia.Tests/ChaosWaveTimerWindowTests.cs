@@ -20,7 +20,7 @@ public sealed class ChaosWaveTimerWindowTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -48,14 +48,14 @@ public sealed class ChaosWaveTimerWindowTests
             try
             {
                 // Without the charm: no window at all (WPF :450, :1094).
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.State!.ShowWaveTimer = false;
                 ChaosRunHost.Overlay!.FinishCountdown();
                 Ticks(8);
                 Assert.Null(ChaosWaveTimerWindow.Active);
                 ChaosRunHost.ForceShutdown();
 
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.State!.ShowWaveTimer = true;
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var w = ChaosWaveTimerWindow.Active!;   // born at BeginRun, pill still hidden
@@ -87,7 +87,7 @@ public sealed class ChaosWaveTimerWindowTests
                 Assert.False(w.IsVisible);
 
                 // A run that ends on its own (Ticks to RunOver -> EndRun) also takes the watch down.
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.State!.ShowWaveTimer = true;
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var w2 = ChaosWaveTimerWindow.Active!;

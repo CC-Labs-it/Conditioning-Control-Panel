@@ -20,9 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// false, WS_EX_NOACTIVATE -> ShowActivated false, WS_EX_TRANSPARENT ->
     /// <see cref="X11Overlay.SetClickThrough"/>. UI thread only: <see cref="ChaosRunHost"/> calls it
     /// from its run tick and closes it on every teardown, including panic (PanicSurfaces "chaos").</para>
-    /// <para>ponytail: WPF's Clear() (the watch blanks while a boon draft is out) and RaiseActive()
-    /// (re-stack above a mandatory video) have no caller here yet: this head has no drafts and no
-    /// chaos video toys.</para>
+    /// <para>ponytail: WPF's RaiseActive() (re-stack above a mandatory video) has no caller here yet.</para>
     /// </summary>
     internal sealed class ChaosWaveTimerWindow : Window
     {
@@ -52,6 +50,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             EnsureCreated();
             Active?.SetText(ChaosWaveTimerReadout.For(wave, waveCount, secLeftInWave, score));
+        }
+
+        /// <summary>WPF ChaosWaveTimerOverlay.cs:61-69: hide the watch during a draft.</summary>
+        internal static void Clear()
+        {
+            if (Active is not { } w) return;
+            w._blink.Stop();
+            w.FinalRush = false;
+            w.ClockText.Opacity = 1;
+            w.Pill.IsVisible = false;
         }
 
         /// <summary>WPF CloseActive: instant teardown (run end, panic, shutdown). Safe when idle.</summary>
@@ -124,7 +132,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 VerticalAlignment = VerticalAlignment.Top,         // a fixed-size render frame keeps the pill's shape
                 Child = stack,
             };
-            Content = Pill;
+            // A collapsed SizeToContent pill otherwise leaves a zero-sized native surface.
+            Content = new Panel { Children = { new Border { Width = 1, Height = 1 }, Pill } };
 
             _blink = new FrameClock(this) { Interval = TimeSpan.FromMilliseconds(33) };
             _blink.Tick += (_, _) => BlinkFrame();

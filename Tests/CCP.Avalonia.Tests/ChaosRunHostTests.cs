@@ -30,7 +30,7 @@ public sealed class ChaosRunHostTests
                 .SetupWithoutStarting();
     }
 
-    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
+    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false };
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
@@ -420,6 +420,7 @@ public sealed class ChaosRunHostTests
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.True(ChaosRunHost.IsActive);
                 Assert.Equal(ChaosPlayMode.Story, ChaosRunHost.State!.Config.PlayMode);
+                ChaosRunHost.State.Config.BoonDraftEnabled = false; // exercise the draftless full-course payout
 
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var state = ChaosRunHost.State!;
