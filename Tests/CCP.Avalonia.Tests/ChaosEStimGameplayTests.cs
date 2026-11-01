@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -60,7 +61,10 @@ public sealed class ChaosEStimGameplayTests
         Assert.Equal(3, ChaosEStimOverlay.Active!.BoltCount);
         Assert.False(near.Popping); // Hops are delayed, not a synchronous sweep.
         await WaitUntil(() => near.Popping && live.Popping && third.Popping);
-        Assert.True(live.Deflating);
+        Assert.False(live.Deflating);
+        double scale = live.Scale;
+        live.Step();
+        Assert.True(live.Scale > scale); // WPF Pop expands a swept live, unlike a held defuse.
         Assert.Equal(1, state.Defused);
         Assert.All(new[] { fourth, far, rabbit, freeze, tease, brittle }, b => Assert.False(b.Popping));
         Assert.True(ChaosEStimGlow.Active!.IsVisible);
@@ -73,6 +77,35 @@ public sealed class ChaosEStimGameplayTests
         Assert.False(ChaosEStimGlow.Active!.IsVisible);
         ChaosRunHost.Tick();
         Assert.False(toy.IsEffectActive);
+    });
+
+    [Fact]
+    public Task Charge_and_arc_feed_use_the_active_language() => WithRun(1, state =>
+    {
+        var loc = LocalizationManager.Instance;
+        string previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("fr");
+            state.ToyPower["e_stim"] = 2;
+            ChaosRunHost.UseToyById("e_stim");
+            Assert.Equal("⚡ charge : vos 2 prochaines bulles conduisent", state.RecentEvents[0]);
+            var source = Add(0);
+            _ = Add(100);
+            BubbleOverlay.Press(source, source.CenterX, source.CenterY);
+            Assert.Equal("⚡ le courant jaillit (reste : 1)", state.RecentEvents[0]);
+            BubbleOverlay.Field.Bubbles.Clear();
+            source = Add(0);
+            _ = Add(100);
+            BubbleOverlay.Press(source, source.CenterX, source.CenterY);
+            Assert.Equal("⚡ la charge est épuisée", state.RecentEvents[0]);
+            state.ActiveToys.Single().CooldownRemainingSec = 0;
+            state.MaxedBoons.Add("e_stim");
+            ChaosRunHost.UseToyById("e_stim");
+            Assert.Equal("⚡ charge : vos 2 prochaines bulles déclenchent une chaîne", state.RecentEvents[0]);
+        }
+        finally { loc.SetLanguage(previous); }
+        return Task.CompletedTask;
     });
 
     [Fact]

@@ -6,6 +6,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
@@ -665,8 +666,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
             ChaosEffectBannerOverlay.Show("estim", "E-Stim", Color.FromRgb(0x9C, 0x5C, 0xFF));
             Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
-            _state.PushEvent(maxed ? $"⚡ charged: your next {charges} pops chain-react"
-                                   : $"⚡ charged: your next {charges} pops conduct");
+            _state.PushEvent(Loc.GetF(maxed ? "chaos_estim_charged_chain" : "chaos_estim_charged_conduct", charges));
         }
 
         // WPF ChaosModeService.cs:2785-2799: each discharge sounds; the final one drops the halo.
@@ -675,12 +675,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state == null) return;
             ChaosOverlayWindow.ChaosSfx.Play("estim_zap", 0.6f);
             Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
-            if (chargesLeft > 0) _state.PushEvent($"⚡ the current arcs ({chargesLeft} left)");
+            if (chargesLeft > 0) _state.PushEvent(Loc.GetF("chaos_estim_arc_remaining", chargesLeft));
             else
             {
                 ChaosEffectBannerOverlay.End("estim");
                 ChaosEStimOverlay.Disarm();
-                _state.PushEvent("⚡ the charge is spent");
+                _state.PushEvent(Loc.Get("chaos_estim_spent"));
             }
         }
 
