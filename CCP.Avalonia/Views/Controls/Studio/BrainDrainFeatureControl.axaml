@@ -184,7 +184,7 @@
 
                             <!-- Show in screenshots (AllowOverlayCapture). Privacy stays the
                                  default; this is the opt-out, and another live-editable knob. -->
-                            <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_allow_capture_hint}">
+                            <Grid x:Name="CaptureRow" Height="34" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_allow_capture_hint}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
