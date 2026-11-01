@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
     /// <see cref="MemorySignalWriter"/>. There is NO LLM extraction — that is Train 4 — so this store
     /// costs exactly zero tokens to fill and still buys most of the "she knows me" feeling.</para>
     ///
-    /// <para><b>Never throws.</b> A corrupt, truncated or hand-mangled memory.json must degrade the
+    /// <para><b>Never throws on load.</b> A corrupt, truncated or hand-mangled memory.json must degrade the
     /// companion to "amnesiac but working", never to "chat is down". Every disk path is wrapped and
     /// falls back to an empty store that immediately starts rebuilding itself from app signals.</para>
     ///
@@ -702,6 +702,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// let <see cref="CompanionSessionStore"/>'s one-time import resurrect the wiped conversation
         /// on the next launch, which is the exact opposite of what the button promises.</para>
         /// </summary>
+        /// <exception cref="IOException">The wipe could neither finish nor record recovery.</exception>
         public void Wipe()
         {
             ChatMemoryEdited?.Invoke();
@@ -761,12 +762,12 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                     if (targets[i] is { } file && _wipeFiles.Contains(file)) mask |= 1 << i;
                 return "P\n" + mask.ToString(CultureInfo.InvariantCulture) + "\n" + firstSeen;
             }
-            bool failed = false;
+            bool failed = false, recorded = false;
             try
             {
                 var dir = Path.GetDirectoryName(_path);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                AtomicWrite(WipeMarkerPath, PendingMarker());
+                AtomicWrite(WipeMarkerPath, PendingMarker()); recorded = true;
             }
             catch (Exception ex) { failed = true; Log.Warning(ex, "MemoryStore: failed to record wipe"); }
 
@@ -787,13 +788,14 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             }
             try
             {
-                if (failed) AtomicWrite(WipeMarkerPath, PendingMarker());
+                if (failed) { AtomicWrite(WipeMarkerPath, PendingMarker()); recorded = true; }
                 else if (firstSeen.Length == 0) File.Delete(WipeMarkerPath);
                 else AtomicWrite(WipeMarkerPath, "C\n" + firstSeen);
             }
             catch (Exception ex) { failed = true; Log.Warning(ex, "MemoryStore: failed to complete wipe"); }
             _wipePending = failed;
             if (failed) RequestSave();
+            if (!recorded && _wipeFiles.Count > 0) throw new IOException("Memory wipe could not be recorded or completed.");
         }
 
         /// <summary>

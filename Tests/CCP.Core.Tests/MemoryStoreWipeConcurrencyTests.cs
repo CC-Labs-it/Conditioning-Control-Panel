@@ -193,6 +193,18 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
     }
 
     [Fact]
+    public void Wipe_reports_when_neither_the_marker_nor_deletion_succeeds()
+    {
+        using var store = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        store.AddFact("forgotten", MemoryFactKind.Event);
+        store.SaveNow();
+        Directory.CreateDirectory(PathToMemory + ".wipe");
+        store.DeleteWipeFile = file => { if (file == PathToMemory) throw new IOException("locked"); File.Delete(file); };
+        Assert.Throws<IOException>(store.Wipe);
+        Assert.True(File.Exists(PathToMemory));
+    }
+
+    [Fact]
     public async Task Failed_delete_retries_after_the_lock_is_released()
     {
         using var store = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
