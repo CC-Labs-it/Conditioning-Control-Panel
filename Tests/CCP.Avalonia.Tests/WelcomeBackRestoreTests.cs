@@ -1,10 +1,7 @@
-using System;
 using System.IO;
 using System.Linq;
-using System.IO.Compression;
-using System.Net;
 using System.Net.Http;
-using System.Text;
+using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -19,7 +16,6 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
-using Newtonsoft.Json;
 using Xunit;
 using IconKind = FluentIcons.Common.Symbol;
 
@@ -27,32 +23,22 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class WelcomeBackRestoreTests
 {
-    private sealed class BackupServer(string? data, bool bodyFails) : HttpMessageHandler
+    private sealed class BackupServer(AppSettings? settings, bool bodyFails) : HttpMessageHandler
     {
         public int Reads;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Reads++;
-            var body = bodyFails && Reads > 1 ? "bad-data" : data;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            var data = settings == null ? null : SettingsBackupBudget.Encode(Newtonsoft.Json.Linq.JObject.FromObject(settings)).Base64;
+            return Task.FromResult(new HttpResponseMessage
             {
-                Content = new StringContent(JsonConvert.SerializeObject(new
-                {
-                    backup = data == null ? null : new { settings_data = body, backed_up_at = "2026-08-01T00:00:00Z" }
-                }))
+                Content = JsonContent.Create(new { backup = data == null ? null : new
+                    { settings_data = bodyFails && Reads > 1 ? "bad-data" : data, backed_up_at = "2026-08-01T00:00:00Z" } })
             });
         }
     }
 
-    internal static CloudSettingsBackup ClientFor(AppSettings settings) => new(new BackupServer(Pack(settings), false));
-
-    private static string Pack(AppSettings settings)
-    {
-        using var output = new MemoryStream();
-        using (var gzip = new GZipStream(output, CompressionMode.Compress, true))
-            gzip.Write(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(settings)));
-        return Convert.ToBase64String(output.ToArray());
-    }
+    internal static CloudSettingsBackup ClientFor(AppSettings settings) => new(new BackupServer(settings, false));
 
     // WPF App.xaml.cs:4899-4923,4982-5000,5033-5035,5080-5118.
     [Theory]
@@ -87,7 +73,7 @@ public sealed class WelcomeBackRestoreTests
             LastSeenVersion = sameVersion ? "7.2.0" : "7.1.0", LastSeasonResetSeen = "2026-08",
             TotalConditioningMinutes = 150
         };
-        var server = new BackupServer(Pack(backup), bodyFails);
+        var server = new BackupServer(backup, bodyFails);
         var dir = Directory.CreateTempSubdirectory("welcome-restore-").FullName;
         WelcomeBackOffer.ResetForTests();
         try
@@ -125,8 +111,10 @@ public sealed class WelcomeBackRestoreTests
         finally { WelcomeBackOffer.ResetForTests(); Directory.Delete(dir, true); }
     });
 
-    [Fact]
-    public Task RestoreFailureFilesAnInboxRetryThatDownloadsAgain() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RestoreFailureFilesAnInboxRetryThatDownloadsAgain(bool locked) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -157,9 +145,13 @@ public sealed class WelcomeBackRestoreTests
                 Assert.False(icon.IsFallback);
             }
             finally { host.Close(); }
-            item.Open!();
+            var current = service.Current;
+            CoreSession.IsSessionRunningProvider = () => locked;
+            StartupLadder.Inbox.Open(item);
             await Task.Yield();
-            Assert.Equal(1, server.Reads);
+            Assert.Equal(locked ? 0 : 1, server.Reads);
+            if (locked) WelcomeBackOffer.ApplyRestore(new AppSettings { FlashEnabled = !current.FlashEnabled });
+            Assert.Same(current, service.Current);
             Assert.Single(StartupLadder.Inbox.Items);
         }
         finally { WelcomeBackOffer.ResetForTests(); StartupLadder.Inbox.Items.Clear(); }

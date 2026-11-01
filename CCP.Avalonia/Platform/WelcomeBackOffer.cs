@@ -130,9 +130,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { Log.Warning(ex, "Welcome-back flavour failed"); }
         }
 
-        // WPF App.xaml.cs:5098-5180: silent success, Inbox failure with a fresh download on retry.
+        // WPF App.xaml.cs:5098-5180; restore locking follows this head's AccountSettingsSection.axaml.cs:524.
         internal static void ApplyRestore(AppSettings? backup)
         {
+            if (RestoreRefused()) { FileRestoreFailure(); return; }
             try
             {
                 if (backup == null || CoreSettings.Service is not { } service)
@@ -148,17 +149,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex)
             {
                 Log.Warning(ex, "Welcome-back restore failed");
-                StartupLadder.Inbox.File(new InboxItem
-                {
-                    Key = "welcome-back:restore-failed", Glyph = nameof(IconKind.Cloud),
-                    Title = Loc.Get("wb_restore_failed_title"),
-                    Summary = Loc.Get("wb_restore_failed_summary"),
-                    Open = () => _ = RetryRestoreAsync(),
-                });
+                FileRestoreFailure();
             }
         }
 
-        private static async Task RetryRestoreAsync() => ApplyRestore(await NewBackup().DownloadAsync(CoreSettings.Current));
+        private static void FileRestoreFailure() => StartupLadder.Inbox.File(new InboxItem
+        {
+            Key = "welcome-back:restore-failed", Glyph = nameof(IconKind.Cloud),
+            Title = Loc.Get("wb_restore_failed_title"),
+            Summary = Loc.Get("wb_restore_failed_summary"),
+            Open = () => _ = RetryRestoreAsync(),
+        });
+
+        private static bool RestoreRefused() => Shell()?.RefuseActionIfSessionLocked("welcome-back-restore") ?? CoreSession.IsSessionRunning;
+        private static async Task RetryRestoreAsync()
+        {
+            if (RestoreRefused()) { FileRestoreFailure(); return; }
+            ApplyRestore(await NewBackup().DownloadAsync(CoreSettings.Current));
+        }
 
         // WPF App.xaml.cs:5028-5053, preferring backup history. The stored current month is
         // server-confirmed (SeasonRecapService); the clock and local recap snapshots are not.
