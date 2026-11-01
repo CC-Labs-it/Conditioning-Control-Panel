@@ -595,7 +595,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     Title = Loc.Get("title_save_data_export"),
                     SuggestedFileName = $"my-data-export-{DateTime.Now:yyyy-MM-dd}.json",
                     DefaultExtension = "json",
-                    FileTypeChoices = new[] { new FilePickerFileType("JSON files") { Patterns = new[] { "*.json" } } },
+                    FileTypeChoices = new[] { new FilePickerFileType(Loc.Get("cloud_export_json_files")) { Patterns = new[] { "*.json" } } },
                 });
                 if (path == null) return;
                 await File.WriteAllTextAsync(path, json);

@@ -180,6 +180,7 @@ public sealed class AccountSettingsSectionTests
         s.UnifiedId = "u-test";
         s.AuthToken = "TOK";
         var server = new CannedBackup("{\"data\":{\"name\":\"Ada\"}}");
+        var language = LocalizationManager.Instance.CurrentLanguage;
         var oldBackup = AccountSettingsSection.NewBackup;
         var oldPick = AccountSettingsSection.PickExport;
         var oldTell = AccountSettingsSection.Tell;
@@ -192,6 +193,7 @@ public sealed class AccountSettingsSectionTests
         AccountSettingsSection.Tell = (_, title, body) => { Dispatcher.UIThread.Post(() => told.TrySetResult((title, body))); return Task.CompletedTask; };
         try
         {
+            LocalizationManager.Instance.SetLanguage("es");
             section.Refresh();
             Click(section, "BtnExportData");
             Assert.False(section.FindControl<Button>("BtnExportData")!.IsEnabled);
@@ -200,7 +202,9 @@ public sealed class AccountSettingsSectionTests
             Assert.NotNull(options);
             Assert.Equal(Loc.Get("title_save_data_export"), options!.Title);
             Assert.Equal($"my-data-export-{DateTime.Now:yyyy-MM-dd}.json", options.SuggestedFileName);
-            Assert.Contains("*.json", Assert.Single(options.FileTypeChoices!).Patterns!);
+            var fileType = Assert.Single(options.FileTypeChoices!);
+            Assert.Equal("Archivos JSON", fileType.Name);
+            Assert.Contains("*.json", fileType.Patterns!);
             picked.SetResult(path);
             var dialog = await told.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(Loc.Get("title_export_complete"), dialog.Title);
@@ -215,6 +219,7 @@ public sealed class AccountSettingsSectionTests
             AccountSettingsSection.NewBackup = oldBackup;
             AccountSettingsSection.PickExport = oldPick;
             AccountSettingsSection.Tell = oldTell;
+            LocalizationManager.Instance.SetLanguage(language);
         }
     });
 

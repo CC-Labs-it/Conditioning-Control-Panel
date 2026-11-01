@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -79,11 +80,53 @@ public sealed class CloudDataExportTests : IDisposable
     [Fact]
     public async Task ExportRequiresIdentity()
     {
-        _settings.UnifiedId = null;
-        var result = await new CloudSettingsBackup(_server).ExportDataAsync(_settings);
-        Assert.False(result.Success);
-        Assert.Equal("You must be logged in to export your data", result.Error);
-        Assert.Empty(_server.Calls);
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("en");
+            _settings.UnifiedId = null;
+            var result = await new CloudSettingsBackup(_server).ExportDataAsync(_settings);
+            Assert.False(result.Success);
+            Assert.Equal("You must be logged in to export your data", result.Error);
+            Assert.Empty(_server.Calls);
+        }
+        finally { loc.SetLanguage(previous); }
+    }
+
+    [Theory]
+    [InlineData("identity", "Debes iniciar sesión para exportar tus datos")]
+    [InlineData("server", "Error del servidor: Forbidden")]
+    [InlineData("connection", "La exportación de datos requiere conexión a Internet")]
+    public async Task ExportErrorsUseTheSelectedLanguage(string scenario, string expected)
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("es");
+            if (scenario == "identity") _settings.UnifiedId = null;
+            if (scenario == "server") _server.Replies.Enqueue((HttpStatusCode.Forbidden, "{}"));
+            // An empty reply queue throws, like a failed connection.
+            var result = await new CloudSettingsBackup(_server).ExportDataAsync(_settings);
+            Assert.False(result.Success);
+            Assert.Equal(expected, result.Error);
+        }
+        finally { loc.SetLanguage(previous); }
+    }
+
+    [Fact]
+    public void EveryLanguageDefinesAllExportStrings()
+    {
+        var keys = new[] { "cloud_export_sign_in_required", "cloud_export_server_error",
+            "cloud_export_connection_required", "cloud_export_json_files" };
+        foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json");
+            var strings = JObject.Parse(File.ReadAllText(path));
+            foreach (var key in keys) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]), $"{code}: {key}");
+            Assert.Contains("{0}", (string)strings["cloud_export_server_error"]!);
+        }
     }
 
     [Fact]

@@ -499,7 +499,7 @@ namespace ConditioningControlPanel.Services
         public async Task<(bool Success, string? Error, string? JsonData)> ExportDataAsync(AppSettings settings)
         {
             var id = settings.UnifiedId;
-            if (string.IsNullOrEmpty(id)) return (false, "You must be logged in to export your data", null);
+            if (string.IsNullOrEmpty(id)) return (false, Localization.Loc.Get("cloud_export_sign_in_required"), null);
             try
             {
                 using var response = await PostAsync("/v2/user/export-data", settings, new { unified_id = id });
@@ -518,7 +518,7 @@ namespace ConditioningControlPanel.Services
                 }
                 if ((int)result.Status < 200 || (int)result.Status >= 300)
                 {
-                    var error = (string?)JObject.Parse(result.Body)["error"] ?? $"Server error: {result.Status}";
+                    var error = (string?)JObject.Parse(result.Body)["error"] ?? Localization.Loc.GetF("cloud_export_server_error", result.Status);
                     return (false, error, null);
                 }
                 return (true, null, JToken.Parse(result.Body).ToString(Formatting.Indented));
@@ -526,7 +526,7 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex)
             {
                 Log.Error(ex, "Export data request failed");
-                return (false, "Data export requires an internet connection", null);
+                return (false, Localization.Loc.Get("cloud_export_connection_required"), null);
             }
         }
 
