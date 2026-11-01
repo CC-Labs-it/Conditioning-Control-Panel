@@ -7,6 +7,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 public partial class EmiDeskWindow
 {
     private CancellationTokenSource? _moveXAnim, _moveYAnim;
+    // WPF animations mask this base value while the show continues to update it.
+    private double _moveYBase;
 
     // WPF EmiDeskWindow.xaml.cs:1094-1160. The CRT scale is shared with the power
     // effect; X and Y offsets have independent slots, just as BeginAnimation does.
@@ -29,6 +31,7 @@ public partial class EmiDeskWindow
 
     private void ScalePulse(int ms, double sx, double sy)
     {
+        double fromX = _crtScale.ScaleX, fromY = _crtScale.ScaleY;
         CancelCrt();
         var cts = new CancellationTokenSource();
         _crtAnim = cts;
@@ -37,9 +40,8 @@ public partial class EmiDeskWindow
             // CubicEaseOut to the 40% keyframe and back to rest.
             double t = p <= .4 ? p / .4 : (p - .4) / .6;
             double eased = 1 - Math.Pow(1 - t, 3);
-            double amount = p <= .4 ? eased : 1 - eased;
-            _crtScale.ScaleX = 1 + (sx - 1) * amount;
-            _crtScale.ScaleY = 1 + (sy - 1) * amount;
+            _crtScale.ScaleX = p <= .4 ? fromX + (sx - fromX) * eased : sx + (1 - sx) * eased;
+            _crtScale.ScaleY = p <= .4 ? fromY + (sy - fromY) * eased : sy + (1 - sy) * eased;
         });
     }
 
@@ -56,15 +58,19 @@ public partial class EmiDeskWindow
             double value = phase <= 1 ? phase : 2 - phase;
             if (horizontal) _moveShift.X = -distance + 2 * distance * value;
             else _moveShift.Y = distance * value;
-            // WPF's offset animations have FillBehavior.Stop.
-            if (p >= 1) { if (horizontal) _moveShift.X = 0; else _moveShift.Y = 0; }
+            // WPF FillBehavior.Stop reveals the latest base value under the animation.
+            if (p >= 1)
+            {
+                if (horizontal) { _moveXAnim = null; _moveShift.X = 0; }
+                else { _moveYAnim = null; _moveShift.Y = _moveYBase; }
+                cts.Dispose();
+            }
         });
     }
 
-    private void CancelBodyMoves()
+    private void SetMoveYBase(double value)
     {
-        _moveXAnim?.Cancel(); _moveXAnim?.Dispose(); _moveXAnim = null;
-        _moveYAnim?.Cancel(); _moveYAnim?.Dispose(); _moveYAnim = null;
-        _moveShift.X = _moveShift.Y = 0;
+        _moveYBase = value;
+        if (_moveYAnim == null) _moveShift.Y = value;
     }
 }
