@@ -41,10 +41,10 @@ namespace ConditioningControlPanel
 
         /// <summary>WPF StartEngine's arming matrix, minus the services no head here has.
         /// Not idempotent in TotalSessions, exactly as WPF; callers start only when stopped.</summary>
-        public static void Start()
+        public static void Start(bool systemInitiated = false)
         {
             var s = CoreSettings.Current;
-            s.TotalSessions++;
+            if (!systemInitiated) s.TotalSessions++;
             CoreSettings.Save();
 
             // #668 Audio-Only Hypno (WPF :304): the visual features sit the session out.

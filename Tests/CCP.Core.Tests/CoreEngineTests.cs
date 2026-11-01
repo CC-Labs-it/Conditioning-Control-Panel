@@ -45,6 +45,20 @@ public sealed class CoreEngineTests
     }
 
     [Fact]
+    public void System_initiated_start_does_not_count_as_a_user_session()
+    {
+        var s = CoreSettings.Current;
+        var sessions = s.TotalSessions;
+        try
+        {
+            CoreEngine.Start(systemInitiated: true);
+            Assert.True(CoreEngine.IsRunning);
+            Assert.Equal(sessions, s.TotalSessions);
+        }
+        finally { CoreEngine.Stop(); }
+    }
+
+    [Fact]
     public void Toggles_do_nothing_while_stopped_and_apply_live_while_running()
     {
         var s = CoreSettings.Current;
