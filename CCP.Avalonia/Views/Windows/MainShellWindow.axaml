@@ -654,7 +654,7 @@
 
         <!-- WPF MainWindow.xaml:817: the rail casts a six pixel shadow onto the page. -->
         <Border x:Name="NavRailShadow" Grid.Row="1" Grid.RowSpan="5" Grid.Column="1"
-                Width="6" HorizontalAlignment="Left" ZIndex="59" IsHitTestVisible="False"/>
+                Width="6" HorizontalAlignment="Left" ZIndex="59" Background="{DynamicResource DepthRailShadow}" IsHitTestVisible="False"/>
 
         <!-- THE HUD BAND (WPF MainWindow.xaml:805, nav polish wave 2): the header row and the XP row
              read as one zone - 20% black over the window ground and a 1px TextMuted divider at 30%
@@ -662,7 +662,7 @@
              Its top edge is a sunken well (WPF MainWindow.xaml:830). -->
         <Border x:Name="HudBand" Grid.Row="1" Grid.RowSpan="3" Grid.Column="1" Background="#33000000" IsHitTestVisible="False">
             <Grid>
-                <Border x:Name="HudBandWellTop" Height="9" VerticalAlignment="Top"/>
+                <Border x:Name="HudBandWellTop" Height="9" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}"/>
                 <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource TextMutedBrush}" Opacity="0.3"/>
             </Grid>
         </Border>
@@ -1668,8 +1668,8 @@
                             ToolTip.Tip=" ">
                         <Grid>
                             <!-- WPF MainWindow.xaml:1867: the empty groove is shaded under the fill. -->
-                            <Border x:Name="XPGrooveTop" Height="5" VerticalAlignment="Top" CornerRadius="5,5,0,0" IsHitTestVisible="False"/>
-                            <Border x:Name="XPGrooveLeft" Width="6" HorizontalAlignment="Left" CornerRadius="5,0,0,5" IsHitTestVisible="False"/>
+                            <Border x:Name="XPGrooveTop" Height="5" VerticalAlignment="Top" CornerRadius="5,5,0,0" Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+                            <Border x:Name="XPGrooveLeft" Width="6" HorizontalAlignment="Left" CornerRadius="5,0,0,5" Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
                             <Border x:Name="XPGrooveFoot" Height="1" VerticalAlignment="Bottom" Margin="5,0" Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
                             <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="5"
                                     HorizontalAlignment="Left" Width="100">

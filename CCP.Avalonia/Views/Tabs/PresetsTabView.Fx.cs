@@ -159,15 +159,21 @@ public partial class PresetsTabView
 
     private void LiftSessionRow(Control row, bool on)
     {
-        // WPF LiftSessionRow replaces this row's entrance animation on the same transform.
-        // Keep the opacity and the other rows' stagger running.
-        if (_rowEntrances.Remove(row, out var entrance)) entrance.Cancel();
         var slide = CardTransforms(row)?.Children.OfType<TranslateTransform>().FirstOrDefault();
         if (slide == null) return;
-        slide.Transitions = Env.AllowTransitions ? new Transitions
+        // WPF replaces the row's entrance animation from its current position, leaving the fade
+        // and the other rows alone. Clearing the old animation/transition first would snap to its base.
+        var current = slide.Y;
+        if (_rowEntrances.Remove(row, out var entrance)) entrance.Cancel();
+        slide.Transitions = null;
+        if (Env.AllowTransitions)
         {
-            new DoubleTransition { Property = TranslateTransform.YProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
-        } : null;
+            slide.Y = current;
+            slide.Transitions = new Transitions
+            {
+                new DoubleTransition { Property = TranslateTransform.YProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+            };
+        }
         slide.Y = on ? -2 : 0; // no scale: full-width rows must not grow beyond their viewport
     }
 

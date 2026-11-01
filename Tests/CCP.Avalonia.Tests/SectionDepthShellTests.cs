@@ -18,6 +18,20 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class SectionDepthShellTests
 {
+    [Theory]
+    [InlineData("NavRailShadow", "DepthRailShadow")]
+    [InlineData("HudBandWellTop", "DepthWellTop")]
+    [InlineData("XPGrooveTop", "DepthWellTop")]
+    [InlineData("XPGrooveLeft", "DepthWellLeft")]
+    public async Task HomeStartsWithTheNeutralDepthBrush(string name, string resource)
+    {
+        await InShell(w =>
+        {
+            Assert.Equal("settings", w.CurrentTab);
+            Assert.Same(Application.Current!.FindResource(resource), w.Named<Border>(name)!.Background);
+        });
+    }
+
     [Fact]
     public async Task NavigationRetintsTheRailShadow()
     {

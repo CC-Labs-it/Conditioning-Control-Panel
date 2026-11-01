@@ -120,6 +120,29 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task HoverDuringArrivalStartsFromTheVisiblePosition() => WithPresets((host, view) =>
+    {
+        var clock = new StepClock();
+        view.SetValue(StepClock.Property, clock.Instance);
+        view.IsVisible = false; Settle();
+        view.IsVisible = true; Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        slide.SetValue(StepClock.Property, clock.Instance);
+        clock.Step(0); clock.Step(50);
+        var from = slide.Y;
+        Assert.True(from > 0, $"Expected a running arrival, got {from}.");
+        HeadlessInput.RenderLiveTree(host);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.True(row.IsPointerOver);
+        Assert.Equal(from, slide.Y, 5);
+        clock.Step(1000); clock.Step(1075);
+        Assert.Equal(from + (-2 - from) * 0.75, slide.Y, 4);
+        clock.Step(1150);
+        Assert.Equal(-2, slide.Y, 4);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
