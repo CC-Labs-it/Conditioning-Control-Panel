@@ -33,6 +33,9 @@ public sealed class WaylandQuickRecalTests
     [InlineData("Ctrl+Alt+G", true)]
     [InlineData("Control + Alt + g", true)]
     [InlineData("Alt+Ctrl+G", true)]
+    [InlineData("Strg+Alt+G", true)]
+    [InlineData("Steuerung+Alt+G", true)]
+    [InlineData("Strg+Alt+K", false)]
     [InlineData("Ctrl+Alt+K", false)]
     [InlineData("G", false)]
     [InlineData("", false)]
@@ -62,7 +65,7 @@ public sealed class WaylandQuickRecalTests
         var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         binding.SetSessionForTests("/session");
         binding.ShortcutChanged("/other", "Ctrl+Alt+K");
-        binding.ShortcutChanged("/session", "Ctrl+Alt+G"); // initial portal notification
+        binding.ShortcutChanged("/session", "Ctrl+Alt+G"); binding.ShortcutChanged("/session", "Strg+Alt+G"); // initial portal notifications
         binding.Route("/session", "quick_recal", true, now); // not yet bound
         Assert.True(binding.Ready());
         binding.Route("/other", "quick_recal", true, now);
@@ -82,13 +85,13 @@ public sealed class WaylandQuickRecalTests
         Assert.Equal(1, closed);
     }
 
-    [Fact]
-    public void UnsafeChangeDuringBindingCannotBecomeReady()
+    [Theory, InlineData("Ctrl+Alt+K"), InlineData("Strg+Alt+K")]
+    public void UnsafeChangeDuringBindingCannotBecomeReady(string trigger)
     {
         int closed = 0;
         var binding = new PortalQuickRecalHotkey(() => { }, () => closed++);
         binding.SetSessionForTests("/session");
-        binding.ShortcutChanged("/session", "Ctrl+Alt+K");
+        binding.ShortcutChanged("/session", trigger);
         Assert.False(binding.Ready());
         Assert.Equal(1, closed);
     }
