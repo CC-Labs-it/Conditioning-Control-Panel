@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -55,6 +56,7 @@ internal static class KeywordTriggerHead
         // Hook thread: translate now (modifier state belongs to this press), then post. Never break panic.
         try
         {
+            if (!Engine.IsActive || !CoreSettings.Current.KeywordTriggersEnabled || !KeywordAudioRuntime.HasAccess) return;
             var special = vk switch
             {
                 0x0D or 0x1B or 0x09 => (KeywordInputKey?)KeywordInputKey.Clear,
@@ -66,11 +68,14 @@ internal static class KeywordTriggerHead
             var ch = special == null ? Translate(vk) : null;
             uint processId = 0;
             var needsForeground = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
-            if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+            // WPF KeywordTriggerService.cs:650-666: sample every two seconds even in Everywhere.
+            var resolveForeground = Engine.ShouldResolveForeground(needsForeground, DateTime.UtcNow);
+            if (resolveForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;
-                var foreground = needsForeground ? Foreground(processId) : (null, false);
+                var foreground = resolveForeground ? Foreground(processId) : (null, false);
+                if (resolveForeground) Engine.ObserveForeground(foreground.Process, foreground.Own);
                 if (special is { } key) Engine.Key(key, foreground.Process, foreground.Own);
                 else if (ch is { } c) Engine.Character(c, foreground.Process, foreground.Own);
                 else Engine.Key(KeywordInputKey.None, foreground.Process, foreground.Own);
@@ -79,8 +84,9 @@ internal static class KeywordTriggerHead
         catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); }
     }
 
-    private static (string? Process, bool Own) Foreground(uint id)
+    internal static (string? Process, bool Own) Foreground(uint id)
     {
+        if (id == 0) return (null, false);
         try
         {
             using var p = Process.GetProcessById((int)id);
@@ -116,6 +122,30 @@ internal sealed class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
     private readonly KeywordCooldowns _cooldowns = new();
+    private readonly LinkedList<string> _seenApps = new();
+    private DateTime _lastSampleAt = DateTime.MinValue;
+
+    // WPF KeywordTriggerService.cs:489-520,582,618-622. Only the hook thread samples;
+    // the UI thread records and reads the bounded, session-only list.
+    internal bool ShouldResolveForeground(bool needsForeground, DateTime now)
+    {
+        if (needsForeground) return true;
+        if ((now - _lastSampleAt).TotalSeconds < 2) return false;
+        _lastSampleAt = now;
+        return true;
+    }
+
+    internal void ObserveForeground(string? process, bool own)
+    {
+        if (!IsActive || !CoreSettings.Current.KeywordTriggersEnabled || !HasAccess || own ||
+            string.IsNullOrWhiteSpace(process)) return;
+        var existing = _seenApps.FirstOrDefault(a => string.Equals(a, process, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) _seenApps.Remove(existing);
+        _seenApps.AddFirst(existing ?? process);
+        while (_seenApps.Count > 8) _seenApps.RemoveLast();
+    }
+
+    internal IReadOnlyList<string> GetRecentForegroundApps() => _seenApps.ToArray();
     private CancellationTokenSource? _audio;
     private Action? _stop;
     private long? _duckGeneration;

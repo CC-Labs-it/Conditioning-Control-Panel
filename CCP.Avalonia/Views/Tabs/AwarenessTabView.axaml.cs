@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -25,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
+    /// ponytail: ScreenOcr, highlight windows, other response actions remain
     /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
@@ -145,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 TxtAwarenessAppList.Text = string.Join(", ", s.KeywordTriggerApps ?? new());
                 AwarenessAppListPanel.IsVisible = s.KeywordTriggerAppScope != AwarenessAppScope.Everywhere;
+                RefreshSeenApps();
 
                 UpdateStatusIndicator(masterOn);
                 RefreshAwarenessPresetCards();
@@ -328,9 +330,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerAppScope");
             }
 
-            // ponytail: WPF also rebuilds the "recently focused" chips from
-            // KeywordTriggerService.GetRecentForegroundApps(). That ring is fed by a foreground-
-            // window poll (Win32) and lives with the service, so the chip row stays empty here.
+            RefreshSeenApps();
         }
 
         private void TxtAwarenessAppList_LostFocus(object? sender, RoutedEventArgs e) => CommitAppList();
@@ -354,12 +354,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 settings.KeywordTriggerApps = parsed;
                 CoreSettings.Save();
                 TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                RefreshSeenApps();
                 Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
                     parsed.Count, settings.KeywordTriggerAppScope);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerApps");
+            }
+        }
+
+        // WPF MainWindow.Awareness.cs:575-638: omit listed apps and add a clicked chip.
+        private void RefreshSeenApps()
+        {
+            var listed = CoreSettings.Current.KeywordTriggerApps ?? new List<string>();
+            var seen = Platform.KeywordTriggerHead.Engine.GetRecentForegroundApps()
+                .Where(app => !AwarenessAppScopeRules.MatchesAppList(listed, app)).ToArray();
+            AwarenessSeenAppsPanel.Children.Clear();
+            TxtAwarenessSeenAppsLabel.IsVisible = seen.Length > 0;
+            foreach (var app in seen)
+            {
+                var chip = new Button
+                {
+                    Content = "+ " + app, Tag = app, FontSize = 10,
+                    Padding = new Thickness(7, 3), Margin = new Thickness(0, 0, 5, 5),
+                    Cursor = new Cursor(StandardCursorType.Hand), Foreground = Brushes.White,
+                    Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x5A)),
+                    BorderThickness = new Thickness(1),
+                };
+                ToolTip.SetTip(chip, $"Add '{app}' to the list");
+                chip.Click += (_, _) =>
+                {
+                    var settings = CoreSettings.Current;
+                    var apps = new List<string>(settings.KeywordTriggerApps ?? new());
+                    if (!AwarenessAppScopeRules.MatchesAppList(apps, app)) apps.Add(app);
+                    settings.KeywordTriggerApps = apps;
+                    CoreSettings.Save();
+                    TxtAwarenessAppList.Text = string.Join(", ", apps);
+                    RefreshSeenApps();
+                };
+                AwarenessSeenAppsPanel.Children.Add(chip);
             }
         }
 
