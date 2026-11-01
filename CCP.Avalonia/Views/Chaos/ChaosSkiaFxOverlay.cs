@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using IFrameSource = ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Compositor;
 using Serilog;
 using SkiaSharp;
@@ -45,6 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Func<bool> Composited = () => X11Overlay.IsAvailable && X11Overlay.IsCompositing;
         /// <summary>Tests step frames (P08); the live source is the window's animation frame.</summary>
         internal static IFrameSource? FramesForTests;
+        internal static Func<bool> VideoPlaying = () => MandatoryVideoOverlay.Instance.Scheduler.IsPlaying;
+        internal static Action<Window> Raise = w => X11Overlay.Raise(w);
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
         private static bool _refused;
 
@@ -103,7 +106,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (Active == null && Create() is { } w) Active = w;
                     if (Active == null) return;
                     act(Active);
-                    if (Active.IsVisible) X11Overlay.Raise(Active);   // WPF StartActivity: ChaosWindowZ.RaiseAboveVideo on every effect
+                    // WPF StartActivity raises only during video, and never pins an opted-out run.
+                    if (Active.IsVisible && VideoPlaying() && Active.Topmost) Raise(Active);
                 }
                 catch (Exception ex) { Log.Debug("ChaosSkiaFx: {E}", ex.Message); }
             });
@@ -118,7 +122,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return null;
             }
             var w = new ChaosSkiaFxOverlay(live: true);
-            if (!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, w._stagePx) && !SkipPlatformChecksForTests)
+            if (SkipPlatformChecksForTests)
+            {
+                w.Position = w._stagePx.Position;
+                w.Width = w._stagePx.Width / w._scale;
+                w.Height = w._stagePx.Height / w._scale;
+            }
+            else if (!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, w._stagePx, topmost: w.Topmost))
             {
                 Log.Warning("ChaosSkiaFx: the platform refused a click-through topmost overlay, so no chaos sparkle field");
                 _refused = true;
@@ -162,7 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop;   // WPF ChaosWindowZ.BornTopmost
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
