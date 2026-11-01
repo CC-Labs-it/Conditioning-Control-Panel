@@ -15,6 +15,8 @@
  * page's own loopback server, so its rows are same-origin stills with no CORS problem. The guard flips: only the
  * page's own origin passes, a scrolller.com url is refused. No element is made here: `deviceRows` goes to
  * host/devicePictures.js, which puts them on the real world screens. Without the origin nothing here changes.
+ * A host that says `caps.scrolller.clips` (the desktop) may also send `kind: 'video'` rows from that origin; without
+ * it (the phone) a clip row is refused like any other stranger.
  */
 export const MAX_FEED_ROWS = 12;
 const NO_ROWS = Object.freeze([]);
@@ -33,15 +35,16 @@ export function deviceUrl(url, pageOrigin) {
   } catch { return ''; }
 }
 
-/** The rows a device-origin feed may carry: v1, stills only (never svg), on the page's own origin, deduped, capped. */
-export function deviceRows(msg, pageOrigin) {
+/** The rows a device-origin feed may carry: v1, stills (never svg) and, only with `clips`, clips, on the page's own origin, deduped, capped. */
+export function deviceRows(msg, pageOrigin, clips = false) {
   if (!msg || msg.v !== 1 || !Array.isArray(msg.rows)) return [];
   const out = [], seen = new Set();
   for (const r of msg.rows) {
     if (out.length >= MAX_FEED_ROWS) break;
-    const url = r?.kind === 'image' ? deviceUrl(r.url, pageOrigin) : '';
-    if (!url || seen.has(url) || /\.svg($|[?#])/i.test(url) || (r.mime !== undefined && !/^image\/(?!svg)/i.test(String(r.mime)))) continue;
-    seen.add(url); out.push({ url, kind: 'image' });
+    const clip = clips && r?.kind === 'video';
+    const url = r?.kind === 'image' || clip ? deviceUrl(r.url, pageOrigin) : '';
+    if (!url || seen.has(url) || /\.svg($|[?#])/i.test(url) || (r.mime !== undefined && !(clip ? /^video\//i : /^image\/(?!svg)/i).test(String(r.mime)))) continue;
+    seen.add(url); out.push({ url, kind: clip ? 'video' : 'image' });
   }
   return out;
 }
@@ -89,7 +92,7 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
   let pictures = [], stills = [], consent = null, disposed = false, catalog = null, expires = 0;
   // Device origin (the phone): the guard's page origin, the rows for host/devicePictures.js and the last message,
   // kept so a feed that lands before the init named the origin is read again under the right guard.
-  let pageOrigin = '', device = NO_ROWS, last = null;
+  let pageOrigin = '', device = NO_ROWS, last = null, deviceClips = false;
   // A player's press asked the phone's consent sheet and no echo has answered yet.
   let asking = false;
   const declined = new Set();
@@ -110,7 +113,7 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
     const next = feedCatalog(msg);
     if (next && JSON.stringify(next) !== JSON.stringify(catalog)) { catalog = next; notify(); }
     if (pageOrigin) {
-      device = consent === false ? NO_ROWS : deviceRows(msg, pageOrigin);
+      device = consent === false ? NO_ROWS : deviceRows(msg, pageOrigin, deviceClips);
       expires = now() + 24 * 60 * 60 * 1000;
       return;
     }
@@ -153,10 +156,10 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
   return {
     /** The stored consent from the last echo, or null before any echo. */
     get consent() { return consent; },
-    /** Device origin: rows are same-origin stills from now on (idempotent); a feed already here is read again. */
-    useDeviceOrigin(origin) {
+    /** Device origin: rows are same-origin from now on (idempotent), clips only when the host offers them; a feed already here is read again. */
+    useDeviceOrigin(origin, { clips = false } = {}) {
       if (disposed || !origin || pageOrigin === origin) return;
-      release(); pageOrigin = origin;
+      release(); pageOrigin = origin; deviceClips = clips === true;
       if (last) apply(last);
     },
     /** Device origin: the rows now in force; the same array until a feed replaces it, empty past consent or expiry. */
