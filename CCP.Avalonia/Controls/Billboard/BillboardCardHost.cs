@@ -398,7 +398,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         private Button BuildCta()
         {
             _ctaText.Foreground = new SolidColorBrush(Ink);
-            var face = new Grid { ClipToBounds = true, Children = { _ctaText, _ctaShine } };
+            var face = new Grid { ClipToBounds = true, Children = { _ctaShine, _ctaText } };
             _ctaFace.Child = face;
             var root = new Grid { Children = { _ctaGlow, _ctaFace } };
             BuildCtaFx(root);

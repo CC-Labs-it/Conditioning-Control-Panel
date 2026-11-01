@@ -29,6 +29,7 @@ public sealed class BillboardCtaTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var old = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => settings;
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         CoreSettings.Current.PerformanceMode = CoreSettings.Current.AutoPerformanceMode = false;
@@ -88,7 +89,11 @@ public sealed class BillboardCtaTests
             window.Close(); Assert.False(host.CtaLoopsRunning);
             host.SetCtaHover(true); Assert.False(host.CtaLoopsRunning);
         }
-        finally { window.Close(); host.ReleaseArt(); }
+        finally
+        {
+            try { window.Close(); host.ReleaseArt(); }
+            finally { CoreSettings.ServiceProvider = old; }
+        }
         return Task.CompletedTask;
     });
 
@@ -175,11 +180,57 @@ public sealed class BillboardCtaTests
         Assert.InRange(Math.Abs(host.CtaShineX), 0, 0.01);
     });
 
+    [Fact]
+    public Task CtaShineLeavesOpaqueLabelPixelsUnchanged() => WithCta((host, window) =>
+    {
+        host.SetCtaHover(true); host.StepCtaFx(0.3); // the sweep is centred across the label
+        var shine = host.Cta.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Rectangle>().Single();
+        int[] Pixels()
+        {
+            int w = (int)Math.Ceiling(host.Cta.Bounds.Width), h = (int)Math.Ceiling(host.Cta.Bounds.Height);
+            using var bitmap = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(w, h));
+            bitmap.Render(host.Cta);
+            var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(w * h * 4);
+            try
+            {
+                bitmap.CopyPixels(new PixelRect(0, 0, w, h), buffer, w * h * 4, w * 4);
+                var pixels = new int[w * h];
+                System.Runtime.InteropServices.Marshal.Copy(buffer, pixels, 0, pixels.Length);
+                return pixels;
+            }
+            finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer); }
+        }
+        shine.IsVisible = false;
+        var plain = Pixels();
+        shine.IsVisible = true;
+        var lit = Pixels();
+        var ink = Enumerable.Range(0, plain.Length).Where(i => unchecked((uint)plain[i]) == 0xff0d0e1c).ToArray();
+        Assert.True(ink.Length >= 5, "The rendered label must contain opaque ink pixels.");
+        foreach (var i in ink) Assert.Equal(plain[i], lit[i]);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CtaFixturesRestoreSettingsProviderBeforeTheIsolationHook(bool mainFixture)
+    {
+        var old = CoreSettings.ServiceProvider;
+        if (mainFixture) await CtaBreathShineHoverPressAndGates();
+        else await WithCta((host, window) => { });
+        Assert.Same(old, CoreSettings.ServiceProvider);
+        if (!mainFixture)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => WithCta((host, window) => throw new InvalidOperationException("fixture probe")));
+            Assert.Same(old, CoreSettings.ServiceProvider);
+        }
+    }
+
     private Task WithCta(Action<BillboardCardHost, Window> check) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var old = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => settings;
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         CoreSettings.Current.PerformanceMode = CoreSettings.Current.AutoPerformanceMode = false;
@@ -194,7 +245,11 @@ public sealed class BillboardCtaTests
             window.Show(); Dispatcher.UIThread.RunJobs(); host.StepCtaFx(0);
             check(host, window);
         }
-        finally { window.Close(); host.ReleaseArt(); }
+        finally
+        {
+            try { window.Close(); host.ReleaseArt(); }
+            finally { CoreSettings.ServiceProvider = old; }
+        }
         return Task.CompletedTask;
     });
 
