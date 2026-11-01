@@ -113,7 +113,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CancelFaucetCharge(silent: false);
             };
             if (ProfilePage is { } page)
+            {
                 page.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !page.IsVisible) OnFaucetVatOffScreen(); };
+                // WPF Browser.cs:1914,1953 and ProfileFaucet.cs:290,577,600.
+                if (page.FindControl<Grid>("ProfileCardWrapper") is { } wrapper)
+                    wrapper.PropertyChanged += (_, e) =>
+                    {
+                        if (e.Property != IsVisibleProperty) return;
+                        if (wrapper.IsVisible) UpdateFaucetPresentation();
+                        else OnFaucetVatOffScreen();
+                    };
+            }
             if (VatGlass is { } glass)
             {
                 glass.FillPercentChanged += OnVatFillPercentChanged;

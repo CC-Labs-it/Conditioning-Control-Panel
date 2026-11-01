@@ -298,6 +298,82 @@ public sealed class ProfileFaucetTests
     });
 
     [Fact]
+    public Task WaitingMotionRestartsWhenSearchHidesAndReopensTheCard() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldClock = BeatLoop.Time;
+        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var clock = new FaucetClock(); BeatLoop.Time = clock;
+        var cues = new List<string>();
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileName(path));
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = Create();
+            var page = shell.ProfilePage!;
+            var wrapper = page.FindControl<Grid>("ProfileCardWrapper")!;
+            var tap = page.FindControl<Grid>("ProfileVatFaucet")!;
+            var chip = page.FindControl<Border>("ProfileVatChip")!;
+            var drop = page.FindControl<Ellipse>("ProfileVatFaucetDrop")!;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.PerformanceMode = false;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            var tilt = Assert.IsType<RotateTransform>(Assert.IsType<TransformGroup>(tap.RenderTransform).Children[2]);
+            var breath = Assert.IsType<ScaleTransform>(chip.RenderTransform);
+            var fall = Assert.IsType<TranslateTransform>(drop.RenderTransform);
+            Assert.Contains(BeatLoop.Running, loop => loop.Owner == tap && loop.OnFrameBeat);
+            CoreSettings.Current.OfflineMode = true;
+            await page.SearchAsync("no-such-faucet-test-user"); Dispatcher.UIThread.RunJobs();
+            Assert.False(wrapper.IsVisible);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == tap);
+            Assert.Equal(0, tilt.Angle); Assert.Equal(1, breath.ScaleX); Assert.Equal(0, drop.Opacity);
+            clock.Seconds = 10; BeatLoop.StepAll(); Assert.Empty(cues);
+            await page.ViewMyProfileAsync(); Dispatcher.UIThread.RunJobs();
+            Assert.True(wrapper.IsVisible);
+            Assert.Contains(BeatLoop.Running, loop => loop.Owner == tap && loop.OnFrameBeat);
+            Assert.Equal(-2.2, tilt.Angle, 3);
+            clock.Seconds = 10.45; BeatLoop.StepAll();
+            Assert.Equal(.85, drop.Opacity, 3); Assert.Equal(1.75, fall.Y, 3);
+            clock.Seconds = 12.8; BeatLoop.StepAll(); Assert.Equal(1.05, breath.ScaleX, 3);
+            clock.Seconds = 13.8; BeatLoop.StepAll(); Assert.Equal(new[] { "faucet_tick.wav" }, cues);
+            Assert.Equal(400, shell.FaucetHeldXp); Assert.Equal(0, CoreSettings.Current.VatPouredTodayXp);
+        }
+        finally
+        {
+            try { CloseFaucetTest(shell); }
+            finally { BeatLoop.Time = oldClock; CoreAudio.PlayOneShotProvider = oldAudio; }
+        }
+    });
+
+    [Fact]
+    public Task HidingTheCardDuringAChargeCancelsWithoutPouring() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var cues = new List<string>();
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileName(path));
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = Create();
+            var page = shell.ProfilePage!;
+            var ring = page.FindControl<Grid>("ProfileVatChargeRing")!;
+            shell.BeginFaucetCharge(); Assert.True(shell.FaucetCharging);
+            CoreSettings.Current.OfflineMode = true;
+            await page.SearchAsync("no-such-faucet-test-user"); Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.FaucetCharging); Assert.False(ring.IsVisible);
+            shell.AdvanceFaucetCharge(1);
+            Assert.Equal(400, shell.FaucetHeldXp); Assert.Equal(0, CoreSettings.Current.VatPouredTodayXp);
+            Assert.DoesNotContain("faucet_charge_drop.wav", cues);
+            await page.ViewMyProfileAsync(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(400, shell.FaucetHeldXp); Assert.False(shell.FaucetCharging);
+        }
+        finally
+        {
+            try { CloseFaucetTest(shell); }
+            finally { CoreAudio.PlayOneShotProvider = oldAudio; }
+        }
+    });
+
+    [Fact]
     public Task HoverPressReleaseAndPourFeedbackShareTheWaitingTransforms() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var oldClock = BeatLoop.Time;
