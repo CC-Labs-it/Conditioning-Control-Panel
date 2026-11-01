@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Fyp;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Serilog;
 
 namespace ConditioningControlPanel.Services
@@ -41,8 +44,8 @@ namespace ConditioningControlPanel.Services
     /// (<c>FinalizeWatchCredit</c> :7424) and the strict-key rules. Drawing is the head's
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
-    /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
+    /// Remote clips use the selected online channels and the device cache when enabled by the head.
+    /// ponytail: cascade/feed/browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
@@ -263,6 +266,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_running) return;
             _running = true;
+            KickRemotePrefetch();
             ScheduleNext();
             Log.Information("VideoService started");
         }
@@ -454,12 +458,118 @@ namespace ConditioningControlPanel.Services
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
             }
+            // WPF GetNextVideo (VideoService.cs:7981-8005): try the ready remote pool first,
+            // with the selected source and share; an empty pool falls back to local/pack.
+            var s = CoreSettings.Current;
+            var localEmpty = _queue.Count == 0 && (PackVideos?.Count ?? 0) == 0;
+            KickRemotePrefetch();
+            if (RemoteAllowed(s) && VideoSelectionRules.WantsRemote(localEmpty, s.MediaSource, s.RemoteMediaRatio, _random)
+                && TakeRemote() is { } remote) { KickRemotePrefetch(); return remote; }
             // WPF GetNextVideo (VideoService.cs:8015-8049): active pack clips join the local pick,
             // weighted by count; a failed decrypt falls back to the local queue. Pack clips skip the
             // length filter (PackFileEntry carries no duration).
             if (PackVideos?.TryDraw(_queue.Count, remaining: true) is { } pack) return pack;
             return _queue.Count > 0 ? _queue.Dequeue() : null;
         }
+
+        // WPF VideoService.cs:8139-8155, 8222-8270, 8323-8368. Each scheduler owns a
+        // video tenant and never waits for the network on a trigger. A channel/source change
+        // invalidates both the buffer and an in-flight response before it can be used.
+        internal bool RemoteMedia { get; set; }
+        private readonly object _remoteLock = new();
+        private readonly List<string> _remoteQueue = new();
+        private string _remoteSelection = "";
+        private int _remoteInFlight;
+        internal Task? RemoteTask { get; private set; }
+        internal Func<CancellationToken, Task<(List<FypAssetManifest.Entry> Entries, string? Error)>> FetchRemote { get; set; } =
+            ct => FypOnlineCoordinator.For("videos", RemoteChannels, FeedMediaKind.Video).FetchBatchAsync(ct);
+        internal Func<string, bool> CachedRemote { get; set; } = ScrolllerDiskCache.Contains;
+        internal Func<string, bool> MayFetchRemote { get; set; } = ScrolllerPolicyService.MayFetchFresh;
+        internal Func<string, CancellationToken, Task<string?>> DownloadRemote { get; set; } =
+            (url, ct) => ScrolllerDiskCache.GetOrFetchAsync(url, ScrolllerItemIndex.MetaFor(url), ct);
+
+        private static IReadOnlyList<string> RemoteChannels() => FypOnlineCoordinator.ResolveChannels(
+            CoreSettings.Current.FypOnlineNiches, CoreSettings.Current.FypOnlineCustomSubs);
+        private bool RemoteAllowed(Models.AppSettings s) => RemoteMedia && ScrolllerPolicy.Enabled
+            && s.MediaSource != "local" && s.HasRemoteMediaConsent;
+        private string Selection()
+        {
+            var s = CoreSettings.Current;
+            return RemoteAllowed(s) ? s.MediaSource + "|" + string.Join("|", RemoteChannels().OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) : "";
+        }
+        private string RefreshRemoteSelection()
+        {
+            var selection = Selection();
+            lock (_remoteLock)
+            {
+                if (_remoteSelection != selection) { _remoteQueue.Clear(); _remoteSelection = selection; }
+            }
+            return selection;
+        }
+        private void KickRemotePrefetch()
+        {
+            var selection = RefreshRemoteSelection();
+            if (selection.Length == 0) return;
+            if (Interlocked.CompareExchange(ref _remoteInFlight, 1, 0) != 0) return;
+            RemoteTask = Task.Run(async () =>
+            {
+                try { await RefillRemoteAsync(selection).ConfigureAwait(false); }
+                catch (Exception ex) { Log.Debug("VideoService: remote prefetch failed: {Error}", ex.Message); }
+                finally { Interlocked.Exchange(ref _remoteInFlight, 0); }
+            });
+        }
+        internal async Task RefillRemoteAsync(string selection)
+        {
+            if (selection.Length == 0 || RefreshRemoteSelection() != selection) return;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            bool fetch;
+            lock (_remoteLock) fetch = _remoteQueue.Count < 4;
+            if (fetch)
+            {
+                var (entries, error) = await FetchRemote(timeout.Token).ConfigureAwait(false);
+                if (error != null || RefreshRemoteSelection() != selection) return;
+                lock (_remoteLock)
+                {
+                    if (_remoteSelection != selection) return;
+                    foreach (var entry in entries)
+                    {
+                        if (_remoteQueue.Count >= 60) break;
+                        if (RemoteMediaFormats.Validate(entry, FeedMediaKind.Video, out _) && !_remoteQueue.Contains(entry.Url))
+                            _remoteQueue.Add(entry.Url);
+                    }
+                }
+            }
+            // Only Scrolller URLs are downloaded; never stream them on a cache miss.
+            for (var i = 0; i < 60 && RefreshRemoteSelection() == selection; i++)
+            {
+                string? next;
+                lock (_remoteLock)
+                {
+                    if (_remoteQueue.Count(u => !ScrolllerPolicy.IsScrolllerUrl(u) || CachedRemote(u)) >= 3) return;
+                    next = _remoteQueue.FirstOrDefault(u => ScrolllerPolicy.IsScrolllerUrl(u) && !CachedRemote(u));
+                }
+                if (next == null || !MayFetchRemote(next) || RefreshRemoteSelection() != selection) return;
+                var path = await DownloadRemote(next, CancellationToken.None).ConfigureAwait(false);
+                if (RefreshRemoteSelection() != selection) return;
+                if (path == null) lock (_remoteLock) _remoteQueue.Remove(next);
+            }
+        }
+        private string? TakeRemote()
+        {
+            if (RefreshRemoteSelection().Length == 0) return null;
+            lock (_remoteLock)
+            {
+                for (int i = 0; i < _remoteQueue.Count; i++)
+                {
+                    var url = _remoteQueue[i];
+                    if (!ScrolllerPolicy.IsScrolllerUrl(url) || CachedRemote(url))
+                    { _remoteQueue.RemoveAt(i); return url; }
+                    if (!MayFetchRemote(url)) _remoteQueue.RemoveAt(i--);
+                }
+            }
+            return null;
+        }
+        internal Task RefillRemoteForTest() => RefillRemoteAsync(RefreshRemoteSelection());
 
         /// <summary>The content-pack clips mixed in (WPF _packVideoQueue); null = local only.</summary>
         public PackMediaPool? PackVideos { get; set; }

@@ -68,6 +68,18 @@ public sealed class PackMediaPoolTests : IDisposable
     }
 
     [Fact]
+    public void VideoCount_tracks_active_pack_entries_without_decrypting()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.mp4", "video"), ("b.mp4", "video"), ("c.png", "image"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        Assert.Equal(2, pool.Count);
+        Assert.Equal(0, pool.TempCount);
+        store.DeactivatePack("p1");
+        Assert.Equal(0, pool.Count);
+    }
+
+    [Fact]
     public void TempsPastTheCap_OldestHalfDeleted()
     {
         ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));

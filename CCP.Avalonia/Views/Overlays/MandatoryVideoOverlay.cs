@@ -37,7 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
+    /// attention input, no-activate z-order, the remote-media offer after the "no videos" dialog,
+    /// and the remote video credit link and end card.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -82,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
             DurationOf = LengthOf,
+            RemoteMedia = true,
             // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
             PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
         };
@@ -124,6 +126,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void Play(string path, bool strict)
         {
+            // WPF VideoService.cs:3215-3224, 3858-3872: recheck after the pre-roll and
+            // every heal; an evicted Scrolller clip is never sent to VLC as a network URL.
+            var mediaPath = PlaybackPath(path);
+            if (mediaPath == null) { Scheduler.End(); return; }
             var muted = _userMuted;
             if (_surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
@@ -218,13 +224,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
-            _media = new Media(vlc, path, FromType.FromPath);
+            var network = VideoSelectionRules.IsRemoteMediaPath(mediaPath);
+            _media = new Media(vlc, mediaPath, network ? FromType.FromLocation : FromType.FromPath);
+            if (network)
+            {
+                _media.AddOption(":network-caching=3000");
+                _media.AddOption(":http-reconnect");
+                _media.AddOption($":http-user-agent={ConditioningControlPanel.Services.Fyp.Online.ScrolllerSource.HonestUserAgent}");
+            }
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
             if (_attention) DispatcherTimer.RunOnce(SetupAttention, TimeSpan.FromSeconds(2));   // WPF: Task.Delay(2000)
+        }
+
+        internal static string? PlaybackPath(string path, Func<string, string?>? cached = null) =>
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(path)
+                ? (cached ?? ConditioningControlPanel.Services.Fyp.Online.ScrolllerDiskCache.TryGetPath)(path) : path;
+
+        internal static ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge CreditFor(string path,
+            Func<string, ConditioningControlPanel.Services.Fyp.Online.ScrolllerCacheMeta?>? lookup = null)
+        {
+            var credit = new ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge();
+            var meta = (lookup ?? ConditioningControlPanel.Services.Fyp.Online.ScrolllerItemIndex.MetaFor)(path);
+            credit.SetShown(ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.IsScrolllerMedia(path)
+                || ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.LinkFor(meta?.Sub) != null);
+            return credit;
         }
 
         /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
@@ -274,6 +301,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
             var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
+            // The WPF browser player credits Scrolller during playback (VideoService.Browser.cs:158).
+            var credit = CreditFor(_path);
             var w = new Window
             {
                 Title = "CCP Video",
@@ -282,7 +311,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
+                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row, credit } },
             };
             var floating = Floating;
             if (floating)

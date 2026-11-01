@@ -37,6 +37,9 @@ namespace ConditioningControlPanel.Services
             _bag = new ShuffleBag<(string PackId, PackFileEntry File)>(e => ContentPackStore.SourceKey(e.PackId, e.File), _rng);
         }
 
+        /// <summary>Active entries available to a video draw, without decrypting one.</summary>
+        public int Count { get { lock (_lock) return Entries().Count; } }
+
         /// <summary>Decrypts on record (tests, diagnostics).</summary>
         public int TempCount { get { lock (_lock) return _temps.Count; } }
 
