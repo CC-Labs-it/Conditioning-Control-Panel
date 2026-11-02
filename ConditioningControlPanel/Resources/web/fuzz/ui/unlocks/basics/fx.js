@@ -14,7 +14,7 @@ export const fresh = (ctx) => { const o = ctx.state.order; return !ctx.restored 
 
 /** Sound is an unlock too: nothing sounds before Click Sound is bought. */
 export function sfx(ctx, file, gain = 0.6) {
-  if (ctx.has('sound')) ctx.audio.play(`assets/audio/${file}`, { bus: 'sfx', gain });
+  if (ctx.has('sound') && ctx.switches.isOn('sound')) ctx.audio.play(`assets/audio/${file}`, { bus: 'sfx', gain });
 }
 
 const BASE_CSS = `

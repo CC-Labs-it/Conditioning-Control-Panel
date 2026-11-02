@@ -60,7 +60,8 @@ function createQuiz(ctx) {
   idle.className = 'xq-idle';
   let open = null, lastId = null, dueAt = 0;
 
-  const ownedTricks = () => Object.keys(TRICKS).filter((t) => ctx.has(TRICKS[t].unlock));
+  const liveRow = (id) => ctx.has(id) && ctx.switches.isOn(id);
+  const ownedTricks = () => Object.keys(TRICKS).filter((t) => liveRow(TRICKS[t].unlock));
 
   /** Mostly the newest few tricks, sometimes any: what you just bought should show up, the old ones still surprise. */
   function chooseTrick() {
@@ -144,7 +145,7 @@ function createQuiz(ctx) {
 
     /* What a trick gets. Everything it starts goes in o, so it stops when the card goes. */
     /* Only Yes: every wrong answer turns into another way of saying yes. All four pay. */
-    const onlyYes = ctx.has('onlyyes') && trick !== 'mono';
+    const onlyYes = liveRow('onlyyes') && trick !== 'mono';
     const yeses = new Map();
     const label = (ans) => {
       if (!onlyYes || ans.tone === 'yes') return ans.label;

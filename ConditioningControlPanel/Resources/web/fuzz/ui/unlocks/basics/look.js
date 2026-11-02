@@ -12,7 +12,7 @@ const SKIN_LABEL = Object.freeze({ round: 'Round', bubble: 'Bubble', watch: 'Wat
 function wardrobe(ctx) {
   let foreign = null;
   const el = ctx.button.el;
-  const owned = () => Object.keys(SKIN_OF).filter((id) => ctx.has(id)).map((id) => SKIN_OF[id]);
+  const owned = () => Object.keys(SKIN_OF).filter((id) => ctx.has(id) && ctx.switches.isOn(id)).map((id) => SKIN_OF[id]);
   const label = () => { b.textContent = `Button: ${SKIN_LABEL[el.dataset.skin] || 'Theme'}`; };
   const b = chip(ctx, '', () => {
     const cur = el.dataset.skin;
@@ -26,7 +26,7 @@ function wardrobe(ctx) {
     bumpZone(ctx);
   });
   const chosen = ctx.store.get('choice');
-  if (chosen) ctx.after(40, () => { ctx.button.skin(chosen); label(); bumpZone(ctx); });
+  if (chosen && (!SKIN_LABEL[chosen] || owned().includes(chosen))) ctx.after(40, () => { ctx.button.skin(chosen); label(); bumpZone(ctx); });
   ctx.on('buy', ({ item }) => { if (SKIN_OF[item.id]) { ctx.store.set('choice', null); ctx.after(30, label); } });
   ctx.every(1000, label);
   label();
