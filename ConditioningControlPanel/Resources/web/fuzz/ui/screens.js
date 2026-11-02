@@ -191,6 +191,7 @@ export function holdMedia(ctx, m, wanted = true) {
   c.width = Math.min(640, m.naturalWidth);
   c.height = Math.round(c.width * (m.naturalHeight / m.naturalWidth));
   c.getContext('2d').drawImage(m, 0, 0, c.width, c.height);
+  c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
   m.after(c);
   m.__still = c;
   m.style.visibility = 'hidden';
