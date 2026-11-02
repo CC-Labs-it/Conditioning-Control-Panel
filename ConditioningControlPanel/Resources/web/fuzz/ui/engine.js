@@ -123,12 +123,13 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     audio?.hold(paused || suspended);
     emit(paused ? 'pause' : 'resume');
   }
-  function setSuspended(v) {
+  function setSuspended(v, reason) {
     const next = !!v;
     if (next === suspended) return;
     if (!paused) ui.holdWorld?.(next);
     suspended = next;
-    audio?.hold(paused || suspended);
+    audio?.hold(paused || suspended);  // first: panic never waits on a listener
+    emit('suspend', { on: suspended, reason });
   }
   /* ---- verbs ---- */
   function tap({ x, y, auto = false } = {}) {
@@ -193,6 +194,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     if (endingBegun) return;
     endingBegun = true;
     stopped = true;
+    audio?.stopStreams?.();
     if (!restored) {
       recordEnding(life, run, id);
       save();

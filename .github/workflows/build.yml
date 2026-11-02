@@ -72,7 +72,7 @@ jobs:
 
       - name: Fuzz sim tests
         working-directory: ConditioningControlPanel/Resources/web/fuzz
-        run: node --test tests/items.test.mjs tests/economy.test.mjs tests/routes.test.mjs tests/save.test.mjs tests/contract.test.mjs tests/pictures.test.mjs tests/bridge.test.mjs
+        run: node --test tests/items.test.mjs tests/economy.test.mjs tests/routes.test.mjs tests/save.test.mjs tests/contract.test.mjs tests/pictures.test.mjs tests/kit.test.mjs tests/bridge.test.mjs
 
       # The suite includes WpfRenderHarness.cs and PlayDoorRenderTests.cs, which do real WPF
       # rendering. Those pass headless on windows-latest - measured, 4924 passed / 0 failed in

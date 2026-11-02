@@ -129,6 +129,17 @@ export function makeContext(engine, scope) {
         scope.loops.add(l);
         return { stop(ms) { scope.loops.delete(l); l.stop(ms); } };
       },
+      stream(url, opts) {
+        const s = !scope.dead && audio?.stream?.(url, opts);
+        if (!s) return { el: null, play() {}, pause() {}, setGain() {}, stop() {}, playing: false };
+        const h = {
+          el: s.el, play: s.play, pause: s.pause, setGain: s.setGain,
+          stop(ms) { scope.loops.delete(h); s.stop(ms); },
+          get playing() { return s.playing; },
+        };
+        scope.loops.add(h);
+        return h;
+      },
     },
     voice(slug, opts) {
       const hostUrl = engine.env.caps?.words?.urls?.[slug];

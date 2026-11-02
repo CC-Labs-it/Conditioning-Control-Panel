@@ -143,6 +143,36 @@ test('events reach listeners; a wall hit pays through the sim', () => {
   assert.deepEqual(events, [true, 'rounded']);
 });
 
+test('a stream dies with its unlock and at the end; suspend holds audio before anyone hears of it', () => {
+  const log = [];
+  const stream = () => ({ el: {}, play() {}, pause() {}, setGain() {}, stop(ms) { log.push(`stop ${ms}`); }, playing: true });
+  const audio = { stream, hold(v) { log.push(`hold ${v}`); }, stopStreams() { log.push('stopStreams'); }, setQuiet() {} };
+  const run = E.createRun();
+  E.grant(run, 'stray');
+  const engine = createEngine({ run, life: createLife(), ui: fakeUi(), audio, registry: {
+    stray: { mount(c) { c.audio.stream('a.mp3'); c.on('suspend', (e) => log.push(`heard ${e.on} ${e.reason}`)); return {}; } },
+  } });
+  engine.mount('stray');
+  engine.setSuspended(true, 'panic');
+  assert.deepEqual(log, ['hold true', 'heard true panic']);
+  log.length = 0;
+  engine.setSuspended(false);
+  engine.unmount('stray');
+  assert.deepEqual(log, ['hold false', 'heard false undefined', 'stop 300']);
+  log.length = 0;
+  engine.end('drop', { restored: true });
+  assert.equal(log[0], 'stopStreams');
+});
+
+test('with no kit a stream is a harmless stand-in', () => {
+  let s;
+  const { engine } = setup({ stray: { mount(c) { s = c.audio.stream('a.mp3'); return {}; } } });
+  engine.mount('stray');
+  assert.equal(s.el, null);
+  s.play(); s.pause(); s.setGain(1); s.stop(100);
+  assert.equal(s.playing, false);
+});
+
 test('a stacking row stays mounted and hears grow; a row without grow remounts', () => {
   let mounts = 0, grown = null;
   const { run, engine } = setup({ stray: { mount() { mounts++; return { grow(n) { grown = n; } }; } } });

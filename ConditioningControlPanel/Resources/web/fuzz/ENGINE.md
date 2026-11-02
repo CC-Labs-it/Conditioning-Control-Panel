@@ -71,7 +71,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 **Events**
 
-- `ctx.on(event, fn)`: `tap {gain,x,y,auto}`, `buy {item,count,cost}`, `fork {fork,lane}`, `wall {gain,x,y,corner}`, `pause`, `resume`, `golden`, `ad`, `pictures {source}`. `ctx.emit(event, data)` sends one: Golden Button emits `golden`, an ad click emits `ad`.
+- `ctx.on(event, fn)`: `tap {gain,x,y,auto}`, `buy {item,count,cost}`, `fork {fork,lane}`, `wall {gain,x,y,corner}`, `pause`, `resume`, `suspend {on, reason}` (the host's panic or focus stop; sound and clocks are already stopped when you hear it), `golden`, `ad`, `pictures {source}`. `ctx.emit(event, data)` sends one: Golden Button emits `golden`, an ad click emits `ad`.
 
 **The main button**: `ctx.button`
 
@@ -87,6 +87,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 - `ctx.audio.muteFor(ms)`: everything silent for up to 15 s, then back.
 - `ctx.audio.play(path, {bus, gain})`, `ctx.audio.loop(path, {bus, gain})` -> `{stop(ms)}`. Buses `sfx ambient voice podcast`. A missing file is silence. Clips in `assets/audio/`.
+- `ctx.audio.stream(url, {bus, gain, loop, autoplay})` -> `{el, play(), pause(), setGain(v), stop(ms), playing}`: long audio on a media element the kit owns, never decoded whole. Use it for anything long, and never `new Audio()` or an `<audio>` of your own: those keep playing through panic. It follows mute, quiet, muteFor and hold, pauses at once on pause, suspend and panic, comes back with them, and dies at the end and with your unlock. Starts on the first gesture. Read `el` (`currentTime`, `duration`, listeners); volume changes and a play during a hold are put back.
 - `ctx.voice(slug, opts?)`: a recorded word (`data/words.js`); no clip = silence. Never speech synthesis.
 - `await ctx.pictures.next({niche})` -> `{url, credit}` or null. Null is normal: draw an empty frame, never an error. Show `credit` when set. Never fetch a picture any other way. `ctx.pictures.source` is `online` (signed in), `own` (the player's files, on this device only) or `none`; a change arrives as the `pictures` event, so refill what is on screen. Choosing a source is not an unlock's job.
 - `ctx.ads.next({kind})` -> the next record from `data/ads.js`.
