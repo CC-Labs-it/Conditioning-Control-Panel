@@ -5,7 +5,7 @@ import { cardUp } from '../ui/unlocks/extras/kit.js';
 import { bankOf, collect, levelSeconds, xpNeed } from '../sim/levels.js';
 import { createEngine } from '../ui/engine.js';
 import { REGISTRY } from '../ui/unlocks/index.js';
-import { fresh } from '../ui/unlocks/basics/fx.js';
+import { fresh, sfx } from '../ui/unlocks/basics/fx.js';
 import * as E from '../sim/economy.js';
 import { createLife, parse, serialize } from '../sim/save.js';
 
@@ -83,4 +83,38 @@ test('a save whose store holds something other than an object loads clean', () =
   const got = parse(JSON.stringify(raw));
   assert.deepEqual(got.run.store, { levels: { lvl: 2 } });
   assert.deepEqual(got.life.store, { z_y: { a: 1 } });
+});
+
+test('Click Sound switched off takes every sfx with it', () => {
+  let ctx = null;
+  const { engine } = engineFor({ stray: { mount(c) { ctx = c; return {}; } }, sound: { mount: () => ({}) } }, ['stray', 'sound']);
+  engine.mountAll();
+  const heard = [];
+  ctx.audio.play = (p) => heard.push(p);
+  sfx(ctx, 'sfx/a.mp3');
+  engine.switches.set('sound', false);
+  sfx(ctx, 'sfx/b.mp3');
+  engine.switches.set('sound', true);
+  sfx(ctx, 'sfx/c.mp3');
+  assert.deepEqual(heard, ['assets/audio/sfx/a.mp3', 'assets/audio/sfx/c.mp3']);
+});
+
+test('ctx.cleanup runs when the unlock goes, once', () => {
+  let n = 0;
+  const { engine } = engineFor({ stray: { mount(c) { c.cleanup(() => { n += 1; }); return {}; } } }, ['stray']);
+  engine.mount('stray');
+  assert.equal(n, 0);
+  engine.unmount('stray');
+  assert.equal(n, 1);
+  engine.unmount('stray');
+  assert.equal(n, 1);
+});
+
+test('a scope lets go of nodes that have left the page once it holds thousands', () => {
+  let ctx = null;
+  const { engine } = engineFor({ stray: { mount(c) { ctx = c; return {}; } } }, ['stray']);
+  engine.mount('stray');
+  for (let i = 0; i < 3000; i++) { const e = ctx.el('div'); e.isConnected = false; }
+  const size = engine.scopes.get('stray').els.size;
+  assert.ok(size < 2100, `still holds ${size}`);
 });
