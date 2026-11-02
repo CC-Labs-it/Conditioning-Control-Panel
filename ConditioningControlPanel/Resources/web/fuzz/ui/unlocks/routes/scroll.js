@@ -2,7 +2,8 @@
  * The feed lives in a rail when there is room; on a phone it sits beside the button and opens full screen on a press. */
 
 import { FEED_LINES } from '../../../data/content/index.js';
-import { panel, deck, burst, ring, railsRoom, fill, docOf } from './kit.js';
+import { panel, deck, burst, ring, railsRoom, fill, CLIP_PICTURES } from './kit.js';
+import { ROUTE_COPY } from './copy.js';
 
 /* The one feed. d_scroll builds it; the later rows hang off it. Module state is reset when d_scroll goes. */
 let feed = null;
@@ -11,18 +12,17 @@ const hooks = { swipe: [], doubleTap: [], pull: [], tile: [] };
 const KINDS = ['pretty', 'close'];
 
 function makeFeed(ctx) {
-  const doc = docOf(ctx);
   const shell = panel(ctx, { side: 'left', height: Math.min(ctx.bounds().h - 120, 520), css: 'pointer-events:auto;' });
   const root = ctx.el('div', 'position:absolute;inset:0;background:#111;border:2px solid #222;border-radius:12px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;pointer-events:auto;', null, shell);
   shell.style.position = shell.style.position || 'relative';
   const col = ctx.el('div', 'position:absolute;left:0;right:0;top:0;transition:transform .28s ease-out;will-change:transform;', null, root);
   const hud = ctx.el('div', 'position:absolute;inset:0;pointer-events:none;z-index:5;', null, root);
-  const hint = ctx.el('div', 'position:absolute;left:0;right:0;bottom:12px;text-align:center;font:700 13px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', 'swipe up', hud);
+  const hint = ctx.el('div', 'position:absolute;left:0;right:0;bottom:12px;text-align:center;font:700 13px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', ROUTE_COPY.feedSwipe, hud);
   hint.className = 'routes-hint';
 
   const f = { root, shell, col, hud, tiles: [], index: 0, h: 0, swipes: 0, fullscreen: false, sheetClose: null };
   ctx.css('.routes-small .routes-big{display:none !important}.routes-full .routes-fy{top:48px !important;right:8px}.routes-full .routes-endbox{bottom:72px !important}.routes-full .routes-hint{bottom:auto !important;top:58%}');
-  const sizeMode = () => { root.classList.toggle('routes-small', !railsRoom(ctx) && !f.fullscreen); hint.textContent = (!railsRoom(ctx) && !f.fullscreen) ? 'press to open' : 'swipe up'; };
+  const sizeMode = () => { root.classList.toggle('routes-small', !railsRoom(ctx) && !f.fullscreen); hint.textContent = (!railsRoom(ctx) && !f.fullscreen) ? ROUTE_COPY.feedPress : ROUTE_COPY.feedSwipe; };
   sizeMode();
   f.sizeMode = sizeMode;
 
@@ -32,7 +32,7 @@ function makeFeed(ctx) {
     t.clip = hooks.clip ? hooks.clip() : false;
     t.seenAt = 0;
     t.liked = false;
-    const pic = await ctx.pictures.next({ niche: kind });
+    const pic = await ctx.pictures.next(t.clip && CLIP_PICTURES ? { niche: kind, kind: 'clip' } : { niche: kind });
     if (!t.el.isConnected) return;
     t.el.style.background = pic ? `center/cover no-repeat url("${pic.url}") #222` : 'repeating-linear-gradient(45deg,#2a2a33 0 10px,#222 10px 20px)';
     t.credit.textContent = pic?.credit || '';
@@ -117,7 +117,7 @@ function makeFeed(ctx) {
   }, { passive: false });
 
   /* Full screen on a phone: same feed, moved into the over layer, with its own way back. Wake Up stays above it. */
-  const back = ctx.el('button', 'position:absolute;left:50%;bottom:12px;transform:translateX(-50%);min-height:44px;padding:4px 18px;background:#fff;color:#000;border:0;border-radius:22px;font:700 15px Arial,Helvetica,sans-serif;pointer-events:auto;z-index:8;touch-action:manipulation;display:none;', 'Back to the button', root);
+  const back = ctx.el('button', 'position:absolute;left:50%;bottom:12px;transform:translateX(-50%);min-height:44px;padding:4px 18px;background:#fff;color:#000;border:0;border-radius:22px;font:700 15px Arial,Helvetica,sans-serif;pointer-events:auto;z-index:8;touch-action:manipulation;display:none;', ROUTE_COPY.feedBack, root);
   back.type = 'button';
   back.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
   const count = ctx.el('div', 'position:absolute;left:10px;top:10px;font:700 18px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;display:none;z-index:6;', '', hud);
@@ -143,7 +143,6 @@ function makeFeed(ctx) {
   ctx.every(200, () => { if (f.fullscreen) count.textContent = ctx.fmt(ctx.state.fuzz); });
   ctx.on('routes:corner', ({ on }) => { if (!f.fullscreen) shell.style.opacity = on ? '.15' : ''; });
   f.open = open;
-  void doc;
   return f;
 }
 
@@ -157,7 +156,7 @@ export default {
       resetHooks();
       feed = makeFeed(ctx);
       if (!ctx.gentle) ctx.anim(feed.shell, [{ transform: 'translateY(30px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'ease-out' });
-      if (!railsRoom(ctx)) ctx.toast('Press the feed to open it.');
+      if (!railsRoom(ctx)) ctx.toast(ROUTE_COPY.feedOpen);
       return { off() { feed = null; resetHooks(); } };
     },
   },
@@ -188,7 +187,7 @@ export default {
       listen(ctx, 'tile', (t) => {
         if (!t.clip) return;
         ctx.el('div', 'position:absolute;left:50%;top:50%;margin:-18px 0 0 -12px;width:0;height:0;border-left:26px solid rgba(255,255,255,.8);border-top:18px solid transparent;border-bottom:18px solid transparent;', null, t.deco);
-        ctx.el('div', 'position:absolute;right:6px;top:6px;font:700 11px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 2px #000;', 'muted', t.deco);
+        ctx.el('div', 'position:absolute;right:6px;top:6px;font:700 11px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 2px #000;', ROUTE_COPY.muted, t.deco);
         t.bar = ctx.el('div', 'position:absolute;left:0;right:0;bottom:0;height:5px;background:#ff69b4;transform-origin:0 50%;transform:scaleX(0);', null, t.deco);
         t.watch = 0;
       });

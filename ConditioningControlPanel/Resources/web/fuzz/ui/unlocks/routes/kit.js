@@ -19,7 +19,8 @@ export function deck(list, ctx) {
 
 export const rectOf = (el) => el.getBoundingClientRect();
 export function btnCentre(ctx) { const r = rectOf(ctx.button.el); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right }; }
-export function stageRect(ctx) { return rectOf(docOf(ctx).getElementById('stage')); }
+/** The zone the button sits in: where the free space beside it ends. */
+export function zoneRect(ctx) { return rectOf(ctx.parts.buttonWrap.parentElement); }
 export function counterRect(ctx) { return rectOf(docOf(ctx).getElementById('counter')); }
 
 /** A ring that opens and fades. Fades only, so it is fine under Gentle. */
@@ -90,9 +91,9 @@ function layout(ctx) {
     }
     return;
   }
-  const stage = stageRect(ctx), btn = rectOf(ctx.button.el);
+  const zone = zoneRect(ctx), btn = rectOf(ctx.button.el);
   const flankW = Math.max(60, Math.min(240, (w - btn.width) / 2 - 16));
-  const top = 42, bottom = stage.bottom - 4;
+  const top = 42, bottom = zone.bottom - 4;
   for (const s of ['left', 'right']) {
     const list = stacks[s], gap = 4;
     const each = Math.max(40, (bottom - top - gap * (list.length - 1)) / Math.max(1, list.length));
@@ -163,9 +164,9 @@ export function meterRow(ctx) {
 }
 
 /* ---- tones: a route may repaint the page, and the Watch route stays dark under all of them ---- */
-export const DARK = { '--page': '#14101e', '--ink': '#f4eff8', '--ink-soft': '#cfc7dc', '--ink-faint': '#a79fb6', '--btn': '#3a3350', '--panel': '#2a2438', '--panel-short': '#201b2c', '--line': '#6a6180', '--fill': '#4a4162', '--stamp': '#ffb0d6' };
+export const DARK = { '--page': '#14101e', '--ink': '#f4eff8', '--ink-soft': '#cfc7dc', '--ink-faint': '#a79fb6', '--btn': '#3a3350', '--panel': '#2a2438', '--panel-short': '#201b2c', '--line': '#6a6180', '--fill': '#4a4162', '--stamp': '#ffb0d6', '--ready': '#4a4162' };
 export function darkCss(ctx) {
-  ctx.css('@keyframes routesReadyDark{50%{background:#4a4162}}#goal .row.ready{animation-name:routesReadyDark}#btn{border-color:#8d84a5}#counter,#l-meters,#l-ticker{text-shadow:0 1px 4px #000,0 0 2px #000}');
+  ctx.css('#btn{border-color:#8d84a5}#counter,#l-meters,#l-ticker{text-shadow:0 1px 4px #000,0 0 2px #000}');
 }
 export const onDark = (ctx) => ctx.has('e_spiral') || ctx.has('a_rain') || ctx.has('a_spiral');
 /** A colour that reads on the page as it is now. */
@@ -195,17 +196,12 @@ export function mountSpiral(ctx, { opacity = 0.6, fadeMs = 1400 } = {}) {
 }
 export const spiral = () => spiralNow;
 
+/** Flip when ctx.pictures can answer {kind:'clip'} with a muted video: Corner GIF, Video Clips and Mandatory Video stop panning a still. */
+export const CLIP_PICTURES = false;
+
 /* ---- ads: one look, one rule. Only a real card links out, on the player's own press, paying once per ad ---- */
-const shown = { ccpOnly: false, hidden: false };
-export const adFlags = shown;
-/** The stand-ins ui/ads.js serves before data/ads.js has loaded have another shape: read both. */
-const adShape = (rec) => (rec.headline ? rec : { ...rec, ccp: rec.kind === 'ccp', headline: rec.text, sub: '', cta: 'Look' });
-export function nextAd(ctx, kind) {
-  let rec = adShape(ctx.ads.next({ kind }));
-  for (let i = 0; shown.ccpOnly && !rec.ccp && i < 40; i++) rec = adShape(ctx.ads.next({ kind }));
-  return rec;
-}
-/** Hooks a press on a real ad: opens cclabs.app in a new tab and pays once for this ad. */
+export const nextAd = (ctx, kind, opts = {}) => ctx.ads.next({ kind, ...opts });
+/** A press on a real ad: pays once for this ad and opens it. Call it directly in the click handler, or ctx.openLink refuses. */
 export function pressAd(ctx, rec, at) {
   if (!rec?.ccp || !rec.url) return false;
   let paid = ctx.store.get('paidAds') || [];
@@ -216,6 +212,6 @@ export function pressAd(ctx, rec, at) {
     ctx.pay(Math.max(r.fps, r.click) * ctx.config.AD_CLICK_PAYS_SECONDS, 'ad', at);
   }
   ctx.emit('ad', { id: rec.id });
-  if (/^https:\/\/([a-z0-9-]+\.)?cclabs\.app(\/|$)/.test(rec.url)) docOf(ctx).defaultView.open(rec.url, '_blank', 'noopener');
+  ctx.openLink(rec.url);
   return true;
 }

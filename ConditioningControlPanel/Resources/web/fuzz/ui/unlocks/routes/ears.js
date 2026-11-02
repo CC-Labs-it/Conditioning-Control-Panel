@@ -3,11 +3,11 @@
 
 import { EDGE_WORDS, PHONES_PROMPT } from '../../../data/content/index.js';
 import { MANTRA } from '../../../data/words.js';
-import { DARK, darkCss, mountSpiral, spiral, deck, ring, flash, bar, panel, btnCentre, meterRow, setLine, burst, railsRoom, ink, freeSpot } from './kit.js';
+import { DARK, darkCss, mountSpiral, spiral, deck, ring, flash, bar, panel, btnCentre, meterRow, setLine, burst, railsRoom, ink, freeSpot, fill } from './kit.js';
+import { ROUTE_COPY } from './copy.js';
 
 const LOOP = (name) => `assets/audio/ambient/${name}.mp3`;
 const say = (slug) => slug.replace(/-/g, ' ');
-const WHISPER_EXTRA = ['psst', 'shh'];   // written here: the content files have no sound words
 
 /* One wide wave behind the button. The Low Hum draws it, Headphones widen it, Binaural Hum splits it. */
 const hum = { left: null, right: null, amp: 0, wide: 1, split: false };
@@ -69,7 +69,7 @@ export default {
         lastTick = ctx.state.clock;
         if (!ctx.gentle) arm.style.transform = `rotate(${side ? 24 : -24}deg)`;
         arm.style.transition = ctx.gentle ? 'none' : 'transform 1s ease-in-out';
-        ctx.audio.play('assets/audio/sfx/count_tick.mp3', { bus: 'sfx', gain: 0.35 });
+        ctx.audio.play('assets/audio/sfx/count_tick.mp3', { bus: 'sfx', gain: 0.35, pan: ctx.has('a_phones') ? (side ? 0.6 : -0.6) : 0 });
         const r = box.getBoundingClientRect();
         ring(ctx, r.left + r.width / 2, r.top + r.height / 2, 90, '#7b5cff', 500);
       };
@@ -82,7 +82,7 @@ export default {
         streak += 1;
         const b = btnCentre(ctx), r = ctx.rates();
         ctx.pay(Math.max(1, r.click) * Math.min(4, streak), 'tick', { x: x ?? b.x, y: y ?? b.top });
-        if (streak >= 2) ctx.float(b.x, b.top - 22, `on the tick x${Math.min(4, streak)}`, 'color:var(--stamp);font-weight:700;');
+        if (streak >= 2) ctx.float(b.x, b.top - 22, fill(ROUTE_COPY.onTick, { n: Math.min(4, streak) }), 'color:var(--stamp);font-weight:700;');
       });
       return {};
     },
@@ -96,11 +96,12 @@ export default {
       [0, 21].forEach((x) => ctx.el('div', `position:absolute;left:${x}px;top:9px;width:7px;height:11px;border-radius:3px;background:var(--ink);`, null, icon));
       const landed = () => {
         hum.wide = ctx.store.get('on') === false ? 1.1 : 1.6;
+        if (ctx.store.get('on') !== false) { ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, pan: -0.8 }); ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, pan: 0.8 }); }
         if (!ctx.gentle) ctx.anim(icon, [{ transform: 'translateY(-60px)' }, { transform: 'translateY(0)' }], { duration: 500, easing: 'ease-in' });
       };
       if (ctx.store.get('on') !== undefined) { landed(); return {}; }
       ctx.modal({
-        title: 'Headphones',
+        title: ROUTE_COPY.phonesTitle,
         body: PHONES_PROMPT.ask,
         buttons: [
           { label: PHONES_PROMPT.yes, onPress: () => { ctx.store.set('on', true); ctx.toast(PHONES_PROMPT.thanks[0]); landed(); } },
@@ -114,9 +115,9 @@ export default {
   /* Whispers: small words all over the page, each with a ripple, and a real whispered clip now and then. */
   a_whisp: {
     mount(ctx) {
-      const words = deck([...EDGE_WORDS, ...WHISPER_EXTRA, ...WHISPER_EXTRA], ctx), clips = deck(MANTRA, ctx);
+      const words = deck([...EDGE_WORDS, ...ROUTE_COPY.whispers, ...ROUTE_COPY.whispers], ctx), clips = deck(MANTRA, ctx);
       const row = ctx.el('div', 'display:flex;align-items:center;gap:4px;font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', null, meterRow(ctx));
-      ctx.el('span', '', 'volume', row).className = 'routes-lbl';
+      ctx.el('span', '', ROUTE_COPY.volume, row).className = 'routes-lbl';
       bar(ctx, row, 'width:40px;height:6px;', '#7b5cff').set(0.1);
       const show = () => {
         const { x, y } = freeSpot(ctx);
@@ -159,12 +160,12 @@ export default {
   a_bin: {
     mount(ctx) {
       hum.split = true;
-      ctx.audio.loop(LOOP('hum-left'), { bus: 'ambient', gain: 0.5 });
-      ctx.audio.loop(LOOP('hum-right'), { bus: 'ambient', gain: 0.5 });
+      ctx.audio.loop(LOOP('hum-left'), { bus: 'ambient', gain: 0.5, pan: -1 });
+      ctx.audio.loop(LOOP('hum-right'), { bus: 'ambient', gain: 0.5, pan: 1 });
       const b = btnCentre(ctx);
       const tag = (side, text, colour) => ctx.el('div', `position:absolute;${side}:12px;top:${b.y - 96}px;font:600 13px Arial,Helvetica,sans-serif;color:${colour};z-index:3;`, text, 'back').className = 'routes-lbl';
-      tag('left', 'left', '#ff69b4');
-      tag('right', 'right', '#2f8fd0');
+      tag('left', ROUTE_COPY.left, '#ff69b4');
+      tag('right', ROUTE_COPY.right, '#2f8fd0');
       const dot = ctx.el('div', `position:absolute;left:50%;top:${b.y - 7}px;margin-left:-98px;width:14px;height:14px;border-radius:50%;background:#ffd24d;z-index:3;`, null, 'back');
       const dot2 = ctx.el('div', `position:absolute;left:50%;top:${b.y - 7}px;margin-left:84px;width:14px;height:14px;border-radius:50%;background:#ffd24d;z-index:3;`, null, 'back');
       for (const d of [dot, dot2]) ctx.anim(d, ctx.gentle ? [{ opacity: 0.5 }, { opacity: 1 }] : [{ transform: 'scale(.6)' }, { transform: 'scale(1.5)' }], { duration: 900, iterations: Infinity, direction: 'alternate' });
@@ -217,7 +218,7 @@ export default {
       const sp = mountSpiral(ctx, { opacity: 0.5, fadeMs: 5000 });
       sp.speedMul = 0.7;
       sp.el.style.zIndex = '0';
-      ctx.after(2600, () => setLine(ctx, 'finally', 'font-size:22px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;', 2400));
+      ctx.after(2600, () => setLine(ctx, ROUTE_COPY.finally, 'font-size:22px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;', 2400));
       ctx.on('tap', () => { sp.kick = Math.min(0.8, sp.kick + 0.08); });
       return { off() { sp.dispose(); } };
     },
@@ -231,10 +232,10 @@ export default {
         const slug = clips(), wide = railsRoom(ctx), b = btnCentre(ctx), { w, h } = ctx.bounds();
         const big = wide ? Math.min(40, (w - 800) / 2 / Math.max(5, say(slug).length) * 1.5) : 17;
         const y = wide ? h * 0.42 : b.y - 12, sideW = wide ? (w - 800) / 2 : (w - b.w) / 2 - 6;
-        ctx.voice(slug, { gain: 0.9 });
+        ctx.voice(slug, { gain: 0.9, pan: -0.7 });
         flash(ctx, 'floaters', say(slug), `left:3px;width:${sideW}px;top:${y}px;text-align:center;font:700 ${big}px/1 Arial,Helvetica,sans-serif;color:${ink(ctx, '#5a3cdc', '#d7c9ff')};`, 1500);
         ctx.after(550, () => {
-          ctx.voice(slug, { gain: 0.45 });
+          ctx.voice(slug, { gain: 0.45, pan: 0.7 });
           flash(ctx, 'floaters', say(slug), `right:3px;width:${sideW}px;top:${y + (wide ? 34 : 0)}px;text-align:center;font:italic 600 ${big * 0.85}px/1 Arial,Helvetica,sans-serif;color:${ink(ctx, '#c23a83', '#ffb0d6')};`, 1400);
         });
       };
@@ -249,9 +250,9 @@ export default {
     mount(ctx) {
       const clips = deck(MANTRA, ctx);
       const row = ctx.el('div', 'display:flex;align-items:center;gap:4px;font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', null, meterRow(ctx));
-      ctx.el('span', '', 'far', row).className = 'routes-lbl';
+      ctx.el('span', '', ROUTE_COPY.far, row).className = 'routes-lbl';
       const m = bar(ctx, row, 'width:50px;height:6px;', '#ff69b4');
-      ctx.el('span', 'color:#ff69b4;', 'close', row).className = 'routes-lbl';
+      ctx.el('span', 'color:#ff69b4;', ROUTE_COPY.close, row).className = 'routes-lbl';
       const come = () => {
         const slug = clips(), b = btnCentre(ctx), big = Math.min(ctx.bounds().w / Math.max(4, say(slug).length) * 1.4, 130);
         const e = ctx.el('div', `position:absolute;left:0;right:0;top:${Math.max(70, b.y - big / 2)}px;text-align:center;font:700 ${big}px/1 Arial,Helvetica,sans-serif;color:#ff9ccf;text-shadow:0 0 8px #000;`, say(slug));

@@ -4,6 +4,7 @@
 import { PRAISE, PRAISE_NAMED, REST_LINES, TUCK_LINES, GLOW_LINES, WARM_LINES, NAP_LINES } from '../../../data/content/index.js';
 import { PLUCKS } from '../../../audio/kit.js';
 import { deck, fill, btnCentre, setLine, meterRow, bar, ring, burst, tone, onDark, docOf, ink } from './kit.js';
+import { ROUTE_COPY } from './copy.js';
 
 /** Fires on real taps only and answers how long the hands have been off, in game seconds. */
 function restClock(ctx) {
@@ -19,7 +20,7 @@ export default {
     mount(ctx) {
       tone(ctx, { '--page': '#fff0e6', '--panel': '#fff7f0', '--panel-short': '#f3e2d6', '--line': '#d9b9a3', '--fill': '#f5cdb0', '--btn': '#f7e3d4' });
       const rest = restClock(ctx), next = deck(PRAISE.filter(fitsLine(ctx)), ctx);
-      const css = `font-style:italic;font-size:20px;color:${ink(ctx, '#d4488f', '#ffb0d6')};`;
+      const css = `font-style:italic;font-size:20px;color:${ink(ctx, '#a8246a', '#ffb0d6')};`;
       const say = () => setLine(ctx, next(), css, 2600);
       ctx.after(500, say);
       let gap = 0;
@@ -179,7 +180,7 @@ export default {
     mount(ctx) {
       const doc = docOf(ctx), MAX = 10 * 60 * 1000;
       const titles = deck(NAP_LINES.tabTitles, ctx), welcome = deck(NAP_LINES.welcome, ctx);
-      const tag = ctx.el('div', 'font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', 'z', meterRow(ctx));
+      const tag = ctx.el('div', 'font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', ROUTE_COPY.napTag, meterRow(ctx));
       if (!ctx.gentle) ctx.anim(tag, [{ opacity: 0.4 }, { opacity: 1 }], { duration: 1500, iterations: Infinity, direction: 'alternate' });
       let oldTitle = null;
       const wake = (ms) => {
@@ -188,7 +189,7 @@ export default {
         const b = btnCentre(ctx);
         ctx.pay(pay, 'away', { x: b.x, y: b.y });
         burst(ctx, b.x, b.y, '#ffd24d', 14, 100);
-        ctx.modal({ title: 'Back', body: fill(welcome(), { pay: ctx.fmt(pay) }) + (capped ? ` ${NAP_LINES.capped}` : ''), ms: 0, buttons: [{ label: 'Good' }] });
+        ctx.modal({ title: ROUTE_COPY.napTitle, body: fill(welcome(), { pay: ctx.fmt(pay) }) + (capped ? ` ${NAP_LINES.capped}` : ''), ms: 0, buttons: [{ label: ROUTE_COPY.napOk }] });
       };
       const onVis = () => {
         if (doc.hidden) {
@@ -219,7 +220,7 @@ export default {
   s_good2: {
     mount(ctx) {
       const next = deck(PRAISE_NAMED, ctx);
-      const css = `font-style:italic;font-size:20px;color:${ink(ctx, '#d4488f', '#ffb0d6')};`;
+      const css = `font-style:italic;font-size:20px;color:${ink(ctx, '#a8246a', '#ffb0d6')};`;
       const praise = (name) => {
         const line = fill(next(), { item: name });
         setLine(ctx, line, `${css}white-space:normal;`, 3200);

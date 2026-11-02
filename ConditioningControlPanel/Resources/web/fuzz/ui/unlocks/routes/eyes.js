@@ -2,6 +2,7 @@
 
 import { BOUNCE_WORDS, BIG_WORDS, EDGE_WORDS, STILL_WORDS, STARE_LINES } from '../../../data/content/index.js';
 import { DARK, darkCss, mountSpiral, spiral, deck, burst, ring, flash, bar, claim, release, docOf, btnCentre, setLine, dropLine, meterRow } from './kit.js';
+import { ROUTE_COPY } from './copy.js';
 
 const COLOURS = ['#ff69b4', '#7bd0ff', '#ffd24d', '#9dff9d', '#d9a6ff'];
 
@@ -37,7 +38,7 @@ function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 }
         ctx.pay(big, 'corner', { x: x + w / 2, y: y + h / 2 });
         burst(ctx, x + w / 2, y + h / 2, '#ffd24d', 18, 110);
         ctx.audio.play('assets/audio/sfx/golden_pop.mp3', { bus: 'sfx', gain: 0.6 });
-        ctx.toast('It hit the corner.');
+        ctx.toast(ROUTE_COPY.corner);
         el.textContent = nextWord();
         measure();
       } else if (gain) {

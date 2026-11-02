@@ -3,6 +3,7 @@
 
 import { ORDERS, DENIED_LINES, COUNT_LINES, BEAT_LINES, STILL_TEST, PHRASES, PHRASE_LINES, CORNER_LINES, REVIEWS } from '../../../data/content/index.js';
 import { deck, fill, btnCentre, setLine, dropLine, meterRow, bar, ring, burst, claim, release, docOf, tone, onDark } from './kit.js';
+import { ROUTE_COPY } from './copy.js';
 
 const RED = '#b3121d', RED_DARK = '#ff8a92', GREEN = '#1a7a3a';
 const red = (ctx) => (onDark(ctx) ? RED_DARK : RED);
@@ -65,7 +66,7 @@ export default {
           fate = 'double';
           if (auto) return;
           if (!ctx.gentle) ctx.anim(ctx.button.el, [{ transform: 'translateX(-7px)' }, { transform: 'translateX(7px)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(0)' }], { duration: 260 });
-          ctx.float(b.x + b.w / 3, b.y - 14, 'NO', `color:${red(ctx)};font:800 34px Arial,Helvetica,sans-serif;`);
+          ctx.float(b.x + b.w / 3, b.y - 14, ROUTE_COPY.refused, `color:${red(ctx)};font:800 34px Arial,Helvetica,sans-serif;`);
           bad(ctx, refused());
           ctx.voice('denied', { gain: 0.4 });
           return;
@@ -208,7 +209,6 @@ export default {
       let handle = null, onKey = null;
       const openCard = () => {
         if (handle && !handle.closed) return;
-        if (doc.getElementById('pause') && !doc.getElementById('pause').hidden) return;
         const phrase = phrases();
         let at = 0;
         const node = doc.createElement('div');
@@ -250,7 +250,7 @@ export default {
           keys.appendChild(r);
         });
         const space = doc.createElement('button');
-        space.type = 'button'; space.textContent = 'space';
+        space.type = 'button'; space.textContent = ROUTE_COPY.space;
         space.style.cssText = 'min-height:40px;width:60%;padding:0;';
         space.addEventListener('pointerdown', (e) => { e.preventDefault(); press(' '); });
         keys.appendChild(space);
@@ -265,7 +265,7 @@ export default {
         handle = ctx.modal({
           title: PHRASE_LINES.prompt,
           node,
-          buttons: [{ label: 'Not now' }],
+          buttons: [{ label: ROUTE_COPY.notNow }],
           onClose: () => { doc.removeEventListener('keydown', onKey); onKey = null; },
         });
       };
@@ -279,8 +279,8 @@ export default {
   t_corner: {
     mount(ctx) {
       const sent = deck(CORNER_LINES.sent, ctx), back = deck(CORNER_LINES.back, ctx);
-      const wrap = ctx.button.el.parentElement, big = ctx.button.el;
-      let on = false;
+      const wrap = ctx.parts.buttonWrap;
+      let on = false, out = null;
       ctx.mod({ click: (v) => (on ? v * 1.5 : v) });
       const go = () => {
         if (on) return;
@@ -288,21 +288,21 @@ export default {
         on = true;
         const { w } = ctx.bounds(), b = btnCentre(ctx);
         const dx = Math.min(300, (w - b.w * 0.72) / 2 - 8);
-        wrap.style.transform = `translate(${dx}px,8px) scale(.72) rotate(3deg)`;
+        out = ctx.anim(wrap, [{ transform: 'none' }, { transform: `translate(${dx}px,8px) scale(.72) rotate(3deg)` }], { duration: 260, easing: 'ease-out', fill: 'forwards' });
         ctx.emit('routes:corner', { on: true });
         setLine(ctx, sent(), STAMP(ctx, 16), 2600);
         ctx.after(10000, () => {
           on = false;
-          wrap.style.transform = '';
+          out?.reverse();
+          ctx.after(300, () => { out?.cancel(); out = null; });
           ctx.emit('routes:corner', { on: false });
           setLine(ctx, back(), STAMP(ctx, 16), 2000);
           release('corner');
         });
       };
-      void big;
       ctx.after(2000, go);
       ctx.every(50000, go);
-      return { off() { if (on) { wrap.style.transform = ''; ctx.emit('routes:corner', { on: false }); } release('corner'); } };
+      return { off() { if (on) ctx.emit('routes:corner', { on: false }); release('corner'); } };
     },
   },
 
@@ -331,7 +331,7 @@ export default {
           ctx.audio.play('assets/audio/sfx/thud.mp3', { bus: 'sfx', gain: 0.6 });
           if (grade === 'A') {
             boost = ctx.state.clock + 30000;
-            tag.textContent = 'x2 for 30 s';
+            tag.textContent = ROUTE_COPY.gradeBoost;
             ctx.after(30000, () => { tag.textContent = ''; });
             const b = btnCentre(ctx);
             burst(ctx, b.x, b.y, RED, 20, 140);
@@ -339,7 +339,7 @@ export default {
         });
         ctx.after(4200, () => { p.remove(); release('review', 'low'); });
       };
-      ctx.after(1000, () => { if (!ctx.store.get('at')) ctx.store.set('at', Math.max(0, ctx.state.clock - 60000)); ctx.toast('A file has been opened on you.'); });
+      ctx.after(1000, () => { if (!ctx.store.get('at')) ctx.store.set('at', Math.max(0, ctx.state.clock - 60000)); ctx.toast(ROUTE_COPY.fileOpened); });
       ctx.after(20000, review);
       ctx.every(120000, review);
       return {};

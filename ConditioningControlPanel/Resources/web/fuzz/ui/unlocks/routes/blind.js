@@ -3,6 +3,7 @@
 
 import { IMAGINE, CAPTIONS, STORIES, RADIO_LINES, FILL_BLANKS, INK_ANSWERS, INK_REPLIES, FALSE_MEMORIES } from '../../../data/content/index.js';
 import { panel, deck, flash, tone, ring, btnCentre, fill, docOf, railsRoom, meterRow } from './kit.js';
+import { ROUTE_COPY } from './copy.js';
 import { WOOD } from './slides.js';
 
 const hall = { frame: null };
@@ -101,7 +102,7 @@ export default {
         const b = pick();
         ctx.modal({
           title: b.text,
-          body: 'Choose one. It pays either way.',
+          body: ROUTE_COPY.fillNote,
           buttons: b.options.map((word) => ({
             label: word,
             onPress() {
@@ -148,7 +149,7 @@ export default {
       };
       const ask = () => {
         ctx.modal({
-          title: 'What do you see',
+          title: ROUTE_COPY.inkTitle,
           node: blot(),
           buttons: answers().map((label) => ({
             label,

@@ -2,13 +2,12 @@
  * that keeps checking in. Everything fake here is in-game: no inputs, no cards, and the only money in it is the game's own. */
 
 import { FAKE_RENEWAL, NEW_TERMS, SUPPORT_MENU, ENDINGS } from '../../../data/content/index.js';
-import { adFlags, nextAd, panel, meterRow, burst, ring, bar, btnCentre, counterRect, deck, fill, docOf, railsRoom } from './kit.js';
+import { nextAd, panel, meterRow, burst, ring, bar, btnCentre, counterRect, deck, fill, docOf, railsRoom } from './kit.js';
 import { endingCard, endButton } from './sell.js';
+import { ROUTE_COPY } from './copy.js';
 
 const GOLD = '#c9a227', GOLD_INK = '#4a3500';
 const FONT = 'Arial,Helvetica,sans-serif';
-/* Written here: these two rows had no lines in data/content. */
-const SKIP_LINES = { label: 'Skip', gone: 'Skipped. That was the part that paid.', back: 'A new ad to not skip.' };
 
 const goldChip = (ctx, parent, text) => ctx.el('b', `font:700 12px Georgia,serif;color:${GOLD_INK};background:linear-gradient(90deg,#f6dd7e,${GOLD},#f6dd7e);padding:1px 8px;border-radius:9px;`, text, parent);
 
@@ -16,14 +15,14 @@ export default {
   /* Joke Ads Gone: from here on, only ads for the real thing. */
   p_member: {
     mount(ctx) {
-      adFlags.ccpOnly = true;
-      const chip = goldChip(ctx, meterRow(ctx), 'Premium');
+      ctx.ads.jokesOff();
+      const chip = goldChip(ctx, meterRow(ctx), ROUTE_COPY.premiumChip);
       const c = btnCentre(ctx);
       if (!ctx.gentle) {
         ctx.anim(chip, [{ transform: 'scale(2.4)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], { duration: 420, easing: 'ease-out' });
         burst(ctx, c.x, c.y - 60, GOLD, 12, 90);
       }
-      return { off() { adFlags.ccpOnly = false; } };
+      return {};
     },
   },
 
@@ -54,7 +53,7 @@ export default {
       const host = wide ? panel(ctx, { side: 'right', height: 120, css: 'pointer-events:auto;' }) : ctx.el('div', 'width:100%;margin-bottom:4px;', null, 'banner');
       const box = ctx.el('div', `position:relative;display:flex;align-items:center;gap:8px;min-height:48px;height:100%;padding:4px 8px;box-sizing:border-box;background:#2a2410;color:#fff;border:1px solid ${GOLD};font:12px/1.15 ${FONT};pointer-events:auto;`, null, host);
       const txt = ctx.el('div', 'flex:1 1 auto;min-width:0;overflow:hidden;', '', box);
-      const btn = ctx.el('button', `flex:none;min-height:40px;padding:2px 14px;background:${GOLD};color:#fff;border:0;border-radius:6px;font:700 14px Georgia,serif;touch-action:manipulation;`, SKIP_LINES.label, box);
+      const btn = ctx.el('button', `flex:none;min-height:40px;padding:2px 14px;background:${GOLD};color:#fff;border:0;border-radius:6px;font:700 14px Georgia,serif;touch-action:manipulation;`, ROUTE_COPY.skip, box);
       btn.type = 'button';
       box.classList.add('routes-ad');
       const turn = () => { const rec = nextAd(ctx, 'banner'); txt.textContent = ctx.brand.text(rec.headline); };
@@ -68,12 +67,13 @@ export default {
         ctx.float(r.left + r.width / 2, r.top - 4, `+${ctx.fmt(got)}`, `color:${GOLD};font:700 13px ${FONT};`);
       });
       ctx.every(8000, turn);
+      ctx.on('ads', turn);
       btn.addEventListener('click', () => {
         until = ctx.state.clock + 45000;
         box.style.opacity = '.3';
         btn.disabled = true;
-        ctx.toast(SKIP_LINES.gone);
-        ctx.after(45000, () => { box.style.opacity = ''; btn.disabled = false; turn(); ctx.toast(SKIP_LINES.back); });
+        ctx.toast(ROUTE_COPY.skipGone);
+        ctx.after(45000, () => { box.style.opacity = ''; btn.disabled = false; turn(); ctx.toast(ROUTE_COPY.skipBack); });
       });
       return {};
     },
@@ -84,9 +84,9 @@ export default {
     mount(ctx) {
       ctx.css(`.row{background:linear-gradient(90deg,#f6dd7e,${GOLD},#f6dd7e) !important;color:${GOLD_INK} !important;border-color:#8a6d10 !important;font-family:Georgia,serif}
 .row.short{background:linear-gradient(90deg,#efe4b8,#d9c98f,#efe4b8) !important}.row small,.row .cost i,#goal .tag{color:#5f4a10 !important}
-#goal .bar{background:rgba(138,109,16,.35) !important}#goal .row.ready{animation:none}`);
-      const doc = docOf(ctx);
-      [...doc.querySelectorAll('#goal .row, #rows .row')].forEach((r, i) => {
+#goal .bar{background:rgba(138,109,16,.35) !important}`);
+      ctx.vars({ '--ready': '#f6dd7e' });
+      [...ctx.parts.shop.querySelectorAll('.row')].forEach((r, i) => {
         if (ctx.gentle) return;
         ctx.anim(r, [{ transform: 'scale(1)' }, { transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 300, delay: i * 90 });
         const q = r.getBoundingClientRect();
@@ -192,13 +192,12 @@ export default {
       const m = bar(ctx, row, 'width:44px;height:7px;', GOLD);
       const terms = deck(NEW_TERMS.terms, ctx);
       let sheet = null, live = false;
-      const backOn = () => { sheet?.remove(); sheet = null; adFlags.hidden = false; };
+      const backOn = () => { sheet?.remove(); sheet = null; };
       btn.addEventListener('click', () => {
         if (live) return;
         live = true;
         btn.disabled = true;
         btn.style.opacity = '.5';
-        adFlags.hidden = true;
         sheet = ctx.css('#l-banner,.routes-ad{visibility:hidden}');
         ctx.toast(NEW_TERMS.gone);
         const c = btnCentre(ctx);
@@ -229,12 +228,12 @@ export default {
           sheet.style.color = '#3e2c00';
           ctx.anim(sheet, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: 'translateY(100%)' }, { transform: 'none' }], { duration: 1100, easing: 'ease-out', fill: 'both' });
           ctx.el('div', 'font:700 min(26vw,140px)/1 Georgia,serif;', '∞', sheet);
-          ctx.el('div', 'font:italic 700 34px Georgia,serif;', 'Thank you', sheet);
-          ctx.el('div', 'font-size:16px;', 'for ever', sheet);
+          ctx.el('div', 'font:italic 700 34px Georgia,serif;', ROUTE_COPY.thanks, sheet);
+          ctx.el('div', 'font-size:16px;', ROUTE_COPY.forEver, sheet);
           ctx.el('div', 'font-size:16px;max-width:520px;margin-top:6px;', e.result, sheet);
           const row = ctx.el('div', 'display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:12px;', null, sheet);
-          endButton(ctx, row, e.link.label, 'background:#2a0f22;color:#fff;', () => docOf(ctx).defaultView.open(e.link.url, '_blank', 'noopener'));
-          endButton(ctx, row, 'Next', 'background:#fff6c8;color:#3e2c00;', finish);
+          endButton(ctx, row, e.link.label, 'background:#2a0f22;color:#fff;', () => ctx.openLink(e.link.url));
+          endButton(ctx, row, ROUTE_COPY.next, 'background:#fff6c8;color:#3e2c00;', finish);
           [1300, 2600, 3900].forEach((ms) => ctx.after(ms, () => burst(ctx, ctx.bounds().w / 2, ctx.bounds().h * 0.3, '#fff6c8', 16, 170)));
         },
       });

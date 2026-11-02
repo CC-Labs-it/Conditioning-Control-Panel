@@ -2,7 +2,8 @@
  * for your taste and then your time. Every picture comes through ctx.pictures: null draws an empty frame. */
 
 import { FEED_LINES } from '../../../data/content/index.js';
-import { panel, deck, burst, ring, onDark, claim, release } from './kit.js';
+import { panel, deck, burst, ring, onDark, claim, release, CLIP_PICTURES } from './kit.js';
+import { ROUTE_COPY } from './copy.js';
 
 export const WOOD = 'box-sizing:border-box;border:4px solid #6b4a2b;background:#f3efe4;box-shadow:0 2px 5px rgba(0,0,0,.4);overflow:hidden;';
 
@@ -16,9 +17,9 @@ export function pictureSlot(ctx, parent, css = '') {
   let top = null, ask = 0;
   return {
     box,
-    async next(niche) {
+    async next(niche, clip = false) {
       const mine = ++ask;
-      const pic = await ctx.pictures.next({ niche });
+      const pic = await ctx.pictures.next(clip && CLIP_PICTURES ? { niche, kind: 'clip' } : { niche });
       if (mine !== ask || !box.isConnected) return;
       const e = ctx.el('div', `position:absolute;inset:0;background:${pic ? `center/cover no-repeat url("${pic.url}")` : 'repeating-linear-gradient(45deg,rgba(0,0,0,.04) 0 6px,transparent 6px 12px)'};`, null, box);
       box.insertBefore(e, creditEl);
@@ -57,11 +58,11 @@ export default {
     mount(ctx) {
       const el = panel(ctx, { side: 'right', height: 150, css: `${WOOD}` });
       const slot = pictureSlot(ctx, el);
-      const tag = ctx.el('div', 'position:absolute;left:3px;bottom:3px;font:700 10px Arial,Helvetica,sans-serif;background:rgba(0,0,0,.65);color:#fff;padding:1px 3px;z-index:3;', 'GIF', el);
+      const tag = ctx.el('div', 'position:absolute;left:3px;bottom:3px;font:700 10px Arial,Helvetica,sans-serif;background:rgba(0,0,0,.65);color:#fff;padding:1px 3px;z-index:3;', ROUTE_COPY.gif, el);
       void tag;
       el.style.position = el.style.position || 'relative';
-      slot.next('loop');
-      ctx.every(9000, () => slot.next('loop'));
+      slot.next('loop', true);
+      ctx.every(9000, () => slot.next('loop', true));
       if (!ctx.gentle) ctx.anim(slot.box, [{ transform: 'scale(1.12) translate(-3%,-2%)' }, { transform: 'scale(1.26) translate(3%,2%)' }], { duration: 1700, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
       return {};
     },
@@ -86,7 +87,7 @@ export default {
       };
       const stop = ctx.every(190, () => { add(); if (n >= cols * rows) stop(); });
       ctx.every(1600, () => { if (cells.length) cells[Math.floor(ctx.rng() * cells.length)].next(ctx.rng() < 0.5 ? NICHES.base : NICHES.second); });
-      ctx.css(`#counter{background:${onDark(ctx) ? 'rgba(20,16,30,.86)' : 'rgba(255,255,255,.88)'};padding:0 14px;border-radius:6px}#l-meters{background:${onDark(ctx) ? 'rgba(20,16,30,.8)' : 'rgba(255,255,255,.8)'};padding:0 8px;border-radius:4px}`);
+      ctx.css(`#counter{background:${onDark(ctx) ? 'rgba(20,16,30,.86)' : 'rgba(255,255,255,.88)'};padding:0 14px;border-radius:6px}#l-meters{background:${onDark(ctx) ? 'rgba(20,16,30,.8)' : 'rgba(255,255,255,.8)'};padding:0 8px;border-radius:4px}#more{background:${onDark(ctx) ? 'rgba(20,16,30,.8)' : 'rgba(255,255,255,.8)'};width:max-content;margin-left:auto;margin-right:auto;padding:0 8px;border-radius:4px}`);
       return {};
     },
   },
@@ -152,7 +153,7 @@ export default {
         const p = ctx.el('div', `position:absolute;left:${(w - pw) / 2}px;top:${h - ph - 8}px;width:${pw}px;height:${ph}px;background:#111;border:2px solid #000;box-shadow:0 4px 18px rgba(0,0,0,.55);overflow:hidden;`, null, 'over');
         live = p;
         const slot = pictureSlot(ctx, p);
-        slot.next('clip');
+        slot.next('clip', true);
         if (!ctx.gentle) ctx.anim(slot.box, [{ transform: 'scale(1)' }, { transform: 'scale(1.18)' }], { duration: 14000, easing: 'linear', fill: 'forwards' });
         ctx.el('div', 'position:absolute;left:50%;top:50%;margin:-20px 0 0 -14px;width:0;height:0;border-left:30px solid rgba(255,255,255,.8);border-top:20px solid transparent;border-bottom:20px solid transparent;z-index:3;', null, p);
         const prog = ctx.el('div', 'position:absolute;left:0;right:0;bottom:0;height:5px;background:#ff69b4;transform-origin:0 50%;z-index:3;', null, p);
@@ -161,12 +162,13 @@ export default {
         hole.type = 'button';
         hole.setAttribute('aria-label', FEED_LINES.video);
         const note = ctx.el('div', 'position:absolute;right:48px;top:14px;font:700 13px Arial,Helvetica,sans-serif;color:#fff;opacity:0;z-index:4;text-shadow:0 1px 2px #000;', FEED_LINES.video, p);
-        hole.addEventListener('pointerdown', (e) => { e.preventDefault(); ctx.anim(note, [{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 1100 }); ctx.toast('Wake Up still works, top right.'); });
+        hole.addEventListener('pointerdown', (e) => { e.preventDefault(); ctx.anim(note, [{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 1100 }); ctx.toast(ROUTE_COPY.wakeStill); });
         ctx.after(14000, () => { if (live === p) finish(true); });
       };
       ctx.after(700, play);
       ctx.every(90000, play);
       ctx.on('pause', () => finish(false));
+      ctx.on('suspend', ({ on }) => { if (on) finish(false); });
       return {};
     },
   },
