@@ -1,10 +1,11 @@
 /* No Pictures: nothing is shown, and the words do it instead. Frames stay empty on purpose, and the small tasks here are
- * answering things, which all pay, because the answer was never the point. */
+ * answering things, which all pay, because the answer was never the point. The frame and the story are screens (ui/screens.js):
+ * they pay, and they go where you drag them. No test card here: the empty frame is the joke. */
 
 import { IMAGINE, CAPTIONS, STORIES, RADIO_LINES, FILL_BLANKS, INK_ANSWERS, INK_REPLIES, FALSE_MEMORIES } from '../../../data/content/index.js';
 import { panel, deck, flash, tone, ring, btnCentre, fill, docOf } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
-import { WOOD } from './slides.js';
+import { screen } from '../../screens.js';
 
 const hall = { frame: null };
 const PAPER = '#fbf7ea';
@@ -18,8 +19,8 @@ export default {
   b_frame: {
     mount(ctx) {
       tone(ctx, { '--page': '#ece8dd', '--panel': '#f6f3ea', '--panel-short': '#ddd8ca', '--line': '#a79f8c', '--fill': '#cfc7b2', '--btn': '#e4dfd0' });
-      const size = { w: 200, h: 230 };
-      const el = panel(ctx, { side: 'left', height: 230, css: `${WOOD}background:#fbf8ef;`, place(s) { size.w = s.w; size.h = s.h; } });
+      const scr = screen(ctx, { ratio: 1.15, hint: !ctx.store.get('spot'), css: 'background:#fbf8ef;' });
+      const size = scr.size, el = scr.body;
       const hole = ctx.el('div', 'position:absolute;inset:6px;border:2px dashed #b5ad98;', null, el);
       void hole;
       hall.frame = { el, size };
@@ -31,7 +32,6 @@ export default {
       hall.say = (t, ms = 2600) => flash(ctx, el, t, `left:9px;right:9px;top:${size.h < 170 ? '8px' : '38%'};text-align:center;color:#6b5f49;font:italic ${fits(size, t.length)}px/1.15 ${SERIF};`, ms);
       ctx.after(400, show);
       const stop = ctx.every(5200, () => { if (!hall.busy) show(); });
-      if (!ctx.gentle) ctx.anim(el, [{ transform: 'translateY(-16px) scale(.9)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 350, easing: 'cubic-bezier(.2,1.4,.5,1)' });
       return { off() { stop(); hall.frame = null; } };
     },
   },
@@ -56,8 +56,11 @@ export default {
   /* Short Story: three slow lines on paper. A new one each minute. */
   b_story: {
     mount(ctx) {
-      const next = deck(STORIES, ctx), size = { w: 200, h: 200 };
-      const el = panel(ctx, { side: 'right', height: 210, css: `background:${PAPER};border:1px solid #bbb2a0;box-shadow:0 1px 3px rgba(0,0,0,.25);overflow:hidden;box-sizing:border-box;padding:6px;`, place(s) { size.w = s.w; size.h = s.h; } });
+      const next = deck(STORIES, ctx);
+      const scr = screen(ctx, { ratio: 0.95, css: `background:${PAPER};` });
+      const el = scr.body;
+      el.style.padding = '6px';
+      el.style.boxSizing = 'border-box';
       const lines = [0, 1, 2].map(() => ctx.el('div', `opacity:0;color:#3a3226;text-align:center;margin:3px 0;transition:opacity 1s;font:italic 16px/1.2 ${SERIF};`, '', el));
       const tell = () => {
         const s = next();

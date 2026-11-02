@@ -49,6 +49,7 @@ button { font: inherit; color: inherit; }
 .layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 #l-back { z-index: 1; }
 #l-wash { z-index: 2; }
+#l-screens { z-index: 5; }   /* under the stage and the shop, so no screen can cover the button or a tile */
 #l-floaters { z-index: 20; }
 #l-over { z-index: 60; }
 #l-fx { z-index: 65; }
@@ -57,8 +58,9 @@ button { font: inherit; color: inherit; }
 #page { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 0 16px; padding-bottom: env(safe-area-inset-bottom, 0); }
 
 /* ---- stage: counter, meters, the button ---- */
-#stage { position: relative; z-index: 10; width: 100%; max-width: 760px; display: flex; flex-direction: column; align-items: center; padding-top: 44px; flex: 0 1 auto; min-height: 0; }
+#stage { pointer-events: none; position: relative; z-index: 10; width: 100%; max-width: 760px; display: flex; flex-direction: column; align-items: center; padding-top: 44px; flex: 0 1 auto; min-height: 0; }
 .ticker { position: absolute; left: 0; right: 96px; top: 12px; height: 22px; overflow: hidden; white-space: nowrap; pointer-events: none; }
+#counter, #phrase, #btn-wrap, #l-meters > * { pointer-events: auto; }   /* the stage's empty parts let a press through to a screen under them */
 #counter { flex: none; font-size: 40px; line-height: 1.1; font-variant-numeric: tabular-nums; text-align: center; }
 #l-meters { flex: 0 1 auto; min-height: 20px; max-width: 100%; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--ink-soft); }
 #btn-zone { flex: none; width: 100%; height: 108px; display: grid; place-items: center; }
@@ -71,7 +73,8 @@ button { font: inherit; color: inherit; }
 #l-banner { position: relative; z-index: 30; width: 100%; max-width: 760px; flex: none; max-height: 18vh; overflow: hidden; }
 
 /* ---- the shop: the goal tile and a rolling window of square tiles. Words and preview live in the tip. ---- */
-#shop { position: relative; z-index: 30; width: 100%; max-width: 760px; flex: 1 1 0; min-height: clamp(150px, 38vh, 420px); overflow-y: auto; display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 6px; padding: 4px 0 12px; font-family: var(--shop-font); animation: rise .25s ease-out; }
+:where(#shop) .row, #more { pointer-events: auto; }
+#shop { pointer-events: none; position: relative; z-index: 30; width: 100%; max-width: 760px; flex: 1 1 0; min-height: clamp(150px, 38vh, 420px); overflow-y: auto; display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 6px; padding: 4px 0 12px; font-family: var(--shop-font); animation: rise .25s ease-out; }
 #goal { flex: none; width: 118px; }
 #goal:empty { display: none; }
 #rows { flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }

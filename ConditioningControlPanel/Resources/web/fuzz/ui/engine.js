@@ -28,7 +28,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   const guards = new Set();
   const refusals = new Map();        // row id + count -> times refused
   const ads = createAds();
-  const pictures = createPictures({ source: env.pictureSource, onChange: (source) => { emit('pictures', { source }); save(); } });
+  const pictures = createPictures({ source: env.pictureSource, gentle: () => !!ui.gentle?.(), onChange: (source) => { emit('pictures', { source }); save(); } });
 
   /* ---- scopes ---- */
   function newScope(item) {

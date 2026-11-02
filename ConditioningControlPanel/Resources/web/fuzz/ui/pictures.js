@@ -1,13 +1,21 @@
-/* ui/pictures.js - everything that shows a picture asks here, through ctx.pictures. One source at a time:
+/* ui/pictures.js - everything that shows a picture, a gif or a clip asks here, through ctx.pictures. One source at a time:
  *   online  signed in, the real Scrolller wire and its consent card come later behind this file. Until then: placeholder
  *           art, generated here, no network at all, reachable only with the dev door ?pictures=online.
  *   own     the player's own files. Blob urls on this device only, never uploaded, gone on reload.
  *   none    next() resolves null. A frame stays empty. The default.
- * The player chooses on the pictures card (ui/picture-card.js). The choice is kept in the save, the files are not. */
+ * The player chooses on the pictures card (ui/picture-card.js) or on a screen's test card (ui/screens.js). The choice is
+ * kept in the save, the files are not.
+ *
+ * Kinds: picture, gif, clip. A caller that leaves `kind` out gets something it can use as a css background, so never a
+ * clip, and never a gif under Gentle (nothing can still a gif there). ui/screens.js asks by kind and draws the real element. */
 
 import { CONFIG } from '../data/config.js';
 
 export const PICTURE_SOURCES = Object.freeze(['online', 'own', 'none']);
+export const OWN_KINDS = Object.freeze(['picture', 'gif', 'clip']);
+
+/** What a screen of that kind may show, best first. A clip screen never shows a still; a picture screen never a clip. */
+const CHAINS = Object.freeze({ picture: ['picture', 'gif'], gif: ['gif', 'clip'], clip: ['clip', 'gif'] });
 
 const TINTS = ['#4a3a7a', '#7a3a5a', '#3a6a7a', '#7a5a3a', '#5a7a3a', '#3a3a7a'];
 let n = 0;
@@ -19,16 +27,41 @@ export function placeholder(niche = 'picture') {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-export function createPictures({ source = CONFIG.PICTURES_DEFAULT, onChange = () => {} } = {}) {
-  let current = PICTURE_SOURCES.includes(source) ? source : 'none';
-  let own = [];
-  let i = 0;
+/** Which kind a file is, or null. The type first; a file with no type is judged by its name. */
+export function ownKind(file) {
+  const type = String(file?.type || '').toLowerCase(), name = String(file?.name || '').toLowerCase();
+  if (type === 'image/gif') return 'gif';
+  if (type.startsWith('image/')) return 'picture';
+  if (type.startsWith('video/')) return 'clip';
+  if (type) return null;
+  if (name.endsWith('.gif')) return 'gif';
+  if (/\.(png|jpe?g|webp|avif|bmp)$/.test(name)) return 'picture';
+  if (/\.(mp4|webm|m4v|mov|ogv)$/.test(name)) return 'clip';
+  return null;
+}
 
-  const dropOwn = () => { for (const url of own) URL.revokeObjectURL?.(url); own = []; i = 0; };
+const emptyOwn = () => ({ picture: [], gif: [], clip: [] });
+
+export function createPictures({ source = CONFIG.PICTURES_DEFAULT, onChange = () => {}, gentle = () => false } = {}) {
+  let current = PICTURE_SOURCES.includes(source) ? source : 'none';
+  let own = emptyOwn();
+  let seen = { picture: 0, gif: 0, clip: 0 };
+
+  const revoke = (bag) => { for (const k of OWN_KINDS) for (const url of bag[k]) URL.revokeObjectURL?.(url); };
+  const total = (bag) => OWN_KINDS.reduce((sum, k) => sum + bag[k].length, 0);
+  const sort = (files, bag) => {
+    let kept = 0;
+    for (const f of files || []) {
+      const kind = ownKind(f);
+      if (kind) { bag[kind].push(URL.createObjectURL(f)); kept += 1; }
+    }
+    return kept;
+  };
 
   return {
     get source() { return current; },
-    get ownCount() { return own.length; },
+    get ownCount() { return total(own); },
+    get ownCounts() { return { picture: own.picture.length, gif: own.gif.length, clip: own.clip.length }; },
     /** Answers whether the source changed. Fires onChange so frames on screen can refill. */
     setSource(kind) {
       if (!PICTURE_SOURCES.includes(kind) || kind === current) return false;
@@ -36,31 +69,40 @@ export function createPictures({ source = CONFIG.PICTURES_DEFAULT, onChange = ()
       onChange(kind);
       return true;
     },
-    /** Files from the player's own press. Images only. Answers how many were kept. */
+    /** Files from the player's own press. Pictures, gifs and videos. Answers how many were kept. */
     addOwn(files) {
-      const before = own.length;
-      for (const f of files || []) if (String(f.type).startsWith('image/')) own.push(URL.createObjectURL(f));
-      if (own.length !== before && current === 'own') onChange(current);
-      return own.length - before;
+      const kept = sort(files, own);
+      if (kept && current === 'own') onChange(current);
+      return kept;
     },
     /** A new pick replaces the last one. Nothing usable in it changes nothing. Answers how many were kept. */
     replaceOwn(files) {
-      const next = [];
-      for (const f of files || []) if (String(f.type).startsWith('image/')) next.push(URL.createObjectURL(f));
-      if (!next.length) return 0;
+      const next = emptyOwn();
+      const kept = sort(files, next);
+      if (!kept) return 0;
       const old = own;
       own = next;
-      i = 0;
+      seen = { picture: 0, gif: 0, clip: 0 };
       if (current === 'own') onChange(current);
-      for (const url of old) URL.revokeObjectURL?.(url);
-      return next.length;
+      revoke(old);
+      return kept;
     },
-    clearOwn() { dropOwn(); if (current === 'own') onChange(current); },
-    /** Resolves {url, credit} or null. Show credit when it is set ("via Scrolller"). */
-    async next({ niche } = {}) {
+    clearOwn() {
+      revoke(own);
+      own = emptyOwn();
+      seen = { picture: 0, gif: 0, clip: 0 };
+      if (current === 'own') onChange(current);
+    },
+    /** Resolves {url, credit, kind} or null. Show credit when it is set ("via Scrolller"). */
+    async next({ niche, kind } = {}) {
       if (current === 'none') return null;
-      if (current === 'own') return own.length ? { url: own[i++ % own.length], credit: null } : null;
-      return { url: placeholder(niche), credit: null };
+      if (current === 'online') return { url: placeholder(niche), credit: null, kind: 'picture' };
+      const chain = kind ? CHAINS[kind] || CHAINS.picture : gentle() ? ['picture'] : CHAINS.picture;
+      for (const k of chain) {
+        const list = own[k];
+        if (list.length) return { url: list[seen[k]++ % list.length], credit: null, kind: k };
+      }
+      return null;
     },
   };
 }
