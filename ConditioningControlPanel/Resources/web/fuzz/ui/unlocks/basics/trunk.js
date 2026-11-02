@@ -316,7 +316,8 @@ export default {
     mount(ctx) {
       if (ctx.gentle) return {};
       const start = fresh(ctx) ? 0 : 1;
-      const a = ctx.anim(ctx.world, [{ transform: 'rotate(-2.2deg)' }, { transform: 'rotate(2.2deg)' }], { duration: 7000, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out', delay: start });
+      // 84 steps of about 0.05 degrees: the eye cannot tell, and the whole page only recomposites a dozen times a second.
+      const a = ctx.anim(ctx.world, [{ transform: 'rotate(-2.2deg)', easing: 'ease-in-out' }, { transform: 'rotate(2.2deg)' }], { duration: 7000, iterations: Infinity, direction: 'alternate', easing: 'steps(84, jump-none)', delay: start });
       ctx.every(1000, () => { if (ctx.gentle) a.cancel(); });
       return {};
     },
@@ -326,7 +327,11 @@ export default {
   wallpaper: {
     mount(ctx) {
       const desk = ctx.el('div', 'position:absolute;inset:0;overflow:hidden;background:var(--page);', null, 'back');
-      spiralCanvas(ctx, 'position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;opacity:.24;', desk, { px: 512, turnMs: 30000 });
+      const wall = spiralCanvas(ctx, 'position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;opacity:.24;', desk, { px: 512, turnMs: 30000 });
+      /* One page-wide spiral at a time: a second one under the first costs as much as anything on the page and shows as stripes. */
+      const stepAside = () => { if (ctx.has('e_spiral') || ctx.has('a_spiral') || ctx.pick('f5') === 'trance') wall.el.style.display = 'none'; };
+      stepAside();
+      ctx.on('buy', stepAside);
       const icons = ctx.el('div', 'position:absolute;left:10px;bottom:34px;display:flex;flex-direction:column;gap:12px;', null, desk);
       for (const name of FAKE_DESKTOP.icons) {
         const i = ctx.el('div', 'width:62px;text-align:center;font-size:11px;color:var(--ink);', null, icons);
@@ -349,15 +354,16 @@ export default {
     },
   },
 
-  /* Warp Tunnel: copies of the page keep falling away behind the page, and the page itself breathes inward. Clones refresh
-   * slowly; they are decoration and take no input. Gentle: no warp at all. */
+  /* Warp Tunnel: frames keep falling away behind the page, toward a point behind the shop, and two of them carry a frozen
+   * snapshot of the counter and the button. The snapshot is only those two: a copy of the live meters was half of all the
+   * nodes in a late run and sat right under the real ones. Decoration, no input. Gentle: no warp at all. */
   tunnel: {
     mount(ctx) {
-      const COPIES = 5, LOOP = 6000;
+      const COPIES = 3, SNAPSHOTS = 2, LOOP = 6000;
       const hole = ctx.el('div', 'position:absolute;inset:0;overflow:hidden;', null, 'back');
       const frames = [];
       for (let i = 0; i < COPIES; i++) {
-        const f = ctx.el('div', 'position:absolute;inset:0;border:3px solid var(--stamp);overflow:hidden;will-change:transform,opacity;', null, hole);
+        const f = ctx.el('div', 'position:absolute;inset:0;border:3px solid var(--stamp);overflow:hidden;will-change:transform,opacity;transform-origin:50% 74%;', null, hole);
         frames.push(f);
         if (!ctx.gentle) {
           ctx.anim(f, [{ transform: 'scale(.92)', opacity: 0 }, { transform: 'scale(.66)', opacity: 0.6, offset: 0.2 }, { transform: 'scale(.4)', opacity: 0.7, offset: 0.4 }, { transform: 'scale(.22)', opacity: 0.8, offset: 0.6 }, { transform: 'scale(.1)', opacity: 0.8, offset: 0.8 }, { transform: 'scale(.04)', opacity: 0 }], { duration: LOOP, iterations: Infinity, easing: 'linear', delay: -i * (LOOP / COPIES) });
@@ -366,15 +372,16 @@ export default {
         }
       }
       const refresh = () => {
-        const stage = ctx.parts.stage;
-        const copy = stage.cloneNode(true);
+        const copy = ctx.parts.stage.cloneNode(false);
         copy.removeAttribute('id');
-        copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
-        copy.style.cssText = 'position:absolute;left:50%;top:0;width:760px;max-width:100%;transform:translateX(-50%);pointer-events:none;';
-        for (const f of frames) f.replaceChildren(copy.cloneNode(true));
+        const snap = (el) => { const c = el.cloneNode(true); c.removeAttribute('id'); c.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id')); copy.appendChild(c); };
+        snap(ctx.parts.counter);
+        snap(ctx.button.el);
+        copy.style.cssText = 'position:absolute;left:50%;top:40%;width:360px;max-width:100%;transform:translateX(-50%);opacity:.45;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px;';
+        for (const f of frames.slice(0, SNAPSHOTS)) f.replaceChildren(copy.cloneNode(true));
       };
       refresh();
-      ctx.every(4000, refresh);
+      ctx.every(30000, refresh);
       // Gentle can be switched on mid-run: the copies stop where they are.
       ctx.every(1000, () => { if (ctx.gentle) for (const f of frames) for (const a of f.getAnimations()) a.pause(); });
       if (fresh(ctx) && !ctx.gentle) ctx.anim(ctx.parts.shop, [{ transform: 'scale(1.06)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 800, easing: 'ease-out' });

@@ -170,7 +170,9 @@ export function spiralCanvas(ctx, css, parent, { px = 512, colors = ['#ff4fa8', 
   const g = c.getContext('2d');
   const params = normalizeParams({ arms, turns, style: 'log', duty: 0.5, colors, bg: bg || '#000000' });
   if (!bg) g.fillRect = () => {};   // the Loom paints its background first: skip it for a see-through spiral
-  drawSpiral(g, px, params, 0);
+  const DRAW = 2048;   // the Loom's rings follow the size it is told: a small canvas blown up to the page would show stairs
+  g.scale(px / DRAW, px / DRAW);
+  drawSpiral(g, DRAW, params, 0);
   const turn = ctx.anim(c, [{ rotate: '0deg' }, { rotate: '360deg' }], { duration: turnMs, iterations: Infinity });
   const hold = () => { if (ctx.gentle) turn.pause(); else if (turn.playState === 'paused' && !paused) turn.play(); };
   let paused = false;

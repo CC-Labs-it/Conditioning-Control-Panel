@@ -146,4 +146,4 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
   #btn-zone { height: 76px; }
   #btn { height: 48px; }
 }
-body.gentle * { animation-duration: .25s !important; }
+body.gentle * { animation-duration: .25s !important; animation-iteration-count: 1 !important; }  /* a loop squeezed to .25 s would be a 4 Hz flicker */
