@@ -144,6 +144,7 @@ export function setLine(ctx, text, css = '', ms = 2200) {
   lineNow?.remove();
   const b = btnCentre(ctx);
   const e = ctx.el('div', `position:absolute;left:0;right:0;top:${b.top - (ctx.bounds().w < 760 ? 21 : 25)}px;height:22px;line-height:20px;text-align:center;pointer-events:none;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:600 ${ctx.bounds().w < 760 ? 15 : 17}px/20px Arial,Helvetica,sans-serif;${css}`, text);
+  e.classList.add('fz-line');
   lineNow = e;
   ctx.anim(e, [{ opacity: 0 }, { opacity: 1 }], { duration: 250 });
   if (ms) {
@@ -180,7 +181,7 @@ export function darkCss(ctx) {
 }
 export const onDark = (ctx) => ctx.has('e_spiral') || ctx.has('a_rain') || ctx.has('a_spiral');
 /** A colour that reads on the page as it is now. */
-export const ink = (ctx, onLight, onDarkPage) => (onDark(ctx) ? onDarkPage : onLight);
+export const ink = (ctx, onLight, onDarkPage) => (ctx.palette().themes.length ? 'var(--niche-text)' : onDark(ctx) ? onDarkPage : onLight);
 /** Sets the page colours unless a dark route or a picked theme holds them. */
 export function tone(ctx, vars) { if (!onDark(ctx) && !ctx.pick('f5')) ctx.vars(vars); }
 

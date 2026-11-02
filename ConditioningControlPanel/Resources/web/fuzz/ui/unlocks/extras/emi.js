@@ -61,7 +61,7 @@ export function getEmi(ctx) {
 
   /* Home: bottom-left on a wide screen, tucked left of the counter on a phone. */
   let ctxs = ctx;
-  const home = () => { const b = ctxs.bounds(); return wide ? { x: railWidth(b.w) + 10, y: b.h - size - 16 } : { x: 2, y: Math.max(38, Math.round(ctxs.button.el.getBoundingClientRect().top) - 4) }; };
+  const home = () => { const b = ctxs.bounds(); return wide ? { x: railWidth(b.w) + 126, y: b.h - size - 16 } : { x: 2, y: Math.max(38, Math.round(ctxs.button.el.getBoundingClientRect().top) - 4) }; };
   const pos = { ...home(), s: 1 };
   const place = () => { el.style.transform = `translate(${pos.x}px,${pos.y}px) scale(${pos.s})`; };
   place();

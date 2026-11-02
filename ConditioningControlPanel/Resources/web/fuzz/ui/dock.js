@@ -69,6 +69,8 @@ export function createDock({ doc, rails, strip, onStrip }) {
   function fit() {
     fitQueued = false;
     if (!isRail()) return;
+    /* Stopped means stopped: nothing on the page moves behind the pause card. It fits again after. */
+    if (doc.getElementById('pause')?.hidden === false) { win.setTimeout?.(queueFit, 500); return; }
     fitRail('left');
     fitRail('right');
   }

@@ -393,7 +393,8 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
   let buried = 0;
   ctx.every(2500, () => {
     if (drag || !me.visible || el.ownerDocument.querySelector('#cards .backdrop')) { buried = 0; return; }
-    buried = reachable() ? 0 : buried + 1;
+    const on = el.ownerDocument.elementFromPoint(spot.x + size.w / 2, spot.y + size.h / 2);
+    buried = reachable() || !on?.closest('.dk,#shop') ? 0 : buried + 1;
     if (buried >= 2) { buried = 0; rescue(room(ctx)); }
   });
 

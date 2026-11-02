@@ -123,7 +123,7 @@ export default {
       const show = () => {
         const { x, y } = freeSpot(ctx);
         flash(ctx, 'floaters', words(), `left:${x}px;top:${y}px;font:italic 15px Arial,Helvetica,sans-serif;color:${ink(ctx, '#5a3cdc', '#cdbfff')};`, 1600);
-        ring(ctx, x + 12, y + 8, 34, 'rgba(123,92,255,.5)', 900);
+        ring(ctx, x + 12, y + 8, 34, 'color-mix(in srgb,var(--accent) 50%,transparent)', 900);
       };
       show();
       ctx.every(ctx.gentle ? 1200 : 700, show);

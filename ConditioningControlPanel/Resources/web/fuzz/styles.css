@@ -61,6 +61,7 @@ button { font: inherit; color: inherit; }
 /* ---- stage: counter, meters, the button ---- */
 #stage { pointer-events: none; position: relative; z-index: 10; width: 100%; max-width: 760px; display: flex; flex-direction: column; align-items: center; padding-top: 44px; flex: 0 1 auto; min-height: 0; }
 .ticker { position: absolute; left: 0; right: 96px; top: 12px; height: 22px; overflow: hidden; white-space: nowrap; pointer-events: none; }
+#world:has(.fz-line) #phrase { opacity: 0; }   /* a route's line stands where the phrase does: one at a time */
 #counter, #phrase, #btn-wrap, #l-meters > * { pointer-events: auto; }   /* the stage's empty parts let a press through to a screen under them */
 #counter { flex: none; font-size: 40px; line-height: 1.1; font-variant-numeric: tabular-nums; text-align: center; }
 #l-meters { flex: 0 1 auto; min-height: 20px; max-width: 100%; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--ink-soft); }
@@ -79,7 +80,7 @@ button { font: inherit; color: inherit; }
 #goal { flex: none; width: 118px; }
 #goal:empty { display: none; }
 #rows { flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
-#more { flex: 0 0 100%; font-size: 13px; color: var(--ink-faint); text-align: center; }
+#more { flex: 0 0 100%; font-size: 13px; color: var(--ink-soft); text-align: center; text-shadow: 0 0 3px var(--page), 0 0 6px var(--page); }
 .row { --hue-a: var(--accent); --hue-b: var(--accent-2); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 100%; aspect-ratio: 1; padding: 4px; text-align: center; background: var(--panel); border: 1px solid var(--line); overflow: hidden; touch-action: manipulation; }
 .row > * { position: relative; }
 .row .body { display: none; }
