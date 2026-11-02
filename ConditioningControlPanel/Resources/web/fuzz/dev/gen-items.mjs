@@ -24,8 +24,8 @@ const REQ_OVERRIDE = { onemore: ['f5'], outside: ['overlay'] };
 /* The design sim paid for 30 minutes with nothing on top. The real game has prizes and modifiers on top (capped in
  * sim/economy.js), so the plan pays 70% of the design's numbers and the whole run lands near 30. Measured: dev/measure.mjs. */
 const planPay = (n, lane) => Math.max(1, Math.round(n * (LANE_PAY[lane] ?? 0.7)));
-/* Tap on Command earns from taps, which a real player does every moment: it runs ahead of the Rest route without this. */
-const LANE_PAY = { strict: 0.6 };
+/* Tap on Command and Bimbo earn from taps, which a real player does every moment: they run ahead of the Rest route without this. */
+const LANE_PAY = { strict: 0.6, bimbo: 0.55 };
 
 /* The theme pick comes at about minute 8 and its podcast at about minute 10 (owner, 2026-11-02). The trunk up to the pick
  * gets cheaper, each theme opens with its head and then its podcast, and the rows that sat before the podcast each take the
