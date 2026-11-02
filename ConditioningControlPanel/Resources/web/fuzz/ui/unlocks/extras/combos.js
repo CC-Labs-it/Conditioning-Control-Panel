@@ -41,8 +41,8 @@ export const COMBO_UNLOCKS = {
     const r = ctx.parts.counter?.getBoundingClientRect();
     const narrow = ctx.bounds().w < 760;
     const size = narrow ? 40 : 54;
-    const word = ctx.el('div', `position:absolute;left:50%;top:${Math.round((r?.top ?? 44) + (narrow ? 66 : 76))}px;translate:-50% 0;display:flex;align-items:center;gap:2px;font:800 ${size}px/1 ${FONT};color:var(--ink);opacity:.82;`, null, 'floaters');
-    if (narrow) { word.style.left = 'auto'; word.style.right = '6px'; word.style.translate = 'none'; word.style.top = `${Math.round((r?.bottom ?? 90) + 34)}px`; word.style.fontSize = '26px'; }
+    const word = ctx.el('div', `position:absolute;left:calc(50% - 372px);top:${Math.round((r?.top ?? 44) + 2)}px;display:flex;align-items:center;gap:2px;font:800 ${size}px/1 ${FONT};color:var(--ink);opacity:.82;`, null, 'floaters');
+    if (narrow) { word.style.left = 'auto'; word.style.right = '6px'; word.style.top = `${Math.round(ctx.button.el.getBoundingClientRect().top)}px`; word.style.fontSize = '26px'; }
     const eyeSize = narrow ? 24 : size - 8;
     const pupils = [];
     h('span', '', 'L', word);

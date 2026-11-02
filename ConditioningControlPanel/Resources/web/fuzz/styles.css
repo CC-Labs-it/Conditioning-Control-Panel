@@ -50,6 +50,7 @@ button { font: inherit; color: inherit; }
 #l-back { z-index: 1; }
 #l-wash { z-index: 2; }
 #l-screens { z-index: 5; }   /* under the stage and the shop, so no screen can cover the button or a tile */
+#l-screens.lifted { z-index: 26; }   /* the one in hand shows over the rails until it is put down */
 #l-floaters { z-index: 20; }
 #l-over { z-index: 60; }
 #l-fx { z-index: 65; }
@@ -138,7 +139,10 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 .dk-f { flex: none; width: 8px; height: 8px; margin-right: 2px; border: solid currentColor; border-width: 0 0 1px 1px; transform: rotate(135deg) translate(-2px, 2px); }
 .dk.min .dk-f, .dk.auto .dk-f { transform: rotate(-45deg); }
 .dk-b { min-width: 0; padding: 0 6px 6px; }
-.dk.min .dk-b, .dk.auto .dk-b { display: none; }
+.dk.min .dk-b, .dk.auto .dk-b, .dk.door .dk-b { display: none; }
+.dk.door .dk-t { min-height: 30px; color: var(--ink); font-weight: 700; cursor: pointer; }
+.dk.door .dk-t:hover { background: color-mix(in srgb, var(--niche) 22%, transparent); }
+.dk.door .dk-f { transform: rotate(-135deg) translate(-1px, 1px); }
 #dock-strip { position: relative; z-index: 31; flex: none; display: flex; align-items: center; gap: 4px; width: calc(100vw - 16px); height: var(--dock-h); padding: 3px 0; overflow: auto hidden; scrollbar-width: none; touch-action: pan-x; }
 #dock-strip::-webkit-scrollbar { display: none; }
 .dk-chip { flex: none; display: flex; align-items: center; gap: 4px; height: 100%; padding: 0 8px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font: 13px/1 var(--font); white-space: nowrap; touch-action: manipulation; }
@@ -224,6 +228,7 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 :where(body.niched) .toast { color: var(--toast-ink); font-weight: 600; }
 
 :where(body.mixed) #counter { background: linear-gradient(90deg, color-mix(in srgb, var(--niche) 45%, var(--ink)), color-mix(in srgb, var(--niche-2) 45%, var(--ink))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+body.mixed #counter { text-shadow: none !important; filter: drop-shadow(0 0 3px var(--page)); }
 :where(body.niched) .row { border-color: transparent; background: linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 22%, var(--panel)), color-mix(in srgb, var(--hue-b) 22%, var(--panel))) padding-box, linear-gradient(135deg, var(--hue-a), var(--hue-b)) border-box; }
 :where(body.niched) .row.short { background: linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 9%, var(--panel-short)), color-mix(in srgb, var(--hue-b) 9%, var(--panel-short))) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 45%, var(--panel-short)), color-mix(in srgb, var(--hue-b) 45%, var(--panel-short))) border-box; }
 :where(body.niched) .row:not(.short):hover, :where(body.niched) .row.peek { outline-color: var(--hue-a); }

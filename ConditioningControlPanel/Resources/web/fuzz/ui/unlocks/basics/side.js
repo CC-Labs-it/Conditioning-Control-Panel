@@ -80,7 +80,7 @@ export default {
   screen: {
     mount(ctx) {
       baseCss(ctx);
-      const ROWS = [['taps', '#ff69b4'], ['strays', '#7b5cff'], ['ads', '#16a596'], ['idle', '#f0a43a'], ['other', '#999']];
+      const ROWS = [['taps', 'var(--accent)'], ['strays', 'var(--accent-2)'], ['ads', 'color-mix(in srgb,var(--accent) 55%,var(--ink))'], ['idle', 'var(--accent-soft)'], ['other', 'var(--ink-faint)']];
       const sort = (src) => {
         const out = { taps: 0, strays: 0, ads: 0, idle: 0, other: 0 };
         for (const [k, v] of Object.entries(src)) {
@@ -93,7 +93,7 @@ export default {
         const bars = ROWS.map(([key, col]) => {
           const r = ctx.el('div', 'display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;', null, host);
           ctx.el('span', 'flex:none;width:76px;', SCREEN_TIME.sources[key], r);
-          const track = ctx.el('span', 'flex:1 1 auto;height:12px;background:rgba(0,0,0,.08);', null, r);
+          const track = ctx.el('span', 'flex:1 1 auto;height:12px;background:color-mix(in srgb,var(--ink) 12%,transparent);', null, r);
           const fill = ctx.el('i', `display:block;height:100%;width:0;background:${col};transition:width .9s ease-out;`, null, track);
           return { key, fill };
         });

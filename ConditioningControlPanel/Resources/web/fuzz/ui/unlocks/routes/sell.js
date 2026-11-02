@@ -30,7 +30,7 @@ export function adCard(ctx, parent, rec, css = '') {
 /** The ad panel that sits low on the page, shared by a few rows. Never takes a press outside its own button. */
 function lowPanel(ctx, height) {
   const { w, h } = ctx.bounds(), pw = Math.min(300, w - 24);
-  return ctx.el('div', `position:absolute;left:${(w - pw) / 2}px;top:${h - height - 8}px;width:${pw}px;height:${height}px;background:#111;color:#fff;border:2px solid #000;box-shadow:0 4px 14px rgba(0,0,0,.5);overflow:hidden;font:13px/1.2 ${FONT};`, null, 'over');
+  return ctx.el('div', `position:absolute;z-index:3;left:${(w - pw) / 2}px;top:${h - height - 8}px;width:${pw}px;height:${height}px;background:#111;color:#fff;border:2px solid #000;box-shadow:0 4px 14px rgba(0,0,0,.5);overflow:hidden;font:13px/1.2 ${FONT};`, null, 'over');
 }
 
 /* Ending shows, shared with the Fewer Ads lane. The credits card comes after. */
@@ -120,7 +120,7 @@ export default {
         const rec = nextAd(ctx, 'popup'), { w, h } = ctx.bounds(), pw = Math.min(270, w - 30), ph = 170;
         const clear = (ctx.parts.shop.querySelector('.row')?.getBoundingClientRect().bottom ?? 260) + 6;
         const x = 10 + ctx.rng() * (w - pw - 20), y = clear + ctx.rng() * Math.max(0, h - ph - 140 - clear);
-        const win = ctx.el('div', `position:absolute;left:${x}px;top:${y}px;width:${pw}px;height:${ph}px;background:${rec.ccp ? '#2a0f22' : '#fffbe4'};color:${rec.ccp ? '#fff' : '#111'};border:3px solid #000;border-radius:10px;box-shadow:5px 5px 0 rgba(0,0,0,.45);font:14px/1.25 ${FONT};pointer-events:auto;overflow:hidden;transform:rotate(${(ctx.rng() * 4 - 2).toFixed(1)}deg);`, null, 'over');
+        const win = ctx.el('div', `position:absolute;z-index:3;left:${x}px;top:${y}px;width:${pw}px;height:${ph}px;background:${rec.ccp ? '#2a0f22' : '#fffbe4'};color:${rec.ccp ? '#fff' : '#111'};border:3px solid #000;border-radius:10px;box-shadow:5px 5px 0 rgba(0,0,0,.45);font:14px/1.25 ${FONT};pointer-events:auto;overflow:hidden;transform:rotate(${(ctx.rng() * 4 - 2).toFixed(1)}deg);`, null, 'over');
         open.add(win);
         ctx.el('div', 'height:32px;background:repeating-linear-gradient(135deg,#ff69b4 0 12px,#ffd24d 12px 24px);border-bottom:3px solid #000;', null, win);
         ctx.el('div', `position:absolute;left:6px;top:8px;${CHIP}`, AD, win);

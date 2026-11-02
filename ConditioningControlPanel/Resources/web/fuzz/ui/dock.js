@@ -41,17 +41,30 @@ export function createDock({ doc, rails, strip, onStrip }) {
   let open = null;   // the slot showing as a tray
   let touch = 0, fitQueued = false;
 
-  /** Fold just enough for this rail to fit, oldest touch first. What the player folded stays folded. */
+  /** Where the screens standing at the bottom of this rail begin. A screen dropped up the rail does not count. */
+  function screensFloor(side) {
+    const rail = rails[side].getBoundingClientRect(), H = win.innerHeight;
+    const low = [...doc.querySelectorAll('.scr')].filter((e) => e.style.display !== 'none').map((e) => e.getBoundingClientRect())
+      .filter((r) => Math.min(r.right, rail.right) - Math.max(r.left, rail.left) > r.width / 2 && r.top + r.height / 2 > H * 0.45);
+    return low.length ? Math.min(...low.map((r) => r.top)) : 0;
+  }
+
+  /** Fold just enough for this rail to fit, oldest touch first. What the player folded stays folded. It stops above any
+   *  screens at its foot; if its titles alone need more than that, it takes what it needs and the screens stand behind. */
   function fitRail(side) {
     const rail = rails[side];
-    const mine = [...slots].filter((s) => s.side === side && !s.keep && !s.pin);
+    const mine = [...slots].filter((s) => s.side === side && !s.keep && !s.pin && !s.root.classList.contains('door'));
     for (const s of mine) s.root.classList.remove('auto');
+    rail.style.maxHeight = '';
+    const floor = screensFloor(side);
+    if (floor) rail.style.maxHeight = `${Math.round(floor)}px`;
     if (rail.scrollHeight <= rail.clientHeight) return;
     for (const s of mine.sort((a, b) => a.touch - b.touch)) {
       if (s.root.classList.contains('min')) continue;
       s.root.classList.add('auto');
       if (rail.scrollHeight <= rail.clientHeight) return;
     }
+    if (floor) rail.style.maxHeight = `${rail.scrollHeight}px`;
   }
   function fit() {
     fitQueued = false;
@@ -66,6 +79,7 @@ export function createDock({ doc, rails, strip, onStrip }) {
     win.requestAnimationFrame?.(fit);
   }
   win.addEventListener?.('resize', queueFit);
+  doc.addEventListener?.('fz-screens', queueFit);
 
   function setOpen(slot) {
     if (open === slot) return;
@@ -92,11 +106,11 @@ export function createDock({ doc, rails, strip, onStrip }) {
 
   narrow?.addEventListener?.('change', () => { if (isRail()) setOpen(null); });
 
-  function add({ edge, title = '', icon = '', order = 100000, chip = true, onChip = null, min = false, onMin = null, pin = false, keep = false }) {
+  function add({ edge, title = '', icon = '', order = 100000, chip = true, onChip = null, door = null, min = false, onMin = null, pin = false, keep = false }) {
     const side = edge === 'left' || edge === 'right' ? edge : emptierEdge(count.left, count.right);
     count[side] += 1;
     const root = doc.createElement('section');
-    root.className = `dk${pin ? ' pin' : ''}${min ? ' min' : ''}`;
+    root.className = `dk${pin ? ' pin' : ''}${door ? ' door' : min ? ' min' : ''}`;
     root.style.order = String(order);
     const head = doc.createElement('button');
     head.type = 'button';
@@ -119,6 +133,7 @@ export function createDock({ doc, rails, strip, onStrip }) {
     const slot = { root, body, side, chip: null, pin, keep, touch: ++touch };
     slots.add(slot);
     head.addEventListener('click', () => {
+      if (door) { door(); return; }
       if (!isRail()) { setOpen(null); return; }
       slot.touch = ++touch;
       if (root.classList.contains('auto')) root.classList.remove('min');
@@ -144,7 +159,8 @@ export function createDock({ doc, rails, strip, onStrip }) {
       n.textContent = title;
       c.append(i, n);
       c.addEventListener('click', () => {
-        if (onChip) { setOpen(null); onChip(); return; }
+        const press = door || onChip;
+        if (press) { setOpen(null); press(); return; }
         setOpen(open === slot ? null : slot);
       });
       strip.appendChild(c);

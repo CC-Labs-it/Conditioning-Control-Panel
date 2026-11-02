@@ -66,6 +66,7 @@ export function makeContext(engine, scope) {
         order: opts.order ?? slotOrder(bought, scope.docks - 1),
         chip: opts.chip !== false,
         onChip: opts.onChip || null,
+        door: opts.door || null,
         pin: !!opts.pin,
         keep: !!opts.keep,
         min: !!saved.min,

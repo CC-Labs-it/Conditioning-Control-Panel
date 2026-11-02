@@ -138,7 +138,7 @@ export default {
         ctx.store.set('n', n);
         ctx.voice(q.clip, { gain: 1 });
         const { w } = ctx.bounds();
-        const panel = ctx.el('div', `position:absolute;left:50%;bottom:12px;width:min(380px,${w - 24}px);transform:translateX(-50%);padding:8px;background:var(--panel);color:var(--ink);border:2px solid var(--stamp);border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,.3);pointer-events:auto;font-family:var(--font);`, null, 'over');
+        const panel = ctx.el('div', `position:absolute;z-index:3;left:50%;bottom:12px;width:min(380px,${w - 24}px);transform:translateX(-50%);padding:8px;background:var(--panel);color:var(--ink);border:2px solid var(--stamp);border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,.3);pointer-events:auto;font-family:var(--font);`, null, 'over');
         const head = ctx.el('div', 'display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:6px;', null, panel);
         const face = ctx.el('div', 'position:relative;flex:none;width:34px;height:34px;border-radius:50%;background:#ff69b4;border:2px solid #d4488f;', null, head);
         for (const x of [8, 18]) ctx.el('i', `position:absolute;left:${x}px;top:10px;width:4px;height:7px;background:#222;border-radius:50%;`, null, face);

@@ -6,10 +6,16 @@ import { ROUTE_COPY } from './copy.js';
 
 const COLOURS = ['#ff69b4', '#7bd0ff', '#ffd24d', '#9dff9d', '#d9a6ff'];
 
+/** The DVD logo's colour change, in the run's colours once a theme is picked. */
+const wordColour = (ctx, c) => {
+  const p = ctx.palette();
+  return p.themes.length ? [p.a, p.b, `color-mix(in srgb,${p.a} 55%,#fff)`, `color-mix(in srgb,${p.b} 55%,#fff)`, p.a][c] : COLOURS[c];
+};
+
 /** A word on the old DVD path: a triangle wave on each axis, so true corners really happen, about every 24 s. */
 function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 } = {}) {
   const px = Math.round(Math.max(20, Math.min(46, ctx.bounds().w * 0.05)) * size);
-  const el = ctx.el('div', `position:absolute;left:0;top:0;font-weight:700;font-size:${px}px;line-height:1;white-space:nowrap;color:${COLOURS[0]};will-change:transform;font-family:Arial,Helvetica,sans-serif;text-shadow:0 0 5px #000,0 1px 2px #000;`, startText);
+  const el = ctx.el('div', `position:absolute;left:0;top:0;font-weight:700;font-size:${px}px;line-height:1;white-space:nowrap;color:${wordColour(ctx, 0)};will-change:transform;font-family:Arial,Helvetica,sans-serif;text-shadow:0 0 5px #000,0 1px 2px #000;`, startText);
   const nextWord = deck(BOUNCE_WORDS, ctx);
   let w = 0, h = 0, seen = null;
   const measure = () => { w = el.offsetWidth; h = el.offsetHeight; seen = ctx.bounds(); };
@@ -31,7 +37,7 @@ function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 }
       if (!hx && !hy) return;
       const corner = hx && hy;
       c = (c + 1) % COLOURS.length;
-      el.style.color = COLOURS[c];
+      el.style.color = wordColour(ctx, c);
       const gain = ctx.wallHit({ x: x + w / 2, y: y + h / 2, corner });
       if (corner) {
         const r = ctx.rates(), big = Math.max(r.wall * 25, r.fps * 2);
@@ -42,7 +48,7 @@ function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 }
         el.textContent = nextWord();
         measure();
       } else if (gain) {
-        ctx.float(x + w / 2, y > b.h / 2 ? y - 14 : y + h + 8, `+${ctx.fmt(gain)}`, `color:${COLOURS[c]};font-weight:700;`);
+        ctx.float(x + w / 2, y > b.h / 2 ? y - 14 : y + h + 8, `+${ctx.fmt(gain)}`, `color:${wordColour(ctx, c)};font-weight:700;`);
       }
     },
   };

@@ -107,7 +107,7 @@ function room(ctx) {
   const btn = ctx.button.el.getBoundingClientRect();
   /* The shop can still be hidden at the first mount of a load: it will start about here. */
   const free = shop && shop.width ? shop.top : btn.bottom + 12;
-  return { W, H, shop, railW: (W - 800) / 2, flank: clamp((W - btn.width) / 2 - PAD, 60, 240), maxH: free - TOP - 6 };
+  return { W, H, shop, railW: (W - 800) / 2, flank: clamp((W - btn.width) / 2 - PAD, 60, 240), maxH: free - TOP - 6, flankTop: Math.max(TOP, Math.round(btn.top) - 8) };
 }
 
 /** The file picker has to open inside the press itself. Own files stay on this device. */
@@ -291,7 +291,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
   const me = {
     el, body, inner, size, grip,
     get visible() { return el.style.display !== 'none'; },
-    show(on = true) { if (!on) drop(); el.style.display = on ? '' : 'none'; },
+    show(on = true) { if (!on) drop(); el.style.display = on ? '' : 'none'; el.ownerDocument.dispatchEvent(new Event('fz-screens')); },
   };
 
   /* First spot: what the save says, or a free place that then goes in the save. */
@@ -300,7 +300,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
     resize(r);
     const saved = ctx.store.get(key);
     const placed = liveScreens().map((s) => s.frame());
-    spot = saved && Number.isFinite(saved.fx) && Number.isFinite(saved.fy) ? fromShare(saved, size, r) : defaultSpot(r, size, placed);
+    spot = saved && Number.isFinite(saved.fx) && Number.isFinite(saved.fy) ? fromShare(saved, size, r) : defaultSpot({ ...r, top: r.railW >= 170 ? TOP : r.flankTop }, size, placed);
     settle(r);
     if (!saved) remember(r);
   }
@@ -312,7 +312,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
    * stop the event themselves) stay theirs. */
   let drag = null;
   const from = handle ? grip : el;
-  const lift = (on) => el.classList.toggle('held', on);
+  const lift = (on) => { el.classList.toggle('held', on); el.parentElement?.classList.toggle('lifted', on); };
   /* Can it still be grabbed where it landed? Under the counter, the button or a dock panel may leave nothing to press. */
   const reachable = () => {
     const doc = el.ownerDocument;
@@ -326,6 +326,26 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
     }
     return false;
   };
+  const tellDock = () => el.ownerDocument.dispatchEvent(new Event('fz-screens'));
+  /* The dock grew over it, or the shop did. It walks to the nearest place with something showing, and stays there. */
+  const rescue = (r) => {
+    const doc = el.ownerDocument;
+    const clearAt = (p) => {
+      const hit = doc.elementFromPoint(p.x + size.w / 2, p.y + (handle ? 12 : size.h / 2));
+      return !hit || hit.closest('.scr') === el || !hit.closest('.dk,#shop,#btn,#dock-strip,.xq,.scr');
+    };
+    const spots = [];
+    for (let y = Math.max(0, r.H - size.h - PAD); y >= TOP; y -= Math.max(40, size.h / 2)) {
+      for (let x = PAD; x <= r.W - size.w - PAD; x += Math.max(40, size.w / 2)) spots.push({ x, y });
+    }
+    spots.sort((a, b) => Math.hypot(a.x - spot.x, a.y - spot.y) - Math.hypot(b.x - spot.x, b.y - spot.y));
+    const to = spots.find(clearAt);
+    if (!to) return;
+    spot = to;
+    settle(r);
+    remember(r);
+    tellDock();
+  };
   const drop = (keep = true) => {
     if (!drag) return;
     const d = drag;
@@ -338,6 +358,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
       settle(r);
       if (!reachable()) { spot = d.start; settle(r); }   // nothing to grab it by there: it goes back
       remember(r);
+      tellDock();
     }
     if (!ctx.gentle) ctx.anim(inner, [{ transform: 'scale(1.03)' }, { transform: 'scale(.985)' }, { transform: 'none' }], { duration: 180, easing: 'ease-out' });
   };
@@ -366,6 +387,15 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
   from.addEventListener('dragstart', (e) => e.preventDefault());
   ctx.on('pause', () => drop());
   ctx.on('suspend', ({ on }) => { if (on) drop(); });
+
+  tellDock();
+  /* Buried twice running, with no card up to explain it: move. */
+  let buried = 0;
+  ctx.every(2500, () => {
+    if (drag || !me.visible || el.ownerDocument.querySelector('#cards .backdrop')) { buried = 0; return; }
+    buried = reachable() ? 0 : buried + 1;
+    if (buried >= 2) { buried = 0; rescue(room(ctx)); }
+  });
 
   /* A resize keeps the spot's share of the free room. */
   let seen = ctx.bounds();

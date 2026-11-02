@@ -5,12 +5,6 @@ import { BY_ID } from '../../../data/items.js';
 import { iconFor } from '../../icons.js';
 import { docOf, fresh, squish } from '../basics/fx.js';
 
-const DOOR_CSS = `
-.fz-door { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; padding: 4px 8px; background: var(--btn); color: var(--btn-ink, var(--ink)); border: 1px solid var(--niche); font-size: 14px; touch-action: manipulation; }
-.fz-door .i { flex: none; font-size: 20px; line-height: 1; }
-@media (max-width: 1040px) { .fz-door .t { display: none; } .fz-door { padding: 4px 2px; } }
-`;
-
 const PANEL_CSS = `
 .fz-sheet-back { position: fixed; inset: 0; pointer-events: auto; background: rgba(0, 0, 0, .18); animation: fadein .15s ease-out; }
 .fz-panel { position: absolute; right: 8px; top: 52px; bottom: 8px; width: min(380px, calc(100vw - 16px)); display: flex; flex-direction: column; min-height: 0; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 4px solid var(--niche); box-shadow: 2px 2px 0 rgba(0, 0, 0, .35); font-family: var(--font); }
@@ -44,15 +38,8 @@ const COPY = {
 
 /** A door in the dock: an icon and a name, and the name goes when the edge is narrow. */
 function door(ctx, label, emoji, onPress) {
-  ctx.css(DOOR_CSS);
-  const host = ctx.dock({ edge: 'left' });
-  const b = ctx.el('button', '', null, host);
-  b.type = 'button';
-  b.className = 'fz-door';
-  b.setAttribute('aria-label', label);
-  ctx.el('span', '', emoji, b).className = 'i';
-  ctx.el('span', '', label, b).className = 't';
-  b.addEventListener('click', onPress);
+  const host = ctx.dock({ edge: 'left', title: label, icon: emoji, door: onPress });
+  const b = host.previousElementSibling;
   if (fresh(ctx)) squish(ctx, b, 1.2);
   return b;
 }

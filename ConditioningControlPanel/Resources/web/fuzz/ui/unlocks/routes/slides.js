@@ -20,7 +20,7 @@ function wallSlot(ctx, parent) {
       const mine = ++ask;
       const pic = await ctx.pictures.next({ niche });
       if (mine !== ask || !box.isConnected) return;
-      const e = ctx.el('div', `position:absolute;inset:0;background:${pic ? `center/cover no-repeat url("${pic.url}")` : 'repeating-linear-gradient(45deg,var(--niche-soft) 0 6px,var(--niche) 6px 8px,var(--niche-soft) 8px 12px)'};`, null, box);
+      const e = ctx.el('div', `position:absolute;inset:0;background:${pic ? `center/cover no-repeat url("${pic.url}")` : 'repeating-linear-gradient(45deg,color-mix(in srgb,var(--niche) 14%,var(--page)) 0 6px,color-mix(in srgb,var(--niche) 24%,var(--page)) 6px 8px,color-mix(in srgb,var(--niche) 14%,var(--page)) 8px 12px)'};`, null, box);
       box.insertBefore(e, creditEl);
       creditEl.textContent = pic?.credit || '';
       ctx.anim(e, [{ opacity: 0 }, { opacity: 1 }], { duration: 450 });
@@ -77,7 +77,7 @@ export default {
       ctx.every(1600, () => { if (cells.length) cells[Math.floor(ctx.rng() * cells.length)].next(niche(ctx.rng() < 0.5 ? NICHES.base : NICHES.second)); });
       ctx.on('pictures', () => { for (const c of cells) c.next(niche(NICHES.base)); });
       /* A plate in the page's own colour, so the page's ink always reads on it, whatever the theme did to both. */
-      ctx.css('#counter{background:color-mix(in srgb,var(--page) 88%,transparent);padding:0 14px;border-radius:6px}#l-meters{background:color-mix(in srgb,var(--page) 80%,transparent);padding:0 8px;border-radius:4px}#more{background:color-mix(in srgb,var(--page) 80%,transparent);width:max-content;margin-left:auto;margin-right:auto;padding:0 8px;border-radius:4px}');
+      ctx.css('#counter{background:color-mix(in srgb,var(--page) 88%,transparent);-webkit-background-clip:border-box;background-clip:border-box;color:var(--ink);padding:0 14px;border-radius:6px}#l-meters{background:color-mix(in srgb,var(--page) 80%,transparent);padding:0 8px;border-radius:4px}#more{background:color-mix(in srgb,var(--page) 80%,transparent);width:max-content;margin-left:auto;margin-right:auto;padding:0 8px;border-radius:4px}');
       return {};
     },
   },
