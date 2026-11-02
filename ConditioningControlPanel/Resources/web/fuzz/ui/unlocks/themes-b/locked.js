@@ -342,7 +342,9 @@ export default {
       const chip = ctx.el('button', 'position:absolute;left:calc(100% + 12px);top:50%;width:68px;height:46px;margin-top:-23px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:23px;font:700 14px var(--font);touch-action:manipulation;pointer-events:auto;', COPY.locked.wheel, wrap);
       chip.type = 'button';
       const node = wheelNode(ctx);
+      // The card keeps its plain grey on every theme, so the wheel's words go dark inside it.
       node.style.color = '#000';
+      node.querySelector('button').style.color = '#000';
       chip.addEventListener('click', () => ctx.modal({ title: ctx.item.name, node, buttons: [{ label: 'Close' }] }));
       return {};
     },
