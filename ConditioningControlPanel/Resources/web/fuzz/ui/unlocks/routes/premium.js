@@ -56,6 +56,7 @@ export default {
       const txt = ctx.el('div', 'flex:1 1 auto;min-width:0;overflow:hidden;', '', box);
       const btn = ctx.el('button', `flex:none;min-height:40px;padding:2px 14px;background:${GOLD};color:#fff;border:0;border-radius:6px;font:700 14px Georgia,serif;touch-action:manipulation;`, SKIP_LINES.label, box);
       btn.type = 'button';
+      box.classList.add('routes-ad');
       const turn = () => { const rec = nextAd(ctx, 'banner'); txt.textContent = ctx.brand.text(rec.headline); };
       turn();
       if (!ctx.gentle) ctx.anim(btn, [{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }], { duration: 900, iterations: Infinity, direction: 'alternate' });
@@ -198,7 +199,7 @@ export default {
         btn.disabled = true;
         btn.style.opacity = '.5';
         adFlags.hidden = true;
-        sheet = ctx.css('#l-banner{visibility:hidden}');
+        sheet = ctx.css('#l-banner,.routes-ad{visibility:hidden}');
         ctx.toast(NEW_TERMS.gone);
         const c = btnCentre(ctx);
         ring(ctx, c.x, c.y, 260, GOLD, 700);

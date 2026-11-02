@@ -313,13 +313,14 @@ export default {
       ctx.mod({ fps: (v, s) => (s.clock < boost ? v * 2 : v), click: (v, s) => (s.clock < boost ? v * 2 : v) });
       const tag = ctx.el('div', `font:12px Arial,Helvetica,sans-serif;color:${red(ctx)};`, '', meterRow(ctx));
       const review = () => {
-        const taps = ctx.state.taps - seen, per = taps / Math.max(1, (ctx.state.clock - (ctx.store.get('at') || 0)) / 60000);
+        const taps = ctx.state.taps - seen; const per = taps / Math.max(1, (ctx.state.clock - (ctx.store.get('at') || 0)) / 60000);
         seen = ctx.state.taps;
         ctx.store.set('at', ctx.state.clock);
         const grade = per >= 90 ? 'A' : per >= 50 ? 'B' : per >= 25 ? 'C' : per >= 8 ? 'D' : 'F';
         const lines = REVIEWS[grade], line = lines[Math.floor(ctx.rng() * lines.length)];
+        if (!claim(ctx, 'review', 4300, 'low')) { ctx.after(3000, review); return; }
         const { w, h } = ctx.bounds(), pw = Math.min(280, w - 60);
-        const p = ctx.el('div', `position:absolute;left:${(w - pw) / 2}px;top:${h * 0.2}px;width:${pw}px;padding:14px;background:#fbf7ea;color:#222;border:1px solid #999;box-shadow:0 3px 10px rgba(0,0,0,.35);font:15px/1.3 "Times New Roman",Times,serif;`, null, 'over');
+        const p = ctx.el('div', `position:absolute;left:${(w - pw) / 2}px;top:${h - 176}px;height:168px;width:${pw}px;overflow:hidden;box-sizing:border-box;padding:14px;background:#fbf7ea;color:#222;border:1px solid #999;box-shadow:0 3px 10px rgba(0,0,0,.35);font:15px/1.3 "Times New Roman",Times,serif;`, null, 'over');
         ctx.el('div', 'font-weight:700;font-size:17px;margin-bottom:6px;', REVIEWS.title, p);
         for (let i = 0; i < 3; i++) ctx.el('div', 'height:3px;width:70%;background:#ccc;margin:6px 0;', null, p);
         ctx.el('div', 'margin-top:8px;padding-right:60px;', line, p);
@@ -336,7 +337,7 @@ export default {
             burst(ctx, b.x, b.y, RED, 20, 140);
           }
         });
-        ctx.after(4200, () => p.remove());
+        ctx.after(4200, () => { p.remove(); release('review', 'low'); });
       };
       ctx.after(1000, () => { if (!ctx.store.get('at')) ctx.store.set('at', Math.max(0, ctx.state.clock - 60000)); ctx.toast('A file has been opened on you.'); });
       ctx.after(20000, review);
