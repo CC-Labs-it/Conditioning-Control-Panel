@@ -6,8 +6,8 @@
  * The player chooses on the pictures card (ui/picture-card.js) or on a screen's test card (ui/screens.js). The choice is
  * kept in the save, the files are not.
  *
- * Kinds: picture, gif, clip. A caller that leaves `kind` out gets something it can use as a css background, so never a
- * clip, and never a gif under Gentle (nothing can still a gif there). ui/screens.js asks by kind and draws the real element. */
+ * Kinds: picture, gif, clip. A caller that leaves `kind` out gets something it can use as a css background or a plain img, so a
+ * still only: nothing can stop a gif there, for Gentle or for Wake Up. ui/screens.js asks by kind and draws the real element. */
 
 import { CONFIG } from '../data/config.js';
 
@@ -42,7 +42,7 @@ export function ownKind(file) {
 
 const emptyOwn = () => ({ picture: [], gif: [], clip: [] });
 
-export function createPictures({ source = CONFIG.PICTURES_DEFAULT, onChange = () => {}, gentle = () => false } = {}) {
+export function createPictures({ source = CONFIG.PICTURES_DEFAULT, onChange = () => {} } = {}) {
   let current = PICTURE_SOURCES.includes(source) ? source : 'none';
   let own = emptyOwn();
   let seen = { picture: 0, gif: 0, clip: 0 };
@@ -97,7 +97,7 @@ export function createPictures({ source = CONFIG.PICTURES_DEFAULT, onChange = ()
     async next({ niche, kind } = {}) {
       if (current === 'none') return null;
       if (current === 'online') return { url: placeholder(niche), credit: null, kind: 'picture' };
-      const chain = kind ? CHAINS[kind] || CHAINS.picture : gentle() ? ['picture'] : CHAINS.picture;
+      const chain = kind ? CHAINS[kind] || CHAINS.picture : ['picture'];
       for (const k of chain) {
         const list = own[k];
         if (list.length) return { url: list[seen[k]++ % list.length], credit: null, kind: k };

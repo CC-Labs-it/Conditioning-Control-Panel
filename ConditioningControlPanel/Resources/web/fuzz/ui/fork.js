@@ -27,7 +27,7 @@ export function openFork(doc, cards, forkId, onPick) {
   const list = doc.createElement('div');
   const entries = Object.entries(fork.opts);
   list.className = 'opts';
-  let io = null;
+  let io = null, held = false;
 
   const hosts = entries.map(([lane, opt]) => {
     const b = doc.createElement('button');
@@ -54,11 +54,26 @@ export function openFork(doc, cards, forkId, onPick) {
     className: entries.length > 3 ? 'wide fork' : 'fork',
     front: true,
     buttons: [{ label: 'Not yet' }],
-    onOpen() {
+    onOpen: start,
+    onClose() {
+      io?.disconnect();
+      for (const h of hosts) if (h.stop) h.stop();
+      stops.length = 0;
+    },
+  });
+  /* Wake Up: previews stop with everything else and start again on the way back, unless Gentle came on meanwhile. */
+  handle.hold = (on) => {
+    held = on;
+    if (!on) { start(); return; }
+    io?.disconnect();
+    io = null;
+    for (const h of hosts) if (h.stop) { h.stop(); h.stop = null; }
+  };
+  function start() {
       /* Previews are not checked against the 3 Hz rule, so Gentle goes without them. */
       if (doc.body.classList.contains('gentle')) { for (const h of hosts) h.demo.hidden = true; return; }
       loadDemos().then((Demo) => {
-        if (handle.closed) return;
+        if (handle.closed || held) return;
         const startOne = (h) => {
           if (h.stop) return;
           const id = demoIdFor(Demo, h.lane);
@@ -76,13 +91,7 @@ export function openFork(doc, cards, forkId, onPick) {
           hosts.forEach((h) => io.observe(h.demo));
         } else hosts.forEach(startOne);
       }).catch((e) => console.error('demos failed', e));
-    },
-    onClose() {
-      io?.disconnect();
-      for (const h of hosts) if (h.stop) h.stop();
-      stops.length = 0;
-    },
-  });
+  }
   return handle;
 }
 

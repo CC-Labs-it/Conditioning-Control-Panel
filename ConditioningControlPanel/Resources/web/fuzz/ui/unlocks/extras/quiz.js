@@ -60,7 +60,8 @@ function createQuiz(ctx) {
   idle.className = 'xq-idle';
   let open = null, lastId = null, dueAt = 0;
 
-  const ownedTricks = () => Object.keys(TRICKS).filter((t) => ctx.has(TRICKS[t].unlock));
+  const liveRow = (id) => ctx.has(id) && ctx.switches.isOn(id);
+  const ownedTricks = () => Object.keys(TRICKS).filter((t) => liveRow(TRICKS[t].unlock));
 
   /** Mostly the newest few tricks, sometimes any: what you just bought should show up, the old ones still surprise. */
   function chooseTrick() {
@@ -116,7 +117,8 @@ function createQuiz(ctx) {
     for (const c of o.cancels) c();
     for (const a of o.anims) { try { a.cancel(); } catch { /* gone */ } }
     o.card.style.pointerEvents = 'none';
-    const a = ctx.anim(o.card, paid ? [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.06)', opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }], { duration: paid ? 170 : 320, easing: 'ease-out' });
+    const pop = paid && !ctx.gentle;
+    const a = ctx.anim(o.card, pop ? [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.06)', opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }], { duration: pop ? 170 : 320, easing: 'ease-out' });
     a.onfinish = () => o.card.remove();
     a.oncancel = () => o.card.remove();
   }
@@ -144,7 +146,7 @@ function createQuiz(ctx) {
 
     /* What a trick gets. Everything it starts goes in o, so it stops when the card goes. */
     /* Only Yes: every wrong answer turns into another way of saying yes. All four pay. */
-    const onlyYes = ctx.has('onlyyes') && trick !== 'mono';
+    const onlyYes = liveRow('onlyyes') && trick !== 'mono';
     const yeses = new Map();
     const label = (ans) => {
       if (!onlyYes || ans.tone === 'yes') return ans.label;

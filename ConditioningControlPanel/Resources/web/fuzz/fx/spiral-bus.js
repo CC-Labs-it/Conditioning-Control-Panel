@@ -186,6 +186,7 @@ export function createBus() {
     const seeThrough = opts.ground === 'clear';
     const lightGround = isHex(opts.ground) && parseInt(opts.ground.slice(1, 3), 16) > 127;
     const lad = LADDER.filter((s) => s <= opts.liveMax);
+    if (!lad.length) lad.push(LADDER[LADDER.length - 1]);   // a window with no size yet: never an empty ladder
     let rung = 0, overBudget = 0, rateMul = 1;
     let live = false, spent = 0, phase = 0, dirty = true, warmIn = WARM_AFTER_S;
     const me = {

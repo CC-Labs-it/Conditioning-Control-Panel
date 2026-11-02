@@ -28,7 +28,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   const guards = new Set();
   const refusals = new Map();        // row id + count -> times refused
   const ads = createAds();
-  const pictures = createPictures({ source: env.pictureSource, gentle: () => !!ui.gentle?.(), onChange: (source) => { emit('pictures', { source }); save(); } });
+  const pictures = createPictures({ source: env.pictureSource, onChange: (source) => { emit('pictures', { source }); save(); } });
 
   /* ---- scopes ---- */
   function newScope(item) {
@@ -79,9 +79,10 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     dropScope(scope);
   }
 
-  const mountAll = () => {
-    if (run.mood) mount(run.mood);
-    for (const id of [...run.order]) if (liveOn(run.off, id)) mount(id);
+  /** restored: this run came from a save, so nothing here just arrived. */
+  const mountAll = (restored = false) => {
+    if (run.mood) mount(run.mood, restored);
+    for (const id of [...run.order]) if (liveOn(run.off, id)) mount(id, restored);
   };
   const unmountAll = () => { for (const id of [...scopes.keys()]) unmount(id); };
 

@@ -73,7 +73,7 @@ export default {
         cells.push(slot);
         n += 1;
       };
-      const stop = ctx.every(190, () => { add(); if (n >= cols * rows) stop(); });
+      const stop = ctx.every(ctx.gentle ? 400 : 190, () => { add(); if (n >= cols * rows) stop(); });
       ctx.every(1600, () => { if (cells.length) cells[Math.floor(ctx.rng() * cells.length)].next(niche(ctx.rng() < 0.5 ? NICHES.base : NICHES.second)); });
       ctx.on('pictures', () => { for (const c of cells) c.next(niche(NICHES.base)); });
       /* A plate in the page's own colour, so the page's ink always reads on it, whatever the theme did to both. */
@@ -98,6 +98,8 @@ export default {
         h.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (h.dataset.cool) return;
+          h.dataset.cool = '1';
           h.style.color = '#ff3b7a';
           shared.favs += 1;
           ctx.store.set('n', shared.favs);
@@ -106,7 +108,7 @@ export default {
           ring(ctx, x, y, 90, '#ff3b7a', 500, 'over');
           ctx.pay(ctx.rates().fps * 2, 'fav', { x, y });
           ctx.toast(line());
-          ctx.after(1500, () => { h.style.color = '#fff'; });
+          ctx.after(1500, () => { h.style.color = '#fff'; delete h.dataset.cool; });
         });
         hearts.push(h);
       };
@@ -156,7 +158,7 @@ export default {
         if (!ctx.gentle) ctx.anim(s.inner, [{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
         ctx.after(14000, () => { if (on) finish(true); });
       };
-      ctx.after(700, play);
+      if (!ctx.restored) ctx.after(700, play);
       ctx.every(90000, play);
       ctx.on('pause', () => finish(false));
       ctx.on('suspend', ({ on: stop }) => { if (stop) finish(false); });

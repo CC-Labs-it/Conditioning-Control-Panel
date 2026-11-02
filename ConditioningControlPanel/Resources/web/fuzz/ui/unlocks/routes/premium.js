@@ -128,7 +128,7 @@ export default {
         });
         h = ctx.modal({ title: FAKE_RENEWAL.title, node, buttons: [{ label: FAKE_RENEWAL.close }] });
       };
-      ctx.after(1500, show);
+      if (!ctx.restored) ctx.after(1500, show);
       ctx.every(120000, show);
       return {};
     },
@@ -177,7 +177,7 @@ export default {
         go(SUPPORT_MENU.start);
         ctx.modal({ title: SUPPORT_MENU.title, node, buttons: [{ label: SUPPORT_MENU.hangUp }] });
       };
-      ctx.after(1500, show);
+      if (!ctx.restored) ctx.after(1500, show);
       ctx.every(200000, show);
       return {};
     },

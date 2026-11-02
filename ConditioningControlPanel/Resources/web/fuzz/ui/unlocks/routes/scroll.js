@@ -46,7 +46,7 @@ function makeFeed(ctx) {
       t.el.insertBefore(t.media, t.credit);
       t.media.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
       if (t.media.tagName === 'IMG') t.media.draggable = false;
-      else t.media.addEventListener('loadeddata', () => syncClips(), { once: true });
+      t.media.addEventListener(t.media.tagName === 'IMG' ? 'load' : 'loadeddata', () => syncClips(), { once: true });   // a gif can only be stilled once it has loaded
     } else {
       t.card = testCard(ctx, t.el, wanted);
     }
@@ -80,9 +80,14 @@ function makeFeed(ctx) {
   f.place = place;
   f.current = () => f.tiles.find((t) => t.n === f.index) || f.tiles[0];
 
+  ctx.cleanup(() => { for (const t of f.tiles) { dropMedia(t.media); t.media = null; } });
   addTile(); addTile();
   ctx.after(30, place);
-  ctx.every(900, () => { if (root.clientHeight !== f.h) { place(); f.sizeMode?.(); } });
+  let wasGentle = ctx.gentle;
+  ctx.every(900, () => {
+    if (root.clientHeight !== f.h) { place(); f.sizeMode?.(); }
+    if (ctx.gentle !== wasGentle) { wasGentle = ctx.gentle; syncClips(); }
+  });
 
   function swipe(at) {
     const was = f.current();

@@ -105,12 +105,9 @@ test('each kind asks for its own, a clip screen never gets a still, and a plain 
   assert.deepEqual(stills.ownCounts, { picture: 1, gif: 0, clip: 0 });
 });
 
-test('a plain caller gets a gif only away from Gentle: nothing can still a gif in a css background', async () => {
-  let gentle = false;
-  const p = createPictures({ source: 'own', gentle: () => gentle });
+test('a plain caller never gets a gif: nothing can stop one in a css background or a plain img, for Gentle or for Wake Up', async () => {
+  const p = createPictures({ source: 'own' });
   p.addOwn([new Blob(['g'], { type: 'image/gif' })]);
-  assert.equal((await p.next()).kind, 'gif');
-  gentle = true;
   assert.equal(await p.next(), null);
   assert.equal((await p.next({ kind: 'picture' })).kind, 'gif', 'a screen asks by kind, and stills it itself');
 });

@@ -36,7 +36,12 @@ export function makeContext(engine, scope) {
   const after = item.group === 'after';
   const bag = () => { const owner = after ? engine.life : engine.run; return (owner.store[item.id] ||= {}); };
 
-  const addEl = (el) => { scope.els.add(el); return el; };
+  const addEl = (el) => {
+    scope.els.add(el);
+    /* A long run makes thousands of short-lived nodes (feed tiles, a wall's fades). What has already left the page need not wait for the unlock. */
+    if (scope.els.size > 2048) for (const e of scope.els) if (!e.isConnected) scope.els.delete(e);
+    return el;
+  };
 
   const ctx = {
     item,
@@ -126,12 +131,14 @@ export function makeContext(engine, scope) {
       scope.anims.add(a);
       a.finished?.then(() => scope.anims.delete(a), () => scope.anims.delete(a));
       a.playbackRate = engine.speedFactor();
-      if (engine.paused || engine.suspended) a.pause();
+      if (engine.paused || engine.suspended) { a.pause(); ui.holdLate?.(a); }
       return a;
     },
     speed: (multiplier) => engine.holdSpeed(multiplier, scope),
 
     on: (event, fn) => engine.subscribe(event, fn, scope),
+    /* Runs when the unlock goes, for things ctx cannot see: a registry of its own, a media element. */
+    cleanup(fn) { scope.cleanups.add(fn); },
     emit: (event, data) => engine.emit(event, data),
 
     pay: (amount, source = item.id, at = null) => engine.pay(amount, source, at),
@@ -222,7 +229,7 @@ export function makeContext(engine, scope) {
     },
 
     get paused() { return !!(engine.paused || engine.suspended); },
-    /* True when the Control Panel switched this row back on: it did not just arrive, so no arrival show and no first-time gift. */
+    /* True on a reload from a save and when the Control Panel switched this row back on: it did not just arrive, so no arrival show and no first-time gift. */
     get restored() { return !!scope.restored; },
     /* The Control Panel's door to the engine: { isOn(id), set(id, on), waitingOn(id), groups() }. */
     switches: engine.switches,
@@ -263,5 +270,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock', 'restored', 'switches',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock', 'restored', 'switches', 'cleanup',
 ]);

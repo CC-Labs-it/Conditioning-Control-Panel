@@ -191,6 +191,7 @@ export function holdMedia(ctx, m, wanted = true) {
   c.width = Math.min(640, m.naturalWidth);
   c.height = Math.round(c.width * (m.naturalHeight / m.naturalWidth));
   c.getContext('2d').drawImage(m, 0, 0, c.width, c.height);
+  c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
   m.after(c);
   m.__still = c;
   m.style.visibility = 'hidden';
@@ -306,6 +307,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
   }
   me.frame = () => ({ ...spot, ...size });
   live.add(me);
+  ctx.cleanup(() => { live.delete(me); me.slot?.clear(); });   // a clip lets go of its decoder, and nothing keeps the old frame alive
 
   /* The whole frame drags, or only the grip. On a small frame the test card's button is most of it, and a finger is fat, so
    * a drag may start on that button too: if it never moves, the press stays the button's. A heart or a fake close (they

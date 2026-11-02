@@ -29,8 +29,8 @@ export function picker(ctx, list) {
   };
 }
 
-/** Is a card up? Then nothing new should pop over it. */
-export const cardUp = () => !!document.getElementById('cards')?.childElementCount;
+/** Is a card up? Then nothing new should pop over it. The Guide and the Control Panel keep a closed sheet in the same host: that is not a card. */
+export const cardUp = () => [...(document.getElementById('cards')?.children || [])].some((c) => !c.hidden);
 
 /** Captions along the bottom. Lives in `over`, above the dock strip, and ignores the pointer. */
 function bottom(ctx) {
