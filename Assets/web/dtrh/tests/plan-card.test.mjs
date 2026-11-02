@@ -70,6 +70,13 @@ test('the row: one calm line, one link, the price only with plans', () => {
   let webHeld = 0;
   web.children[1].listeners.click[0]({ preventDefault: () => { webHeld++; } });
   assert.equal(webHeld, 0, 'with no host the link opens itself');
+  const strings = [];
+  const gtk = buildPlanRow({ doc: fakeDoc(), row: planRowFor({ daily_gift: true }), plans: C1, env: { invokeCSharpAction: (s) => strings.push(s) } });
+  let gtkHeld = 0;
+  gtk.children[1].listeners.click[0]({ preventDefault: () => { gtkHeld++; } });
+  // The exact string DtrhFunnelTests feeds GameWindow.HandleMessage: the Linux host gets the click and opens checkout.
+  assert.deepEqual(strings, ['{"type":"funnel","event":"cta_clicked","a":"dtrh","b":"patreon","plan":"basic"}']);
+  assert.equal(gtkHeld, 1, 'the WebKitGTK host opens checkout, not the link');
   assert.equal(buildPlanRow({ doc: fakeDoc(), row: planRowFor({ daily_gift: true }), env: {} }).children.length, 2, 'no plans, no price');
   assert.doesNotMatch(DAILY_GIFT_LINE, /[!\u2013\u2014]/);
 });

@@ -131,7 +131,7 @@ public class RecentSoundsTests
     [Fact]
     public void The_report_appends_the_section_after_everything_else_and_before_the_scrubber()
     {
-        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "BugReportService.cs"));
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "BugReportService.cs"));
 
         var hang = src.IndexOf("BuildHangReportSection(TryReadNewestHangReport", StringComparison.Ordinal);
         var sounds = src.IndexOf("combined = AppendRecentSounds(combined,", StringComparison.Ordinal);

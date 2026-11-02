@@ -44,7 +44,7 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
         public const string KeyLapseGreeting = "lapse_greeting";
 
         /// <summary>How long after the close the closed row may still be posted (proposal 4d).</summary>
-        public static readonly TimeSpan ClosedRowWindow = TimeSpan.FromDays(30);
+        public static readonly TimeSpan ClosedRowWindow = EntitlementTierRule.ClosedRowWindow;
 
         // Compiled fallback of GET /config/plans (brief C1). TODO(D1): read Services/Vault/PlanCatalog
         // once it lands on main; these stay as its fallback values.

@@ -104,6 +104,10 @@ namespace ConditioningControlPanel.Services
             return true;
         }
 
+        /// <summary>How long a closed plan stays the news. Here because Core cannot see the head's
+        /// ConversionRules, which reads this same value.</summary>
+        public static readonly TimeSpan ClosedRowWindow = TimeSpan.FromDays(30);
+
         /// <summary>The shortest time between the two agreeing readings that end a grace window.</summary>
         public static readonly TimeSpan GraceConfirmGap = TimeSpan.FromSeconds(90);
 
@@ -179,7 +183,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static int? ClosedTierNow(AppSettings? settings, DateTime nowUtc)
             => settings?.GraceClosedTier is int tier && settings.GraceClosedAtUtc is DateTime at
-               && nowUtc - at <= Startup.Conversion.ConversionRules.ClosedRowWindow
+               && nowUtc - at <= ClosedRowWindow
                 ? tier
                 : null;
 

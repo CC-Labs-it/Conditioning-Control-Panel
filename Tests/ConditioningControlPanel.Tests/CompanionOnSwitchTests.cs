@@ -82,8 +82,8 @@ public class CompanionOnSwitchTests
     [Fact]
     public void Quest_ding_follows_the_perk_opt_out()
     {
-        var quests = ReadSource("Services", "Progression", "QuestService.cs");
-        Assert.True(Mentions(quests, "if (!App.PerkNotificationsSuppressed) { SystemSounds.Exclamation.Play();"),
+        var app = ReadSource("App.xaml.cs");   // the port plays the ding behind Core's PlayCompletionEffectsProvider
+        Assert.True(Mentions(app, "if (!PerkNotificationsSuppressed) { SystemSounds.Exclamation.Play();"),
             "the Windows ding respects the same switch as the popup");
     }
 

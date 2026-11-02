@@ -8,11 +8,11 @@ namespace ConditioningControlPanel.Services.Audio
     /// <summary>
     /// ccp-bugs #1537, #1540 (and #1490, #1491): "random audio stings", and no report could name the
     /// sound. The activity log is cut to its tail on the way to the tracker and webcam lines flood it,
-    /// and the engine-off trace (<see cref="EngineOffAudioLog"/>) sits in the part that gets cut.
+    /// and the engine-off trace (WPF EngineOffAudioLog) sits in the part that gets cut.
     ///
     /// <para>So: the last <see cref="Capacity"/> sounds the app started, in memory, written as the LAST
     /// section of a bug report, where the tail cut cannot reach it. File names only, never a path. Fed
-    /// by <see cref="EngineOffAudioLog.Note"/>, which every app-owned player already calls when a sound
+    /// by WPF EngineOffAudioLog.Note, and on Linux by LibVlcAudio.PlayOneShot, when a sound
     /// really starts. It records and reports; it never changes what plays.</para>
     /// </summary>
     public sealed class RecentSounds
@@ -110,10 +110,25 @@ namespace ConditioningControlPanel.Services.Audio
             return sb.ToString();
         }
 
+        /// <summary>WPF EngineOffAudioLog.NameOf: a full path can carry the user name.</summary>
+        private static string FileNameOf(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return "?";
+            try
+            {
+                var name = System.IO.Path.GetFileName(path.TrimEnd('/', (char)92));
+                return string.IsNullOrEmpty(name) ? "?" : name;
+            }
+            catch
+            {
+                return "?";
+            }
+        }
+
         /// <summary>File name only, no query string, capped.</summary>
         internal static string CleanName(string? path)
         {
-            var name = EngineOffAudioLog.NameOf(path);
+            var name = FileNameOf(path);
             var cut = name.IndexOfAny(new[] { '?', '#' });
             if (cut > 0) name = name.Substring(0, cut);
             return name.Length <= MaxNameChars ? name : name.Substring(0, MaxNameChars);
