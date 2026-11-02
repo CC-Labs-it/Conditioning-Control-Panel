@@ -5,9 +5,9 @@ import look2 from './basics/look2.js';
 import trunk from './basics/trunk.js';
 import side from './basics/side.js';
 import side2 from './basics/side2.js';
-import { fresh } from './basics/fx.js';
+import { btnCenter, fresh, rings } from './basics/fx.js';
 
-const CORNER_NEAR = 12;
+const CORNER_NEAR = 6;
 
 /** One bouncing button. Speed is set from the page size so every screen gets the same wall hits per second. */
 function bouncer(ctx) {
@@ -86,6 +86,8 @@ export default {
         const n = String(ctx.state.buys % 18).padStart(2, '0');
         ctx.audio.play(`assets/audio/pluck/wood_${n}.wav`, { bus: 'sfx', gain: 0.8 });
       });
+      // A muted player still sees that the button found its voice.
+      if (fresh(ctx)) { const c = btnCenter(ctx); rings(ctx, c.x, c.y); ctx.float(c.x, c.y - 34, 'click', 'font-size:20px;font-weight:700;'); ctx.audio.play('assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.8 }); }
       return {};
     },
   },

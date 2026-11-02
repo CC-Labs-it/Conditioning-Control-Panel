@@ -2,7 +2,9 @@
  * glossy icons, spiral overlay, page tilt, the fake desktop, the warp and the Drop. */
 
 import { ACHIEVEMENTS, DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS, thoughtsFor } from '../../../data/content/index.js';
-import { beatAt, BEAT_MS, burst, btnCenter, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
+import { FORKS } from '../../../data/items.js';
+import { SECOND_THEME, THEME_TINTS } from './copy.js';
+import { beatAt, BEAT_MS, burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
 
 const openLink = (ctx, url) => {
   if (!/^https:\/\/([a-z0-9-]+\.)?cclabs\.app(\/|$)/.test(url)) return;
@@ -15,7 +17,7 @@ const stampFork = {
     if (!fresh(ctx)) return {};
     const lane = ctx.pick(ctx.item.id);
     const c = btnCenter(ctx);
-    const label = lane ? lane.replace(/^./, (m) => m.toUpperCase()) : ctx.item.name;
+    const label = FORKS[ctx.item.id]?.opts?.[lane]?.name || ctx.item.name;
     pop(ctx, ctx.bounds().w / 2, c.y, label, { size: 58, ms: 1400 });
     burst(ctx, c.x, c.y, { n: 24, reach: 190, size: 9, ms: 900 });
     sfx(ctx, 'sfx/unlock_card.mp3', 0.6);
@@ -49,7 +51,13 @@ export default {
   softw: {
     mount(ctx) {
       const el = ctx.button.el;
-      let dry = 0;
+      let dry = 0, unhide = () => {};
+      const word = (c) => {
+        unhide();
+        el.style.color = 'transparent';
+        unhide = ctx.after(850, () => { el.style.color = ''; });
+        pop(ctx, c.x, c.y, LUCKY_WORDS[Math.floor(ctx.rng() * LUCKY_WORDS.length)], { color: 'var(--ink)', size: 28, ms: 900 });
+      };
       ctx.on('tap', ({ x, y, auto }) => {
         dry += 1;
         if (ctx.rng() > 0.125 && dry < 16) return;
@@ -57,13 +65,13 @@ export default {
         const c = btnCenter(ctx);
         const at = x == null ? c : { x, y };
         ctx.pay(ctx.rates().click * 7, 'lucky', at);
-        pop(ctx, c.x, c.y, LUCKY_WORDS[Math.floor(ctx.rng() * LUCKY_WORDS.length)], { size: 26, ms: 900 });
+        word(c);
         ctx.float(c.x + c.w / 2 + 24, c.y - 12, 'x8', 'color:var(--stamp);font-size:22px;font-weight:700;');
         if (!auto) squish(ctx, el, 0.8);
         sfx(ctx, 'sfx/chip_pop.mp3', 0.45);
         ctx.emit('lucky', { x: at.x, y: at.y, auto });
       });
-      if (fresh(ctx)) { const c = btnCenter(ctx); pop(ctx, c.x, c.y, LUCKY_WORDS[0], { size: 26, ms: 1100 }); }
+      if (fresh(ctx)) word(btnCenter(ctx));
       return {};
     },
   },
@@ -228,32 +236,72 @@ export default {
     },
   },
 
-  /* Second Theme: pick one other theme at the card. A tinted button and its button words follow; pictures read the pick. */
+  /* Second Theme: pick one other theme at the card. Its button and its button words come along, and a small frame shows
+   * pictures asked for under that theme's name. The chip goes back to the card until a pick is made. */
   taste2: {
     mount(ctx) {
-      const words = (id) => THEMES[id]?.buttonWords || [];
-      const apply = (id) => {
+      let frame = null;
+      const wearIt = (id) => {
+        const tint = THEME_TINTS[id] || '#777777';
+        ctx.css(`#btn[data-skin=taste-${id}] { background: ${tint}; color: #fff; border: 2px solid rgba(0,0,0,.35); border-radius: 12px; box-shadow: 0 3px 0 rgba(0,0,0,.35); font-weight: 700; }`);
+        ctx.button.skin(`taste-${id}`);
+      };
+      const showPicture = async (id) => {
+        if (!frame) return;
+        const pic = await ctx.pictures.next({ niche: id });
+        if (!frame) return;
+        frame.img.style.display = pic ? 'block' : 'none';
+        if (pic) { frame.img.src = pic.url; ctx.anim(frame.img, [{ opacity: 0 }, { opacity: 1 }], { duration: 500 }); }
+        frame.credit.textContent = pic?.credit || '';
+      };
+      const buildFrame = (id) => {
+        const rail = ctx.layer('side', 'left');
+        const wide = rail.clientWidth >= 120;
+        const box = ctx.el('div', wide
+          ? 'position:relative;flex:none;width:100%;max-width:190px;height:150px;border:2px dashed var(--line);background:var(--panel);overflow:hidden;'
+          : 'position:absolute;right:6px;width:58px;height:78px;border:2px dashed var(--line);background:var(--panel);overflow:hidden;', null, wide ? rail : 'floaters');
+        if (!wide) box.style.top = `${btnCenter(ctx).y - 39}px`;
+        const img = ctx.el('img', 'display:none;width:100%;height:100%;object-fit:cover;', null, box);
+        img.alt = '';
+        const credit = ctx.el('span', 'position:absolute;right:3px;bottom:2px;font-size:10px;color:#fff;text-shadow:0 1px 2px #000;', '', box);
+        frame = { box, img, credit };
+        showPicture(id);
+      };
+      let ask = null;
+      const apply = (id, arriving) => {
         ctx.store.set('theme', id);
         ctx.emit('taste2', { theme: id });
-        ctx.toast(`${THEMES[id].label} too. For research.`);
+        wearIt(id);
+        buildFrame(id);
+        ask?.remove();
+        if (arriving) {
+          ctx.toast(SECOND_THEME.chosen.replace('{theme}', THEMES[id].label));
+          const c = btnCenter(ctx);
+          squish(ctx, ctx.button.el, 1.3);
+          burst(ctx, c.x, c.y, { color: THEME_TINTS[id], n: 18, reach: 110, size: 8 });
+          sfx(ctx, 'sfx/ui_unlock.mp3', 0.5);
+        }
+      };
+      const openCard = () => {
+        const others = THEME_IDS.filter((id) => id !== ctx.pick('f5'));
+        ctx.modal({ title: SECOND_THEME.title, body: SECOND_THEME.ask, buttons: others.map((id) => ({ label: THEMES[id].label, onPress: () => apply(id, true) })) });
       };
       const chosen = ctx.store.get('theme');
-      if (!chosen && fresh(ctx)) {
-        const others = THEME_IDS.filter((id) => id !== ctx.pick('f5'));
-        ctx.modal({
-          title: 'Second Theme',
-          body: 'Pick one more. It brings its pictures and its button words.',
-          buttons: others.map((id) => ({ label: THEMES[id].label, onPress: () => apply(id) })),
-        });
+      if (chosen) apply(chosen, false);
+      else {
+        ask = chip(ctx, SECOND_THEME.chip, openCard);
+        if (fresh(ctx)) openCard();
       }
+      ctx.every(14000, () => { const id = ctx.store.get('theme'); if (id) showPicture(id); });
+      ctx.on('pictures', () => { const id = ctx.store.get('theme'); if (id) showPicture(id); });
       ctx.on('lucky', () => {
         const id = ctx.store.get('theme');
-        const list = id ? words(id) : [];
+        const list = id ? THEMES[id]?.buttonWords || [] : [];
         if (!list.length) return;
         const c = btnCenter(ctx);
         pop(ctx, c.x, c.y - c.h, list[Math.floor(ctx.rng() * list.length)], { size: 20, ms: 900 });
       });
-      return {};
+      return { off() { frame = null; } };
     },
   },
 
@@ -331,6 +379,8 @@ export default {
       };
       refresh();
       ctx.every(4000, refresh);
+      // Gentle can be switched on mid-run: the copies stop where they are.
+      ctx.every(1000, () => { if (ctx.gentle) for (const f of frames) for (const a of f.getAnimations()) a.pause(); });
       if (fresh(ctx) && !ctx.gentle) ctx.anim(doc.getElementById('page'), [{ transform: 'scale(1.06)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 800, easing: 'ease-out' });
       return {};
     },
@@ -342,14 +392,17 @@ export default {
     ending(ctx) {
       return new Promise((done) => {
         const { w, h } = ctx.bounds();
+        // The fade stays up inside the world through the show, so the words sit on their own sheet above it (and below Wake Up).
+        const sheet = ctx.el('div', 'position:fixed;inset:0;z-index:85;pointer-events:none;overflow:hidden;font-family:var(--font);', null, docOf(ctx).body);
         const list = DROP_WORDS.filter((_, i) => i < 2 || i % 3 === 0 || i === DROP_WORDS.length - 1);
+        const GAP = 1500;
         list.forEach((d, i) => {
-          ctx.after(600 + i * 1100, () => {
-            pop(ctx, w / 2, h * 0.45, d.word, { color: '#b03a7a', size: 42, ms: 1000, weight: 600 });
+          ctx.after(500 + i * GAP, () => {
+            pop(ctx, w / 2, h * 0.45, d.word, { color: '#b03a7a', size: 46, ms: GAP - 100, weight: 600, parent: sheet });
             if (d.clip) ctx.voice(d.clip, { gain: 0.7 });
           });
         });
-        ctx.after(600 + list.length * 1100 + 300, done);
+        ctx.after(500 + list.length * GAP + 400, done);
       });
     },
   },

@@ -118,14 +118,15 @@ export default {
         }
       };
       place();
-      ctx.every(2000, () => { place(); card?.draw(); });
+      ctx.every(2000, () => { place(); card?.draw(); open.style.display = wide() ? 'none' : ''; });
       ctx.every(20000, () => { if (card) card.tip.textContent = pick(ctx, SCREEN_TIME.tips); });
-      chip(ctx, SCREEN_TIME.title, () => {
+      const open = chip(ctx, SCREEN_TIME.title, () => {
         const node = docOf(ctx).createElement('div');
         const m = build(node);
         ctx.modal({ title: SCREEN_TIME.title, node });
         m.draw();
       });
+      open.style.display = wide() ? 'none' : '';
       return {};
     },
   },

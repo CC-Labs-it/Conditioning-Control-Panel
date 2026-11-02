@@ -76,8 +76,20 @@ export function burst(ctx, x, y, { color = 'var(--stamp)', n = 10, reach = 46, s
   }
 }
 
+/** Rings spreading from a point: how sound looks. Gentle gets a slower single ring. */
+export function rings(ctx, x, y, { color = 'var(--stamp)', n = 3, size = 90 } = {}) {
+  const count = ctx.gentle ? 1 : n;
+  for (let i = 0; i < count; i++) {
+    const r = spawn(ctx, `left:${x}px;top:${y}px;width:${size}px;height:${size}px;margin:${-size / 2}px 0 0 ${-size / 2}px;box-sizing:border-box;border:3px solid ${color};border-radius:50%;`);
+    play(ctx, r, [{ transform: 'scale(.3)', opacity: 0.9 }, { transform: 'scale(1.7)', opacity: 0 }], { duration: 800, delay: i * 170, easing: 'ease-out', fill: 'backwards' });
+  }
+}
+
 /** A word that swells in, holds and fades. Never flashes. */
 export function pop(ctx, x, y, text, { color = 'var(--stamp)', size = 22, ms = 1000, weight = 700, parent = 'over' } = {}) {
+  const half = String(text).length * size * 0.32 + 6, { w, h } = ctx.bounds();
+  x = half * 2 >= w ? w / 2 : Math.max(half, Math.min(w - half, x));
+  y = Math.max(size, Math.min(h - size, y));
   const e = spawn(ctx, `transform:translate(${x}px,${y}px) translate(-50%,-50%);color:${color};font-size:${size}px;font-weight:${weight};white-space:nowrap;text-shadow:0 1px 0 rgba(255,255,255,.35);`, text, parent);
   const base = `translate(${x}px,${y}px) translate(-50%,-50%)`;
   const frames = ctx.gentle

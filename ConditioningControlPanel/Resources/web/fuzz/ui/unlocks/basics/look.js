@@ -79,11 +79,11 @@ export default {
       set();
       ctx.every(60000, () => { i += 1; set(); });
       if (fresh(ctx)) {
-        const tab = spawn(ctx, 'left:50%;top:8px;margin-left:-110px;width:220px;padding:6px 10px;background:#d4d0c8;color:#000;border:1px solid #6e6a62;border-radius:7px 7px 0 0;font:600 14px "Segoe UI",system-ui,sans-serif;white-space:nowrap;overflow:hidden;', '');
+        const tab = spawn(ctx, 'left:50%;top:6px;margin-left:-110px;width:220px;padding:6px 10px;background:#d4d0c8;color:#000;border:1px solid #6e6a62;border-radius:7px 7px 0 0;font:600 14px "Segoe UI",system-ui,sans-serif;white-space:nowrap;overflow:hidden;', '');
         const sq = docOf(ctx).createElement('i');
         sq.style.cssText = 'display:inline-block;width:12px;height:12px;background:#1d7a45;border-radius:2px;margin-right:6px;vertical-align:-1px;';
         tab.append(sq, TAB_TITLES[0]);
-        play(ctx, tab, [{ transform: 'translateY(90px)', opacity: 0 }, { transform: 'translateY(60px)', opacity: 1, offset: 0.14 }, { transform: 'translateY(60px)', opacity: 1, offset: 0.7 }, { transform: 'translateY(-50px)', opacity: 0 }], { duration: 2200, easing: 'ease-in-out' });
+        play(ctx, tab, [{ transform: 'translateY(-44px)' }, { transform: 'translateY(0)', offset: 0.12 }, { transform: 'translateY(0)', offset: 0.82 }, { transform: 'translateY(-44px)' }], { duration: 2200, easing: 'ease-in-out' });
       }
       return { off() { doc.title = was; if (link) link.remove(); } };
     },
@@ -132,7 +132,7 @@ body { transition: background-color .6s, color .6s; }
         const { w, h } = ctx.bounds();
         const hit = [x < 50 ? 0 : null, x > w - 50 ? Math.PI : null, y < 30 ? Math.PI / 2 : null, y > h - 30 ? -Math.PI / 2 : null].find((a) => a != null);
         const a = hit ?? 0;
-        burst(ctx, Math.max(0, Math.min(w, x)), Math.max(0, Math.min(h, y)), { n, reach: 42, size: 6, from: a - 1.3, to: a + 1.3 });
+        burst(ctx, Math.max(0, Math.min(w, x)), Math.max(0, Math.min(h, y)), { n, reach: 58, size: 8, from: a - 1.3, to: a + 1.3 });
       };
       ctx.on('wall', ({ x, y }) => {
         blast(x, y);
@@ -184,7 +184,7 @@ body { transition: background-color .6s, color .6s; }
   bubble: {
     mount(ctx) {
       wear(ctx, 'bubble', `
-#btn[data-skin=bubble] { width: 92px; height: 92px; border-radius: 50%; color: transparent; border: 1.5px solid rgba(120,170,220,.9); box-shadow: inset 0 -6px 14px rgba(120,190,255,.35); background: radial-gradient(circle at 32% 28%, #fff 0 9%, rgba(255,255,255,.4) 16%, rgba(190,225,255,.5) 55%, rgba(120,190,255,.8)); }
+#btn[data-skin=bubble] { width: 84px; height: 84px; border-radius: 50%; color: transparent; border: 1.5px solid rgba(120,170,220,.9); box-shadow: inset 0 -6px 14px rgba(120,190,255,.35); background: radial-gradient(circle at 32% 28%, #fff 0 9%, rgba(255,255,255,.4) 16%, rgba(190,225,255,.5) 55%, rgba(120,190,255,.8)); }
 #btn[data-skin=bubble].down { border-style: solid; box-shadow: inset 0 -6px 14px rgba(120,190,255,.35); }
 #world:has(#btn[data-skin=bubble]) [data-stray] { border-radius: 50%; width: 26px !important; height: 26px !important; border: 1.5px solid rgba(120,170,220,.9) !important; background: radial-gradient(circle at 32% 28%, #fff 0 12%, rgba(190,225,255,.5) 50%, rgba(120,190,255,.8)) !important; }
 `);

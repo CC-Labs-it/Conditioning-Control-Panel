@@ -2,6 +2,7 @@
  * Listening Test, Toy Link, Friend Remote. Words are recorded clips or nothing. App-only rows say so and do nothing here. */
 
 import { APP_ONLY, DRIFT_LINES, FALLING_WORDS, LISTENING_TEST, OPINIONS, REMOTE } from '../../../data/content/index.js';
+import { LISTEN_NAME, REMOTE_SOLO } from './copy.js';
 import { burst, btnCenter, chip, docOf, fresh, play, pop, setPalette, sfx, spawn, squish } from './fx.js';
 
 const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length)];
@@ -88,7 +89,7 @@ export default {
           sfx(ctx, 'sfx/chime1.mp3', 0.5);
           if (word.effect === 'crit') { ctx.pay(ctx.rates().click * 10, 'trigger', { x: cx, y: cy }); ctx.emit('lucky', { x: cx, y: cy, auto: true }); }
           else if (word.effect === 'speed') fastUntil = now + 12000;
-          // Muting for six seconds needs a master switch ctx does not have; the line still lands.
+          else if (word.effect === 'mute') ctx.audio.muteFor?.(6000);
           ctx.say(word.line);
         });
       };
@@ -137,8 +138,12 @@ export default {
         ctx.store.set('n', n);
         ctx.voice(q.clip, { gain: 1 });
         const { w } = ctx.bounds();
-        const panel = ctx.el('div', `position:absolute;left:50%;top:60px;width:min(360px,${w - 24}px);transform:translateX(-50%);padding:8px;background:var(--panel);color:var(--ink);border:2px solid var(--stamp);border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,.3);pointer-events:auto;font-family:var(--font);`, null, 'over');
-        ctx.el('div', 'text-align:center;font-weight:700;margin-bottom:6px;', pick(ctx, LISTENING_TEST.ask), panel);
+        const panel = ctx.el('div', `position:absolute;left:50%;bottom:12px;width:min(380px,${w - 24}px);transform:translateX(-50%);padding:8px;background:var(--panel);color:var(--ink);border:2px solid var(--stamp);border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,.3);pointer-events:auto;font-family:var(--font);`, null, 'over');
+        const head = ctx.el('div', 'display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:6px;', null, panel);
+        const face = ctx.el('div', 'position:relative;flex:none;width:34px;height:34px;border-radius:50%;background:#ff69b4;border:2px solid #d4488f;', null, head);
+        for (const x of [8, 18]) ctx.el('i', `position:absolute;left:${x}px;top:10px;width:4px;height:7px;background:#222;border-radius:50%;`, null, face);
+        ctx.el('span', '', `${LISTEN_NAME}: ${pick(ctx, LISTENING_TEST.ask)}`, head);
+        if (!ctx.gentle) ctx.anim(panel, [{ translate: '0 140px' }, { translate: '0 0' }], { duration: 300, easing: 'ease-out' });
         const row = ctx.el('div', 'display:flex;gap:6px;', null, panel);
         const opts = [q.word, ...q.decoys];
         const start = Math.floor(ctx.rng() * 3);
@@ -189,7 +194,8 @@ export default {
     },
   },
 
-  /* Friend Remote: preset buttons and no words. No friend wire exists yet, so it says so and the buttons act on this run. */
+  /* Friend Remote: preset buttons and no words, pressed by the player on the player's own run. No friend wire exists, and
+   * the card says so; nothing here pretends one is connected. */
   remote: {
     mount(ctx) {
       const doc = docOf(ctx);
@@ -197,12 +203,12 @@ export default {
         const el = ctx.button.el;
         if (p.key === 'poke') squish(ctx, el, 1.5);
         else if (p.key === 'spin') { if (!ctx.gentle) ctx.anim(el, [{ rotate: '0deg' }, { rotate: '360deg' }], { duration: 700 }); }
-        else if (p.key === 'pink') setPalette(ctx, 'pink');
+        else if (p.key === 'pink') { setPalette(ctx, 'pink'); ctx.emit('palette', { name: 'pink' }); }
         else if (p.key === 'tap') ctx.button.press();
-        else if (p.key === 'hush') ctx.say('Shh.');
-        ctx.toast(p.toast);
+        else if (p.key === 'hush') ctx.audio.muteFor?.(3000);
+        ctx.toast(REMOTE_SOLO.toasts[p.key]);
       };
-      chip(ctx, 'Remote', () => {
+      const open = () => {
         const node = doc.createElement('div');
         node.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
         for (const p of REMOTE.presets) {
@@ -212,9 +218,10 @@ export default {
           b.addEventListener('click', () => act(p));
           node.appendChild(b);
         }
-        ctx.modal({ title: REMOTE.title, body: `${REMOTE.note} No friend is connected yet, so these work on you.`, node });
-      });
-      if (fresh(ctx)) act(REMOTE.presets[0]);
+        ctx.modal({ title: REMOTE_SOLO.title, body: REMOTE_SOLO.note, node });
+      };
+      const c = chip(ctx, REMOTE_SOLO.chip, open);
+      if (fresh(ctx)) { squish(ctx, c, 1.3); open(); }
       return {};
     },
   },
