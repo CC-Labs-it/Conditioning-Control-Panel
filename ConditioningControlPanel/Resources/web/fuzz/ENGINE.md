@@ -32,9 +32,10 @@ carries on. An ending row may also export `ending(ctx) -> Promise`: its show bet
 
 - `/fuzz/index.html?buy=e_speed,sound`: starts owning those rows and all their parents, picks the lanes they need, skips the
   intro, saves nothing. A row on a lane the route already locked is refused with a console warning.
-- `?pace=50`: income x50 (max 500). `?mood=m_pink`: force a run mood. `?fresh=1`: no save, no intro. `?pictures=none`: force a picture source.
+- `?pace=50`: income x50 (max 500). `?mood=m_pink`: force a run mood. `?fresh=1`: no save, no intro. `?pictures=none|own|online`: force a picture source. `online` is the only way to the placeholder art; without it the source is `none` until the player chooses, so frames are empty on a dev page.
 - `window.fuzz`: `.buy(id)` `.pick('f1','eyes')` `.add(1000)` `.grant(id)` `.tap(10)` `.end('drop')` `.newRun()`, `.state`, `.life`, `.items`, `.engine`.
 - `node dev/smoke.mjs` plays a whole route headless and fails on any page error. Screens land in `dev/shots/`.
+- `node dev/intro-drive.mjs` drives the contract, Decline, skimming, the host wire and the pictures card by real input, desktop and 390 px.
 - `node --test --test-concurrency=2 tests/*.test.mjs` includes the timing of all 192 routes.
 
 ## ctx
@@ -94,7 +95,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.audio.play(path, {bus, gain, pan})`, `ctx.audio.loop(path, {bus, gain, pan})` -> `{stop(ms)}`. Buses `sfx ambient voice podcast`. `pan` is -1 (left) to 1 (right), fixed at the start, on `stream` too; files on this site only for a stream. A missing file is silence. Clips in `assets/audio/`.
 - `ctx.audio.stream(url, {bus, gain, loop, autoplay, pan})` -> `{el, play(), pause(), setGain(v), stop(ms), playing}`: long audio on a media element the kit owns, never decoded whole. Use it for anything long, and never `new Audio()` or an `<audio>` of your own: those keep playing through panic. It follows mute, quiet, muteFor and hold, pauses at once on pause, suspend and panic, comes back with them, and dies at the end and with your unlock. Starts on the first gesture. Read `el` (`currentTime`, `duration`, listeners); volume changes and a play during a hold are put back.
 - `ctx.voice(slug, opts?)`: a recorded word (`data/words.js`); no clip = silence. Never speech synthesis.
-- `await ctx.pictures.next({niche})` -> `{url, credit}` or null. Null is normal: draw an empty frame, never an error. Show `credit` when set. Never fetch a picture any other way. `ctx.pictures.source` is `online` (signed in), `own` (the player's files, on this device only) or `none`; a change arrives as the `pictures` event, so refill what is on screen. Choosing a source is not an unlock's job.
+- `await ctx.pictures.next({niche})` -> `{url, credit}` or null. Null is normal: draw an empty frame, never an error. Show `credit` when set. Never fetch a picture any other way. `ctx.pictures.source` is `online` (signed in, a stub until the website build), `own` (the player's files, object URLs on this device, gone on reload) or `none` (the default); a change arrives as the `pictures` event, so refill what is on screen. Choosing a source is not an unlock's job: the pictures card (`ui/picture-card.js`) asks the first time the route is Slideshow or Swipe Feed, again after a reload lost the files, and from the pause card. A frame holding a gif is fine: own files are images and gifs.
 - `ctx.ads.next({kind, theme, ccpOnly})` -> the next record: `{id, kind, headline, sub, cta, ccp, url?, tone?}`. Every ad slot in every lane draws from this and never hand-picks a CCP chip: once a theme is picked (`theme` defaults to the `f5` lane; pass `null` for none) its CCP cards are in the mix. `ccpOnly` asks for real cards only.
 - `ctx.ads.jokesOff(on = true)`: Joke Ads Gone. While any unlock holds it, every `next` in every lane is real cards only; it ends with the holder. `ctx.ads.jokesAreOff` reads it; the `ads {jokesOff}` event says it changed, so swap a joke already on screen.
 - `ctx.store.get(key)`, `ctx.store.set(key, value)`: small JSON in the save for this unlock (After lane entries: kept across runs).
@@ -118,6 +119,10 @@ return { off() { sp.dispose(); } };
 - `meta`: moods. The sim numbers live in `sim/moods.js`. The entry for `state.mood` mounts at run start; there is none on the first run.
 - `after`: every `z_*` entry mounts when the credits card is up and draws into `ctx.layer('credits')`. `ctx.life` holds what it needs; `ctx.setPerk(id|null)` keeps one owned Look for the next run.
 - Endings: `drop`, `outside` and the rest all go through one flow (`engine.end`). `onemore` does not end the run; `state.endless` turns on.
+
+## The intro
+
+`ui/intro.js` opens before the engine mounts anything; the words live in `data/content/terms.js` (kept out of `content/index.js` because they hold markup). First visit: the whole contract, hidden things pay a starting lump (`sources.intro`), once a lifetime. Every later load: the short update window with the age box, a new llama line per visit (`life.updates`). A New run reload does not ask again. Decline: no game, no audio, nothing written. `main.js` writes no save until the window is accepted, so nothing an unlock does can run before it. While it is up Wake Up and Escape only say nothing is running; a host's `suspend` puts the real pause card over it, and `close` ends it.
 
 ## Rules that bite
 

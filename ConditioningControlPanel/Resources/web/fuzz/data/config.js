@@ -13,7 +13,7 @@ export const CONFIG = Object.freeze({
   STRAY_PAYBACK_S: 45,
 
   /** Where pictures come from until the player chooses: online, own or none (ui/pictures.js). */
-  PICTURES_DEFAULT: 'online',
+  PICTURES_DEFAULT: 'none',
 
   /** Rows in the shop window. The goal row is extra. */
   SHOP_MIN: 3,

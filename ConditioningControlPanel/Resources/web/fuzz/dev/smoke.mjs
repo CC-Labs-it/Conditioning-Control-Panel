@@ -37,14 +37,31 @@ async function wakeIsOnTop(page, where) {
   if (!ok) errors.push(`Wake Up is covered at ${where}`);
 }
 
+/** The whole contract, the way a stubborn player gets through it: age box, scroll until the second box opens, tick, Accept. */
+async function signContract(page) {
+  await page.check('#age');
+  for (let i = 0; i < 40 && await page.isDisabled('#read'); i++) {
+    await page.evaluate(() => { const t = document.getElementById('terms'); t.scrollTop = t.scrollHeight; });
+    await page.waitForTimeout(60);
+  }
+  await page.check('#read');
+  await page.click('#accept');
+}
+/** The short window every later load asks. */
+async function acceptUpdate(page) {
+  await page.waitForSelector('.tc #age');
+  await page.check('#age');
+  await page.click('#accept');
+}
+
 /* ---- desktop: the first real minute, by hand ---- */
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const page = await ctx.newPage();
 watch(page);
 await page.goto(base, { waitUntil: 'load' });
-await page.waitForSelector('.backdrop .card');
-await page.screenshot({ path: join(shots, 'a0-age.png') });
-await page.click('.card button.primary');
+await page.waitForSelector('.tc #terms');
+await page.screenshot({ path: join(shots, 'a0-contract.png') });
+await signContract(page);
 await page.waitForFunction(() => !!window.fuzz);
 await page.screenshot({ path: join(shots, 'a1-start.png') });
 for (let i = 0; i < 12; i++) await page.click('#btn');
@@ -59,8 +76,9 @@ if (strays !== 1) errors.push(`expected one stray, saw ${strays}`);
 /* ---- a reload keeps the run and mounts again ---- */
 await page.evaluate(() => window.fuzz.engine.save());
 await page.reload({ waitUntil: 'load' });
+await acceptUpdate(page);
 await page.waitForFunction(() => !!window.fuzz);
-if (await page.locator('[data-stray]').count() !== 1) errors.push('the stray did not come back after a reload');
+await page.waitForFunction(() => document.querySelectorAll('[data-stray]').length === 1, null, { timeout: 3000 }).catch(() => errors.push('the stray did not come back after a reload'));
 const taps = await page.evaluate(() => window.fuzz.state.taps);
 if (taps < 12) errors.push(`the save lost the taps: ${taps}`);
 
@@ -170,6 +188,7 @@ const played = await page.evaluate(async (picks) => {
   while (!f.state.ended && performance.now() - t0 < 60000) {
     f.tap(5);
     for (const id of Object.keys(picks)) if (f.items.find((i) => i.id === id) && !f.state.owned[id] && f.state.fuzz >= e.price(id)) f.pick(id, picks[id]);
+    document.querySelector('.tc [data-pick=none]')?.click();   // the pictures card on Slideshow and Swipe Feed
     const win = e.shop(50);
     for (const it of [...win.rows, win.goal].filter(Boolean)) {
       if (it.kind === 'fork' || (it.kind === 'end' && it.id !== 'drop')) continue;
