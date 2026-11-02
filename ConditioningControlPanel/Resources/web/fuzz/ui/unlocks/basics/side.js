@@ -137,7 +137,7 @@ export default {
     mount(ctx) {
       ctx.css('@keyframes fz-ready { 50% { box-shadow: 0 0 0 3px var(--niche); } } .fz-lvl-ready { animation: fz-ready 1.2s ease-in-out infinite; } body.gentle .fz-lvl-ready { animation: none; }');
       let lvl = ctx.store.get('lvl') || 1, xp = ctx.store.get('xp') || 0, shownBank = -1, lastFill = 0;
-      const row = ctx.el('div', 'order:4;display:flex;align-items:center;gap:6px;margin-top:3px;font-size:13px;pointer-events:auto;', null, ctx.layer('meters'));
+      const row = ctx.el('div', 'order:4;display:flex;align-items:center;gap:6px;margin-top:3px;padding:0 6px;background:color-mix(in srgb,var(--panel) 82%,transparent);color:var(--ink);font-size:13px;pointer-events:auto;', null, ctx.layer('meters'));
       const label = ctx.el('span', 'flex:none;', '', row);
       const track = ctx.el('span', 'display:block;width:110px;height:10px;background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden;', null, row);
       const fill = ctx.el('i', 'display:block;height:100%;width:0;background:linear-gradient(90deg,var(--niche),color-mix(in srgb,var(--niche),var(--niche-2)) 45%,var(--niche-2));transition:width .25s linear;', null, track);

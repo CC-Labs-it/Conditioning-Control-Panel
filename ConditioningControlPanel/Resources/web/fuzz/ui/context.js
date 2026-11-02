@@ -195,7 +195,7 @@ export function makeContext(engine, scope) {
     get paused() { return !!(engine.paused || engine.suspended); },
     /* True when the Control Panel switched this row back on: it did not just arrive, so no arrival show and no first-time gift. */
     get restored() { return !!scope.restored; },
-    /* The Control Panel's door to the engine: { isOn(id), set(id, on), groups() }. */
+    /* The Control Panel's door to the engine: { isOn(id), set(id, on), waitingOn(id), groups() }. */
     switches: engine.switches,
     get gentle() { return ui.gentle(); },
     get reduced() { return ui.reduced(); },

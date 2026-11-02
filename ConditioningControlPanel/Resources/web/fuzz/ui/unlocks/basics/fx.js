@@ -149,8 +149,7 @@ export const PALETTES = Object.freeze({
 
 /** Write a palette straight on the root. The player's own press wins over anything mounted before it. */
 export function setPalette(ctx, name) {
-  const root = docOf(ctx).documentElement.style;
-  for (const [k, v] of Object.entries(PALETTES[name])) root.setProperty(k, v);
+  ctx.vars(PALETTES[name]);   // through ctx, or the page keeps these colours after the row is switched off
 }
 
 /* ---- the Loom, once ---- */

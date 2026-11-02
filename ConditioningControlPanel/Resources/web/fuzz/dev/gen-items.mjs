@@ -71,6 +71,7 @@ function moveRows(rows) {
 
 /* Row text that named a multiple. Modifiers bend past a knee (sim/economy.js), so a row says more, never how many times. */
 const WHAT_OVERRIDE = {
+  levels: 'An XP bar keeps filling, and one press collects every level for a bonus.',
   softw: 'Some taps pay extra, a word fades in on the button, and you hear a moan.',
   heartbtn: 'The button becomes a squishy heart.',
   t_denied: 'Some taps are refused, and the next one pays more.',

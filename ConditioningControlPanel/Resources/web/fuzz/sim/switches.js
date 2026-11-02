@@ -2,7 +2,19 @@
  * row itself pays per second or per tap stays in the sim, so tidying up is never a punishment. Forks, endings, the moods,
  * `start` and the panel itself are never listed. Wake Up and panic are not rows, and nothing here reaches them. */
 
-import { BY_ID, LANES } from '../data/items.js';
+import { BY_ID, ITEMS, LANES } from '../data/items.js';
+
+/* Rows that build on a parent's live state rather than on the screen alone: the feed's hooks, the frame the captions write in,
+ * EMI herself, the hum. They cannot come and go alone, so a switch in a family remounts the family, and with the parent off
+ * its children wait. Their own switches keep what the player chose. */
+const laneFamily = (lane) => ITEMS.filter((it) => it.lane === lane && it.kind === 'item').map((it) => it.id);
+const FAMILIES = [laneFamily('scroll'), laneFamily('blind'), laneFamily('emi'), ['a_hum', 'a_phones', 'a_bin']];
+const FAMILY_OF = new Map(FAMILIES.flatMap((f) => f.map((id) => [id, f])));
+
+export const familyOf = (id) => FAMILY_OF.get(id) || null;
+export const parentOf = (id) => { const f = FAMILY_OF.get(id); return f && f[0] !== id ? f[0] : null; };
+/** Should this row be mounted? Its own switch is on and its family's parent is too. */
+export const liveOn = (off, id) => !off[id] && !off[parentOf(id)];
 
 export const switchable = (it) => !!it && it.kind === 'item' && it.group === 'run' && it.id !== 'start' && it.id !== 'panel';
 

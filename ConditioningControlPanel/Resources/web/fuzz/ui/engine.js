@@ -10,7 +10,7 @@ import { brandText } from '../data/brand.js';
 import * as E from '../sim/economy.js';
 import { adClickFactor, moodOf } from '../sim/moods.js';
 import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
-import { panelGroups, switchable } from '../sim/switches.js';
+import { familyOf, liveOn, panelGroups, parentOf, switchable } from '../sim/switches.js';
 import { makeContext } from './context.js';
 import { createPictures } from './pictures.js';
 import { createAds } from './ads.js';
@@ -65,7 +65,9 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     scope.restored = restored;
     scopes.set(id, scope);
     scope.ctx = makeContext(api, scope);
+    scope.mounting = true;
     scope.ret = guard(scope, () => entry.mount(scope.ctx)) || {};
+    scope.mounting = false;
     return true;
   }
 
@@ -79,7 +81,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
 
   const mountAll = () => {
     if (run.mood) mount(run.mood);
-    for (const id of [...run.order]) if (isOn(id)) mount(id);
+    for (const id of [...run.order]) if (liveOn(run.off, id)) mount(id);
   };
   const unmountAll = () => { for (const id of [...scopes.keys()]) unmount(id); };
 
@@ -88,8 +90,15 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   function setOn(id, on) {
     if (stopped || !switchable(BY_ID[id]) || !E.has(run, id) || !registry[id]?.mount) return false;
     if (on === isOn(id)) return true;
-    if (on) { delete run.off[id]; mount(id, true); restack(); }
-    else { run.off[id] = 1; unmount(id); }
+    if (on) delete run.off[id]; else run.off[id] = 1;
+    const family = familyOf(id);
+    if (family) {
+      const owned = run.order.filter((x) => family.includes(x));
+      for (const x of [...owned].reverse()) unmount(x);
+      for (const x of owned) if (liveOn(run.off, x)) mount(x, true);
+      restack();
+    } else if (on) { mount(id, true); restack(); }
+    else unmount(id);
     syncQuiet();
     save();
     emit('switch', { id, on });
@@ -112,12 +121,12 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   const lookPlace = new Map();
   function seqFor(scope, key) {
     const k = `${scope.item.id}|${key}`;
-    if (scope.restored && lookPlace.has(k)) return lookPlace.get(k);
+    if (scope.restored && scope.mounting && lookPlace.has(k)) return lookPlace.get(k);   // later, a press is news and wins
     lookSeq += 1;
     lookPlace.set(k, lookSeq);
     return lookSeq;
   }
-  /* ctx.vars: each hold keeps its own values, so letting go of one never restores a value another row has since let go of. */
+  /* ctx.vars: each row holds its own values, so letting go of one never restores a value another row has since let go of. */
   const varHolds = new Set();
   const varBase = new Map();
   function paintVar(key) {
@@ -130,14 +139,19 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   }
   function holdVars(map, scope) {
     const root = ui.doc.documentElement.style;
-    const h = { map: { ...map }, seq: {} };
-    for (const k of Object.keys(h.map)) {
-      if (!varBase.has(k)) varBase.set(k, root.getPropertyValue(k));
-      h.seq[k] = seqFor(scope, `var:${k}`);
+    if (!scope.varHold) {
+      const fresh = { map: {}, seq: {} };
+      scope.varHold = fresh;
+      varHolds.add(fresh);
+      scope.cleanups.add(() => { varHolds.delete(fresh); for (const k of Object.keys(fresh.map)) paintVar(k); });
     }
-    varHolds.add(h);
-    for (const k of Object.keys(h.map)) paintVar(k);
-    scope.cleanups.add(() => { varHolds.delete(h); for (const k of Object.keys(h.map)) paintVar(k); });
+    const h = scope.varHold;
+    for (const [k, v] of Object.entries(map)) {
+      if (!varBase.has(k)) varBase.set(k, root.getPropertyValue(k));
+      h.map[k] = v;
+      h.seq[k] = seqFor(scope, `var:${k}`);
+      paintVar(k);
+    }
   }
 
   /* ---- events ---- */
@@ -281,7 +295,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     const scope = scopes.get(id);
     delete run.off[id];   // buying a row again means wanting it
     if (scope && scope.ret?.grow) guard(scope, scope.ret.grow, res.count);
-    else mount(id);
+    else if (liveOn(run.off, id)) mount(id);
     emit('switch', { id, on: true });
     syncQuiet();
     save();
@@ -368,7 +382,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     /** Game time that ctx.speed never touches: for what must always run out on time. */
     get real() { return real; },
     speedFactor, holdSpeed, seqFor, holdVars,
-    switches: { isOn, set: setOn, groups: () => panelGroups(run, (id) => !!registry[id]?.mount) },
+    switches: { isOn, set: setOn, waitingOn: (id) => (run.off[parentOf(id)] ? parentOf(id) : null), groups: () => panelGroups(run, (id) => !!registry[id]?.mount) },
     get paused() { return paused; },
     get suspended() { return suspended; },
     get stopped() { return stopped; },

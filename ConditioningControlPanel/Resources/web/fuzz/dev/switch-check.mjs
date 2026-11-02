@@ -123,10 +123,11 @@ for (const route of process.env.QUICK ? ROUTES.slice(0, 1) : ROUTES) {
       const n = errs.length;
       const s0 = await page.evaluate(SNAP);
       await page.evaluate((x) => window.fuzz.engine.switches.set(x, false), id);
-      await page.waitForTimeout(120);
+      await page.waitForTimeout(60);
       await page.evaluate((x) => window.fuzz.engine.switches.set(x, true), id);
-      await page.waitForTimeout(120);
-      const d = diff(s0, await page.evaluate(SNAP));
+      await page.waitForTimeout(60);
+      /* Trance's fade and the short-lived sprites in `back` move by themselves, with or without a switch. */
+      const d = diff(s0, await page.evaluate(SNAP)).filter((x) => !/^(counter|shop|layers\.back)/.test(x));
       if (d.length) one.push(`${id}: ${d.slice(0, 3).join(' | ')}`);
       if (errs.length > n) one.push(`${id}: ERR ${errs[errs.length - 1]}`);
     }
