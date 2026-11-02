@@ -20,7 +20,8 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   const mods = [];                   // live modifiers, in mount order
   const listeners = new Map();       // event -> Set of {fn, scope}
   let paused = false, suspended = false, stopped = !!run.ended, now = run.clock;
-  let endingBegun = false, creditsUp = false;
+  let endingBegun = false, creditsUp = false, real = run.clock;
+  const speeds = new Set();
   const pictures = createPictures({ source: env.pictureSource, onChange: (source) => { emit('pictures', { source }); save(); } });
 
   /* ---- scopes ---- */
@@ -98,10 +99,32 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   function step(dtMs) {
     if (paused || suspended) return;
     const dt = Math.min(1000, Math.max(0, dtMs));
-    if (!run.ended) E.tick(run, dt, mods);
-    now += dt;
-    if (stopped && !creditsUp) { const s = scopes.get(ENDING_SCOPE); if (s) runScope(s, dt); return; }
-    for (const scope of [...scopes.values()]) runScope(scope, dt);
+    if (!run.ended) E.tick(run, dt, mods);   // real time: income and route timing never see ctx.speed
+    const scaled = dt * speedFactor();
+    now += scaled;
+    real += dt;
+    if (stopped && !creditsUp) { const s = scopes.get(ENDING_SCOPE); if (s) runScope(s, scaled); return; }
+    for (const scope of [...scopes.values()]) runScope(scope, scaled);
+  }
+
+  /* ---- ctx.speed: every hold multiplies the unlocks' clock, capped, restored when released ---- */
+  function speedFactor() {
+    let f = 1;
+    for (const h of speeds) f *= h.m;
+    return Math.min(CONFIG.SPEED_MAX, Math.max(CONFIG.SPEED_MIN, f));
+  }
+  function applySpeed() {
+    const f = speedFactor();
+    for (const scope of scopes.values()) for (const a of scope.anims) a.playbackRate = f;
+  }
+  function holdSpeed(m, scope) {
+    if (!(m > 0) || !Number.isFinite(m)) return () => {};
+    const h = { m };
+    speeds.add(h);
+    applySpeed();
+    const release = () => { if (speeds.delete(h)) applySpeed(); scope.cleanups.delete(release); };
+    scope.cleanups.add(release);
+    return release;
   }
 
   function runScope(scope, dt) {
@@ -240,6 +263,9 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   const api = {
     get run() { return run; }, life, ui, audio, mods, host, rng, env, scopes, pictures,
     get now() { return now; },
+    /** Game time that ctx.speed never touches: for what must always run out on time. */
+    get real() { return real; },
+    speedFactor, holdSpeed,
     get paused() { return paused; },
     get suspended() { return suspended; },
     get stopped() { return stopped; },

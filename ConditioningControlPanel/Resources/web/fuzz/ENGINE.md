@@ -62,6 +62,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.bounds()`: `{w, h}` of the page, cached; use it instead of measuring each frame.
 - `ctx.every(ms, fn)`, `ctx.after(ms, fn)`, `ctx.frame(fn(dt, now))`: each returns a cancel function. Share these; live particles have a cap, so prefer `ctx.float(x, y, text, css?)` for rising numbers.
 - `ctx.anim(el, keyframes, opts)`: Web Animations. Keep loops at or under 3 Hz.
+- `ctx.speed(multiplier)`: while held, every unlock's `every`, `after`, `frame`, `tick` and `anim` run at that speed; holds multiply, held between 0.1 and 4; returns a release, and it ends with your unlock. Per-second income, button locks and swaps stay on real time, so route timing holds. `now` in frames and modifiers follows it; `ctx.state.clock` does not, so never mix the two.
 
 **Money**
 

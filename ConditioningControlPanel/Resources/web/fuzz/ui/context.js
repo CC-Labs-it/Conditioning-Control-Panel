@@ -89,9 +89,11 @@ export function makeContext(engine, scope) {
       const a = el.animate(keyframes, typeof opts === 'number' ? { duration: opts } : opts);
       scope.anims.add(a);
       a.finished?.then(() => scope.anims.delete(a), () => scope.anims.delete(a));
+      a.playbackRate = engine.speedFactor();
       if (engine.paused || engine.suspended) a.pause();
       return a;
     },
+    speed: (multiplier) => engine.holdSpeed(multiplier, scope),
 
     on: (event, fn) => engine.subscribe(event, fn, scope),
     emit: (event, data) => engine.emit(event, data),
@@ -100,9 +102,11 @@ export function makeContext(engine, scope) {
     wallHit: (at) => engine.wallHit(at),
     rates: () => engine.rates(),
     mod(m) {
-      scope.mods.push(m);
-      engine.mods.push(m);
-      return () => { const i = engine.mods.indexOf(m); if (i >= 0) engine.mods.splice(i, 1); scope.mods.splice(scope.mods.indexOf(m), 1); };
+      // A modifier always sees the same clock as ctx.frame and ctx.every, whatever the sim is passing.
+      const held = Object.fromEntries(Object.entries(m).map(([k, f]) => [k, typeof f === 'function' ? (v, s, _now, it) => f(v, s, engine.now, it) : f]));
+      scope.mods.push(held);
+      engine.mods.push(held);
+      return () => { const i = engine.mods.indexOf(held); if (i >= 0) engine.mods.splice(i, 1); scope.mods.splice(scope.mods.indexOf(held), 1); };
     },
 
     get button() { return ui.buttonFor(scope); },
@@ -172,4 +176,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
+  'speed',
 ]);

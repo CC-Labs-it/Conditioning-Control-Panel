@@ -142,10 +142,10 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
         const d = Math.min(12000, ms);
         const dx = Math.min(180, el.stage.clientWidth / 3);
         el.wrap.style.transform = `translateX(${el.wrap.style.transform.includes('-') ? dx : -dx}px)`;
-        swapUntil = engine.now + d;
+        swapUntil = engine.real + d;
       },
       lockFor(ms, label = '') {
-        lockUntil = engine.now + Math.min(CONFIG.LOCK_MAX_MS, Math.max(0, ms));
+        lockUntil = engine.real + Math.min(CONFIG.LOCK_MAX_MS, Math.max(0, ms));
         el.btn.classList.add('locked');
         el.lock.hidden = !label;
         el.lock.textContent = brandText(label);
@@ -154,8 +154,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
 
   function tickButton() {
-    if (lockUntil && engine.now >= lockUntil) { lockUntil = 0; el.btn.classList.remove('locked'); el.lock.hidden = true; }
-    if (swapUntil && engine.now >= swapUntil) { swapUntil = 0; el.wrap.style.transform = ''; }
+    if (lockUntil && engine.real >= lockUntil) { lockUntil = 0; el.btn.classList.remove('locked'); el.lock.hidden = true; }
+    if (swapUntil && engine.real >= swapUntil) { swapUntil = 0; el.wrap.style.transform = ''; }
   }
 
   function wireButton() {

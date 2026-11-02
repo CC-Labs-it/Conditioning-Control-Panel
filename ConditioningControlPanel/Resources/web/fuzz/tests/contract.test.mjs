@@ -173,6 +173,43 @@ test('with no kit a stream is a harmless stand-in', () => {
   assert.equal(s.playing, false);
 });
 
+test('ctx.speed scales every unlock clock, never income, and ends with its holder', () => {
+  const log = { every: 0, sec: 0 };
+  let ctx, seenNow = 0, release;
+  const run = E.createRun();
+  E.grant(run, 'ticker');
+  E.grant(run, 'rounded');
+  const engine = createEngine({ run, life: createLife(), ui: fakeUi(), registry: {
+    stray: { mount(c) { ctx = c; c.every(100, () => log.every++); c.frame((dt, now) => { log.sec += dt; seenNow = now; }); c.mod({ fps: (v, _s, now) => { seenNow = now; return v; } }); return {}; } },
+    rounded: { mount(c) { release = c.speed(0.5); return {}; } },
+  } });
+  engine.mount('stray');
+  engine.mount('rounded');
+  const anim = ctx.anim(ctx.el('div'), [], 100);
+  assert.equal(anim.playbackRate, 0.5);
+  const fps = engine.rates().fps;
+  const before = run.fuzz;
+  for (let i = 0; i < 10; i++) engine.step(100);
+  assert.equal(log.every, 5, 'half the timer fires');
+  assert.equal(Math.round(log.sec * 100), 50, 'half the frame time');
+  assert.equal(Math.round(run.fuzz - before), fps, 'a full second of income');
+  assert.equal(run.clock, 1000, 'the sim clock is real time');
+  assert.equal(engine.real, 1000);
+  assert.equal(engine.now, 500);
+  engine.rates();
+  assert.equal(seenNow, 500, 'a modifier reads the same clock as a frame');
+  release();
+  assert.equal(anim.playbackRate, 1);
+  engine.step(100);
+  assert.equal(engine.now, 600);
+  ctx.speed(0.001);
+  assert.equal(engine.speedFactor(), 0.1, 'never a stopped clock');
+  ctx.speed(NaN);
+  assert.equal(engine.speedFactor(), 0.1);
+  engine.unmount('stray');
+  assert.equal(engine.speedFactor(), 1, 'restored on off');
+});
+
 test('a stacking row stays mounted and hears grow; a row without grow remounts', () => {
   let mounts = 0, grown = null;
   const { run, engine } = setup({ stray: { mount() { mounts++; return { grow(n) { grown = n; } }; } } });
