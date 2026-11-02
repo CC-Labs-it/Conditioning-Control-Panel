@@ -32,8 +32,6 @@ export function picker(ctx, list) {
 /** Is a card up? Then nothing new should pop over it. */
 export const cardUp = () => !!document.getElementById('cards')?.childElementCount;
 
-export const rect = (id) => document.getElementById(id)?.getBoundingClientRect() || null;
-
 /** The bottom dock: captions above a strip of little widgets. Lives in `over`, ignores the pointer except its widgets. */
 function bottom(ctx) {
   if (dock?.root.isConnected) return dock;

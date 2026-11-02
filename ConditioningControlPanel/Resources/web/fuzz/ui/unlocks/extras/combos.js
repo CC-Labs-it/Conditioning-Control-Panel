@@ -6,7 +6,7 @@ import { AUDIO_DRAMA, COMBO_LINES, INDUCTION, SLEEP_STORY } from '../../../data/
 import { LAZY_CAPTIONS } from '../../../data/content/blind.js';
 import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/loomSpiral.js';
 import { COMBO_COPY as C } from './copy.js';
-import { FONT, captions, cardUp, dockTop, h, pick, picker, rect, slot } from './kit.js';
+import { FONT, captions, cardUp, dockTop, h, pick, picker, slot } from './kit.js';
 
 /** The secret stamp: two ingredients slide together into the name. Once per run. */
 function found(ctx) {
@@ -337,8 +337,8 @@ export const COMBO_UNLOCKS = {
       const more = shop.querySelector('#more');
       const end = (more?.offsetParent ? more : shop.querySelector('#rows'))?.getBoundingClientRect();
       /* Nor over the number: that is the one thing on the page everybody reads. */
-      for (const id of ['counter', 'l-meters']) {
-        const c = rect(id);
+      for (const part of [ctx.parts.counter, ctx.layer('meters')]) {
+        const c = part?.getBoundingClientRect();
         if (c && x + AW > c.left + c.width * 0.1 && x < c.right - c.width * 0.1 && y + AH > c.top && y < c.bottom) return false;
       }
       if (!top?.height) return false;
@@ -358,7 +358,7 @@ export const COMBO_UNLOCKS = {
         a.el.type = 'button';
         a.el.addEventListener('click', () => {
           ctx.emit('ad', { kind: 'viral' });
-          ctx.pay(ctx.rates().fps * ctx.config.AD_CLICK_PAYS_SECONDS, 'x_viral', { x: x + AW / 2, y });
+          ctx.pay(ctx.rates().fps * ctx.config.AD_CLICK_PAYS_SECONDS, 'ad', { x: x + AW / 2, y });
           kill(a);
         });
         ctx.anim(a.el, [{ transform: 'scale(.3)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: 'ease-out' });

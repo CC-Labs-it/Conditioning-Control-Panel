@@ -68,7 +68,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 **Money**
 
-- `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`.
+- `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`. An ad press uses the source `'ad'`, which is what the Broke mood doubles.
 - `ctx.spend(amount, reason?)`: takes from the bank, never below zero, answers what it took. No debt, and it does not touch `total`. Pace does not apply. Reasons add up in `ctx.state.spent`.
 - `ctx.guardBuy(fn(item) -> {refuse: 'line'} | null)`: refuse or delay a buy; the line shows as a toast. Returns a remover. Use this, never capture listeners on the shop. It cannot make a run impossible: a row goes through after 3 refusals whatever you answer, a fork or ending row never reaches you, and a throw lets the row through.
 - `ctx.wallHit({x, y, corner})`: a bouncing thing hit a wall: pays the wall value, emits `wall`, answers the gain.
@@ -85,7 +85,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 **Words and cards**
 
-- `ctx.say(text)`: the thought ticker. `ctx.toast(text)`: a line under the button; newest replaces.
+- `ctx.say(text)`: the thought ticker. `ctx.sayRate(r)`: while held, only that share of every lane's thoughts gets through (0.5 = every second one; holds multiply; ends with your unlock). `ctx.toast(text)`: a line under the button; newest replaces.
 - `ctx.modal({title, body, buttons:[{label, onPress, keepOpen?}], node?, ms?})`: one at a time, queued; returns `{close()}`. No buttons and no `ms` gets a Close button. Must never cost the run. No text inputs, ever.
 
 **Sound and media**

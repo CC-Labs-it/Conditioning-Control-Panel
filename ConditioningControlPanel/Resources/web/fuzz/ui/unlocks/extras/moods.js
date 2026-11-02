@@ -9,7 +9,7 @@ import { moodOf } from '../../../sim/moods.js';
 import { MOOD_COPY as C } from './copy.js';
 import { getEmi } from './emi.js';
 import { arrive, buyLine } from './emi-unlocks.js';
-import { FONT, h, picker, rect } from './kit.js';
+import { FONT, h, picker } from './kit.js';
 
 const EMOJI_FONT = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
 const contentOf = (id) => MOODS.find((m) => m.id === id);
@@ -70,6 +70,7 @@ const mood = (fn) => ({
 export const MOOD_UNLOCKS = {
   /* Busy: a faint band of static rolls down the page now and then. The bouncers are in the sim. */
   m_static: mood((ctx) => {
+    ctx.sayRate(0.5);
     if (ctx.gentle) return;
     const band = ctx.el('div', 'position:absolute;left:0;right:0;top:0;height:60px;opacity:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.09) 0 1px,transparent 1px 3px);', null, 'wash');
     const roll = () => { ctx.anim(band, [{ transform: 'translateY(-60px)', opacity: 0.8 }, { transform: `translateY(${ctx.bounds().h}px)`, opacity: 0.8 }], { duration: 3600, easing: 'linear' }); };

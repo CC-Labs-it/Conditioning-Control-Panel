@@ -215,10 +215,12 @@ test('ctx.speed scales every unlock clock, never income, and ends with its holde
 test('ctx.parts hands over the shop and the button wrap, and cannot be reassigned', () => {
   let ctx;
   const { ui, engine } = setup({ stray: { mount(c) { ctx = c; return {}; } } });
-  ui.parts = { shop: new FakeEl('shop'), buttonWrap: new FakeEl('wrap') };
+  ui.parts = { shop: new FakeEl('shop'), buttonWrap: new FakeEl('wrap'), counter: new FakeEl('counter'), stage: new FakeEl('stage') };
   engine.mount('stray');
   assert.equal(ctx.parts.shop, ui.parts.shop);
   assert.equal(ctx.parts.buttonWrap, ui.parts.buttonWrap);
+  assert.equal(ctx.parts.counter, ui.parts.counter);
+  assert.equal(ctx.parts.stage, ui.parts.stage);
   assert.throws(() => { ctx.parts.shop = null; });
 });
 
@@ -419,4 +421,12 @@ test('the registry merges five independent group files, no id claimed twice, eve
     }
   }
   assert.equal(Object.keys(REGISTRY).length, seen.size);
+});
+
+test('an ad press is worth double on a Broke day, and any other lump is not', () => {
+  const { engine, run } = setup({ stray: { mount() { return {}; } } });
+  run.mood = 'm_broke';
+  const plain = engine.pay(10, 'x');
+  const ad = engine.pay(10, 'ad');
+  assert.equal(ad, plain * 2);
 });

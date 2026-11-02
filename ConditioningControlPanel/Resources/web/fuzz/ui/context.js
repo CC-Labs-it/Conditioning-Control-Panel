@@ -116,6 +116,12 @@ export function makeContext(engine, scope) {
     get button() { return ui.buttonFor(scope); },
 
     say: (text) => ui.say(brandText(text)),
+    sayRate(rate) {
+      const off = ui.holdSayRate?.(rate) || (() => {});
+      const release = () => { off(); scope.cleanups.delete(release); };
+      scope.cleanups.add(release);
+      return release;
+    },
     toast: (text) => ui.toast(brandText(text)),
     float: (x, y, text, css) => ui.float(x, y, brandText(text), css),
     modal(spec) {
@@ -204,5 +210,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate',
 ]);

@@ -8,7 +8,7 @@ import { BY_ID, ITEMS } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { brandText } from '../data/brand.js';
 import * as E from '../sim/economy.js';
-import { moodOf } from '../sim/moods.js';
+import { adClickFactor, moodOf } from '../sim/moods.js';
 import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
 import { makeContext } from './context.js';
 import { createPictures } from './pictures.js';
@@ -172,7 +172,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
 
   function pay(amount, source = 'lump', at = null) {
     if (stopped) return 0;
-    const got = E.lump(run, amount * run.pace, source);
+    const got = E.lump(run, amount * run.pace * (source === 'ad' ? adClickFactor(run) : 1), source);
     ui.paid?.(got, at);
     ui.draw?.();
     return got;

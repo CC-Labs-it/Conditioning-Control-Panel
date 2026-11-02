@@ -91,8 +91,21 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     t.animate?.([{ opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], { duration: 2800, fill: 'both' }).finished?.then(() => t.remove(), () => {});
   }
 
+  /* ctx.sayRate: held rates multiply. Thoughts past the rate are dropped, not delayed. */
+  const sayRates = new Set();
+  let sayOwed = 0;
+  const sayRate = () => { let r = 1; for (const h of sayRates) r *= h.r; return r; };
+  function holdSayRate(r) {
+    const h = { r: Math.min(1, Math.max(0, r)) };
+    sayRates.add(h);
+    return () => sayRates.delete(h);
+  }
+
   /** One thought at a time crossing the strip. Gentle holds it still and fades it. */
   function say(text) {
+    sayOwed += sayRate();
+    if (sayOwed < 1) return;
+    sayOwed -= 1;
     tickerQ.push(text);
     if (tickerQ.length > 6) tickerQ.shift();
     pumpTicker();
@@ -190,7 +203,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       frozen = el.world.getAnimations?.({ subtree: true }).filter((a) => a.playState === 'running') || [];
       for (const a of frozen) a.pause();
     } else {
-      for (const a of frozen) { try { a.play(); } catch { /* cancelled while paused */ } }
+      for (const a of frozen) { if (a.playState === 'paused') a.play(); }  // anything cancelled during the pause stays cancelled
       frozen = [];
     }
   }
@@ -314,7 +327,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     buttonFor, buttonLocked: () => lockUntil > 0, inPress,
     pressed() { el.btn.classList.add('down'); clearTimeout(downTimer); downTimer = setTimeout(() => el.btn.classList.remove('down'), 90); },
     holdWorld,
-    paid, float, toast, say, draw,
+    paid, float, toast, say, holdSayRate, draw,
     modal: (spec) => cards.open(spec),
     denied: (id) => shop?.denied(id),
     bought(item) {
