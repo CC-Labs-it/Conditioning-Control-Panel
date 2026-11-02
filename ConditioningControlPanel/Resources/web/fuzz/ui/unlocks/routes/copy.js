@@ -22,6 +22,14 @@ export const ROUTE_COPY = Object.freeze({
   wakeStill: 'Wake Up still works, top right.',
   feedOpen: 'Press the feed to open it.',
   feedPress: 'press to open', feedSwipe: 'swipe up', feedBack: 'Back to the button',
+  /* Screens */
+  screenNone: 'Nothing chosen. Still paying.',
+  screenNoGif: 'No GIFs here. Still paying.',
+  screenNoClip: 'No videos here. Still paying.',
+  screenAdd: 'Add your files',
+  screenNotFiles: 'Those were not pictures, GIFs or videos.',
+  screenDrag: 'drag me anywhere',
+  screenPay: '+{n}/s',
   /* No Pictures */
   fillNote: 'Choose one. It pays either way.',
   inkTitle: 'What do you see',

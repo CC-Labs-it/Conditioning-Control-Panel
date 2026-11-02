@@ -21,7 +21,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     wrap: $('btn-wrap'), lock: $('btn-lock'), pause: $('pause'), wake: $('wake'), resume: $('resume'), mute: $('mute'), gentle: $('gentle'),
     toast: $('l-toast'), fx: $('l-fx'), cards: $('cards'), saveBox: $('save-box'),
   };
-  const LAYERS = { back: 'l-back', wash: 'l-wash', floaters: 'l-floaters', ticker: 'l-ticker', meters: 'l-meters', banner: 'l-banner', side: 'l-side', over: 'l-over', toast: 'l-toast', ending: 'l-ending' };
+  const LAYERS = { back: 'l-back', wash: 'l-wash', screens: 'l-screens', floaters: 'l-floaters', ticker: 'l-ticker', meters: 'l-meters', banner: 'l-banner', side: 'l-side', over: 'l-over', toast: 'l-toast', ending: 'l-ending' };
   const cards = createCards(doc, el.cards);
   const motionQuery = win.matchMedia?.('(prefers-reduced-motion: reduce)');
   let gentleOn = !!extras.gentle, initGentle = !!init.gentle, initReduced = !!init.reduced;
