@@ -18,6 +18,8 @@ export const ENDING_IDS = Object.freeze(ITEMS.filter((i) => i.kind === 'end').ma
 
 const num = (v, lo = 0, hi = Number.MAX_SAFE_INTEGER) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo);
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+/** ctx.store: one plain object per unlock. Anything else would throw inside that unlock. */
+const stores = (v) => Object.fromEntries(Object.entries(obj(v)).filter(([, x]) => x && typeof x === 'object' && !Array.isArray(x)));
 
 /** What outlives a run: every ending seen, what the After lane needs. */
 export function createLife() {
@@ -78,7 +80,7 @@ function parseRun(src) {
   for (const [k, v] of Object.entries(obj(src.spent))) s.spent[k] = num(v);
   const side = obj(src.side);
   s.side = { budget: num(side.budget), asked: num(side.asked), paid: num(side.paid) };
-  s.store = obj(src.store);
+  s.store = stores(src.store);
   s.off = cleanOff(src.off, s.owned);
   s.endless = !!src.endless && !!s.owned.onemore;
   s.ended = src.ended && s.owned[src.ended.id] && BY_ID[src.ended.id]?.kind === 'end' ? { id: src.ended.id, at: num(src.ended.at) } : null;
@@ -104,7 +106,7 @@ function parseLife(src) {
   }
   life.bestMs = num(src.bestMs);
   life.perk = BY_ID[src.perk]?.lane === 'look' ? src.perk : null;
-  life.store = obj(src.store);
+  life.store = stores(src.store);
   return life;
 }
 

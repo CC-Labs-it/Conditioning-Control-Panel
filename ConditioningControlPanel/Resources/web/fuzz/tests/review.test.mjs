@@ -7,7 +7,7 @@ import { createEngine } from '../ui/engine.js';
 import { REGISTRY } from '../ui/unlocks/index.js';
 import { fresh } from '../ui/unlocks/basics/fx.js';
 import * as E from '../sim/economy.js';
-import { createLife } from '../sim/save.js';
+import { createLife, parse, serialize } from '../sim/save.js';
 
 test('a closed Guide or Control Panel sheet is not a card up', () => {
   const was = globalThis.document;
@@ -73,4 +73,14 @@ test('a reload from a save is not an arrival: Levels keeps its XP, the wheel its
   engine.mountAll(true);
   engine.step(1000);
   assert.ok(run.store.levels.xp >= 500, `xp after a reload is ${run.store.levels.xp}`);
+});
+
+test('a save whose store holds something other than an object loads clean', () => {
+  const run = E.createRun();
+  const raw = JSON.parse(serialize(run, createLife()));
+  raw.run.store = { quiz: 'nope', levels: { lvl: 2 }, wheel: [1], gold: null };
+  raw.life.store = { z_x: 3, z_y: { a: 1 } };
+  const got = parse(JSON.stringify(raw));
+  assert.deepEqual(got.run.store, { levels: { lvl: 2 } });
+  assert.deepEqual(got.life.store, { z_y: { a: 1 } });
 });
