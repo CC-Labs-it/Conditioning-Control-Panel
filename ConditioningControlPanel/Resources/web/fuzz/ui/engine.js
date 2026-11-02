@@ -10,6 +10,7 @@ import { brandText } from '../data/brand.js';
 import * as E from '../sim/economy.js';
 import { adClickFactor, moodOf } from '../sim/moods.js';
 import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
+import { familyOf, liveOn, panelGroups, parentOf, switchable } from '../sim/switches.js';
 import { makeContext } from './context.js';
 import { createPictures } from './pictures.js';
 import { createAds } from './ads.js';
@@ -55,15 +56,18 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     scope.els.clear(); scope.timers.clear(); scope.frames.clear(); scope.anims.clear(); scope.loops.clear();
   }
 
-  function mount(id) {
+  function mount(id, restored = false) {
     const item = BY_ID[id];
     const entry = registry[id];
     if (!item || !entry?.mount) return false;
     if (scopes.has(id)) unmount(id);
     const scope = newScope(item);
+    scope.restored = restored;
     scopes.set(id, scope);
     scope.ctx = makeContext(api, scope);
+    scope.mounting = true;
     scope.ret = guard(scope, () => entry.mount(scope.ctx)) || {};
+    scope.mounting = false;
     return true;
   }
 
@@ -77,9 +81,78 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
 
   const mountAll = () => {
     if (run.mood) mount(run.mood);
-    for (const id of [...run.order]) mount(id);
+    for (const id of [...run.order]) if (liveOn(run.off, id)) mount(id);
   };
   const unmountAll = () => { for (const id of [...scopes.keys()]) unmount(id); };
+
+  /* ---- the Control Panel: a row switched off is not mounted, now or on the next load. Its own pay stays in the sim. ---- */
+  const isOn = (id) => !run.off[id];
+  function setOn(id, on) {
+    if (stopped || !switchable(BY_ID[id]) || !E.has(run, id) || !registry[id]?.mount) return false;
+    if (on === isOn(id)) return true;
+    if (on) delete run.off[id]; else run.off[id] = 1;
+    const family = familyOf(id);
+    if (family) {
+      const owned = run.order.filter((x) => family.includes(x));
+      for (const x of [...owned].reverse()) unmount(x);
+      for (const x of owned) if (liveOn(run.off, x)) mount(x, true);
+      restack();
+    } else if (on) { mount(id, true); restack(); }
+    else unmount(id);
+    syncQuiet();
+    save();
+    emit('switch', { id, on });
+    ui.draw?.(true);
+    return true;
+  }
+  /** A row back on returns to its place: modifiers fold in buy order, as they would after a reload. */
+  function restack() {
+    const seen = new Set(), next = [];
+    for (const id of [run.mood, ...run.order]) {
+      const s = id && scopes.get(id);
+      if (s && !seen.has(id)) { seen.add(id); next.push(...s.mods); }
+    }
+    for (const s of scopes.values()) if (!seen.has(s.item.id)) next.push(...s.mods);
+    mods.splice(0, mods.length, ...next);
+  }
+
+  /* ---- layered looks: the newest word wins, and a row switched back on takes its old place, never the top. ---- */
+  let lookSeq = 0;
+  const lookPlace = new Map();
+  function seqFor(scope, key) {
+    const k = `${scope.item.id}|${key}`;
+    if (scope.restored && scope.mounting && lookPlace.has(k)) return lookPlace.get(k);   // later, a press is news and wins
+    lookSeq += 1;
+    lookPlace.set(k, lookSeq);
+    return lookSeq;
+  }
+  /* ctx.vars: each row holds its own values, so letting go of one never restores a value another row has since let go of. */
+  const varHolds = new Set();
+  const varBase = new Map();
+  function paintVar(key) {
+    const root = ui.doc.documentElement.style;
+    let top = null;
+    for (const h of varHolds) if (key in h.map && (!top || h.seq[key] > top.seq[key])) top = h;
+    const v = top ? top.map[key] : varBase.get(key);
+    if (v) root.setProperty(key, v); else root.removeProperty(key);
+    if (!top) varBase.delete(key);
+  }
+  function holdVars(map, scope) {
+    const root = ui.doc.documentElement.style;
+    if (!scope.varHold) {
+      const fresh = { map: {}, seq: {} };
+      scope.varHold = fresh;
+      varHolds.add(fresh);
+      scope.cleanups.add(() => { varHolds.delete(fresh); for (const k of Object.keys(fresh.map)) paintVar(k); });
+    }
+    const h = scope.varHold;
+    for (const [k, v] of Object.entries(map)) {
+      if (!varBase.has(k)) varBase.set(k, root.getPropertyValue(k));
+      h.map[k] = v;
+      h.seq[k] = seqFor(scope, `var:${k}`);
+      paintVar(k);
+    }
+  }
 
   /* ---- events ---- */
   function emit(event, data) {
@@ -220,8 +293,10 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     const item = res.item;
     emit('buy', { item, count: res.count, cost: res.cost });
     const scope = scopes.get(id);
+    delete run.off[id];   // buying a row again means wanting it
     if (scope && scope.ret?.grow) guard(scope, scope.ret.grow, res.count);
-    else mount(id);
+    else if (liveOn(run.off, id)) mount(id);
+    emit('switch', { id, on: true });
     syncQuiet();
     save();
     ui.bought?.(item, res);
@@ -306,7 +381,8 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     get now() { return now; },
     /** Game time that ctx.speed never touches: for what must always run out on time. */
     get real() { return real; },
-    speedFactor, holdSpeed,
+    speedFactor, holdSpeed, seqFor, holdVars,
+    switches: { isOn, set: setOn, waitingOn: (id) => (run.off[parentOf(id)] ? parentOf(id) : null), groups: () => panelGroups(run, (id) => !!registry[id]?.mount) },
     get paused() { return paused; },
     get suspended() { return suspended; },
     get stopped() { return stopped; },

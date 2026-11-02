@@ -3,6 +3,7 @@
 
 import { APP_ONLY, BOXES, FAKE_CHAT, FAKE_INBOX, GOLDEN, LEVELS, SCREEN_TIME, WHEEL } from '../../../data/content/index.js';
 import { baseCss, burst, btnCenter, chip, docOf, fresh, pop, sfx, squish } from './fx.js';
+import { XP_PER_SECOND, XP_PER_TAP, bankOf, collect, xpNeed } from '../../../sim/levels.js';
 
 const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length)];
 
@@ -112,40 +113,55 @@ export default {
     },
   },
 
-  /* Levels: an XP bar under the counter. Full, it asks to be collected and pays; nothing is lost by leaving it. */
+  /* Levels: an XP bar under the counter. XP never stops: whole levels bank up while the bar keeps filling, and one press
+   * pays them all at once, with a party the size of what was left waiting. */
   levels: {
     mount(ctx) {
-      ctx.css('@keyframes fz-ready { 50% { box-shadow: 0 0 0 3px var(--stamp); } } .fz-lvl-ready { animation: fz-ready 1.2s ease-in-out infinite; } body.gentle .fz-lvl-ready { animation: none; }');
-      let lvl = ctx.store.get('lvl') || 1, xp = ctx.store.get('xp') || 0;
-      const row = ctx.el('div', 'order:4;display:flex;align-items:center;gap:6px;margin-top:3px;font-size:13px;pointer-events:auto;', null, ctx.layer('meters'));
+      ctx.css('@keyframes fz-ready { 50% { box-shadow: 0 0 0 3px var(--niche); } } .fz-lvl-ready { animation: fz-ready 1.2s ease-in-out infinite; } body.gentle .fz-lvl-ready { animation: none; }');
+      let lvl = ctx.store.get('lvl') || 1, xp = ctx.store.get('xp') || 0, shownBank = -1, lastFill = 0;
+      const row = ctx.el('div', 'order:4;display:flex;align-items:center;gap:6px;margin-top:3px;padding:0 6px;background:color-mix(in srgb,var(--panel) 82%,transparent);color:var(--ink);font-size:13px;pointer-events:auto;', null, ctx.layer('meters'));
       const label = ctx.el('span', 'flex:none;', '', row);
       const track = ctx.el('span', 'display:block;width:110px;height:10px;background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden;', null, row);
       const fill = ctx.el('i', 'display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .25s linear;', null, track);
-      const need = () => Math.min(180, 35 * Math.pow(1.22, lvl - 1));
-      const b = ctx.el('button', 'min-height:30px;padding:1px 8px;font-size:12px;background:var(--btn);color:var(--btn-ink,inherit);border:1px solid var(--line);touch-action:manipulation;visibility:hidden;', LEVELS.collect, row);
+      const b = ctx.el('button', 'min-height:30px;padding:1px 8px;font-size:12px;background:var(--btn);color:var(--btn-ink,inherit);border:1px solid var(--niche);touch-action:manipulation;visibility:hidden;white-space:nowrap;', LEVELS.collect, row);
       b.type = 'button';
       const draw = () => {
-        label.textContent = LEVELS.label.replace('{n}', String(lvl));
-        const f = Math.min(1, xp / need());
-        fill.style.width = `${(f * 100).toFixed(1)}%`;
-        const full = f >= 1;
-        b.style.visibility = full ? 'visible' : 'hidden';
-        b.classList.toggle('fz-lvl-ready', full);
+        const now = bankOf(lvl, xp);
+        label.textContent = LEVELS.label.replace('{n}', String(now.lvl));
+        /* The bar wraps when a level banks: jump back, never drain. */
+        fill.style.transition = now.fill < lastFill ? 'none' : 'width .25s linear';
+        lastFill = now.fill;
+        fill.style.width = `${(now.fill * 100).toFixed(1)}%`;
+        if (now.banked === shownBank) return;
+        const rose = shownBank >= 0 && now.banked > shownBank;
+        shownBank = now.banked;
+        b.textContent = `${LEVELS.collect} ${now.banked}`;
+        b.style.visibility = now.banked ? 'visible' : 'hidden';
+        b.classList.toggle('fz-lvl-ready', now.banked > 0);
+        if (rose) squish(ctx, b, 1.2);
       };
-      b.addEventListener('click', () => {
-        if (xp < need()) return;
-        const r = b.getBoundingClientRect();
-        ctx.pay(worth(ctx, 25 + lvl * 3), 'levels', { x: r.left, y: r.top });
-        xp = 0; lvl += 1;
-        ctx.store.set('lvl', lvl); ctx.store.set('xp', 0);
-        burst(ctx, r.left + r.width / 2, r.top, { n: 14, reach: 80 });
-        sfx(ctx, 'sfx/lvup.mp3', 0.6);
+      const press = () => {
+        const got = collect(lvl, xp);
+        if (!got.levels) return;
+        const r = b.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top;
+        const k = got.levels, size = Math.min(1, (k - 1) / 5);   // one level is a small party, six or more the biggest
+        ctx.pay(worth(ctx, got.seconds), 'levels', { x: r.left, y: r.top });
+        lvl = got.lvl; xp = got.xp;
+        ctx.store.set('lvl', lvl); ctx.store.set('xp', xp);
+        burst(ctx, x, y, { color: 'var(--niche)', n: 14 + Math.round(26 * size), reach: 80 + 110 * size });
+        if (k > 1) {
+          burst(ctx, x, y, { color: 'var(--niche-2)', n: 8 + Math.round(18 * size), reach: 50 + 150 * size, size: 5 });
+          pop(ctx, x, y - 26, LEVELS.label.replace('{n}', String(lvl)), { color: 'var(--niche)', size: 20 + Math.round(18 * size), ms: 1100 });
+          squish(ctx, ctx.parts.counter, 0.5 + size * 0.5);
+        }
+        sfx(ctx, k >= 3 ? 'sfx/pb_fanfare.mp3' : 'sfx/lvup.mp3', 0.6);
         ctx.say(pick(ctx, LEVELS.up));
         draw();
-      });
-      ctx.on('tap', () => { xp += 1.2; });
-      ctx.every(1000, () => { xp += 1; ctx.store.set('xp', xp); draw(); });
-      if (fresh(ctx)) xp = need() * 0.8;
+      };
+      b.addEventListener('click', press);
+      ctx.on('tap', () => { xp += XP_PER_TAP; draw(); });
+      ctx.every(1000, () => { xp += XP_PER_SECOND; ctx.store.set('xp', xp); draw(); });
+      if (fresh(ctx)) xp = xpNeed(lvl) * 0.8;
       draw();
       return {};
     },

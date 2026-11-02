@@ -42,7 +42,7 @@ const HOUSE_SPIRAL = Object.freeze(['#ff4fa8', '#6a3cff']);
 
 /** Second Theme keeps its id in its own store; the store is in the save, so this holds across a reload. */
 export const secondTheme = (run) => {
-  const id = run?.store?.taste2?.theme;
+  const id = run?.off?.taste2 ? null : run?.store?.taste2?.theme;
   return THEME_PALETTES[id] && id !== run?.picks?.f5 ? id : null;
 };
 
@@ -121,5 +121,5 @@ export function bindPalette(engine, doc) {
   const sync = () => { if (applyPalette(doc, engine.run)) engine.emit('palette', paletteOf(engine.run)); };
   applyPalette(doc, engine.run);
   doc.defaultView?.setTimeout(() => doc.documentElement.classList.add('palette-live'), 100);
-  for (const event of ['fork', 'taste2', 'buy', 'page-colour']) engine.subscribe(event, sync);
+  for (const event of ['fork', 'taste2', 'buy', 'page-colour', 'switch']) engine.subscribe(event, sync);
 }

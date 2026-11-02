@@ -9,8 +9,8 @@ import { spiralBus } from '../../../fx/spiral-bus.js';
 
 export const docOf = (ctx) => ctx.button.el.ownerDocument;
 
-/** True when this row is the newest buy: mount also runs on reload, and a reload should not replay the arrival. */
-export const fresh = (ctx) => { const o = ctx.state.order; return o[o.length - 1] === ctx.item.id; };
+/** True when this row is the newest buy: mount also runs on reload and on a Control Panel switch, and neither should replay the arrival. */
+export const fresh = (ctx) => { const o = ctx.state.order; return !ctx.restored && o[o.length - 1] === ctx.item.id; };
 
 /** Sound is an unlock too: nothing sounds before Click Sound is bought. */
 export function sfx(ctx, file, gain = 0.6) {
@@ -152,9 +152,8 @@ export const PALETTES = Object.freeze({
 /** Write a palette straight on the root. The player's own press wins over anything mounted before it. After a theme pick this
  *  moves the page only: ui/palette.js holds the accents. 'theme' goes back to the page the theme wears. */
 export function setPalette(ctx, name) {
-  const root = docOf(ctx).documentElement.style;
   const vars = name === 'theme' ? THEME_PAGES[ctx.pick('f5')] : PALETTES[name];
-  for (const [k, v] of Object.entries(vars || {})) root.setProperty(k, v);
+  ctx.vars(vars || {});   // through ctx, or the page keeps these colours after the row is switched off
 }
 
 /* ---- the Loom, once ---- */

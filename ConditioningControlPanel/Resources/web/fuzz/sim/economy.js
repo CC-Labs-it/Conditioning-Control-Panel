@@ -28,6 +28,7 @@ export function createRun({ pace = 1, mood = null, seed = 1, perk = null } = {})
     spent: {},         // ctx.spend by reason
     side: { budget: 0, asked: 0, paid: 0 },  // side money: see sideLump
     store: {},         // ctx.store per unlock
+    off: {},           // Control Panel: unlock id -> 1 while switched off (sim/switches.js)
     endless: false,
     ended: null,       // {id, at}
     base: { fps: 0, click: 1, wall: WALL_BASE },

@@ -71,7 +71,7 @@ export default {
         ctx.emit('lucky', { x: at.x, y: at.y, auto });
       });
       if (fresh(ctx)) word(btnCenter(ctx));
-      return {};
+      return { off() { el.style.color = ''; } };
     },
   },
 

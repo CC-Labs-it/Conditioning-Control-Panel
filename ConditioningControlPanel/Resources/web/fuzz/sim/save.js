@@ -8,6 +8,7 @@ import { ITEMS, BY_ID, FORKS } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { createRun, recalc } from './economy.js';
 import { MOODS } from './moods.js';
+import { cleanOff } from './switches.js';
 
 export const SAVE_KEY = 'fuzz.save.v2';
 export const SAVE_VERSION = 2;
@@ -78,6 +79,7 @@ function parseRun(src) {
   const side = obj(src.side);
   s.side = { budget: num(side.budget), asked: num(side.asked), paid: num(side.paid) };
   s.store = obj(src.store);
+  s.off = cleanOff(src.off, s.owned);
   s.endless = !!src.endless && !!s.owned.onemore;
   s.ended = src.ended && s.owned[src.ended.id] && BY_ID[src.ended.id]?.kind === 'end' ? { id: src.ended.id, at: num(src.ended.at) } : null;
   recalc(s);

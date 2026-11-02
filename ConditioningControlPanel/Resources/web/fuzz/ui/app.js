@@ -131,7 +131,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
 
   /* ---- the main button ---- */
   function applySkin() {
-    const top = skins.length ? skins[skins.length - 1].name : '';
+    const top = skins.reduce((best, s) => (!best || s.seq > best.seq ? s : best), null)?.name || '';
     if (top) el.btn.dataset.skin = top; else delete el.btn.dataset.skin;
   }
 
@@ -139,7 +139,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     return {
       el: el.btn,
       skin(name) {
-        const entry = { name, scope };
+        const entry = { name, scope, seq: engine.seqFor(scope, `skin:${name}`) };
         skins.push(entry);
         applySkin();
         scope.cleanups.add(() => { const i = skins.indexOf(entry); if (i >= 0) skins.splice(i, 1); applySkin(); });

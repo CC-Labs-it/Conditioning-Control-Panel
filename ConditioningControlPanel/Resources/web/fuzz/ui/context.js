@@ -96,15 +96,15 @@ export function makeContext(engine, scope) {
     css(text) {
       const s = ui.doc.createElement('style');
       s.textContent = text;
-      ui.doc.head.appendChild(s);
+      /* A row switched back on takes its old place in the cascade. */
+      scope.cssN = (scope.cssN || 0) + 1;
+      const seq = engine.seqFor(scope, `css:${scope.cssN}`);
+      s.dataset.fzSeq = seq;
+      const later = [...ui.doc.head.querySelectorAll('style[data-fz-seq]')].find((o) => Number(o.dataset.fzSeq) > seq);
+      ui.doc.head.insertBefore(s, later || null);
       return addEl(s);
     },
-    vars(map) {
-      const root = ui.doc.documentElement.style;
-      const old = Object.keys(map).map((k) => [k, root.getPropertyValue(k)]);
-      for (const [k, v] of Object.entries(map)) root.setProperty(k, v);
-      scope.cleanups.add(() => { for (const [k, v] of old) { if (v) root.setProperty(k, v); else root.removeProperty(k); } });
-    },
+    vars: (map) => engine.holdVars(map, scope),
 
     every(ms, fn) {
       const t = { at: engine.now + ms, every: Math.max(16, ms), fn };
@@ -221,6 +221,10 @@ export function makeContext(engine, scope) {
     },
 
     get paused() { return !!(engine.paused || engine.suspended); },
+    /* True when the Control Panel switched this row back on: it did not just arrive, so no arrival show and no first-time gift. */
+    get restored() { return !!scope.restored; },
+    /* The Control Panel's door to the engine: { isOn(id), set(id, on), waitingOn(id), groups() }. */
+    switches: engine.switches,
     get gentle() { return ui.gentle(); },
     get reduced() { return ui.reduced(); },
     host: (type, fields) => host.send?.(type, fields),
@@ -258,5 +262,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock', 'restored', 'switches',
 ]);
