@@ -56,7 +56,7 @@ export function slot(ctx, css = '') {
 /** One caption row per unlock. Silent audio shows here, so Sleep Story and friends still make sense. */
 export function captions(ctx, icon = '') {
   const row = ctx.el('div', `display:none;max-width:min(560px,100%);padding:4px 10px;background:rgba(20,16,30,.86);color:#fff;font:600 15px/1.25 ${FONT};text-align:center;border-radius:4px;`, null, bottom(ctx).lines);
-  ctx.css('#shop{padding-bottom:84px}');
+  ctx.css('#shop{padding-bottom:130px}');
   let hide = null;
   return {
     el: row,
@@ -70,20 +70,4 @@ export function captions(ctx, icon = '') {
       });
     },
   };
-}
-
-/** A round of a list on a clock: calls fn(line, i), loops or stops. Reads and writes its place in the store. */
-export function serial(ctx, list, ms, fn, { loop = true, key = 'at', onEnd = null } = {}) {
-  const next = () => {
-    let i = ctx.store.get(key) || 0;
-    if (i >= list.length) {
-      if (!loop) return;
-      onEnd?.();
-      i = 0;
-    }
-    ctx.store.set(key, i + 1);
-    fn(list[i], i);
-    if (i + 1 >= list.length && !loop) onEnd?.();
-  };
-  return { next, stop: ctx.every(ms, next) };
 }
