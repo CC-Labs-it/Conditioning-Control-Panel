@@ -118,6 +118,12 @@ export function makeContext(engine, scope) {
 
     audio: {
       play: (path, opts) => audio?.play(path, opts),
+      /* Silence everything for a moment, capped. Wall clock on purpose: it must always end, also across a pause. */
+      muteFor(ms) {
+        audio?.setBlank?.(true);
+        clearTimeout(engine.blankTimer);
+        engine.blankTimer = setTimeout(() => audio?.setBlank?.(false), Math.min(Math.max(0, ms), 15000));
+      },
       loop(path, opts) {
         const l = audio?.loop(path, opts) || { stop() {} };
         scope.loops.add(l);

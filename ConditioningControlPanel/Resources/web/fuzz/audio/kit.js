@@ -9,7 +9,7 @@ export const PLUCKS = Array.from({ length: 18 }, (_, i) => `assets/audio/pluck/w
 
 export function createKit() {
   let ctx = null, master = null, armed = false;
-  let muted = false, quiet = false, held = false;
+  let muted = false, quiet = false, held = false, blank = false;
   const buffers = new Map();
   const loops = new Set();
 
@@ -20,7 +20,7 @@ export function createKit() {
     return buffers.get(url);
   }
 
-  const level = () => (muted || quiet || held ? 0 : 1);
+  const level = () => (muted || quiet || held || blank ? 0 : 1);
   function applyLevel(fadeMs = 200) {
     if (!armed) return;
     master.gain.cancelScheduledValues(ctx.currentTime);
@@ -89,6 +89,8 @@ export function createKit() {
     setMuted(v) { muted = !!v; applyLevel(); },
     /** A run mood may keep the page silent for a while. */
     setQuiet(v) { quiet = !!v; applyLevel(); },
+    /** An unlock may silence the page for a few seconds (ctx.audio.muteFor). */
+    setBlank(v) { blank = !!v; applyLevel(); },
     /** Pause, panic, the end: everything stops now and stays stopped until released. */
     hold(v) {
       held = !!v;

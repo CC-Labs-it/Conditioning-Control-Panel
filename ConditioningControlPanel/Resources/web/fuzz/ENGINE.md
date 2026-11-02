@@ -85,6 +85,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 **Sound and media**
 
+- `ctx.audio.muteFor(ms)`: everything silent for up to 15 s, then back.
 - `ctx.audio.play(path, {bus, gain})`, `ctx.audio.loop(path, {bus, gain})` -> `{stop(ms)}`. Buses `sfx ambient voice podcast`. A missing file is silence. Clips in `assets/audio/`.
 - `ctx.voice(slug, opts?)`: a recorded word (`data/words.js`); no clip = silence. Never speech synthesis.
 - `await ctx.pictures.next({niche})` -> `{url, credit}` or null. Null is normal: draw an empty frame, never an error. Show `credit` when set. Never fetch a picture any other way. `ctx.pictures.source` is `online` (signed in), `own` (the player's files, on this device only) or `none`; a change arrives as the `pictures` event, so refill what is on screen. Choosing a source is not an unlock's job.
