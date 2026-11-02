@@ -81,6 +81,7 @@ function layout(ctx) {
   const { w } = ctx.bounds();
   const railW = (w - 800) / 2;
   if (railW >= RAIL_MIN) {
+    docOf(ctx).documentElement.style.setProperty('--routes-mid', '100%');
     for (const s of ['left', 'right']) {
       for (const p of stacks[s]) {
         const rail = ctx.layer('side', s);
@@ -93,7 +94,8 @@ function layout(ctx) {
   }
   const zone = zoneRect(ctx), btn = rectOf(ctx.button.el);
   const flankW = Math.max(60, Math.min(240, (w - btn.width) / 2 - 16));
-  const top = 42, bottom = zone.bottom - 4;
+  const top = counterRect(ctx).bottom + 2, bottom = zone.bottom - 4;
+  docOf(ctx).documentElement.style.setProperty('--routes-mid', stacks.left.length || stacks.right.length ? `${w - 2 * (flankW + 10)}px` : '100%');
   for (const s of ['left', 'right']) {
     const list = stacks[s], gap = 4;
     const each = Math.max(40, (bottom - top - gap * (list.length - 1)) / Math.max(1, list.length));
@@ -122,10 +124,15 @@ export function panel(ctx, { side = '', height = 170, css = '', place = null } =
   prune();
   const s = side || (stacks.left.length <= stacks.right.length ? 'left' : 'right');
   const el = ctx.el('div', css);
+  baseCss(ctx);
   stacks[s].push({ el, side: s, height, css, place });
+  if (s === 'right') ctx.on('routes:corner', ({ on }) => el.classList.toggle('routes-cornered', on && !railsRoom(ctx)));
   layout(ctx);
-  let seen = ctx.bounds();
-  ctx.every(700, () => { const b = ctx.bounds(); if (b.w !== seen.w || b.h !== seen.h) { seen = b; layout(ctx); } });
+  let seen = ctx.bounds(), zoneBottom = zoneRect(ctx).bottom;
+  ctx.every(700, () => {
+    const b = ctx.bounds(), z = zoneRect(ctx).bottom;   // a new meter row moves the button down
+    if (b.w !== seen.w || b.h !== seen.h || Math.abs(z - zoneBottom) > 1) { seen = b; zoneBottom = z; layout(ctx); }
+  });
   return el;
 }
 export const railsRoom = (ctx) => (ctx.bounds().w - 800) / 2 >= RAIL_MIN;
@@ -148,17 +155,19 @@ export function dropLine(e) { if (e) { if (lineNow === e) lineNow = null; e.remo
 
 /** One shared row under the counter, so the routes' little meters sit side by side instead of pushing the shop down. */
 let rowNow = null;
-export function meterRow(ctx) {
+function baseCss(ctx) {
   const doc = docOf(ctx);
-  if (!doc.getElementById('routes-lbl-css')) {
-    const s = doc.createElement('style');
-    s.id = 'routes-lbl-css';
-    s.textContent = '@media(max-width:759px){.routes-lbl{display:none !important}}';
-    doc.head.appendChild(s);
-  }
+  if (doc.getElementById('routes-lbl-css')) return;
+  const s = doc.createElement('style');
+  s.id = 'routes-lbl-css';
+  s.textContent = '@media(max-width:759px){.routes-lbl{display:none !important}}.routes-cornered{opacity:.12 !important}.routes-cornered,.routes-cornered *{pointer-events:none !important}';
+  doc.head.appendChild(s);
+}
+export function meterRow(ctx) {
+  baseCss(ctx);
   if (rowNow?.isConnected) return rowNow;
   rowNow = ctx.layer('over').ownerDocument.createElement('div');
-  rowNow.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;';
+  rowNow.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:6px 10px;flex-wrap:wrap;max-width:var(--routes-mid,100%);';
   ctx.layer('meters').appendChild(rowNow);
   return rowNow;
 }

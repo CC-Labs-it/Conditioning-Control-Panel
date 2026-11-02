@@ -216,7 +216,8 @@ export default {
   o_native: {
     mount(ctx) {
       const next = deck(NATIVE_LINES, ctx), touched = new Map();
-      const undo = () => { for (const [el, text] of touched) { el.textContent = text; const r = el.parentElement?.parentElement; r?.style.removeProperty('background'); r?.style.removeProperty('color'); } touched.clear(); };
+      ctx.css('.routes-native{background:#fffbe4 !important}.routes-native,.routes-native b,.routes-native small,.routes-native i{color:#222 !important}');
+      const undo = () => { for (const [el, text] of touched) { el.textContent = text; el.closest('.row')?.classList.remove('routes-native'); } touched.clear(); };
       const turn = () => {
         undo();
         const rows = [...ctx.parts.shop.querySelectorAll('#rows .row small')];
@@ -224,8 +225,7 @@ export default {
         const el = rows[Math.floor(ctx.rng() * rows.length)];
         touched.set(el, el.textContent);
         el.textContent = `${ctx.brand.text(next())} (${AD})`;
-        el.parentElement?.parentElement?.style.setProperty('background', '#fffbe4');
-        el.parentElement?.parentElement?.style.setProperty('color', '#111');
+        el.closest('.row')?.classList.add('routes-native');
         ctx.anim(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 350 });
       };
       turn();

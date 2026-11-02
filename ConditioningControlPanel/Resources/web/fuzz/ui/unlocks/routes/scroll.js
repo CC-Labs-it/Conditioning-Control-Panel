@@ -141,7 +141,6 @@ function makeFeed(ctx) {
     ctx.after(40, place);
   }
   ctx.every(200, () => { if (f.fullscreen) count.textContent = ctx.fmt(ctx.state.fuzz); });
-  ctx.on('routes:corner', ({ on }) => { if (!f.fullscreen) shell.style.opacity = on ? '.15' : ''; });
   f.open = open;
   return f;
 }

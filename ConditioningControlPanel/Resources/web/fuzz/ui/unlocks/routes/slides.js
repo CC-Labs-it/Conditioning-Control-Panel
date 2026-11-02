@@ -40,8 +40,6 @@ function frame(ctx, { side = '', height = 190, niche, every = 3400, first = 0 })
   ctx.every(every, () => slot.next(pick()));
   if (!ctx.gentle) ctx.anim(el, [{ transform: 'translateY(-16px) scale(.9)', opacity: 0 }, { transform: 'translateY(0) scale(1)', opacity: 1 }], { duration: 350, easing: 'cubic-bezier(.2,1.4,.5,1)' });
   ctx.on('pictures', () => slot.next(pick()));
-  // A cornered button gets the free space back while it is out here.
-  ctx.on('routes:corner', ({ on }) => { el.style.opacity = on ? '.12' : ''; el.style.pointerEvents = on ? 'none' : 'auto'; });
   return el;
 }
 
@@ -73,7 +71,7 @@ export default {
     mount(ctx) {
       const { w, h } = ctx.bounds();
       const cell = Math.ceil(Math.sqrt((w * h) / 34)), cols = Math.ceil(w / cell), rows = Math.ceil(h / cell);
-      const host = ctx.el('div', 'position:absolute;inset:0;', null, 'back');
+      const host = ctx.el('div', `position:absolute;inset:0;${onDark(ctx) ? 'opacity:.7;' : ''}`, null, 'back');
       const cells = [];
       let n = 0;
       const add = () => {
