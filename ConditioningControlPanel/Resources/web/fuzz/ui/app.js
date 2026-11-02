@@ -203,14 +203,22 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   /** Pause and suspend freeze every animation in the world, CSS ones included, and thaw only those they froze, or that were born frozen. */
   let frozen = [];
   const holdLate = (a) => { frozen.push(a); };
+  let worldWasInert = false, forkCard = null;
   function holdWorld(on) {
     if (on) {
-      frozen = el.world.getAnimations?.({ subtree: true }).filter((a) => a.playState === 'running') || [];
+      frozen = [el.world, el.cards].flatMap((h) => h.getAnimations?.({ subtree: true }) || []).filter((a) => a.playState === 'running');
       for (const a of frozen) a.pause();
+      /* The backdrop stops a mouse. This stops the keyboard: a tile's preview, a collect or a card's button behind the pause card. */
+      worldWasInert = !!el.world.inert;
+      el.world.inert = true;
+      el.cards.inert = true;
     } else {
       for (const a of frozen) { if (a.playState === 'paused') a.play(); }  // anything cancelled during the pause stays cancelled
       frozen = [];
+      el.world.inert = worldWasInert;
+      el.cards.inert = false;
     }
+    if (!forkCard?.closed) forkCard?.hold(on);
   }
 
   /* ---- shop presses ---- */
@@ -219,7 +227,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     if (engine.paused) return;
     if (engine.run.fuzz < engine.price(id)) { shop.denied(id); return; }
     if (it.kind === 'fork') {
-      openFork(doc, cards, id, (lane) => engine.choose(id, lane));
+      forkCard = openFork(doc, cards, id, (lane) => engine.choose(id, lane));
       return;
     }
     if (it.kind === 'end' && id !== 'onemore') {
