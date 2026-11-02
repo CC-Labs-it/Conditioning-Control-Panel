@@ -53,9 +53,6 @@ export function startTheme(ctx, spec) {
   if (first) crossfade(ctx);
   ctx.vars(spec.vars);
   if (spec.css) ctx.css(spec.css);
-  ctx.css(`#cards .card{background:var(--panel);color:var(--ink);border:1px solid var(--line);font-family:var(--font);}
-#cards .card .card-sub,#cards .opt small{color:var(--ink-soft);}
-#cards .card button{background:var(--panel-short);color:var(--ink);border:1px solid var(--line);}`);
   if (first && spec.moment) spec.moment(ctx);
 
   /* The button says the theme's words, one every few seconds. A skin that hides the label simply hides them. */

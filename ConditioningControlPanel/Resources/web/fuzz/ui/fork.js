@@ -3,6 +3,7 @@
 
 import { FORKS, ITEMS } from '../data/items.js';
 import { brandText } from '../data/brand.js';
+import { hueClass } from './palette.js';
 
 let demos = null;
 function loadDemos() {
@@ -31,7 +32,7 @@ export function openFork(doc, cards, forkId, onPick) {
   const hosts = entries.map(([lane, opt]) => {
     const b = doc.createElement('button');
     b.type = 'button';
-    b.className = 'opt';
+    b.className = `opt ${hueClass(lane)}`.trim();
     b.dataset.lane = lane;
     const demo = doc.createElement('div');
     demo.className = 'demo';

@@ -8,6 +8,7 @@ import { bag, geo, counterEl, sheet, done, frame, sideFrames, gentleSwitch } fro
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
 import { THEME_TASTES } from '../theme-skins.js';
+import { THEME_PAGES } from '../../palette.js';
 
 const R = THEMES.trance.rules;
 const NICHES = ['spirals', 'soft voices', 'pendulum', 'eyes closed'];
@@ -18,14 +19,13 @@ const isOpen = (now) => { const p = breathAt(now); return p >= BREATH_OPEN[0] &&
 const SWING_MS = 3900;
 
 const VARS = {
-  '--page': '#15123a', '--ink': '#dfe4ff', '--ink-soft': '#a9b0e6', '--ink-faint': '#7d84c4', '--btn': '#3f3a8c',
-  '--panel': '#221e58', '--panel-short': '#1a1749', '--line': '#4b4698', '--fill': '#332f7a', '--ready': '#332f7a', '--stamp': '#8fd0ff',
+  ...THEME_PAGES.trance,
   '--font': '"Barlow","Segoe UI",system-ui,sans-serif',
 };
-const CSS = `#btn{border:1px solid #6e68c8;border-radius:27px;color:var(--ink);}
+const CSS = `#btn{border:1px solid var(--btn-edge);border-radius:27px;}
 #btn.down{border-style:solid;}
 .row{border-radius:8px;}
-.toast{border-radius:12px;background:#dfe4ff;color:#15123a;}`;
+.toast{border-radius:12px;}`;
 
 /** Night falls from the edges in; the spiral is already turning when it clears. */
 function moment(ctx) {

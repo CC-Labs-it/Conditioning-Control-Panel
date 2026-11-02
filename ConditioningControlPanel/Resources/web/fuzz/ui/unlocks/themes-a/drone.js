@@ -7,20 +7,20 @@ import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, shopWords, pi
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
 import { THEME_TASTES } from '../theme-skins.js';
+import { THEME_PAGES } from '../../palette.js';
 
 const R = THEMES.drone.rules;
 const NICHES = ['shiny', 'chrome', 'visor', 'gloss', 'mirror', 'latex'];
 const MONO = 'Consolas,"Courier New",monospace';
 
 const VARS = {
-  '--page': '#10161a', '--ink': '#dfe6ea', '--ink-soft': '#9aa8b0', '--ink-faint': '#6c7a82', '--btn': '#bfc9cf',
-  '--panel': '#1a2226', '--panel-short': '#141a1e', '--line': '#46535a', '--fill': '#2a3a3a', '--ready': '#26413a', '--stamp': '#3dff8e',
+  ...THEME_PAGES.drone,
   '--font': MONO,
 };
-const CSS = `#btn{border:0;border-radius:3px;color:#111;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:15px;background:linear-gradient(135deg,#f6f8f9,#8d99a1 40%,#e6ebee 62%,#6f7a82);box-shadow:0 2px 0 #333;}
+const CSS = `#btn{border:0;border-radius:3px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:15px;background:linear-gradient(135deg,color-mix(in srgb,var(--niche) 18%,#fff),var(--niche) 40%,color-mix(in srgb,var(--niche) 30%,#fff) 62%,var(--niche-2));box-shadow:0 2px 0 var(--btn-edge);}
 #btn.down{border-style:none;box-shadow:none;transform:translateY(2px);}
 .row{border-radius:2px;}
-.toast{background:#3dff8e;color:#070b09;border-radius:0;}`;
+.toast{border-radius:0;}`;
 
 /** A hard scan from the top, a line of boot text. No easing: machines do not ease. */
 function moment(ctx) {
