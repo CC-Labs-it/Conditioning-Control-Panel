@@ -285,4 +285,5 @@ body.niched #btn[data-skin=spiral] { border-color: var(--niche); }
   #btn-zone { height: 76px; }
   #btn { height: 48px; }
 }
+#world[inert], #world[inert] * { transition: none !important; }   /* Wake Up: the freeze misses a fade that starts after it, like the hover the page just lost */
 body.gentle * { animation-duration: .25s !important; animation-iteration-count: 1 !important; }  /* a loop squeezed to .25 s would be a 4 Hz flicker */
