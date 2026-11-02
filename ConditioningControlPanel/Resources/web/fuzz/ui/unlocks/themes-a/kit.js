@@ -118,6 +118,7 @@ export function sideFrames(ctx, niches, css = '') {
   ctx.css(`.ta-side{position:absolute;width:clamp(74px,calc((100vw - 800px)/2 - 24px),210px);aspect-ratio:3/4;${css}}
 .ta-side.l{left:12px}.ta-side.r{right:12px}
 .ta-side.b0{bottom:20px}.ta-side.b1{bottom:calc(20px + clamp(74px,calc((100vw - 800px)/2 - 24px),210px)*1.333 + 14px)}
+@media(max-height:900px){.ta-side.b1{display:none}}
 @media(max-width:1000px){.ta-side{bottom:auto !important;top:50px;width:70px;opacity:.5}.ta-side.b1{display:none}}`);
   const out = niches.map((n, i) => {
     const f = frame(ctx, '', n);

@@ -2,5 +2,6 @@
 import trance from './themes-a/trance.js';
 import bimbo from './themes-a/bimbo.js';
 import drone from './themes-a/drone.js';
+import sissy from './themes-a/sissy.js';
 
-export default { ...trance, ...bimbo, ...drone };
+export default { ...trance, ...bimbo, ...drone, ...sissy };
