@@ -99,7 +99,7 @@ export default {
   bi_iq: {
     mount(ctx) {
       const b = bag(ctx);
-      ctx.mod({ click: (v, s) => v * (1 + 2 * (100 - iqOf(s)) / 100) });
+      ctx.mod({ click: (v, s) => v * (1 + (100 - iqOf(s)) / 100) });
       const box = ctx.el('div', 'display:flex;flex-direction:column;align-items:center;width:min(280px,80vw);margin-top:2px;', null, 'meters');
       const top = ctx.el('div', 'display:flex;gap:8px;align-items:baseline;font-weight:600;color:var(--ink);', null, box);
       const num = ctx.el('span', 'font-size:17px;font-variant-numeric:tabular-nums;', null, top);
