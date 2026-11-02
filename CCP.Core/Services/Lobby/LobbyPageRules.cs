@@ -10,7 +10,8 @@ public static class LobbyPageRules
     public static int Column(int index) => Math.Clamp(index, 0, 2);
     public static string LabelKey(LobbyGame game) => game switch
     {
-        LobbyGame.Chess => "lobby_game_chess", LobbyGame.Goon => "lobby_game_goon", _ => "lobby_game_remote"
+        LobbyGame.Chess => "lobby_game_chess", LobbyGame.Goon => "lobby_game_goon", LobbyGame.Race => "lobby_game_race",
+        _ => "lobby_game_remote"
     };
     public static string Id(LobbyRow row) => row.Game + "|" + (row.Key ?? row.HostName + "|" + row.OpponentName) + "|" + row.State;
     public static string Title(LobbyRow row, Func<string, string> loc) =>

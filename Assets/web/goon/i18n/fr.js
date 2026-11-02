@@ -816,6 +816,7 @@ export default Object.freeze({
   gg_duel_gameName: "The Deep End",
   gg_duel_rule: "Même jeu, même graine. Le meilleur résultat gagne.",
   gg_duel_busy: "finis d'abord le jeu",
+  gg_duel_refused: "pas encore possible en face, garde-la",
   gg_duel_timeLeft: "{n}s",
   gg_duel_waiting: "en attente de son plateau",
   gg_duel_won: "gagné +{bonus}",

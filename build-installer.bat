@@ -7,7 +7,7 @@ echo ============================================
 echo.
 
 :: Configuration
-set VERSION=7.1.14
+set VERSION=7.1.15
 :: 7.2+: the shipped app is the Avalonia head (one app on Windows and Linux). Its exe is
 :: CCP.Avalonia.exe in the publish tree; installer.iss installs it as ConditioningControlPanel.exe
 :: (DestName), same AppId and folder, so a WPF install upgrades in place

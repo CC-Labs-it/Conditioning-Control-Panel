@@ -174,7 +174,9 @@ The client:
   belongs to the leashed side's local `day` from the latest R. The leashed client reports
   `assign_done: true` in R when it met it; the server marks it `done`, adds an automatic `good`
   sticker from the holder and emits `assign_done` to the holder. When an R arrives with a later
-  `day` and the assignment was still open, it is `missed` (`assign_missed` to the holder).
+  `day` and the assignment was still open, it is `missed` (`assign_missed` to the holder), unless
+  no R arrived since the assignment's `at`: then it was never seen and moves to the new `day`
+  instead (ccp-bugs #1496, CCP-Server #324).
 - Week strip W: `g` if that day's assignment was done, or with no assignment the day's R showed
   minutes >= 15; `r` if a punishment was sent that day (r wins over g); `x` otherwise; the
   latest day is `t`. Seven days, oldest first.

@@ -2474,6 +2474,8 @@ The racing cabinet opens Racing Thoughts in the current window with `game-open {
 
 **The cabinet is not a purchase door (2026-09-18).** The stack that wrote this section had the host validate canonical original-track ownership before the transfer, and refuse with `reason:"locked"`. That check is disarmed: the owner removed Racing Thoughts' tier gate on 2026-09-17 and chose open testing on both surfaces, and a purchase check is the same closed door under another name. The rule survives whole in `Services/Race/RacingAccess.cs` behind one constant, so the cabinet's only refusal today is `reason:"busy"` when a race window is already up. ONE PAYOUT PER RUN is a separate rule and is in force: `RaceRunLifecycle` latches the run and never asks about ownership.
 
+**Racing Thoughts is Prime only (2026-10-29).** The desktop host answers the cabinet with `game-open-result { ok: false, reason: "prime" }` below tier 2 (and shows the app's Prime refusal), or `reason: "elsewhere"` when it opens the race in its own window. Both release the portal; only `"locked"` walks to the counter.
+
 **The same-window race door and what the account owns (2026-09-18).** A native host answers `game-open` with the race
 window and sends `init.settings.racingTracks` itself. The web room has no host on the other side of a navigation, so
 `room/race-portal.js` writes `{ version: 1, tracks: [0..10] }` to sessionStorage under `backroom.race-ownership.v1`

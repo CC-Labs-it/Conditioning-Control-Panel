@@ -98,6 +98,7 @@ namespace ConditioningControlPanel.Services.Billboard.Providers
         {
             LobbyGame.Chess => "lobby_game_chess",
             LobbyGame.Goon => "lobby_game_goon",
+            LobbyGame.Race => "lobby_game_race",
             _ => "lobby_game_remote",
         });
 

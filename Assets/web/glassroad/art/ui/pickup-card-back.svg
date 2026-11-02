@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="360" viewBox="0 0 256 360">
+  <defs>
+    <radialGradient id="plum"><stop stop-color="#593049"/><stop offset="1" stop-color="#1d1424"/></radialGradient>
+    <pattern id="quilt" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M-22 0L44 66M0-22L66 44M-22 44L44-22M0 66L66 0" stroke="#ff6aa8" stroke-opacity=".12" stroke-width="2"/></pattern>
+    <clipPath id="inset"><rect x="14" y="14" width="228" height="332" rx="12"/></clipPath>
+  </defs>
+  <!-- Owner-selected Drop Duel card-back artwork, runtime vector only. -->
+  <rect width="256" height="360" rx="20" fill="url(#plum)"/>
+  <rect x="14" y="14" width="228" height="332" rx="12" fill="url(#quilt)" stroke="#ff6aa8" stroke-opacity=".55" stroke-width="3" clip-path="url(#inset)"/>
+  <circle cx="128" cy="184" r="40" fill="none" stroke="#f2c14e" stroke-width="3"/>
+  <path d="M128 160C139 176 144 179 144 188A16 16 0 0 1 112 188C112 179 117 176 128 160Z" fill="#ff6aa8"/>
+</svg>

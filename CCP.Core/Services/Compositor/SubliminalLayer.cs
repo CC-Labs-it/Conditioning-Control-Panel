@@ -6,7 +6,7 @@ namespace ConditioningControlPanel.Services.Compositor;
 /// Compositor twin of the subliminal flash cards. Mirrors the Avalonia port's SubliminalLayer
 /// (queued items, per-item 50ms fade envelope, most-recent-wins render) plus the WPF
 /// outlined-text construction the Avalonia head doesn't have yet: 8 border-color offset copies
-/// under the main text, Arial Bold 120 DIP (BuildSubliminalContent parity).
+/// under the main text, the SubliminalFont face (Arial Bold by default) at 120 DIP (BuildSubliminalContent parity).
 ///
 /// Renders on the MAIN surface: subliminals stay visible in screen capture BY DESIGN (the
 /// legacy windows deliberately set WDA_NONE); the awareness OCR skips the text via
@@ -29,6 +29,58 @@ public sealed class SubliminalLayer : BaseLayer
     /// text Arial can render - see <see cref="Item.Runs"/> and bugs #615 / #717.</summary>
     private static readonly SKTypeface BoldArial =
         SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold) ?? SKTypeface.Default;
+
+    // ccp-bugs #1493: the card face follows AppSettings.SubliminalFont like the WPF windows do
+    // (CreateTextBlock). Resolved faces are kept for the session: a picker holds a handful at most.
+    private static readonly Dictionary<string, SKTypeface> _faces = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object _facesSync = new();
+
+    /// <summary>Head hook: the font file for a bundled picker name (WPF: "Fredoka (bundled)" off its
+    /// pack:// resource, FontPickerHelper.BundledFaceStream), or null when the name is not bundled.</summary>
+    public static Func<string, System.IO.Stream?>? BundledFaceStream { get; set; }
+
+    /// <summary>
+    /// The bold Skia face for a stored font picker value (the head's font picker).
+    /// Empty, unknown or uninstalled names fall back to Arial Bold, the WPF Resolve fallback.
+    /// Skia hands back the default family for a name it cannot find, so a face whose family name
+    /// does not match the request counts as missing.
+    /// </summary>
+    public static SKTypeface ResolveFace(string? name)
+    {
+        name = name?.Trim();
+        if (!string.IsNullOrEmpty(name) && name.Contains(',')) name = name.Split(',')[0].Trim();
+        if (string.IsNullOrEmpty(name) || string.Equals(name, "Arial", StringComparison.OrdinalIgnoreCase))
+            return BoldArial;
+
+        lock (_facesSync)
+        {
+            if (_faces.TryGetValue(name, out var cached)) return cached;
+
+            SKTypeface? face = null;
+            try
+            {
+                var bundled = BundledFaceStream?.Invoke(name);
+                if (bundled != null)
+                {
+                    using (bundled) face = SKTypeface.FromStream(bundled);
+                }
+                else
+                {
+                    var match = SKTypeface.FromFamilyName(name, SKFontStyle.Bold);
+                    if (match != null && string.Equals(match.FamilyName, name, StringComparison.OrdinalIgnoreCase))
+                        face = match;
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug("SubliminalLayer: font {N} failed, using Arial: {E}", name, ex.Message);
+            }
+
+            face ??= BoldArial;
+            _faces[name] = face;
+            return face;
+        }
+    }
 
     /// <summary>One screen's card geometry in virtual-desktop device px.</summary>
     public readonly struct Placement
@@ -119,13 +171,14 @@ public sealed class SubliminalLayer : BaseLayer
     /// <param name="fadeInMs">The card's own fades; the WPF default is 50 ms each side of the hold.</param>
     public void Flash(IReadOnlyList<Placement> placements, string text,
         SKColor bg, SKColor textColor, SKColor border,
-        bool bgTransparent, double targetOpacity, int holdMs, double fadeInMs = FadeMs, double fadeOutMs = FadeMs)
+        bool bgTransparent, double targetOpacity, int holdMs, double fadeInMs = FadeMs, double fadeOutMs = FadeMs,
+        SKTypeface? face = null)
     {
         if (string.IsNullOrWhiteSpace(text) || placements.Count == 0) return;
         fadeInMs = Math.Max(1, fadeInMs);
         fadeOutMs = Math.Max(1, fadeOutMs);
 
-        var runs = GlyphFallback.Split(text, BoldArial, SKFontStyle.Bold);
+        var runs = GlyphFallback.Split(text, face ?? BoldArial, SKFontStyle.Bold);
         if (runs.Length == 0) return;
 
         var item = new Item

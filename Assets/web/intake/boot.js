@@ -21,6 +21,7 @@
  * ==========================================================================*/
 
 import * as shim from './web-shim.js';
+import { showSlip } from './sparkles-slip.js';
 import { createHostEscape, HOST_ESCAPE } from './host-escape.js';
 import { createAI } from './core/ai.js';
 import { createEngine } from './core/engine.js';
@@ -38,6 +39,8 @@ import './ui/fullscreen.js';
 
 const hostEscape = createHostEscape(); // Before pause installs its frozen clocks.
 shim.on(HOST_ESCAPE, () => hostEscape.kept());
+// SPARKLES BY PLACE (B1 W5): the host's receipt for a finished intake, under the certificate.
+shim.on('sparkles-receipt', showSlip);
 
 /* ----------------------------------------------------------------------------
  * DOM handles — guarded so importing this module in node (no `document`) is

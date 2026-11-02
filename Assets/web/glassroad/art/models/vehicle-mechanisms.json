@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "baseSha256": "7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1",
+  "vehicles": {
+    "pendulum": {"groups": [
+      {"id":1,"name":"pendulum_bob","bone":"cup_body","pivot":[0,0.47,0.457],"axis":[0,0,1],"mode":"swing","amplitude":0.28,"rate":0.64,"phase":0},
+      {"id":2,"name":"winding_crown","bone":"saucer_body","pivot":[0,0.068,-0.714],"axis":[0,0,1],"mode":"spin","amplitude":1,"rate":0.62,"phase":0}
+    ]},
+    "feedback": {"groups": [
+      {"id":1,"name":"tape_reel_-1","bone":"cup_body","pivot":[-0.313,0.339,0.699],"axis":[0,0,1],"mode":"spin","amplitude":1,"rate":1.3,"phase":0},
+      {"id":2,"name":"tape_reel_1","bone":"cup_body","pivot":[0.313,0.339,0.699],"axis":[0,0,1],"mode":"spin","amplitude":1,"rate":1.58,"phase":0},
+      {"id":3,"name":"speaker_diaphragm_-1","bone":"cup_body","pivot":[-0.51,0.536,0.287],"axis":[0,0,1],"mode":"pulse","amplitude":0.2,"rate":2.1,"phase":0.4},
+      {"id":4,"name":"speaker_diaphragm_1","bone":"cup_body","pivot":[0.51,0.536,0.287],"axis":[0,0,1],"mode":"pulse","amplitude":0.2,"rate":2.1,"phase":0.9}
+    ]},
+    "reverie": {"groups": [
+      {"id":1,"name":"star_pendant_-1","bone":"cup_body","pivot":[-0.475,0.27,0.23],"axis":[1,0,0],"mode":"swing","amplitude":0.16,"rate":0.55,"phase":0.6},
+      {"id":2,"name":"star_pendant_1","bone":"cup_body","pivot":[0.475,0.27,0.23],"axis":[1,0,0],"mode":"swing","amplitude":0.16,"rate":0.55,"phase":1.7}
+    ]},
+    "undertow": {"groups": [
+      {"id":1,"name":"coral_spiral_rotor_-1","bone":"cup_body","pivot":[-0.42,0.385,-0.055],"axis":[1,0,0],"mode":"spin","amplitude":1,"rate":0.48,"phase":0},
+      {"id":2,"name":"coral_spiral_rotor_1","bone":"cup_body","pivot":[0.42,0.385,-0.055],"axis":[1,0,0],"mode":"spin","amplitude":1,"rate":-0.48,"phase":0}
+    ]},
+    "checkmate": {"groups": [
+      {"id":1,"name":"rear_rank_shutter_-1","bone":"cup_body","pivot":[-0.365,0.452,0.342],"axis":[0,0,1],"mode":"press","amplitude":1,"rate":0.68,"phase":0.9,"travel":0.005},
+      {"id":2,"name":"rear_rank_shutter_1","bone":"cup_body","pivot":[0.365,0.452,0.342],"axis":[0,0,1],"mode":"press","amplitude":1,"rate":0.68,"phase":2.2,"travel":0.005}
+    ]},
+    "house-edge": {"groups": [
+      {"id":1,"name":"rear_dice_pip_0","bone":"cup_body","pivot":[-0.145,0.421,0.601],"axis":[0,0,1],"mode":"press","amplitude":1,"rate":0.52,"phase":0.0,"travel":0.006},
+      {"id":2,"name":"rear_dice_pip_1","bone":"cup_body","pivot":[0.0,0.421,0.601],"axis":[0,0,1],"mode":"press","amplitude":1,"rate":0.52,"phase":1.5,"travel":0.006},
+      {"id":3,"name":"rear_dice_pip_2","bone":"cup_body","pivot":[0.145,0.421,0.601],"axis":[0,0,1],"mode":"press","amplitude":1,"rate":0.52,"phase":3.0,"travel":0.006},
+      {"id":4,"name":"casino_token_inset","bone":"cup_body","pivot":[0,0.335,-0.6],"axis":[0,0,1],"mode":"spin","amplitude":1,"rate":0.3,"phase":0}
+    ]},
+    "lovebomb": {"groups": [
+      {"id":1,"name":"atomizer_squeeze","bone":"cup_body","pivot":[0.543,0.665,0.32],"axis":[1,0,0],"mode":"pulse","amplitude":0.055,"rate":0.62,"phase":0},
+      {"id":2,"name":"bow_tail_-1","bone":"cup_body","pivot":[-0.015,0.43,0.565],"axis":[0,0,1],"mode":"swing","amplitude":0.065,"rate":0.73,"phase":0.2},
+      {"id":3,"name":"bow_tail_1","bone":"cup_body","pivot":[0.015,0.43,0.565],"axis":[0,0,1],"mode":"swing","amplitude":0.065,"rate":0.73,"phase":1.1}
+    ]},
+    "velvet-lock": {"groups": [
+      {"id":1,"name":"heart_lock_pendant","bone":"cup_body","pivot":[0,0.38,0.49],"axis":[0,0,1],"mode":"swing","amplitude":0.065,"rate":0.57,"phase":0}
+    ]}
+  }
+}

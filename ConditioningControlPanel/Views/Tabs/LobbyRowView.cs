@@ -74,6 +74,7 @@ public sealed class LobbyRowView
     {
         LobbyGame.Chess => "♟️",
         LobbyGame.Goon => "\U0001F497",
+        LobbyGame.Race => "\U0001F3CE️",
         _ => "\U0001F6F0️",
     };
 
@@ -83,6 +84,7 @@ public sealed class LobbyRowView
     {
         LobbyGame.Chess => "features/piecebypiece.png",
         LobbyGame.Goon => "features/goon_game_tile.png",
+        LobbyGame.Race => "features/race.png",
         // A text-free crop of the Remote Hands quest art: the feature card says REMOTE CONTROL,
         // which a 40 px thumbnail cuts to "MOTE NTROL".
         _ => "features/lobby_remote.png",

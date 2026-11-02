@@ -411,6 +411,7 @@ namespace ConditioningControlPanel
             if (wasLive && !nowLive)
             {
                 UnsubscribeBlinkTrainerLiveBlink();
+                _blinkTrainerLiveImageSeq++; // a live still decoding now must not land on the demo
                 StartBlinkTrainerDemoLoop();
             }
             else if (!wasLive && nowLive)
@@ -447,6 +448,7 @@ namespace ConditioningControlPanel
                     BlinkTrainerTab.BlinkTrainerStageMedia.Opacity = 0;
                 }
                 _blinkTrainerLiveLastPickedPath = null;
+                _blinkTrainerLiveImageSeq++; // drop a decode still in flight
                 _blinkTrainerDemoUsingA = true; // first live pick goes to A
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "ResetBlinkTrainerStageForLive failed"); }
@@ -524,50 +526,76 @@ namespace ConditioningControlPanel
             }
         }
 
-        private void ApplyBlinkTrainerLiveImage(string path)
+        /// <summary>Bumped by every live swap, so a decode that lands after a newer blink (or a
+        /// video pick) is dropped instead of covering it.</summary>
+        private int _blinkTrainerLiveImageSeq;
+
+        /// <summary>
+        /// The decode runs OFF the UI thread (ccp-bugs #1512). It ran inline in the blink handler,
+        /// which the webcam raises inside its UpdateBlinkState dispatcher op: a big picture cost
+        /// 0.6-1 s per blink, and a file the disk had to fetch first (the colour-profile read waits
+        /// on a WebRequest) held the whole UI for 13 s+ until the watchdog called the app hung.
+        /// </summary>
+        private async void ApplyBlinkTrainerLiveImage(string path)
         {
             if (BlinkTrainerTab.BlinkTrainerStageImageA == null || BlinkTrainerTab.BlinkTrainerStageImageB == null) return;
 
-            // Stop any playing video first.
-            if (BlinkTrainerTab.BlinkTrainerStageMedia != null)
-            {
-                try { BlinkTrainerTab.BlinkTrainerStageMedia.Stop(); } catch { }
-                BlinkTrainerTab.BlinkTrainerStageMedia.Opacity = 0;
-            }
+            var seq = ++_blinkTrainerLiveImageSeq;
+            var bmp = await Task.Run(() => DecodeBlinkTrainerStill(path));
+            if (bmp == null || seq != _blinkTrainerLiveImageSeq) return;
 
-            BitmapImage bmp;
             try
             {
-                bmp = new BitmapImage();
+                // Stop any playing video first.
+                if (BlinkTrainerTab.BlinkTrainerStageMedia != null)
+                {
+                    try { BlinkTrainerTab.BlinkTrainerStageMedia.Stop(); } catch { }
+                    BlinkTrainerTab.BlinkTrainerStageMedia.Opacity = 0;
+                }
+
+                // Hard-cut swap — kill any in-flight animations from demo mode and
+                // pin opacities directly. Toggle which Image control is "active".
+                Image incoming = _blinkTrainerDemoUsingA ? BlinkTrainerTab.BlinkTrainerStageImageB : BlinkTrainerTab.BlinkTrainerStageImageA;
+                Image outgoing = _blinkTrainerDemoUsingA ? BlinkTrainerTab.BlinkTrainerStageImageA : BlinkTrainerTab.BlinkTrainerStageImageB;
+
+                incoming.BeginAnimation(UIElement.OpacityProperty, null);
+                outgoing.BeginAnimation(UIElement.OpacityProperty, null);
+                incoming.Source = bmp;
+                incoming.Opacity = 1;
+                outgoing.Opacity = 0;
+
+                _blinkTrainerDemoUsingA = !_blinkTrainerDemoUsingA;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning(ex, "BlinkTrainer live image swap failed");
+            }
+        }
+
+        /// <summary>Thread-pool decode; the frozen bitmap crosses back to the UI thread.</summary>
+        private static BitmapImage? DecodeBlinkTrainerStill(string path)
+        {
+            try
+            {
+                var bmp = new BitmapImage();
                 bmp.BeginInit();
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
                 bmp.UriSource = new Uri(path);
                 bmp.EndInit();
                 bmp.Freeze();
+                return bmp;
             }
             catch (Exception ex)
             {
                 App.Logger?.Warning(ex, "BlinkTrainer live image load failed for {Path}", path);
-                return;
+                return null;
             }
-
-            // Hard-cut swap — kill any in-flight animations from demo mode and
-            // pin opacities directly. Toggle which Image control is "active".
-            Image incoming = _blinkTrainerDemoUsingA ? BlinkTrainerTab.BlinkTrainerStageImageB : BlinkTrainerTab.BlinkTrainerStageImageA;
-            Image outgoing = _blinkTrainerDemoUsingA ? BlinkTrainerTab.BlinkTrainerStageImageA : BlinkTrainerTab.BlinkTrainerStageImageB;
-
-            incoming.BeginAnimation(UIElement.OpacityProperty, null);
-            outgoing.BeginAnimation(UIElement.OpacityProperty, null);
-            incoming.Source = bmp;
-            incoming.Opacity = 1;
-            outgoing.Opacity = 0;
-
-            _blinkTrainerDemoUsingA = !_blinkTrainerDemoUsingA;
         }
 
         private void ApplyBlinkTrainerLiveVideo(string path)
         {
             if (BlinkTrainerTab.BlinkTrainerStageMedia == null) return;
+            _blinkTrainerLiveImageSeq++; // a still still decoding must not land over this video
 
             // Hide both images while the video is on top.
             if (BlinkTrainerTab.BlinkTrainerStageImageA != null)

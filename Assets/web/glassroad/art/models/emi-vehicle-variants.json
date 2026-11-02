@@ -1,0 +1,231 @@
+{
+  "version": 1,
+  "id": "emi-vehicle-variants-r4-v1",
+  "baseAsset": "emi-teacup-kart",
+  "baseSha256": "7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1",
+  "faceAsset": "emi-faces",
+  "approvedFaceSha256": "591d9d8dfcf74b95e23035961e0781bdaae8dcabc717fdd4c299c68866cb7b08",
+  "geometrySpace": "accepted kart model space, metres, Y up, forward -Z",
+  "bindMode": "reuse-existing-bones",
+  "meshParent": "sibling of accepted kart mesh",
+  "meshLocalTransform": "identity",
+  "bindMatrix": "identity",
+  "boneInverseSource": "vehicle GLB skin inverseBindMatrices",
+  "temporaryRig": "discard after exact-name remapping to the cloned kart bones",
+  "jointNames": [
+    "kart_root",
+    "cup_body",
+    "rider_mount",
+    "EMI_root",
+    "ant0",
+    "ant1",
+    "ant2",
+    "ballpiv",
+    "button",
+    "EMI_glass",
+    "footL",
+    "footR",
+    "shoulderL",
+    "shoulderR",
+    "saucer_body"
+  ],
+  "weightedJointNames": [
+    "cup_body",
+    "saucer_body"
+  ],
+  "rejectIf": "base hash, exact bone-name set or inverse binds differ",
+  "animationSource": "approved shared 26 kart clips; vehicle GLBs contain no clips",
+  "motionOwnership": "Reuse the existing kart event binding, Gentle and motion-off behavior. Do not add a clock, retarget bones or alter shared clips.",
+  "selection": "One vehicle per racer; original cup/saucer or one replacement. An optional wardrobe outfit remains independent.",
+  "replacement": {
+    "sourceTriangles": 4892,
+    "removedTriangles": 1612,
+    "retainedRiderTriangles": 3280,
+    "removedJointNames": [
+      "cup_body",
+      "saucer_body"
+    ],
+    "rule": "Read normalized weights and JOINTS_0. Remove a triangle iff all3 vertices have weight1 on cup_body or saucer_body. Resolve bones by name. Assert no mixed retained/removed triangle. Preserve all existing attributes/materials/skins/nodes/animation; change index buffers only on a derived runtime instance. Never drop a complete material primitive because it also contains EMI geometry.",
+    "mutationScope": "Clone index buffers on a derived runtime instance. Keep immutable cached source geometry and every vertex attribute, material, skin, node and action.",
+    "primitives": [
+      {
+        "index": 0,
+        "material": "kart_surface",
+        "originalTriangles": 4476,
+        "removedTriangles": 1612,
+        "remainingTriangles": 2864
+      },
+      {
+        "index": 1,
+        "material": "emi_screen",
+        "originalTriangles": 416,
+        "removedTriangles": 0,
+        "remainingTriangles": 416
+      }
+    ],
+    "mixedJointTriangles": 0,
+    "emiAndScreenRemovedTriangles": 0
+  },
+  "contact": {
+    "floor": {
+      "yM": 0.32,
+      "usableRadiusM": 0.362,
+      "joint": "cup_body"
+    },
+    "palmPlaneYM": 0.51,
+    "support": {
+      "footYM": 0.105,
+      "footRadiusM": 0.22,
+      "footPolygonSides": 32,
+      "saucerSeatYM": 0.105,
+      "saucerSeatUsableRadiusM": 0.48
+    },
+    "riderRelease": "Existing jump and reaction releases remain intentional; support checks apply to the bound planted phases.",
+    "brimTargetCentersM": {
+      "shoulderL": [
+        0.36838141083717346,
+        0.51,
+        -0.1249985545873642
+      ],
+      "shoulderR": [
+        -0.3664381802082062,
+        0.51,
+        -0.12499850988388062
+      ]
+    },
+    "supportedPalmSweepM": {
+      "shoulderL": {
+        "minM": [
+          0.36703076568649223,
+          0.5100251978501558,
+          -0.12713475217754502
+        ],
+        "maxM": [
+          0.36871919431654315,
+          0.5100358663875144,
+          -0.1227025096871476
+        ]
+      },
+      "shoulderR": {
+        "minM": [
+          -0.36675181918376615,
+          0.5099979687780622,
+          -0.12715367380398487
+        ],
+        "maxM": [
+          -0.3651613960935009,
+          0.5100116964342526,
+          -0.12279654427287037
+        ]
+      }
+    }
+  },
+  "materials": {
+    "slots": [
+      "emi_vehicle_porcelain",
+      "emi_vehicle_metal"
+    ],
+    "colorSource": "linear COLOR_0",
+    "maps": 0,
+    "alphaMode": "OPAQUE"
+  },
+  "texturesAddedBytes": 0,
+  "textureResidencyMiB": {
+    "desktop": 196.416664,
+    "phone": 119.104164,
+    "desktopWithMenuBackdrop": 205.416664,
+    "phoneWithMenuBackdrop": 127.01432
+  },
+  "validation": {
+    "boundsSamplesPerVehicle": 2726,
+    "contactSamplesPerVehicle": 8140,
+    "contactSampling": "all exported keys plus 120 fps and adjacent-key midpoints",
+    "maxPalmGapM": 8.371132567641659e-05,
+    "maxPlantedSoleGapM": 0.000129723543257243,
+    "maxSupportEnvelopeErrorM": 0,
+    "scope": "Exact decoded surfaces and existing animation transforms; host integration and race playtest pending."
+  },
+  "vehicles": [
+    {
+      "id": "emi-vehicle-petal",
+      "label": "Petal porcelain",
+      "file": "models/emi-vehicle-petal.glb",
+      "sha256": "a9db77ea0c7d64aca193b522c1a30c5bde57419978ab68a9c97b42196c389be7",
+      "downloadBytes": 58272,
+      "triangles": 4492,
+      "draws": 2,
+      "boundRadiusM": 0.899,
+      "assembledTrianglesBeforeWardrobe": 7772,
+      "assembledDrawsBeforeWardrobe": 4
+    },
+    {
+      "id": "emi-vehicle-trinket",
+      "label": "Trinket box",
+      "file": "models/emi-vehicle-trinket.glb",
+      "sha256": "bfacb9c5e15af380db3b43661c4b2a628f0a1027d10c9a9ce3ff4a1583d3ca44",
+      "downloadBytes": 51344,
+      "triangles": 3480,
+      "draws": 2,
+      "boundRadiusM": 0.898,
+      "assembledTrianglesBeforeWardrobe": 6760,
+      "assembledDrawsBeforeWardrobe": 4
+    },
+    {
+      "id": "emi-vehicle-pendulum",
+      "label": "Pendulum",
+      "file": "models/emi-vehicle-pendulum.glb",
+      "sha256": "db12f61a5d2e2fd6eff9cbc23248b9ba23d3681a130a7644658dd5254689233d"
+    },
+    {
+      "id": "emi-vehicle-reverie",
+      "label": "Reverie",
+      "file": "models/emi-vehicle-reverie.glb",
+      "sha256": "4f39264d1277163d7c2f1684579b8c4ea82844931450dad6d0c9f4075bb60d94"
+    },
+    {
+      "id": "emi-vehicle-house-edge",
+      "label": "House Edge",
+      "file": "models/emi-vehicle-house-edge.glb",
+      "sha256": "7bbc7bca9540ad0bcbaf8275488787d161f4138c98f08efdeca840da2b829136"
+    },
+    {
+      "id": "emi-vehicle-checkmate",
+      "label": "Checkmate",
+      "file": "models/emi-vehicle-checkmate.glb",
+      "sha256": "c756977f6be1c59bffe28d1582151a4c4024c2f289b24f01e42bafe0a9594cf2"
+    },
+    {
+      "id": "emi-vehicle-lovebomb",
+      "label": "Lovebomb",
+      "file": "models/emi-vehicle-lovebomb.glb",
+      "sha256": "d8afdd16fd9abd81903a3c055ac6a09be140d107b4d2e2b8baff0e72027b3baa"
+    },
+    {
+      "id": "emi-vehicle-feedback",
+      "label": "Feedback",
+      "file": "models/emi-vehicle-feedback.glb",
+      "sha256": "90ad535bdca24e422ed8919fff1e2173fe2f8a55cf3a27177f339bcb0fb4ae13"
+    },
+    {
+      "id": "emi-vehicle-velvet-lock",
+      "label": "Velvet Lock",
+      "file": "models/emi-vehicle-velvet-lock.glb",
+      "sha256": "5f457fe7bd16197a3e0ddff467468073c25b6ac7889618c43e6afc098be7e642"
+    },
+    {
+      "id": "emi-vehicle-undertow",
+      "label": "Undertow",
+      "file": "models/emi-vehicle-undertow.glb",
+      "sha256": "bbb9cb9faffa3cc001983512289e28b0f8b37a9758edc7c565d9ac35f9aa2c2c"
+    }
+  ],
+  "maximumReviewedAssembly": {
+    "vehicle": "emi-vehicle-petal",
+    "outfit": "emi-outfit-varsity",
+    "wardrobeRevision": 2,
+    "outfitTriangles": 2026,
+    "triangles": 9798,
+    "draws": 6
+  },
+  "integrationStatus": "Art delivered; host replacement and wardrobe selection integration pending."
+}

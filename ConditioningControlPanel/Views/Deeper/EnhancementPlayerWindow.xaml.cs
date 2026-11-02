@@ -2133,6 +2133,8 @@ namespace ConditioningControlPanel.Views.Deeper
                     Height = 300,
                     Content = VideoBrowser
                 };
+                // Same host shape as the Settings browser: no monitor-sized hardware target (#1504).
+                Services.Browser.BrowserHostSurface.UseSoftwareTarget(built);
 
                 // Capture delegates in locals so the Closed handler can
                 // unsubscribe them before the window is unreferenced — keeps

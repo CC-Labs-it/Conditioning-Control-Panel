@@ -251,7 +251,7 @@ public class PlayDoorRenderTests
     {
         "PlayLockGaze", "PlayLockFocusGaze", "PlayLockRemote",
         "PlayLockLockdown", "PlayLockBlink", "PlayLockFyp", "PlayLockIntake",
-        "PlayLockDtrh", "PlayLockArcademy",
+        "PlayLockDtrh", "PlayLockArcademy", "PlayLockRacingThoughts",
     };
 
     [Fact]
@@ -620,6 +620,8 @@ public class PlayDoorRenderTests
             // Diamond on the two Lab games rehomed from the Premium page (nav rework 2026-10-06).
             Assert.Equal(2, page.PlayBadgeDtrh.Tier);
             Assert.Equal(2, page.PlayBadgeArcademy.Tier);
+            // Racing Thoughts 3D is Prime only (owner 2026-10-29).
+            Assert.Equal(2, page.PlayBadgeRacingThoughts.Tier);
         });
     }
 

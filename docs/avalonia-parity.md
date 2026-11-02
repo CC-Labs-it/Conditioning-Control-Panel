@@ -708,6 +708,14 @@ The delta ledger for the eighth main sync (`avalonia-port/main-20261024`) is
 ported-by-merge or needs-port (with its `sync8-*` port lane, 15 lanes). Safety rows (voice panic reach, Lockdown veil,
 remote hand-back, leash cut, factory reset) are all needs-port. Tick its rows as each lane lands.
 
+## main-sync-9 (7.1.15, Glassroad, Sparkles B1, Lobby race rows, pin `7e01ec326`)
+
+The delta ledger for the ninth main sync (`avalonia-port/main-20261030`, on `review/mich-1025-merge`) is
+[`avalonia-main-sync-20261030.md`](avalonia-main-sync-20261030.md): one row per non-merge commit (591, pins `7e01ec326` + `a11ada22e`), each
+ported-by-merge, needs-port (with its `sync9-*` lane, 4 lanes) or n/a with a reason. The Glassroad web tree moved to
+`Assets/web/glassroad`. Its watch list names what is on the way to main (`preview/7.2.0` Prize Counter, `feat/glassroad-a`).
+Tick its rows as each lane lands.
+
 ## DTRH feel rework (dtrh-feel 17-pace, merge `23054e370`)
 
 The delta ledger for the DTRH feel rework (`11d7c3afc..46e9e908d`) is

@@ -4414,6 +4414,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.PatreonMember),
             nameof(AppSettings.PostGrants),
             nameof(AppSettings.ServerPaidUntil),
+            // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
+            nameof(AppSettings.RainPackHash),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
         };
@@ -4472,6 +4474,7 @@ namespace ConditioningControlPanel.Services
             restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
+            restored.RainPackHash = current.RainPackHash;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)

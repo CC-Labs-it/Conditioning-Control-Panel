@@ -20,13 +20,46 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.14";
+        public const string AppVersion = "7.1.15";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.14 - Bring a Friend
+        public const string CurrentPatchNotes = @"v7.1.15 - Settle Down
+
+NEW IN 7.1.15
+
+GAMES
+- Breakout: the pause card has a Menu button.
+
+SETTINGS STAY YOURS
+- a session that crashes or gets closed mid-run no longer leaves its values behind. ducking, flash and pink opacity, Hydra and subliminal length go back to yours at the next launch.
+- a panic, an exit, the AI overlay switching off or a Takeover pulse no longer freeze their temporary values into your settings.
+- other apps no longer stay ducked after CCP closes.
+
+COMPANION
+- with the engine off, webcam and window-awareness lines show their bubble quietly, the same as idle lines. ""Speak idle lines when the engine is off"" brings the sound back.
+- AI effect commands obey your own switches.
+
+PANIC AND LOCKDOWN
+- the voice panic follows the panic key rules, and now also stops the Deeper player, browser videos and keyword triggers.
+- a Stop button is never eaten by the Ctrl+K palette or an Escape pause.
+- a running Lockdown keeps the panic key off when a remote session ends. its way out survives a sign-out, a clock change and a full-width phrase.
+- opening the Lockdown tab no longer redraws the veil over a running lockdown.
+
+REMOTE, LEASH AND CIRCE'S TAB
+- your own settings and strict lock come back when a remote session ends.
+- Leash minutes count real time, so a busy PC no longer misses a minutes task.
+- cutting the leash drops leash bookings that were not pushed yet.
+- one failed attention check books once.
+
+FIXES
+- a floating video no longer clears the bubbles.
+- named flash sizes apply.
+- Hypnotube links from friends open the video.
+- the online media share unsticks after a clock change.
+- factory reset and the graphics-failure exit no longer freeze the app.
 
 NEW IN 7.1.14
 

@@ -52,6 +52,7 @@ import { mountMicHud } from './voice/micHud.js';
 import { createDropRoller } from './drops.js';
 import { createDuelController } from './duel/duelController.js';
 import { createDuelView } from './duel/duelView.js';
+import { DUEL_COPY } from './duel/copy.js';
 import { COACH } from './coach.js';
 import { avatarNode, emitAva } from './avatar.js';
 import { setPreviewMedia } from './throwPreview.js';
@@ -925,7 +926,7 @@ export function mountHud({ match, session = null, audio = null, prefs = null, me
   // silent bookkeeping, only its flourish rides the animation budget.
   const drops = createDropRoller({ match, arsenal, audio, onLog });
   // A duel the receiver refused ('busy') hands the game card back to the slot.
-  duel.setReturnCard(() => arsenal.armDrop('gamecard', { silent: true }));
+  duel.setReturnCard(() => arsenal.armDrop('gamecard', { silent: true, tip: DUEL_COPY.refused }));
   led.listen(d, BUBBLE_POP_EVENT, (e) => {
     try {
       const res = drops.onPop(e && e.detail);

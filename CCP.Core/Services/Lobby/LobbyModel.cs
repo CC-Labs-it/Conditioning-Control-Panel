@@ -22,8 +22,9 @@ public static class LobbyPollPlan
     }
 }
 
-/// <summary>The games the Lobby lists. One row shape for all three.</summary>
-public enum LobbyGame { Chess, Goon, Remote }
+/// <summary>The games the Lobby lists. One row shape for all of them; Race is Racing Thoughts 3D
+/// (Glassroad), joined on the web.</summary>
+public enum LobbyGame { Chess, Goon, Remote, Race }
 
 /// <summary>Open = waiting for a player (Join). Playing = a game under way (Watch only where the
 /// game supports spectating: a public chess match both players let people watch).</summary>
@@ -63,6 +64,14 @@ public sealed record LobbyRow
     // remote
     public string? RemoteTier { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
+    // race (Glassroad): Key is the web room id
+    public string? Track { get; init; }
+    public int Seats { get; init; }
+    public int Filled { get; init; }
+    public int Laps { get; init; }
+    public bool Staked { get; init; }
+    /// <summary>Seconds to the start, or null while no countdown runs.</summary>
+    public int? StartsInSec { get; init; }
 
     /// <summary>A public chess match both seats let people watch: the row's Watch button opens
     /// it as a spectator (<see cref="Key"/> = the match id). Goon and Remote never.</summary>
@@ -118,7 +127,8 @@ public static class LobbyMerge
         IReadOnlyList<RemoteSeat>? remote,
         IReadOnlyList<Friend>? friends,
         bool signedIn,
-        long nowMs)
+        long nowMs,
+        RaceOpenReply? race = null)
     {
         if (!signedIn) return LobbySnapshot.Empty;
         var friendList = friends ?? Array.Empty<Friend>();
@@ -171,6 +181,16 @@ public static class LobbyMerge
                     Key = r.Claimed ? null : r.UnifiedId,
                     HostName = r.Name, Level = r.Level, RemoteTier = r.Tier, Tags = r.Tags,
                     Friend = friendIds.Contains(r.UnifiedId),
+                });
+
+        // A tier refusal carries no rows: a non-Prime account simply sees no races.
+        if (race != null)
+            foreach (var r in race.Rooms)
+                rows.Add(new LobbyRow
+                {
+                    Game = LobbyGame.Race, State = LobbyRowState.Open, Key = r.RoomId, HostName = r.HostName,
+                    Friend = r.Friend, Track = r.Track, Seats = r.Seats, Filled = r.Filled, Laps = r.Laps,
+                    Staked = r.Staked, StartsInSec = r.StartsInSec,
                 });
 
         // Friends in a game the lists above do not show (a chess match off the open list, a
@@ -253,6 +273,14 @@ public static class LobbySummary
                 if (!string.IsNullOrEmpty(row.RemoteTier)) parts.Add(loc("lobby_remote_tier_" + row.RemoteTier));
                 if (row.Tags.Count > 0) parts.Add(string.Join(", ", row.Tags.Take(3)));
                 break;
+            case LobbyGame.Race:
+                var track = RaceOpenApi.TrackName(row.Track);
+                if (track.Length > 0) parts.Add(track);
+                if (row.Seats > 0) parts.Add(string.Format(CultureInfo.InvariantCulture, loc("lobby_race_seats"), row.Filled, row.Seats));
+                if (row.Laps > 0) parts.Add(string.Format(CultureInfo.InvariantCulture, loc("lobby_race_laps"), row.Laps));
+                if (row.Staked) parts.Add(loc("lobby_race_staked"));
+                if (row.StartsInSec is int s) parts.Add(string.Format(CultureInfo.InvariantCulture, loc("lobby_race_starts"), s));
+                break;
         }
         return string.Join(" · ", parts);
     }
@@ -290,10 +318,13 @@ public readonly record struct LobbyGates(
         GoonHost: signedIn && goonHosting, GoonJoin: signedIn,
         RemoteHost: signedIn && remoteHosting, RemoteJoin: signedIn);
 
+    /// <summary>Races are hosted on the web, never from the Lobby. A race row only exists when the
+    /// server already let this account see it (Prime), so joining needs an account and nothing else.</summary>
     public bool CanHost(LobbyGame g) => g switch
     {
         LobbyGame.Chess => ChessHost,
         LobbyGame.Goon => GoonHost,
+        LobbyGame.Race => false,
         _ => RemoteHost,
     };
 
@@ -301,6 +332,7 @@ public readonly record struct LobbyGates(
     {
         LobbyGame.Chess => ChessJoin,
         LobbyGame.Goon => GoonJoin,
+        LobbyGame.Race => SignedIn,
         _ => RemoteJoin,
     };
 }

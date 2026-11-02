@@ -18,6 +18,8 @@ export const DUEL_COPY_RAW = Object.freeze({
   gameName: 'The Deep End',
   rule: 'Same game, same seed. Best result wins.',
   busy: 'finish the game first',
+  /** Their side answered `busy` (first match, still in the gap, a result up): the card comes back. */
+  refused: "they can't play one yet, keep it",
   timeLeft: tpl('{n}s', (s) => ({ n: Math.max(0, s | 0) })),
   waiting: 'waiting for their board',
   won: tpl('won +{bonus}', (bonus) => ({ bonus })),

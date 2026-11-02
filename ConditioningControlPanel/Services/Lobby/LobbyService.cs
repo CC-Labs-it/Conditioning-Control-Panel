@@ -12,7 +12,8 @@ using ConditioningControlPanel.Services.GoonGame;
 namespace ConditioningControlPanel.Services.Lobby;
 
 /// <summary>
-/// THE LOBBY (App.Lobby). Fans out to the three existing open-table wires (chess
+/// THE LOBBY (App.Lobby). Fans out to the existing open-table wires (Glassroad races
+/// <c>GET /v2/race/open</c> via <see cref="RaceOpenApi"/>, chess
 /// <c>GET /v2/pbp/lobby</c>, Goon <c>POST /v2/goon/open</c> via <see cref="GoonOpenTables"/>,
 /// Remote <c>GET /v2/directory/list</c> via <see cref="AvailableSubjectsService"/>), folds in
 /// the friends list, and hands one <see cref="LobbySnapshot"/> to the page and the launcher.
@@ -33,6 +34,7 @@ public sealed class LobbyService : IDisposable
     internal Func<CancellationToken, Task<PbpLobbyReply>> FetchChess { get; set; } = ct => new PbpLobbyApi().FetchAsync(ct);
     internal Func<Task<OpenTablesReply>> FetchGoon { get; set; } = () => GoonOpenTables.RefreshAsync();
     internal Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> FetchRemote { get; set; } = FetchRemoteFromDirectory;
+    internal Func<CancellationToken, Task<RaceOpenReply>> FetchRace { get; set; } = ct => new RaceOpenApi().FetchAsync(ct);
     internal Func<IReadOnlyList<Friend>> ReadFriends { get; set; } = () => App.Friends?.Snapshot.Friends ?? Array.Empty<Friend>();
     internal Func<bool> SignedIn { get; set; } = () => BackRoomApi.AppIdentity() != null;
     internal Func<long> NowMs { get; set; } = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -108,14 +110,16 @@ public sealed class LobbyService : IDisposable
                 var chessTask = SafeChess();
                 var goonTask = SafeGoon();
                 var remoteTask = SafeRemote();
-                await Task.WhenAll(chessTask, goonTask, remoteTask).ConfigureAwait(false);
+                var raceTask = SafeRace();
+                await Task.WhenAll(chessTask, goonTask, remoteTask, raceTask).ConfigureAwait(false);
                 var chess = chessTask.Result;
                 var remote = remoteTask.Result;
+                var race = raceTask.Result;
                 // Goon's wire cannot tell "no tables" from "no answer", so it never counts as a fault.
-                ok = chess.Ok || remote.Ok;
+                ok = chess.Ok || remote.Ok || race.Ok;
                 IReadOnlyList<Friend> friends;
                 try { friends = ReadFriends(); } catch { friends = Array.Empty<Friend>(); }
-                snap = LobbyMerge.Build(chess, goonTask.Result, remote.Seats, friends, true, NowMs());
+                snap = LobbyMerge.Build(chess, goonTask.Result, remote.Seats, friends, true, NowMs(), race);
             }
         }
         catch (Exception ex)
@@ -152,6 +156,12 @@ public sealed class LobbyService : IDisposable
     {
         try { return await FetchGoon().ConfigureAwait(false); }
         catch { return OpenTablesReply.Empty; }
+    }
+
+    private async Task<RaceOpenReply> SafeRace()
+    {
+        try { return await FetchRace(CancellationToken.None).ConfigureAwait(false); }
+        catch { return RaceOpenReply.Empty; }
     }
 
     private async Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)> SafeRemote()

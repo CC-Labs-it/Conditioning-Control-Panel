@@ -26,6 +26,9 @@ import * as bridge from './bridge.js';
 import { createHostEscape, HOST_ESCAPE } from './shell/host-escape.js';
 const hostEscape = createHostEscape();
 bridge.on(HOST_ESCAPE, () => hostEscape.kept());
+// SPARKLES BY PLACE (B1 W5): the host's receipt for a graded class, drawn under the report card.
+import { showSlip } from './sparkles-slip.js';
+bridge.on('sparkles-receipt', showSlip);
 import { installDeviceClass } from './core/device.js';
 /* THE DIRECT LAUNCH's two reads, and they are the only reason boot.js knows the
  * registry exists. Both are STATIC data (a frozen table and two Sets) - the game

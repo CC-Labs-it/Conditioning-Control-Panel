@@ -20,6 +20,10 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public class SubliminalService : IDisposable
     {
+        // The Core card layer (ccp-bugs #1493) loads the bundled Fredoka through the head.
+        static SubliminalService() =>
+            Compositor.SubliminalLayer.BundledFaceStream ??= ConditioningControlPanel.Helpers.FontPickerHelper.BundledFaceStream;
+
         private readonly Random _random = new();
 
         // KEEP-ALIVE windows, one per screen: a subliminal "show" swaps the text content and
@@ -727,7 +731,8 @@ namespace ConditioningControlPanel.Services
                     new SkiaSharp.SKColor(bgColor.R, bgColor.G, bgColor.B),
                     new SkiaSharp.SKColor(textColor.R, textColor.G, textColor.B),
                     new SkiaSharp.SKColor(borderColor.R, borderColor.G, borderColor.B),
-                    bgTransparent, targetOpacity, durationMs, fadeInMs, fadeOutMs);
+                    bgTransparent, targetOpacity, durationMs, fadeInMs, fadeOutMs,
+                    Compositor.SubliminalLayer.ResolveFace(App.Settings.Current.SubliminalFont));
                 return true;
             }
             catch (Exception ex)

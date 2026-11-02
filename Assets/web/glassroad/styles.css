@@ -1,0 +1,579 @@
+/* glassroad styles: the race HUD, the paper cards (menu, pause, options, controls, results,
+ * start, finish) and the feel sheet. Paper and ink, CCP pink accents, no glow. */
+:root {
+  --ink: #f4eef8;
+  --ink-dim: rgba(244, 238, 248, 0.62);
+  --glass: rgba(14, 12, 22, 0.58);
+  --line: rgba(244, 238, 248, 0.16);
+  --accent: #ff8fc4;
+  --pink: #ff5fa8;
+  --gold: #ffd36b;
+  --paper: #f5f0e8;
+  --paper-ink: #1c1722;
+  --paper-dim: #6a6272;
+  --paper-pink: #d4307c;
+  --shade: rgba(14, 10, 22, 0.7);
+  --font: system-ui, "Segoe UI", sans-serif;
+  --mono: ui-monospace, Consolas, "Courier New", monospace;
+}
+
+/* HUD */
+.hud { position: fixed; inset: 0; pointer-events: none; color: var(--ink); font: 600 15px/1.2 var(--font);
+  text-shadow: 0 1px 2px var(--shade); user-select: none; -webkit-user-select: none; }
+.hud-race { position: absolute; inset: 0; }
+.hud-direction { position: absolute; top: max(100px, calc(env(safe-area-inset-top) + 88px)); left: 50%;
+  transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+  color: #fff3cf; background: #231b20; border: 2px solid #edc46a; border-radius: 12px;
+  font-size: clamp(18px, 3vw, 26px); font-weight: 800; opacity: 0; visibility: hidden;
+  transition: opacity 0.35s, visibility 0.35s; }
+.hud-direction.on { opacity: 1; visibility: visible; }
+.hud-direction svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.hud-direction small { display: block; margin-top: 2px; font-size: 12px; font-weight: 600; text-align: center; }
+.hud[data-screen="menu"] .hud-race, .hud[data-screen="results"] .hud-race,
+.hud[data-screen="menu"] .hud-count { display: none; }
+.hud-tl { position: absolute; top: max(14px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left));
+  display: flex; flex-direction: column; gap: 2px; }
+.hud-lap { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.hud-time, .hud-best, .hud-speed b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.hud-time { font-size: 20px; }
+.hud-best { font-size: 12px; color: var(--ink-dim); font-weight: 400; }
+.hud-best:empty { display: none; }
+
+/* item slot, top centre; tap to use on touch. Polish 6: a SOLID ink socket with a paper rim and an ink
+ * outline, never see-through, so it reads over any scene and over a Flash; the glass bubble sits on an
+ * opaque core disc. States (hud/slotMath.js, data-state): empty / rolling / ready (.held) / used. */
+.hud-item { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; width: 72px; height: 72px;
+  margin-left: -36px; padding: 0; border-radius: 50%; border: 4px solid var(--paper); background: var(--paper-ink);
+  box-shadow: 0 0 0 2px var(--paper-ink), 3px 4px 0 2px rgba(14, 10, 22, 0.45); pointer-events: auto; cursor: pointer;
+  display: grid; place-items: center; touch-action: none; -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s; box-sizing: border-box; }
+.hud-item-core { position: absolute; inset: 7%; border-radius: 50%; background: radial-gradient(circle at 50% 36%, #43365a 0, #271f35 52%, #16121e 100%);
+  box-shadow: inset 0 0 0 2px rgba(245, 240, 232, 0.16); transition: opacity 0.15s; }
+.hud-item img { position: relative; grid-area: 1 / 1; width: 84%; height: 84%; object-fit: contain; pointer-events: none; }
+.hud-item-ring { position: absolute; inset: 3px; border-radius: 50%; border: 2px dashed transparent; }
+.hud-item-flare { position: absolute; inset: -4px; border-radius: 50%; border: 3px solid var(--flare, var(--pink)); opacity: 0; pointer-events: none; }
+.hud-item.empty { border-color: rgba(245, 240, 232, 0.72); }
+.hud-item.empty .hud-item-core { opacity: 0.55; }
+.hud-item.empty .hud-item-ring { inset: 22%; border-color: rgba(245, 240, 232, 0.3); }
+.hud-item.rolling, .hud-item.held { border-color: var(--pink); }
+.hud-item.rolling .hud-item-ring { border-color: var(--paper); animation: hud-spin 0.9s linear infinite; }
+.hud-item.held img { animation: hud-bob 2.4s ease-in-out infinite; }
+/* ready: a pink ring breathes out of the rim (IN at the rim, OUT as it fades) */
+.hud-item.held::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--pink);
+  animation: hud-ready 1.6s ease-out infinite; pointer-events: none; }
+.hud-item.used { border-color: var(--paper); }
+/* the moments: catch (a card grabbed), land (the roll snaps onto the drawn item), use (fired), drop, soft (Gentle) */
+.hud-item.m-catch { animation: hud-catch 0.34s ease-out; --flare: var(--paper); }
+.hud-item.m-land { animation: hud-snap 0.3s ease-out; --flare: var(--gold); }
+.hud-item.m-land .hud-item-icon { animation: hud-icon-snap 0.3s ease-out, hud-bob 2.4s ease-in-out 0.3s infinite; }
+.hud-item.m-use { animation: hud-squeeze 0.3s ease-out; --flare: var(--pink); }
+.hud-item.m-catch .hud-item-flare, .hud-item.m-land .hud-item-flare, .hud-item.m-use .hud-item-flare { animation: hud-flare 0.42s ease-out; }
+.hud-item.m-use .hud-item-ghost { animation: hud-shrink-out 0.42s ease-in both; }
+.hud-item.m-use-soft .hud-item-ghost { animation: hud-fade-out 0.6s ease-out both; }
+.hud-item.m-drop, .hud-item.m-soft { animation: hud-fade 0.4s ease-out; }
+.hud-item .hud-item-ghost { position: absolute; width: 84%; height: 84%; }
+/* the roll slides each card in from the right (render/items/slotfx.js): a smaller card stays inside the rim */
+.hud-item.rolling .hud-item-icon { width: 64%; height: 64%; }
+.hud-item-ghost[hidden], .hud-item img[hidden] { display: none; }
+.hud.finished .hud-item { visibility: hidden; }
+@keyframes hud-spin { to { transform: rotate(360deg); } }
+@keyframes hud-bob { 50% { transform: translateY(-3px); } }
+@keyframes hud-fade { from { opacity: 0.5; } to { opacity: 1; } }
+@keyframes hud-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes hud-ready { 0% { opacity: 0; transform: scale(0.94); } 20% { opacity: 0.9; } 100% { opacity: 0; transform: scale(1.22); } }
+@keyframes hud-catch { 0% { transform: scale(1); } 35% { transform: scale(1.2); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }
+@keyframes hud-snap { 0% { transform: scale(1.24); } 45% { transform: scale(0.93); } 100% { transform: scale(1); } }
+@keyframes hud-icon-snap { 0% { transform: scale(1.45) rotate(-8deg); } 60% { transform: scale(0.94); } 100% { transform: none; } }
+@keyframes hud-squeeze { 0% { transform: scale(0.86); } 55% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes hud-flare { 0% { opacity: 0.95; transform: scale(0.85); } 100% { opacity: 0; transform: scale(1.5); } }
+@keyframes hud-shrink-out { 0% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0; transform: scale(0.15) translateY(30%); } }
+
+/* a pickup bubble: two rings at the kart (IN from small, OUT as they spread) and a speed punch */
+.hud-pop { position: absolute; left: 50%; top: 66%; width: 0; height: 0; visibility: hidden; }
+.hud-pop.on, .hud-pop.on-soft { visibility: visible; }
+.hud.paused .hud-pop { visibility: hidden; }
+.hud-pop i { position: absolute; left: -46px; top: -30px; width: 92px; height: 60px; border-radius: 50%; border: 3px solid var(--pink);
+  box-sizing: border-box; opacity: 0; }
+.hud-pop i.r2 { border-color: var(--paper); border-width: 2px; }
+.hud-pop.on i { animation: hud-pop-ring 0.46s cubic-bezier(0.15, 0.7, 0.3, 1) both; }
+.hud-pop.on i.r2 { animation-delay: 0.06s; }
+.hud-pop.on-soft i { animation: hud-fade-out 0.6s ease-out both; }
+.hud-pop.on-soft i.r2 { display: none; }
+@keyframes hud-pop-ring { 0% { opacity: 0.9; transform: scale(0.35); } 100% { opacity: 0; transform: scale(2.1); } }
+.hud-speed b { display: inline-block; transform-origin: 80% 70%; }
+.hud-speed.punch b { animation: hud-punch 0.4s ease-out; }
+.hud-speed.punch-soft b { animation: hud-ink-in 0.6s ease-out; }
+@keyframes hud-punch { 0% { transform: scale(1.3); color: var(--accent); } 100% { transform: scale(1); } }
+@keyframes hud-ink-in { from { color: var(--accent); } }
+
+/* minimap */
+.hud-mapbox { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right));
+  width: 132px; height: 104px; }
+.hud-map { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 10px; background: rgba(14, 10, 22, 0.32); }
+
+/* place numeral, bottom left */
+.hud-place { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom));
+  font-weight: 900; line-height: 0.9; transform-origin: 20% 80%; }
+.hud-place[hidden] { display: none; }
+.hud-place b { font-size: 88px; letter-spacing: -0.03em; -webkit-text-stroke: 2px var(--paper-ink); paint-order: stroke fill; }
+.hud-place sup { font-size: 30px; vertical-align: top; position: relative; top: 8px; margin-left: 2px; color: var(--pink); }
+.hud-place small { font-size: 18px; font-weight: 600; color: var(--ink-dim); margin-left: 4px; }
+.hud-place.first b { color: var(--gold); }
+.hud-place.pop { animation: hud-place-pop 0.36s ease-out; }
+.hud-place.pop.up b { animation: hud-place-ink 0.6s ease-out; }
+.hud-place.pop-soft { animation: hud-fade 0.45s ease-out; }
+@keyframes hud-place-pop { from { transform: scale(1.22); } to { transform: scale(1); } }
+@keyframes hud-place-ink { from { color: var(--pink); } }
+
+/* drift pips under the kart, speed bottom right */
+.hud-pips { position: absolute; left: 50%; bottom: 11%; transform: translateX(-50%); display: flex; gap: 6px; }
+.hud-pips i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(253, 247, 255, 0.5);
+  transition: background-color 0.12s, border-color 0.12s; }
+.hud-pips i.on { background: var(--pip, #fff); border-color: var(--pip, #fff); }
+/* polish 6: lit pips wear a ring in the CURRENT tier colour (the spark colour); a new tier pops its pip
+ * (IN: a swell past size, OUT: settles), the release swells the row and fades it (hud/slotMath.js PIP_OUT_S) */
+.hud-pips i.on { box-shadow: 0 0 0 2px var(--paper-ink), 0 0 0 4px var(--tier, var(--pip, #fff)); }
+.hud-pips i.pop { animation: hud-pip-pop 0.32s ease-out; }
+.hud-pips i.pop-soft { animation: hud-fade 0.4s ease-out; }
+.hud-pips.out i.on { animation: hud-pip-out 0.34s ease-out both; }
+.hud-pips.out-soft i.on { animation: hud-fade-out 0.34s ease-out both; }
+@keyframes hud-pip-pop { 0% { transform: scale(0.6); } 40% { transform: scale(1.7); } 100% { transform: scale(1); } }
+@keyframes hud-pip-out { 0% { transform: scale(1); opacity: 1; } 35% { transform: scale(1.45); opacity: 1; } 100% { transform: scale(1.9) translateY(-6px); opacity: 0; } }
+.hud-speed { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); color: var(--ink-dim); }
+.hud-speed b { font-size: 28px; color: var(--ink); }
+/* touch: Throw and Drop occupy the bottom right corner; speed and media credit sit above both */
+.gr-touch-on .hud-speed { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 136px); }
+.gr-touch-on .hud-credit { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 176px); }
+/* playtest 2026-10-28: the km/h readout is opt-in (the speedo option); hud.js sets [hidden] */
+.hud-speed[hidden] { display: none; }
+/* the fire key, a paper keycap on the slot's lower rim, only while an item is held (hud/labels.js itemKey) */
+.hud-item-key { position: absolute; left: 50%; bottom: -11px; transform: translateX(-50%); z-index: 1; min-width: 14px;
+  padding: 1px 6px; border-radius: 5px; background: var(--paper); color: var(--paper-ink); border: 1.5px solid var(--paper-ink);
+  box-shadow: 2px 2px 0 var(--shade); font: 800 12px/16px var(--font); text-align: center; text-shadow: none; white-space: nowrap;
+  pointer-events: none; animation: hud-key-in 0.3s ease-out; }
+.hud-item-key[hidden] { display: none; }
+@keyframes hud-key-in { from { opacity: 0; } }
+/* the Autopilot chip, bottom centre above the note line, while the assist drives (bus 'autopilot'); IN rises and
+ * fades, OUT sinks and fades; Motion Less / Off and Gentle keep a longer fade only */
+.hud-auto { position: absolute; left: 50%; bottom: calc(max(18px, calc(env(safe-area-inset-bottom) + 12px)) + 36px);
+  transform: translate(-50%, 8px) scale(0.92); padding: 3px 10px; border-radius: 999px; background: var(--paper-ink);
+  color: var(--paper); border: 1.5px solid var(--pink); font: 700 12px/1.2 var(--font); letter-spacing: 0.06em;
+  text-transform: uppercase; text-shadow: none; white-space: nowrap; opacity: 0; transition: opacity 0.22s, transform 0.22s; }
+.hud-auto.on { opacity: 0.92; transform: translate(-50%, 0) scale(1); }
+.hud-auto[data-motion="less"], .hud-auto[data-motion="off"], .hud.gentle .hud-auto { transform: translate(-50%, 0); transition: opacity 0.45s; }
+.hud.finished .hud-auto { opacity: 0; }
+/* touch: View / Rear own the bottom centre (input/touch.js, 48 px tall); the chip sits above them */
+.gr-touch-on .hud-auto { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 60px); }
+@media (prefers-reduced-motion: reduce) { .hud-auto { transform: translate(-50%, 0); transition: opacity 0.45s; } .hud-item-key { animation: none; } }
+
+/* toast: a paper slip in the race band, above the road's vanishing point and well clear of the item slot (playtest
+ * 2026-10-28); only the first-pickup tip ([data-at="slot"]) hangs under the slot it explains */
+.hud-toast { position: absolute; top: max(30%, calc(max(12px, env(safe-area-inset-top)) + 120px)); left: 50%; transform: translate(-50%, -4px);
+  padding: 5px 12px; border-radius: 4px; background: var(--paper); color: var(--paper-ink); border: 1.5px solid var(--paper-ink);
+  box-shadow: 3px 3px 0 var(--shade); font: 700 13px/1.2 var(--font); text-shadow: none; white-space: nowrap;
+  opacity: 0; transition: opacity 0.22s, transform 0.22s; }
+.hud-toast.on { opacity: 1; transform: translate(-50%, 0); }
+.hud.gentle .hud-toast { transition: opacity 0.4s; transform: translate(-50%, 0); }
+.hud-toast[data-at="slot"] { top: calc(max(12px, env(safe-area-inset-top)) + 84px); }
+
+/* polish 5 (J2): each bell stamps a big digit in and shrinks it out over one beat; Go bursts at your kart */
+.hud-count { position: absolute; top: 24%; left: 0; right: 0; text-align: center; font: 900 clamp(110px, 24vh, 270px)/1 var(--font);
+  color: #fff4fa; text-shadow: 0 5px 0 var(--paper-pink), 0 10px 0 var(--shade); --beat: 0.625s; }
+.hud-count span { opacity: 0; }
+.hud-count.stamp span { animation: hud-stamp var(--beat) linear both; }
+@keyframes hud-stamp {
+  0% { opacity: 0; transform: scale(1.9); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.25); }
+  18% { opacity: 1; transform: scale(0.94); }
+  26% { opacity: 1; transform: scale(1); }
+  68% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  100% { opacity: 0; transform: scale(0.45); }
+}
+@keyframes hud-fade-beat { 0% { opacity: 0; } 28% { opacity: 1; } 66% { opacity: 1; } 100% { opacity: 0; } }
+.hud.gentle .hud-count.stamp span { animation-name: hud-fade-beat; }
+.hud-go { position: absolute; left: 50%; top: 66%; width: 0; height: 0; visibility: hidden; }
+.hud-go.on { visibility: visible; }
+.hud[data-screen="menu"] .hud-go, .hud.paused .hud-go { visibility: hidden; }
+.hud-go span { position: absolute; left: 0; bottom: 0.35em; font: 900 clamp(72px, 15vh, 170px)/1 var(--font); color: #fff4fa;
+  text-shadow: 0 5px 0 var(--paper-pink), 0 10px 0 var(--shade); white-space: nowrap; opacity: 0; transform: translateX(-50%); }
+.hud-go.on span { animation: hud-go var(--go-s, 0.72s) linear both; }
+@keyframes hud-go {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.35); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+  20% { opacity: 1; transform: translateX(-50%) scale(1.12); }
+  38% { opacity: 1; transform: translateX(-50%) scale(1); animation-timing-function: ease-in; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-0.45em) scale(1.7); }
+}
+@keyframes hud-fade-go { 0% { opacity: 0; } 25% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }
+.hud-go-ring { position: absolute; left: -70px; top: -42px; width: 140px; height: 84px; border-radius: 50%; border: 6px solid var(--pink);
+  box-sizing: border-box; opacity: 0; }
+.hud-go-ring.r2 { border-color: var(--gold); border-width: 4px; }
+.hud-go.on .hud-go-ring { animation: hud-go-ring var(--go-s, 0.72s) cubic-bezier(0.15, 0.7, 0.3, 1) both; }
+.hud-go.on .hud-go-ring.r2 { animation-delay: 0.09s; }
+@keyframes hud-go-ring { 0% { opacity: 0.95; transform: scale(0.2); } 70% { opacity: 0.35; } 100% { opacity: 0; transform: scale(3.6); } }
+.hud.gentle .hud-go.on span { animation-name: hud-fade-go; }
+.hud.gentle .hud-go-ring { display: none; }
+.hud-credit { position: absolute; right: 16px; bottom: max(52px, calc(env(safe-area-inset-bottom) + 40px)); font-size: 12px; color: var(--ink-dim); }
+.hud-credit:empty { display: none; }
+.hud.paused .hud-count { visibility: hidden; }
+
+/* controller notes: a paper slip at the bottom, on every screen */
+.hud-note { position: absolute; left: 50%; bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px)); transform: translate(-50%, 4px);
+  padding: 5px 12px; border-radius: 4px; background: var(--paper); color: var(--paper-ink); border: 1.5px solid var(--paper-ink);
+  box-shadow: 3px 3px 0 var(--shade); font: 700 13px/1.2 var(--font); text-shadow: none; white-space: nowrap;
+  opacity: 0; transition: opacity 0.22s, transform 0.22s; }
+.hud-note.on { opacity: 1; transform: translate(-50%, 0); }
+.hud.gentle .hud-note { transition: opacity 0.4s; transform: translate(-50%, 0); }
+.hud-count span { display: block; }
+.hud-count-flag { display: block; width: clamp(72px, 9vh, 112px); height: auto; margin: 0 auto 6px; }
+.hud-count-flag[hidden] { display: none; }
+
+/* the SVG HUD kit (hud/kit.js): each kit-* class lands only when its files loaded; without it the plain look above stays */
+.hud-div { display: none; }
+.hud.kit-divider .hud-div { display: block; width: 108px; height: 9px; margin: 1px 0 2px;
+  background: url(art/ui/lap-time-divider.svg) left center / contain no-repeat; }
+/* polish 6: the kit frame now sits on a SOLID ink disc (its own fill is 60% see-through); the state rim is a
+ * ring just outside the frame (pink rolling and ready, paper when used) */
+.hud.kit-slot .hud-item { border: 0; box-shadow: 3px 4px 0 1px rgba(14, 10, 22, 0.45);
+  background: url(art/ui/item-slot-frame.svg) center / 100% 100% no-repeat, radial-gradient(circle closest-side, var(--paper-ink) 0 98%, transparent 100%); }
+.hud.kit-slot .hud-item.rolling, .hud.kit-slot .hud-item.held { box-shadow: 0 0 0 3px var(--pink), 3px 4px 0 4px rgba(14, 10, 22, 0.45); }
+.hud.kit-slot .hud-item.used { box-shadow: 0 0 0 3px var(--paper), 3px 4px 0 4px rgba(14, 10, 22, 0.45); }
+.hud.kit-slot .hud-item-core { inset: 12%; }
+.hud.kit-slot .hud-item img, .hud.kit-slot .hud-item-ghost { width: 70%; height: 70%; }
+.hud.kit-slot .hud-item.rolling .hud-item-icon { width: 54%; height: 54%; }
+.hud.kit-slot .hud-item-ring { inset: 13%; }
+.hud.kit-slot .hud-item.empty .hud-item-ring { inset: 26%; }
+.hud.kit-slot .hud-item.held .hud-item-ring { border: 2px solid var(--pink); }
+.hud.kit-slot .hud-item-flare { inset: -6px; }
+.hud.kit-map .hud-mapbox { width: 168px; height: 128px; background: url(art/ui/minimap-frame.svg) center / 100% 100% no-repeat; }
+.hud.kit-map .hud-map { inset: 15.79% auto auto 12%; width: 76%; height: 68.42%; border-radius: 0; background: none; }
+.hud.kit-pips .hud-pips { gap: 4px; }
+.hud.kit-pips .hud-pips i { width: 26px; height: 26px; border: 0; border-radius: 50%; background: center / contain no-repeat;
+  opacity: 0.3; transition: opacity 0.12s; }
+.hud.kit-pips .hud-pips i:nth-child(1) { background-image: url(art/ui/drift-pip-pink.svg); }
+.hud.kit-pips .hud-pips i:nth-child(2) { background-image: url(art/ui/drift-pip-white.svg); }
+.hud.kit-pips .hud-pips i:nth-child(3) { background-image: url(art/ui/drift-pip-gold.svg); }
+.hud.kit-pips .hud-pips i.on { background-color: transparent; opacity: 1; }
+.hud-place-art { height: 96px; width: auto; vertical-align: bottom; }
+.hud-place-art[hidden] { display: none; }
+.hud-place.art b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hud-place.art sup { top: 10px; }
+
+/* Gentle: no spin, no bob, no scale pops (fades only) */
+.hud.gentle .hud-item-ring, .hud.gentle .hud-item-icon { animation: none; }
+.hud.gentle .hud-item.held::after { display: none; }
+
+/* phone: the place numeral goes top right, left of the touch pause button; the map tucks under the time */
+@media (max-width: 640px) {
+  .hud-place { top: max(10px, env(safe-area-inset-top)); bottom: auto; right: calc(max(12px, env(safe-area-inset-right)) + 58px); left: auto; }
+  .hud-place b { font-size: 54px; }
+  .hud-place sup { font-size: 20px; top: 4px; }
+  .hud-place small { display: none; }
+  .hud-mapbox { top: calc(max(14px, env(safe-area-inset-top)) + 52px); left: max(16px, env(safe-area-inset-left)); right: auto; width: 92px; height: 72px; }
+  .hud.kit-map .hud-mapbox { width: 112px; height: 85px; }
+  .hud-place-art { height: 56px; }
+  .hud.kit-divider .hud-div { width: 84px; }
+  .hud-item { width: 58px; height: 58px; margin-left: -29px; border-width: 3px; }
+  .hud-toast[data-at="slot"] { top: calc(max(12px, env(safe-area-inset-top)) + 68px); }
+  .hud-lap { font-size: 15px; }
+  .hud-time { font-size: 16px; }
+}
+
+/* cards: paper on the scene */
+#card { background: rgba(8, 7, 14, 0.42); z-index: 10; }
+#card[data-kind="menu"] { background: linear-gradient(90deg, rgba(8, 7, 14, 0.55), rgba(8, 7, 14, 0) 72%);
+  place-items: center start; padding-left: max(16px, 6vw); box-sizing: border-box; }
+#card .card-body { width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box;
+  padding: 22px 22px 20px; background: var(--paper); color: var(--paper-ink); border: 1.5px solid var(--paper-ink);
+  border-radius: 6px; box-shadow: 5px 5px 0 var(--shade); text-align: center; font: 15px/1.35 var(--font); }
+#card .card-body.in { animation: card-in 0.28s ease-out; }
+@keyframes card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+#card .card-title { margin: 0 0 4px; font-size: 26px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.05; }
+#card .card-title small { display: block; margin-top: 6px; font: 600 11px/1 var(--mono); letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--paper-pink); }
+#card[data-kind="menu"] .card-title { font-size: 34px; text-align: left; }
+#card[data-kind="menu"] .card-note { text-align: left; }
+#card .card-note { margin: 0 0 16px; color: var(--paper-dim); font: 13px/1.3 var(--mono); }
+#card .card-note[hidden] { display: none; }
+/* the warming card (pass 3): a bar that fills with the real stages; the sheen and the ring are transform-only
+   animations, so the compositor keeps them moving even while a shader link holds the page */
+#card .c-load { display: flex; align-items: center; gap: 10px; margin: -6px 0 16px; }
+#card .c-load-bar { position: relative; flex: 1; height: 8px; border: 1.5px solid var(--paper-ink); border-radius: 5px;
+  background: rgba(28, 23, 34, 0.08); overflow: hidden; }
+#card .c-load-fill { position: absolute; inset: 0; background: var(--paper-pink); transform-origin: 0 50%; transform: scaleX(0);
+  transition: transform 0.3s ease-out; }
+#card .c-load-sheen { position: absolute; top: 0; bottom: 0; left: 0; width: 35%; will-change: transform;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
+  animation: c-load-sheen 1.2s linear infinite; }
+#card .c-load-ring { flex: none; width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; will-change: transform;
+  border: 2px solid var(--paper-pink); border-right-color: transparent; animation: c-load-spin 0.8s linear infinite; }
+@keyframes c-load-sheen { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+@keyframes c-load-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { #card .c-load-sheen { animation-duration: 3.6s; } #card .c-load-ring { animation-duration: 2.4s; } }
+
+#card button { font: 600 15px var(--font); color: var(--paper-ink); background: transparent; border: 1.5px solid var(--paper-ink);
+  border-radius: 999px; padding: 9px 20px; min-height: 44px; margin: 0; cursor: pointer; }
+#card #card-go { margin: 0 4px; }
+#card button.hot { background: var(--paper-pink); border-color: var(--paper-pink); color: #fff; }
+#card button.quiet { border-color: transparent; color: var(--paper-dim); }
+#card button:hover:not(:disabled) { border-color: var(--paper-pink); }
+#card button:focus-visible, #card input:focus-visible { outline: 2.5px solid var(--paper-pink); outline-offset: 3px; }
+#card button:active:not(:disabled) { transform: translateY(1px); }
+#card button:disabled { opacity: 0.45; cursor: default; }
+#card button[hidden] { display: none; }
+
+.c-list { display: flex; flex-direction: column; gap: 8px; }
+.c-list.row { flex-direction: row; justify-content: center; margin-top: 14px; }
+.c-list.row button { min-width: 110px; }
+.c-doors { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#card .c-door { position: relative; border-radius: 8px; padding: 14px 12px; text-align: left; display: flex; flex-direction: column; gap: 4px; min-height: 84px; }
+.c-door b { font-size: 21px; font-weight: 800; }
+.c-door em { font-style: normal; font-size: 12px; font-weight: 500; opacity: 0.8; }
+#card .c-door.soon { color: var(--paper-dim); border-style: dashed; }
+.c-stamp { position: absolute; top: 8px; right: 8px; transform: rotate(-8deg); padding: 1px 6px; border: 1.5px solid var(--paper-pink);
+  border-radius: 3px; color: var(--paper-pink); font: 700 10px/1.3 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.c-links { display: flex; justify-content: flex-start; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
+#card .c-link { border-color: transparent; padding: 6px 10px; min-height: 36px; font-size: 14px; text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-color: rgba(28, 23, 34, 0.3); }
+
+.c-opts { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; text-align: left; }
+.c-opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(28, 23, 34, 0.12); }
+.c-opt small { display: block; font-size: 11px; color: var(--paper-dim); font-weight: 400; margin-top: 2px; }
+#card .c-tog { min-width: 68px; padding: 6px 14px; min-height: 36px; }
+#card .c-tog.on { background: var(--paper-ink); color: var(--paper); }
+/* Online pictures: this track's Scrolller niches as chips (web only) */
+.c-niches { flex-direction: column; align-items: stretch; }
+.c-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#card .c-chip { min-height: 34px; padding: 4px 11px; font-size: 12px; }
+#card .c-chip.on { background: var(--paper-ink); color: var(--paper); }
+#card .c-chip-reset { border-style: dashed; }
+#card .c-btn.pending { opacity: .6; }
+.c-opt input[type="range"] { width: 52%; accent-color: var(--paper-pink); }
+
+.c-keys { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px; text-align: left; }
+.c-keys th, .c-keys td { padding: 5px 4px; border-bottom: 1px solid rgba(28, 23, 34, 0.12); vertical-align: top; }
+.c-keys thead th { font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--paper-dim); }
+.c-keys td { font-family: var(--mono); }
+@media (hover: none) and (pointer: coarse) { .c-keys td:nth-child(2), .c-keys th:nth-child(2) { display: none; } }
+@media (hover: hover) { .c-keys td:nth-child(4), .c-keys th:nth-child(4) { display: none; } }
+/* the device used last: its column always shows, in pink */
+.c-keys[data-last="keyboard"] .k, .c-keys[data-last="touch"] .t { display: table-cell; }
+.c-keys[data-last="pad"] .p, .c-keys[data-last="keyboard"] .k, .c-keys[data-last="touch"] .t { color: var(--paper-pink); font-weight: 700; }
+.c-layout { margin: -6px 0 14px; text-align: left; }
+.c-hint { margin: 12px 0 0; font: 12px/1.3 var(--mono); color: var(--paper-dim); }
+.c-hint[hidden] { display: none; }
+.c-flag { display: block; width: 64px; height: auto; margin: 0 auto 2px; }
+
+/* menu doors in the kit frames: labels in the frame's label band, the line in its description box */
+#card.kit-doors[data-kind="menu"] .card-body { width: min(420px, calc(100vw - 32px)); }
+#card.kit-doors .c-door, #card.kit-doors .c-door.hot { aspect-ratio: 256 / 168; min-height: 0; padding: 0; border: 0; border-radius: 0;
+  background: url(art/ui/menu-race-frame.svg) center / 100% 100% no-repeat; color: #fff8ef; }
+#card.kit-doors .c-door[data-act="online"] { background-image: url(art/ui/menu-online-frame.svg); }
+#card.kit-doors .c-door b { position: absolute; left: 10.5%; top: 71.4%; width: 76.6%; height: 14.9%; display: flex; align-items: center;
+  font-size: 15px; line-height: 1; }
+#card.kit-doors .c-door em { position: absolute; left: 38.3%; top: 22.6%; width: 42.6%; height: 36.3%; font-size: 11px; line-height: 1.2; overflow: hidden; }
+#card.kit-doors .c-door.soon { opacity: 0.75; color: #fff8ef; }
+/* garage first: the Race door while the course lights warm behind the menu (its note counts up; a press waits under the cover) */
+#card .c-door.c-wait { opacity: 0.82; } #card .c-door.c-wait em { animation: c-wait-pulse 1.6s ease-in-out infinite; }
+@keyframes c-wait-pulse { 0%, 100% { opacity: 0.8; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { #card .c-door.c-wait em { animation: none; } }
+@media (max-width: 420px) { #card.kit-doors .c-doors { grid-template-columns: 1fr; } #card.kit-doors .c-door b { font-size: 17px; } #card.kit-doors .c-door em { font-size: 12px; } }
+
+#card[data-kind="results"] .card-title { margin-bottom: 0; }
+/* The Sparkles slip (sparkles-slip.js, shared byte for byte with the other trees) sits bottom centre, where it
+ * would cover the results card's buttons: here it moves to the bottom left corner. Its animations translate it
+ * by -50% of its own width, so `left` is its centre: a 16px gutter plus half of min(300px, 86vw). */
+body .sps-slip { left: calc(16px + min(150px, 43vw)); bottom: 16px; }
+.c-place { font-size: 64px; font-weight: 900; line-height: 1; }
+.c-place sup { font-size: 24px; color: var(--paper-pink); margin-left: 2px; }
+.c-rows { list-style: none; margin: 0; padding: 0; text-align: left; }
+.c-rows li { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: baseline; padding: 4px 8px;
+  border-bottom: 1px solid rgba(28, 23, 34, 0.1); }
+.c-rows li.me { background: rgba(212, 48, 124, 0.1); box-shadow: inset 3px 0 0 var(--paper-pink); font-weight: 700; }
+.c-rows .p { font-weight: 800; }
+.c-rows .t { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.c-rows .t.est { color: var(--paper-dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  #card .card-body.in, .hud-item-ring, .hud-item-icon, .hud-item.land, .hud-place.pop, .hud-place.pop b { animation: none; }
+  /* polish 6: the slot, pip and pop moments keep their fades, never a scale */
+  .hud-item.m-catch, .hud-item.m-land, .hud-item.m-use, .hud-pips i.pop { animation: hud-fade 0.4s ease-out; }
+  .hud-item.m-land .hud-item-icon, .hud-item-flare, .hud-item.held::after, .hud-pop i.r2 { animation: none; display: none; }
+  .hud-item.m-use .hud-item-ghost, .hud-pips.out i.on, .hud-pop.on i { animation: hud-fade-out 0.5s ease-out both; }
+  .hud-speed.punch b { animation: hud-ink-in 0.6s ease-out; }
+  .hud-count.stamp span { animation-name: hud-fade-beat; }
+  .hud-go.on span { animation-name: hud-fade-go; }
+  .hud-go-ring { display: none; }
+}
+
+/* feel sheet (?feel=1) */
+.feel-sheet { position: fixed; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100vw - 16px)); overflow: auto;
+  z-index: 20; background: rgba(10, 9, 16, 0.92); border: 1px solid var(--line); border-radius: 10px;
+  color: var(--ink); font: 12px/1.3 var(--font); padding: 6px 8px; box-sizing: border-box; }
+.feel-sheet.folded { bottom: auto; overflow: hidden; }
+.feel-sheet.folded details { display: none; }
+.feel-bar { display: flex; gap: 6px; position: sticky; top: -6px; background: inherit; padding: 4px 0 6px; }
+.feel-bar button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.feel-sheet summary { cursor: pointer; padding: 4px 0; font-weight: 700; color: var(--accent); }
+.feel-row { display: flex; align-items: center; gap: 6px; padding: 2px 0 2px 8px; }
+.feel-row span { flex: 0 0 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); }
+.feel-row input { min-width: 0; font: 12px var(--mono); color: var(--ink); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; }
+.feel-row input[type="number"], .feel-row input[type="text"] { width: 60px; flex: 1 1 60px; }
+.feel-row input[type="range"] { flex: 1 1 80px; padding: 0; }
+.feel-row input[type="checkbox"] { flex: 0 0 auto; }
+
+/* the 1-2-3 how-to card (music road pass 4, hud/howto.js): three paper panels, a rubber-stamp number each, ink
+ * drawings; the keys press on the countdown beat (96 bpm), slower and shallower under Gentle; IN = the panels stamp
+ * down one after another, OUT = the card lifts away */
+#card { --hw-beat: 0.625s; --hw-paper: #fbf8f2; }
+#card[data-kind="howto"] .card-body { width: min(760px, calc(100vw - 24px)); padding: 18px 20px 16px; text-align: left; }
+#card[data-kind="howto"] .card-title { font-size: 21px; margin: 0 0 14px 2px; }
+.hw-panels { list-style: none; margin: 0 0 14px; padding: 6px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.hw-panel { --hw-r: 0deg; position: relative; padding: 12px 8px 9px; background: var(--hw-paper); border: 1.5px solid var(--paper-ink);
+  border-radius: 3px; box-shadow: 2px 2px 0 rgba(28, 23, 34, 0.18); transform: rotate(var(--hw-r));
+  animation: hw-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.25) both; animation-delay: calc(var(--hw-i, 0) * 0.12s + 0.08s); }
+.hw-panel:nth-child(1) { --hw-r: -0.7deg; }
+.hw-panel:nth-child(2) { --hw-r: 0.5deg; }
+.hw-panel:nth-child(3) { --hw-r: -0.3deg; }
+@keyframes hw-in { from { opacity: 0; transform: translateY(-6px) scale(1.06) rotate(var(--hw-r)); } to { opacity: 1; transform: rotate(var(--hw-r)); } }
+.hw-n { position: absolute; top: -13px; left: -9px; width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid var(--paper-pink); color: var(--paper-pink); background: var(--paper); font: 900 17px/26px var(--font);
+  text-align: center; box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px var(--paper-pink); transform: rotate(-10deg); opacity: 0.92; }
+.hw-panel:nth-child(2) .hw-n { transform: rotate(7deg); }
+.hw-panel:nth-child(3) .hw-n { transform: rotate(-4deg); }
+.hw-art { display: block; width: 100%; height: auto; color: var(--paper-ink); overflow: visible; }
+.hw-art .ink-fill { fill: currentColor; stroke: none; }
+.hw-art .paper-fill { fill: var(--hw-paper); stroke: currentColor; }
+.hw-art .pk-line { stroke: var(--paper-pink); }
+.hw-art .pk-fill { fill: var(--paper-pink); stroke: none; }
+.hw-art .pk-soft { fill: rgba(212, 48, 124, 0.14); stroke: var(--paper-pink); }
+.hw-art .paper-line { stroke: #fff; }
+.hw-art text { stroke: none; }
+.hw-art .hw-t { fill: currentColor; font-family: var(--mono); font-weight: 700; }
+.hw-art .hw-stamp-t { fill: var(--paper-pink); font-family: var(--font); font-weight: 900; letter-spacing: 0.08em; }
+.hw-art .hw-bub-t { fill: var(--paper-pink); font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 700; }
+.hw-art .hw-road-t { fill: currentColor; opacity: 0.45; font-family: var(--font); font-weight: 800; }
+.hw-key .hw-top { animation: hw-press var(--hw-beat) ease-out infinite; }
+@keyframes hw-press { 0%, 100% { transform: translateY(0); } 10% { transform: translateY(3px); } 45% { transform: translateY(0); } }
+.hw-ring { transform-box: fill-box; transform-origin: center; animation: hw-ring var(--hw-beat) ease-out infinite; }
+@keyframes hw-ring { from { transform: scale(0.7); opacity: 0.9; } to { transform: scale(1.35); opacity: 0; } }
+.hw-cap { margin: 6px 0 0; font: 700 13px/1.25 var(--mono); text-align: center; }
+.hw-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+#card .hw-go { padding: 9px 18px; font-size: 15px; }
+#card .hw-off { min-height: 32px; padding: 4px 12px; font-size: 13px; border-color: rgba(28, 23, 34, 0.35); }
+/* the pre-race rows (playtest 2026-10-28): an ink icon, one word and the chips; the picked chip is pressed in */
+.pr-rows { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 14px 2px; }
+.pr-row { display: flex; align-items: center; gap: 8px; }
+.pr-i { width: 28px; height: 28px; color: var(--paper-ink); flex: none; }
+.pr-i .pk-line { stroke: var(--paper-pink); }
+.pr-l { font: 800 13px/1 var(--font); letter-spacing: 0.04em; text-transform: uppercase; }
+#card .pr-row .c-chip { min-width: 40px; font-size: 14px; }
+.pr-row { flex-wrap: wrap; }
+.pr-h { flex-basis: 100%; padding-left: 36px; font: 600 12px/1.2 var(--mono); opacity: 0.75; }
+#card .card-body.out { animation: hw-out 0.2s ease-in forwards; pointer-events: none; }
+@keyframes hw-out { to { opacity: 0; transform: translateY(-12px) scale(0.98); } }
+#card.c-gentle .hw-key .hw-top { animation-name: hw-press-soft; animation-duration: calc(var(--hw-beat) * 2); }
+@keyframes hw-press-soft { 0%, 100% { transform: translateY(0); } 25% { transform: translateY(1.5px); } 60% { transform: translateY(0); } }
+#card.c-gentle .hw-ring { animation-duration: calc(var(--hw-beat) * 2); }
+#card.c-gentle .hw-panel { animation: hw-in-soft 0.5s ease-out both; animation-delay: calc(var(--hw-i, 0) * 0.16s + 0.08s); }
+@keyframes hw-in-soft { from { opacity: 0; } to { opacity: 1; } }
+#card.c-gentle .card-body.out { animation: hw-out-soft 0.32s ease-out forwards; }
+@keyframes hw-out-soft { to { opacity: 0; } }
+@media (max-width: 520px) {
+  .hw-panels { gap: 8px; }
+  .hw-panel { padding: 10px 4px 7px; }
+  .hw-cap { font-size: 10.5px; }
+  .hw-n { width: 24px; height: 24px; font-size: 14px; line-height: 20px; top: -10px; left: -6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hw-panel, .hw-key .hw-top, .hw-ring, #card .card-body.out { animation: none; }
+}
+
+/* logbook recap (hud/recap.js, the results branch of hud/cards.js): page 2 = highlights + course sketch, page 3 =
+ * rubber stamps; every page slides in and out, the stamps thunk down one after another; Gentle and reduced motion
+ * fade only (no thunk, no slide) */
+#card { --rc-teal: #168a86; }
+#card[data-kind="results"][data-page="run"] .card-title, #card[data-kind="results"][data-page="stamps"] .card-title { font-size: 24px; margin-bottom: 2px; }
+.rc-page.in { animation: rc-in 0.24s ease-out both; }
+.rc-page.out { animation: rc-out 0.17s ease-in forwards; pointer-events: none; }
+@keyframes rc-in { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes rc-out { to { opacity: 0; transform: translateX(-18px); } }
+.rc-dots { display: flex; justify-content: center; gap: 6px; margin: 12px 0 0; }
+.rc-dots i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--paper-ink); box-sizing: border-box; }
+.rc-dots i.on { background: var(--paper-pink); border-color: var(--paper-pink); }
+.rc-hl { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rc-hl li { display: flex; flex-direction: column; gap: 3px; padding: 8px 4px 7px; border: 1.5px solid var(--paper-ink); border-radius: 3px;
+  background: #fbf8f2; box-shadow: 2px 2px 0 rgba(28, 23, 34, 0.18); animation: rc-in 0.28s ease-out both; animation-delay: calc(var(--i, 0) * 0.07s); }
+.rc-hl b { font: 900 24px/1 var(--font); font-variant-numeric: tabular-nums; }
+.rc-hl span { font: 600 10.5px/1.2 var(--mono); color: var(--paper-dim); }
+.rc-map { margin: 12px 0 0; }
+.rc-sketch { display: block; width: 100%; max-width: 260px; height: auto; margin: 0 auto; overflow: visible; }
+.rc-loop { fill: none; stroke: var(--paper-ink); stroke-width: 2.2; stroke-linejoin: round; opacity: 0.8; }
+.rc-best { fill: none; stroke: var(--rc-teal); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.rc-start { fill: var(--paper-ink); }
+.rc-fall { fill: var(--paper-pink); stroke: var(--paper); stroke-width: 1.2; }
+.rc-key { display: flex; justify-content: center; gap: 14px; margin: 6px 0 0; font: 600 10.5px/1 var(--mono); color: var(--paper-dim); }
+.rc-key span::before { content: ''; display: inline-block; vertical-align: middle; margin: -2px 5px 0 0; }
+.rc-key .k-best::before { width: 14px; height: 4px; border-radius: 2px; background: var(--rc-teal); }
+.rc-key .k-fall::before { width: 7px; height: 7px; border-radius: 50%; background: var(--paper-pink); }
+.rc-stamps { list-style: none; margin: 6px 0 0; padding: 4px 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 12px; }
+.rc-stamp { --r: -3deg; display: flex; flex-direction: column; gap: 3px; max-width: 100%; padding: 6px 11px 5px; box-sizing: border-box;
+  border: 2px solid var(--paper-pink); border-radius: 4px; color: var(--paper-pink); background: transparent; opacity: 0.94;
+  box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px var(--paper-pink); transform: rotate(var(--r));
+  animation: rc-thunk 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; animation-delay: calc(var(--i, 0) * 0.16s + 0.12s); }
+.rc-stamp b { font: 900 15px/1.05 var(--font); letter-spacing: 0.06em; text-transform: uppercase; }
+.rc-stamp span { font: 600 11px/1.2 var(--mono); color: var(--paper-ink); letter-spacing: 0; text-transform: none; }
+.rc-stamp.medal { border-color: var(--paper-ink); color: var(--paper-ink); box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px var(--paper-ink); }
+.rc-stamp.medal-gold b { color: #a8790f; }
+.rc-stamp.medal-glass b { color: var(--rc-teal); }
+.rc-stamp.unlock { border-style: dashed; }
+@keyframes rc-thunk { from { opacity: 0; transform: scale(1.45) rotate(calc(var(--r) * 2)); } 70% { opacity: 1; } to { opacity: 0.94; transform: rotate(var(--r)); } }
+@keyframes rc-fade { from { opacity: 0; } }
+#card.c-gentle .rc-page.in, #card.c-gentle .rc-hl li { animation: rc-fade 0.4s ease-out both; }
+#card.c-gentle .rc-page.out { animation: hw-out-soft 0.26s ease-out forwards; }
+#card.c-gentle .rc-stamp { animation: rc-fade 0.5s ease-out both; animation-delay: calc(var(--i, 0) * 0.2s + 0.1s); }
+@media (prefers-reduced-motion: reduce) {
+  .rc-page.in, .rc-hl li { animation: rc-fade 0.4s ease-out both; }
+  .rc-page.out { animation: hw-out-soft 0.26s ease-out forwards; }
+  .rc-stamp { animation: rc-fade 0.5s ease-out both; animation-delay: calc(var(--i, 0) * 0.2s + 0.1s); }
+}
+@media (max-width: 420px) { .rc-hl b { font-size: 20px; } }
+/* end logbook recap */
+
+/* ==== HIT CAM inset (render/hitCam.js, hud/hitCamChrome.js) ====================================
+ * The picture is drawn into the canvas under this rect; this is its chrome, moved with the same transform
+ * (slide, tilt, scale about the centre): ink frame, pink offset shadow and glow pulse (--glow 0..1), vignette,
+ * exposure flash, the tilted chip with a blinking rec dot, the victim tag and the comic impact word. Look after the
+ * chess capture replay (piecebypiece/styles.css .pbp-replay-*). Above the canvas and touch layer, under the HUD. */
+.hitcam { position: fixed; inset: 0; z-index: 12; pointer-events: none; overflow: hidden; }
+.hitcam[hidden] { display: none; }
+.hitcam-frame { position: absolute; box-sizing: border-box; border: 4px solid #0c0a1e; border-radius: 6px; transform-origin: 50% 50%;
+  --glow: 0; will-change: transform;
+  box-shadow: 0 0 0 2px #fff4fa, 5px 5px 0 2px #ff5aa5, 0 0 calc(6px + var(--glow) * 30px) calc(var(--glow) * 8px) rgba(255, 90, 165, calc(0.25 + var(--glow) * 0.75)); }
+.hitcam-vig { position: absolute; inset: 0; border-radius: 2px;
+  background: radial-gradient(ellipse at 50% 55%, transparent 52%, rgba(12, 10, 30, 0.55) 100%); }
+.hitcam-flash { position: absolute; inset: 0; opacity: 0; mix-blend-mode: screen;
+  background: radial-gradient(circle at 50% 55%, #ffffff 0, #ffd0e6 45%, #ff5aa5 100%); }
+.hitcam-chip { position: absolute; left: -10px; top: -14px; display: flex; gap: 6px; align-items: center; padding: 4px 7px 3px;
+  border: 2px solid #fff; border-radius: 5px; background: rgba(12, 10, 30, 0.92); color: #fff; box-shadow: 3px 3px 0 #ff5aa5;
+  font: 800 10px/1 var(--font); letter-spacing: 0.14em; text-shadow: none; transform-origin: 0 50%; }
+.hitcam-chip em { font-style: normal; }
+.hitcam-chip i { width: 8px; height: 8px; border-radius: 50%; background: #ff5aa5; box-shadow: 0 0 8px #ff5aa5;
+  animation: hitcam-rec 700ms steps(2, jump-none) infinite; }
+@keyframes hitcam-rec { 0% { opacity: 1; } 100% { opacity: 0.25; } }
+.hitcam-tag { position: absolute; left: 6px; bottom: 5px; max-width: calc(100% - 12px); display: flex; gap: 6px; align-items: baseline;
+  padding: 2px 7px; border-radius: 4px; background: rgba(12, 10, 30, 0.78); color: #fff4fa; white-space: nowrap; overflow: hidden;
+  font: 800 12px/1.2 var(--font); text-shadow: none; }
+.hitcam-tag small { font-weight: 600; font-size: 10px; color: #ff9cc9; letter-spacing: 0.04em; text-transform: uppercase; }
+.hitcam-word { position: absolute; right: 2px; top: 16%; opacity: 0; white-space: nowrap; transform-origin: 60% 60%;
+  color: #ff5aa5; font: italic 900 34px/1 var(--font); letter-spacing: 0.02em;
+  -webkit-text-stroke: 0.085em #0c0a1e; paint-order: stroke fill; text-shadow: 0.08em 0.08em 0 #0c0a1e; }
+.hitcam.gentle .hitcam-chip i { animation: none; opacity: 0.8; }
+@media (max-width: 640px), (max-height: 480px) {
+  .hitcam-frame { border-width: 3px; }
+  .hitcam-word { font-size: 24px; }
+  .hitcam-tag { font-size: 10px; }
+  .hitcam-tag small { font-size: 9px; }
+  .hitcam-chip { font-size: 8px; padding: 3px 5px 2px; }
+}
+@media (prefers-reduced-motion: reduce) { .hitcam-chip i { animation: none; } }
+/* ==== end HIT CAM ==== */

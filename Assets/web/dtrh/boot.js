@@ -13,6 +13,7 @@
  * ==========================================================================*/
 
 import * as bridge from './bridge.js';
+import { showSlip } from './sparkles-slip.js';
 import { isMuted, onMuteChange } from './shared/audioMute.js';
 import { setModContent } from './modContent.js';
 import { createHostMediaSource } from './hostMedia.js';
@@ -195,6 +196,9 @@ bridge.on('loom-list', (m) => {
 bridge.on('loom-result', (m) => { if (game && game.onLoomResult) game.onLoomResult(m); });
 bridge.on('end-run', () => { try { game && game.abandonRun && game.abandonRun(); } catch (e) { /* ignore */ } shutdown(); });
 bridge.on('ping', (m) => bridge.send({ type: 'pong', t: m.t }));
+// SPARKLES BY PLACE (B1 W5): the host's receipt for a finished descent, under the results card. A trance
+// game (no shake, hit-stop or flash): the slip plays calm, never the stamp slam or the flight.
+bridge.on('sparkles-receipt', (m) => showSlip(m, { calm: true }));
 
 // The dive's master mute is a WEB switch - it silences page media but never the
 // native mandatory video the host lays over us. Mirror it to the host so one

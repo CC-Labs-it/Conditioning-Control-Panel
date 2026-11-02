@@ -1,0 +1,1380 @@
+{
+ "about": "Glassroad wire vectors (NET.md). Byte-identical copy in CCP-Server rooms/test/vectors.json. Regenerate both together.",
+ "v": 1,
+ "headerBytes": 8,
+ "kartBytes": 40,
+ "items": [
+  "flash",
+  "spiral",
+  "brainDrain",
+  "freeze",
+  "blackout",
+  "pink",
+  "melt",
+  "shatter",
+  "surge",
+  "glass",
+  "echo",
+  "golden",
+  "pendulum",
+  "disc",
+  "tether",
+  "snap",
+  "bigSpiral"
+ ],
+ "outfits": [
+  "emi-outfit-croupier",
+  "emi-outfit-pool",
+  "emi-outfit-varsity",
+  "emi-outfit-builder",
+  "emi-outfit-cheer",
+  "emi-outfit-swim",
+  "emi-outfit-drone-protocol",
+  "emi-outfit-snow-day"
+ ],
+ "vehicles": [
+  "emi-teacup-kart",
+  "emi-vehicle-petal",
+  "emi-vehicle-trinket",
+  "emi-vehicle-pendulum",
+  "emi-vehicle-reverie",
+  "emi-vehicle-house-edge",
+  "emi-vehicle-checkmate",
+  "emi-vehicle-lovebomb",
+  "emi-vehicle-feedback",
+  "emi-vehicle-velvet-lock",
+  "emi-vehicle-undertow"
+ ],
+ "karts": [
+  {
+   "name": "rest",
+   "in": {
+    "tick": 0,
+    "seq": 0,
+    "seat": 0,
+    "paused": false,
+    "bot": false,
+    "finished": false,
+    "grounded": false,
+    "airborne": false,
+    "lap": 0,
+    "checkpoint": 0,
+    "respawn": 0,
+    "stalled": false,
+    "assist": false,
+    "s": 0,
+    "x": 0,
+    "h": 0,
+    "q": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "v": [
+     0,
+     0,
+     0
+    ],
+    "speedPct": 0,
+    "driftDir": 0,
+    "driftStage": 0,
+    "boostKind": 0,
+    "item": null,
+    "rolling": false,
+    "effect": null,
+    "shield": null,
+    "echo": 0,
+    "pose": 0,
+    "pulses": 0,
+    "pops": 0
+   },
+   "hex": "000000000000000000000000000000000000000000000000ff7f0000000000000000000000000000",
+   "out": {
+    "tick": 0,
+    "seq": 0,
+    "seat": 0,
+    "paused": false,
+    "bot": false,
+    "finished": false,
+    "grounded": false,
+    "airborne": false,
+    "lap": 0,
+    "checkpoint": 0,
+    "respawn": 0,
+    "stalled": false,
+    "assist": false,
+    "s": 0,
+    "x": 0,
+    "h": 0,
+    "q": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "v": [
+     0,
+     0,
+     0
+    ],
+    "speedPct": 0,
+    "driftDir": 0,
+    "driftStage": 0,
+    "boostKind": 0,
+    "item": null,
+    "rolling": false,
+    "effect": null,
+    "shield": null,
+    "echo": 0,
+    "pose": 0,
+    "pulses": 0,
+    "pops": 0
+   }
+  },
+  {
+   "name": "mid race",
+   "in": {
+    "tick": 3600,
+    "seq": 72,
+    "seat": 2,
+    "paused": false,
+    "bot": false,
+    "finished": false,
+    "grounded": true,
+    "airborne": false,
+    "lap": 1,
+    "checkpoint": 2,
+    "respawn": 0,
+    "stalled": false,
+    "assist": false,
+    "s": 712.345,
+    "x": -2.468,
+    "h": 0.051,
+    "q": [
+     0.01234,
+     -0.70123,
+     0.02345,
+     0.71234
+    ],
+    "v": [
+     12.34,
+     -0.56,
+     -25.67
+    ],
+    "speedPct": 0.987,
+    "driftDir": 1,
+    "driftStage": 2,
+    "boostKind": 1,
+    "item": "spiral",
+    "rolling": false,
+    "effect": "freeze",
+    "shield": "glass",
+    "echo": 0,
+    "pose": 0,
+    "pulses": 9,
+    "pops": 37
+   },
+   "hex": "100e00004800420102004316010009ff050094013fa600032d5bd204c8fff9f5a81a021400092500",
+   "out": {
+    "tick": 3600,
+    "seq": 72,
+    "seat": 2,
+    "paused": false,
+    "bot": false,
+    "finished": false,
+    "grounded": true,
+    "airborne": false,
+    "lap": 1,
+    "checkpoint": 2,
+    "respawn": 0,
+    "stalled": false,
+    "assist": false,
+    "s": 712.35,
+    "x": -2.47,
+    "h": 0.05,
+    "q": [
+     0.012329477828302866,
+     -0.7012237922299875,
+     0.023438215277565844,
+     0.7123325296792504
+    ],
+    "v": [
+     12.34,
+     -0.56,
+     -25.67
+    ],
+    "speedPct": 0.9882352941176471,
+    "driftDir": 1,
+    "driftStage": 2,
+    "boostKind": 1,
+    "item": "spiral",
+    "rolling": false,
+    "effect": "freeze",
+    "shield": "glass",
+    "echo": 0,
+    "pose": 0,
+    "pulses": 9,
+    "pops": 37
+   }
+  },
+  {
+   "name": "bot rolling",
+   "in": {
+    "tick": 9000,
+    "seq": 4,
+    "seat": 7,
+    "paused": false,
+    "bot": true,
+    "finished": false,
+    "grounded": true,
+    "airborne": false,
+    "lap": 2,
+    "checkpoint": 0,
+    "respawn": 0,
+    "stalled": false,
+    "assist": false,
+    "s": 1352.99,
+    "x": 4.2,
+    "h": 0,
+    "q": [
+     0,
+     0.38268,
+     0,
+     0.92388
+    ],
+    "v": [
+     -5,
+     0,
+     3
+    ],
+    "speedPct": 1.3,
+    "driftDir": 0,
+    "driftStage": 0,
+    "boostKind": 0,
+    "item": "golden",
+    "rolling": true,
+    "effect": null,
+    "shield": "echo",
+    "echo": 3,
+    "pose": 0,
+    "pulses": 4,
+    "pops": 0
+   },
+   "hex": "2823000004005702000083100200a40100000000fb30000041760cfe00002c01dd002cf000040000",
+   "out": {
+    "tick": 9000,
+    "seq": 4,
+    "seat": 7,
+    "paused": false,
+    "bot": true,
+    "finished": false,
+    "grounded": true,
+    "airborne": false,
+    "lap": 2,
+    "checkpoint": 0,
+    "respawn": 0,
+    "stalled": false,
+    "assist": false,
+    "s": 1352.99,
+    "x": 4.2,
+    "h": 0,
+    "q": [
+     0,
+     0.3826715903195288,
+     0,
+     0.9238868373668631
+    ],
+    "v": [
+     -5,
+     0,
+     3
+    ],
+    "speedPct": 1.3,
+    "driftDir": 0,
+    "driftStage": 0,
+    "boostKind": 0,
+    "item": "golden",
+    "rolling": true,
+    "effect": null,
+    "shield": "echo",
+    "echo": 3,
+    "pose": 0,
+    "pulses": 4,
+    "pops": 0
+   }
+  },
+  {
+   "name": "edges high",
+   "in": {
+    "tick": 4294967301,
+    "seq": 65545,
+    "seat": 9,
+    "paused": true,
+    "bot": true,
+    "finished": true,
+    "grounded": true,
+    "airborne": true,
+    "lap": 300,
+    "checkpoint": 999,
+    "respawn": 9,
+    "stalled": true,
+    "assist": true,
+    "s": 1000000000,
+    "x": 400,
+    "h": 400,
+    "q": [
+     0.5,
+     0.5,
+     0.5,
+     0.5
+    ],
+    "v": [
+     500,
+     500,
+     500
+    ],
+    "speedPct": 2,
+    "driftDir": -1,
+    "driftStage": 7,
+    "boostKind": 9,
+    "item": "shatter",
+    "rolling": false,
+    "effect": "shatter",
+    "shield": "golden",
+    "echo": 9,
+    "pose": 999,
+    "pulses": 999,
+    "pops": 70000
+   },
+   "hex": "ffffffff0900ffffff1fffffffffff7fff7f0040004000400040ff7fff7fff7fff7d08e8ffffffff",
+   "out": {
+    "tick": 4294967295,
+    "seq": 9,
+    "seat": 7,
+    "paused": true,
+    "bot": true,
+    "finished": true,
+    "grounded": true,
+    "airborne": true,
+    "lap": 255,
+    "checkpoint": 255,
+    "respawn": 7,
+    "stalled": true,
+    "assist": true,
+    "s": 42949672.95,
+    "x": 327.67,
+    "h": 327.67,
+    "q": [
+     0.500015259254738,
+     0.500015259254738,
+     0.500015259254738,
+     0.500015259254738
+    ],
+    "v": [
+     327.67,
+     327.67,
+     327.67
+    ],
+    "speedPct": 1.5,
+    "driftDir": -1,
+    "driftStage": 3,
+    "boostKind": 7,
+    "item": "shatter",
+    "rolling": false,
+    "effect": "shatter",
+    "shield": "golden",
+    "echo": 3,
+    "pose": 255,
+    "pulses": 255,
+    "pops": 65535
+   }
+  },
+  {
+   "name": "edges low",
+   "in": {
+    "tick": -5,
+    "seq": -1,
+    "seat": -3,
+    "paused": false,
+    "bot": false,
+    "finished": false,
+    "grounded": false,
+    "airborne": false,
+    "lap": 0,
+    "checkpoint": 0,
+    "respawn": 3,
+    "stalled": false,
+    "assist": false,
+    "s": -1,
+    "x": -400,
+    "h": -400,
+    "q": [
+     -0.1,
+     0.2,
+     -0.3,
+     -0.927362
+    ],
+    "v": [
+     -500,
+     -0.004,
+     0.005
+    ],
+    "speedPct": -1,
+    "driftDir": -0.2,
+    "driftStage": 0,
+    "boostKind": 0,
+    "item": "surge",
+    "rolling": false,
+    "effect": "surge",
+    "shield": null,
+    "echo": 0,
+    "pose": 0,
+    "pulses": -1,
+    "pops": -1
+   },
+   "hex": "00000000ffff000000030000000000800080cd0c67e66626b3760080000001000001090000000000",
+   "out": {
+    "tick": 0,
+    "seq": 65535,
+    "seat": 0,
+    "paused": false,
+    "bot": false,
+    "finished": false,
+    "grounded": false,
+    "airborne": false,
+    "lap": 0,
+    "checkpoint": 0,
+    "respawn": 3,
+    "stalled": false,
+    "assist": false,
+    "s": 0,
+    "x": -327.68,
+    "h": -327.68,
+    "q": [
+     0.1000091555528428,
+     -0.1999877925962096,
+     0.2999969481490524,
+     0.9273659474471266
+    ],
+    "v": [
+     -327.68,
+     0,
+     0.01
+    ],
+    "speedPct": 0,
+    "driftDir": -1,
+    "driftStage": 0,
+    "boostKind": 0,
+    "item": "surge",
+    "rolling": false,
+    "effect": null,
+    "shield": null,
+    "echo": 0,
+    "pose": 0,
+    "pulses": 0,
+    "pops": 0
+   }
+  },
+  {
+   "name": "zero quat",
+   "in": {
+    "tick": 0,
+    "seq": 0,
+    "seat": 1,
+    "paused": false,
+    "bot": false,
+    "finished": false,
+    "grounded": false,
+    "airborne": true,
+    "lap": 0,
+    "checkpoint": 0,
+    "respawn": 2,
+    "stalled": false,
+    "assist": false,
+    "s": 0,
+    "x": 0,
+    "h": -12.345,
+    "q": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "v": [
+     0,
+     0,
+     0
+    ],
+    "speedPct": 0,
+    "driftDir": 0,
+    "driftStage": 0,
+    "boostKind": 0,
+    "item": "nope",
+    "rolling": false,
+    "effect": "golden",
+    "shield": null,
+    "echo": 0,
+    "pose": 2,
+    "pulses": 0,
+    "pops": 0
+   },
+   "hex": "000000000000810000020000000000002efb00000000000000000000000000000000000002000000",
+   "out": {
+    "tick": 0,
+    "seq": 0,
+    "seat": 1,
+    "paused": false,
+    "bot": false,
+    "finished": false,
+    "grounded": false,
+    "airborne": true,
+    "lap": 0,
+    "checkpoint": 0,
+    "respawn": 2,
+    "stalled": false,
+    "assist": false,
+    "s": 0,
+    "x": 0,
+    "h": -12.34,
+    "q": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "v": [
+     0,
+     0,
+     0
+    ],
+    "speedPct": 0,
+    "driftDir": 0,
+    "driftStage": 0,
+    "boostKind": 0,
+    "item": null,
+    "rolling": false,
+    "effect": null,
+    "shield": null,
+    "echo": 0,
+    "pose": 2,
+    "pulses": 0,
+    "pops": 0
+   }
+  }
+ ],
+ "frames": [
+  {
+   "name": "batch of three",
+   "hex": "0101030040e20100100e00004800420102004316010009ff050094013fa600032d5bd204c8fff9f5a81a0214000925002823000004005702000083100200a40100000000fb30000041760cfe00002c01dd002cf000040000000000000000000000000000000000000000000000000000ff7f0000000000000000000000000000",
+   "out": {
+    "type": 1,
+    "ver": 1,
+    "n": 3,
+    "flags": 0,
+    "ms": 123456,
+    "karts": [
+     {
+      "tick": 3600,
+      "seq": 72,
+      "seat": 2,
+      "paused": false,
+      "bot": false,
+      "finished": false,
+      "grounded": true,
+      "airborne": false,
+      "lap": 1,
+      "checkpoint": 2,
+      "respawn": 0,
+      "stalled": false,
+      "assist": false,
+      "s": 712.35,
+      "x": -2.47,
+      "h": 0.05,
+      "q": [
+       0.012329477828302866,
+       -0.7012237922299875,
+       0.023438215277565844,
+       0.7123325296792504
+      ],
+      "v": [
+       12.34,
+       -0.56,
+       -25.67
+      ],
+      "speedPct": 0.9882352941176471,
+      "driftDir": 1,
+      "driftStage": 2,
+      "boostKind": 1,
+      "item": "spiral",
+      "rolling": false,
+      "effect": "freeze",
+      "shield": "glass",
+      "echo": 0,
+      "pose": 0,
+      "pulses": 9,
+      "pops": 37
+     },
+     {
+      "tick": 9000,
+      "seq": 4,
+      "seat": 7,
+      "paused": false,
+      "bot": true,
+      "finished": false,
+      "grounded": true,
+      "airborne": false,
+      "lap": 2,
+      "checkpoint": 0,
+      "respawn": 0,
+      "stalled": false,
+      "assist": false,
+      "s": 1352.99,
+      "x": 4.2,
+      "h": 0,
+      "q": [
+       0,
+       0.3826715903195288,
+       0,
+       0.9238868373668631
+      ],
+      "v": [
+       -5,
+       0,
+       3
+      ],
+      "speedPct": 1.3,
+      "driftDir": 0,
+      "driftStage": 0,
+      "boostKind": 0,
+      "item": "golden",
+      "rolling": true,
+      "effect": null,
+      "shield": "echo",
+      "echo": 3,
+      "pose": 0,
+      "pulses": 4,
+      "pops": 0
+     },
+     {
+      "tick": 0,
+      "seq": 0,
+      "seat": 0,
+      "paused": false,
+      "bot": false,
+      "finished": false,
+      "grounded": false,
+      "airborne": false,
+      "lap": 0,
+      "checkpoint": 0,
+      "respawn": 0,
+      "stalled": false,
+      "assist": false,
+      "s": 0,
+      "x": 0,
+      "h": 0,
+      "q": [
+       0,
+       0,
+       0,
+       1
+      ],
+      "v": [
+       0,
+       0,
+       0
+      ],
+      "speedPct": 0,
+      "driftDir": 0,
+      "driftStage": 0,
+      "boostKind": 0,
+      "item": null,
+      "rolling": false,
+      "effect": null,
+      "shield": null,
+      "echo": 0,
+      "pose": 0,
+      "pulses": 0,
+      "pops": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "upload own kart",
+   "hex": "0201010092ea0000100e00004800420102004316010009ff050094013fa600032d5bd204c8fff9f5a81a021400092500",
+   "out": {
+    "type": 2,
+    "ver": 1,
+    "n": 1,
+    "flags": 0,
+    "ms": 60050,
+    "karts": [
+     {
+      "tick": 3600,
+      "seq": 72,
+      "seat": 2,
+      "paused": false,
+      "bot": false,
+      "finished": false,
+      "grounded": true,
+      "airborne": false,
+      "lap": 1,
+      "checkpoint": 2,
+      "respawn": 0,
+      "stalled": false,
+      "assist": false,
+      "s": 712.35,
+      "x": -2.47,
+      "h": 0.05,
+      "q": [
+       0.012329477828302866,
+       -0.7012237922299875,
+       0.023438215277565844,
+       0.7123325296792504
+      ],
+      "v": [
+       12.34,
+       -0.56,
+       -25.67
+      ],
+      "speedPct": 0.9882352941176471,
+      "driftDir": 1,
+      "driftStage": 2,
+      "boostKind": 1,
+      "item": "spiral",
+      "rolling": false,
+      "effect": "freeze",
+      "shield": "glass",
+      "echo": 0,
+      "pose": 0,
+      "pulses": 9,
+      "pops": 37
+     }
+    ]
+   }
+  },
+  {
+   "name": "empty batch",
+   "hex": "0101000000000000",
+   "out": {
+    "type": 1,
+    "ver": 1,
+    "n": 0,
+    "flags": 0,
+    "ms": 0,
+    "karts": []
+   }
+  }
+ ],
+ "badFrames": [
+  {
+   "name": "short",
+   "hex": "02010100070000"
+  },
+  {
+   "name": "wrong version",
+   "hex": "0202010007000000100e00004800420102004316010009ff050094013fa600032d5bd204c8fff9f5a81a021400092500"
+  },
+  {
+   "name": "type 3",
+   "hex": "0301010007000000100e00004800420102004316010009ff050094013fa600032d5bd204c8fff9f5a81a021400092500"
+  },
+  {
+   "name": "n says 2",
+   "hex": "0201020007000000100e00004800420102004316010009ff050094013fa600032d5bd204c8fff9f5a81a021400092500"
+  },
+  {
+   "name": "n 9",
+   "hex": "0101090000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+   "name": "trailing byte",
+   "hex": "0201010007000000100e00004800420102004316010009ff050094013fa600032d5bd204c8fff9f5a81a02140009250000"
+  }
+ ],
+ "messages": [
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"hello\",\"v\":1,\"ticket\":\"abc.def\",\"clientMs\":1792699000123.5}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"hello\",\"v\":1,\"ticket\":\"\",\"clientMs\":1}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"ping\",\"c\":12.5}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"ready\",\"on\":true}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"ready\",\"on\":1}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"start\"}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"start\",\"now\":true}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"look\",\"outfit\":null,\"vehicle\":\"emi-vehicle-trinket\"}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"look\",\"outfit\":\"Emi Outfit\",\"vehicle\":\"emi-vehicle-trinket\"}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"pickup\",\"box\":3,\"tick\":4000}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"pickup\",\"box\":3,\"tick\":4000,\"seat\":5}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"pickup\",\"box\":3,\"tick\":4000,\"seat\":8}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"fire\",\"id\":1,\"item\":\"blackout\",\"mode\":\"lob\",\"tick\":4100,\"s\":455.2,\"x\":-1.5}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"fire\",\"id\":1,\"item\":\"shell\",\"mode\":\"throw\",\"tick\":4100,\"s\":455.2,\"x\":-1.5}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"fire\",\"id\":1,\"item\":\"melt\",\"mode\":\"drop\",\"tick\":4100,\"s\":455.2}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"cp\",\"idx\":0,\"lap\":1,\"tick\":9000}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"finish\",\"tick\":20000,\"frac\":0.25}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"finish\",\"tick\":20000,\"frac\":1.5}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"drop\",\"tick\":5000,\"s\":600}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"emote\",\"code\":\"gg\"}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"emote\",\"code\":\"hello there\"}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"leave\"}",
+   "ok": true
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"pause\",\"on\":true}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"ping\",\"c\":1.5,\"extra\":1}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"welcome\"}",
+   "ok": false
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"welcome\",\"v\":1,\"roomId\":\"k3m9q2w7x4p8\",\"seat\":0,\"t0\":1792699000000,\"serverMs\":1792699001234,\"phase\":\"lobby\",\"cfg\":{\"track\":\"threshold\",\"laps\":3,\"seats\":8,\"mode\":\"open\",\"laneKeeper\":false,\"staked\":false,\"botFill\":true,\"autoStartS\":45},\"seed\":7,\"seats\":[{\"seat\":0,\"kind\":\"human\",\"name\":\"Ana\",\"platform\":\"web\",\"look\":{\"outfit\":\"emi-outfit-snow-day\",\"vehicle\":\"emi-vehicle-petal\"},\"host\":true,\"ready\":true,\"idle\":false,\"left\":false},{\"seat\":1,\"kind\":\"bot\",\"name\":\"EMI bot\",\"platform\":null,\"look\":{\"outfit\":\"emi-outfit-varsity\",\"vehicle\":\"emi-vehicle-trinket\"},\"host\":false,\"ready\":true,\"idle\":false,\"left\":false},{\"seat\":2,\"kind\":\"empty\",\"name\":\"\",\"platform\":null,\"look\":{\"outfit\":\"emi-outfit-swim\",\"vehicle\":\"emi-teacup-kart\"},\"host\":false,\"ready\":true,\"idle\":false,\"left\":false}],\"keep\":[]}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"welcome\",\"v\":1,\"roomId\":\"K3M9\",\"seat\":0,\"t0\":1,\"serverMs\":2,\"phase\":\"lobby\",\"cfg\":{\"track\":\"threshold\",\"laps\":3,\"seats\":8,\"mode\":\"open\",\"laneKeeper\":false,\"staked\":false,\"botFill\":true,\"autoStartS\":45},\"seed\":7,\"seats\":[],\"keep\":[]}",
+   "ok": false
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"start\",\"countAt\":1792699043000,\"startAt\":1792699046000,\"goTick\":2760,\"seed\":7}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"seat\",\"seat\":3,\"left\":true,\"reason\":\"gone\"}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"seat\",\"seat\":3,\"left\":true,\"reason\":\"panic\"}",
+   "ok": false
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"keep\",\"seats\":[5,6,7]}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"roll\",\"seat\":1,\"box\":4,\"item\":\"pink\"}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"fired\",\"sid\":9,\"seat\":1,\"id\":2,\"item\":\"flash\",\"mode\":\"throw\",\"tick\":5000,\"s\":100.5,\"x\":0,\"target\":3}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"fired\",\"sid\":10,\"seat\":1,\"id\":3,\"item\":\"surge\",\"mode\":\"self\",\"tick\":5000,\"s\":100.5,\"x\":0,\"target\":null}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"hit\",\"sid\":9,\"victim\":3,\"by\":1,\"item\":\"flash\",\"verdict\":\"mercy\",\"durationS\":0,\"tick\":5030}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"hit\",\"sid\":9,\"victim\":3,\"by\":1,\"item\":\"flash\",\"verdict\":\"dodge\",\"durationS\":0,\"tick\":5030}",
+   "ok": false
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"fizzle\",\"sid\":9,\"tick\":5200}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"standings\",\"tick\":6000,\"rows\":[{\"seat\":2,\"place\":1,\"lap\":1,\"progM\":1500.2,\"pops\":40,\"finished\":false,\"timeMs\":null}]}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"finish\",\"rows\":[{\"seat\":2,\"place\":1,\"name\":\"Ana\",\"bot\":false,\"finished\":true,\"timeMs\":181234,\"bestLapMs\":59001,\"pops\":212},{\"seat\":5,\"place\":2,\"name\":\"EMI bot\",\"bot\":true,\"finished\":false,\"timeMs\":null,\"bestLapMs\":null,\"pops\":0}]}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"error\",\"code\":\"item\",\"re\":\"pickup\"}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"abort\",\"reason\":\"replay\"}",
+   "ok": true
+  },
+  {
+   "dir": "r2c",
+   "text": "{\"t\":\"abort\",\"reason\":\"nope\"}",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"ping\",\"c\":",
+   "ok": false
+  },
+  {
+   "dir": "c2r",
+   "text": "{\"t\":\"hello\",\"v\":1,\"ticket\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"clientMs\":1}",
+   "ok": false
+  }
+ ],
+ "botLooks": [
+  {
+   "seed": 0,
+   "seats": [
+    {
+     "outfit": "emi-outfit-croupier",
+     "vehicle": "emi-teacup-kart"
+    },
+    {
+     "outfit": "emi-outfit-builder",
+     "vehicle": "emi-vehicle-petal"
+    },
+    {
+     "outfit": "emi-outfit-drone-protocol",
+     "vehicle": "emi-vehicle-trinket"
+    },
+    {
+     "outfit": "emi-outfit-pool",
+     "vehicle": "emi-vehicle-pendulum"
+    },
+    {
+     "outfit": "emi-outfit-cheer",
+     "vehicle": "emi-vehicle-reverie"
+    },
+    {
+     "outfit": "emi-outfit-snow-day",
+     "vehicle": "emi-vehicle-house-edge"
+    },
+    {
+     "outfit": "emi-outfit-varsity",
+     "vehicle": "emi-vehicle-checkmate"
+    },
+    {
+     "outfit": "emi-outfit-swim",
+     "vehicle": "emi-vehicle-lovebomb"
+    }
+   ]
+  },
+  {
+   "seed": 7,
+   "seats": [
+    {
+     "outfit": "emi-outfit-snow-day",
+     "vehicle": "emi-vehicle-lovebomb"
+    },
+    {
+     "outfit": "emi-outfit-varsity",
+     "vehicle": "emi-vehicle-feedback"
+    },
+    {
+     "outfit": "emi-outfit-swim",
+     "vehicle": "emi-vehicle-velvet-lock"
+    },
+    {
+     "outfit": "emi-outfit-croupier",
+     "vehicle": "emi-vehicle-undertow"
+    },
+    {
+     "outfit": "emi-outfit-builder",
+     "vehicle": "emi-teacup-kart"
+    },
+    {
+     "outfit": "emi-outfit-drone-protocol",
+     "vehicle": "emi-vehicle-petal"
+    },
+    {
+     "outfit": "emi-outfit-pool",
+     "vehicle": "emi-vehicle-trinket"
+    },
+    {
+     "outfit": "emi-outfit-cheer",
+     "vehicle": "emi-vehicle-pendulum"
+    }
+   ]
+  },
+  {
+   "seed": 4294967295,
+   "seats": [
+    {
+     "outfit": "emi-outfit-snow-day",
+     "vehicle": "emi-vehicle-pendulum"
+    },
+    {
+     "outfit": "emi-outfit-varsity",
+     "vehicle": "emi-vehicle-reverie"
+    },
+    {
+     "outfit": "emi-outfit-swim",
+     "vehicle": "emi-vehicle-house-edge"
+    },
+    {
+     "outfit": "emi-outfit-croupier",
+     "vehicle": "emi-vehicle-checkmate"
+    },
+    {
+     "outfit": "emi-outfit-builder",
+     "vehicle": "emi-vehicle-lovebomb"
+    },
+    {
+     "outfit": "emi-outfit-drone-protocol",
+     "vehicle": "emi-vehicle-feedback"
+    },
+    {
+     "outfit": "emi-outfit-pool",
+     "vehicle": "emi-vehicle-velvet-lock"
+    },
+    {
+     "outfit": "emi-outfit-cheer",
+     "vehicle": "emi-vehicle-undertow"
+    }
+   ]
+  },
+  {
+   "seed": 123456789,
+   "seats": [
+    {
+     "outfit": "emi-outfit-swim",
+     "vehicle": "emi-vehicle-house-edge"
+    },
+    {
+     "outfit": "emi-outfit-croupier",
+     "vehicle": "emi-vehicle-checkmate"
+    },
+    {
+     "outfit": "emi-outfit-builder",
+     "vehicle": "emi-vehicle-lovebomb"
+    },
+    {
+     "outfit": "emi-outfit-drone-protocol",
+     "vehicle": "emi-vehicle-feedback"
+    },
+    {
+     "outfit": "emi-outfit-pool",
+     "vehicle": "emi-vehicle-velvet-lock"
+    },
+    {
+     "outfit": "emi-outfit-cheer",
+     "vehicle": "emi-vehicle-undertow"
+    },
+    {
+     "outfit": "emi-outfit-snow-day",
+     "vehicle": "emi-teacup-kart"
+    },
+    {
+     "outfit": "emi-outfit-varsity",
+     "vehicle": "emi-vehicle-petal"
+    }
+   ]
+  }
+ ],
+ "normLooks": [
+  {
+   "in": null,
+   "out": {
+    "outfit": null,
+    "vehicle": "emi-teacup-kart"
+   }
+  },
+  {
+   "in": {
+    "outfit": "emi-outfit-swim",
+    "vehicle": "emi-vehicle-trinket"
+   },
+   "out": {
+    "outfit": "emi-outfit-swim",
+    "vehicle": "emi-vehicle-trinket"
+   }
+  },
+  {
+   "in": {
+    "outfit": "emi-outfit-unknown",
+    "vehicle": "kart-9"
+   },
+   "out": {
+    "outfit": null,
+    "vehicle": "emi-teacup-kart"
+   }
+  }
+ ],
+ "seqNewer": [
+  {
+   "a": 1,
+   "b": 0,
+   "newer": true
+  },
+  {
+   "a": 0,
+   "b": 1,
+   "newer": false
+  },
+  {
+   "a": 0,
+   "b": 65535,
+   "newer": true
+  },
+  {
+   "a": 32767,
+   "b": 0,
+   "newer": true
+  },
+  {
+   "a": 32768,
+   "b": 0,
+   "newer": false
+  },
+  {
+   "a": 5,
+   "b": 5,
+   "newer": false
+  }
+ ],
+ "ticket": {
+  "secret": "glassroad-test-secret-never-use-in-production-0123456789",
+  "kTicketHex": "44de7b36d91216fcc44ea554d1bb34c75da09d624fdd4d08fd2dc643d785d2fd",
+  "kResultHex": "9538d46fff49c01bf1352f7b1fca916b4dafdebf29fd6b696d8b32d22e0cdd61",
+  "payload": {
+   "v": 1,
+   "roomId": "k3m9q2w7x4p8",
+   "uid": "u_7f3a9c1e",
+   "seat": 0,
+   "name": "Ana Ä",
+   "tier": 2,
+   "platform": "desktop",
+   "look": {
+    "outfit": "emi-outfit-cheer",
+    "vehicle": "emi-vehicle-petal"
+   },
+   "role": "host",
+   "cfg": {
+    "track": "threshold",
+    "laps": 3,
+    "seats": 8,
+    "mode": "open",
+    "laneKeeper": false,
+    "staked": false,
+    "botFill": true,
+    "autoStartS": 45
+   },
+   "exp": 1792699120,
+   "nonce": "AAECAwQFBgcICQoLDA0ODw"
+  },
+  "payloadB64": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0",
+  "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9k",
+  "cases": [
+   {
+    "name": "valid",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9k",
+    "nowMs": 1792699000000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "ok"
+   },
+   {
+    "name": "valid at exp",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9k",
+    "nowMs": 1792699120000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "ok"
+   },
+   {
+    "name": "past exp",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9k",
+    "nowMs": 1792699121000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "expired"
+   },
+   {
+    "name": "exp too far ahead",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9k",
+    "nowMs": 1792698819000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "expired"
+   },
+   {
+    "name": "other room",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9k",
+    "nowMs": 1792699000000,
+    "roomId": "zzzzzzzzzzzz",
+    "expect": "ticket"
+   },
+   {
+    "name": "signature flipped",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9A",
+    "nowMs": 1792699000000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "ticket"
+   },
+   {
+    "name": "payload changed",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MSwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9k",
+    "nowMs": 1792699000000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "ticket"
+   },
+   {
+    "name": "three parts",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.1xPMp-G_PD_H0RL5kXs1Tx3KeksA7ZFphjYyyuOjD9k.x",
+    "nowMs": 1792699000000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "ticket"
+   },
+   {
+    "name": "version 2",
+    "ticket": "eyJ2IjoyLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.UUtAkTuYKP2I7O6VUD6ixag_THCH8P7fClM68IWaVZ8",
+    "nowMs": 1792699000000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "version"
+   },
+   {
+    "name": "bad shape seat 9",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6OSwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.3AtSzy6q4cBYVFlS5qq5zb8t_KHavw29SiylHxm2_dU",
+    "nowMs": 1792699000000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "ticket"
+   },
+   {
+    "name": "bad shape extra key",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3IiwiYWRtaW4iOnRydWV9.DZrhbPk1iTjoWTCSQIbinBfwaJa4x6TfrC8-QlC6bRY",
+    "nowMs": 1792699000000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "ticket"
+   },
+   {
+    "name": "wrong secret",
+    "ticket": "eyJ2IjoxLCJyb29tSWQiOiJrM205cTJ3N3g0cDgiLCJ1aWQiOiJ1XzdmM2E5YzFlIiwic2VhdCI6MCwibmFtZSI6IkFuYSDDhCIsInRpZXIiOjIsInBsYXRmb3JtIjoiZGVza3RvcCIsImxvb2siOnsib3V0Zml0IjoiZW1pLW91dGZpdC1jaGVlciIsInZlaGljbGUiOiJlbWktdmVoaWNsZS1wZXRhbCJ9LCJyb2xlIjoiaG9zdCIsImNmZyI6eyJ0cmFjayI6InRocmVzaG9sZCIsImxhcHMiOjMsInNlYXRzIjo4LCJtb2RlIjoib3BlbiIsImxhbmVLZWVwZXIiOmZhbHNlLCJzdGFrZWQiOmZhbHNlLCJib3RGaWxsIjp0cnVlLCJhdXRvU3RhcnRTIjo0NX0sImV4cCI6MTc5MjY5OTEyMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.E1clwex-C3PuWnpvP7SsVYZXwJPY2LB2mSlYG67DL0Y",
+    "nowMs": 1792699000000,
+    "roomId": "k3m9q2w7x4p8",
+    "expect": "ticket"
+   }
+  ]
+ },
+ "result": {
+  "cases": [
+   {
+    "name": "valid",
+    "body": "{\"v\":1,\"roomId\":\"k3m9q2w7x4p8\",\"track\":\"threshold\",\"laps\":3,\"mode\":\"open\",\"staked\":false,\"seed\":7,\"t0\":1792699000000,\"startAt\":1792699046000,\"endedAt\":1792699230000,\"sentAt\":1792699231000,\"rows\":[{\"seat\":0,\"uid\":\"u_7f3a9c1e\",\"name\":\"Ana Ä\",\"bot\":false,\"place\":1,\"finished\":true,\"timeMs\":181234,\"bestLapMs\":59001,\"lapsMs\":[61200,59001,61033],\"pops\":212,\"left\":false,\"flags\":[]},{\"seat\":1,\"uid\":null,\"name\":\"EMI bot\",\"bot\":true,\"place\":2,\"finished\":false,\"timeMs\":null,\"bestLapMs\":60500,\"lapsMs\":[60500,61000],\"pops\":0,\"left\":false,\"flags\":[\"speed\"]}]}",
+    "sig": "GLspqizJc2ibHY_5243lfXIi-BhM0clGZO3jCYP5HAw",
+    "nowMs": 1792699231500,
+    "expect": "ok"
+   },
+   {
+    "name": "stale",
+    "body": "{\"v\":1,\"roomId\":\"k3m9q2w7x4p8\",\"track\":\"threshold\",\"laps\":3,\"mode\":\"open\",\"staked\":false,\"seed\":7,\"t0\":1792699000000,\"startAt\":1792699046000,\"endedAt\":1792699230000,\"sentAt\":1792699231000,\"rows\":[{\"seat\":0,\"uid\":\"u_7f3a9c1e\",\"name\":\"Ana Ä\",\"bot\":false,\"place\":1,\"finished\":true,\"timeMs\":181234,\"bestLapMs\":59001,\"lapsMs\":[61200,59001,61033],\"pops\":212,\"left\":false,\"flags\":[]},{\"seat\":1,\"uid\":null,\"name\":\"EMI bot\",\"bot\":true,\"place\":2,\"finished\":false,\"timeMs\":null,\"bestLapMs\":60500,\"lapsMs\":[60500,61000],\"pops\":0,\"left\":false,\"flags\":[\"speed\"]}]}",
+    "sig": "GLspqizJc2ibHY_5243lfXIi-BhM0clGZO3jCYP5HAw",
+    "nowMs": 1792699532000,
+    "expect": "stale"
+   },
+   {
+    "name": "bad sig",
+    "body": "{\"v\":1,\"roomId\":\"k3m9q2w7x4p8\",\"track\":\"threshold\",\"laps\":3,\"mode\":\"open\",\"staked\":false,\"seed\":7,\"t0\":1792699000000,\"startAt\":1792699046000,\"endedAt\":1792699230000,\"sentAt\":1792699231000,\"rows\":[{\"seat\":0,\"uid\":\"u_7f3a9c1e\",\"name\":\"Ana Ä\",\"bot\":false,\"place\":1,\"finished\":true,\"timeMs\":181234,\"bestLapMs\":59001,\"lapsMs\":[61200,59001,61033],\"pops\":212,\"left\":false,\"flags\":[]},{\"seat\":1,\"uid\":null,\"name\":\"EMI bot\",\"bot\":true,\"place\":2,\"finished\":false,\"timeMs\":null,\"bestLapMs\":60500,\"lapsMs\":[60500,61000],\"pops\":0,\"left\":false,\"flags\":[\"speed\"]}]}",
+    "sig": "GLspqizJc2ibHY_5243lfXIi-BhM0clGZO3jCYP5HAA",
+    "nowMs": 1792699231500,
+    "expect": "sig"
+   },
+   {
+    "name": "body changed",
+    "body": "{\"v\":1,\"roomId\":\"k3m9q2w7x4p8\",\"track\":\"threshold\",\"laps\":3,\"mode\":\"open\",\"staked\":false,\"seed\":7,\"t0\":1792699000000,\"startAt\":1792699046000,\"endedAt\":1792699230000,\"sentAt\":1792699231000,\"rows\":[{\"seat\":0,\"uid\":\"u_7f3a9c1e\",\"name\":\"Ana Ä\",\"bot\":false,\"place\":2,\"finished\":true,\"timeMs\":181234,\"bestLapMs\":59001,\"lapsMs\":[61200,59001,61033],\"pops\":212,\"left\":false,\"flags\":[]},{\"seat\":1,\"uid\":null,\"name\":\"EMI bot\",\"bot\":true,\"place\":2,\"finished\":false,\"timeMs\":null,\"bestLapMs\":60500,\"lapsMs\":[60500,61000],\"pops\":0,\"left\":false,\"flags\":[\"speed\"]}]}",
+    "sig": "GLspqizJc2ibHY_5243lfXIi-BhM0clGZO3jCYP5HAw",
+    "nowMs": 1792699231500,
+    "expect": "sig"
+   }
+  ]
+ }
+}

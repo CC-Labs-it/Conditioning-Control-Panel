@@ -571,6 +571,13 @@
                                         <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="10"/></Style></Button.Resources>
                                     </Button>
                                 </Grid>
+                                <Border x:Name="PlayLockRacingThoughts" x:FieldModifier="internal" Style="{StaticResource PlayLockBandT2}" Margin="-22">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <helpers:EmojiTextBlock Text="🔒" Style="{StaticResource PlayLockGlyph}"/>
+                                        <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Style="{StaticResource PlayLockTeaserT2}"/>
+                                    </StackPanel>
+                                </Border>
+                                <fx:TierBadge x:Name="PlayBadgeRacingThoughts" x:FieldModifier="internal" Style="{StaticResource PlayTierBadge}" Tier="2"/>
                             </Grid>
                         </Border>
                     </Grid>

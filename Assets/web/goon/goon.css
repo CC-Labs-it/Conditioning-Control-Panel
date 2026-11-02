@@ -304,3 +304,8 @@ html[data-gg-perf="lite"] .gg-scrim { backdrop-filter: none; }
   #gg-drawer { width: 100vw; }
   :root { --gg-mercy-bottom: 1.4rem; }
 }
+
+/* The Sparkles slip (sparkles-slip.js, shared byte for byte with the other trees) sits bottom centre, over
+ * the recap column's buttons on a short window: here it moves to the bottom left corner. Its animations
+ * translate it by -50% of its own width, so `left` is its centre: a 16px gutter plus half of min(300px, 86vw). */
+body .sps-slip { left: calc(16px + min(150px, 43vw)); bottom: 16px; }

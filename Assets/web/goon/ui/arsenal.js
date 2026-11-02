@@ -661,13 +661,15 @@ export function mountArsenal({
    * @param {{count?:number, from?:{x:number,y:number}|null, silent?:boolean}} [o]
    * @returns {boolean} true when the slot took it
    */
-  function armDrop(id, { count = DROP_STACK, from = null, silent = false } = {}) {
+  function armDrop(id, { count = DROP_STACK, from = null, silent = false, tip = '' } = {}) {
     const rec = tiles.get(id);
     if (!rec || !rec.needsArm) return false;
     if (rec.item.duel && rec.armed > 0) return false;   // one game card at a time
     rec.armed += rec.item.duel ? 1 : Math.max(1, count | 0);
     paint();
     if (!silent) dropFlourish(rec, from);
+    // A card handed back (their side refused the duel) says why, or the throw reads as a dud.
+    if (tip) { tipOn(rec, tip, HINT_MS); return true; }
     if (rec.item.duel && duel && typeof duel.firstHint === 'function' && duel.firstHint()) {
       tipOn(rec, DUEL_COPY.firstHint, HINT_MS);
     }

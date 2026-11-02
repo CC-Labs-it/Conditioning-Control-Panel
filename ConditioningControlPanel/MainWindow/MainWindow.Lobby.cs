@@ -270,9 +270,20 @@ namespace ConditioningControlPanel
                         try { await ClaimRemoteSubjectAsync(row.Key); }
                         finally { button.IsEnabled = true; }
                         break;
+                    case LobbyGame.Race:
+                        OpenRaceJoin(row.Key);
+                        break;
                 }
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "[Lobby] join {Game} failed", row.Game); }
+        }
+
+        /// <summary>A race row: Racing Thoughts opens in the app on <c>?join=&lt;roomId&gt;</c> and the
+        /// page seats us (a refused seat shows the room's reason). A malformed room id never leaves.</summary>
+        internal static void OpenRaceJoin(string? roomId)
+        {
+            if (!RaceJoinLink.IsRoomId(roomId)) { App.Logger?.Warning("[Lobby] race join refused: bad room id"); return; }
+            Services.Glassroad.GlassroadHostService.Launch(roomId);
         }
 
         /// <summary>The host bar (and the empty state's buttons): each game's own host door.</summary>

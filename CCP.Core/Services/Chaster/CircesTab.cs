@@ -296,6 +296,20 @@ public static class CircesTab
         state.ParkedCreditSeconds = 0;
     }
 
+    /// <summary>The raffle day's slip-up cannot reach the lock (no lock picked, the picked one
+    /// ended or ran out, or the keyholder turned adding off): the set-aside credit goes back on the
+    /// tab and cancels it as it did before the raffle rule. Left parked, it paid every later
+    /// slip-up out of sight and the tab read as if nothing booked (ccp-bugs #1511). Returns the
+    /// seconds released.</summary>
+    public static int ReleaseParked(TabState state)
+    {
+        var parked = Math.Max(0, state.ParkedCreditSeconds);
+        if (parked == 0) return 0;
+        state.BalanceSeconds -= parked;
+        state.ParkedCreditSeconds = 0;
+        return parked;
+    }
+
     /// <summary>What to send the lock right now, if anything. Live since 2026-09-23 (owner): a
     /// positive balance goes out on the next push, and a credit stays on the tab, where it cancels
     /// the next slip-ups before they reach the lock. <paramref name="canRemove"/> is false for a

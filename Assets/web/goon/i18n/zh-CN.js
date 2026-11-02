@@ -816,6 +816,7 @@ export default Object.freeze({
   gg_duel_gameName: "The Deep End",
   gg_duel_rule: "同一个游戏，同一个种子。结果好的赢。",
   gg_duel_busy: "先把游戏玩完",
+  gg_duel_refused: "对方还玩不了，卡先留着",
   gg_duel_timeLeft: "{n} 秒",
   gg_duel_waiting: "等待对方的棋盘",
   gg_duel_won: "赢了 +{bonus}",

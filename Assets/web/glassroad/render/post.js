@@ -1,0 +1,157 @@
+/* render/post.js - RenderPipeline (r183+ name for PostProcessing): scene pass, the item screen effect
+ * (render/screenfx.js, CONTRACT-B1), bloom at the tier's resolution, then one tiny composite: edge tint,
+ * vignette, rescue white fade, finish swell.
+ * Bloom reads the raw scene and is added AFTER the screen effect, so rails and the racing line glow
+ * through every effect (never fully blind). Every number that moves here comes from FxState, which
+ * already asked photosafe and Gentle; fx.screen (fx/effects.js) drives the screen effect.
+ * Polish 2 (perf): MSAA lives on the scene pass only (Q.antialias, 4 samples); the canvas gets the one
+ * composite quad and needs none. compileAsync() builds the scene pass pipelines for its own target.
+ * HIT CAM (render/hitCam.js): the inset picture is its own small render target (`inset.target`, linear HDR like
+ * the scene pass), laid over the finished frame in this same composite quad as a rotated rect in CSS px
+ * (screenUV is top-left origin on both backends, and three flips render target uvs on WebGL2, so one law
+ * serves WebGPU and WebGL2). setInset(null) turns it off; the tone map then runs over both alike.
+ */
+import { RenderPipeline, Color, RenderTarget, HalfFloatType, LinearFilter, Vector2, Vector4 } from 'three/webgpu';
+import { pass, uniform, screenUV, smoothstep, mix, vec2, vec3, vec4, clamp, texture, step, abs } from 'three/tsl';
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { LOOK } from './look.js';
+import { Q } from './quality.js';
+
+// the SCREENFX lane's module; a missing or broken one leaves the plain scene (the race still runs)
+const screenMod = await import('./screenfx.js').catch((e) => { console.warn('[glassroad/post] no screenfx: ' + (e && e.message)); return null; });
+
+const rgb = (hex) => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
+const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, prevKind: 'none', prevK: 0,
+  params: Object.freeze({ gentle: false, corner: false, dimOnly: false, blurMul: 1, flicker: false, cover: 0, seed: 0, by: -1 }) });
+
+export function createPost(three, scene, camera) {
+  const pipe = new RenderPipeline(three);
+  const u = { strength: uniform(LOOK.bloomStrength), aberration: uniform(0), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0), webPictures: uniform(1), speedBlur: uniform(0) };
+  const scenePass = pass(scene, camera, { samples: Q.antialias ? 4 : 0 });
+  const col = scenePass.getTextureNode('output');
+  let screen = null;
+  try { screen = screenMod ? screenMod.createScreenFx(three) : null; } catch (e) { console.warn('[glassroad/post] screenfx failed: ' + (e && e.message)); }
+  // feel wave: trauma chromatic aberration (fx.aberrationPx, 0 at rest and under Gentle): red and blue re-read the scene
+  // a few px outward and inward from the centre; the delta rides on whatever the screen effect drew
+  const abUv = screenUV.sub(0.5).mul(u.aberration);
+  const abDelta = vec3(col.sample(screenUV.add(abUv)).r.sub(col.r), 0, col.sample(screenUV.sub(abUv)).b.sub(col.b));
+  const base0 = screen ? screen.node(col) : col.rgb;
+  // speed wave: edge blur (fx.speedBlur, 0 at rest, under Motion off and on the phone tier, where it compiles out):
+  // four taps of the scene stepping toward the centre, the step growing with the distance from it past speedBlurIn
+  // of the half diagonal (the middle third stays sharp); like the aberration it is a delta over the screen effect
+  const blurDelta = Q.name === 'phone' ? null : (() => {
+    const rd = screenUV.sub(0.5), rw = smoothstep(LOOK.speedBlurIn, 1, rd.length().mul(Math.SQRT2)).mul(u.speedBlur).mul(LOOK.speedBlurUv);
+    const tap = (k) => col.sample(screenUV.sub(rd.mul(rw.mul(k)))).rgb;
+    return tap(0.25).add(tap(0.5)).add(tap(0.75)).add(tap(1)).mul(0.25).sub(col.rgb);
+  })();
+  const base = blurDelta ? base0.add(abDelta).add(blurDelta) : base0.add(abDelta);
+  let bloomNode = null, builtBloom = null;
+  // the hit cam inset: centre and half size in CSS px (rect), rotation (cos, sin), the CSS view size
+  const insetTarget = new RenderTarget(2, 2, { type: HalfFloatType, depthBuffer: true, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
+  insetTarget.texture.name = 'hit-cam-inset';
+  const iu = { on: uniform(0), rect: uniform(new Vector4(0, 0, 1, 1)), rot: uniform(new Vector2(1, 0)), view: uniform(new Vector2(1, 1)) };
+  /** The hit cam picture over `out`; `inside` is 1 on the inset (it stays opaque over web picture windows). */
+  function insetOver(out) {
+    const p = screenUV.mul(iu.view).sub(iu.rect.xy);
+    const l = vec2(p.x.mul(iu.rot.x).add(p.y.mul(iu.rot.y)), p.y.mul(iu.rot.x).sub(p.x.mul(iu.rot.y)));
+    const inside = step(abs(l.x), iu.rect.z).mul(step(abs(l.y), iu.rect.w)).mul(iu.on);
+    const pic = texture(insetTarget.texture, l.div(iu.rect.zw.mul(2)).add(0.5)).rgb;
+    return { rgb: mix(out, pic, inside), inside };
+  }
+
+  function build() {
+    if (bloomNode) { bloomNode.dispose(); bloomNode = null; }
+    let out = base;
+    if (Q.bloom) {
+      bloomNode = bloom(col, u.strength, LOOK.bloomRadius, LOOK.bloomThreshold);
+      bloomNode.setResolutionScale(Q.bloomScale);
+      out = out.add(bloomNode.rgb.mul(screen ? screen.bloomGate() : 1));
+    }
+    const vig = smoothstep(LOOK.vignetteIn, LOOK.vignetteOut, screenUV.sub(0.5).length().mul(Math.SQRT2));
+    const sideW = clamp(screenUV.x.sub(0.5).mul(u.side).mul(2).add(1), 0, 1);
+    out = mix(out, rgb(LOOK.edgeTint), vig.mul(u.edge).mul(sideW).mul(0.6));
+    out = out.mul(vig.mul(LOOK.vignetteDark).oneMinus());
+    out = mix(out, vec3(1, 1, 1), u.white).add(rgb(LOOK.flashTint).mul(u.flash));
+    // A steady coolant tint eases with depth; no strobe, blur or loss of the driving corridor.
+    out = mix(out, out.mul(vec3(0.48, 0.82, 1.02)).add(vec3(0.006, 0.035, 0.055)), u.submerged.mul(0.8));
+    const inset = insetOver(out);
+    out = inset.rgb;
+    // Only display-only world screens write zero alpha. Their DOM pictures sit
+    // behind the canvas, so the scene's normal depth test supplies occlusion.
+    // Fullscreen effects close those windows instead of letting pictures escape; the hit cam inset is opaque.
+    const alpha = mix(mix(1, col.a, u.webPictures), 1, inset.inside);
+    pipe.outputNode = vec4(out.mul(alpha), alpha);
+    pipe.needsUpdate = true;
+    builtBloom = Q.bloom;
+  }
+  build();
+
+  return {
+    pipe,
+    antialias: Q.antialias,
+    /** Reuse the same scene-pass targets, effect nodes and composite pipeline for the next course. */
+    setScene(nextScene,nextCamera){
+      scene=nextScene;camera=nextCamera;scenePass.scene=nextScene;scenePass.camera=nextCamera;
+    },
+    detachScene(){scene=null;camera=null;scenePass.scene=null;scenePass.camera=null;},
+    /** Compile every visible scene object for the scene pass target (no draw). */
+    async compileAsync(onProgress = null) {
+      const target = three.getRenderTarget(), mrt = three.getMRT();
+      try {
+        three.setRenderTarget(scenePass.renderTarget);
+        three.setMRT(scenePass.getMRT());
+        // The pipeline quad renders at depth +1, its scene pass at +2. Match that
+        // cache context without changing the shared recursion counter across awaits.
+        await three.compileAsync(scene, camera, null, onProgress, three._callDepth + 2);
+      } finally {
+        three.setRenderTarget(target);
+        three.setMRT(mrt);
+      }
+    },
+    /** compileAsync for frames that keep running (render/stagedWarm.js): the render list is taken and the target
+     *  handed back in this task, so a frame drawn while the pipelines build never lands in the scene pass target. */
+    compileStart(onProgress = null) {
+      const target = three.getRenderTarget(), mrt = three.getMRT();
+      try {
+        three.setRenderTarget(scenePass.renderTarget);
+        three.setMRT(scenePass.getMRT());
+        return three.compileAsync(scene, camera, null, onProgress, three._callDepth + 2);
+      } finally {
+        three.setRenderTarget(target);
+        three.setMRT(mrt);
+      }
+    },
+    /** Call after a quality step. */
+    retier() { if (builtBloom !== Q.bloom) build(); else if (bloomNode) bloomNode.setResolutionScale(Q.bloomScale); },
+    update(fx, dt = 0, aspect = 16 / 9, view = {}) {
+      if (screen) screen.update((fx && fx.screen) || NONE, dt, aspect, view, fx?.fog, fx?.fogTheme);
+      if (!fx) return;
+      u.strength.value = LOOK.bloomStrength * (1 + (fx.bloomBoost || 0) * LOOK.bloomBoostGain);
+      u.white.value = fx.whiteFade || 0;
+      u.flash.value = fx.flashLevel || 0;
+      u.edge.value = fx.edgeGlow || 0;
+      u.side.value = fx.edgeSide || 0;
+      u.submerged.value = fx.submerged || 0;
+      u.speedBlur.value = fx.speedBlur || 0;
+      // px -> uv per unit of centre distance (aberrationPx at the edge of a 1280 px wide frame); 0 = no shift
+      u.aberration.value = Math.min(2.5, fx.aberrationPx || 0) / 640;
+      const scr = fx.screen;
+      u.webPictures.value = Math.max(scr?.k || 0, scr?.prevK || 0, fx.whiteFade || 0,
+        fx.submerged || 0, fx.fog?.k || 0) > .0001 ? 0 : 1;
+    },
+    /** The composite uniforms (tests read them). */
+    uniforms: u,
+    /** The hit cam's render target (its picture is drawn into it before render()). */
+    inset: { target: insetTarget },
+    /** r = { cx, cy, w, h, rotRad } in CSS px with the CSS view size, or null to turn the inset off. */
+    setInset(r, viewW = 1, viewH = 1) {
+      if (!r) { iu.on.value = 0; return; }
+      iu.on.value = 1;
+      iu.rect.value.set(r.cx, r.cy, r.w / 2, r.h / 2);
+      iu.rot.value.set(Math.cos(r.rotRad || 0), Math.sin(r.rotRad || 0));
+      iu.view.value.set(Math.max(1, viewW), Math.max(1, viewH));
+    },
+    render() { pipe.render(); },
+    dispose() { if (bloomNode) bloomNode.dispose(); if (screen) screen.dispose(); insetTarget.dispose(); pipe.dispose(); },
+  };
+}

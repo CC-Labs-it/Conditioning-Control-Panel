@@ -26,6 +26,10 @@ internal static class HostNetPathRule
     /// parser something huge.</summary>
     public const int MaxPathLength = 2048;
 
+    /// <summary>The Glassroad race lobby (<c>GlassroadHostService</c>): the only prefix that relay
+    /// forwards. The chess and Goon hosts keep their own prefixes beside their relays.</summary>
+    public const string RacePrefix = "/v2/race/";
+
     /// <summary>
     /// True when <paramref name="path"/> may be relayed; <paramref name="uri"/> is then the exact
     /// address to send to (pass THIS to HttpRequestMessage, never re-concatenate the string).

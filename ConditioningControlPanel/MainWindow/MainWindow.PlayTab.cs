@@ -129,6 +129,7 @@ namespace ConditioningControlPanel
                 SetLockbandVisible(tab.PlayLockBreakout, !Services.BackRoom.BreakoutAccess.FullAllowed);
                 SetLockband(tab.PlayLockDtrh, TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh"));
                 SetLockband(tab.PlayLockArcademy, TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")));
+                SetLockband(tab.PlayLockRacingThoughts, TierGate.RequiresLab(Loc.Get("launcher_game_race_title")));
                 SetLockband(tab.PlayLockGaze, TierGate.RequiresLab(Loc.Get("label_gaze_minigame")));
                 SetLockband(tab.PlayLockFocusGaze, TierGate.RequiresLab(Loc.Get("label_focus_gaze")));
                 SetLockband(tab.PlayLockRemote, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote"));

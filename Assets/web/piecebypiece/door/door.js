@@ -856,6 +856,12 @@ export function createDoor(opts = {}) {
     settleIq(lastEnd, rec.iq);
     endRating = current.mode === 'online' ? rateEnd(seat, rec) : null;
     if (current.mode === 'online' && m && m.id) stake.end(m.id);
+    // Sparkles by place (B1): the host claims vs Computer and online games; hotseat never.
+    if (current.mode === 'solo' || current.mode === 'online') {
+      postToHost({ type: 'pbp:game-over', mode: current.mode, outcome: outcome(lastEnd), plies: lastEnd.plies || 0,
+        durationMs: lastEnd.durationMs || 0, reason: (lastEnd.result && (lastEnd.result.reason || lastEnd.result.result)) || null,
+        matchId: m && m.id ? String(m.id) : null });
+    }
     const finished = current;
     current = null;
     // the board's own end beat first, then the card
@@ -1217,6 +1223,8 @@ export function createDoor(opts = {}) {
    *   { mode: 'join', target }          the desktop Lobby: sit at that open table (a p_ id)
    *   { mode: 'host' }                  the desktop Lobby: list a table and wait
    *   { mode: 'spectate', matchId }     the desktop Lobby: watch that public game (ten seconds behind)
+   *   { mode: 'quick' }                 a tournament page's Play: Quick match at once; the server's tournament
+   *                                     hook answers it with this round's game (any time control)
    * A live online game is never interrupted; the host hears null and says so.
    */
   function friend(intent) {
@@ -1239,6 +1247,7 @@ export function createDoor(opts = {}) {
     // The desktop Lobby: sit at one open table, or list ours. The same buttons the lobby screen has.
     if (m.mode === 'join' && m.target) { if (screen !== 'lobby') show('lobby'); act('join', String(m.target)); return; }
     if (m.mode === 'host') { if (screen !== 'lobby') show('lobby'); act('host'); return; }
+    if (m.mode === 'quick') { act('quick'); return; }
     if (m.mode === 'accept' && m.challengeId && typeof lobby.acceptChallenge === 'function') {
       gate(() => {
         if (screen !== 'lobby') show('lobby');
