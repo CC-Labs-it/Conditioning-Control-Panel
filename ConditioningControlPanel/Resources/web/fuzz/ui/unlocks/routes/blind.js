@@ -61,8 +61,9 @@ export default {
       const lines = [0, 1, 2].map(() => ctx.el('div', `opacity:0;color:#3a3226;text-align:center;margin:3px 0;transition:opacity 1s;font:italic 16px/1.2 ${SERIF};`, '', el));
       const tell = () => {
         const s = next();
-        const px = fits({ w: size.w, h: size.h / 3 }, Math.max(...s.lines.map((l) => l.length)), 20);
-        lines.forEach((l, i) => { l.style.opacity = '0'; l.style.fontSize = `${px}px`; ctx.after(600, () => { l.textContent = s.lines[i]; }); ctx.after(800 + i * 1300, () => { l.style.opacity = '1'; }); });
+        lines.forEach((l, i) => { l.style.opacity = '0'; ctx.after(600, () => { l.textContent = s.lines[i]; }); ctx.after(800 + i * 1300, () => { l.style.opacity = '1'; }); });
+        // Three lines must fit whatever box the phone left: measured once a story, never per frame.
+        ctx.after(620, () => { let px = 20; do { lines.forEach((l) => { l.style.fontSize = `${px}px`; }); px -= 1; } while (px >= 10 && el.scrollHeight > el.clientHeight); });
       };
       tell();
       ctx.every(60000, tell);
