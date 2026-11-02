@@ -38,6 +38,8 @@ const EXTRA_ROWS = [
 
 /* The design sim paid for 30 minutes with nothing on top. The real game has prizes and modifiers on top (capped in
  * sim/economy.js), so the plan pays 70% of the design's numbers and the whole run lands near 30. Measured: dev/measure.mjs. */
+/* Pay a row earns on top of its design numbers, before planPay. Swipe Feed is a screen: it earns per second as well as per swipe. */
+const EXTRA_PAY = { d_scroll: { fps: 11 } };
 const planPay = (n, lane) => Math.max(1, Math.round(n * (LANE_PAY[lane] ?? 0.7)));
 /* Tap on Command and Bimbo earn from taps, which a real player does every moment: they run ahead of the Rest route without this. */
 const LANE_PAY = { strict: 0.6, bimbo: 0.55 };
@@ -77,6 +79,8 @@ const WHAT_OVERRIDE = {
   t_grade: 'Every two minutes you get a score, and a top score raises earnings for a while.',
   si_set: 'Dressing the button in a full matching set raises its pay.',
   x_later: 'Pick Tap and Chastity: refused taps and purchases pay more.',
+  v_frame: 'A framed picture appears and pays every second. Drag it anywhere.',
+  d_scroll: 'Swipe through a picture feed. Every swipe counts as a tap, it pays every second, and its bar drags it anywhere.',
   /* Copy the design source promises and the game does not do, or no longer does. */
   remote: 'Preset buttons that poke your own run. No friend is on the other end.',
   z_shuffle: 'A little board of side unlocks that shuffles itself on the credits.',
@@ -103,10 +107,11 @@ const groupOf = (r) => (r.lane === 'meta' ? 'meta' : r.lane === 'after' ? 'after
 export function buildItems() {
   const rows = walkOrder(moveRows([...read('rows.json').filter((r) => !DROPPED.has(r.id)), ...EXTRA_ROWS])), copy = read('copy.json'), lanes = read('lanes.json');
   const items = rows.map((r) => {
-    const c = r.name ? r : copy.items[r.id];
+    const c = copy.items[r.id] || r;
     if (!c) throw new Error(`copy.json has no ${r.id}`);
     const it = { id: r.id, emoji: r.emoji, name: cur(c.name), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
-    if (r.fps) it.fps = planPay(r.fps, r.lane);
+    const fps = r.fps || EXTRA_PAY[r.id]?.fps;
+    if (fps) it.fps = planPay(fps, r.lane);
     if (r.click) it.click = planPay(r.click, r.lane);
     if (r.wall) it.wall = r.wall;
     if (r.flags) it.flags = r.flags;
