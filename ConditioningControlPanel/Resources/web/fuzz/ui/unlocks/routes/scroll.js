@@ -80,6 +80,7 @@ function makeFeed(ctx) {
   f.place = place;
   f.current = () => f.tiles.find((t) => t.n === f.index) || f.tiles[0];
 
+  ctx.cleanup(() => { for (const t of f.tiles) { dropMedia(t.media); t.media = null; } });
   addTile(); addTile();
   ctx.after(30, place);
   ctx.every(900, () => { if (root.clientHeight !== f.h) { place(); f.sizeMode?.(); } });

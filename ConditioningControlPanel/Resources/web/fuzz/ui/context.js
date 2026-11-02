@@ -131,6 +131,8 @@ export function makeContext(engine, scope) {
     speed: (multiplier) => engine.holdSpeed(multiplier, scope),
 
     on: (event, fn) => engine.subscribe(event, fn, scope),
+    /* Runs when the unlock goes, for things ctx cannot see: a registry of its own, a media element. */
+    cleanup(fn) { scope.cleanups.add(fn); },
     emit: (event, data) => engine.emit(event, data),
 
     pay: (amount, source = item.id, at = null) => engine.pay(amount, source, at),
@@ -262,5 +264,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock', 'restored', 'switches',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock', 'restored', 'switches', 'cleanup',
 ]);

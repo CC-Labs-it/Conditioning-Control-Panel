@@ -306,6 +306,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
   }
   me.frame = () => ({ ...spot, ...size });
   live.add(me);
+  ctx.cleanup(() => { live.delete(me); me.slot?.clear(); });   // a clip lets go of its decoder, and nothing keeps the old frame alive
 
   /* The whole frame drags, or only the grip. On a small frame the test card's button is most of it, and a finger is fat, so
    * a drag may start on that button too: if it never moves, the press stays the button's. A heart or a fake close (they

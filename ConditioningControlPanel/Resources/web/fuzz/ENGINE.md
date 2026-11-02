@@ -115,6 +115,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 The Control Panel can unmount any owned row and mount it again at any moment, so `off` plus the scope must leave nothing behind, and a second mount must work with the other rows still up. Keep shared state out of module scope, or make it survive that. What goes through ctx (`vars`, `css`, `button.skin`, `mod`) comes back to its old place in the order, not on top. A row switched off stays unmounted on load, and buying it again switches it on. Its own row pay stays in the sim; anything it adds through `ctx.mod` goes with it.
 
+- `ctx.cleanup(fn)`: runs when the unlock goes, for what ctx cannot see: a registry of its own, a media element it made by hand.
 - `ctx.restored`: true on a reload from a save and when the Control Panel switched this row back on. It did not just arrive: no arrival show, no first-time gift. `fresh(ctx)` in `basics/fx.js` already asks.
 - `ctx.switches`: `{ isOn(id), set(id, on), waitingOn(id), groups() }`, the Control Panel's door. Event `switch {id, on}`. Nothing else should need it.
 - Rows that lean on a parent's live state (a module-level object, hooks, a shared element) go in `FAMILIES` in `sim/switches.js`: a switch in a family remounts the family, and with the parent off its children wait.
