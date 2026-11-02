@@ -4,7 +4,8 @@ import { BY_ID, ITEMS } from '../data/items.js';
 import * as E from '../sim/economy.js';
 import { parse, serialize } from '../sim/save.js';
 import { createLife } from '../sim/save.js';
-import { bankOf, collect, levelSeconds, xpNeed } from '../sim/levels.js';
+import { COLLECT_MAX_SECONDS, bankOf, collect, levelSeconds, xpNeed } from '../sim/levels.js';
+import { CONFIG } from '../data/config.js';
 import { cleanOff, familyOf, liveOn, panelGroups, parentOf, switchable } from '../sim/switches.js';
 import { edgesOf, layoutGuide, marksOf, NODE_H, NODE_W, reachable } from '../ui/guide-map.js';
 
@@ -27,6 +28,15 @@ test('one press pays every banked level and keeps the part-filled bar', () => {
   assert.ok(Math.abs(got.xp - 7) < 1e-9);
   assert.equal(got.seconds, levelSeconds(2) + levelSeconds(3));
   assert.deepEqual(collect(got.lvl, got.xp).levels, 0);
+});
+
+test('a run of waiting asks for no more than the cap, and still takes every level', () => {
+  const need = Array.from({ length: 200 }, (_, i) => xpNeed(i + 1)).reduce((a, b) => a + b, 0);
+  const got = collect(1, need + 1);
+  assert.equal(got.levels, 200);
+  assert.equal(got.lvl, 201);
+  assert.equal(got.seconds, COLLECT_MAX_SECONDS);
+  assert.ok(COLLECT_MAX_SECONDS * CONFIG.SIDE_FLOOR <= 30, 'the floor of a capped collect is worth half a minute at most');
 });
 
 test('collecting late pays exactly what collecting each one on time pays', () => {

@@ -21,9 +21,12 @@ export const CONFIG = Object.freeze({
 
   /** Side money: everything ctx.pay hands out (prizes, lumps, ad clicks) shares a budget of this much of what taps, walls
    * and per-second pay earned, so it stays about a fifth of a run's income however many side games are on. */
-  SIDE_SHARE: 0.2,
+  SIDE_SHARE: 0.25,
+  /** How much of the budget a prize can claim, per unit it asks for. A choice the player got right should not shrink like a
+   * corner hit nobody pressed for. Sources not named here are 1. */
+  SIDE_WEIGHT: Object.freeze({ quiz: 7, levels: 4, golden: 3 }),
   /** A prize never pays less than this part of what it asked for, so a press always shows something. */
-  SIDE_FLOOR: 0.1,
+  SIDE_FLOOR: 0.05,
   /** Value modifiers keep working past these multiples of the plan, at MOD_SLOPE of their strength. */
   MOD_FPS_KNEE: 1.1,
   MOD_CLICK_KNEE: 1.5,

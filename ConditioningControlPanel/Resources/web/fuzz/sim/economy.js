@@ -149,13 +149,17 @@ export function earn(s, amount, source = 'earn') {
 }
 
 /** Side money. Every prize asks for a sum, usually seconds of the player's rate. While all prizes together ask for less than
- *  the budget each pays in full; past it each pays the same part of its ask, so a golden prize stays ten scratches. */
+ *  the budget each pays in full; past it each pays the same part of its ask, so a golden prize stays ten scratches. A source
+ *  in CONFIG.SIDE_WEIGHT counts as more of itself on both sides of that sum: it keeps a bigger part of its ask, and takes it
+ *  even when the rest of the budget has just gone. Its part can never be more than all the budget there is, so the others
+ *  fall to the floor for a moment and the sum still holds. */
 export function sideLump(s, amount, source = 'lump') {
   const ask = Number.isFinite(amount) ? Math.max(0, amount) : 0;
   const g = s.side;
-  g.asked += ask;
-  const fair = g.asked > 0 ? ask * Math.min(1, g.budget / g.asked) : 0;
-  const paid = Math.min(fair, Math.max(g.budget - g.paid, ask * CONFIG.SIDE_FLOOR));
+  const w = CONFIG.SIDE_WEIGHT[source] || 1;
+  g.asked += ask * w;
+  const fair = g.asked > 0 ? ask * Math.min(1, w * g.budget / g.asked) : 0;
+  const paid = w > 1 ? fair : Math.min(fair, Math.max(g.budget - g.paid, ask * CONFIG.SIDE_FLOOR));
   const got = Math.max(paid, ask * CONFIG.SIDE_FLOOR);
   g.paid += got;
   return credit(s, got, source);

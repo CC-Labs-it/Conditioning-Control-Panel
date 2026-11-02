@@ -19,13 +19,16 @@ export function bankOf(lvlIn, xpIn) {
   return { lvl, banked, left, need, fill: left / need };
 }
 
-/** Seconds of income one level pays when it is collected. */
-export const levelSeconds = (lvl) => 25 + lvl * 3;
+/** Seconds of income one level asks for when it is collected, before the side budget. A level banks about every 30 s at 4 taps/s,
+ *  so this and the budget's weight for 'levels' set how much of the side money Levels takes. */
+export const levelSeconds = () => 8;
+/** One press asks for no more than this, however long the levels waited: a run of saving cannot buy the Drop. */
+export const COLLECT_MAX_SECONDS = 240;
 
 /** One press takes every banked level. `seconds` is what they pay together; the part-filled bar carries over. */
 export function collect(lvlIn, xpIn) {
   const { lvl, banked, left } = bankOf(lvlIn, xpIn);
   let seconds = 0;
   for (let i = 0; i < banked; i++) seconds += levelSeconds(lvl + i);
-  return { lvl: lvl + banked, xp: left, levels: banked, seconds };
+  return { lvl: lvl + banked, xp: left, levels: banked, seconds: Math.min(COLLECT_MAX_SECONDS, seconds) };
 }
