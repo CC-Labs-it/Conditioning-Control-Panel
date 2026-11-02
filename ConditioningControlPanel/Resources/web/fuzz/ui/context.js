@@ -9,7 +9,7 @@ import { CONFIG } from '../data/config.js';
 import { clipUrl } from '../data/words.js';
 import { fmt, money } from '../sim/format.js';
 import * as E from '../sim/economy.js';
-import { nextAd } from './ads.js';
+import { allowedLink } from './links.js';
 
 /** A deep read-only view: unlocks read the state and change it only through the verbs. */
 const views = new WeakMap();
@@ -49,6 +49,7 @@ export function makeContext(engine, scope) {
 
     layer: (name, side) => ui.layer(name, side),
     world: ui.world,
+    parts: Object.freeze({ get shop() { return ui.parts?.shop ?? null; }, get buttonWrap() { return ui.parts?.buttonWrap ?? null; } }),
     bounds: () => ui.bounds(),
 
     el(tag, cssText = '', text = null, parent = null) {
@@ -90,20 +91,26 @@ export function makeContext(engine, scope) {
       const a = el.animate(keyframes, typeof opts === 'number' ? { duration: opts } : opts);
       scope.anims.add(a);
       a.finished?.then(() => scope.anims.delete(a), () => scope.anims.delete(a));
+      a.playbackRate = engine.speedFactor();
       if (engine.paused || engine.suspended) a.pause();
       return a;
     },
+    speed: (multiplier) => engine.holdSpeed(multiplier, scope),
 
     on: (event, fn) => engine.subscribe(event, fn, scope),
     emit: (event, data) => engine.emit(event, data),
 
     pay: (amount, source = item.id, at = null) => engine.pay(amount, source, at),
+    spend: (amount, reason = item.id) => engine.spend(amount, reason),
+    guardBuy: (fn) => engine.addGuard(fn, scope),
     wallHit: (at) => engine.wallHit(at),
     rates: () => engine.rates(),
     mod(m) {
-      scope.mods.push(m);
-      engine.mods.push(m);
-      return () => { const i = engine.mods.indexOf(m); if (i >= 0) engine.mods.splice(i, 1); scope.mods.splice(scope.mods.indexOf(m), 1); };
+      // A modifier always sees the same clock as ctx.frame and ctx.every, whatever the sim is passing.
+      const held = Object.fromEntries(Object.entries(m).map(([k, f]) => [k, typeof f === 'function' ? (v, s, _now, it) => f(v, s, engine.now, it) : f]));
+      scope.mods.push(held);
+      engine.mods.push(held);
+      return () => { const i = engine.mods.indexOf(held); if (i >= 0) engine.mods.splice(i, 1); scope.mods.splice(scope.mods.indexOf(held), 1); };
     },
 
     get button() { return ui.buttonFor(scope); },
@@ -119,10 +126,27 @@ export function makeContext(engine, scope) {
 
     audio: {
       play: (path, opts) => audio?.play(path, opts),
+      /* Silence everything for a moment, capped. Wall clock on purpose: it must always end, also across a pause. */
+      muteFor(ms) {
+        audio?.setBlank?.(true);
+        clearTimeout(engine.blankTimer);
+        engine.blankTimer = setTimeout(() => audio?.setBlank?.(false), Math.min(Math.max(0, ms), 15000));
+      },
       loop(path, opts) {
         const l = audio?.loop(path, opts) || { stop() {} };
         scope.loops.add(l);
         return { stop(ms) { scope.loops.delete(l); l.stop(ms); } };
+      },
+      stream(url, opts) {
+        const s = !scope.dead && audio?.stream?.(url, opts);
+        if (!s) return { el: null, play() {}, pause() {}, setGain() {}, stop() {}, playing: false };
+        const h = {
+          el: s.el, play: s.play, pause: s.pause, setGain: s.setGain,
+          stop(ms) { scope.loops.delete(h); s.stop(ms); },
+          get playing() { return s.playing; },
+        };
+        scope.loops.add(h);
+        return h;
       },
     },
     voice(slug, opts) {
@@ -132,11 +156,27 @@ export function makeContext(engine, scope) {
     },
 
     pictures: engine.pictures,
-    ads: { next: (o) => nextAd(o) },
+    ads: {
+      next: (o = {}) => engine.ads.next({ ...o, theme: o.theme === undefined ? E.pick(engine.run, 'f5') : o.theme }),
+      jokesOff(on = true) {
+        const before = engine.ads.jokesOff;
+        engine.ads.hold(scope, !!on);
+        scope.cleanups.add(() => { const was = engine.ads.jokesOff; engine.ads.hold(scope, false); if (was !== engine.ads.jokesOff) engine.emit('ads', { jokesOff: engine.ads.jokesOff }); });
+        if (before !== engine.ads.jokesOff) engine.emit('ads', { jokesOff: engine.ads.jokesOff });
+      },
+      get jokesAreOff() { return engine.ads.jokesOff; },
+    },
 
     get gentle() { return ui.gentle(); },
     get reduced() { return ui.reduced(); },
     host: (type, fields) => host.send?.(type, fields),
+    openLink(url) {
+      const href = allowedLink(url);
+      if (!href || !ui.inPress?.()) return false;
+      if (host.isHosted) host.send?.('open-url', { url: href });
+      else ui.win.open(href, '_blank', 'noopener');
+      return true;
+    },
     get hosted() { return !!host.isHosted; },
     get caps() { return engine.env.caps || {}; },
 
@@ -163,5 +203,6 @@ export const CTX_MEMBERS = Object.freeze([
   'layer', 'el', 'every', 'after', 'frame', 'anim', 'on', 'pay', 'mod', 'button',
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
-  'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config', 'setPerk',
+  'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk',
 ]);

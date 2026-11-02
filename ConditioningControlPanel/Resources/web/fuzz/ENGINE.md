@@ -45,33 +45,38 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 **Reading**
 
 - `ctx.item`: the row (`id, name, what, line, cost, lane, req, fps, click, wall, grow`). `ctx.count`: how many are owned.
-- `ctx.state`: the run, read only, live: `fuzz total taps walls buys clock owned order picks mood sources endless`. `ctx.life`: the lifetime, read only: `runs endings seen routes bestMs perk`.
+- `ctx.state`: the run, read only, live: `fuzz total taps walls buys clock owned order picks mood sources spent endless`. `ctx.life`: the lifetime, read only: `runs endings seen routes bestMs perk`.
 - `ctx.has(id)`, `ctx.pick('f1')` (the chosen lane or null), `ctx.fmt(n)`, `ctx.rng()`, `ctx.rates()` (`{fps, click, wall, walls}` right now, walls = hits per second per bouncing button), `ctx.config`.
 - `ctx.brand`: `.game .short .currency .currencyPlural`, `.text('{cur}')`, `.money(n)`. Never write the names; write `{game}`, `{short}`, `{cur}`.
   Text given to `el`, `say`, `toast`, `float`, `modal` is token-expanded for you.
 - `ctx.gentle`, `ctx.reduced`: live. Gentle: nothing above 3 Hz, flashes become fades of 250 ms or more, spiral still, no sway, no warp. If an effect cannot be gentle, leave it off.
 - `ctx.hosted`, `ctx.caps`, `ctx.host(type, fields)`: the app wire, see `CONTRACT.md`.
+- `ctx.openLink(url)`: the one way to open a real page. Only `https://cclabs.app` and its paths, and only called directly inside the player's own press on your element or card button: not after an `await` or `ctx.after`, not from a tap on the game button. Answers whether it opened. Never `window.open` or an `<a>` of your own.
 
 **Drawing**
 
-- `ctx.layer(name)`: `back` (behind everything), `wash` (full-page tint), `floaters` (above the page, below the shop), `ticker`, `meters` (under the counter), `banner` (ad slots, in the page flow above the shop), `side` (the emptier of the two rails; `ctx.layer('side','left'|'right')` to choose; 0 wide on phones, so check `ctx.bounds().w`), `over` (over everything except cards and Wake Up), `toast`, `credits` (the slot on the credits card, for the After lane).
+- `ctx.layer(name)`: `back` (behind everything), `wash` (full-page tint), `floaters` (above the page, below the shop), `ticker`, `meters` (under the counter), `banner` (ad slots, in the page flow above the shop), `side` (the emptier of the two rails; `ctx.layer('side','left'|'right')` to choose; 0 wide on phones, so check `ctx.bounds().w`), `over` (over everything except cards and Wake Up), `toast`, `ending` (above the end fade: an ending's show draws here, never on `ctx.world` with a z-index), `credits` (the slot on the credits card, for the After lane).
 - Layers ignore the pointer: a child you want tappable needs `pointer-events:auto` in its css. Nothing goes above Wake Up. Never move or restyle `#wake`.
 - `ctx.el(tag, cssText, text?, parent?)`: parent is an element or a layer name; default `floaters`.
-- `ctx.css(text)`: a stylesheet. `ctx.vars({'--page':'#ffdcee'})`: page variables, restored on off: `--page --ink --ink-soft --ink-faint --btn --panel --panel-short --line --fill --stamp --font --shop-font`.
+- `ctx.css(text)`: a stylesheet. `ctx.vars({'--page':'#ffdcee'})`: page variables, restored on off: `--page --ink --ink-soft --ink-faint --btn --panel --panel-short --line --fill --ready --stamp --font --shop-font`. `--ready` is the flash on a goal row you can afford: set it with your theme, never restyle `#goal`.
 - `ctx.world`: the element holding all layers and the page, for a lean or warp. Wake Up and the cards are outside it. Do not filter it every frame on a phone.
+- `ctx.parts`: `.shop`, `.buttonWrap`: the elements themselves, to measure or to animate with `ctx.anim` (`.buttonWrap` moves the button without touching its own transform). Use these, never `querySelector` into `ctx.world`.
 - `ctx.bounds()`: `{w, h}` of the page, cached; use it instead of measuring each frame.
 - `ctx.every(ms, fn)`, `ctx.after(ms, fn)`, `ctx.frame(fn(dt, now))`: each returns a cancel function. Share these; live particles have a cap, so prefer `ctx.float(x, y, text, css?)` for rising numbers.
 - `ctx.anim(el, keyframes, opts)`: Web Animations. Keep loops at or under 3 Hz.
+- `ctx.speed(multiplier)`: while held, every unlock's `every`, `after`, `frame`, `tick` and `anim` run at that speed; holds multiply, held between 0.1 and 4; returns a release, and it ends with your unlock. Per-second income, button locks and swaps stay on real time, so route timing holds. `now` in frames and modifiers follows it; `ctx.state.clock` does not, so never mix the two.
 
 **Money**
 
 - `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`.
+- `ctx.spend(amount, reason?)`: takes from the bank, never below zero, answers what it took. No debt, and it does not touch `total`. Pace does not apply. Reasons add up in `ctx.state.spent`.
+- `ctx.guardBuy(fn(item) -> {refuse: 'line'} | null)`: refuse or delay a buy; the line shows as a toast. Returns a remover. Use this, never capture listeners on the shop. It cannot make a run impossible: a row goes through after 3 refusals whatever you answer, a fork or ending row never reaches you, and a throw lets the row through.
 - `ctx.wallHit({x, y, corner})`: a bouncing thing hit a wall: pays the wall value, emits `wall`, answers the gain.
 - `ctx.mod({fps?, click?, wall?, walls?, price?})`: value modifiers `(value, state, now) => value`, `price` also gets `item` last. Pure: no DOM, no rng, no writes. Registered on each mount, folded in order. For a chance-based payoff use `ctx.on('tap', ...)` + `ctx.pay`.
 
 **Events**
 
-- `ctx.on(event, fn)`: `tap {gain,x,y,auto}`, `buy {item,count,cost}`, `fork {fork,lane}`, `wall {gain,x,y,corner}`, `pause`, `resume`, `golden`, `ad`, `pictures {source}`. `ctx.emit(event, data)` sends one: Golden Button emits `golden`, an ad click emits `ad`.
+- `ctx.on(event, fn)`: `tap {gain,x,y,auto}`, `buy {item,count,cost}`, `fork {fork,lane}`, `wall {gain,x,y,corner}`, `pause`, `resume`, `suspend {on, reason}` (the host's panic or focus stop; sound and clocks are already stopped when you hear it), `golden`, `ad`, `pictures {source}`, `ads {jokesOff}`. `ctx.emit(event, data)` sends one: Golden Button emits `golden`, an ad click emits `ad`.
 
 **The main button**: `ctx.button`
 
@@ -85,10 +90,13 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 **Sound and media**
 
-- `ctx.audio.play(path, {bus, gain})`, `ctx.audio.loop(path, {bus, gain})` -> `{stop(ms)}`. Buses `sfx ambient voice podcast`. A missing file is silence. Clips in `assets/audio/`.
+- `ctx.audio.muteFor(ms)`: everything silent for up to 15 s, then back.
+- `ctx.audio.play(path, {bus, gain, pan})`, `ctx.audio.loop(path, {bus, gain, pan})` -> `{stop(ms)}`. Buses `sfx ambient voice podcast`. `pan` is -1 (left) to 1 (right), fixed at the start, on `stream` too; files on this site only for a stream. A missing file is silence. Clips in `assets/audio/`.
+- `ctx.audio.stream(url, {bus, gain, loop, autoplay, pan})` -> `{el, play(), pause(), setGain(v), stop(ms), playing}`: long audio on a media element the kit owns, never decoded whole. Use it for anything long, and never `new Audio()` or an `<audio>` of your own: those keep playing through panic. It follows mute, quiet, muteFor and hold, pauses at once on pause, suspend and panic, comes back with them, and dies at the end and with your unlock. Starts on the first gesture. Read `el` (`currentTime`, `duration`, listeners); volume changes and a play during a hold are put back.
 - `ctx.voice(slug, opts?)`: a recorded word (`data/words.js`); no clip = silence. Never speech synthesis.
 - `await ctx.pictures.next({niche})` -> `{url, credit}` or null. Null is normal: draw an empty frame, never an error. Show `credit` when set. Never fetch a picture any other way. `ctx.pictures.source` is `online` (signed in), `own` (the player's files, on this device only) or `none`; a change arrives as the `pictures` event, so refill what is on screen. Choosing a source is not an unlock's job.
-- `ctx.ads.next({kind})` -> the next record from `data/ads.js`.
+- `ctx.ads.next({kind, theme, ccpOnly})` -> the next record: `{id, kind, headline, sub, cta, ccp, url?, tone?}`. Every ad slot in every lane draws from this and never hand-picks a CCP chip: once a theme is picked (`theme` defaults to the `f5` lane; pass `null` for none) its CCP cards are in the mix. `ccpOnly` asks for real cards only.
+- `ctx.ads.jokesOff(on = true)`: Joke Ads Gone. While any unlock holds it, every `next` in every lane is real cards only; it ends with the holder. `ctx.ads.jokesAreOff` reads it; the `ads {jokesOff}` event says it changed, so swap a joke already on screen.
 - `ctx.store.get(key)`, `ctx.store.set(key, value)`: small JSON in the save for this unlock (After lane entries: kept across runs).
 
 ## The spiral
@@ -104,6 +112,8 @@ return { off() { sp.dispose(); } };
 ```
 
 ## Special lanes
+
+- Forks: a fork row (`f1` to `f5`) may be registered by several group files; all of them mount when it is taken, on one shared `ctx`. Every handler checks `ctx.pick('f5')` and returns early if the pick is not its own, and keeps its `ctx.store` keys to itself. No other row may be claimed twice. Already mounted unlocks can also hear the `fork` event.
 
 - `meta`: moods. The sim numbers live in `sim/moods.js`. The entry for `state.mood` mounts at run start; there is none on the first run.
 - `after`: every `z_*` entry mounts when the credits card is up and draws into `ctx.layer('credits')`. `ctx.life` holds what it needs; `ctx.setPerk(id|null)` keeps one owned Look for the next run.

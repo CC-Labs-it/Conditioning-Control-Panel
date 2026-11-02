@@ -6,11 +6,13 @@
 
 import { BY_ID, ITEMS } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
+import { brandText } from '../data/brand.js';
 import * as E from '../sim/economy.js';
 import { moodOf } from '../sim/moods.js';
 import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
 import { makeContext } from './context.js';
 import { createPictures } from './pictures.js';
+import { createAds } from './ads.js';
 
 const MAX_UNLOCK_ERRORS = 3;
 const ENDING_SCOPE = '__ending';
@@ -20,7 +22,11 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   const mods = [];                   // live modifiers, in mount order
   const listeners = new Map();       // event -> Set of {fn, scope}
   let paused = false, suspended = false, stopped = !!run.ended, now = run.clock;
-  let endingBegun = false, creditsUp = false;
+  let endingBegun = false, creditsUp = false, real = run.clock;
+  const speeds = new Set();
+  const guards = new Set();
+  const refusals = new Map();        // row id + count -> times refused
+  const ads = createAds();
   const pictures = createPictures({ source: env.pictureSource, onChange: (source) => { emit('pictures', { source }); save(); } });
 
   /* ---- scopes ---- */
@@ -98,10 +104,32 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   function step(dtMs) {
     if (paused || suspended) return;
     const dt = Math.min(1000, Math.max(0, dtMs));
-    if (!run.ended) E.tick(run, dt, mods);
-    now += dt;
-    if (stopped && !creditsUp) { const s = scopes.get(ENDING_SCOPE); if (s) runScope(s, dt); return; }
-    for (const scope of [...scopes.values()]) runScope(scope, dt);
+    if (!run.ended) E.tick(run, dt, mods);   // real time: income and route timing never see ctx.speed
+    const scaled = dt * speedFactor();
+    now += scaled;
+    real += dt;
+    if (stopped && !creditsUp) { const s = scopes.get(ENDING_SCOPE); if (s) runScope(s, scaled); return; }
+    for (const scope of [...scopes.values()]) runScope(scope, scaled);
+  }
+
+  /* ---- ctx.speed: every hold multiplies the unlocks' clock, capped, restored when released ---- */
+  function speedFactor() {
+    let f = 1;
+    for (const h of speeds) f *= h.m;
+    return Math.min(CONFIG.SPEED_MAX, Math.max(CONFIG.SPEED_MIN, f));
+  }
+  function applySpeed() {
+    const f = speedFactor();
+    for (const scope of scopes.values()) for (const a of scope.anims) a.playbackRate = f;
+  }
+  function holdSpeed(m, scope) {
+    if (!(m > 0) || !Number.isFinite(m)) return () => {};
+    const h = { m };
+    speeds.add(h);
+    applySpeed();
+    const release = () => { if (speeds.delete(h)) applySpeed(); scope.cleanups.delete(release); };
+    scope.cleanups.add(release);
+    return release;
   }
 
   function runScope(scope, dt) {
@@ -123,12 +151,13 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     audio?.hold(paused || suspended);
     emit(paused ? 'pause' : 'resume');
   }
-  function setSuspended(v) {
+  function setSuspended(v, reason) {
     const next = !!v;
     if (next === suspended) return;
     if (!paused) ui.holdWorld?.(next);
     suspended = next;
-    audio?.hold(paused || suspended);
+    audio?.hold(paused || suspended);  // first: panic never waits on a listener
+    emit('suspend', { on: suspended, reason });
   }
   /* ---- verbs ---- */
   function tap({ x, y, auto = false } = {}) {
@@ -147,6 +176,36 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     ui.paid?.(got, at);
     ui.draw?.();
     return got;
+  }
+
+  function spend(amount, reason) {
+    if (stopped) return 0;
+    const took = E.spend(run, amount, reason);
+    ui.draw?.();
+    return took;
+  }
+
+  /* ---- ctx.guardBuy: a guard may refuse a row a few times. A fork or ending row is never refused, a row goes through
+   * after GUARD_MAX_REFUSALS whatever the guard says, and a guard that throws lets it through. Never an impossible run. */
+  function refusal(id) {
+    const it = BY_ID[id];
+    if (!it || it.kind === 'fork' || it.kind === 'end' || !guards.size) return null;
+    if (!E.isOpen(run, it) || run.fuzz < E.price(run, id, mods)) return null;  // would fail anyway: nothing to refuse
+    const key = `${id}:${E.count(run, id)}`;
+    const n = refusals.get(key) || 0;
+    if (n >= CONFIG.GUARD_MAX_REFUSALS) return null;
+    for (const g of [...guards]) {
+      const ans = guard(g.scope, g.fn, it);
+      if (ans?.refuse) { refusals.set(key, n + 1); return ans; }
+    }
+    return null;
+  }
+  function addGuard(fn, scope) {
+    const g = { fn, scope };
+    guards.add(g);
+    const off = () => { guards.delete(g); scope.cleanups.delete(off); };
+    scope.cleanups.add(off);
+    return off;
   }
 
   function wallHit({ x, y, corner = false } = {}) {
@@ -171,6 +230,12 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
 
   function buy(id) {
     if (stopped) return { ok: false, reason: 'ended' };
+    const refused = refusal(id);
+    if (refused) {
+      ui.denied?.(id, refused);
+      if (typeof refused.refuse === 'string') ui.toast?.(brandText(refused.refuse));
+      return { ok: false, reason: 'guarded', line: refused.refuse };
+    }
     const res = E.buy(run, id, mods);
     if (!res.ok) { ui.denied?.(id, res); return res; }
     afterGain(id, res);
@@ -193,6 +258,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     if (endingBegun) return;
     endingBegun = true;
     stopped = true;
+    audio?.stopStreams?.();
     if (!restored) {
       recordEnding(life, run, id);
       save();
@@ -236,13 +302,16 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   }
 
   const api = {
-    get run() { return run; }, life, ui, audio, mods, host, rng, env, scopes, pictures,
+    get run() { return run; }, life, ui, audio, mods, host, rng, env, scopes, pictures, ads,
     get now() { return now; },
+    /** Game time that ctx.speed never touches: for what must always run out on time. */
+    get real() { return real; },
+    speedFactor, holdSpeed,
     get paused() { return paused; },
     get suspended() { return suspended; },
     get stopped() { return stopped; },
     mount, unmount, mountAll, unmountAll, emit, subscribe, step,
-    setPaused, setSuspended, tap, pay, wallHit, buy, choose, end, grant, syncQuiet, save,
+    setPaused, setSuspended, tap, pay, spend, addGuard, wallHit, buy, choose, end, grant, syncQuiet, save,
     rates: () => E.rates(run, mods, now),
     price: (id) => E.price(run, id, mods, now),
     shop: (size) => E.shopWindow(run, mods, size),

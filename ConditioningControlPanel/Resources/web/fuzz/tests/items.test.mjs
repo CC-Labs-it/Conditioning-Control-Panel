@@ -59,5 +59,7 @@ test('the currency name appears only in data/brand.js', () => {
 });
 
 test('data/items.js is what the generator makes, when the design source is on this machine', { skip: !existsSync(DESIGN) }, () => {
-  assert.equal(readFileSync(join(tree, 'data', 'items.js'), 'utf8'), itemsSource());
+  // A Windows checkout may hold CRLF; git stores LF. Compare what git would store.
+  const lf = (s) => s.split('\r\n').join('\n');
+  assert.equal(lf(readFileSync(join(tree, 'data', 'items.js'), 'utf8')), lf(itemsSource()));
 });

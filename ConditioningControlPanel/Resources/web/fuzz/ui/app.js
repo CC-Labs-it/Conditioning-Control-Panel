@@ -20,7 +20,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     wrap: $('btn-wrap'), lock: $('btn-lock'), pause: $('pause'), wake: $('wake'), resume: $('resume'), mute: $('mute'), gentle: $('gentle'),
     toast: $('l-toast'), fx: $('l-fx'), cards: $('cards'), saveBox: $('save-box'),
   };
-  const LAYERS = { back: 'l-back', wash: 'l-wash', floaters: 'l-floaters', ticker: 'l-ticker', meters: 'l-meters', banner: 'l-banner', side: 'l-side', over: 'l-over', toast: 'l-toast' };
+  const LAYERS = { back: 'l-back', wash: 'l-wash', floaters: 'l-floaters', ticker: 'l-ticker', meters: 'l-meters', banner: 'l-banner', side: 'l-side', over: 'l-over', toast: 'l-toast', ending: 'l-ending' };
   const cards = createCards(doc, el.cards);
   const motionQuery = win.matchMedia?.('(prefers-reduced-motion: reduce)');
   let gentleOn = !!extras.gentle, initGentle = !!init.gentle, initReduced = !!init.reduced;
@@ -142,10 +142,10 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
         const d = Math.min(12000, ms);
         const dx = Math.min(180, el.stage.clientWidth / 3);
         el.wrap.style.transform = `translateX(${el.wrap.style.transform.includes('-') ? dx : -dx}px)`;
-        swapUntil = engine.now + d;
+        swapUntil = engine.real + d;
       },
       lockFor(ms, label = '') {
-        lockUntil = engine.now + Math.min(CONFIG.LOCK_MAX_MS, Math.max(0, ms));
+        lockUntil = engine.real + Math.min(CONFIG.LOCK_MAX_MS, Math.max(0, ms));
         el.btn.classList.add('locked');
         el.lock.hidden = !label;
         el.lock.textContent = brandText(label);
@@ -154,8 +154,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
 
   function tickButton() {
-    if (lockUntil && engine.now >= lockUntil) { lockUntil = 0; el.btn.classList.remove('locked'); el.lock.hidden = true; }
-    if (swapUntil && engine.now >= swapUntil) { swapUntil = 0; el.wrap.style.transform = ''; }
+    if (lockUntil && engine.real >= lockUntil) { lockUntil = 0; el.btn.classList.remove('locked'); el.lock.hidden = true; }
+    if (swapUntil && engine.real >= swapUntil) { swapUntil = 0; el.wrap.style.transform = ''; }
   }
 
   function wireButton() {
@@ -167,6 +167,21 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     el.btn.addEventListener('click', (ev) => { if (ev.detail === 0) engine.tap({}); });  // keyboard
     el.btn.addEventListener('contextmenu', (ev) => ev.preventDefault());
   }
+
+  /** ctx.openLink only works inside a real press. Set while one trusted event is being handled, cleared right after it,
+   *  so a timer, an await or a script's el.click() never counts. Pressing the game button or Wake Up does not count
+   *  either: tapping to earn must never open a tab. */
+  let pressTarget = null;
+  function wirePresses() {
+    const note = (ev) => {
+      if (!ev.isTrusted) return;
+      if (ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
+      pressTarget = ev.target;
+      win.setTimeout(() => { pressTarget = null; }, 0);
+    };
+    for (const type of ['pointerup', 'click', 'keydown']) doc.addEventListener(type, note, true);
+  }
+  const inPress = () => !!pressTarget && !pressTarget.closest?.('#btn, #wake');
 
   /** Pause and suspend freeze every animation in the world, CSS ones included, and thaw only those they froze. */
   let frozen = [];
@@ -294,8 +309,9 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
 
   const ui = {
     doc, win, world: el.world, layer, gentle, reduced, cards,
+    parts: Object.freeze({ shop: $('shop'), buttonWrap: el.wrap }),
     bounds: () => dims,
-    buttonFor, buttonLocked: () => lockUntil > 0,
+    buttonFor, buttonLocked: () => lockUntil > 0, inPress,
     pressed() { el.btn.classList.add('down'); clearTimeout(downTimer); downTimer = setTimeout(() => el.btn.classList.remove('down'), 90); },
     holdWorld,
     paid, float, toast, say, draw,
@@ -317,6 +333,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       ui.credits = (id) => credits(id, { hooks });
       el.cur.textContent = BRAND.currencyPlural;
       wireButton();
+      wirePresses();
       wirePause(hooks);
       applyGentle();
       motionQuery?.addEventListener?.('change', applyGentle);
