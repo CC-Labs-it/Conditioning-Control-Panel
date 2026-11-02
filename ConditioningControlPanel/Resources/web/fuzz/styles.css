@@ -11,6 +11,7 @@
   --panel-short: #cbc7be;
   --line: #8a867d;
   --fill: #b4b0a6;
+  --ready: #f4f2ec;
   --stamp: #a3232b;
   --font: "Times New Roman", Times, serif;
   --shop-font: var(--font);
@@ -30,6 +31,7 @@ button { font: inherit; color: inherit; }
 #l-floaters { z-index: 20; }
 #l-over { z-index: 60; }
 #l-fx { z-index: 65; }
+#l-ending { z-index: 85; }   /* above .endfade (80), below the cards and Wake Up, which live outside the world */
 
 #page { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 0 16px; padding-bottom: env(safe-area-inset-bottom, 0); }
 
@@ -74,7 +76,7 @@ button { font: inherit; color: inherit; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade { to { opacity: 0; transform: scale(.98); } }
 @keyframes nudge { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
-@keyframes ready { 50% { background: #f4f2ec; } }
+@keyframes ready { 50% { background: var(--ready); } }
 body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 
 /* ---- side rails, toast ---- */

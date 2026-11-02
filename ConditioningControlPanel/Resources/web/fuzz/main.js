@@ -83,8 +83,8 @@ function start(init) {
   const escape = createHostEscape();
   bridge.on('kept-escape', () => escape.kept());
   bridge.on('suspend', (f) => {
-    if (f.on) { ui.pause(); engine.setSuspended(true); }
-    else engine.setSuspended(false);
+    if (f.on) { ui.pause(); engine.setSuspended(true, f.reason); }
+    else engine.setSuspended(false, f.reason);
   });
   bridge.on('close', () => { audio.hold(true); persist(); bridge.send('exit-done'); });
   bridge.on('setting', (f) => { if (f.key === 'gentle') ui.setInit({ gentle: !!f.value }); });

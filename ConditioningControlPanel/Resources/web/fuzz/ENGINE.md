@@ -51,14 +51,16 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
   Text given to `el`, `say`, `toast`, `float`, `modal` is token-expanded for you.
 - `ctx.gentle`, `ctx.reduced`: live. Gentle: nothing above 3 Hz, flashes become fades of 250 ms or more, spiral still, no sway, no warp. If an effect cannot be gentle, leave it off.
 - `ctx.hosted`, `ctx.caps`, `ctx.host(type, fields)`: the app wire, see `CONTRACT.md`.
+- `ctx.openLink(url)`: the one way to open a real page. Only `https://cclabs.app` and its paths, and only called directly inside the player's own press on your element or card button: not after an `await` or `ctx.after`, not from a tap on the game button. Answers whether it opened. Never `window.open` or an `<a>` of your own.
 
 **Drawing**
 
-- `ctx.layer(name)`: `back` (behind everything), `wash` (full-page tint), `floaters` (above the page, below the shop), `ticker`, `meters` (under the counter), `banner` (ad slots, in the page flow above the shop), `side` (the emptier of the two rails; `ctx.layer('side','left'|'right')` to choose; 0 wide on phones, so check `ctx.bounds().w`), `over` (over everything except cards and Wake Up), `toast`, `credits` (the slot on the credits card, for the After lane).
+- `ctx.layer(name)`: `back` (behind everything), `wash` (full-page tint), `floaters` (above the page, below the shop), `ticker`, `meters` (under the counter), `banner` (ad slots, in the page flow above the shop), `side` (the emptier of the two rails; `ctx.layer('side','left'|'right')` to choose; 0 wide on phones, so check `ctx.bounds().w`), `over` (over everything except cards and Wake Up), `toast`, `ending` (above the end fade: an ending's show draws here, never on `ctx.world` with a z-index), `credits` (the slot on the credits card, for the After lane).
 - Layers ignore the pointer: a child you want tappable needs `pointer-events:auto` in its css. Nothing goes above Wake Up. Never move or restyle `#wake`.
 - `ctx.el(tag, cssText, text?, parent?)`: parent is an element or a layer name; default `floaters`.
-- `ctx.css(text)`: a stylesheet. `ctx.vars({'--page':'#ffdcee'})`: page variables, restored on off: `--page --ink --ink-soft --ink-faint --btn --panel --panel-short --line --fill --stamp --font --shop-font`.
+- `ctx.css(text)`: a stylesheet. `ctx.vars({'--page':'#ffdcee'})`: page variables, restored on off: `--page --ink --ink-soft --ink-faint --btn --panel --panel-short --line --fill --ready --stamp --font --shop-font`. `--ready` is the flash on a goal row you can afford: set it with your theme, never restyle `#goal`.
 - `ctx.world`: the element holding all layers and the page, for a lean or warp. Wake Up and the cards are outside it. Do not filter it every frame on a phone.
+- `ctx.parts`: `.shop`, `.buttonWrap`: the elements themselves, to measure or to animate with `ctx.anim` (`.buttonWrap` moves the button without touching its own transform). Use these, never `querySelector` into `ctx.world`.
 - `ctx.bounds()`: `{w, h}` of the page, cached; use it instead of measuring each frame.
 - `ctx.every(ms, fn)`, `ctx.after(ms, fn)`, `ctx.frame(fn(dt, now))`: each returns a cancel function. Share these; live particles have a cap, so prefer `ctx.float(x, y, text, css?)` for rising numbers.
 - `ctx.anim(el, keyframes, opts)`: Web Animations. Keep loops at or under 3 Hz.

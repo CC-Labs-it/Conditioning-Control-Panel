@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createEngine } from '../ui/engine.js';
 import { CTX_MEMBERS } from '../ui/context.js';
+import { allowedLink } from '../ui/links.js';
 import { GROUPS, REGISTRY } from '../ui/unlocks/index.js';
 import { BY_ID } from '../data/items.js';
 import * as E from '../sim/economy.js';
@@ -208,6 +209,59 @@ test('ctx.speed scales every unlock clock, never income, and ends with its holde
   assert.equal(engine.speedFactor(), 0.1);
   engine.unmount('stray');
   assert.equal(engine.speedFactor(), 1, 'restored on off');
+});
+
+test('ctx.parts hands over the shop and the button wrap, and cannot be reassigned', () => {
+  let ctx;
+  const { ui, engine } = setup({ stray: { mount(c) { ctx = c; return {}; } } });
+  ui.parts = { shop: new FakeEl('shop'), buttonWrap: new FakeEl('wrap') };
+  engine.mount('stray');
+  assert.equal(ctx.parts.shop, ui.parts.shop);
+  assert.equal(ctx.parts.buttonWrap, ui.parts.buttonWrap);
+  assert.throws(() => { ctx.parts.shop = null; });
+});
+
+test('the ending layer is in the page, above the end fade', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../ui/app.js', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="l-ending"'));
+  assert.ok(app.includes("ending: 'l-ending'"));
+  const z = (re) => Number(css.match(re)[1]);
+  assert.ok(z(/#l-ending \{ z-index: (\d+)/) > z(/\.endfade \{[^}]*z-index: (\d+)/));
+});
+
+test('a link is cclabs.app or nothing', () => {
+  for (const good of ['https://cclabs.app', 'https://cclabs.app/', 'https://cclabs.app/ccp.html?x=1#y', 'HTTPS://CCLABS.APP/a']) assert.ok(allowedLink(good), good);
+  for (const bad of ['http://cclabs.app', 'https://app.cclabs.app', 'https://cclabs.app.example.com', 'https://cclabs.app@example.com', 'https://x:y@cclabs.app', 'https://cclabs.app:8443', 'javascript:alert(1)', 'data:text/html,x', '//cclabs.app', '/a', '', null, undefined, 'https://example.com/https://cclabs.app']) assert.equal(allowedLink(bad), null, String(bad));
+});
+
+test('ctx.openLink opens only inside a press; hosted goes down the wire, unhosted is a new tab', () => {
+  let ctx;
+  const sent = [], opened = [];
+  let pressing = false;
+  const run = E.createRun();
+  E.grant(run, 'stray');
+  const make = (isHosted) => {
+    const ui = fakeUi();
+    ui.inPress = () => pressing;
+    ui.win = { open: (...a) => opened.push(a) };
+    const engine = createEngine({ run, life: createLife(), ui, host: { isHosted, send: (t, f) => sent.push([t, f]) }, registry: { stray: { mount(c) { ctx = c; return {}; } } } });
+    engine.mount('stray');
+  };
+  make(false);
+  assert.equal(ctx.openLink('https://cclabs.app/x'), false, 'no press, no tab');
+  pressing = true;
+  assert.equal(ctx.openLink('https://example.com'), false);
+  assert.equal(ctx.openLink('https://cclabs.app/x'), true);
+  assert.deepEqual(opened, [['https://cclabs.app/x', '_blank', 'noopener']]);
+  assert.deepEqual(sent, []);
+  make(true);
+  assert.equal(ctx.openLink('https://cclabs.app/y'), true);
+  assert.deepEqual(sent, [['open-url', { url: 'https://cclabs.app/y' }]]);
+  assert.equal(opened.length, 1);
+  assert.equal(ctx.openLink('https://example.com'), false);
+  assert.equal(sent.length, 1);
 });
 
 test('a stacking row stays mounted and hears grow; a row without grow remounts', () => {

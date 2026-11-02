@@ -9,6 +9,7 @@ import { clipUrl } from '../data/words.js';
 import { fmt, money } from '../sim/format.js';
 import * as E from '../sim/economy.js';
 import { nextAd } from './ads.js';
+import { allowedLink } from './links.js';
 
 /** A deep read-only view: unlocks read the state and change it only through the verbs. */
 const views = new WeakMap();
@@ -48,6 +49,7 @@ export function makeContext(engine, scope) {
 
     layer: (name, side) => ui.layer(name, side),
     world: ui.world,
+    parts: Object.freeze({ get shop() { return ui.parts?.shop ?? null; }, get buttonWrap() { return ui.parts?.buttonWrap ?? null; } }),
     bounds: () => ui.bounds(),
 
     el(tag, cssText = '', text = null, parent = null) {
@@ -157,6 +159,13 @@ export function makeContext(engine, scope) {
     get gentle() { return ui.gentle(); },
     get reduced() { return ui.reduced(); },
     host: (type, fields) => host.send?.(type, fields),
+    openLink(url) {
+      const href = allowedLink(url);
+      if (!href || !ui.inPress?.()) return false;
+      if (host.isHosted) host.send?.('open-url', { url: href });
+      else ui.win.open(href, '_blank', 'noopener');
+      return true;
+    },
     get hosted() { return !!host.isHosted; },
     get caps() { return engine.env.caps || {}; },
 
@@ -176,5 +185,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed',
+  'speed', 'parts', 'openLink',
 ]);
