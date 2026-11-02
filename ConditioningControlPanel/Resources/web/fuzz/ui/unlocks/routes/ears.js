@@ -37,10 +37,11 @@ function drawHum(ctx) {
     g.clearRect(0, 0, 480, 150);
     const a = hum.amp * hum.wide;
     if (hum.split) {
-      line(0, 215, 0.05, 3.1, '#ff69b4', a);
-      line(265, 480, 0.042, -2.6, '#2f8fd0', a);
+      const p = ctx.palette(), themed = p.themes.length > 0;
+      line(0, 215, 0.05, 3.1, themed ? p.a : '#ff69b4', a);
+      line(265, 480, 0.042, -2.6, themed ? p.b : '#2f8fd0', a);
     } else {
-      line(0, 480, 0.03, 1.6, '#7b5cff', a);
+      line(0, 480, 0.03, 1.6, ctx.palette().themes.length ? ctx.palette().a : '#7b5cff', a);
     }
   };
 }
@@ -71,7 +72,7 @@ export default {
         arm.style.transition = ctx.gentle ? 'none' : 'transform 1s ease-in-out';
         ctx.audio.play('assets/audio/sfx/count_tick.mp3', { bus: 'sfx', gain: 0.35, pan: ctx.has('a_phones') ? (side ? 0.6 : -0.6) : 0 });
         const r = box.getBoundingClientRect();
-        ring(ctx, r.left + r.width / 2, r.top + r.height / 2, 90, '#7b5cff', 500);
+        ring(ctx, r.left + r.width / 2, r.top + r.height / 2, 90, 'var(--accent-2)', 500);
       };
       swing();
       ctx.every(1000, swing);
@@ -118,7 +119,7 @@ export default {
       const words = deck([...EDGE_WORDS, ...ROUTE_COPY.whispers, ...ROUTE_COPY.whispers], ctx), clips = deck(MANTRA, ctx);
       const row = ctx.el('div', 'display:flex;align-items:center;gap:4px;font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', null, meterRow(ctx));
       ctx.el('span', '', ROUTE_COPY.volume, row).className = 'routes-lbl';
-      bar(ctx, row, 'width:40px;height:6px;', '#7b5cff').set(0.1);
+      bar(ctx, row, 'width:40px;height:6px;', 'var(--accent-2)').set(0.1);
       const show = () => {
         const { x, y } = freeSpot(ctx);
         flash(ctx, 'floaters', words(), `left:${x}px;top:${y}px;font:italic 15px Arial,Helvetica,sans-serif;color:${ink(ctx, '#5a3cdc', '#cdbfff')};`, 1600);
@@ -142,7 +143,7 @@ export default {
         open = ctx.state.clock + 1500;
         setLine(ctx, say(slug), 'font-size:21px;font-weight:700;color:var(--ink);', 1700);
         const b = btnCentre(ctx);
-        ring(ctx, b.x, b.top - 12, 90, '#7b5cff', 700);
+        ring(ctx, b.x, b.top - 12, 90, 'var(--accent-2)', 700);
       };
       speak();
       ctx.every(6000, speak);
@@ -164,7 +165,7 @@ export default {
       ctx.audio.loop(LOOP('hum-right'), { bus: 'ambient', gain: 0.5, pan: 1 });
       const b = btnCentre(ctx);
       const tag = (side, text, colour) => ctx.el('div', `position:absolute;${side}:12px;top:${b.y - 96}px;font:600 13px Arial,Helvetica,sans-serif;color:${colour};z-index:3;`, text, 'back').className = 'routes-lbl';
-      tag('left', ROUTE_COPY.left, '#ff69b4');
+      tag('left', ROUTE_COPY.left, 'var(--accent)');
       tag('right', ROUTE_COPY.right, '#2f8fd0');
       const dot = ctx.el('div', `position:absolute;left:50%;top:${b.y - 7}px;margin-left:-98px;width:14px;height:14px;border-radius:50%;background:#ffd24d;z-index:3;`, null, 'back');
       const dot2 = ctx.el('div', `position:absolute;left:50%;top:${b.y - 7}px;margin-left:84px;width:14px;height:14px;border-radius:50%;background:#ffd24d;z-index:3;`, null, 'back');
@@ -251,18 +252,18 @@ export default {
       const clips = deck(MANTRA, ctx);
       const row = ctx.el('div', 'display:flex;align-items:center;gap:4px;font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', null, meterRow(ctx));
       ctx.el('span', '', ROUTE_COPY.far, row).className = 'routes-lbl';
-      const m = bar(ctx, row, 'width:50px;height:6px;', '#ff69b4');
-      ctx.el('span', 'color:#ff69b4;', ROUTE_COPY.close, row).className = 'routes-lbl';
+      const m = bar(ctx, row, 'width:50px;height:6px;', 'var(--accent)');
+      ctx.el('span', 'color:var(--stamp);', ROUTE_COPY.close, row).className = 'routes-lbl';
       const come = () => {
         const slug = clips(), b = btnCentre(ctx), big = Math.min(ctx.bounds().w / Math.max(4, say(slug).length) * 1.4, 130);
-        const e = ctx.el('div', `position:absolute;left:0;right:0;top:${Math.max(70, b.y - big / 2)}px;text-align:center;font:700 ${big}px/1 Arial,Helvetica,sans-serif;color:#ff9ccf;text-shadow:0 0 8px #000;`, say(slug));
+        const e = ctx.el('div', `position:absolute;left:0;right:0;top:${Math.max(70, b.y - big / 2)}px;text-align:center;font:700 ${big}px/1 Arial,Helvetica,sans-serif;color:var(--accent-soft);text-shadow:0 0 8px #000;`, say(slug));
         const fin = ctx.gentle ? [{ opacity: 0 }, { opacity: 0.7 }, { opacity: 0 }] : [{ transform: 'scale(.12)', opacity: 0 }, { transform: 'scale(1)', opacity: 0.72, offset: 0.9 }, { transform: 'scale(1.1)', opacity: 0 }];
         ctx.anim(e, fin, { duration: 3200, easing: 'ease-in', fill: 'both' });
         ctx.after(3220, () => e.remove());
         m.set(0); m.set(1, 3000);
         ctx.after(3200, () => m.set(0, 800));
         ctx.after(2800, () => ctx.voice(slug, { gain: 1 }));
-        ctx.after(2900, () => { const c = btnCentre(ctx); burst(ctx, c.x, c.y, '#ff9ccf', 10, 60); });
+        ctx.after(2900, () => { const c = btnCentre(ctx); burst(ctx, c.x, c.y, 'var(--accent-soft)', 10, 60); });
       };
       ctx.after(300, come);
       ctx.every(11000, come);

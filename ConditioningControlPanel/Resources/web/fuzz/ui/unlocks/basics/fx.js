@@ -3,6 +3,7 @@
  * because a scope remembers every node it ever made; they die with their animation instead. */
 
 import { brandText } from '../../../data/brand.js';
+import { THEME_PAGES } from '../../palette.js';
 import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/loomSpiral.js';
 
 export const docOf = (ctx) => ctx.button.el.ownerDocument;
@@ -147,10 +148,12 @@ export const PALETTES = Object.freeze({
   dark: pal('#17132c', '#f0f0f5', '#bdb8d2', '#8f8aa8', '#3b2f6e', '#fff', '#120e24', '#231e3e', '#1b1732', '#4a4370', '#403666', '#ff9ccf', '#3a3360'),
 });
 
-/** Write a palette straight on the root. The player's own press wins over anything mounted before it. */
+/** Write a palette straight on the root. The player's own press wins over anything mounted before it. After a theme pick this
+ *  moves the page only: ui/palette.js holds the accents. 'theme' goes back to the page the theme wears. */
 export function setPalette(ctx, name) {
   const root = docOf(ctx).documentElement.style;
-  for (const [k, v] of Object.entries(PALETTES[name])) root.setProperty(k, v);
+  const vars = name === 'theme' ? THEME_PAGES[ctx.pick('f5')] : PALETTES[name];
+  for (const [k, v] of Object.entries(vars || {})) root.setProperty(k, v);
 }
 
 /* ---- the Loom, once ---- */

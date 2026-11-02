@@ -23,10 +23,5 @@ export const SECOND_THEME = Object.freeze({
   chip: 'Theme two',
 });
 
-/** The button colour each theme wears when it is the second one. Shown on the Pick a Theme card too. */
-export const THEME_TINTS = Object.freeze({
-  trance: '#5a3fb5', bimbo: '#ff4fa8', drone: '#3a4a5a', sissy: '#d670b4', goon: '#b5342a', locked: '#8a6d1f', censored: '#222222', infection: '#4f9a2f',
-});
-
 /* listen Listening Test */
 export const LISTEN_NAME = 'EMI';

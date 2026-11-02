@@ -4,7 +4,8 @@
 import { moan } from '../moan.js';
 import { ACHIEVEMENTS, DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS, thoughtsFor } from '../../../data/content/index.js';
 import { FORKS } from '../../../data/items.js';
-import { SECOND_THEME, THEME_TINTS } from './copy.js';
+import { SECOND_THEME } from './copy.js';
+import { THEME_PALETTES } from '../../palette.js';
 import { burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
 import { THEME_TASTES } from '../theme-skins.js';
 
@@ -110,7 +111,7 @@ export default {
       let showing = false;
       const card = (a) => {
         showing = true;
-        const c = spawn(ctx, 'left:max(8px,calc(50vw - 165px));top:0;width:min(330px,calc(100vw - 108px));padding:4px 10px;text-align:center;background:var(--ink);color:var(--page);border-radius:6px;font-size:15px;line-height:1.2;box-shadow:0 3px 10px rgba(0,0,0,.35);', `★ ${a.name}`);
+        const c = spawn(ctx, 'left:max(8px,calc(50vw - 165px));top:0;width:min(330px,calc(100vw - 108px));padding:4px 10px;text-align:center;background:var(--toast-bg);color:var(--toast-ink);border-radius:6px;font-size:15px;line-height:1.2;box-shadow:0 3px 10px rgba(0,0,0,.35);', `★ ${a.name}`);
         const sub = docOf(ctx).createElement('div');
         sub.style.cssText = 'font-size:13px;opacity:.8;';
         sub.textContent = ctx.brand.text(a.line);
@@ -168,7 +169,7 @@ export default {
 .fz-ad .t small { display: block; font-weight: 400; font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fz-ad .c { flex: none; padding: 4px 8px; background: #000; color: #fff; font-size: 12px; white-space: nowrap; }
 .fz-ad.ccp { background: #2a0f22; color: #fff; }
-.fz-ad.ccp .c { background: #ff69b4; color: #fff; }
+.fz-ad.ccp .c { background: var(--accent); color: var(--niche-ink); }
 .fz-ad.scam { background: #fff; color: #b00020; } .fz-ad.wellness { background: #e8f6ee; color: #114d33; } .fz-ad.pharma { background: #e7f1fb; color: #123a66; } .fz-ad.desperate { background: #ffe4dc; color: #6a1b00; } .fz-ad.corporate { background: #eceff3; color: #1d2733; } .fz-ad.local { background: #fff0f7; color: #7a0f4a; }
 `);
       const slot = ctx.el('button', 'display:none;', null, ctx.layer('banner'));
@@ -208,7 +209,7 @@ export default {
   /* Glossy Icons: the same icons, in a shiny tile. Art comes later behind ui/icons.js; the tile stays. */
   glossy: {
     mount(ctx) {
-      ctx.css(`.row .ico { display: grid; place-items: center; width: 30px; height: 30px; font-size: 19px; border-radius: 8px; background: radial-gradient(circle at 32% 24%, #fff 0 12%, #ff9ccf 34%, #c21f7f 92%); box-shadow: 0 2px 5px rgba(90,0,60,.45), inset 0 -2px 4px rgba(90,0,60,.3); }`);
+      ctx.css(`.row .ico { display: grid; place-items: center; width: 30px; height: 30px; font-size: 19px; border-radius: 8px; background: radial-gradient(circle at 32% 24%, #fff 0 12%, color-mix(in srgb, var(--hue-a, #ff69b4) 60%, #fff) 34%, color-mix(in srgb, var(--hue-b, #ff4fa8) 78%, #000) 92%); box-shadow: 0 2px 5px rgba(0,0,0,.4), inset 0 -2px 4px rgba(0,0,0,.25); }`);
       if (fresh(ctx) && !ctx.gentle) {
         ctx.parts.shop.querySelectorAll('.row .ico').forEach((ic, i) => ctx.anim(ic, [{ transform: 'rotateY(90deg)' }, { transform: 'rotateY(0)' }], { duration: 360, delay: i * 80, fill: 'backwards' }));
       }
@@ -255,7 +256,7 @@ export default {
           ctx.toast(SECOND_THEME.chosen.replace('{theme}', THEMES[id].label));
           const c = btnCenter(ctx);
           squish(ctx, ctx.button.el, 1.3);
-          burst(ctx, c.x, c.y, { color: THEME_TINTS[id], n: 18, reach: 110, size: 8 });
+          burst(ctx, c.x, c.y, { color: THEME_PALETTES[id]?.a, n: 18, reach: 110, size: 8 });
           sfx(ctx, 'sfx/ui_unlock.mp3', 0.5);
         }
       };
@@ -379,7 +380,7 @@ export default {
         const GAP = 1500;
         list.forEach((d, i) => {
           ctx.after(500 + i * GAP, () => {
-            pop(ctx, w / 2, h * 0.45, d.word, { color: '#b03a7a', size: 46, ms: GAP - 100, weight: 600, parent: 'ending' });
+            pop(ctx, w / 2, h * 0.45, d.word, { color: 'color-mix(in srgb, var(--accent) 62%, #000)', size: 46, ms: GAP - 100, weight: 600, parent: 'ending' });
             if (d.clip) ctx.voice(d.clip, { gain: 0.7 });
           });
         });

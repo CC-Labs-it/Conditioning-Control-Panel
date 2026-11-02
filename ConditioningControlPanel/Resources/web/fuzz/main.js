@@ -15,6 +15,7 @@ import { MOODS, rollMood } from './sim/moods.js';
 import { createLife, forget, load, parse, serialize, store, SAVE_KEY } from './sim/save.js';
 import { createUi } from './ui/app.js';
 import { createEngine } from './ui/engine.js';
+import { bindPalette } from './ui/palette.js';
 import { REGISTRY } from './ui/unlocks/index.js';
 import { openIntro } from './ui/intro.js';
 import { openPictureCard, pictureCardDue, PICTURE_ROUTES } from './ui/picture-card.js';
@@ -152,6 +153,7 @@ function start(init) {
   };
 
   const go = () => {
+    bindPalette(engine, document);
     if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
     engine.mountAll();
     engine.syncQuiet();

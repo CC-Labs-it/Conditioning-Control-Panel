@@ -9,6 +9,7 @@ import { CONFIG } from '../data/config.js';
 import { whole, fmt } from '../sim/format.js';
 import { iconFor } from './icons.js';
 import { createTip } from './shop-tip.js';
+import { hueClass } from './palette.js';
 
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 
@@ -33,7 +34,7 @@ export function createShop({ doc, engine, onPress }) {
   function makeRow(item, isGoal) {
     const el = doc.createElement('button');
     el.type = 'button';
-    el.className = 'row in';
+    el.className = `row in ${hueClass(item.lane)}`.trim();
     el.dataset.id = item.id;
     const body = doc.createElement('span');
     body.className = 'body';

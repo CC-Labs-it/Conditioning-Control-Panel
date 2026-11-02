@@ -12,7 +12,7 @@ const CORNER_NEAR = 6;
 /** One bouncing button. Speed is set from the page size so every screen gets the same wall hits per second. */
 function bouncer(ctx) {
   const W = 52, H = 22;
-  const el = ctx.el('div', `position:absolute;left:0;top:0;width:${W}px;height:${H}px;box-sizing:border-box;background:var(--btn);border:2px outset #fff;will-change:transform;`);
+  const el = ctx.el('div', `position:absolute;left:0;top:0;width:${W}px;height:${H}px;box-sizing:border-box;background:var(--btn-fill);border:2px outset #fff;will-change:transform;`);
   el.dataset.stray = '1';
   const b = ctx.bounds();
   const main = ctx.button.el.getBoundingClientRect?.();

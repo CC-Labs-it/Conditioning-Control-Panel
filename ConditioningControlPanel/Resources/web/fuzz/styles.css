@@ -21,12 +21,27 @@
   --niche-ink: #000;
   --rail-w: 0px;          /* the dock: see ui/dock.js */
   --dock-h: 0px;
+  --mix: color-mix(in oklch, var(--niche), var(--niche-2));   /* round the hue wheel: two themes make a third colour, never grey */
+  --niche-text: color-mix(in srgb, var(--mix) 45%, var(--ink));   /* the accent as text: follows the page's ink, so it reads on any page */
+  --niche-wash: 0%;
+  --accent: #ff69b4;      /* the game's pink until a theme is picked, then the theme */
+  --accent-2: #7b5cff;
+  --accent-soft: #ff9ccf;
+  --accent-deep: #d4488f;
+  --demo-page: #d4d0c8;
+  --btn-fill: var(--btn);
+  --toast-bg: var(--ink);
+  --toast-ink: var(--page);
 }
+/* Registered so a second theme fades in. Where this is not supported it simply snaps. */
+@property --niche { syntax: '<color>'; inherits: true; initial-value: #8a867d; }
+@property --niche-2 { syntax: '<color>'; inherits: true; initial-value: #8a867d; }
+:root.palette-live { transition: --niche .7s ease-out, --niche-2 .7s ease-out; }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 [hidden] { display: none !important; }
-body { background: var(--page); color: var(--ink); font: 16px/1.25 var(--font); overflow: hidden; -webkit-tap-highlight-color: transparent; }
+body { background-color: var(--page); background-image: radial-gradient(90vmax 70vmax at 0 0, color-mix(in srgb, var(--niche) var(--niche-wash), transparent), transparent 60%), radial-gradient(90vmax 70vmax at 100% 100%, color-mix(in srgb, var(--niche-2) var(--niche-wash), transparent), transparent 60%); color: var(--ink); font: 16px/1.25 var(--font); overflow: hidden; -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; }
 
 /* ---- the world: everything an unlock may lean, warp or cover. Wake Up and the cards live outside it. ---- */
@@ -48,7 +63,7 @@ button { font: inherit; color: inherit; }
 #l-meters { flex: 0 1 auto; min-height: 20px; max-width: 100%; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--ink-soft); }
 #btn-zone { flex: none; width: 100%; height: 108px; display: grid; place-items: center; }
 #btn-wrap { position: relative; transition: transform .25s ease-out; }
-#btn { display: block; width: 150px; height: 54px; background: var(--btn); border: 2px outset #fff; font-size: 18px; cursor: default; touch-action: manipulation; user-select: none; -webkit-user-select: none; transition: transform .07s ease-out; }
+#btn { display: block; width: 150px; height: 54px; background: var(--btn-fill); border: 2px outset #fff; font-size: 18px; cursor: default; touch-action: manipulation; user-select: none; -webkit-user-select: none; transition: transform .07s ease-out; }
 #btn.down { transform: scale(.95); border-style: inset; }
 #btn.locked { opacity: .55; }
 #btn-lock { position: absolute; inset: auto 0 -20px 0; text-align: center; font-size: 13px; color: var(--stamp); white-space: nowrap; pointer-events: none; }
@@ -61,7 +76,7 @@ button { font: inherit; color: inherit; }
 #goal:empty { display: none; }
 #rows { flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
 #more { flex: 0 0 100%; font-size: 13px; color: var(--ink-faint); text-align: center; }
-.row { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 100%; aspect-ratio: 1; padding: 4px; text-align: center; background: var(--panel); border: 1px solid var(--line); overflow: hidden; touch-action: manipulation; }
+.row { --hue-a: var(--accent); --hue-b: var(--accent-2); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 100%; aspect-ratio: 1; padding: 4px; text-align: center; background: var(--panel); border: 1px solid var(--line); overflow: hidden; touch-action: manipulation; }
 .row > * { position: relative; }
 .row .body { display: none; }
 .row.short { background: var(--panel-short); color: var(--ink-soft); }
@@ -103,7 +118,7 @@ button { font: inherit; color: inherit; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade { to { opacity: 0; transform: scale(.98); } }
 @keyframes nudge { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
-@keyframes ready { 50% { background: var(--ready); } }
+@keyframes ready { 50% { background-color: var(--ready); filter: brightness(1.14) saturate(1.1); } }
 body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 
 /* ---- the dock: passive things at the edges. Rails on a wide page, a chip strip and a tray on a narrow one. ui/dock.js ---- */
@@ -144,7 +159,7 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 
 /* ---- toast ---- */
 #l-toast { position: absolute; left: 0; right: 0; z-index: 70; display: flex; justify-content: center; pointer-events: none; padding: 0 16px; }
-.toast { max-width: 560px; padding: 3px 10px; background: var(--ink); color: var(--page); font-size: 15px; text-align: center; }
+.toast { max-width: 560px; padding: 3px 10px; background: var(--toast-bg); color: var(--toast-ink); font-size: 15px; text-align: center; }
 
 /* ---- floats ---- */
 .fl { position: absolute; left: 0; top: 0; font-size: 15px; white-space: nowrap; pointer-events: none; will-change: transform, opacity; }
@@ -180,6 +195,7 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 .opt b { display: block; margin-top: 6px; font-size: 16px; }
 .opt small { display: block; font-size: 13px; line-height: 1.2; color: #444; }
 .opt .demo { pointer-events: none; }
+.card button.opt[class*=hue-] { border: 2px solid var(--hue-a); box-shadow: inset 0 -5px 0 var(--hue-a); padding-bottom: 11px; }
 
 /* ---- credits ---- */
 .credits dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 8px 0; }
@@ -187,11 +203,62 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 .credits dd { margin: 0; }
 #l-credits:empty { display: none; }
 #l-credits { margin-top: 10px; padding-top: 10px; border-top: 1px solid #8a867d; }
-.endfade { position: fixed; inset: 0; z-index: 80; background: linear-gradient(#ffe6f2, #fff); opacity: 0; pointer-events: none; }
+.endfade { position: fixed; inset: 0; z-index: 80; background: linear-gradient(color-mix(in srgb, var(--accent) 16%, #fff), #fff); opacity: 0; pointer-events: none; }
 
 /* ---- Wake Up: outside the world, above everything, never moved ---- */
 #wake { position: fixed; top: max(8px, env(safe-area-inset-top, 0)); right: max(8px, env(safe-area-inset-right, 0)); z-index: 2147483000; min-height: 36px; padding: 4px 12px; background: #d4d0c8; color: #000; font: 15px "Times New Roman", Times, serif; border: 2px outset #fff; touch-action: manipulation; }
 #wake:active { border-style: inset; }
+
+/* ---- colour: from the theme pick on, everything a player reads as the page wears it. :where keeps these weak, so a skin or
+ * an unlock's own rule still wins. Colours and accents live in ui/palette.js. Before a pick none of this applies: grey on purpose. ---- */
+:where(body.niched) #counter { color: var(--niche-text); font-weight: 600; }
+:where(body.niched) #l-meters { color: var(--niche-text); }
+:where(body.niched) .ticker, :where(body.niched) #l-ticker { color: var(--niche-text); }
+:where(body.niched) #btn { color: var(--btn-ink); border: 2px solid var(--btn-edge); box-shadow: 0 3px 0 var(--btn-edge); font-weight: 600; }
+:where(body.niched) #btn.down { border-style: solid; box-shadow: none; transform: translateY(3px) scale(.98); }
+:where(body.niched) #btn-lock { color: var(--niche-text); }
+:where(body.niched) .fl { color: var(--niche-text); font-weight: 600; }
+:where(body.niched) .toast { color: var(--toast-ink); font-weight: 600; }
+
+:where(body.mixed) #counter { background: linear-gradient(90deg, color-mix(in srgb, var(--niche) 45%, var(--ink)), color-mix(in srgb, var(--niche-2) 45%, var(--ink))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:where(body.niched) .row { border-color: transparent; background: linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 22%, var(--panel)), color-mix(in srgb, var(--hue-b) 22%, var(--panel))) padding-box, linear-gradient(135deg, var(--hue-a), var(--hue-b)) border-box; }
+:where(body.niched) .row.short { background: linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 9%, var(--panel-short)), color-mix(in srgb, var(--hue-b) 9%, var(--panel-short))) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 45%, var(--panel-short)), color-mix(in srgb, var(--hue-b) 45%, var(--panel-short))) border-box; }
+:where(body.niched) .row:not(.short):hover, :where(body.niched) .row.peek { outline-color: var(--hue-a); }
+:where(body.niched) #goal .row { border-color: transparent; background: linear-gradient(var(--panel-short), var(--panel-short)) padding-box, linear-gradient(135deg, var(--hue-a), var(--hue-b)) border-box; }
+:where(body.niched) #goal .row:not(.short) { background: linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 62%, var(--panel)), color-mix(in srgb, var(--hue-b) 62%, var(--panel))) padding-box, linear-gradient(135deg, var(--hue-a), var(--hue-b)) border-box; }
+:where(body.niched) #goal .bar { background: linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 62%, var(--panel-short)), color-mix(in srgb, var(--hue-b) 62%, var(--panel-short))); }
+:where(body.niched) #goal .row .cost { padding: 0 4px; background: color-mix(in srgb, var(--panel) 86%, transparent); color: var(--ink); }
+
+:where(body.niched) .row.tip { border: 2px solid transparent; background: linear-gradient(var(--panel), var(--panel)) padding-box, linear-gradient(135deg, var(--hue-a), var(--hue-b)) border-box; box-shadow: 3px 3px 0 color-mix(in srgb, var(--hue-a) 50%, transparent); }
+:where(body.niched) .row.tip b { color: color-mix(in srgb, var(--hue-a) 45%, var(--ink)); }
+:where(body.niched) .tip-demo { border-color: var(--hue-a); }
+/* The previews keep their light stage so their own black words still read, and take the theme's colour. Dark stages set their own. */
+body.niched { --demo-page: color-mix(in srgb, var(--mix) 32%, #efece6); }
+body.niched .tip-demo .dm, body.niched .opt .demo .dm { background: var(--demo-page); }
+body.niched .dm-in[style*="212, 208, 200"], body.niched .dm-in[style*="255, 220, 238"] { background: var(--demo-page) !important; }
+body.niched .dm-btn:not(.bubble) { background: var(--btn-fill); color: var(--btn-ink); border: 2px solid var(--btn-edge); }
+body.niched [data-stray] { background: var(--btn-fill) !important; border: 2px solid var(--btn-edge) !important; }
+:where(body.niched) .tip-buy { background: var(--btn-fill); color: var(--btn-ink); border: 2px solid var(--btn-edge); }
+
+:where(body.niched) .card { background: var(--panel); color: var(--ink); font-family: var(--font); border: 2px solid var(--niche); border-top: 6px solid transparent; border-image: linear-gradient(90deg, var(--niche), var(--niche-2)) 6; box-shadow: 3px 3px 0 color-mix(in srgb, var(--mix) 45%, transparent); }
+:where(body.niched) .card h2 { color: var(--niche-text); }
+:where(body.niched) .card-sub, :where(body.niched) .opt small, :where(body.niched) .credits dt { color: var(--ink-soft); }
+:where(body.niched) .card button { background: var(--panel-short); color: var(--ink); border: 1px solid var(--line); }
+:where(body.niched) .card button.primary { background: var(--btn-fill); color: var(--btn-ink); border-color: var(--btn-edge); }
+:where(body.niched) .card button.opt { background: color-mix(in srgb, var(--mix) 12%, var(--panel)); }
+:where(body.niched) .card button.opt:hover { outline-color: var(--niche); }
+:where(body.niched) .card.fork .card-buttons { background: var(--panel); }
+:where(body.niched) .card-buttons.small, :where(body.niched) #l-credits { border-top-color: var(--line); }
+
+/* The bought button looks carry their own paint, so they take the theme here. */
+body.niched #btn[data-skin=heart] { background: var(--btn-fill); color: var(--btn-ink); text-shadow: none; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 29'%3E%3Cpath d='M16 29C16 29 0 19 0 9 0 3 5 0 9 0c3 0 6 2 7 5 1-3 4-5 7-5 4 0 9 3 9 9 0 10-16 20-16 20z'/%3E%3C/svg%3E") center/84% auto no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 29'%3E%3Cpath d='M16 29C16 29 0 19 0 9 0 3 5 0 9 0c3 0 6 2 7 5 1-3 4-5 7-5 4 0 9 3 9 9 0 10-16 20-16 20z'/%3E%3C/svg%3E") center/84% auto no-repeat; }
+body.niched #btn[data-skin=bubble] { border-color: var(--niche); box-shadow: inset 0 -6px 14px color-mix(in srgb, var(--niche-2) 40%, transparent); background: radial-gradient(circle at 32% 28%, #fff 0 9%, rgba(255,255,255,.4) 16%, color-mix(in srgb, var(--niche) 45%, transparent) 55%, color-mix(in srgb, var(--niche-2) 80%, transparent)); }
+body.niched #world:has(#btn[data-skin=bubble]) [data-stray] { border-color: var(--niche) !important; background: radial-gradient(circle at 32% 28%, #fff 0 12%, color-mix(in srgb, var(--niche) 50%, transparent) 50%, var(--niche-2)) !important; }
+body.niched #btn[data-skin=watch] { border-color: var(--btn-edge); color: var(--btn-ink); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--niche) 28%, #fff), var(--niche) 70%, var(--niche-2)); }
+body.niched #btn[data-skin=watch]::before { background: repeating-linear-gradient(var(--btn-edge) 0 4px, var(--niche) 4px 8px); }
+body.niched #btn[data-skin=mirror] { color: var(--btn-ink); background-image: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.85) 50%, transparent 58%), var(--btn-fill); }
+body.niched #btn[data-skin=mirror]::after { color: var(--btn-ink); background: var(--btn-fill); }
+body.niched #btn[data-skin=spiral] { border-color: var(--niche); }
 
 @media (max-width: 759px) {
   #goal { width: 96px; }

@@ -38,7 +38,7 @@ export default {
       const rest = restClock(ctx), resting = deck(REST_LINES.resting, ctx), broken = deck(REST_LINES.broken, ctx);
       const row = ctx.el('div', 'display:flex;align-items:center;gap:5px;font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', REST_LINES.label, meterRow(ctx));
       const m = bar(ctx, row, 'width:60px;height:7px;', '#f0a060');
-      const x = ctx.el('b', 'font-size:15px;color:#d4488f;opacity:.25;transition:opacity .3s;', 'More', row);
+      const x = ctx.el('b', 'font-size:15px;color:var(--stamp);opacity:.25;transition:opacity .3s;', 'More', row);
       let lit = false;
       ctx.mod({ fps: (v) => (lit ? v * 1.5 : v) });
       ctx.on('tap', ({ auto }) => {
@@ -67,7 +67,8 @@ export default {
   s_blanket: {
     mount(ctx) {
       const warm = deck(WARM_LINES, ctx);
-      if (onDark(ctx)) ctx.vars({ '--page': '#2a1a14', '--panel': '#3a261c', '--panel-short': '#2f1f18', '--line': '#7d5a45', '--fill': '#6d4632', '--btn': '#5a3a2a' });
+      if (ctx.pick('f5')) { /* A picked theme keeps its page: only the shapes below change. */ }
+      else if (onDark(ctx)) ctx.vars({ '--page': '#2a1a14', '--panel': '#3a261c', '--panel-short': '#2f1f18', '--line': '#7d5a45', '--fill': '#6d4632', '--btn': '#5a3a2a' });
       else ctx.vars({ '--page': '#ffd9bb', '--panel': '#fff0e2', '--panel-short': '#f7dcc6', '--line': '#d9a079', '--fill': '#ffbf91', '--btn': '#ffb98a', '--ink': '#3d1f12', '--ink-soft': '#6b3f2a' });
       ctx.css('.row,#goal .row{border-radius:14px}#btn{border-radius:18px;border:0;box-shadow:0 3px 0 rgba(90,40,10,.35)}#btn.down{box-shadow:none;transform:translateY(2px) scale(.97)}.rail > *{border-radius:12px}body{transition:background 2.4s}');
       const v = ctx.el('div', 'position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(255,140,70,.35) 100%);opacity:0;', null, 'wash');
@@ -83,7 +84,7 @@ export default {
       const notes = [3, 6, 8, 10, 8, 6, 5, 8, 3, 6, 10, 13, 10, 8, 5, 3];
       const c = ctx.el('canvas', 'position:absolute;left:0;width:100%;height:120px;z-index:2;opacity:.7;', null, 'back');
       c.width = 480; c.height = 120;
-      const g = c.getContext('2d'), strings = [0, 0, 0, 0], tints = ['#7b5cff', '#a35cff', '#d45ca8', '#ff69b4'];
+      const g = c.getContext('2d'), strings = [0, 0, 0, 0], tints = ctx.palette().themes.length ? [ctx.palette().a, ctx.palette().a, ctx.palette().b, ctx.palette().b] : ['#7b5cff', '#a35cff', '#d45ca8', '#ff69b4'];
       const place = () => { c.style.top = `${btnCentre(ctx).y - 60}px`; };
       place();
       let i = 0, t = 0, spent = 0;
@@ -124,7 +125,7 @@ export default {
     mount(ctx) {
       const rest = restClock(ctx), lines = deck(TUCK_LINES, ctx);
       const row = ctx.el('div', 'display:flex;align-items:flex-end;gap:2px;height:20px;', null, meterRow(ctx));
-      const ticks = [0, 1, 2, 3, 4].map((i) => ctx.el('div', `width:6px;height:${5 + i * 3}px;background:#d4488f;transition:opacity .4s;`, null, row));
+      const ticks = [0, 1, 2, 3, 4].map((i) => ctx.el('div', `width:6px;height:${5 + i * 3}px;background:var(--accent-deep);transition:opacity .4s;`, null, row));
       let hush = 0;
       const paint = () => ticks.forEach((t, i) => { t.style.opacity = i < 5 - hush ? 1 : 0.15; });
       paint();
@@ -134,7 +135,7 @@ export default {
         const b = btnCentre(ctx), h = hush;
         const v = 1 - h / 5;
         ctx.audio.play('assets/audio/pop/Pop2.mp3', { bus: 'sfx', gain: 0.1 + v * 0.8 });
-        ring(ctx, b.x, b.y, 40 + v * 170, '#d4488f', 600);
+        ring(ctx, b.x, b.y, 40 + v * 170, 'var(--accent-deep)', 600);
         if (h >= 2) {
           const r = ctx.rates();
           ctx.pay(r.fps * h * 2.5, 'quiet', { x: x ?? b.x, y: y ?? b.y });

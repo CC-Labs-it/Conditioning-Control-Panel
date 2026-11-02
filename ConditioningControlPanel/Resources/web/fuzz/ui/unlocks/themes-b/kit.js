@@ -2,6 +2,7 @@
  * ticker lines, flavour on shop rows, picture tiles and galleries, cards, and the ending stage. */
 
 import { THEMES } from '../../../data/content/themes.js';
+import { THEME_PAGES } from '../../palette.js';
 
 export const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length)];
 export const docOf = (ctx) => ctx.button.el.ownerDocument;
@@ -15,31 +16,31 @@ const FONT_TYPE = '"Courier New", Courier, monospace';
 
 export const DRESS = {
   goon: {
-    hot: '#f2a33c', ready: '#3a2c1e',
-    vars: { '--page': '#16110d', '--ink': '#f7e6cf', '--ink-soft': '#d9c4a8', '--ink-faint': '#a8947c', '--btn': '#2a1f15', '--panel': '#241c15', '--panel-short': '#1b1510', '--line': '#6b5238', '--fill': '#4d3b2a', '--stamp': '#f2a33c', '--font': FONT_SANS },
-    css: '#btn{color:#f7e6cf;border:2px solid #f2a33c;border-radius:6px;box-shadow:0 0 18px rgba(242,163,60,.28);}#btn.down{border-style:solid;}#count{color:#f2a33c;}',
+    hot: 'var(--niche)',
+    vars: { ...THEME_PAGES.goon, '--font': FONT_SANS },
+    css: '#btn{border-radius:6px;box-shadow:0 0 18px color-mix(in srgb,var(--mix) 35%,transparent);}#btn.down{border-style:solid;}',
   },
   locked: {
-    hot: '#e3b341', ready: '#34495e',
-    vars: { '--page': '#1d2935', '--ink': '#e4ecf3', '--ink-soft': '#c3d0dc', '--ink-faint': '#93a6b8', '--btn': '#2c3c4c', '--panel': '#263544', '--panel-short': '#1f2c39', '--line': '#5a7086', '--fill': '#3a4a5a', '--stamp': '#e3b341', '--font': FONT_SANS },
-    css: '#btn{color:#e4ecf3;border:2px solid #9fb3c6;border-radius:4px;}#btn.down{border-style:solid;}#count{color:#e3b341;}',
+    hot: 'var(--niche)',
+    vars: { ...THEME_PAGES.locked, '--font': FONT_SANS },
+    css: '#btn{border-radius:4px;}#btn.down{border-style:solid;}',
   },
   censored: {
-    hot: '#c2261f', ready: '#fffdf6',
-    vars: { '--page': '#efece4', '--ink': '#141414', '--ink-soft': '#3d3a34', '--ink-faint': '#6b675d', '--btn': '#fffdf6', '--panel': '#fffdf6', '--panel-short': '#e2ded3', '--line': '#141414', '--fill': '#c9c4b6', '--stamp': '#c2261f', '--font': FONT_TYPE },
-    css: '#btn{color:#141414;border:2px solid #141414;border-radius:0;}#btn.down{border-style:solid;}',
+    hot: 'var(--niche)',
+    vars: { ...THEME_PAGES.censored, '--font': FONT_TYPE },
+    css: '#btn{border-color:#141414;border-radius:0;}#btn.down{border-style:solid;}',
   },
   infection: {
-    hot: '#ff2f92', ready: '#f7c9e0',
-    vars: { '--page': '#e6f1e8', '--ink': '#18342a', '--ink-soft': '#2f5245', '--ink-faint': '#567a6b', '--btn': '#f4faf5', '--panel': '#f4faf5', '--panel-short': '#c9d8cc', '--line': '#8fa797', '--fill': '#a9bdaf', '--stamp': '#ff2f92', '--font': FONT_SANS },
-    css: '#btn{color:#18342a;border:2px solid #18342a;border-radius:12px;}#btn.down{border-style:solid;}',
+    hot: 'var(--niche)',
+    vars: { ...THEME_PAGES.infection, '--font': FONT_SANS },
+    css: '#btn{border-radius:12px;}#btn.down{border-style:solid;}',
   },
 };
 
 /** The whole page changes character. Called once on the pick; theme variables win over later look buys. */
 export function dress(ctx, lane) {
   const d = DRESS[lane];
-  const vars = { ...d.vars, '--ready': d.ready };
+  const vars = d.vars;
   ctx.vars(vars);
   ctx.css(`${d.css}
     body{transition:background-color .35s ease-out,color .35s ease-out;}
@@ -50,7 +51,8 @@ export function dress(ctx, lane) {
     .tb-credit{position:absolute;right:2px;bottom:1px;font:10px var(--font);color:#fff;text-shadow:0 0 2px #000;}
     @media (max-width:759px){.tb-wide{display:none;}}`);
   const root = docOf(ctx).documentElement.style;
-  const assert_ = () => { for (const [k, v] of Object.entries(vars)) root.setProperty(k, v); };
+  /* The theme holds its page against later look buys, until the player has pressed a page colour of their own. */
+  const assert_ = () => { if (ctx.has('paint')) return; for (const [k, v] of Object.entries(vars)) root.setProperty(k, v); };
   ctx.on('buy', assert_);
   ctx.after(0, assert_);
   const body = docOf(ctx).body;

@@ -9,6 +9,7 @@ import { bag, geo, counterEl, sheet, done, frame, sideFrames, shopWords, pick, g
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
 import { THEME_TASTES } from '../theme-skins.js';
+import { THEME_PAGES } from '../../palette.js';
 
 const R = THEMES.bimbo.rules;
 const NICHES = ['pink', 'heels', 'gloss', 'curls', 'lashes'];
@@ -24,16 +25,14 @@ export function iqOf(s) {
 }
 
 const VARS = {
-  '--page': '#ffcde6', '--ink': '#8a0f5c', '--ink-soft': '#b0277f', '--ink-faint': '#c9559d', '--btn': '#ff2f92',
-  '--panel': '#fff0f7', '--panel-short': '#ffd9ec', '--line': '#ff8ac2', '--fill': '#ffa9d4', '--ready': '#fff', '--stamp': '#ff2f92',
+  ...THEME_PAGES.bimbo,
   '--font': '"Fredoka","Segoe UI",system-ui,sans-serif',
 };
 const CSS = `@font-face{font-family:"Fredoka";src:url("assets/fonts/fredoka-latin.woff2") format("woff2");font-weight:300 700;font-display:swap;}
-#btn{border:0;border-radius:28px;color:#fff;font-weight:600;background:linear-gradient(#ff8ac2,#ff2f92);box-shadow:0 3px 0 #c9207a;}
-#btn.down{border-style:none;box-shadow:0 1px 0 #c9207a;transform:translateY(2px) scale(.97);}
-#counter{color:#ff2f92;font-weight:600;}
+#btn{border:0;border-radius:28px;}
+#btn.down{border-style:none;box-shadow:0 1px 0 var(--btn-edge);transform:translateY(2px) scale(.97);}
 .row{border-radius:14px;}
-.toast{border-radius:14px;background:#ff2f92;color:#fff;}`;
+.toast{border-radius:14px;}`;
 
 /** A pink pop from the button, hearts, one word. */
 function moment(ctx) {
@@ -233,8 +232,7 @@ export default {
   /* Sparkly Surfaces: gloss on every row and a sheen across the page, with little stars landing on what is there. */
   bi_gloss: {
     mount(ctx) {
-      ctx.css(`.row{background:linear-gradient(#fff,#ffd9ec);box-shadow:inset 0 1px 0 #fff,0 1px 0 #ff8ac2;}
-.row.short{background:linear-gradient(#ffeaf4,#ffc9e2);}`);
+      ctx.css(`.row{box-shadow:inset 0 2px 0 rgba(255,255,255,.75),inset 0 -8px 12px -8px var(--hue-a),0 1px 0 var(--hue-a);}`);
       gentleSwitch(ctx, () => {
         const sheen = ctx.el('div', 'position:absolute;top:0;bottom:0;left:0;width:120px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);will-change:transform;', null, 'over');
         const { w } = ctx.bounds();

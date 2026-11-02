@@ -84,7 +84,7 @@ export default {
         ctx.el('span', `position:absolute;left:3px;top:3px;${CHIP}`, AD, t);
         const name = ctx.el('span', 'position:absolute;left:4px;right:4px;bottom:9px;text-align:center;text-shadow:0 1px 2px #000;', '', t);
         ctx.el('span', 'position:absolute;left:50%;top:26%;margin-left:-8px;width:0;height:0;border-left:16px solid rgba(255,255,255,.75);border-top:10px solid transparent;border-bottom:10px solid transparent;', null, t);
-        const prog = ctx.el('span', 'position:absolute;left:0;right:0;bottom:0;height:4px;background:#ff69b4;transform-origin:0 50%;', null, t);
+        const prog = ctx.el('span', 'position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--accent);transform-origin:0 50%;', null, t);
         ctx.anim(prog, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 2400 + i * 700, iterations: Infinity, easing: 'linear' });
         const rec = { now: null };
         t.addEventListener('click', () => {

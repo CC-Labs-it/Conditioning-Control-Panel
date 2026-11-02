@@ -25,7 +25,7 @@ export function zoneRect(ctx) { return rectOf(ctx.parts.buttonWrap.parentElement
 export function counterRect(ctx) { return rectOf(ctx.parts.counter); }
 
 /** A ring that opens and fades. Fades only, so it is fine under Gentle. */
-export function ring(ctx, x, y, size, color = '#7b5cff', ms = 800, parent = 'floaters') {
+export function ring(ctx, x, y, size, color = 'var(--accent-2)', ms = 800, parent = 'floaters') {
   const e = ctx.el('div', `position:absolute;left:${x - size / 2}px;top:${y - size / 2}px;width:${size}px;height:${size}px;border:2px solid ${color};border-radius:50%;`, null, parent);
   ctx.anim(e, ctx.gentle ? [{ opacity: 0.6 }, { opacity: 0 }] : [{ transform: 'scale(.3)', opacity: 0.9 }, { transform: 'scale(1)', opacity: 0 }], { duration: Math.max(ms, 300), easing: 'ease-out' });
   ctx.after(Math.max(ms, 300) + 20, () => e.remove());
@@ -33,7 +33,7 @@ export function ring(ctx, x, y, size, color = '#7b5cff', ms = 800, parent = 'flo
 }
 
 /** A party sized to the event. Off under Gentle. */
-export function burst(ctx, x, y, color = '#ffd24d', n = 12, dist = 70) {
+export function burst(ctx, x, y, color = 'var(--accent)', n = 12, dist = 70) {
   if (ctx.gentle) return;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * 6.283, d = ctx.el('div', `position:absolute;left:${x}px;top:${y}px;width:6px;height:6px;border-radius:50%;background:${color};`, null, 'over');
@@ -52,7 +52,7 @@ export function flash(ctx, parent, text, css, ms = 1500) {
 }
 
 /** A thin progress bar. set(0..1, ms) */
-export function bar(ctx, parent, css, color = '#ff69b4', bg = 'rgba(128,128,128,.35)') {
+export function bar(ctx, parent, css, color = 'var(--accent)', bg = 'rgba(128,128,128,.35)') {
   const o = ctx.el('div', `height:8px;border-radius:4px;overflow:hidden;background:${bg};${css}`, null, parent);
   const i = ctx.el('div', `width:100%;height:100%;background:${color};transform-origin:0 50%;transform:scaleX(0);`, null, o);
   return {
@@ -181,8 +181,8 @@ export function darkCss(ctx) {
 export const onDark = (ctx) => ctx.has('e_spiral') || ctx.has('a_rain') || ctx.has('a_spiral');
 /** A colour that reads on the page as it is now. */
 export const ink = (ctx, onLight, onDarkPage) => (onDark(ctx) ? onDarkPage : onLight);
-/** Sets the page colours unless a dark route holds them. */
-export function tone(ctx, vars) { if (!onDark(ctx)) ctx.vars(vars); }
+/** Sets the page colours unless a dark route or a picked theme holds them. */
+export function tone(ctx, vars) { if (!onDark(ctx) && !ctx.pick('f5')) ctx.vars(vars); }
 
 /* ---- the spiral: one canvas per run, shared by the rows that change it ---- */
 let spiralNow = null;

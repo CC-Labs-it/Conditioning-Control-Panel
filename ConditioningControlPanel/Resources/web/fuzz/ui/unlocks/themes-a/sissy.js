@@ -7,6 +7,7 @@ import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, pick, pop, ra
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
 import { THEME_TASTES } from '../theme-skins.js';
+import { THEME_PAGES } from '../../palette.js';
 
 const R = THEMES.sissy.rules;
 const NICHES = ['lace', 'bows', 'pearls', 'frills', 'gloves', 'satin'];
@@ -22,14 +23,13 @@ const LOOK = {
 const LABEL_INK = { satin: '#7a2f4b', lace: '#7a2f4b', gingham: '#7a2f4b', velvet: '#fff' };
 
 const VARS = {
-  '--page': '#fbeef0', '--ink': '#7a2f4b', '--ink-soft': '#9a5470', '--ink-faint': '#b5738c', '--btn': '#f2c5d2',
-  '--panel': '#fffafb', '--panel-short': '#f6e0e6', '--line': '#d9a0b4', '--fill': '#f2c5d2', '--ready': '#fff', '--stamp': '#c96a8c',
+  ...THEME_PAGES.sissy,
   '--font': 'Georgia,"Times New Roman",serif',
 };
-const CSS = `#btn{border:1px solid #c96a8c;border-radius:14px;color:#7a2f4b;background:linear-gradient(#fff6f8,#f2c5d2);font-style:italic;}
+const CSS = `#btn{border:1px solid var(--btn-edge);border-radius:14px;font-style:italic;}
 #btn.down{border-style:solid;}
 .row{border-radius:6px;border-style:dashed;}
-.toast{background:#7a2f4b;color:#fbeef0;border-radius:4px;font-style:italic;}
+.toast{border-radius:4px;font-style:italic;}
 #counter{font-style:italic;}`;
 
 /** Two curtains part on the new page. */
