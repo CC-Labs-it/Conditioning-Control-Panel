@@ -3,7 +3,7 @@
 
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, startTheme, modChip, pick, pop, railPanel } from './kit.js';
+import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, pick, pop, railPanel } from './kit.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
 
@@ -22,15 +22,12 @@ const LABEL_INK = { satin: '#7a2f4b', lace: '#7a2f4b', gingham: '#7a2f4b', velve
 
 const VARS = {
   '--page': '#fbeef0', '--ink': '#7a2f4b', '--ink-soft': '#9a5470', '--ink-faint': '#b5738c', '--btn': '#f2c5d2',
-  '--panel': '#fffafb', '--panel-short': '#f6e0e6', '--line': '#d9a0b4', '--fill': '#f2c5d2', '--stamp': '#c96a8c',
+  '--panel': '#fffafb', '--panel-short': '#f6e0e6', '--line': '#d9a0b4', '--fill': '#f2c5d2', '--ready': '#fff', '--stamp': '#c96a8c',
   '--font': 'Georgia,"Times New Roman",serif',
 };
 const CSS = `#btn{border:1px solid #c96a8c;border-radius:14px;color:#7a2f4b;background:linear-gradient(#fff6f8,#f2c5d2);font-style:italic;}
 #btn.down{border-style:solid;}
 .row{border-radius:6px;border-style:dashed;}
-#goal .row{border-style:solid;border-color:#c96a8c;}
-#goal .row.ready{animation-name:si-ready;}
-@keyframes si-ready{50%{background:#fff;}}
 .toast{background:#7a2f4b;color:#fbeef0;border-radius:4px;font-style:italic;}
 #counter{font-style:italic;}`;
 
@@ -54,7 +51,7 @@ function moment(ctx) {
 
 /** What the button is wearing. Each piece is plain css hung off the wrap; the wrap keeps the taps. */
 function dressUp(ctx) {
-  const wrap = ctx.world.querySelector('#btn-wrap');
+  const wrap = ctx.parts.buttonWrap;
   const piece = (css) => ctx.el('div', `position:absolute;pointer-events:none;box-sizing:border-box;${css}`, null, wrap);
   return [
     /* ribbon */ piece('left:50%;top:-20px;width:60px;height:26px;margin-left:-30px;z-index:2;clip-path:polygon(0 0,50% 40%,100% 0,100% 100%,50% 60%,0 100%);border:0;'),
@@ -65,14 +62,14 @@ function dressUp(ctx) {
   ];
 }
 
+export const START = { theme: 'sissy', vars: VARS, css: CSS, moment };
+
 export default {
   si_head: {
     mount(ctx) {
-      const theme = startTheme(ctx, { theme: 'sissy', vars: VARS, css: CSS, moment });
       /* A lace edge round the whole page. */
       ctx.el('div', 'position:absolute;inset:4px;border:2px dotted #e7b6c8;border-radius:10px;', null, 'wash');
       sideFrames(ctx, ['lace', 'bows', 'pearls', 'satin'], 'border-radius:50%;outline:2px dotted #c96a8c;outline-offset:3px;');
-      modChip(ctx, 'sissy');
       /* A taste of the signature before House Rules is bought: one small manner beside the button, and it pays. */
       const manner = ctx.el('button', 'position:absolute;left:0;top:0;width:84px;min-height:48px;padding:2px 4px;background:#fff;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:12px/1.1 Georgia,serif;pointer-events:auto;cursor:pointer;opacity:0;visibility:hidden;', null, 'floaters');
       manner.type = 'button';
@@ -97,7 +94,7 @@ export default {
       });
       ctx.after(2500, say);
       ctx.every(9000, say);
-      return { off() { theme.off(); } };
+      return {};
     },
   },
 
@@ -395,7 +392,7 @@ export default {
     mount(ctx) {
       let until = 0, i = Math.floor(ctx.rng() * R.manners.length);
       const BOOST_MS = 30000, TIME_MS = 5500;
-      ctx.mod({ click: (v, s, now) => (now < until ? v * 3 : v) });
+      ctx.mod({ click: (v, s) => (s.clock < until ? v * 3 : v) });
       const tag = ctx.el('div', `height:0;overflow:hidden;font-size:14px;font-weight:700;color:${GOLD};font-style:italic;`, COPY.sissy.testBoost, 'meters');
       const b_ = bag(ctx);
       const show = () => {

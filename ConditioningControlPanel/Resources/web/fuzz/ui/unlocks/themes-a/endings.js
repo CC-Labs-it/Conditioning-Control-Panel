@@ -1,14 +1,13 @@
 /* The four endings' shows. Each runs between the fade and the credits, draws above the end fade, and ends on its own or on
  * the player's press. Copy comes from data/content/endings.js. */
 
-import { openLink } from './kit.js';
 import { COPY } from './copy.js';
 
 const wait = (ctx, ms) => new Promise((res) => ctx.after(ms, res));
 
-/** A full-page stage. The engine's fade sits at z 80 in the world, above every layer, so this goes in the world itself. */
+/** A full-page stage on the ending layer, above the end fade. */
 function stage(ctx, css) {
-  return ctx.el('div', `position:absolute;inset:0;z-index:81;overflow:hidden;display:block;pointer-events:auto;${css}`, null, ctx.world);
+  return ctx.el('div', `position:absolute;inset:0;overflow:hidden;pointer-events:auto;${css}`, null, 'ending');
 }
 
 /** The honest link and the way out. Resolves when the player goes on, or after `ms`. */
@@ -18,7 +17,7 @@ function outro(ctx, host, end, css, ms = 26000) {
   if (end.link) {
     const a = ctx.el('button', 'min-height:44px;padding:6px 16px;background:transparent;color:inherit;border:1px solid currentColor;font-size:15px;cursor:pointer;', end.link.label, row);
     a.type = 'button';
-    a.addEventListener('click', () => openLink(ctx, end.link.url));
+    a.addEventListener('click', () => ctx.openLink(end.link.url));
   }
   const go = ctx.el('button', 'min-height:44px;padding:6px 16px;background:transparent;color:inherit;border:0;text-decoration:underline;font-size:15px;cursor:pointer;', COPY.go, row);
   go.type = 'button';

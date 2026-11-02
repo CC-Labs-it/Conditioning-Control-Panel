@@ -5,7 +5,7 @@
  * Reads assets/audio/podcast/<theme>/manifest.json (shape: handoff-1102/GAME-PODCAST-HANDOFF.md, "What to hand back").
  * Anything missing is silence: no manifest, no file, a failed play. The player with the show's name still shows.
  * All audio goes through ctx.audio.stream: the kit owns the element, so mute, pause, suspend, panic and the end stop it
- * in the same call, with nothing here listening or polling. An engine without stream simply stays off air.
+ * in the same call, with nothing here listening or polling.
  */
 
 const DUCK = 0.36;            // an episode under a clip, as a share of the bus
@@ -26,7 +26,7 @@ export function mountPodcast(ctx, { theme, show, accent = 'var(--stamp)' }) {
   /* ---- episodes, in rotation, resuming where the save left off ---- */
   function loadEpisode(i, at = 0) {
     const list = manifest?.episodes || [];
-    if (!list.length || !ctx.audio.stream) return;
+    if (!list.length) return;
     const n = ((i % list.length) + list.length) % list.length, e = list[n];
     ctx.store.set('ep', n);
     ep?.stop();
@@ -43,7 +43,7 @@ export function mountPodcast(ctx, { theme, show, accent = 'var(--stamp)' }) {
 
   /* ---- clips: the opener, ads, reactions. One at a time, over a ducked episode. ---- */
   function playClip(kinds) {
-    if (clip || !wanted || !manifest?.clips || !ctx.audio.stream) return false;
+    if (clip || !wanted || !manifest?.clips) return false;
     const pool = kinds.flatMap((k) => manifest.clips[k] || []);
     if (!pool.length) return false;
     const c = pick(ctx, pool);
@@ -71,7 +71,7 @@ export function mountPodcast(ctx, { theme, show, accent = 'var(--stamp)' }) {
     if (gone || !m) return;
     manifest = m;
     if (m.show) ui.show(m.show);
-    ui.onAir(!!ctx.audio.stream && (m.episodes || []).length > 0);
+    ui.onAir((m.episodes || []).length > 0);
     const first = !ctx.store.get('heard');
     ctx.store.set('heard', 1);
     loadEpisode(ctx.store.get('ep') || 0, ctx.store.get('at') || 0);

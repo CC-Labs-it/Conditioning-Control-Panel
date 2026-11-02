@@ -2,7 +2,6 @@
  * shop text rewriter and the small CCP chip. Nothing runs at import time. */
 
 import { THEMES } from '../../../data/content/index.js';
-import { CCP_THEME_ADS } from '../../../data/content/ads.js';
 
 /** One bag per run for what a theme's unlocks tell each other (ctx.store is per unlock). */
 const bags = new WeakMap();
@@ -15,14 +14,14 @@ export function bag(ctx) {
 export const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length) % list.length];
 
 /* ---- geometry ---- */
-export const q = (ctx, sel) => ctx.world.querySelector(sel);
+/** The counter has no ctx.parts entry yet (named in the hand-back); this is the one place that finds it. */
+export const counterEl = (ctx) => ctx.parts.counter ?? ctx.parts.buttonWrap?.closest?.('#stage')?.querySelector?.('#counter') ?? null;
 
 /** Page numbers, measured on purpose: call it from slow timers, never each frame. */
 export function geo(ctx) {
   const { w, h } = ctx.bounds();
-  const wrap = q(ctx, '#btn-wrap')?.getBoundingClientRect?.();
-  const shop = q(ctx, '#shop')?.getBoundingClientRect?.();
-  const stage = q(ctx, '#stage')?.getBoundingClientRect?.();
+  const wrap = ctx.parts.buttonWrap?.getBoundingClientRect?.();
+  const shop = ctx.parts.shop?.getBoundingClientRect?.();
   return {
     w, h,
     wide: w >= 1100,                                  // rails are wide enough for a panel
@@ -31,7 +30,7 @@ export function geo(ctx) {
     bw: wrap?.width || 150,
     bh: wrap?.height || 54,
     shop,
-    stageBottom: stage?.bottom ?? 220,
+    stageBottom: shop?.width ? shop.top : (wrap ? wrap.bottom + 24 : 220),
   };
 }
 
@@ -44,12 +43,13 @@ function crossfade(ctx) {
 }
 
 /**
- * The theme switches on: variables and css at once, the show only the first time (not on a reload).
+ * The theme switches on the moment it is picked: variables and css at once, the show only the first time, not on a
+ * reload. Runs from the shared f5 handler, so its ctx.store keys stay prefixed.
  * spec: { theme, vars, css, moment(ctx), words }
  */
 export function startTheme(ctx, spec) {
-  const first = !ctx.store.get('seen');
-  ctx.store.set('seen', 1);
+  const first = !ctx.store.get('taSeen');
+  ctx.store.set('taSeen', 1);
   if (first) crossfade(ctx);
   ctx.vars(spec.vars);
   if (spec.css) ctx.css(spec.css);
@@ -166,7 +166,7 @@ export function shopWords(ctx, rewrite) {
         if (n.textContent !== t) n.textContent = t;
       }
     };
-    const boxes = [q(ctx, '#rows'), q(ctx, '#goal')].filter(Boolean);
+    const boxes = ['#rows', '#goal'].map((sel) => ctx.parts.shop?.querySelector?.(sel)).filter(Boolean);
     const all = () => { for (const box of boxes) for (const row of box.children) applyRow(row); };
     const mo = new MutationObserver((recs) => { for (const r of recs) for (const a of r.addedNodes) if (a.nodeType === 1) applyRow(a); });
     for (const box of boxes) mo.observe(box, { childList: true });
@@ -184,40 +184,6 @@ export function shopWords(ctx, rewrite) {
       if (!w.list.length) { w.mo.disconnect(); b.words = null; }
     },
   };
-}
-
-/* ---- the small CCP chip a theme's head brings ---- */
-
-/** Called straight from the player's own press. ctx.openLink checks the address and the press. */
-export function openLink(ctx, url) {
-  ctx.openLink?.(url);
-}
-
-/** A slim line above the shop that names the mod. Honest copy from content. One payment per ad, on the player's press. */
-export function modChip(ctx, theme) {
-  const ads = (CCP_THEME_ADS[theme] || []).filter((a) => a.kind === 'banner');
-  if (!ads.length) return;
-  const row = ctx.el('button', 'display:flex;gap:8px;align-items:center;width:100%;min-height:30px;padding:2px 8px;margin-bottom:4px;background:var(--panel);color:var(--ink);border:1px dashed var(--line);font-size:13px;text-align:left;cursor:pointer;pointer-events:auto;overflow:hidden;', null, 'banner');
-  row.type = 'button';
-  const tag = ctx.el('span', 'flex:none;padding:0 5px;background:var(--stamp);color:var(--page);font-size:11px;', 'CCP', row);
-  tag.setAttribute('aria-hidden', 'true');
-  const txt = ctx.el('span', 'flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;', null, row);
-  const cta = ctx.el('span', 'flex:none;text-decoration:underline;', null, row);
-  let i = 0;
-  const paint = () => { const a = ads[i % ads.length]; txt.textContent = ctx.brand.text(a.headline); cta.textContent = a.cta; };
-  paint();
-  ctx.every(45000, () => { i += 1; paint(); });
-  row.addEventListener('click', () => {
-    const a = ads[i % ads.length];
-    openLink(ctx, a.url);
-    const paid = ctx.store.get('adPaid') || [];
-    if (!paid.includes(a.id)) {
-      ctx.store.set('adPaid', [...paid, a.id]);
-      const r = row.getBoundingClientRect();
-      ctx.pay(ctx.rates().fps * (ctx.config.AD_CLICK_PAYS_SECONDS || 10), ctx.item.id, { x: r.left + r.width / 2, y: r.top });
-    }
-    ctx.emit('ad', { id: a.id });
-  });
 }
 
 /** A small panel in the side rail, for a page wide enough to have one. */

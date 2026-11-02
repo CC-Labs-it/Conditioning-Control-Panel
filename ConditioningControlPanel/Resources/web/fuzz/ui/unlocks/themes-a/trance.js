@@ -4,7 +4,7 @@
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { createSpiral } from '../../../fx/spiral.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, q, sheet, done, frame, refillOnChange, sideFrames, startTheme, gentleSwitch } from './kit.js';
+import { bag, geo, counterEl, sheet, done, frame, sideFrames, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
 
@@ -18,14 +18,12 @@ const SWING_MS = 3900;
 
 const VARS = {
   '--page': '#15123a', '--ink': '#dfe4ff', '--ink-soft': '#a9b0e6', '--ink-faint': '#7d84c4', '--btn': '#3f3a8c',
-  '--panel': '#221e58', '--panel-short': '#1a1749', '--line': '#4b4698', '--fill': '#332f7a', '--stamp': '#8fd0ff',
+  '--panel': '#221e58', '--panel-short': '#1a1749', '--line': '#4b4698', '--fill': '#332f7a', '--ready': '#332f7a', '--stamp': '#8fd0ff',
   '--font': '"Barlow","Segoe UI",system-ui,sans-serif',
 };
 const CSS = `#btn{border:1px solid #6e68c8;border-radius:27px;color:var(--ink);}
 #btn.down{border-style:solid;}
 .row{border-radius:8px;}
-#goal .row.ready{animation-name:tr-ready;}
-@keyframes tr-ready{50%{background:#332f7a;}}
 .toast{border-radius:12px;background:#dfe4ff;color:#15123a;}`;
 
 /** Night falls from the edges in; the spiral is already turning when it clears. */
@@ -53,10 +51,11 @@ function murmur(ctx, text, css = '') {
   done(ctx.anim(e, [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 2600 }), e);
 }
 
+export const START = { theme: 'trance', vars: VARS, css: CSS, moment };
+
 export default {
   tr_head: {
     mount(ctx) {
-      const theme = startTheme(ctx, { theme: 'trance', vars: VARS, css: CSS, moment });
       /* One spiral is enough on a phone: a spiral bought on the Watch route keeps turning, this one stays home. */
       let sp = null;
       if (!ctx.has('e_spiral') && !ctx.has('a_spiral')) {
@@ -64,12 +63,11 @@ export default {
         sp = createSpiral(c, { reduced: ctx.gentle, manual: true });
         sp.recolour(['#8fd0ff', '#b79cff']);
         sp.show();
-        bag(ctx).spiral = sp;
         ctx.frame((dt) => sp.step(dt));
         ctx.every(500, () => sp.setStill(ctx.gentle));
       }
       sideFrames(ctx, ['spirals', 'soft voices', 'hypnosis', 'pendulum'], 'border-radius:12px;opacity:.85;');
-      return { off() { theme.off(); sp?.dispose(); bag(ctx).spiral = null; } };
+      return { off() { sp?.dispose(); } };
     },
   },
 
@@ -79,8 +77,8 @@ export default {
       const b = bag(ctx);
       let last = ctx.state.clock, lineAt = 0, li = 0;
       const stillFor = (now) => Math.max(0, now - last) / 1000;
-      const mult = (now) => 1 + Math.min(1, stillFor(now) / 40);
-      ctx.mod({ fps: (v, s, now) => v * mult(now) });
+      const mult = (clock) => 1 + Math.min(1, stillFor(clock) / 40);
+      ctx.mod({ fps: (v, s) => v * mult(s.clock) });
       const line = ctx.el('div', 'display:flex;align-items:center;justify-content:center;gap:12px;height:22px;font-size:14px;color:var(--ink-soft);', null, 'meters');
       b.meterRow = line;
       const box = ctx.el('span', 'display:flex;align-items:center;gap:6px;', null, line);
@@ -114,7 +112,8 @@ export default {
   tr_breath: {
     mount(ctx) {
       const b = bag(ctx);
-      b.breathOpenNow = () => isOpen(ctx.state.clock);
+      let clock = 0;
+      b.breathOpenNow = () => isOpen(clock);
       ctx.mod({ click: (v, s, now) => (isOpen(now) ? v * 4 : v) });
       const size = () => (ctx.bounds().w < 760 ? 148 : 170);
       let g = geo(ctx), D = size();
@@ -127,18 +126,19 @@ export default {
       const word = ctx.el('div', `position:absolute;left:0;right:0;top:-2px;text-align:center;font-size:13px;color:var(--ink-soft);`, null, wrap);
       let shownOpen = false, shownWord = -1;
       ctx.frame((dt, now) => {
-        const p = breathAt(ctx.state.clock);
+        clock = now;
+        const p = breathAt(now);
         const up = p < 0.5 ? p * 2 : (1 - p) * 2;                     // 0 at empty, 1 at the top
         const eased = up * up * (3 - 2 * up);
         if (ctx.gentle) ring.style.opacity = (0.2 + eased * 0.8).toFixed(2);
         else { ring.style.opacity = 1; ring.style.transform = `scale(${(0.45 + eased * 0.55).toFixed(3)})`; }
-        const open = isOpen(ctx.state.clock);
+        const open = isOpen(now);
         if (open !== shownOpen) { shownOpen = open; rim.style.opacity = open ? 1 : 0.55; rim.style.borderStyle = open ? 'solid' : 'dashed'; }
         const w = p < 0.38 ? 0 : p <= 0.62 ? 2 : 1;
         if (w !== shownWord) { shownWord = w; word.textContent = w === 2 ? R.breath[2] : w === 0 ? R.breath[0] : R.breath[1]; }
       });
       ctx.on('tap', (e) => {
-        if (!isOpen(ctx.state.clock) || e.auto) return;
+        if (!isOpen(clock) || e.auto) return;
         ctx.float(g.cx, g.cy - g.bh, COPY.trance.breathPay(ctx.fmt(e.gain)), 'color:#8fd0ff;font-size:20px;');
         ctx.audio.play('assets/audio/sfx/chime1.mp3', { bus: 'sfx', gain: 0.5 });
         if (!ctx.gentle) ctx.anim(rim, [{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }], 360);
@@ -191,9 +191,10 @@ export default {
       const mid = (now) => Math.abs(Math.sin((now / SWING_MS) * Math.PI * 2)) < 0.26;
       ctx.mod({ click: (v, s, now) => (!ctx.gentle && mid(now) ? v * 2 : v) });
       const el = b.el;
-      ctx.frame(() => { if (!ctx.gentle) el.style.rotate = `${(Math.sin((ctx.state.clock / SWING_MS) * Math.PI * 2) * 15).toFixed(2)}deg`; else el.style.rotate = ''; });
+      let clock = 0;
+      ctx.frame((dt, now) => { clock = now; if (!ctx.gentle) el.style.rotate = `${(Math.sin((now / SWING_MS) * Math.PI * 2) * 15).toFixed(2)}deg`; else el.style.rotate = ''; });
       ctx.on('tap', (e) => {
-        if (e.auto || ctx.gentle || !mid(ctx.state.clock)) return;
+        if (e.auto || ctx.gentle || !mid(clock)) return;
         ctx.float(e.x ?? ctx.bounds().w / 2, (e.y ?? 150) - 26, COPY.trance.middle, 'color:#b79cff;');
       });
       return { off() { el.style.rotate = ''; } };
@@ -245,7 +246,7 @@ export default {
   tr_fade: {
     mount(ctx) {
       const doc = ctx.world.ownerDocument;
-      const parts = ['#shop', '#counter', '#l-meters', '#l-banner'].map((s) => q(ctx, s)).filter(Boolean);
+      const parts = [ctx.parts.shop, counterEl(ctx), ctx.layer('meters'), ctx.layer('banner')].filter(Boolean);
       for (const p of parts) p.style.transition = 'opacity .35s';
       let last = ctx.state.clock, shown = 1;
       const wake = () => { last = ctx.state.clock; paint(1); };
@@ -277,19 +278,15 @@ export default {
       const track = ctx.el('span', 'position:relative;width:clamp(48px,12vw,110px);height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden;', null, box);
       const fill = ctx.el('span', 'position:absolute;inset:0;background:#b79cff;transform-origin:0 50%;', null, track);
       const pct = ctx.el('span', 'min-width:2em;color:var(--stamp);font-variant-numeric:tabular-nums;', null, box);
-      const slow = (rate) => {
-        for (const a of ctx.world.getAnimations?.({ subtree: true }) || []) {
-          if (a.effect?.target?.classList?.contains('fl')) continue;   // the numbers stay readable
-          if (a.playbackRate !== rate) a.playbackRate = rate;
-        }
-      };
+      /* A hold multiplies, so each step lets go of the last. Down to 0.4: slow, and the breath still comes round. */
+      let release = ctx.speed(1 - 0.6 * depth);
       ctx.every(600, () => {
         ctx.store.set('depth', depth);
-        slow(+(1 - 0.72 * depth).toFixed(2));
-        b.spiral?.faster(1 - 0.8 * depth);
+        release();
+        release = ctx.speed(+(1 - 0.6 * depth).toFixed(2));
       });
       ctx.frame((dt, now) => {
-        depth = Math.min(1, depth + dt / 75);
+        depth = Math.min(1, depth + dt / 45);
         fill.style.transform = `scaleX(${depth.toFixed(3)})`;
         if (now > lineAt) {
           lineAt = now + 500;
@@ -297,7 +294,7 @@ export default {
           if (depth > 0.3 * (li + 1) && li < R.deep.length) { murmur(ctx, R.deep[li]); li += 1; }
         }
       });
-      return { off() { slow(1); b.spiral?.faster(1); } };
+      return {};
     },
   },
 

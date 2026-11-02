@@ -4,7 +4,7 @@
 import { BY_ID } from '../../../data/items.js';
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, q, sheet, done, frame, sideFrames, startTheme, shopWords, modChip, pick, gentleSwitch } from './kit.js';
+import { bag, geo, counterEl, sheet, done, frame, sideFrames, shopWords, pick, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
 
@@ -23,7 +23,7 @@ export function iqOf(s) {
 
 const VARS = {
   '--page': '#ffcde6', '--ink': '#8a0f5c', '--ink-soft': '#b0277f', '--ink-faint': '#c9559d', '--btn': '#ff2f92',
-  '--panel': '#fff0f7', '--panel-short': '#ffd9ec', '--line': '#ff8ac2', '--fill': '#ffa9d4', '--stamp': '#ff2f92',
+  '--panel': '#fff0f7', '--panel-short': '#ffd9ec', '--line': '#ff8ac2', '--fill': '#ffa9d4', '--ready': '#fff', '--stamp': '#ff2f92',
   '--font': '"Fredoka","Segoe UI",system-ui,sans-serif',
 };
 const CSS = `@font-face{font-family:"Fredoka";src:url("assets/fonts/fredoka-latin.woff2") format("woff2");font-weight:300 700;font-display:swap;}
@@ -31,9 +31,6 @@ const CSS = `@font-face{font-family:"Fredoka";src:url("assets/fonts/fredoka-lati
 #btn.down{border-style:none;box-shadow:0 1px 0 #c9207a;transform:translateY(2px) scale(.97);}
 #counter{color:#ff2f92;font-weight:600;}
 .row{border-radius:14px;}
-#goal .row{border-color:#ff2f92;}
-#goal .row.ready{animation-name:bi-ready;}
-@keyframes bi-ready{50%{background:#fff;}}
 .toast{border-radius:14px;background:#ff2f92;color:#fff;}`;
 
 /** A pink pop from the button, hearts, one word. */
@@ -88,13 +85,13 @@ function swapper(ctx) {
   };
 }
 
+export const START = { theme: 'bimbo', vars: VARS, css: CSS, moment };
+
 export default {
   bi_head: {
     mount(ctx) {
-      const theme = startTheme(ctx, { theme: 'bimbo', vars: VARS, css: CSS, moment });
       sideFrames(ctx, ['pink', 'heels', 'gloss', 'lashes'], 'border-radius:18px;border:3px solid #fff;box-shadow:0 2px 0 #ff8ac2;');
-      modChip(ctx, 'bimbo');
-      return { off() { theme.off(); } };
+      return {};
     },
   },
 
@@ -198,7 +195,7 @@ export default {
       const refresh = () => {
         handle.refresh();
         if (ctx.gentle) return;
-        for (const r of ctx.world.querySelectorAll('#rows .row small,#goal .row small')) ctx.anim(r, [{ opacity: 0.1, transform: 'scale(.97)' }, { opacity: 1, transform: 'scale(1)' }], 350);
+        for (const r of ctx.parts.shop.querySelectorAll('.row small')) ctx.anim(r, [{ opacity: 0.1, transform: 'scale(.97)' }, { opacity: 1, transform: 'scale(1)' }], 350);
       };
       b.onIq?.add(refresh);
       ctx.after(0, refresh);
@@ -210,7 +207,7 @@ export default {
   bi_nums: {
     mount(ctx) {
       const STEPS = [1e3, 1e4, 5e4, 2e5, 5e5, 1e6, 3e6];
-      const count = q(ctx, '#count'), cur = q(ctx, '#cur'), box = q(ctx, '#counter');
+      const box = counterEl(ctx), count = box.querySelector('#count'), cur = box.querySelector('#cur');
       const word = ctx.el('span', '', '', box);
       count.hidden = true;
       if (cur) cur.hidden = true;
@@ -245,7 +242,7 @@ export default {
       });
       const rects = () => {
         const out = [];
-        for (const r of ctx.world.querySelectorAll('.row,#btn,#counter')) { const b = r.getBoundingClientRect(); if (b.width) out.push(b); }
+        for (const r of [...ctx.parts.shop.querySelectorAll('.row'), ctx.parts.buttonWrap, counterEl(ctx)]) { const b = r?.getBoundingClientRect?.(); if (b?.width) out.push(b); }
         return out;
       };
       let spots = rects();
@@ -292,10 +289,9 @@ export default {
   /* Icons Only Shop: at zero IQ the words are gone. A row still dims when it costs too much; the goal still fills. */
   bi_pics: {
     mount(ctx) {
-      const shop = q(ctx, '#shop');
+      const shop = ctx.parts.shop;
       ctx.css(`#shop.ta-icons .row b,#shop.ta-icons .row small,#shop.ta-icons .row .cost,#shop.ta-icons .row .tag,#shop.ta-icons #more{display:none;}
 #shop.ta-icons .row{grid-template-columns:1fr;justify-items:center;min-height:56px;}
-#shop.ta-icons #goal .row{min-height:64px;}
 #shop.ta-icons .row .ico{font-size:34px;}
 #shop.ta-icons .row img.ico{width:40px;height:40px;}
 #shop.ta-icons #rows{grid-template-columns:repeat(auto-fit,minmax(84px,1fr));}

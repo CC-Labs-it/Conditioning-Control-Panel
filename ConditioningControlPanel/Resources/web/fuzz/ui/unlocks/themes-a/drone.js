@@ -3,7 +3,7 @@
 
 import { THEMES, ENDINGS, FAKE_UPDATE } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, q, sheet, done, frame, refillOnChange, sideFrames, startTheme, shopWords, modChip, pick, railPanel, gentleSwitch } from './kit.js';
+import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, shopWords, pick, railPanel, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
 
@@ -13,14 +13,12 @@ const MONO = 'Consolas,"Courier New",monospace';
 
 const VARS = {
   '--page': '#10161a', '--ink': '#dfe6ea', '--ink-soft': '#9aa8b0', '--ink-faint': '#6c7a82', '--btn': '#bfc9cf',
-  '--panel': '#1a2226', '--panel-short': '#141a1e', '--line': '#46535a', '--fill': '#2a3a3a', '--stamp': '#3dff8e',
+  '--panel': '#1a2226', '--panel-short': '#141a1e', '--line': '#46535a', '--fill': '#2a3a3a', '--ready': '#26413a', '--stamp': '#3dff8e',
   '--font': MONO,
 };
 const CSS = `#btn{border:0;border-radius:3px;color:#111;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:15px;background:linear-gradient(135deg,#f6f8f9,#8d99a1 40%,#e6ebee 62%,#6f7a82);box-shadow:0 2px 0 #333;}
 #btn.down{border-style:none;box-shadow:none;transform:translateY(2px);}
 .row{border-radius:2px;}
-#goal .row.ready{animation-name:dr-ready;}
-@keyframes dr-ready{50%{background:#26413a;}}
 .toast{background:#3dff8e;color:#070b09;border-radius:0;}`;
 
 /** A hard scan from the top, a line of boot text. No easing: machines do not ease. */
@@ -52,12 +50,12 @@ const rollSerial = (ctx) => {
   return n;
 };
 
+export const START = { theme: 'drone', vars: VARS, css: CSS, moment };
+
 export default {
   dr_head: {
     mount(ctx) {
-      const theme = startTheme(ctx, { theme: 'drone', vars: VARS, css: CSS, moment });
       sideFrames(ctx, ['shiny', 'chrome', 'visor', 'mirror'], 'border-radius:2px;outline:1px solid #46535a;');
-      modChip(ctx, 'drone');
       /* A taste of the signature before Task Queue is bought: now and then an order, and a tap on it pays. */
       const tag = ctx.el('div', `position:absolute;left:0;top:0;padding:4px 10px;background:#3dff8e;color:#070b09;font:700 14px ${MONO};white-space:nowrap;opacity:0;`, COPY.drone.order, 'floaters');
       let up = false;
@@ -81,7 +79,7 @@ export default {
         const got = ctx.pay(Math.max(ctx.rates().click * 5, ctx.rates().fps), 'dr_head', { x: e.x ?? g.cx, y: e.y ?? g.cy });
         ctx.float(e.x ?? g.cx, (e.y ?? g.cy) - 34, COPY.drone.orderPay(ctx.fmt(got)), 'color:#3dff8e;font-size:18px;font-weight:700;');
       });
-      return { off() { theme.off(); } };
+      return {};
     },
   },
 
@@ -118,12 +116,11 @@ export default {
       ctx.store.set('seen', 1);
       ctx.vars({
         '--page': '#070b09', '--ink': '#3dff8e', '--ink-soft': '#2fd175', '--ink-faint': '#1c8a4f', '--panel': '#0b130f', '--panel-short': '#070d0a',
-        '--line': '#1c6b42', '--fill': '#123a26', '--btn': '#0f2a1d',
+        '--line': '#1c6b42', '--fill': '#123a26', '--ready': '#123a26', '--btn': '#0f2a1d',
       });
       ctx.css(`#counter{text-shadow:0 0 8px rgba(61,255,142,.45);}
 .row{border-style:solid;}
-.row b::before{content:'> ';}
-#goal .row{border-color:#3dff8e;}`);
+.row b::before{content:'> ';}`);
       ctx.el('div', 'position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,transparent 2px 4px);', null, 'over');
       if (first) {
         const s = sheet(ctx, `background:#070b09;color:#3dff8e;font:600 18px/1.5 ${MONO};padding:18% 12%;white-space:pre-line;`, R.boot.join('\n'));
@@ -297,7 +294,7 @@ export default {
     mount(ctx) {
       const MS = 10000;
       const run = () => {
-        const r = q(ctx, '#shop')?.getBoundingClientRect?.();
+        const r = ctx.parts.shop?.getBoundingClientRect?.();
         if (!r || !r.width) return;
         const cover = ctx.el('div', `position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;pointer-events:auto;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:14px;box-sizing:border-box;background:rgba(7,11,9,.86);color:var(--stamp);font:600 15px ${MONO};border:1px solid var(--line);text-align:center;`, null, 'over');
         ctx.anim(cover, [{ opacity: 0 }, { opacity: 1 }], ctx.gentle ? 400 : 180);
