@@ -2,6 +2,9 @@
 
 import look from './basics/look.js';
 import look2 from './basics/look2.js';
+import trunk from './basics/trunk.js';
+import side from './basics/side.js';
+import side2 from './basics/side2.js';
 import { fresh } from './basics/fx.js';
 
 const CORNER_NEAR = 12;
@@ -45,6 +48,9 @@ function bouncer(ctx) {
 export default {
   ...look,
   ...look2,
+  ...trunk,
+  ...side,
+  ...side2,
 
   /* Bouncing Button: a second button that pays on every wall hit. Stacks to 12. */
   stray: {
