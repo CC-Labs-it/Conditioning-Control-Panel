@@ -103,7 +103,7 @@ const groupOf = (r) => (r.lane === 'meta' ? 'meta' : r.lane === 'after' ? 'after
 export function buildItems() {
   const rows = walkOrder(moveRows([...read('rows.json').filter((r) => !DROPPED.has(r.id)), ...EXTRA_ROWS])), copy = read('copy.json'), lanes = read('lanes.json');
   const items = rows.map((r) => {
-    const c = r.name ? r : copy.items[r.id];
+    const c = copy.items[r.id] || r;   // final copy first; only the rows that came after the design source carry their own
     if (!c) throw new Error(`copy.json has no ${r.id}`);
     const it = { id: r.id, emoji: r.emoji, name: cur(c.name), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
     if (r.fps) it.fps = planPay(r.fps, r.lane);

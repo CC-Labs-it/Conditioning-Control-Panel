@@ -16,6 +16,11 @@ test('every unlock from the design is here, with a real parent', () => {
   for (const it of ITEMS) for (const q of it.req) assert.ok(BY_ID[q], `${it.id} needs ${q}`);
 });
 
+test('every row a player can buy says what it does, in the final copy', () => {
+  for (const it of ITEMS) if (it.kind !== 'fork') assert.ok(it.what, it.id);
+  assert.equal(BY_ID.stray.name, 'Bouncing Button');
+});
+
 test('no row sits behind an ending: buying the ending would end the run first', () => {
   for (const it of ITEMS) for (const q of it.req) assert.notEqual(BY_ID[q].kind, 'end', it.id);
 });
