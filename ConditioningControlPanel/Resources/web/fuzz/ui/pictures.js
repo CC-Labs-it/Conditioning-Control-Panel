@@ -1,9 +1,9 @@
 /* ui/pictures.js - everything that shows a picture asks here, through ctx.pictures. One source at a time:
  *   online  signed in, the real Scrolller wire and its consent card come later behind this file. Until then: placeholder
- *           art, generated here, no network at all.
- *   own     the player's own files. Blob urls on this device only, never uploaded, gone on reload for now.
- *   none    next() resolves null. A frame stays empty.
- * The choice is kept in the save. No screen sets it yet; a later lane adds the press and the consent. */
+ *           art, generated here, no network at all, reachable only with the dev door ?pictures=online.
+ *   own     the player's own files. Blob urls on this device only, never uploaded, gone on reload.
+ *   none    next() resolves null. A frame stays empty. The default.
+ * The player chooses on the pictures card (ui/picture-card.js). The choice is kept in the save, the files are not. */
 
 import { CONFIG } from '../data/config.js';
 
@@ -42,6 +42,18 @@ export function createPictures({ source = CONFIG.PICTURES_DEFAULT, onChange = ()
       for (const f of files || []) if (String(f.type).startsWith('image/')) own.push(URL.createObjectURL(f));
       if (own.length !== before && current === 'own') onChange(current);
       return own.length - before;
+    },
+    /** A new pick replaces the last one. Nothing usable in it changes nothing. Answers how many were kept. */
+    replaceOwn(files) {
+      const next = [];
+      for (const f of files || []) if (String(f.type).startsWith('image/')) next.push(URL.createObjectURL(f));
+      if (!next.length) return 0;
+      const old = own;
+      own = next;
+      i = 0;
+      if (current === 'own') onChange(current);
+      for (const url of old) URL.revokeObjectURL?.(url);
+      return next.length;
     },
     clearOwn() { dropOwn(); if (current === 'own') onChange(current); },
     /** Resolves {url, credit} or null. Show credit when it is set ("via Scrolller"). */
