@@ -1,53 +1,63 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-import { ITEMS, BY_ID, PINNED, ENDING_ID } from '../data/items.js';
-import { CIRCE, MANTRA, VOICE, ENDING, clipUrl } from '../data/words.js';
+import { ITEMS, BY_ID, LANES, FORKS } from '../data/items.js';
+import { BRAND, brandText } from '../data/brand.js';
+import { CONFIG } from '../data/config.js';
+import { DESIGN, itemsSource } from '../dev/gen-items.mjs';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const tree = fileURLToPath(new URL('..', import.meta.url));
 
-test('every id is unique and every prerequisite names an item that comes earlier', () => {
-  const seen = new Set();
-  ITEMS.forEach((it, i) => {
-    assert.ok(!seen.has(it.id), `duplicate id ${it.id}`);
-    seen.add(it.id);
-    for (const r of it.req || []) {
-      assert.ok(BY_ID[r], `${it.id} requires unknown ${r}`);
-      assert.ok(ITEMS.indexOf(BY_ID[r]) < i, `${it.id} requires ${r}, which comes later in the ladder`);
-    }
-  });
-  for (const p of PINNED) assert.ok(BY_ID[p]);
-  assert.equal(ITEMS[ITEMS.length - 1].id, ENDING_ID, 'the ending is the last tile');
+test('every unlock from the design is here, with a real parent', () => {
+  assert.equal(ITEMS.length, 283);
+  assert.equal(new Set(ITEMS.map((i) => i.id)).size, 283);
+  for (const it of ITEMS) for (const q of it.req) assert.ok(BY_ID[q], `${it.id} needs ${q}`);
 });
 
-test('the ladder climbs: base prices never fall, 3 to 2,000,000', () => {
-  assert.equal(ITEMS[0].cost, 3);
-  assert.equal(BY_ID[ENDING_ID].cost, 2_000_000);
-  for (let i = 1; i < ITEMS.length; i++) assert.ok(ITEMS[i].cost >= ITEMS[i - 1].cost, `${ITEMS[i].id} is cheaper than ${ITEMS[i - 1].id}`);
+test('no row sits behind an ending: buying the ending would end the run first', () => {
+  for (const it of ITEMS) for (const q of it.req) assert.notEqual(BY_ID[q].kind, 'end', it.id);
 });
 
-test('copy keeps the house voice: no exclamation marks, no em-dashes, one short line each', () => {
-  for (const it of ITEMS) {
-    for (const text of [it.name, it.line]) {
-      assert.ok(!/[!—–]/.test(text), `${it.id}: "${text}"`);
-    }
-    assert.ok(it.line.length <= 80, `${it.id}: line too long`);
-    assert.ok(it.name.length <= 24, `${it.id}: name too long`);
+test('thirteen endings, five forks, every fork lane named', () => {
+  assert.equal(ITEMS.filter((i) => i.kind === 'end').length, 13);
+  assert.deepEqual(Object.keys(FORKS), ['f1', 'f2', 'f3', 'f4', 'f5']);
+  for (const [f, def] of Object.entries(FORKS)) {
+    assert.equal(BY_ID[f].kind, 'fork');
+    for (const lane of Object.keys(def.opts)) assert.equal(LANES.find((l) => l.id === lane)?.fork, f);
   }
 });
 
-test('every icon and every word clip ships with the tree', () => {
-  for (const it of ITEMS) assert.ok(existsSync(join(ROOT, it.icon)), `${it.id}: missing ${it.icon}`);
-  for (const slug of CIRCE) assert.ok(existsSync(join(ROOT, clipUrl(slug))), `missing clip ${slug}`);
-  for (const slug of [...MANTRA, ...ENDING, ...Object.values(VOICE).flat()]) assert.ok(CIRCE.includes(slug), `${slug} is not a shipped clip`);
-  assert.equal(clipUrl('bambi-sleep'), null, 'unknown words stay silent, never synthesised');
+test('copy keeps the house voice: no dashes, no exclamation marks', () => {
+  for (const it of ITEMS) assert.ok(!/[–—!]/.test(`${it.name} ${it.what} ${it.line}`), it.id);
+  for (const f of Object.values(FORKS)) for (const o of [f, ...Object.values(f.opts)]) assert.ok(!/[–—!]/.test(`${o.name} ${o.what || ''} ${o.ask || ''}`));
 });
 
-test('repeatable items carry a cap; one-shot items carry none', () => {
-  for (const it of ITEMS) {
-    if (it.grow) assert.ok(it.max > 0, `${it.id}: repeatable without max`);
-    else assert.equal(it.max, undefined, `${it.id}: max on a one-shot item`);
+test('the open owner calls sit in config at their agreed defaults', () => {
+  assert.equal(CONFIG.AD_CLICK_PAYS_SECONDS, 10);
+  assert.equal(CONFIG.BAMBI_VOICE_ON_WEB, false);
+});
+
+/* ---- the name is not decided ---- */
+
+test('brand tokens expand from one module', () => {
+  assert.equal(brandText('{game} pays in {cur}'), `${BRAND.game} pays in ${BRAND.currencyPlural}`);
+});
+
+test('the currency name appears only in data/brand.js', () => {
+  const word = /\bFuzz\b/;
+  for (const it of ITEMS) assert.ok(!word.test(`${it.name} ${it.what} ${it.line}`), it.id);
+  const walk = (d) => readdirSync(d).flatMap((n) => { const p = join(d, n); return statSync(p).isDirectory() ? walk(p) : [p]; });
+  const files = [join(tree, 'index.html'), join(tree, 'main.js'), ...walk(join(tree, 'ui')), ...walk(join(tree, 'data'))]
+    .filter((p) => /\.(js|html)$/.test(p) && !p.replace(/\\/g, '/').endsWith('data/brand.js'));
+  for (const p of files) {
+    // Comments are not player-facing.
+    const src = readFileSync(p, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    assert.ok(!word.test(src), `${p} names the currency`);
   }
+});
+
+test('data/items.js is what the generator makes, when the design source is on this machine', { skip: !existsSync(DESIGN) }, () => {
+  assert.equal(readFileSync(join(tree, 'data', 'items.js'), 'utf8'), itemsSource());
 });
