@@ -22,6 +22,13 @@ export const CONFIG = Object.freeze({
   /** Pace is a dev door: it multiplies income, not the clock. */
   MAX_PACE: 500,
 
+  /** ctx.speed is held inside these, however many unlocks multiply it. */
+  SPEED_MIN: 0.1,
+  SPEED_MAX: 4,
+
+  /** A guarded row goes through after this many refusals, whatever the guard says. */
+  GUARD_MAX_REFUSALS: 3,
+
   /** A button lock is always temporary. */
   LOCK_MAX_MS: 30000,
   /** How long an ending's own show may hold the credits back. */

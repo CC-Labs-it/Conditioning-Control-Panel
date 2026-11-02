@@ -73,14 +73,92 @@ await page.waitForTimeout(1500);
 await page.screenshot({ path: join(shots, 'a4-fork.png') });
 await page.click(`.opt[data-lane="${route[0]}"]`);
 
-/* ---- pause: Wake Up stops the clock ---- */
+/* ---- a stream on a real media element: two seconds of silent WAV, so it needs no asset ---- */
+await page.click('#btn');
+await page.evaluate(() => {
+  const n = 16000, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+  const s = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  s(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); s(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); s(36, 'data'); v.setUint32(40, n * 2, true);
+  const url = URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  const ctx = window.fuzz.engine.scopes.get('stray').ctx;
+  window.__ctx = ctx;
+  window.__s = ctx.audio.stream(url, { loop: true });
+  window.__panned = ctx.audio.stream(url, { loop: true, pan: -1 });
+});
+await page.waitForFunction(() => !window.__s.el.paused && window.__s.el.currentTime > 0.05 && !window.__panned.el.paused && window.__panned.el.currentTime > 0.05, null, { timeout: 8000 })
+  .catch(() => errors.push('a stream did not play'));
+
+/* ---- ctx.parts, the ending layer, ctx.speed in a real page ---- */
+const bits = await page.evaluate(async () => {
+  const c = window.__ctx, e = window.fuzz.engine;
+  const n0 = e.now, r0 = e.real;
+  const release = c.speed(0.5);
+  await new Promise((r) => setTimeout(r, 500));
+  const ratio = (e.now - n0) / (e.real - r0);
+  release();
+  return { shop: c.parts.shop.id, wrap: c.parts.buttonWrap.id, ending: c.layer('ending').id, ratio };
+});
+if (bits.shop !== 'shop' || bits.wrap !== 'btn-wrap' || bits.ending !== 'l-ending') errors.push(`ctx.parts or the ending layer: ${JSON.stringify(bits)}`);
+if (bits.ratio > 0.85) errors.push(`ctx.speed(0.5) ran at ${bits.ratio}`);
+
+/* ---- the goal row's flash reads --ready ---- */
+await page.evaluate(() => { window.fuzz.add(1e4); window.fuzz.ui.draw(true); });
+const flash = await page.evaluate(() => {
+  document.documentElement.style.setProperty('--ready', 'rgb(1, 2, 3)');
+  const row = document.querySelector('#goal .row.ready');
+  const a = row?.getAnimations().find((x) => x.animationName === 'ready');
+  if (!a) return 'no animation';
+  a.pause(); a.currentTime = 800;
+  const c = getComputedStyle(row).backgroundColor;
+  a.play();
+  document.documentElement.style.removeProperty('--ready');
+  return c;
+});
+if (flash !== 'rgb(1, 2, 3)') errors.push(`the ready flash ignored --ready: ${flash}`);
+
+/* ---- ctx.openLink: only a real press on a card button, only cclabs.app ---- */
+await page.evaluate(() => {
+  window.__opened = [];
+  window.open = (...a) => { window.__opened.push(a[0]); return null; };
+  window.__direct = window.__ctx.openLink('https://cclabs.app/direct');
+  window.__ctx.on('tap', () => { window.__onTap = window.__ctx.openLink('https://cclabs.app/tap'); });
+  window.__ctx.modal({ title: 'Link', buttons: [
+    { label: 'Go', keepOpen: true, onPress: () => { window.__ctx.openLink('https://cclabs.app/ok'); window.__ctx.openLink('https://example.com/no'); } },
+    { label: 'Close' },
+  ] });
+});
+await page.waitForTimeout(400);
+await page.click('.backdrop .card button.primary');
+await page.evaluate(() => document.querySelector('.backdrop .card button.primary').click());  // a script's click is not a press
+await page.click('.backdrop .card button:not(.primary)');
+await page.click('#btn');
+const links = await page.evaluate(() => ({ opened: window.__opened, direct: window.__direct, onTap: window.__onTap }));
+if (JSON.stringify(links.opened) !== '["https://cclabs.app/ok"]' || links.direct !== false || links.onTap !== false) errors.push(`ctx.openLink: ${JSON.stringify(links)}`);
+
+/* ---- pause: Wake Up stops the clock and the stream, with nothing polling ---- */
 await page.click('#wake');
+const heldNow = await page.evaluate(() => ({ s: window.__s.el.paused, p: window.__panned.el.paused }));
+if (!heldNow.s || !heldNow.p) errors.push('a stream kept playing through Wake Up');
 const c0 = await page.evaluate(() => window.fuzz.state.clock);
 await page.waitForTimeout(400);
 const c1 = await page.evaluate(() => window.fuzz.state.clock);
 if (c0 !== c1) errors.push('the clock ran during pause');
 await page.screenshot({ path: join(shots, 'a5-pause.png') });
 await page.click('#resume');
+await page.waitForFunction(() => !window.__s.el.paused, null, { timeout: 3000 }).catch(() => errors.push('a stream did not come back after resume'));
+
+/* ---- the host's panic: the stream stops in the same call ---- */
+const panic = await page.evaluate(() => {
+  const heard = [];
+  window.__ctx.on('suspend', (e) => heard.push([e.on, e.reason, window.__s.el.paused]));
+  window.fuzz.engine.setSuspended(true, 'panic');
+  const during = window.__s.el.paused;
+  window.__s.el.play();
+  window.fuzz.engine.setSuspended(false, 'panic');
+  return { during, heard };
+});
+if (!panic.during || !panic.heard[0]?.[2] || panic.heard[0]?.[1] !== 'panic') errors.push(`panic and a stream: ${JSON.stringify(panic)}`);
 
 /* ---- the rest of the route at speed: a greedy buyer through the real verbs ---- */
 const picks = { f2: route[1], f3: route[2], f4: route[3], f5: route[4] };
@@ -101,6 +179,8 @@ const played = await page.evaluate(async (picks) => {
   }
   return { ended: f.state.ended, n, picks: f.state.picks, clock: f.state.clock, order: f.state.order.length };
 }, picks);
+const endHeld = await page.evaluate(() => window.__s.el.paused && window.__panned.el.paused);
+if (!endHeld) errors.push('a stream outlived the end of the run');
 await page.waitForTimeout(2600);
 await page.screenshot({ path: join(shots, 'a6-credits.png') });
 if (!played.ended) errors.push('the route did not reach an ending');

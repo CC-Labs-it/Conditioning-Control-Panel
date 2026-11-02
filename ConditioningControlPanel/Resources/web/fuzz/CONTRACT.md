@@ -26,6 +26,7 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 | `scrolller-niches` | `niches:[id]` | Ask for pictures for the feed panels (same wire as Glassroad CONTRACT 292-325). |
 | `set-setting` | `key:'media.remoteConsent', value, ask:true` | Only from the player's own press on the consent card. |
 | `haptic` | `level, ms, tag?` | Optional toy pulse on crits and the Drop; hosts clamp. |
+| `open-url` | `url` | The player pressed a real link. The page only ever sends `https://cclabs.app` and its paths, from inside a press; the page is untrusted, so the host checks the same rule and opens it in the system browser. Unhosted the page opens a new tab itself. |
 
 ## 2. Host -> page
 
