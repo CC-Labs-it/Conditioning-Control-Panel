@@ -1,0 +1,14 @@
+/* ui/unlocks/moan.js - a crit from the player's own tap gets a recorded moan. One at a time: a crit during a clip stays silent. */
+
+const CLIPS = [['short', 1440], ['soft', 1680], ['hum', 2320], ['breathy', 2960], ['rising', 3680], ['long', 4880]];
+let busyUntil = 0, last = -1;
+
+export function moan(ctx) {
+  const now = performance.now();
+  if (now < busyUntil) return;
+  let i = Math.floor(Math.random() * CLIPS.length);   // cosmetic: stays off the run's seed
+  if (i === last) i = (i + 1) % CLIPS.length;
+  last = i;
+  busyUntil = now + CLIPS[i][1];
+  ctx.audio.play(`assets/audio/moans/${CLIPS[i][0]}.mp3`, { bus: 'voice', gain: 0.8 });
+}

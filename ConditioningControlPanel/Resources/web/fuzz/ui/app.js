@@ -230,6 +230,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   function pause(host) {
     if (wakeGate && host !== true) { wakeGate(); return; }
     if (engine.paused) { el.resume.focus(); return; }
+    shop?.closeTip();
     engine.setPaused(true);
     el.pause.hidden = false;
     const after = engine.life.runs > 0;

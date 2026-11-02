@@ -1,6 +1,7 @@
 /* ui/unlocks/basics/trunk.js - the main path: forks stamp, Lucky Taps, the ticker, achievements, heartbeat, the ad banner,
  * glossy icons, spiral overlay, page tilt, the fake desktop, the warp and the Drop. */
 
+import { moan } from '../moan.js';
 import { ACHIEVEMENTS, DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS, thoughtsFor } from '../../../data/content/index.js';
 import { FORKS } from '../../../data/items.js';
 import { SECOND_THEME, THEME_TINTS } from './copy.js';
@@ -65,6 +66,7 @@ export default {
         ctx.float(c.x + c.w / 2 + 24, c.y - 12, `+${ctx.fmt(got)}`, 'color:var(--stamp);font-size:22px;font-weight:700;');
         if (!auto) squish(ctx, el, 0.8);
         sfx(ctx, 'sfx/chip_pop.mp3', 0.45);
+        if (!auto) moan(ctx);
         ctx.emit('lucky', { x: at.x, y: at.y, auto });
       });
       if (fresh(ctx)) word(btnCenter(ctx));

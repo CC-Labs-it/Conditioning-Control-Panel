@@ -1,6 +1,7 @@
 /* Bimbo: hot pink and gloss, fewer and fewer words. The signature: the game gets dumber as you buy. A fake IQ drops with
  * every purchase, taps pay more the lower it goes, and the shop's words wear away until only pictures are left. */
 
+import { moan } from '../moan.js';
 import { BY_ID } from '../../../data/items.js';
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
@@ -277,6 +278,7 @@ export default {
         ctx.float(x, y - 54, COPY.bimbo.giggle(ctx.fmt(gain)), 'color:#ff2f92;font-size:22px;font-style:italic;font-weight:600;');
         ctx.audio.play(`assets/audio/themes/bimbo/giggle${1 + Math.floor(ctx.rng() * 3)}.mp3`, { bus: 'voice', gain: 0.8 });
         ctx.audio.play('assets/audio/sfx/chain_pop.mp3', { bus: 'sfx', gain: 0.5 });
+        moan(ctx);
         if (!ctx.gentle) {
           const ring = ctx.el('div', `position:absolute;left:${x - 30}px;top:${y - 30}px;width:60px;height:60px;border-radius:50%;border:3px solid #ff2f92;`, null, 'floaters');
           done(ctx.anim(ring, [{ transform: 'scale(.4)', opacity: 1 }, { transform: 'scale(2.2)', opacity: 0 }], { duration: 480, easing: 'ease-out' }), ring);
@@ -286,23 +288,13 @@ export default {
     },
   },
 
-  /* Icons Only Shop: at zero IQ the words are gone. A row still dims when it costs too much; the goal still fills. */
+  /* Icons Only Shop: at zero IQ the words are gone, from the tiles and the card over them. A tile still dims when it costs too much; the goal still fills. */
   bi_pics: {
     mount(ctx) {
       const shop = ctx.parts.shop;
-      ctx.css(`#shop.ta-icons .row b,#shop.ta-icons .row small,#shop.ta-icons .row .cost,#shop.ta-icons .row .tag,#shop.ta-icons #more{display:none;}
-#shop.ta-icons .row{grid-template-columns:1fr;justify-items:center;min-height:56px;}
-#shop.ta-icons .row .ico{font-size:34px;}
-#shop.ta-icons .row img.ico{width:40px;height:40px;}
-#shop.ta-icons #rows{grid-template-columns:repeat(auto-fit,minmax(84px,1fr));}
-#shop.ta-icons .row.short .ico{opacity:.5;}`);
-      const handle = shopWords(ctx, (text, node) => {
-        const row = node.closest('.row');
-        if (row && node.tagName === 'B' && !row.getAttribute('aria-label')) row.setAttribute('aria-label', text);
-        return text;
-      });
+      ctx.css(`#shop.ta-icons .row b,#shop.ta-icons .row small,#shop.ta-icons .row .cost,#shop.ta-icons .row .tag,#shop.ta-icons #more{display:none;}`);
       shop?.classList.add('ta-icons');
-      return { off() { shop?.classList.remove('ta-icons'); handle.off(); } };
+      return { off() { shop?.classList.remove('ta-icons'); } };
     },
   },
 

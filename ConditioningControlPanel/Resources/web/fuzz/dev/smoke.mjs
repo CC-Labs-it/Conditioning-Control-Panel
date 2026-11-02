@@ -251,7 +251,7 @@ await phone.goto(`${base}?buy=glossy&fresh=1`, { waitUntil: 'load' });
 await phone.waitForFunction(() => !!window.fuzz);
 await phone.evaluate(() => { window.fuzz.add(1e6); window.fuzz.ui.draw(true); });
 await phone.waitForTimeout(250);
-await phone.tap('#goal .row');
+await phone.tap('#goal .row');   // a choice goes straight to its card
 await phone.waitForSelector('.opt');
 await phone.waitForTimeout(1200);
 await phone.screenshot({ path: join(shots, 'b3-phone-fork.png') });

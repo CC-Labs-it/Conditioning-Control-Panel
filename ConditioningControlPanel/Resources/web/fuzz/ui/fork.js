@@ -54,6 +54,8 @@ export function openFork(doc, cards, forkId, onPick) {
     front: true,
     buttons: [{ label: 'Not yet' }],
     onOpen() {
+      /* Previews are not checked against the 3 Hz rule, so Gentle goes without them. */
+      if (doc.body.classList.contains('gentle')) { for (const h of hosts) h.demo.hidden = true; return; }
       loadDemos().then((Demo) => {
         if (handle.closed) return;
         const startOne = (h) => {
