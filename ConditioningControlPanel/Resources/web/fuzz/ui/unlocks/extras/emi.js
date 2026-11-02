@@ -87,7 +87,9 @@ export function getEmi(ctx) {
       bubble.className = 'xe-s';
       const scale = 1 / (pos.s || 1);
       bubble.style.transform = `scale(${scale})`;
-      if (self.wide) { bubble.style.left = '8px'; bubble.style.bottom = `calc(100% + 34px)`; bubble.style.transformOrigin = 'left bottom'; } else { bubble.style.left = '4px'; bubble.style.top = '100%'; bubble.style.transformOrigin = 'left top'; }
+      /* Above her in the bottom corner; below her, and below her buttons, near the top of the page. */
+      const buttons = controls.childElementCount && controls.style.display !== 'none';
+      if (self.wide && pos.y > 200) { bubble.style.left = '8px'; bubble.style.bottom = `calc(100% + ${buttons ? 34 : 4}px)`; bubble.style.transformOrigin = 'left bottom'; } else { bubble.style.left = '4px'; bubble.style.top = `calc(100% + ${buttons ? 32 : 0}px)`; bubble.style.transformOrigin = 'left top'; }
       const b = bubble;
       ctxs.anim(b, [{ opacity: 0, translate: '0 6px' }, { opacity: 1, translate: '0 0' }], { duration: 160, easing: 'ease-out' });
       bubbleOff = ctxs.after(ms, () => { b.remove(); if (bubble === b) bubble = null; });

@@ -66,4 +66,6 @@ export const AFTER_COPY = Object.freeze({
   shuffleNote: 'Every run after the first, the side unlocks come in a different order.',
   closeTab: 'Close this',
   closeTabHard: 'This tab will not close itself. Politeness has limits.',
+  bye: 'Bye.',
+  theEnd: 'The End',
 });

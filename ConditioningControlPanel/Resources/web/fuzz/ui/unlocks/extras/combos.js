@@ -4,9 +4,9 @@
 
 import { AUDIO_DRAMA, COMBO_LINES, INDUCTION, SLEEP_STORY } from '../../../data/content/combos.js';
 import { LAZY_CAPTIONS } from '../../../data/content/blind.js';
-import { createSpiral } from '../../../fx/spiral.js';
+import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/loomSpiral.js';
 import { COMBO_COPY as C } from './copy.js';
-import { FONT, captions, cardUp, h, pick, picker, rect, slot } from './kit.js';
+import { FONT, captions, cardUp, dockTop, h, pick, picker, rect, slot } from './kit.js';
 
 /** The secret stamp: two ingredients slide together into the name. Once per run. */
 function found(ctx) {
@@ -268,12 +268,26 @@ export const COMBO_UNLOCKS = {
      counts back up, and the lids always lift. Gentle keeps the spiral still and the lids off. */
   x_induct: combo((ctx) => {
     const cap = captions(ctx, '🕯️');
-    /* The Loom sets its own canvas opacity, so the dimming goes on a wrapper. */
-    const wash = ctx.el('div', 'position:absolute;inset:0;opacity:.22;transition:opacity 4s;', null, 'back');
-    const canvas = h('canvas', 'position:absolute;left:50%;top:50%;width:110vmax;height:110vmax;transform:translate(-50%,-50%);', null, wash);
-    const sp = createSpiral(canvas, { reduced: ctx.gentle, manual: true });
-    sp.show();
-    ctx.frame((dt) => sp.step(dt));
+    /* A small disc with the clock on it, like the demo. The Loom's canvas is opaque (dark ground, hot pink arms), so spread
+       over the page at any opacity it reads as loud stripes; it stays in a disc of its own at full strength. */
+    const big = ctx.bounds().w >= 1100;
+    const D = big ? 150 : 60;
+    const { el: disc } = slot(ctx, `position:relative;width:${D}px;height:${D}px;border-radius:50%;overflow:hidden;background:#14060f;`);
+    const canvas = h('canvas', 'position:absolute;inset:0;width:100%;height:100%;', null, disc);
+    canvas.width = canvas.height = D * 2;
+    const g = canvas.getContext('2d', { alpha: false });
+    const params = normalizeParams({ arms: 4, turns: 2, style: 'log', duty: 0.5, speed: 2, colors: ['#ff69b4'], bg: '#14060f' });
+    let phase = 0, spent = 0;
+    drawSpiral(g, D * 2, params, phase);
+    ctx.frame((dt) => {
+      spent += dt;
+      if (ctx.gentle || spent < 1 / 20) return;
+      phase = (phase + spent * 0.08) % 1;
+      spent = 0;
+      drawSpiral(g, D * 2, params, phase);
+    });
+    const clock = h('div', `position:absolute;inset:0;display:grid;place-items:center;color:#fff;font:800 ${big ? 26 : 13}px ${FONT};font-variant-numeric:tabular-nums;text-shadow:0 0 4px #000;`, '', disc);
+    const showClock = (left) => { clock.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; };
     const lid = (top) => ctx.gentle ? null : ctx.el('div', `position:absolute;left:0;right:0;${top ? 'top:0' : 'bottom:0'};height:22vh;background:linear-gradient(${top ? 'to bottom' : 'to top'},rgba(0,0,0,.72),rgba(0,0,0,0));transform:scaleY(0);transform-origin:50% ${top ? '0' : '100%'};`, null, 'over');
     const lids = [lid(true), lid(false)];
     const setLids = (f) => { for (const l of lids) if (l) l.style.transform = `scaleY(${f})`; };
@@ -286,19 +300,20 @@ export const COMBO_UNLOCKS = {
       if (i >= stopAt) {
         stop?.();
         setLids(0);
-        wash.style.opacity = '0';
+        showClock(0);
         cap.show(C.inductDone, 5000);
         return;
       }
       cap.show(INDUCTION[i], STEP - 800);
       setLids(depth(i));
+      showClock((stopAt - i) * (STEP / 1000));
       i += 1;
       ctx.store.set('at', i);
     };
     for (const l of lids) if (l) l.style.transition = 'transform 8s ease-in-out';
     ctx.after(2400, next);
     stop = ctx.every(STEP, next);
-    return { off() { sp.dispose(); } };
+    showClock((stopAt - i) * (STEP / 1000));
   }),
 
   /* More Ads + Infection: little ads breed across the page, then wither. Tapping one pays once. */
@@ -314,6 +329,7 @@ export const COMBO_UNLOCKS = {
       const top = document.getElementById('goal')?.getBoundingClientRect();
       const end = (document.getElementById('more')?.offsetParent ? document.getElementById('more') : document.getElementById('rows'))?.getBoundingClientRect();
       if (!top?.height) return false;
+      if (y + AH > dockTop(ctx) - 4) return false;
       if (top && end && x + AW > top.left - 4 && x < top.right + 4 && y + AH > top.top - 4 && y < end.bottom + 4) return false;
       return ![...live].some((a) => Math.abs(a.x - x) < AW && Math.abs(a.y - y) < AH);
     };
@@ -346,6 +362,8 @@ export const COMBO_UNLOCKS = {
     };
     const adHost = ctx.el('div', 'position:absolute;inset:0;z-index:1;pointer-events:none;', null, 'over');
     ctx.every(1700, () => {
+      /* A caption or a widget may have arrived since this one landed. */
+      for (const a of [...live]) if (a.y + AH > dockTop(ctx) - 4) kill(a);
       const list = [...live];
       spawn(list.length && ctx.rng() < 0.8 ? list[Math.floor(ctx.rng() * list.length)] : null);
     });

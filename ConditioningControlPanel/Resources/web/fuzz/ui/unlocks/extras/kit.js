@@ -44,6 +44,14 @@ function bottom(ctx) {
   return dock;
 }
 
+/** Where the dock's reserved space starts: every caption row counts even while it is between lines. */
+export function dockTop(ctx) {
+  const H = ctx.bounds().h;
+  if (!dock?.root.isConnected) return H;
+  const strip = dock.strip.childElementCount ? dock.strip.offsetHeight + 4 : 0;
+  return H - strip - dock.lines.childElementCount * 34 - 8;
+}
+
 /** A place for a small widget. The rail on a wide screen, otherwise the bottom strip, and the shop scrolls clear of it. */
 export function slot(ctx, css = '') {
   const wide = ctx.bounds().w >= 1100;

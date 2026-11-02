@@ -227,10 +227,10 @@ export const EMI_UNLOCKS = {
         if (!c) return;
         e.napping = true;
         e.controls.style.display = 'none';
-        /* Feet on the first digit, so the number stays readable. */
+        /* Curled up against the first digit, on its left, so the number stays readable. */
         const s = Math.min(1, 46 / e.size);
-        const y = Math.max(2, c.top - e.size * s + 4);
-        e.moveTo(c.left - 6, y, s, 600);
+        const y = c.bottom - e.size * s - 4;
+        e.moveTo(Math.max(2, c.left - e.size * s - 2), y, s, 600);
         e.mood('sleep');
         e.say(asleep(), 2600);
         snore = ctx.every(1600, () => {
