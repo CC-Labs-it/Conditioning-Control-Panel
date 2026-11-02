@@ -30,6 +30,7 @@ export function cardModel(card, sp, t) {
   if (card.face === 'short') lines.push({ cls: 'short', text: t('shop_short', card.short) });
   if (card.face === 'soon') lines.push({ cls: 'soon', text: t('shop_soon') });
   if (card.face === 'gone') lines.push({ cls: 'gone', text: t('shop_gone') });
+  if (card.hintKey) lines.push({ cls: 'hint', text: t(card.hintKey) });
   const note = card.pending ? t('shop_pending') : card.noteKey ? t(card.noteKey) : null;
   return {
     face: card.face, name: itemName(t, card.itemId), desc: itemDesc(t, card.itemId), pending: !!card.pending,

@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Services.Glassroad;
 /// (a repeat is a no-op). The relay signs as the player, so it forwards ONLY <c>/v2/race/</c>,
 /// judged on the built Uri (<see cref="HostNetPathRule"/>). Every exit is <see cref="Close"/>.
 /// </summary>
-internal static class GlassroadHostService
+internal static partial class GlassroadHostService
 {
     public const string ProductName = "Racing Thoughts";
     private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";
@@ -157,6 +157,7 @@ internal static class GlassroadHostService
             _counterOpen = false;
             try { if (App.Haptics != null) App.Haptics.ConnectionChanged -= OnToyConnectionChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
             RaceHapticDirector.Stop();
+            DisposePictures();
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             if (had)
@@ -191,7 +192,7 @@ internal static class GlassroadHostService
             try { tier = EntitlementTierSync.EffectiveTierNow(); } catch (Exception ex) { Diag.Swallowed(ex); }
             var init = GlassroadRules.InitFrame(online ? uid : null, s?.UserDisplayName, tier, GentleVisuals.On,
                 s?.GentleFadeSeconds ?? GentleVisuals.DefaultFadeSeconds, s?.GentleSpeed ?? GentleVisuals.DefaultSpeed,
-                App.Ownership?.Grants, ToysConnected);
+                App.Ownership?.Grants, ToysConnected, PicturesOnNow);
             _core?.PostWebMessageAsJson(init.ToString(Newtonsoft.Json.Formatting.None));
         }
         catch (Exception ex) { App.Logger?.Debug("Glassroad: init post failed: {E}", ex.Message); }
@@ -245,6 +246,12 @@ internal static class GlassroadHostService
                     break;
                 case "race-result":
                     OnRaceResult(o);
+                    break;
+                case "set-setting":
+                    RunOnUi(() => OnPictureSetting(o));
+                    break;
+                case "scrolller-niches":
+                    RunOnUi(() => OnPictureNiches(o));
                     break;
                 case "open-prize-counter":
                     RunOnUi(OpenPrizeCounter);
