@@ -98,9 +98,12 @@ export function isOpen(s, it) {
   return it.req.every((q) => has(s, q));
 }
 
+/** Shuffled Shop: from the second run on (a mood means not the first), open side rows sort by a price scaled per run. */
+const sideKey = (s, x) => (s.mood && x.it.lane === 'side' ? x.c * (0.3 + ((Math.imul(s.seed ^ x.it.cost, 2654435761) >>> 0) / 2 ** 32) * 1.6) : x.c);
+
 export const openItems = (s, mods = null) => ITEMS.filter((it) => isOpen(s, it))
   .map((it) => ({ it, c: price(s, it.id, mods) }))
-  .sort((a, b) => a.c - b.c || a.it.cost - b.it.cost)
+  .sort((a, b) => sideKey(s, a) - sideKey(s, b) || a.it.cost - b.it.cost)
   .map((x) => x.it);
 
 /** The next row on the main path: always in sight, always one press away. */
