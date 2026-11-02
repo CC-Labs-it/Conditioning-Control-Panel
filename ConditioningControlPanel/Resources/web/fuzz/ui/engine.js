@@ -11,6 +11,7 @@ import { moodOf } from '../sim/moods.js';
 import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
 import { makeContext } from './context.js';
 import { createPictures } from './pictures.js';
+import { createAds } from './ads.js';
 
 const MAX_UNLOCK_ERRORS = 3;
 const ENDING_SCOPE = '__ending';
@@ -22,6 +23,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   let paused = false, suspended = false, stopped = !!run.ended, now = run.clock;
   let endingBegun = false, creditsUp = false, real = run.clock;
   const speeds = new Set();
+  const ads = createAds();
   const pictures = createPictures({ source: env.pictureSource, onChange: (source) => { emit('pictures', { source }); save(); } });
 
   /* ---- scopes ---- */
@@ -261,7 +263,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   }
 
   const api = {
-    get run() { return run; }, life, ui, audio, mods, host, rng, env, scopes, pictures,
+    get run() { return run; }, life, ui, audio, mods, host, rng, env, scopes, pictures, ads,
     get now() { return now; },
     /** Game time that ctx.speed never touches: for what must always run out on time. */
     get real() { return real; },

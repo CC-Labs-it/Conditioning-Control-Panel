@@ -8,7 +8,6 @@ import { CONFIG } from '../data/config.js';
 import { clipUrl } from '../data/words.js';
 import { fmt, money } from '../sim/format.js';
 import * as E from '../sim/economy.js';
-import { nextAd } from './ads.js';
 import { allowedLink } from './links.js';
 
 /** A deep read-only view: unlocks read the state and change it only through the verbs. */
@@ -154,7 +153,16 @@ export function makeContext(engine, scope) {
     },
 
     pictures: engine.pictures,
-    ads: { next: (o) => nextAd(o) },
+    ads: {
+      next: (o = {}) => engine.ads.next({ ...o, theme: o.theme === undefined ? E.pick(engine.run, 'f5') : o.theme }),
+      jokesOff(on = true) {
+        const before = engine.ads.jokesOff;
+        engine.ads.hold(scope, !!on);
+        scope.cleanups.add(() => { const was = engine.ads.jokesOff; engine.ads.hold(scope, false); if (was !== engine.ads.jokesOff) engine.emit('ads', { jokesOff: engine.ads.jokesOff }); });
+        if (before !== engine.ads.jokesOff) engine.emit('ads', { jokesOff: engine.ads.jokesOff });
+      },
+      get jokesAreOff() { return engine.ads.jokesOff; },
+    },
 
     get gentle() { return ui.gentle(); },
     get reduced() { return ui.reduced(); },
