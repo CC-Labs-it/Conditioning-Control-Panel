@@ -1,0 +1,252 @@
+/* ============================================================================
+ * ui/engine.js - the game clock, the scopes that track everything an unlock makes, the modifiers, and the verbs (tap,
+ * pay, buy, choose, end). It does not know how anything looks: `ui` (ui/app.js) draws. A failing unlock is logged and
+ * switched off; it never takes the game down. Unlock authors read ENGINE.md, not this file.
+ * ==========================================================================*/
+
+import { BY_ID, ITEMS } from '../data/items.js';
+import { CONFIG } from '../data/config.js';
+import * as E from '../sim/economy.js';
+import { moodOf } from '../sim/moods.js';
+import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
+import { makeContext } from './context.js';
+import { createPictures } from './pictures.js';
+
+const MAX_UNLOCK_ERRORS = 3;
+const ENDING_SCOPE = '__ending';
+
+export function createEngine({ run, life, ui, audio, registry, host = {}, rng = Math.random, save = () => {}, env = {} }) {
+  const scopes = new Map();          // unlock id -> scope
+  const mods = [];                   // live modifiers, in mount order
+  const listeners = new Map();       // event -> Set of {fn, scope}
+  let paused = false, suspended = false, stopped = !!run.ended, now = run.clock;
+  let endingBegun = false, creditsUp = false;
+  const pictures = createPictures({ source: env.pictureSource, onChange: (source) => { emit('pictures', { source }); save(); } });
+
+  /* ---- scopes ---- */
+  function newScope(item) {
+    return { item, ctx: null, ret: null, els: new Set(), timers: new Set(), frames: new Set(), anims: new Set(), mods: [], subs: new Set(), loops: new Set(), cleanups: new Set(), errors: 0, dead: false };
+  }
+
+  function guard(scope, fn, ...args) {
+    if (scope.dead) return undefined;
+    try { return fn(...args); } catch (e) {
+      scope.errors += 1;
+      console.error(`unlock ${scope.item.id}:`, e);
+      if (scope.errors >= MAX_UNLOCK_ERRORS) unmount(scope.item.id);
+      return undefined;
+    }
+  }
+
+  function dropScope(scope) {
+    scope.dead = true;
+    for (const f of scope.cleanups) { try { f(); } catch (e) { console.error(e); } }
+    for (const a of scope.anims) { try { a.cancel(); } catch { /* gone */ } }
+    for (const l of scope.loops) l.stop(300);
+    for (const s of scope.subs) s();
+    for (const m of scope.mods) { const i = mods.indexOf(m); if (i >= 0) mods.splice(i, 1); }
+    for (const el of scope.els) el.remove();
+    scope.els.clear(); scope.timers.clear(); scope.frames.clear(); scope.anims.clear(); scope.loops.clear();
+  }
+
+  function mount(id) {
+    const item = BY_ID[id];
+    const entry = registry[id];
+    if (!item || !entry?.mount) return false;
+    if (scopes.has(id)) unmount(id);
+    const scope = newScope(item);
+    scopes.set(id, scope);
+    scope.ctx = makeContext(api, scope);
+    scope.ret = guard(scope, () => entry.mount(scope.ctx)) || {};
+    return true;
+  }
+
+  function unmount(id) {
+    const scope = scopes.get(id);
+    if (!scope) return;
+    scopes.delete(id);
+    if (scope.ret?.off) { try { scope.ret.off(); } catch (e) { console.error(e); } }
+    dropScope(scope);
+  }
+
+  const mountAll = () => {
+    if (run.mood) mount(run.mood);
+    for (const id of [...run.order]) mount(id);
+  };
+  const unmountAll = () => { for (const id of [...scopes.keys()]) unmount(id); };
+
+  /* ---- events ---- */
+  function emit(event, data) {
+    const set = listeners.get(event);
+    if (!set) return;
+    for (const sub of [...set]) {
+      if (sub.scope) guard(sub.scope, sub.fn, data);
+      else sub.fn(data);
+    }
+  }
+  function subscribe(event, fn, scope = null) {
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    const sub = { fn, scope };
+    listeners.get(event).add(sub);
+    const off = () => { listeners.get(event)?.delete(sub); scope?.subs.delete(off); };
+    scope?.subs.add(off);
+    return off;
+  }
+
+  /* ---- the clock ---- */
+  /** One frame of game time. Nothing an unlock made runs while paused, suspended or after the end. */
+  function step(dtMs) {
+    if (paused || suspended) return;
+    const dt = Math.min(1000, Math.max(0, dtMs));
+    if (!run.ended) E.tick(run, dt, mods);
+    now += dt;
+    if (stopped && !creditsUp) { const s = scopes.get(ENDING_SCOPE); if (s) runScope(s, dt); return; }
+    for (const scope of [...scopes.values()]) runScope(scope, dt);
+  }
+
+  function runScope(scope, dt) {
+    for (const t of [...scope.timers]) {
+      if (now < t.at) continue;
+      if (t.every) { t.at = now + t.every; guard(scope, t.fn); }
+      else { scope.timers.delete(t); guard(scope, t.fn); }
+    }
+    const sec = dt / 1000;
+    for (const f of [...scope.frames]) guard(scope, f, sec, now);
+    if (scope.ret?.tick) guard(scope, scope.ret.tick, sec, now);
+  }
+
+  function setPaused(v) {
+    const next = !!v;
+    if (next === paused) return;
+    if (!suspended) ui.holdWorld?.(next);
+    paused = next;
+    audio?.hold(paused || suspended);
+    emit(paused ? 'pause' : 'resume');
+  }
+  function setSuspended(v) {
+    const next = !!v;
+    if (next === suspended) return;
+    if (!paused) ui.holdWorld?.(next);
+    suspended = next;
+    audio?.hold(paused || suspended);
+  }
+  /* ---- verbs ---- */
+  function tap({ x, y, auto = false } = {}) {
+    if (paused || suspended || stopped || ui.buttonLocked?.()) return 0;
+    audio?.arm();
+    const gain = E.tap(run, mods, now);
+    ui.pressed?.();
+    emit('tap', { gain, x, y, auto });
+    ui.draw?.();
+    return gain;
+  }
+
+  function pay(amount, source = 'lump', at = null) {
+    if (stopped) return 0;
+    const got = E.lump(run, amount * run.pace, source);
+    ui.paid?.(got, at);
+    ui.draw?.();
+    return got;
+  }
+
+  function wallHit({ x, y, corner = false } = {}) {
+    if (paused || suspended || stopped) return 0;
+    const gain = E.wallHit(run, mods, now);
+    emit('wall', { gain, x, y, corner });
+    return gain;
+  }
+
+  function afterGain(id, res) {
+    noteSeen(life, run);
+    const item = res.item;
+    emit('buy', { item, count: res.count, cost: res.cost });
+    const scope = scopes.get(id);
+    if (scope && scope.ret?.grow) guard(scope, scope.ret.grow, res.count);
+    else mount(id);
+    syncQuiet();
+    save();
+    ui.bought?.(item, res);
+    ui.draw?.(true);
+  }
+
+  function buy(id) {
+    if (stopped) return { ok: false, reason: 'ended' };
+    const res = E.buy(run, id, mods);
+    if (!res.ok) { ui.denied?.(id, res); return res; }
+    afterGain(id, res);
+    if (run.ended) end(id);
+    else if (id === 'onemore') { recordEnding(life, run, id); save(); }
+    return res;
+  }
+
+  function choose(forkId, lane) {
+    const res = E.choose(run, forkId, lane, mods);
+    if (!res.ok) return res;
+    emit('fork', { fork: forkId, lane });
+    afterGain(forkId, { item: res.item, count: 1, cost: 0 });
+    return res;
+  }
+
+  /** One ending flow for all thirteen. Called with the run already marked ended. A registry entry may add
+   *  ending(ctx) -> Promise: its own show between the fade and the credits. */
+  async function end(id, { restored = false } = {}) {
+    if (endingBegun) return;
+    endingBegun = true;
+    stopped = true;
+    if (!restored) {
+      recordEnding(life, run, id);
+      save();
+      host.send?.('fuzz-ended', {
+        total: Math.round(run.total), minutes: Math.round(run.clock / 60000), items: run.order.length,
+        ending: id, route: E.routeOf(run), dayUtc: new Date().toISOString().slice(0, 10),
+      });
+      audio?.setQuiet(true);
+      await ui.ending?.(id);
+    }
+    unmountAll();
+    const show = !restored && registry[id]?.ending;
+    if (show) {
+      audio?.setQuiet(false);
+      const scope = newScope(BY_ID[id]);
+      scopes.set(ENDING_SCOPE, scope);
+      scope.ctx = makeContext(api, scope);
+      try {
+        await Promise.race([registry[id].ending(scope.ctx), new Promise((r) => setTimeout(r, CONFIG.ENDING_SHOW_MAX_MS))]);
+      } catch (e) { console.error(e); }
+      unmount(ENDING_SCOPE);
+      audio?.setQuiet(true);
+    }
+    ui.credits?.(id);
+    creditsUp = true;
+    for (const it of ITEMS) if (it.group === 'after') mount(it.id);
+  }
+
+  function syncQuiet() {
+    const until = moodOf(run)?.silentUntil;
+    audio?.setQuiet(!!until && !until.some((id) => E.has(run, id)));
+  }
+
+  /* ---- dev door ---- */
+  function grant(id) {
+    const added = E.grant(run, id);
+    for (const a of added) mount(a);
+    syncQuiet();
+    ui.draw?.(true);
+    return added;
+  }
+
+  const api = {
+    get run() { return run; }, life, ui, audio, mods, host, rng, env, scopes, pictures,
+    get now() { return now; },
+    get paused() { return paused; },
+    get suspended() { return suspended; },
+    get stopped() { return stopped; },
+    mount, unmount, mountAll, unmountAll, emit, subscribe, step,
+    setPaused, setSuspended, tap, pay, wallHit, buy, choose, end, grant, syncQuiet, save,
+    rates: () => E.rates(run, mods, now),
+    price: (id) => E.price(run, id, mods, now),
+    shop: (size) => E.shopWindow(run, mods, size),
+    endingsTotal: ENDING_IDS.length,
+  };
+  return api;
+}
