@@ -1,4 +1,10 @@
-/* Lanes: trunk look side. Three examples prove the contract; the basics lane fills in the rest. See ENGINE.md. */
+/* Lanes: trunk look side. Bulky entries live in ./basics/. See ENGINE.md. */
+
+import look from './basics/look.js';
+import look2 from './basics/look2.js';
+import { fresh } from './basics/fx.js';
+
+const CORNER_NEAR = 12;
 
 /** One bouncing button. Speed is set from the page size so every screen gets the same wall hits per second. */
 function bouncer(ctx) {
@@ -24,6 +30,9 @@ function bouncer(ctx) {
       let hx = false, hy = false;
       if (x < 0) { x = 0; dx = Math.abs(dx); hx = true; } else if (x > w - W) { x = w - W; dx = -Math.abs(dx); hx = true; }
       if (y < 0) { y = 0; dy = Math.abs(dy); hy = true; } else if (y > h - H) { y = h - H; dy = -Math.abs(dy); hy = true; }
+      // Near enough to a corner counts, and snaps there: two walls on one exact frame would almost never happen.
+      if (hx && !hy) { if (y < CORNER_NEAR) { y = 0; dy = Math.abs(dy); hy = true; } else if (y > h - H - CORNER_NEAR) { y = h - H; dy = -Math.abs(dy); hy = true; } }
+      if (hy && !hx) { if (x < CORNER_NEAR) { x = 0; dx = Math.abs(dx); hx = true; } else if (x > w - W - CORNER_NEAR) { x = w - W; dx = -Math.abs(dx); hx = true; } }
       el.style.transform = `translate(${x}px,${y}px)`;
       if (hx || hy) {
         const gain = ctx.wallHit({ x: x + W / 2, y: y + H / 2, corner: hx && hy });
@@ -34,6 +43,9 @@ function bouncer(ctx) {
 }
 
 export default {
+  ...look,
+  ...look2,
+
   /* Bouncing Button: a second button that pays on every wall hit. Stacks to 12. */
   stray: {
     mount(ctx) {
@@ -47,7 +59,8 @@ export default {
   /* Per Second: the rate under the counter, walls included. */
   fpsv: {
     mount(ctx) {
-      const el = ctx.el('div', 'font-size:16px;', '', ctx.layer('meters'));
+      const el = ctx.el('div', 'order:1;font-size:16px;', '', ctx.layer('meters'));
+      if (fresh(ctx)) ctx.anim(el, [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 300 });
       const draw = () => {
         const r = ctx.rates();
         const rate = r.fps + r.wall * r.walls * (ctx.state.owned.stray || 0);
