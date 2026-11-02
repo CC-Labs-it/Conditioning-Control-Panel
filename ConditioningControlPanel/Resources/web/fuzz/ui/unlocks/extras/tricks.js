@@ -7,14 +7,20 @@ import { QUIZ_COPY as C } from './copy.js';
 const fill = (s, n) => s.replace('{n}', n);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-/** The plain pair. Returns {y, n, slots}. */
-function pair(t, zh = 52) {
-  t.zone.style.height = `${zh}px`;
-  const bw = Math.floor((t.zw - 12) / 2);
-  const sy = Math.max(0, zh - 50);
-  const [a, b] = t.q.answers;
-  const A = t.btn(a, 0, sy, bw), B = t.btn(b, bw + 12, sy, bw);
-  return { a: A, b: B, y: a === t.no ? B : A, n: a === t.no ? A : B, bw, sy };
+const GAP = 6, BH = 46;
+
+/** The four answers in a shuffled two by two. top leaves room above each row, for a note. Returns the wanted button, the wrong
+ *  ones and where each cell is. */
+function quad(t, { top = 0, under = 0 } = {}) {
+  const bw = Math.floor((t.zw - GAP) / 2);
+  const rowH = top + BH + GAP;
+  t.zone.style.height = `${rowH * 2 - GAP + under}px`;
+  const order = shuffle(t.ctx, t.q.answers);
+  const cells = order.map((ans, i) => {
+    const x = i % 2 ? bw + GAP : 0, y = (i >> 1) * rowH + top;
+    return { ans, x, y, b: t.btn(ans, x, y, bw) };
+  });
+  return { cells, y: cells.find((c) => c.ans === t.yes), ns: cells.filter((c) => c.ans !== t.yes), bw, rowH };
 }
 
 /** A press-and-hold with a bar. done() on a full hold; a keyboard press counts too. */
@@ -54,16 +60,19 @@ function tiles(t, emojis, onTile) {
   return { g, list };
 }
 
-function underRow(t, first, second) {
+/** All four under a puzzle. The wanted one is left to its trick; the others answer on press. */
+function underRow(t) {
   const r = t.el('div', '', null, t.zone);
   r.className = 'xq-row';
-  const mk = (ans) => {
+  let wanted = null;
+  for (const ans of shuffle(t.ctx, t.q.answers)) {
     const b = t.el('button', 'min-height:44px;', t.ctx.brand.text(t.label(ans)), r);
     b.type = 'button';
-    b.className = `xq-a${t.tone(ans) !== 'no' ? ' yes' : ''}`;
-    return b;
-  };
-  return { A: mk(first), B: mk(second), r };
+    b.className = 'xq-a';
+    t.mark(ans, b);
+    if (ans === t.yes) wanted = b; else b.addEventListener('click', () => t.answer(ans, b));
+  }
+  return { A: wanted, r };
 }
 
 const DECOY_EMOJI = { socks: '🧦', hat: '🎩', soap: '🧼' };
@@ -77,119 +86,137 @@ const shuffle = (ctx, list) => {
 };
 
 export const TRICK_FNS = {
-  none: { draw(t) { pair(t); } },
-  mono: { draw(t) { pair(t); } },
+  none: { draw(t) { quad(t); } },
+  mono: { draw(t) { quad(t); } },
 
-  /* Press the refusal and it melts off the card. It pays nothing and takes nothing. */
+  /* Press a wrong answer and it melts off the card. It pays nothing and takes nothing, but a right answer after it pays a little less. */
   'melt-away': {
     draw(t) {
-      const p = pair(t, 60);
-      p.n.blocked = true;
-      p.n.addEventListener('click', () => {
-        if (p.n.melting) return;
-        p.n.melting = true;
-        t.pop();
-        t.ctx.toast(C.melted);
-        p.n.style.pointerEvents = 'none';
-        const frames = t.gentle ? [{ opacity: 1 }, { opacity: 0 }] : [{ transform: 'none', opacity: 1, borderRadius: '0' }, { transform: 'translateY(8px) scale(.92,1.4)', opacity: 1, borderRadius: '0 0 14px 14px', offset: 0.5 }, { transform: 'translateY(26px) scale(.45,2)', opacity: 0, borderRadius: '0 0 24px 24px' }];
-        t.anim(p.n, frames, { duration: t.gentle ? 500 : 1600, easing: 'ease-in', fill: 'forwards' });
-      });
+      const p = quad(t, { under: 20 });
+      for (const c of p.ns) {
+        c.b.blocked = true;
+        c.b.addEventListener('click', () => {
+          if (c.b.melting) return;
+          c.b.melting = true;
+          t.melted();
+          t.pop();
+          t.ctx.toast(C.melted);
+          c.b.style.pointerEvents = 'none';
+          const frames = t.gentle ? [{ opacity: 1 }, { opacity: 0 }] : [{ transform: 'none', opacity: 1, borderRadius: '0' }, { transform: 'translateY(8px) scale(.92,1.4)', opacity: 1, borderRadius: '0 0 14px 14px', offset: 0.5 }, { transform: 'translateY(26px) scale(.45,2)', opacity: 0, borderRadius: '0 0 24px 24px' }];
+          t.anim(c.b, frames, { duration: t.gentle ? 500 : 1600, easing: 'ease-in', fill: 'forwards' });
+        });
+      }
     },
   },
 
-  /* The answers trade places as you close in. Three swaps, then they are tired. */
+  /* Reach for a wrong answer and the wanted one takes its place. Three swaps, then they are tired. */
   'hover-swap': {
     draw(t) {
-      const p = pair(t);
-      let swaps = 0, flipped = false;
-      const swap = () => {
+      const p = quad(t);
+      let swaps = 0;
+      const swap = (c) => {
         if (swaps >= 3) return false;
-        swaps += 1; flipped = !flipped;
-        const x = (b, left) => { b.style.left = `${left ? 0 : p.bw + 12}px`; };
-        x(p.a, flipped ? false : true);
-        x(p.b, flipped ? true : false);
+        swaps += 1;
+        [c.x, p.y.x] = [p.y.x, c.x];
+        [c.y, p.y.y] = [p.y.y, c.y];
+        for (const k of [c, p.y]) { k.b.style.left = `${k.x}px`; k.b.style.top = `${k.y}px`; }
         return true;
       };
       t.card.addEventListener('pointermove', (ev) => {
         if (ev.pointerType !== 'mouse') return;
-        const r = p.n.getBoundingClientRect();
-        if (ev.clientX > r.left - 6 && ev.clientX < r.right + 6 && ev.clientY > r.top - 10 && ev.clientY < r.bottom + 10) swap();
+        for (const c of p.ns) {
+          const r = c.b.getBoundingClientRect();
+          if (ev.clientX > r.left - 6 && ev.clientX < r.right + 6 && ev.clientY > r.top - 6 && ev.clientY < r.bottom + 6) { swap(c); return; }
+        }
       });
-      p.n.addEventListener('pointerdown', (ev) => { if (ev.pointerType !== 'mouse' && swap()) { ev.preventDefault(); p.n.blocked = true; t.after(260, () => { p.n.blocked = false; }); } });
+      for (const c of p.ns) c.b.addEventListener('pointerdown', (ev) => { if (ev.pointerType !== 'mouse' && swap(c)) { ev.preventDefault(); c.b.blocked = true; t.after(260, () => { c.b.blocked = false; }); } });
     },
   },
 
-  /* The refusal slides away from your finger. Five runs, then you can catch it. */
+  /* The wrong answers slide away from your finger. Six runs in all, then you can catch them. */
   flee: {
     draw(t) {
-      const zh = 128;
-      t.zone.style.height = `${zh}px`;
-      const bw = Math.floor((t.zw - 12) / 2);
-      const y = t.btn(t.yes, 0, 40, bw), n = t.btn(t.no, bw + 12, 40, bw);
-      void y;
-      const spots = [[bw + 12, 0], [bw + 12, 80], [Math.floor(bw / 2), 0], [0, 88], [bw + 12, 40]];
-      let i = 0;
-      const run = () => {
-        if (i >= spots.length) return false;
-        const [sx, sy] = spots[i++];
-        n.style.left = `${sx}px`; n.style.top = `${sy}px`;
+      const bw = Math.floor((t.zw - GAP) / 2), rowH = BH + GAP;
+      t.zone.style.height = `${rowH * 3 - GAP}px`;
+      const spots = [0, 1, 2, 3, 4, 5].map((i) => [i % 2 ? bw + GAP : 0, (i >> 1) * rowH]);
+      const taken = new Set([0, 1, 2, 3]);
+      const start = shuffle(t.ctx, t.q.answers).map((ans, i) => ({ ans, at: i, b: t.btn(ans, spots[i][0], spots[i][1], bw) }));
+      const ns = start.filter((c) => c.ans !== t.yes);
+      let runs = 6;
+      const run = (c) => {
+        if (runs <= 0) return false;
+        const free = [0, 1, 2, 3, 4, 5].filter((i) => !taken.has(i));
+        const to = free[Math.floor(t.ctx.rng() * free.length)];
+        runs -= 1;
+        taken.delete(c.at);
+        taken.add(to);
+        c.at = to;
+        c.b.style.left = `${spots[to][0]}px`;
+        c.b.style.top = `${spots[to][1]}px`;
         return true;
       };
       t.card.addEventListener('pointermove', (ev) => {
         if (ev.pointerType !== 'mouse') return;
-        const r = n.getBoundingClientRect();
-        if (Math.hypot(ev.clientX - (r.left + r.width / 2), ev.clientY - (r.top + r.height / 2)) < r.width / 2 + 16) run();
+        for (const c of ns) {
+          const r = c.b.getBoundingClientRect();
+          if (Math.hypot(ev.clientX - (r.left + r.width / 2), ev.clientY - (r.top + r.height / 2)) < r.width / 2 + 10) { run(c); return; }
+        }
       });
-      n.addEventListener('pointerdown', (ev) => { if (ev.pointerType !== 'mouse' && run()) { ev.preventDefault(); n.blocked = true; t.after(260, () => { n.blocked = false; }); } });
+      for (const c of ns) c.b.addEventListener('pointerdown', (ev) => { if (ev.pointerType !== 'mouse' && run(c)) { ev.preventDefault(); c.b.blocked = true; t.after(260, () => { c.b.blocked = false; }); } });
     },
   },
 
-  /* No asks if you are sure, up to three times. */
+  /* A wrong answer asks if you are sure, up to three times. */
   'nested-nag': {
     draw(t) {
-      const zh = 132;
-      t.zone.style.height = `${zh}px`;
-      const bw = Math.floor((t.zw - 12) / 2);
-      t.btn(t.yes, 0, zh - 50, bw);
-      const first = t.btn(t.no, bw + 12, zh - 50, bw);
-      let n = 0;
-      const nag = () => {
-        const dw = Math.min(170, t.zw - 56);
-        const box = t.el('div', `position:absolute;left:${t.zw - dw - (2 - n) * 12}px;top:${n * 34}px;width:${dw}px;height:82px;background:#f4f1e8;border:2px outset #fff;box-shadow:2px 2px 0 rgba(0,0,0,.35);`, null, t.zone);
-        t.el('div', 'padding:6px 4px 0;text-align:center;font-size:14px;', C.nag[n], box);
-        const b = t.el('button', 'left:50%;bottom:4px;margin-left:-44px;width:88px;height:40px;min-height:40px;', t.ctx.brand.text(t.label(t.no)), box);
-        b.type = 'button';
-        b.className = 'xq-a';
-        t.anim(box, [{ transform: 'scale(.7)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 140, easing: 'ease-out' });
-        n += 1;
-        b.addEventListener('click', () => { if (n >= C.nag.length) t.answer(t.no, b); else nag(); });
-      };
-      first.blocked = true;
-      first.addEventListener('click', nag);
+      const p = quad(t, { under: 26 });
+      let up = false;
+      for (const c of p.ns) {
+        c.b.blocked = true;
+        c.b.addEventListener('click', () => {
+          if (up) return;
+          up = true;
+          let n = 0;
+          const nag = () => {
+            const dw = Math.min(170, t.zw - 30);
+            const box = t.el('div', `position:absolute;z-index:3;left:${t.zw - dw - (2 - n) * 10}px;top:${n * 24}px;width:${dw}px;height:82px;background:#f4f1e8;border:2px outset #fff;box-shadow:2px 2px 0 rgba(0,0,0,.35);`, null, t.zone);
+            t.el('div', 'padding:6px 4px 0;text-align:center;font-size:14px;', C.nag[n], box);
+            const b = t.el('button', 'left:50%;bottom:4px;margin-left:-60px;width:120px;height:40px;min-height:40px;', t.ctx.brand.text(t.label(c.ans)), box);
+            b.type = 'button';
+            b.className = 'xq-a';
+            t.mark(c.ans, b);
+            t.anim(box, [{ transform: 'scale(.7)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 140, easing: 'ease-out' });
+            n += 1;
+            b.addEventListener('click', () => { if (n >= C.nag.length) t.answer(c.ans, b); else nag(); });
+          };
+          nag();
+        });
+      }
     },
   },
 
-  /* Fake buttons multiply. A fake just fades when pressed; the real two are in there. */
+  /* Fake buttons multiply. A fake just fades when pressed; the real four are in there. */
   crowd: {
     draw(t) {
-      const cols = 4, rows = 4, gap = 4, bh = 36;
+      const cols = 3, rows = 4, gap = 4, bh = 38;
       const zh = rows * (bh + gap);
       t.zone.style.height = `${zh}px`;
       const bw = Math.floor((t.zw - (cols - 1) * gap) / cols);
       const slots = [];
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) slots.push([c * (bw + gap), r * (bh + gap)]);
       const order = shuffle(t.ctx, slots);
+      const answers = shuffle(t.ctx, t.q.answers);
+      /* The real ones turn up among the fakes, so the first few never give it away. */
+      const real = new Map(shuffle(t.ctx, [3, 4, 5, 6, 7, 8, 9, 10, 11]).slice(0, 4).map((idx, k) => [idx, answers[k]]));
       let i = 0;
-      const realY = 3 + Math.floor(t.ctx.rng() * 6), realN = 9 + Math.floor(t.ctx.rng() * 6);
       const add = () => {
         if (i >= order.length) return;
         const [x, y] = order[i];
         const idx = i++;
         let b;
-        if (idx === realY) b = t.btn(t.yes, x, y, bw, bh);
-        else if (idx === realN) b = t.btn(t.no, x, y, bw, bh);
+        if (real.has(idx)) b = t.btn(real.get(idx), x, y, bw, bh);
         else {
-          b = t.el('button', `left:${x}px;top:${y}px;width:${bw}px;height:${bh}px;min-height:0;`, t.ctx.brand.text(idx % 2 ? t.label(t.no) : t.label(t.yes)), t.zone);
+          b = t.el('button', `left:${x}px;top:${y}px;width:${bw}px;height:${bh}px;min-height:0;`, t.ctx.brand.text(t.label(answers[idx % 4])), t.zone);
           b.type = 'button';
           b.className = 'xq-a';
           b.addEventListener('click', () => {
@@ -202,6 +229,7 @@ export const TRICK_FNS = {
         }
         b.style.minHeight = '0';
         b.style.fontSize = '12px';
+        b.style.padding = '1px 2px';
         if (!t.gentle) t.anim(b, [{ transform: 'scale(.3)' }, { transform: 'none' }], { duration: 130 });
       };
       t.every(110, add);
@@ -209,45 +237,49 @@ export const TRICK_FNS = {
     },
   },
 
-  /* Answers float up as bubbles and come round again. Pop one to choose. */
+  /* Answers float up as bubbles and come round again. Pop one to choose. Gentle holds them still. */
   'bubble-pop': {
     draw(t) {
-      const zh = 176, d = 78;
+      const zh = 176, d = Math.min(74, Math.floor(t.zw / 3));
       t.zone.style.height = `${zh}px`;
       t.zone.style.overflow = 'hidden';
-      const mk = (ans, x, dur, delay) => {
-        const b = t.el('button', `left:${x}px;top:${zh - d}px;width:${d}px;height:${d}px;`, t.ctx.brand.text(t.label(ans)), t.zone);
+      const step = (t.zw - d) / 3;
+      shuffle(t.ctx, t.q.answers).forEach((ans, i) => {
+        const b = t.el('button', `left:${i * step}px;top:${zh - d}px;width:${d}px;height:${d}px;`, t.ctx.brand.text(t.label(ans)), t.zone);
         b.type = 'button';
         b.className = 'xq-bub';
-        if (t.gentle) { b.style.top = `${(zh - d) / 2}px`; } else {
-          t.anim(b, [{ transform: `translateY(${d}px)` }, { transform: `translateY(${-(zh - d) - 4}px)` }], { duration: dur, delay, iterations: Infinity, easing: 'linear' });
+        t.mark(ans, b);
+        if (t.gentle) {
+          b.style.left = `${i % 2 ? t.zw - d - 6 : 6}px`;
+          b.style.top = `${(i >> 1) * (d + 6)}px`;
+        } else {
+          t.anim(b, [{ transform: `translateY(${d}px)` }, { transform: `translateY(${-(zh - d) - 4}px)` }], { duration: 4400 + i * 500, delay: -i * 1300, iterations: Infinity, easing: 'linear' });
         }
         b.addEventListener('click', () => { t.pop(); t.answer(ans, b); });
-        return b;
-      };
-      mk(t.yes, t.zw * 0.16, 5200, 0);
-      mk(t.no, t.zw * 0.56, 4600, -1800);
+      });
     },
   },
 
-  /* A slider that leans to the top. Your answer is wherever it is when you press. */
+  /* A slider with the four answers along it, leaning to the last. Your answer is wherever it is when you press. */
   'lean-slider': {
     draw(t) {
-      const zh = 122;
+      const zh = 122, list = t.q.answers;
       t.zone.style.height = `${zh}px`;
-      const num = t.el('div', `position:absolute;left:0;right:0;top:0;text-align:center;font:800 26px sans-serif;color:#c23c84;font-variant-numeric:tabular-nums;`, '', t.zone);
-      const track = t.el('div', 'top:44px;', null, t.zone);
+      const num = t.el('div', `position:absolute;left:0;right:0;top:0;text-align:center;font:800 22px sans-serif;color:#333;font-variant-numeric:tabular-nums;white-space:nowrap;`, '', t.zone);
+      const track = t.el('div', 'top:40px;', null, t.zone);
       track.className = 'xq-slide';
       const knob = t.el('div', '', null, track);
       knob.className = 'xq-knob';
-      t.note(t.q.low, 0, 58, 90).style.textAlign = 'left';
-      const hi = t.note(t.q.high, t.zw - 90, 58, 90);
-      hi.style.textAlign = 'right';
-      const numeric = /^\d+$/.test(t.q.low);
-      let v = 0.92, held = false;
+      const nw = Math.floor(t.zw / 4);
+      list.forEach((ans, i) => {
+        const n = t.note(t.label(ans), i * nw, 54, nw);
+        n.style.fontSize = '11px';
+      });
+      let v = 0.2, held = false;
+      const at = () => list[Math.min(list.length - 1, Math.floor(v * list.length))];
       const draw = () => {
         knob.style.left = `${v * 100}%`;
-        num.textContent = numeric ? String(Math.round(Number(t.q.low) + v * (Number(t.q.high) - Number(t.q.low)))) : (v < 0.5 ? t.q.low : t.q.high);
+        num.textContent = t.ctx.brand.text(t.label(at()));
       };
       const setFrom = (ev) => {
         const r = track.getBoundingClientRect();
@@ -259,51 +291,53 @@ export const TRICK_FNS = {
       const up = () => { held = false; };
       track.addEventListener('pointerup', up);
       track.addEventListener('pointercancel', up);
-      t.frame((dt) => { if (!held && v < 1) { v = Math.min(1, v + dt * (0.1 + v * 0.35)); draw(); } });
+      t.frame((dt) => { if (!held && v < 1) { v = Math.min(1, v + dt * (0.06 + v * 0.2)); draw(); } });
       draw();
-      const done = t.el('button', `left:${(t.zw - 170) / 2}px;top:${zh - 44}px;width:170px;height:44px;`, C.sliderDone, t.zone);
+      const dw = Math.min(170, t.zw);
+      const done = t.el('button', `left:${(t.zw - dw) / 2}px;top:${zh - 46}px;width:${dw}px;height:44px;`, C.sliderDone, t.zone);
       done.type = 'button';
-      done.className = 'xq-a yes';
-      done.addEventListener('click', () => t.answer(v >= 0.5 ? t.yes : t.no, done));
+      done.className = 'xq-a';
+      t.mark(t.yes, done);
+      done.addEventListener('click', () => t.answer(at(), done));
     },
   },
 
-  /* The right one grows, the other shrinks. Both stay pressable. */
+  /* The right one grows, the others shrink. All stay pressable. */
   'size-skew': {
     draw(t) {
-      const p = pair(t, 62);
-      p.y.style.transformOrigin = p.y === p.a ? 'left center' : 'right center';
-      p.n.style.transformOrigin = p.n === p.a ? 'left center' : 'right center';
+      const p = quad(t);
+      p.y.b.style.zIndex = '2';
+      if (t.gentle) { p.y.b.style.transform = 'scale(1.18)'; for (const c of p.ns) c.b.style.transform = 'scale(.7)'; return; }
       const opts = { duration: 3200, easing: 'ease-in-out', fill: 'forwards' };
-      if (t.gentle) { p.y.style.transform = 'scale(1.35)'; p.n.style.transform = 'scale(.55)'; return; }
-      t.anim(p.y, [{ transform: 'scale(1)' }, { transform: 'scale(1.5)' }], opts);
-      t.anim(p.n, [{ transform: 'scale(1)' }, { transform: 'scale(.42)' }], opts);
+      t.anim(p.y.b, [{ transform: 'scale(1)' }, { transform: 'scale(1.22)' }], opts);
+      for (const c of p.ns) t.anim(c.b, [{ transform: 'scale(1)' }, { transform: 'scale(.62)' }], opts);
     },
   },
 
-  /* The refusal fades out but can still be tapped. */
+  /* The wrong ones fade out but can still be tapped. */
   'opacity-skew': {
     draw(t) {
-      const p = pair(t);
-      t.anim(p.n, [{ opacity: 1 }, { opacity: 0.06 }], { duration: 2400, easing: 'ease-in', fill: 'forwards' });
-      p.n.addEventListener('pointerdown', () => { const r = p.n.getBoundingClientRect(); t.float(r.left + r.width / 2, r.top, C.stillThere, 'color:#a3232b;font-size:14px;'); });
+      const p = quad(t);
+      for (const c of p.ns) {
+        t.anim(c.b, [{ opacity: 1 }, { opacity: 0.06 }], { duration: 2400, easing: 'ease-in', fill: 'forwards' });
+        c.b.addEventListener('pointerdown', () => { const r = c.b.getBoundingClientRect(); t.float(r.left + r.width / 2, r.top, C.stillThere, 'color:#a3232b;font-size:14px;'); });
+      }
     },
   },
 
-  /* The right answer drifts toward your finger. Refusing stays on top of it, so it can always be pressed. */
+  /* The right answer drifts toward your finger. The others stay on top of it, so each can always be pressed. */
   magnet: {
     draw(t) {
-      const zh = 120;
-      t.zone.style.height = `${zh}px`;
-      const bw = Math.floor((t.zw - 12) / 2);
-      const y = t.btn(t.yes, 0, 37, bw), n = t.btn(t.no, bw + 12, 37, bw);
+      const p = quad(t, { under: 34 });
+      const zh = parseFloat(t.zone.style.height), bw = p.bw;
+      const y = p.y.b;
       y.style.transition = 'none';
-      n.style.zIndex = '2';
-      let x0 = 0, y0 = 37, tx = 0, ty = 37;
+      for (const c of p.ns) c.b.style.zIndex = '2';
+      let x0 = p.y.x, y0 = p.y.y, tx = x0, ty = y0;
       const aim = (ev) => {
         const r = t.zone.getBoundingClientRect();
         tx = clamp(ev.clientX - r.left - bw / 2, 0, t.zw - bw);
-        ty = clamp(ev.clientY - r.top - 23, 0, zh - 46);
+        ty = clamp(ev.clientY - r.top - BH / 2, 0, zh - BH);
       };
       t.card.addEventListener('pointermove', aim);
       t.card.addEventListener('pointerdown', aim);
@@ -316,62 +350,62 @@ export const TRICK_FNS = {
     extraMs: 0,
   },
 
-  /* No arrives after a wait. */
+  /* The other answers arrive after a wait, one by one. */
   'late-bloom': {
-    extraMs: 6000,
+    extraMs: 9000,
     draw(t) {
-      t.zone.style.height = '52px';
-      const bw = Math.floor((t.zw - 12) / 2);
-      t.btn(t.yes, 0, 2, bw);
-      const WAIT = 7000;
-      const slot = t.el('div', `position:absolute;left:${bw + 12}px;top:2px;width:${bw}px;height:46px;box-sizing:border-box;border:1.5px dashed #888;overflow:hidden;`, null, t.zone);
-      const f = t.el('div', 'position:absolute;inset:0;background:#d4d0c8;transform-origin:0 50%;', null, slot);
-      t.anim(f, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: WAIT, easing: 'linear', fill: 'forwards' });
-      const lab = t.el('div', 'position:absolute;inset:0;display:grid;place-items:center;font-size:13px;color:#333;', fill(C.lateIn, Math.ceil(WAIT / 1000)), slot);
-      let left = Math.ceil(WAIT / 1000);
-      t.every(1000, () => { left -= 1; if (left > 0) lab.textContent = fill(C.lateIn, left); });
-      t.after(WAIT, () => {
-        slot.remove();
-        const n = t.btn(t.no, bw + 12, 2, bw);
-        t.anim(n, [{ transform: 'scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 180 });
+      const bw = Math.floor((t.zw - GAP) / 2), rowH = BH + GAP;
+      t.zone.style.height = `${rowH * 2 - GAP}px`;
+      const WAIT = 5000;
+      shuffle(t.ctx, t.q.answers).forEach((ans, i) => {
+        const x = i % 2 ? bw + GAP : 0, y = (i >> 1) * rowH;
+        if (ans === t.yes) { t.btn(ans, x, y, bw); return; }
+        const wait = WAIT + (i * 2000);
+        const slot = t.el('div', `position:absolute;left:${x}px;top:${y}px;width:${bw}px;height:${BH}px;box-sizing:border-box;border:1.5px dashed #888;overflow:hidden;`, null, t.zone);
+        const f = t.el('div', 'position:absolute;inset:0;background:#d4d0c8;transform-origin:0 50%;', null, slot);
+        t.anim(f, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: wait, easing: 'linear', fill: 'forwards' });
+        let left = Math.ceil(wait / 1000);
+        const lab = t.el('div', 'position:absolute;inset:0;display:grid;place-items:center;font-size:13px;color:#333;', fill(C.lateIn, left), slot);
+        t.every(1000, () => { left -= 1; if (left > 0) lab.textContent = fill(C.lateIn, left); });
+        t.after(wait, () => {
+          slot.remove();
+          const n = t.btn(ans, x, y, bw);
+          t.anim(n, [{ transform: 'scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 180 });
+        });
       });
     },
   },
 
-  /* Yes takes one tap. No takes a three-second hold. */
+  /* The right one takes one tap. Any other takes a three-second hold. */
   'hold-refuse': {
     draw(t) {
-      const p = pair(t, 76);
-      p.y.style.top = p.n.style.top = '20px';
-      const x = (b) => parseFloat(b.style.left);
-      t.note(C.oneTap, x(p.y), 2, p.bw).style.color = '#c23c84';
-      const lab = t.note(fill(C.holdFor, 3), x(p.n), 2, p.bw);
-      const bar = t.el('div', `left:${x(p.n)}px;top:68px;width:${p.bw}px;`, null, t.zone);
-      bar.className = 'xq-bar';
-      const inner = t.el('i', '', null, bar);
-      p.n.blocked = true;
-      p.n.addEventListener('click', (ev) => { if (ev.detail === 0) t.answer(t.no, p.n); });
-      holdable(t, p.n, 3000, {
-        onTick(f) { inner.style.transform = `scaleX(${f})`; lab.textContent = fill(C.holdFor, Math.max(1, Math.ceil(3 * (1 - f)))); },
-        onCancel() { inner.style.transform = 'scaleX(0)'; lab.textContent = fill(C.holdFor, 3); },
-        done() { lab.textContent = C.phew; t.after(220, () => t.answer(t.no, p.n)); },
-      });
+      const p = quad(t, { top: 18, under: 8 });
+      t.note(C.oneTap, p.y.x, p.y.y - 17, p.bw);
+      for (const c of p.ns) {
+        const lab = t.note(fill(C.holdFor, 3), c.x, c.y - 17, p.bw);
+        const bar = t.el('div', `left:${c.x}px;top:${c.y + BH + 1}px;width:${p.bw}px;height:4px;`, null, t.zone);
+        bar.className = 'xq-bar';
+        const inner = t.el('i', '', null, bar);
+        c.b.blocked = true;
+        c.b.addEventListener('click', (ev) => { if (ev.detail === 0) t.answer(c.ans, c.b); });
+        holdable(t, c.b, 3000, {
+          onTick(f) { inner.style.transform = `scaleX(${f})`; lab.textContent = fill(C.holdFor, Math.max(1, Math.ceil(3 * (1 - f)))); },
+          onCancel() { inner.style.transform = 'scaleX(0)'; lab.textContent = fill(C.holdFor, 3); },
+          done() { lab.textContent = C.phew; t.after(220, () => t.answer(c.ans, c.b)); },
+        });
+      }
     },
   },
 
-  /* The refusal is under a pile of notes. Drag them off, or flick one with a tap. */
+  /* The other answers are under piles of notes. Drag them off, or flick one with a tap. */
   'drag-reveal': {
     draw(t) {
-      const zh = 96;
-      t.zone.style.height = `${zh}px`;
-      const bw = Math.floor((t.zw - 12) / 2);
-      t.btn(t.yes, 0, 26, bw);
-      const nx = bw + 12;
-      t.btn(t.no, nx, 26, bw);
-      t.note(C.whereIsNo, nx, 2, bw).style.color = '#a3232b';
+      const p = quad(t, { top: 2, under: 22 });
+      t.note(C.whereIsNo, 0, parseFloat(t.zone.style.height) - 18, t.zw);
       const tints = ['#d8f5c9', '#ffd0e8', '#c7e8ff', '#fff2a8'];
-      tints.forEach((tint, i) => {
-        const c = t.el('div', `left:${nx + i - 2}px;top:${18 + i}px;width:${bw}px;height:60px;background:${tint};z-index:${2 + i};`, C.stickies[i], t.zone);
+      p.ns.forEach((cell, k) => [0, 1].forEach((i) => {
+        const tint = tints[(k + i) % tints.length];
+        const c = t.el('div', `left:${cell.x + i * 2 - 1}px;top:${cell.y + i - 2}px;width:${p.bw}px;height:50px;background:${tint};z-index:${2 + i};`, C.stickies[(k + i) % C.stickies.length], t.zone);
         c.className = 'xq-stick';
         let down = false, sx = 0, sy = 0, dx = 0, dy = 0;
         c.addEventListener('pointerdown', (ev) => { ev.preventDefault(); down = true; sx = ev.clientX; sy = ev.clientY; try { c.setPointerCapture(ev.pointerId); } catch { /* fine */ } });
@@ -386,36 +420,38 @@ export const TRICK_FNS = {
         };
         c.addEventListener('pointerup', up);
         c.addEventListener('pointercancel', up);
-      });
+      }));
     },
   },
 
-  /* Each No peels off to show another No. Six in all. */
+  /* Each wrong answer peels off to show itself again. Six in all, each. */
   'bottomless-no': {
     draw(t) {
-      const p = pair(t, 72);
-      p.y.style.top = p.n.style.top = '20px';
-      let left = 6;
-      const lab = t.note(fill(C.more, left), parseFloat(p.n.style.left), 2, p.bw);
-      lab.style.color = '#a3232b';
-      p.n.style.boxShadow = '2px 2px 0 #aaa,4px 4px 0 #999,6px 6px 0 #888';
-      p.n.blocked = true;
-      p.n.addEventListener('click', () => {
-        left -= 1;
-        if (left <= 0) { t.answer(t.no, p.n); return; }
-        lab.textContent = fill(C.more, left);
-        const c = t.el('div', `position:absolute;left:${p.n.style.left};top:20px;width:${p.bw}px;height:46px;box-sizing:border-box;background:#d4d0c8;border:2px outset #fff;display:grid;place-items:center;pointer-events:none;`, t.ctx.brand.text(t.label(t.no)), t.zone);
-        const a = t.anim(c, [{ transform: 'none', opacity: 1 }, { transform: 'translate(46px,-46px) rotate(24deg)', opacity: 0 }], { duration: 420, easing: 'ease-out' });
-        a.onfinish = () => c.remove();
-        t.pop();
-      });
+      const p = quad(t, { top: 18 });
+      for (const cell of p.ns) {
+        let left = 6;
+        const lab = t.note(fill(C.more, left), cell.x, cell.y - 17, p.bw);
+        lab.style.color = '#a3232b';
+        cell.b.style.boxShadow = '2px 2px 0 #aaa,4px 4px 0 #999';
+        cell.b.blocked = true;
+        cell.b.addEventListener('click', () => {
+          left -= 1;
+          if (left <= 0) { t.answer(cell.ans, cell.b); return; }
+          lab.textContent = fill(C.more, left);
+          const c = t.el('div', `position:absolute;left:${cell.x}px;top:${cell.y}px;width:${p.bw}px;height:${BH}px;box-sizing:border-box;background:#d4d0c8;border:2px outset #fff;display:grid;place-items:center;pointer-events:none;`, t.ctx.brand.text(t.label(cell.ans)), t.zone);
+          const a = t.anim(c, [{ transform: 'none', opacity: 1 }, { transform: 'translate(46px,-46px) rotate(24deg)', opacity: 0 }], { duration: 420, easing: 'ease-out' });
+          a.onfinish = () => c.remove();
+          t.pop();
+        });
+      }
     },
   },
 
   /* Not a robot: hold the box steady for two seconds. It knows it is a joke, and there is nothing to fill in. */
   'verify-checkbox': {
     draw(t) {
-      t.zone.style.height = '132px';
+      const wrongs = t.q.answers.filter((a) => a !== t.yes);
+      t.zone.style.height = '134px';
       const panel = t.el('div', 'position:absolute;left:0;right:0;top:0;height:76px;background:#fafafa;border:1px solid #bbb;border-radius:3px;', null, t.zone);
       const box = t.el('div', 'position:absolute;left:12px;top:12px;width:44px;height:44px;box-sizing:border-box;background:#fff;border:2px solid #888;border-radius:3px;display:grid;place-items:center;font:700 32px/1 sans-serif;color:#1f9d55;cursor:pointer;', '', panel);
       t.el('div', 'position:absolute;left:68px;right:6px;top:12px;font-size:15px;line-height:1.15;', t.ctx.brand.text(t.label(t.yes)), panel);
@@ -429,7 +465,9 @@ export const TRICK_FNS = {
         onCancel() { inner.style.transform = 'scaleX(0)'; hint.textContent = C.robotTwitch; t.nudge(box); },
         done() { box.textContent = '✓'; hint.textContent = C.robotDone; t.after(420, () => t.answer(t.yes, box)); },
       });
-      t.btn(t.no === t.yes ? t.q.answers[1] : t.no, (t.zw - 170) / 2, 84, 170);
+      t.mark(t.yes, box);
+      const bw = Math.floor((t.zw - 2 * 4) / 3);
+      shuffle(t.ctx, wrongs).forEach((ans, i) => { t.btn(ans, i * (bw + 4), 84, bw).style.fontSize = '12px'; });
     },
   },
 
@@ -440,14 +478,13 @@ export const TRICK_FNS = {
       const decoy = DECOY_EMOJI[t.q.decoy] || FILLER[0];
       const set = shuffle(t.ctx, [...Array(n).fill(SPIRAL), ...shuffle(t.ctx, [decoy, decoy, ...FILLER]).slice(0, 9 - n)]);
       const { list } = tiles(t, set, (b) => { b.classList.toggle('on'); t.pop(); });
-      const { A, B } = underRow(t, t.yes, t.no);
+      const { A } = underRow(t);
       let warned = false;
       A.addEventListener('click', () => {
         const missed = list.some((b, i) => set[i] === SPIRAL && !b.classList.contains('on')) || list.some((b, i) => set[i] !== SPIRAL && b.classList.contains('on'));
         if (missed && !warned) { warned = true; t.deny(); t.nudge(A); t.ctx.toast(C.gridMissed); return; }
         t.answer(t.yes, A);
       });
-      B.addEventListener('click', () => t.answer(t.no, B));
     },
   },
 
@@ -468,7 +505,7 @@ export const TRICK_FNS = {
       const need = [...new Set(phrase.replace(/ /g, ''))];
       const extra = shuffle(t.ctx, [...'ABKQWZ'].filter((c) => !need.includes(c))).slice(0, 2);
       let at = 0;
-      const { A, B } = underRow(t, t.yes, t.no);
+      const { A } = underRow(t);
       A.disabled = true;
       A.style.opacity = '.5';
       const advance = () => {
@@ -484,7 +521,6 @@ export const TRICK_FNS = {
         });
       }
       A.addEventListener('click', () => t.answer(t.yes, A));
-      B.addEventListener('click', () => t.answer(t.no, B));
     },
     extraMs: 30000,
   },
@@ -509,22 +545,20 @@ export const TRICK_FNS = {
       void list;
       let count = 0;
       const lab = t.el('div', 'text-align:center;margin-top:4px;font-size:13px;color:#555;', fill(C.regenCount, 0), t.zone);
-      const { A, B } = underRow(t, t.yes, t.no);
+      const { A } = underRow(t);
       A.addEventListener('click', () => t.answer(t.yes, A));
-      B.addEventListener('click', () => t.answer(t.no, B));
     },
     extraMs: 15000,
   },
 
-  /* A pink cursor comes to get the answer for you. Knock it away three times and it gives up. Refusing always works. */
+  /* A pink cursor comes to get the answer for you. Knock it away three times and it gives up. Any other answer always works. */
   'mouse-hijack': {
     draw(t) {
-      const p = pair(t, 96);
-      p.y.style.top = p.n.style.top = '48px';
+      const p = quad(t, { top: 30 });
       const cur = t.el('div', '', null, t.zone);
       cur.className = 'xq-cur';
       t.el('i', '', null, cur);
-      const yr = () => ({ x: parseFloat(p.y.style.left) + p.bw / 2, y: 62 });
+      const yr = () => ({ x: p.y.x + p.bw / 2, y: p.y.y + 14 });
       let x = t.zw - 30, y = 0, knocks = 0, gone = false;
       const knock = () => {
         if (gone) return;
@@ -549,7 +583,7 @@ export const TRICK_FNS = {
         cool -= dt;
         if (gone) return;
         const g = yr(), dx = g.x - x, dy = g.y - y, d = Math.hypot(dx, dy);
-        if (d < 6) { gone = true; t.ctx.toast(C.hijackDone); t.after(200, () => t.answer(t.yes, p.y)); return; }
+        if (d < 6) { gone = true; t.ctx.toast(C.hijackDone); t.after(200, () => t.answer(t.yes, p.y.b)); return; }
         const step = Math.min(d, 62 * dt);
         x += (dx / d) * step; y += (dy / d) * step;
         cur.style.left = `${x}px`; cur.style.top = `${y}px`;

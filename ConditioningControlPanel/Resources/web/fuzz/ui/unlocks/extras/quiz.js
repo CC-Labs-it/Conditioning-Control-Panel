@@ -1,21 +1,28 @@
-/* ui/unlocks/extras/quiz.js - Pop-Up Question and the Button Trouble lane. One card at a time, floating in `over`, no
- * backdrop: the game keeps running behind it. Every card closes: it answers, or it gives up by itself after a while, and
- * any answer pays except a melted one, which pays nothing and costs nothing. tricks.js holds the 20 ways to be annoying. */
+/* ui/unlocks/extras/quiz.js - Pop-Up Question and the Button Trouble lane. One card at a time, always in the same spot: on
+ * a wide page over the first slot of the left rail, on a phone along the bottom above the dock strip. No backdrop: the
+ * game keeps running behind it. Four answers, one of them what the game wants. That one pays a lot, any other a little,
+ * and the card then shows which it was. Every card closes: it answers, or it gives up by itself after a while. A melted
+ * answer pays nothing and costs nothing. tricks.js holds the 20 ways to be annoying. */
 
-import { QUESTIONS, TRICKS } from '../../../data/content/questions.js';
+import { QUESTIONS, TRICKS, quizPay } from '../../../data/content/questions.js';
+import { dockIsRail } from '../../dock.js';
 import { QUIZ_COPY as C } from './copy.js';
 import { FONT, cardUp, h, pick } from './kit.js';
 import { TRICK_FNS } from './tricks.js';
 
 const CSS = `
 .xq{position:absolute;z-index:5;box-sizing:border-box;background:#fff;color:#111;border:1px solid #333;border-radius:5px;box-shadow:3px 4px 0 rgba(0,0,0,.28);font:600 15px/1.2 ${FONT};pointer-events:auto;user-select:none;-webkit-user-select:none;overflow:hidden;}
-.xq-t{position:relative;height:24px;padding-left:8px;background:#7b5cff;color:#fff;font:600 13px/24px ${FONT};}
-.xq-tb{position:absolute;left:0;bottom:0;width:100%;height:3px;background:#ffd6ec;transform-origin:0 50%;}
-.xq-q{padding:10px 12px 8px;font-size:19px;line-height:1.2;text-align:center;}
+.xq-t{position:relative;height:24px;padding-left:8px;background:var(--niche);color:var(--niche-ink);font:600 13px/24px ${FONT};}
+.xq-tb{position:absolute;left:0;bottom:0;width:100%;height:3px;background:var(--niche-soft);transform-origin:0 50%;}
+.xq-q{padding:9px 10px 8px;font-size:17px;line-height:1.2;text-align:center;}
+.xq-q.said{font-weight:700;}
 .xq-z{position:relative;margin:0 8px 10px;}
 .xq-a{position:absolute;box-sizing:border-box;min-height:44px;padding:4px 6px;background:#d4d0c8;color:#111;border:2px outset #fff;font:600 15px/1.1 ${FONT};touch-action:manipulation;transition:left .2s ease-in-out,top .2s ease-in-out,opacity .3s;}
 .xq-a:active{border-style:inset;}
-.xq-a.yes{background:#ff69b4;color:#fff;border:1.5px solid #c23c84;}
+.xq-a.ok,.xq-bub.ok{background:#1f9d55;color:#fff;border:2px solid #14663a;opacity:1 !important;}
+.xq-a.bad,.xq-bub.bad{background:#a3232b;color:#fff;border:2px solid #6b1219;opacity:1 !important;}
+.xq-done button,.xq-done .xq-stick{pointer-events:none;}
+.xq-idle{font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
 .xq-note{position:absolute;font:600 12px ${FONT};color:#555;text-align:center;pointer-events:none;}
 .xq-bar{position:absolute;height:6px;background:#eee;border:1px solid #999;box-sizing:border-box;overflow:hidden;pointer-events:none;}
 .xq-bar i{display:block;height:100%;background:#7b5cff;transform-origin:0 50%;transform:scaleX(0);}
@@ -23,8 +30,8 @@ const CSS = `
 .xq-tile{position:relative;display:grid;place-items:center;background:#e9e6f4;border:1px solid #8d94b5;font:24px/1 "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;touch-action:manipulation;padding:0;transition:opacity .25s,outline .1s;}
 .xq-tile.on{outline:3px solid #3b7ddd;outline-offset:-3px;}
 .xq-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
-.xq-row{display:flex;gap:8px;margin-top:8px;}
-.xq-row .xq-a{position:relative;flex:1;}
+.xq-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
+.xq-row .xq-a{position:relative;}
 .xq-pad{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:8px;}
 .xq-pad button{width:38px;height:38px;background:#d4d0c8;border:2px outset #fff;font:700 15px ${FONT};color:#111;touch-action:manipulation;padding:0;}
 .xq-wob{display:flex;flex-wrap:wrap;justify-content:center;gap:0 3px;padding:8px 4px;background:repeating-linear-gradient(20deg,#e8e4d8 0 5px,#d8d4c6 5px 10px);border:1px solid #888;font:700 22px Georgia,serif;color:#333;}
@@ -42,11 +49,16 @@ body.gentle .xq-wob span{animation:none;}
 
 const POP = 'assets/audio/pop/Pop.mp3';
 const FIRST_MS = 26000, EVERY_MS = 48000, EVERY_JITTER = 18000, GIVE_UP_MS = 30000;
+const MIN_SCALE = 0.68;
 
 function createQuiz(ctx) {
   ctx.css(CSS);
   const host = ctx.el('div', 'position:absolute;inset:0;z-index:5;pointer-events:none;', null, 'over');
-  let open = null, lastId = null;
+  /* The card's fixed spot on a wide page. It also says when the next one is due, and a phone does not need that. */
+  const spot = ctx.dock({ edge: 'left', order: -1, chip: false, pin: true, title: C.title, icon: ctx.item.emoji });
+  const idle = ctx.el('div', '', '', spot);
+  idle.className = 'xq-idle';
+  let open = null, lastId = null, dueAt = 0;
 
   const ownedTricks = () => Object.keys(TRICKS).filter((t) => ctx.has(TRICKS[t].unlock));
 
@@ -66,29 +78,35 @@ function createQuiz(ctx) {
     return q;
   }
 
+  /** How wide a card is: the slot on a wide page, nearly the whole page on a phone. */
+  const cardWidth = () => {
+    const { w } = ctx.bounds();
+    return dockIsRail(w) ? spot.parentElement.offsetWidth : Math.min(420, w - 16);
+  };
+
+  /** Always the same spot. Too tall for the room shrinks it a little, and tapping and the next buy go on. */
   function place(card, cardH) {
     const { w, h: H } = ctx.bounds();
-    const cw = card.offsetWidth;
-    const b = ctx.button.el.getBoundingClientRect();
-    /* Below the goal row, so tapping and the next buy go on; beside the shop on a wide screen. */
-    let x, y;
-    if (w >= 1120) {
-      const side = ctx.rng() < 0.5;
-      x = side ? 12 + ctx.rng() * Math.max(0, (w - 780) / 2 - cw - 12) : w - cw - 12 - ctx.rng() * Math.max(0, (w - 780) / 2 - cw - 12);
-      y = 60 + ctx.rng() * Math.max(0, H - cardH - 130);
-    } else {
-      x = (w - cw) / 2 + (ctx.rng() - 0.5) * Math.max(0, w - cw - 16);
-      const goal = ctx.parts.shop.querySelector('#goal')?.getBoundingClientRect();
-      const below = (goal?.height ? goal.bottom : b.bottom) + 8;
-      const room = H - below - 8;
-      if (cardH > room) {
-        card.style.transformOrigin = '50% 100%';
-        card.style.scale = String(Math.max(0.68, room / cardH));
-      }
-      y = Math.min(below, H - cardH - 8);
+    card.style.scale = '';
+    if (dockIsRail(w)) {
+      const r = spot.parentElement.getBoundingClientRect();
+      const room = H - r.top - 8;
+      card.style.transformOrigin = '0 0';
+      if (cardH > room) card.style.scale = String(Math.max(MIN_SCALE, room / cardH));
+      card.style.left = `${r.left}px`;
+      card.style.top = `${r.top}px`;
+      return;
     }
-    card.style.left = `${Math.max(4, x)}px`;
-    card.style.top = `${Math.max(46, y)}px`;
+    const strip = ctx.parts.shop.ownerDocument.getElementById('dock-strip')?.offsetHeight || 0;
+    const goal = ctx.parts.shop.querySelector('#goal')?.getBoundingClientRect();
+    const b = ctx.button.el.getBoundingClientRect();
+    const below = (goal?.height ? goal.bottom : b.bottom) + 6;
+    const bottom = strip + 6;
+    const room = H - bottom - below;
+    card.style.transformOrigin = '50% 100%';
+    if (cardH > room) card.style.scale = String(Math.max(MIN_SCALE, room / cardH));
+    card.style.left = `${(w - card.offsetWidth) / 2}px`;
+    card.style.top = `${H - bottom - cardH}px`;
   }
 
   function close(paid) {
@@ -107,8 +125,7 @@ function createQuiz(ctx) {
   function ask(trick = chooseTrick()) {
     if (open) close(false);
     const q = chooseQuestion(trick);
-    const { w } = ctx.bounds();
-    const W = Math.min(340, w - 16);
+    const W = cardWidth();
     const card = h('div', `width:${W}px;left:-999px;top:0;`, null, host);
     card.className = 'xq';
     const title = h('div', '', C.title, card);
@@ -121,48 +138,71 @@ function createQuiz(ctx) {
     zone.className = 'xq-z';
     const zw = W - 18;
 
-    const o = { card, cancels: [], anims: [], trick };
+    const o = { card, cancels: [], anims: [], trick, done: false, buttons: new Map(), melted: 0 };
     open = o;
+    const live = () => open === o && !o.done;
 
     /* What a trick gets. Everything it starts goes in o, so it stops when the card goes. */
+    /* Only Yes: every wrong answer turns into another way of saying yes. All four pay. */
     const onlyYes = ctx.has('onlyyes') && trick !== 'mono';
-    let alsoYes = pick(ctx, C.alsoYes);
-    const label = (ans) => (onlyYes && ans.tone === 'no' ? alsoYes : ans.label);
+    const yeses = new Map();
+    const label = (ans) => {
+      if (!onlyYes || ans.tone === 'yes') return ans.label;
+      if (!yeses.has(ans)) yeses.set(ans, C.alsoYes[yeses.size % C.alsoYes.length]);
+      return yeses.get(ans);
+    };
     const tone = (ans) => (onlyYes ? 'yes' : ans.tone);
+    const yes = q.answers.find((a) => a.tone === 'yes') || q.answers[0];
     const t = {
       ctx, q, card, zone, zw, W, gentle: ctx.gentle,
-      yes: q.answers.find((a) => a.tone !== 'no') || q.answers[0],
-      no: q.answers.find((a) => a.tone === 'no') || q.answers[q.answers.length - 1],
+      yes,
+      wrongs: q.answers.filter((a) => a !== yes),
       label, tone,
-      after(ms, fn) { const c = ctx.after(ms, () => { if (open === o) fn(); }); o.cancels.push(c); return c; },
-      every(ms, fn) { const c = ctx.every(ms, () => { if (open === o) fn(); }); o.cancels.push(c); return c; },
-      frame(fn) { const c = ctx.frame((dt, now) => { if (open === o) fn(dt, now); }); o.cancels.push(c); return c; },
+      after(ms, fn) { const c = ctx.after(ms, () => { if (live()) fn(); }); o.cancels.push(c); return c; },
+      every(ms, fn) { const c = ctx.every(ms, () => { if (live()) fn(); }); o.cancels.push(c); return c; },
+      frame(fn) { const c = ctx.frame((dt, now) => { if (live()) fn(dt, now); }); o.cancels.push(c); return c; },
       anim(el, kf, opts) { const a = ctx.anim(el, kf, opts); o.anims.push(a); return a; },
       el: h,
       /* An answer button at x,y. It answers on press unless the trick says otherwise. */
       btn(ans, x, y, bw, bh = 46, parent = zone) {
         const b = h('button', `left:${x}px;top:${y}px;width:${bw}px;height:${bh}px;`, ctx.brand.text(label(ans)), parent);
         b.type = 'button';
-        b.className = `xq-a${tone(ans) === 'no' ? '' : ans === t.yes ? ' yes' : ''}`;
+        b.className = 'xq-a';
+        o.buttons.set(ans, b);
         b.addEventListener('click', () => { if (!b.blocked) t.answer(ans, b); });
         return b;
       },
+      /* Tell the card which button stands for an answer, for one a trick drew itself. */
+      mark(ans, b) { o.buttons.set(ans, b); },
+      /* A melted answer: it scores nothing, and each one takes a little off the right answer's pay. */
+      melted() { o.melted += 1; },
       note(text2, x, y, nw, parent = zone) {
         const n = h('div', `left:${x}px;top:${y}px;width:${nw}px;`, ctx.brand.text(text2), parent);
         n.className = 'xq-note';
         return n;
       },
       float(x, y, text2, css) { ctx.float(x, y, text2, css); },
-      /* Answer it: pays and closes. */
+      /* Answer it: pays, shows which one the game wanted, and closes. */
       answer(ans, b, mult = 1) {
-        if (open !== o) return;
+        if (!live()) return;
+        o.done = true;
+        const right = tone(ans) !== 'no';
         const r = (b || card).getBoundingClientRect();
-        const rates = ctx.rates();
-        const secs = tone(ans) === 'no' ? 2 : 4;
-        const amount = Math.max(rates.fps * secs, rates.click * 10) * mult;
-        ctx.pay(amount, 'quiz', { x: r.left + r.width / 2, y: r.top });
-        ctx.audio.play(tone(ans) === 'no' ? 'assets/audio/sfx/ui_click.mp3' : 'assets/audio/sfx/chime1.mp3', { bus: 'sfx', gain: 0.7 });
-        close(true);
+        const x = r.left + r.width / 2, y = r.top;
+        const amount = quizPay(ctx.rates(), right) * mult * Math.max(0.4, 1 - o.melted * 0.2);
+        ctx.pay(amount, 'quiz', { x, y });
+        ctx.audio.play(right ? 'assets/audio/sfx/chime1.mp3' : 'assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.7 });
+        for (const c of o.cancels) c();
+        o.cancels.length = 0;
+        for (const a of o.anims) { try { a.cancel(); } catch { /* gone */ } }
+        o.anims.length = 0;
+        card.classList.add('xq-done');
+        text.textContent = pick(ctx, right ? C.right : C.wrong);
+        text.classList.add('said');
+        b?.classList.add(right ? 'ok' : 'bad');
+        if (!right) o.buttons.get(t.yes)?.classList.add('ok');
+        if (right && !ctx.gentle) ctx.anim(card, [{ transform: 'none' }, { transform: 'scale(1.04)', offset: 0.35 }, { transform: 'none' }], { duration: 240, easing: 'ease-out' });
+        ctx.after(right ? 560 : 1100, () => { if (open === o) close(true); });
       },
       pop() { ctx.audio.play(POP, { bus: 'sfx', gain: 0.7 }); },
       deny() { ctx.audio.play('assets/audio/sfx/ui_denied.mp3', { bus: 'sfx', gain: 0.6 }); },
@@ -178,6 +218,9 @@ function createQuiz(ctx) {
     ctx.anim(card, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, translate: '0 12px' }, { opacity: 1, translate: '0 0' }], { duration: 240, easing: 'ease-out' });
     ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.5 });
     t.after(giveUpMs, () => { ctx.toast(pick(ctx, C.giveUp)); close(false); });
+    /* Same spot after a resize. */
+    let seen = ctx.bounds();
+    t.every(700, () => { const n = ctx.bounds(); if (n !== seen) { seen = n; place(card, card.offsetHeight); } });
     return o;
   }
 
@@ -187,8 +230,14 @@ function createQuiz(ctx) {
     ask();
   }
   let stop = null;
-  const schedule = (ms) => { stop?.(); stop = ctx.after(ms, () => { maybeAsk(); schedule(EVERY_MS + ctx.rng() * EVERY_JITTER); }); };
+  const schedule = (ms) => { stop?.(); dueAt = ctx.state.clock + ms; stop = ctx.after(ms, () => { maybeAsk(); schedule(EVERY_MS + ctx.rng() * EVERY_JITTER); }); };
   schedule(FIRST_MS);
+  const drawIdle = () => {
+    const s = Math.max(0, Math.ceil((dueAt - ctx.state.clock) / 1000));
+    idle.textContent = open ? C.idleNow : C.idleNext.replace('{n}', String(s));
+  };
+  drawIdle();
+  ctx.every(1000, drawIdle);
 
   return { ask, close: () => close(false), get open() { return open; } };
 }
@@ -200,7 +249,7 @@ export const QUIZ_UNLOCKS = {
     mount(ctx) {
       quiz = createQuiz(ctx);
       if (!ctx.store.get('asked')) { ctx.store.set('asked', 1); ctx.after(650, () => quiz?.ask('none')); }
-      return { ask: quiz.ask, off() { quiz?.close(); quiz = null; } };
+      return { ask: quiz.ask, close: quiz.close, off() { quiz?.close(); quiz = null; } };
     },
   },
 };

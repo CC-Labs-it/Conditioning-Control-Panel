@@ -9,7 +9,7 @@ import { CIRCE } from '../data/words.js';
 
 const {
   JOKE_ADS, CCP_ADS, CCP_THEME_ADS, SPONSORED_THOUGHTS, NATIVE_LINES, EMI_AD_READS,
-  THOUGHTS, thoughtsFor, QUESTIONS, TRICKS, ENDINGS, DROP_WORDS, THEMES, THEME_IDS,
+  THOUGHTS, thoughtsFor, QUESTIONS, TRICKS, quizPay, ENDINGS, DROP_WORDS, THEMES, THEME_IDS,
   FAKE_ANTIVIRUS, FAKE_PAYWALL, FAKE_RENEWAL, NEW_TERMS, SUPPORT_MENU, FAKE_KEYHOLDER,
   FAKE_UPDATE, FAKE_CALL, FAKE_INBOX, FAKE_CHAT, FAKE_DESKTOP,
   PRAISE, PRAISE_NAMED, REST_LINES, TUCK_LINES, GLOW_LINES, WARM_LINES, NAP_LINES,
@@ -104,16 +104,39 @@ test('the ticker has about 150 lines and later general lines drift further', () 
   assert.ok(thoughtsFor({ stage: 'late', routes: ['eyes'], themes: ['goon'] }).length > thoughtsFor().length);
 });
 
-test('every question has a listed trick and at least 2 answers', () => {
+test('every question has a listed trick and four answers', () => {
   assert.ok(QUESTIONS.length >= 50 && QUESTIONS.length <= 75, `questions ${QUESTIONS.length}`);
   for (const x of QUESTIONS) {
     assert.ok(Object.hasOwn(TRICKS, x.trick), `${x.id} trick ${x.trick}`);
-    assert.ok(x.answers.length >= 2, x.id);
+    assert.equal(x.answers.length, 4, x.id);
+    assert.equal(new Set(x.answers.map((a) => a.label)).size, 4, `${x.id} says the same thing twice`);
     for (const a of x.answers) {
       assert.ok(a.label, x.id);
-      assert.ok(['yes', 'no', 'odd'].includes(a.tone), x.id);
+      assert.ok(['yes', 'no'].includes(a.tone), x.id);
+      assert.ok(a.label.length <= (x.trick === 'bubble-pop' ? 12 : x.trick === 'crowd' || x.trick === 'lean-slider' ? 14 : 24), `${x.id} "${a.label}" is too long for its card`);
     }
   }
+});
+
+test('exactly one answer is what the game wants, except on Only Yes, where they all are', () => {
+  for (const x of QUESTIONS) {
+    const wanted = x.answers.filter((a) => a.tone === 'yes').length;
+    assert.equal(wanted, x.trick === 'mono' ? 4 : 1, x.id);
+  }
+});
+
+test('the slider ends on the answer it leans to', () => {
+  for (const x of QUESTIONS.filter((y) => y.trick === 'lean-slider')) assert.equal(x.answers[3].tone, 'yes', x.id);
+});
+
+test('the right answer pays many times a wrong one, on either route', () => {
+  for (const rates of [{ fps: 100, click: 1 }, { fps: 0, click: 50 }]) {
+    assert.ok(quizPay(rates, true) >= 10 * quizPay(rates, false), JSON.stringify(rates));
+    assert.ok(quizPay(rates, false) > 0, 'a wrong answer still pays');
+  }
+  /* Before: the better answer paid 4 s or 10 taps. */
+  assert.ok(quizPay({ fps: 100, click: 1 }, true) >= 4 * 400);
+  assert.ok(quizPay({ fps: 0, click: 50 }, true) >= 4 * 500 * 0.9);
 });
 
 test('every trick has questions and every question can be finished', () => {

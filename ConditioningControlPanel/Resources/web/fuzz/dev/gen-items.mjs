@@ -71,6 +71,19 @@ function moveRows(rows) {
 
 /* Row text that named a multiple. Modifiers bend past a knee (sim/economy.js), so a row says more, never how many times. */
 const WHAT_OVERRIDE = {
+  /* Pop-up questions have four answers now, in one fixed spot. */
+  quiz: 'A question pops up at the edge of the screen with four answers. The one the game wants pays a lot, the others a little.',
+  swap: 'Answers trade places when your pointer gets close.',
+  flee: 'The wrong answers slide away from your finger.',
+  crowd: 'Fake answer buttons multiply across the card, and the real four hide among them.',
+  slider: 'A slider picks between the four answers, and it leans toward the top.',
+  shrink: 'The right answer grows while the wrong ones shrink.',
+  fadeno: 'The wrong answers fade out but can still be tapped.',
+  late: 'The other answers appear only after a long wait.',
+  holdno: 'Every wrong answer takes a long hold, while the right one takes one tap.',
+  dragno: 'Drag cards out of the way to find the other answers.',
+  stackno: 'Each wrong answer peels away to reveal itself again underneath.',
+  onlyyes: 'Every question still has four answers. All of them are now yes.',
   softw: 'Some taps pay extra, a word fades in on the button, and you hear a moan.',
   heartbtn: 'The button becomes a squishy heart.',
   t_denied: 'Some taps are refused, and the next one pays more.',

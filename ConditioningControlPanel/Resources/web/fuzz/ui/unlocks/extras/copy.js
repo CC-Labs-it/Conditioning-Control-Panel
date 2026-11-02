@@ -13,7 +13,7 @@ export const QUIZ_COPY = Object.freeze({
   oneTap: '1 tap',
   holdFor: 'hold {n} s',
   phew: 'phew',
-  whereIsNo: 'Where is No?',
+  whereIsNo: 'Where did they go?',
   stickies: ['not here', 'also not here', 'keep looking', 'warmer'],
   robotHold: 'Hold. Calmly.',
   robotTwitch: 'Less twitchy.',
@@ -25,7 +25,11 @@ export const QUIZ_COPY = Object.freeze({
   hijackDone: 'Got that for you',
   hijackLost: 'Fine. Do it yourself.',
   sliderDone: 'That is my answer',
-  alsoYes: ['Also yes', 'Yes, reluctantly', 'Yes, in a different font', 'Yes, but quieter'],
+  alsoYes: ['Also yes', 'Yes, reluctantly', 'Yes, but quieter', 'Very yes'],
+  right: ['That is what we wanted.', 'Correct.', 'Good answer.', 'See, that was easy.', 'We knew you would.'],
+  wrong: ['Noted.', 'Interesting.', 'We will work on that.', 'Not that one.', 'Close enough for a little.'],
+  idleNext: 'Next one in {n} s',
+  idleNow: 'Answer it.',
 });
 
 export const EMI_COPY = Object.freeze({
