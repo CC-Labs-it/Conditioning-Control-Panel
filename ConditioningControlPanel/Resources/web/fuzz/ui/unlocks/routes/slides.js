@@ -156,7 +156,7 @@ export default {
         if (!ctx.gentle) ctx.anim(s.inner, [{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
         ctx.after(14000, () => { if (on) finish(true); });
       };
-      ctx.after(700, play);
+      if (!ctx.restored) ctx.after(700, play);
       ctx.every(90000, play);
       ctx.on('pause', () => finish(false));
       ctx.on('suspend', ({ on: stop }) => { if (stop) finish(false); });

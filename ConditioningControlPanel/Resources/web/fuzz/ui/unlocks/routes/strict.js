@@ -269,7 +269,7 @@ export default {
           onClose: () => { doc.removeEventListener('keydown', onKey); onKey = null; },
         });
       };
-      ctx.after(1500, openCard);
+      if (!ctx.restored) ctx.after(1500, openCard);
       ctx.every(120000, openCard);
       return { off() { if (onKey) doc.removeEventListener('keydown', onKey); } };
     },

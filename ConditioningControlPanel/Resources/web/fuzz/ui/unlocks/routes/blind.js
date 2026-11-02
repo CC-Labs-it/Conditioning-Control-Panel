@@ -121,7 +121,7 @@ export default {
         if (hall.say) { hall.busy = true; hall.say(line, 4200); ctx.after(4300, () => { hall.busy = false; }); }
         ctx.toast(line);
       };
-      ctx.after(900, ask);
+      if (!ctx.restored) ctx.after(900, ask);
       ctx.every(180000, ask);
       if (said.length) ctx.after(20000, echo);
       return {};
@@ -160,7 +160,7 @@ export default {
           })),
         });
       };
-      ctx.after(800, ask);
+      if (!ctx.restored) ctx.after(800, ask);
       ctx.every(150000, ask);
       return {};
     },
