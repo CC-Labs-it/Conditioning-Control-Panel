@@ -2,6 +2,7 @@
 // slow for CI, a 30 minute run takes about a minute of wall time. Needs dev/serve.mjs running.
 //   node dev/serve.mjs 8811 &   node dev/measure.mjs --port 8811
 // Flags: --routes "eyes,sweet,slides,sell,trance;ears,strict,..."  --profile person|lazy|both  --maxmin 70  --seed 7  --out file.json
+//        --collect 30 (seconds between Levels presses, 0 = never)  --panel-off 1 (switch everything off when Control Panel is bought)
 // Nothing in the game changes for this: dev/measure-page.js replaces the page's clock from outside and plays by pressing
 // what a person would press. Env: PW_DIR, FF_EXE, as dev/smoke.mjs.
 import { createRequire } from 'node:module';
@@ -13,6 +14,8 @@ const PORT = arg('port', '8811');
 const MAX_MIN = Number(arg('maxmin', 70));
 const SEED = Number(arg('seed', 7));
 const OUT = arg('out', '');
+const COLLECT = Number(arg('collect', 30));
+const PANEL_OFF = arg('panel-off', '') === '1';
 const FRAME_MS = Number(arg('frame', 200));
 const SPREAD = 'eyes,sweet,slides,sell,trance;ears,strict,scroll,premium,bimbo;eyes,strict,blind,premium,drone;ears,sweet,slides,premium,sissy;eyes,sweet,scroll,sell,goon;ears,strict,blind,sell,locked;eyes,strict,slides,sell,censored;ears,sweet,blind,premium,infection';
 const routes = arg('routes', SPREAD).split(';').map((r) => r.trim()).filter(Boolean);
@@ -48,7 +51,11 @@ for (const profile of profiles) {
       await page.waitForTimeout(25);
     }
     const lanes = route.split(',');
-    await page.evaluate(([lanes, taps, frame]) => window.__play.start({ picks: { f1: lanes[0], f2: lanes[1], f3: lanes[2], f4: lanes[3], f5: lanes[4] }, taps, frame }), [lanes, PROFILES[profile].taps, FRAME_MS]);
+    await page.evaluate(([lanes, taps, frame, collect, panelOff]) => window.__play.start({ picks: { f1: lanes[0], f2: lanes[1], f3: lanes[2], f4: lanes[3], f5: lanes[4] }, taps, frame, collect, panelOff }), [lanes, PROFILES[profile].taps, FRAME_MS, COLLECT, PANEL_OFF]);
+    await page.evaluate(async () => {
+      const { QUESTIONS } = await import('/fuzz/data/content/questions.js');
+      window.__yes = new Set(QUESTIONS.flatMap((q) => q.answers.filter((a) => a.tone === 'yes').map((a) => a.label)));
+    });
     let res = null;
     while (true) {
       res = await page.evaluate((s) => window.__play.run(s), 60);
@@ -64,15 +71,18 @@ for (const profile of profiles) {
     console.log(`  gaps   longest ${row.longest.gap} s at ${m(row.longest.at)} min (for ${row.longest.next}), over 60 s: ${row.over60}, mean ${row.meanGap} s`);
     console.log(`  ends   ${Object.entries(row.endings).map(([k, v]) => `${k} ${m(v)}`).join(' ')}`);
     console.log(`  money  ${top}`);
-    console.log(`  side   lumps ${row.lumpShare}%, mods ${row.modShare}%, pressed ${row.pressed}`);
+    console.log(`  side   lumps ${row.lumpShare}%, mods ${row.modShare}%, pressed ${row.pressed}, paid/asked ${(row.side.paid / Math.max(1, row.side.asked)).toFixed(2)}`);
+    console.log(`  lumps  ${Object.entries(row.lumps).sort((a, b) => b[1].got - a[1].got).slice(0, 8).map(([k, l]) => `${k} ${l.n}x ${(l.secs / l.n).toFixed(1)}s late ${l.lateN ? (l.lateSecs / l.lateN).toFixed(1) : '-'}s`).join(', ')}`);
     if (row.errors.length) console.log(`  ERRORS ${row.errors.join(' | ')}`);
     if (OUT) writeFileSync(OUT, JSON.stringify(all, null, 1));
   }
 }
 await browser.close();
 
-console.log('\nroute                                     prof    drop  first-alt  gap  f1   f5   pod  lumps mods');
+const first = (r, ids) => { const v = ids.map((i) => r.at[i]).filter((x) => x != null); return v.length ? Math.min(...v) : null; };
+const THEME_FIRST = (id) => /^(tr|bi|dr|si|go|lo|ce|in)_/.test(id) && !id.endsWith('_head') && !id.endsWith('_pod');
+console.log('\nroute                                     prof    drop  first-alt  gap  f1   f5   f3  scrn  row2  pod  2nd  sCol sShp asmr guid pnl lumps mods');
 for (const r of all) {
   const alts = Object.entries(r.endings).filter(([k]) => k !== 'drop' && k !== 'onemore').map(([, v]) => v).filter((v) => v != null);
-  console.log(`${r.route.padEnd(41)} ${r.profile.padEnd(6)} ${m(r.t)} ${m(alts.length ? Math.min(...alts) : null)}  ${String(r.longest.gap).padStart(4)} ${m(r.forks.f1)} ${m(r.forks.f5)} ${m(r.pod)} ${String(r.lumpShare).padStart(4)}% ${String(r.modShare).padStart(4)}%`);
+  console.log(`${r.route.padEnd(41)} ${r.profile.padEnd(6)} ${m(r.t)} ${m(alts.length ? Math.min(...alts) : null)}  ${String(r.longest.gap).padStart(4)} ${m(r.forks.f1)} ${m(r.forks.f5)} ${m(r.forks.f3)} ${m(first(r, ['v_frame', 'd_scroll', 'b_frame']))} ${m(first(r, Object.keys(r.at).filter(THEME_FIRST)))} ${m(r.pod)} ${m(r.at.taste2)} ${m(r.at.sp_colors)} ${m(r.at.sp_shapes)} ${m(r.at.asmr)} ${m(r.at.guide)} ${m(r.at.panel)} ${String(r.lumpShare).padStart(4)}% ${String(r.modShare).padStart(4)}%`);
 }

@@ -25,13 +25,15 @@ test('no row sits behind an ending: buying the ending would end the run first', 
   for (const it of ITEMS) for (const q of it.req) assert.notEqual(BY_ID[q].kind, 'end', it.id);
 });
 
-test('no row is cheaper than a parent, and each theme opens on its head then its podcast', () => {
+test('no row is cheaper than a parent, and each theme opens on its head, with rows on offer before its podcast', () => {
   for (const it of ITEMS) for (const q of it.req) assert.ok(it.cost >= BY_ID[q].cost, `${it.id} ${it.cost} is cheaper than ${q} ${BY_ID[q].cost}`);
   for (const lane of Object.keys(FORKS.f5.opts)) {
     const rows = ITEMS.filter((i) => i.lane === lane && i.kind !== 'end').sort((a, b) => a.cost - b.cost);
-    assert.ok(rows[1].id.endsWith('_pod'), `${lane} opens with ${rows[1].id}`);
-    assert.deepEqual(rows[1].req, [rows[0].id]);
+    assert.ok(rows[0].id.endsWith('_head'), `${lane} opens with ${rows[0].id}`);
     assert.ok(rows[0].req.includes('f5'));
+    const at = rows.findIndex((r) => r.id.endsWith('_pod'));
+    assert.deepEqual(rows[at].req, [rows[0].id], `${lane}: the podcast needs only the head`);
+    assert.ok(at >= 3, `${lane}: the pick should be felt before the podcast, only ${at - 1} rows sit under it`);
   }
 });
 

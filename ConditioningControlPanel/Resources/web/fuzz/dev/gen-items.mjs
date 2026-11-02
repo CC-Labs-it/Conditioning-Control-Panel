@@ -29,10 +29,10 @@ const TRUNK_ORDER = ['start', 'stray', 'fpsv', 'f1', 'softw', 'ticker', 'f5', 'f
 const DROPPED = new Set(['heart']);   // owner, 2026-11-02: no heartbeat
 /* Rows that came after the design source. A row with `any` needs at least one of those as well as all of `req`. */
 const EXTRA_ROWS = [
-  { id: 'sp_colors', emoji: '🎨', name: 'Spiral Colours', what: 'The spiral slowly drifts through your colours.', line: 'It will not sit still.', cost: 5000, lane: 'look', req: [], any: ['e_spiral', 'a_spiral'], pay: '-' },
-  { id: 'sp_shapes', emoji: '🧿', name: 'Spiral Shapes', what: 'The spiral keeps melting into new shapes.', line: 'Follow it anyway.', cost: 15000, lane: 'look', req: ['sp_colors'], pay: '-' },
-  { id: 'asmr', emoji: '🎧', name: 'ASMR', what: 'A player for soft ASMR sits at the edge of the screen. Off air for now.', line: 'Closer than you think.', cost: 3000, lane: 'side', req: ['f5'], pay: 'f', fps: 20 },
-  { id: 'guide', emoji: '🗺️', name: 'Guide', what: 'Open a map of every unlock and where it leads.', line: 'Now you can see what you skipped.', cost: 7000, lane: 'side', req: ['screen'], pay: '-' },
+  { id: 'sp_colors', emoji: '🎨', name: 'Spiral Colours', what: 'The spiral slowly drifts through your colours.', line: 'It will not sit still.', cost: 7000, lane: 'look', req: [], any: ['e_spiral', 'a_spiral'], pay: '-' },
+  { id: 'sp_shapes', emoji: '🧿', name: 'Spiral Shapes', what: 'The spiral keeps melting into new shapes.', line: 'Follow it anyway.', cost: 20000, lane: 'look', req: ['sp_colors'], pay: '-' },
+  { id: 'asmr', emoji: '🎧', name: 'ASMR', what: 'A player for soft ASMR sits at the edge of the screen. Off air for now.', line: 'Closer than you think.', cost: 5000, lane: 'side', req: ['f5'], pay: 'f', fps: 20 },
+  { id: 'guide', emoji: '🗺️', name: 'Guide', what: 'Open a map of every unlock and where it leads.', line: 'Now you can see what you skipped.', cost: 9000, lane: 'side', req: ['screen'], pay: '-' },
   { id: 'panel', emoji: '🎛️', name: 'Control Panel', what: 'Turn anything you have unlocked on or off.', line: 'You were always in control. Sure.', cost: 400000, lane: 'side', req: ['overlay'], pay: '-' },
 ];
 
@@ -40,23 +40,37 @@ const EXTRA_ROWS = [
  * sim/economy.js), so the plan pays 70% of the design's numbers and the whole run lands near 30. Measured: dev/measure.mjs. */
 /* Pay a row earns on top of its design numbers, before planPay. Swipe Feed is a screen: it earns per second as well as per swipe. */
 const EXTRA_PAY = { d_scroll: { fps: 11 } };
-const planPay = (n, lane) => Math.max(1, Math.round(n * (LANE_PAY[lane] ?? 0.7)));
-/* Tap on Command and Bimbo earn from taps, which a real player does every moment: they run ahead of the Rest route without this. */
-const LANE_PAY = { strict: 0.6, bimbo: 0.55 };
+const planPay = (n, lane, cost) => Math.max(1, Math.round(n * (LANE_PAY[lane] ?? 0.7) * (cost >= LATE_FROM ? LATE_PAY : 1)));
+/* Tap on Command and Bimbo earn from taps, which a real player does every moment: they run ahead of the Rest route without this.
+ * Infection and No Pictures pay less on top of their rows, so they get a little more in them. */
+const LANE_PAY = { strict: 0.6, bimbo: 0.45, scroll: 0.65, goon: 0.65, blind: 0.8, infection: 0.9, censored: 0.65 };
+/* Everything past the podcast pays this much less: the early game got its rows sooner, and the run still takes 30 minutes. */
+const LATE_FROM = 20000, LATE_PAY = 0.82;
 
-/* The theme pick comes at about minute 8 and its podcast at about minute 10 (owner, 2026-11-02). The trunk up to the pick
- * gets cheaper, each theme opens with its head and then its podcast, and the rows that sat before the podcast each take the
- * price of the row before them, so everything above the podcast's old place keeps its price and no late gap opens. A row
- * that moves keeps its value for money: pay follows price along the design's own curve. */
-const TRUNK_MOVES = { f5: 600, f3: 1000, depth: 1200, f2: 1500, banner: 5000, f4: 6500, glossy: 8000, v_frame: 1200, d_scroll: 1200 };
+/* The order and the minutes (owner, 2026-11-02): theme pick about minute 3, pictures about minute 4, a first screen right after,
+ * gifs and clips as later upgrades of that lane, the theme's first rows between the pick and minute 10, its podcast at about
+ * minute 10. Measured on the real game: dev/measure.mjs. A row that moves keeps its value for money: pay follows price along
+ * the design's own curve. */
+const TRUNK_MOVES = {
+  f5: 2300, f3: 3300, depth: 3600, f2: 4200, banner: 5000, f4: 6500, glossy: 8000, taste2: 45000, overlay: 150000, takeover: 230000,
+  /* The picture lanes, whichever fork: first screen, then a slot each. */
+  v_frame: 3500, v_frame2: 5500, v_frame3: 8000, v_gif: 12000, v_wall: 22000, v_fav: 40000, v_video: 65000,
+  d_scroll: 3500, d_like: 5500, d_clips: 8000, d_foryou: 12000, d_streak: 22000, d_refresh: 40000, d_end: 65000,
+  b_frame: 3500, b_caption: 5500, b_story: 8000, b_radio: 12000, b_fill: 22000, b_ink: 40000, b_memory: 65000,
+  /* Rows behind Rest or Tap never sit under it. */
+  s_good: 4200, s_rest: 4500, t_orders: 4200, t_denied: 4200, t_count: 4500, quiz: 4500, melt: 5000,
+};
+/* The last buy: at the rate a run ends on, a bigger one is more than a minute of waiting with nothing else left to buy. */
+const END_COST = 1700000;
 const THEME_LANES = ['trance', 'bimbo', 'drone', 'sissy', 'goon', 'locked', 'censored', 'infection'];
-const HEAD_COST = 800, POD_COST = 12000;
+/* Head just after the pick, then the theme's next rows priced so the pick is felt before the podcast. */
+const HEAD_COST = 2500, THEME_EARLY = [3800, 6000, 9000], POD_COST = 12000;
 const moved = (r, cost) => {
   const k = (cost / r.cost) ** 0.8;
   return { ...r, cost, ...(r.fps ? { fps: Math.round(r.fps * k) } : {}), ...(r.click ? { click: Math.round(r.click * k) } : {}) };
 };
 function moveRows(rows) {
-  const out = rows.map((r) => (TRUNK_MOVES[r.id] ? moved(r, TRUNK_MOVES[r.id]) : r));
+  const out = rows.map((r) => (TRUNK_MOVES[r.id] ? moved(r, TRUNK_MOVES[r.id]) : r.kind === 'end' && r.cost === 2000000 ? { ...r, cost: END_COST } : r));
   const byId = new Map(out.map((r) => [r.id, r]));
   for (const lane of THEME_LANES) {
     const chain = out.filter((r) => r.lane === lane && r.kind !== 'end').sort((a, b) => a.cost - b.cost);
@@ -67,6 +81,8 @@ function moveRows(rows) {
     byId.set(head.id, moved(head, HEAD_COST));
     byId.set(pod.id, { ...moved(pod, POD_COST), req: [head.id] });
     if (after) byId.set(after.id, { ...after, req: [chain[p - 1].id] });
+    const rest = chain.filter((r) => r !== head && r !== pod).map((r) => byId.get(r.id)).sort((a, b) => a.cost - b.cost);
+    THEME_EARLY.forEach((cost, i) => { if (rest[i]) byId.set(rest[i].id, moved(rest[i], cost)); });
   }
   return out.map((r) => byId.get(r.id));
 }
@@ -125,8 +141,8 @@ export function buildItems() {
     if (!c) throw new Error(`copy.json has no ${r.id}`);
     const it = { id: r.id, emoji: r.emoji, name: cur(c.name), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
     const fps = r.fps || EXTRA_PAY[r.id]?.fps;
-    if (fps) it.fps = planPay(fps, r.lane);
-    if (r.click) it.click = planPay(r.click, r.lane);
+    if (fps) it.fps = planPay(fps, r.lane, r.cost);
+    if (r.click) it.click = planPay(r.click, r.lane, r.cost);
     if (r.wall) it.wall = r.wall;
     if (r.flags) it.flags = r.flags;
     if (r.any) it.any = r.any;
