@@ -110,8 +110,7 @@ function finger(page) {
   /* Deep into the shop: it never stays all the way behind it. */
   await mouseDrag(page, { x: a2.x + a2.w / 2, y: a2.y + a2.h - 30 }, { x: shop.x + shop.width / 2, y: 700 });
   const a3 = (await frames(page))[0];
-  const stands = Math.max(shop.y - a3.y, shop.x - a3.x, a3.x + a3.w - (shop.x + shop.width));
-  check(stands >= 40, `something stands clear of the shop (${stands}, ${JSON.stringify(a3)})`);
+  check(await page.evaluate(({ x, y, w, h }) => { for (let i = 1; i < 10; i += 2) for (let j = 1; j < 10; j += 2) if (document.elementFromPoint(x + w * i / 10, y + h * j / 10)?.closest('.scr')) return true; return false; }, a3), `something can still be grabbed (${JSON.stringify(a3)})`);
   await shot(page, 'scr-03-desk-shop-clamp');
   const tiles = await page.evaluate(() => { const r = document.querySelector('#rows .row, #goal .row').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('.row') != null; });
   check(tiles, 'a tile stays pressable over a screen');
@@ -261,15 +260,14 @@ function finger(page) {
   check(hit === 'btn', 'the button is pressable with the frames up');
   const taps0 = await page.evaluate(() => window.fuzz.state.taps);
   const fin = finger(page);
-  await fin.drag({ x: a.x + a.w / 2, y: a.y + a.h - 8 }, { x: a.x + a.w / 2 + 120, y: a.y + a.h - 8 + 30 });
+  await fin.drag({ x: a.x + a.w / 2, y: a.y + 10 }, { x: a.x + a.w / 2 + 120, y: 560 });   // open ground: a drop with nothing to grab goes back
   const a2 = (await frames(page))[0];
   check(a2.x > a.x + 100, `a finger drags a frame (${JSON.stringify(a)} -> ${JSON.stringify(a2)})`);
   check(await page.evaluate(() => window.fuzz.state.taps) === taps0, 'a finger drag across the button is not a tap');
   await shot(page, 'scr-11-phone-dragged');
   await fin.drag({ x: a2.x + a2.w / 2, y: a2.y + a2.h - 8 }, { x: 195, y: 700 });
   const a3 = (await frames(page))[0];
-  const shopTop = (await page.locator('#shop').boundingBox()).y;
-  check(a3.y + 40 <= shopTop, `a finger cannot bury it in the shop (${JSON.stringify(a3)}, shop ${shopTop})`);
+  check(await page.evaluate(({ x, y, w, h }) => { for (let i = 1; i < 10; i += 2) for (let j = 1; j < 10; j += 2) if (document.elementFromPoint(x + w * i / 10, y + h * j / 10)?.closest('.scr')) return true; return false; }, a3), `a finger cannot bury it in the shop (${JSON.stringify(a3)})`);
   await page.tap('#btn');
   check(await page.evaluate(() => window.fuzz.state.taps) === taps0 + 1, 'the button takes a real tap');
   await page.close();
@@ -282,9 +280,10 @@ function finger(page) {
   const money = await page.evaluate(() => window.fuzz.rates?.fps ?? window.fuzz.engine.rates().fps);
   check(money > 0, `the feed earns per second (${money})`);
   const t0 = await page.evaluate(() => window.fuzz.state.taps);
-  await fin2.drag({ x: s.x + s.w / 2, y: s.y + 10 }, { x: 195, y: s.y + 20 });
+  await fin2.drag({ x: s.x + s.w / 2, y: s.y + 10 }, { x: 195, y: 62 });
   const under = (await frames(page))[0];
-  check(under.x === s.x && under.y === s.y, `a bar dropped under the counter goes back, or nothing could grab it (${JSON.stringify(under)})`);
+  check(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x + 6, y + 10)?.closest('.scr'), under), `a bar dropped by the counter can still be grabbed (${JSON.stringify(under)})`);
+  await fin2.drag({ x: under.x + 6, y: under.y + 10 }, { x: s.x + 6, y: s.y + 10 });
   await fin2.drag({ x: s.x + s.w / 2, y: s.y + 10 }, { x: s.x + s.w / 2 + 272, y: s.y + 10 + 12 });
   const s2 = (await frames(page))[0];
   check(s2.x > s.x + 120, `the bar drags the feed (${JSON.stringify(s)} -> ${JSON.stringify(s2)})`);
@@ -310,7 +309,7 @@ function finger(page) {
   await shot(page, 'scr-14-phone-blind');
   check(await page.locator('.scr-card').count() === 0, 'No Pictures has no test card: the empty frame is the joke');
   const [c] = await frames(page);
-  await finger(page).drag({ x: c.x + c.w / 2, y: c.y + c.h - 8 }, { x: c.x + c.w / 2 + 100, y: c.y + c.h });
+  await finger(page).drag({ x: c.x + c.w / 2, y: c.y + 10 }, { x: c.x + c.w / 2 + 100, y: 560 });
   const c2 = (await frames(page))[0];
   check(c2.x > c.x + 80, `the empty frame drags (${JSON.stringify(c2)})`);
   await page.close();

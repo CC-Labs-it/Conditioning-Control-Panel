@@ -63,7 +63,8 @@ test('new screens fill the emptier side, from the bottom of a rail, and do not s
   assert.equal(c.x, 8);
   assert.equal(c.y, a.y - 258 - 8);
   const phone = { W: 390, H: 800, railW: -205 };
-  const p = defaultSpot(phone, { w: 102, h: 110 }, []);
+  const p = defaultSpot({ ...phone, floor: 740 }, { w: 102, h: 110 }, []);
+  assert.equal(p.y, 740 - 8 - 110, 'a phone starts in the open room above the dock strip');
   const q = defaultSpot(phone, { w: 102, h: 110 }, [{ ...p, w: 102, h: 110 }]);
   const btn = rect(110, 130, 280, 188);
   for (const s of [p, q]) assert.ok(s.x + 102 <= btn.left + 2 || s.x >= btn.right - 2, JSON.stringify(s));

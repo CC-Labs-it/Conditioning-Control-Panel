@@ -33,18 +33,18 @@ export function clampSpot({ x, y, w, h }, { W, H, shop = null }) {
 }
 
 /** How big a screen is here. In the rails on a wide window, beside the button on a narrow one. */
-export function screenSize({ W, railW, flank, maxH }, { ratio = 1.1, wide = false, scale = 1 } = {}) {
+export function screenSize({ W, railW, flank, maxH, flankH = maxH }, { ratio = 1.1, wide = false, scale = 1 } = {}) {
   if (railW >= 170) {
     const w = Math.round(clamp((railW - 16) * scale, 130, 300));
     return { w, h: Math.round(w * ratio) };
   }
   const w = Math.round(wide ? Math.min(W * 0.62, 340) : flank);
-  return { w, h: Math.round(Math.min(w * ratio, Math.max(60, maxH))) };
+  return { w, h: Math.round(Math.min(w * ratio, Math.max(60, wide ? maxH : flankH))) };
 }
 
 /** The first spot for a new screen. Fills the emptier side, from the bottom of the rails up (the dock fills them from the
- *  top), or the free room beside the button when there are no rails. */
-export function defaultSpot({ W, H, railW, top = TOP }, { w, h }, placed = []) {
+ *  top), or the open room under the shop, up from the dock strip, when there are no rails. */
+export function defaultSpot({ W, H, railW, top = TOP, floor = H }, { w, h }, placed = []) {
   const left = placed.filter((p) => p.x + p.w / 2 < W / 2), right = placed.filter((p) => p.x + p.w / 2 >= W / 2);
   const onLeft = left.length <= right.length;
   const col = onLeft ? left : right;
@@ -53,7 +53,8 @@ export function defaultSpot({ W, H, railW, top = TOP }, { w, h }, placed = []) {
     const y = H - PAD - h - col.reduce((sum, p) => sum + p.h + PAD, 0);
     return { x: edge, y: y >= top ? y : top + col.length * 18 };
   }
-  return { x: edge + (onLeft ? 1 : -1) * col.length * 10, y: top + col.length * 14 };
+  const y = floor - PAD - h - col.reduce((sum, p) => sum + p.h + PAD, 0);
+  return { x: edge + (onLeft ? 1 : -1) * col.length * 10, y: y >= top ? y : top + col.length * 14 };
 }
 
 /** The picked themes' niches come first, since the theme comes first now. roll() is 0..1. */
@@ -102,13 +103,24 @@ function ensureCss(ctx) {
   doc.head.appendChild(s);
 }
 
+/** What the shop really holds. Its box runs to the foot of the page and lets the pointer through; only the tiles are in the way. */
+function shopContent(box) {
+  const whole = box?.getBoundingClientRect();
+  if (!whole?.width) return whole || null;
+  const kids = [...box.children].map((k) => k.getBoundingClientRect()).filter((r) => r.width && r.height);
+  return kids.length ? { top: whole.top, left: whole.left, right: whole.right, width: whole.width, bottom: Math.max(...kids.map((r) => r.bottom)) } : whole;
+}
+
 function room(ctx) {
   const { w: W, h: H } = ctx.bounds();
-  const shop = ctx.parts.shop?.getBoundingClientRect() || null;
+  const shop = shopContent(ctx.parts.shop);
   const btn = ctx.button.el.getBoundingClientRect();
   /* The shop can still be hidden at the first mount of a load: it will start about here. */
   const free = shop && shop.width ? shop.top : btn.bottom + 12;
-  return { W, H, shop, railW: (W - 800) / 2, flank: clamp((W - btn.width) / 2 - PAD, 60, 240), maxH: free - ((W - 800) / 2 >= 170 ? TOP : Math.max(TOP, Math.round(btn.top) - 8)) - 6, flankTop: Math.max(TOP, Math.round(btn.top) - 8) };
+  /* No rails: the room under the shop. A frame takes a fair part of the window, not the crack beside the button. */
+  const strip = ctx.button.el.ownerDocument.getElementById('dock-strip')?.getBoundingClientRect();
+  const railW = (W - 800) / 2;
+  return { W, H, shop, railW, floor: strip?.height ? strip.top : H - 50, flank: clamp(W * 0.42, 120, 200), maxH: railW >= 170 ? free - TOP - 6 : H * 0.34, flankH: railW >= 170 ? free - TOP - 6 : H * 0.28, flankTop: Math.max(TOP, Math.round(btn.top) - 8) };
 }
 
 /** The file picker has to open inside the press itself. Own files stay on this device. */
