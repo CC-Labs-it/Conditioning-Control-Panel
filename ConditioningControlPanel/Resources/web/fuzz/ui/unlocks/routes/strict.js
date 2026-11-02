@@ -50,7 +50,7 @@ export default {
         good(ctx, obeyed());
         ctx.voice('obey', { gain: 0.5 });
       });
-      return {};
+      return { off() { close(); } };
     },
   },
 

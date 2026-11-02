@@ -7,8 +7,8 @@ import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/lo
 
 export const docOf = (ctx) => ctx.button.el.ownerDocument;
 
-/** True when this row is the newest buy: mount also runs on reload, and a reload should not replay the arrival. */
-export const fresh = (ctx) => { const o = ctx.state.order; return o[o.length - 1] === ctx.item.id; };
+/** True when this row is the newest buy: mount also runs on reload and on a Control Panel switch, and neither should replay the arrival. */
+export const fresh = (ctx) => { const o = ctx.state.order; return !ctx.restored && o[o.length - 1] === ctx.item.id; };
 
 /** Sound is an unlock too: nothing sounds before Click Sound is bought. */
 export function sfx(ctx, file, gain = 0.6) {
