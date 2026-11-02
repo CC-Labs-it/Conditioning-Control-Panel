@@ -110,14 +110,22 @@ export default {
       baseCss(ctx);
       ctx.css(`
 body { transition: background-color .6s, color .6s; }
-#btn { background: var(--btn); border: 2px solid var(--btn-edge); box-shadow: 0 3px 0 var(--btn-edge); font-weight: 600; }
+#btn { background: var(--btn-fill); border: 2px solid var(--btn-edge); box-shadow: 0 3px 0 var(--btn-edge); font-weight: 600; }
 #btn.down { border-style: solid; box-shadow: none; transform: translateY(3px) scale(.98); }
 .row { border-radius: 6px; }
 #goal .row { border-color: var(--btn-edge); }
 `);
-      const { '--page': page, ...rest } = PALETTES.pink;
-      ctx.vars(rest);
-      wipe(ctx, page, () => ctx.vars({ '--page': page }));
+      if (ctx.pick('f5')) {
+        /* The grey is long gone: bought after a theme, Colour gives the page more of the theme, in the same wipe. */
+        const rich = { '--niche-wash-now': '30%' };
+        wipe(ctx, 'color-mix(in srgb, var(--mix) 26%, var(--page))', () => ctx.vars(rich));
+      } else {
+        const { '--page': page, ...rest } = PALETTES.pink;
+        ctx.vars(rest);
+        wipe(ctx, page, () => { if (!ctx.pick('f5')) ctx.vars({ '--page': page }); });
+        /* Bought before the theme: the pick comes along and takes the page, so the richer wash waits for it. */
+        ctx.on('fork', ({ fork }) => { if (fork === 'f5') ctx.vars({ '--niche-wash-now': '30%' }); });
+      }
       if (fresh(ctx)) { sfx(ctx, 'sfx/reveal_chime.mp3', 0.6); squish(ctx, ctx.button.el); }
       return {};
     },
@@ -160,7 +168,7 @@ body { transition: background-color .6s, color .6s; }
   /* Confetti: every purchase, sized to how much of the bank it took. */
   confetti: {
     mount(ctx) {
-      const COLS = ['#ff4fa8', '#7b5cff', '#f0c24b', '#29b6c9'];
+      const COLS = ['var(--accent)', 'var(--accent-2)', 'var(--accent-soft)', 'var(--accent-deep)'];
       const shower = (n) => {
         const { w } = ctx.bounds(), c = btnCenter(ctx);
         if (ctx.gentle) { burst(ctx, c.x, c.y, { color: COLS[0], reach: 90 }); return; }
@@ -206,7 +214,7 @@ body { transition: background-color .6s, color .6s; }
       ctx.css(`html, body, button, .row, #btn { cursor: url("data:image/svg+xml,${arrow}") 1 1, auto !important; }`);
       const win = docOf(ctx).defaultView;
       const ring = (x, y) => {
-        const d = spawn(ctx, `width:44px;height:44px;margin:-22px 0 0 -22px;box-sizing:border-box;border:3px solid #ff4fa8;border-radius:50%;left:${x}px;top:${y}px;`);
+        const d = spawn(ctx, `width:44px;height:44px;margin:-22px 0 0 -22px;box-sizing:border-box;border:3px solid var(--accent);border-radius:50%;left:${x}px;top:${y}px;`);
         play(ctx, d, [{ transform: 'scale(.3)', opacity: 1 }, { transform: 'scale(1.1)', opacity: 0 }], { duration: ctx.gentle ? 400 : 480, easing: 'ease-out' });
       };
       const onDown = (e) => { if (!ctx.paused) ring(e.clientX, e.clientY); };
@@ -314,9 +322,12 @@ body.gentle #btn[data-skin=watch] { animation: none; }
         setPalette(ctx, name);
         ctx.store.set('name', name);
         for (const [k, d] of Object.entries(dots)) d.setAttribute('aria-pressed', String(k === name));
-        if (by) { ctx.emit('palette', { name }); }
+        if (by) ctx.emit('page-colour', { name });
       };
-      for (const [name, col] of [['pink', '#ff69b4'], ['violet', '#7b5cff'], ['teal', '#16a596'], ['black', '#111']]) {
+      /* After a pick a fifth pot goes back to the theme's own page. */
+      const pots = [['pink', '#ff69b4'], ['violet', '#7b5cff'], ['teal', '#16a596'], ['black', '#111']];
+      if (ctx.pick('f5')) pots.unshift(['theme', 'var(--btn-fill)']);
+      for (const [name, col] of pots) {
         const b = ctx.el('button', '', null, row);
         b.type = 'button';
         b.className = 'fz-pot';
@@ -329,7 +340,9 @@ body.gentle #btn[data-skin=watch] { animation: none; }
         if (fresh(ctx)) ctx.anim(b, [{ scale: 0 }, { scale: 1.3, offset: 0.7 }, { scale: 1 }], { duration: 320, delay: 80 * Object.keys(dots).length, fill: 'backwards' });
       }
       const pick = ctx.store.get('name');
-      paint(pick || 'violet', false);
+      paint(pick || (ctx.pick('f5') === 'trance' ? 'teal' : 'violet'), false);
+      /* A theme picked after the pots dresses the page: the player's pot goes back on top of it. */
+      ctx.on('fork', ({ fork }) => { if (fork === 'f5') ctx.after(0, () => paint(ctx.store.get('name') || 'violet', false)); });
       return {};
     },
   },
@@ -346,10 +359,10 @@ body.gentle #btn[data-skin=watch] { animation: none; }
       };
       const b = chip(ctx, '', () => {
         set(!on);
-        if (on) setPalette(ctx, 'dark'); else setPalette(ctx, base || 'pink');
+        if (on) setPalette(ctx, 'dark'); else setPalette(ctx, base || (ctx.pick('f5') ? 'theme' : 'pink'));
         sfx(ctx, 'sfx/ui_equip.mp3', 0.4);
       });
-      ctx.on('palette', ({ name }) => { base = name; if (on) set(false); });
+      ctx.on('page-colour', ({ name }) => { base = name; if (on) set(false); });
       set(on);
       ctx.after(0, () => { if (on) setPalette(ctx, 'dark'); });
       return {};

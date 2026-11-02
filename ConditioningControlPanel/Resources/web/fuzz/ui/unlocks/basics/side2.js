@@ -55,7 +55,7 @@ export default {
       const c = chip(ctx, `✦ ${APP_ONLY.sparkle.tag}`, () => ctx.toast(app ? APP_ONLY.sparkle.app : APP_ONLY.sparkle.web));
       ctx.on('box', ({ x, y }) => {
         const r = c.getBoundingClientRect();
-        const s = spawn(ctx, 'width:22px;height:22px;background:#19b5d6;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);');
+        const s = spawn(ctx, 'width:22px;height:22px;background:var(--accent);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);');
         play(ctx, s, [{ transform: `translate(${x}px,${y}px) scale(1)`, opacity: 1 }, { transform: `translate(${r.left + r.width / 2}px,${r.top}px) scale(.6) rotate(180deg)`, opacity: 0.9 }], { duration: ctx.gentle ? 400 : 800, easing: 'ease-in' });
         ctx.after(820, () => squish(ctx, c, 1.2));
       });
@@ -102,7 +102,7 @@ export default {
   /* Voice Reactions: a small round voice by the button, a caption bubble, a recorded clip or silence. */
   opinions: {
     mount(ctx) {
-      const orb = ctx.el('div', 'position:absolute;left:10px;width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#b9a4ff,#5a3fb5);pointer-events:none;', null, 'floaters');
+      const orb = ctx.el('div', 'position:absolute;left:10px;width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 35% 30%,var(--accent-soft),var(--accent-2));pointer-events:none;', null, 'floaters');
       const place = () => { orb.style.top = `${btnCenter(ctx).y - 18}px`; };
       place();
       ctx.every(2000, place);
@@ -112,7 +112,7 @@ export default {
         quietUntil = now + 5000;
         const line = pick(ctx, bank);
         const r = orb.getBoundingClientRect();
-        const b = spawn(ctx, `left:${r.left + 14}px;top:${r.top - 44}px;padding:6px 12px;background:#fff;color:#2a1a5a;border:2px solid #5a3fb5;border-radius:12px;font-weight:700;font-size:16px;white-space:nowrap;`, line.caption);
+        const b = spawn(ctx, `left:${r.left + 14}px;top:${r.top - 44}px;padding:6px 12px;background:var(--panel);color:var(--ink);border:2px solid var(--accent-2);border-radius:12px;font-weight:700;font-size:16px;white-space:nowrap;`, line.caption);
         play(ctx, b, [{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], { duration: 1500 });
         if (line.clip) ctx.voice(line.clip, { gain: 0.8 });
         squish(ctx, orb, 1.4);
@@ -203,7 +203,7 @@ export default {
         const el = ctx.button.el;
         if (p.key === 'poke') squish(ctx, el, 1.5);
         else if (p.key === 'spin') { if (!ctx.gentle) ctx.anim(el, [{ rotate: '0deg' }, { rotate: '360deg' }], { duration: 700 }); }
-        else if (p.key === 'pink') { setPalette(ctx, 'pink'); ctx.emit('palette', { name: 'pink' }); }
+        else if (p.key === 'pink') { setPalette(ctx, 'pink'); ctx.emit('page-colour', { name: 'pink' }); }
         else if (p.key === 'tap') ctx.button.press();
         else if (p.key === 'hush') ctx.audio.muteFor(3000);
         ctx.toast(REMOTE_SOLO.toasts[p.key]);

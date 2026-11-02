@@ -138,7 +138,7 @@ export default {
       const row = ctx.el('div', 'order:4;display:flex;align-items:center;gap:6px;margin-top:3px;font-size:13px;pointer-events:auto;', null, ctx.layer('meters'));
       const label = ctx.el('span', 'flex:none;', '', row);
       const track = ctx.el('span', 'display:block;width:110px;height:10px;background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden;', null, row);
-      const fill = ctx.el('i', 'display:block;height:100%;width:0;background:linear-gradient(#ffb0d8,#ff4fa8);transition:width .25s linear;', null, track);
+      const fill = ctx.el('i', 'display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .25s linear;', null, track);
       const need = () => Math.min(180, 35 * Math.pow(1.22, lvl - 1));
       const b = ctx.el('button', 'min-height:30px;padding:1px 8px;font-size:12px;background:var(--btn);color:var(--btn-ink,inherit);border:1px solid var(--line);touch-action:manipulation;visibility:hidden;', LEVELS.collect, row);
       b.type = 'button';
@@ -178,7 +178,7 @@ export default {
         const { w, h } = ctx.bounds();
         const x = 20 + ctx.rng() * (w - 110), y = 80 + ctx.rng() * (h * 0.5);
         live += 1;
-        const box = ctx.el('button', `position:absolute;left:${x}px;top:${y}px;width:68px;height:62px;padding:0;border:1px solid #a02a6a;border-radius:4px;background:linear-gradient(90deg,#ff69b4 42%,#ffe08a 42% 58%,#ff69b4 58%);color:#2a0f22;font-size:11px;font-weight:700;pointer-events:auto;touch-action:manipulation;`, pick(ctx, BOXES.labels), 'over');
+        const box = ctx.el('button', `position:absolute;left:${x}px;top:${y}px;width:68px;height:62px;padding:0;border:1px solid var(--accent-deep);border-radius:4px;background:linear-gradient(90deg,var(--accent) 42%,#ffe08a 42% 58%,var(--accent-2) 58%);color:var(--niche-ink);font-size:11px;font-weight:700;pointer-events:auto;touch-action:manipulation;`, pick(ctx, BOXES.labels), 'over');
         box.type = 'button';
         const bar = ctx.el('i', 'position:absolute;left:0;right:0;bottom:-6px;height:4px;background:var(--stamp);transform-origin:0 50%;', null, box);
         if (!ctx.gentle) ctx.anim(box, [{ transform: 'translateY(-240px)', opacity: 0 }, { transform: 'none', opacity: 1, offset: 0.6 }, { transform: 'translateY(-9px)', offset: 0.8 }, { transform: 'none' }], { duration: 520, easing: 'ease-in' });
@@ -193,7 +193,7 @@ export default {
           stop();
           leave();
           ctx.pay(worth(ctx, 12), 'boxes', { x: cx, y: cy });
-          burst(ctx, cx, cy, { color: '#ff69b4', n: 16, reach: 80 });
+          burst(ctx, cx, cy, { color: 'var(--accent)', n: 16, reach: 80 });
           sfx(ctx, 'sfx/chain_pop.mp3', 0.6);
           ctx.say(pick(ctx, BOXES.opened));
           ctx.emit('box', { x: cx, y: cy });
@@ -278,7 +278,7 @@ export default {
         if (ctx.gentle) return;
         ctx.anim(el, [{ rotate: '-3deg' }, { rotate: '3deg' }, { rotate: '0deg' }], { duration: 340, iterations: 1, easing: 'linear' });
         const c = btnCenter(ctx);
-        for (const [dx, t] of [[-c.w / 2 - 22, '(('], [c.w / 2 + 22, '))']]) pop(ctx, c.x + dx, c.y, t, { color: '#7b5cff', size: 30, ms: 700 });
+        for (const [dx, t] of [[-c.w / 2 - 22, '(('], [c.w / 2 + 22, '))']]) pop(ctx, c.x + dx, c.y, t, { color: 'var(--stamp)', size: 30, ms: 700 });
       };
       ctx.on('lucky', shake);
       if (fresh(ctx)) { shake(); ctx.toast(can ? APP_ONLY.buzz.web : APP_ONLY.buzz.off); }

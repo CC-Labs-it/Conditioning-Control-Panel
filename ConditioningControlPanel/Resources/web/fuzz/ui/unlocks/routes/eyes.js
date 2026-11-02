@@ -36,7 +36,7 @@ function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 }
       if (corner) {
         const r = ctx.rates(), big = Math.max(r.wall * 25, r.fps * 2);
         ctx.pay(big, 'corner', { x: x + w / 2, y: y + h / 2 });
-        burst(ctx, x + w / 2, y + h / 2, '#ffd24d', 18, 110);
+        burst(ctx, x + w / 2, y + h / 2, 'var(--accent)', 18, 110);
         ctx.audio.play('assets/audio/sfx/golden_pop.mp3', { bus: 'sfx', gain: 0.6 });
         ctx.toast(ROUTE_COPY.corner);
         el.textContent = nextWord();
@@ -69,7 +69,7 @@ export default {
       const bars = [0, 1, 2, 3, 4].map((i) => ctx.el('div', `width:9px;height:${6 + i * 3}px;background:rgba(255,255,255,.25);border-radius:1px;transition:background .3s;`, null, row));
       let n = 2, dir = 1;
       const paint = () => {
-        bars.forEach((b, i) => { b.style.background = i <= n ? '#ffd24d' : 'rgba(255,255,255,.25)'; });
+        bars.forEach((b, i) => { b.style.background = i <= n ? 'var(--accent)' : 'rgba(255,255,255,.25)'; });
         if (sp) sp.speedMul = 0.6 + n * 0.75;
       };
       paint();
@@ -135,7 +135,7 @@ export default {
         if (s === 2) return `left:8px;top:${44 + u * (h - 80)}px;`;
         return `right:8px;top:${44 + u * (h - 80)}px;`;
       };
-      const show = () => flash(ctx, 'over', next(), `${spot()}font:15px Arial,Helvetica,sans-serif;color:#ffb6dc;text-shadow:0 0 6px #000;`, 1300);
+      const show = () => flash(ctx, 'over', next(), `${spot()}font:15px Arial,Helvetica,sans-serif;color:var(--accent-soft);text-shadow:0 0 6px #000;`, 1300);
       show();
       ctx.every(ctx.gentle ? 1400 : 600, show);
       return {};
@@ -159,13 +159,13 @@ export default {
         on = true;
         const b = btnCentre(ctx);
         label = setLine(ctx, nextStart(), 'font-weight:700;color:#fff;text-shadow:0 1px 4px #000;', 0);
-        meter = bar(ctx, 'floaters', `position:absolute;left:50%;margin-left:-90px;width:180px;top:${b.top - 8}px;height:5px;`, '#ffd24d');
+        meter = bar(ctx, 'floaters', `position:absolute;left:50%;margin-left:-90px;width:180px;top:${b.top - 8}px;height:5px;`, 'var(--accent)');
         meter.set(1, 6000);
         spiral()?.setOpacity(0.95, 500);
         cancel = ctx.after(6000, () => {
           const r = ctx.rates(), at = btnCentre(ctx);
           ctx.pay(Math.max(r.fps * 30, r.click * 30), 'stare', { x: at.x, y: at.top });
-          burst(ctx, at.x, at.y, '#ffd24d', 16, 100);
+          burst(ctx, at.x, at.y, 'var(--accent)', 16, 100);
           ctx.toast(nextDone());
           ctx.audio.play('assets/audio/sfx/reveal_chime.mp3', { bus: 'sfx', gain: 0.6 });
           stop();
@@ -198,7 +198,7 @@ export default {
         tick(dt) {
           still += dt;
           if (still > 2.5 && !shown) {
-            shown = setLine(ctx, next(), 'color:#ff9ccf;text-shadow:0 1px 3px #000;', 0);
+            shown = setLine(ctx, next(), 'color:var(--accent-soft);text-shadow:0 1px 3px #000;', 0);
             ctx.anim(shown, [{ opacity: 0 }, { opacity: 1 }], { duration: 1400 });
           }
           if (still > 6 && !paid) {
@@ -222,7 +222,7 @@ export default {
       const glow = ctx.el('div', 'position:absolute;left:50%;top:30%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;border-radius:50%;background:radial-gradient(circle,rgba(255,180,220,.55) 0,rgba(255,105,180,.42) 30%,rgba(255,105,180,0) 62%);opacity:.25;', null, 'wash');
       ctx.anim(glow, [{ opacity: 0.12 }, { opacity: 0.8 }], { duration: 2000, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
       if (!ctx.gentle) ctx.anim(ctx.button.el, [{ transform: 'scale(.94)' }, { transform: 'scale(1.08)' }], { duration: 2000, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out', composite: 'add' });
-      const word = ctx.el('div', 'font:600 15px Arial,Helvetica,sans-serif;color:#ffb0d6;width:30px;', 'In', meterRow(ctx));
+      const word = ctx.el('div', 'font:600 15px Arial,Helvetica,sans-serif;color:var(--accent-soft);width:30px;', 'In', meterRow(ctx));
       let out = false;
       ctx.every(2000, () => { out = !out; word.textContent = out ? 'Out' : 'In'; });
       return {};

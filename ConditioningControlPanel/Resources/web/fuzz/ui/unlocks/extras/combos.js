@@ -13,7 +13,7 @@ function found(ctx) {
   if (ctx.store.get('found')) return;
   ctx.store.set('found', 1);
   const { w, h: H } = ctx.bounds();
-  const el = ctx.el('div', `position:absolute;left:50%;top:${Math.round(H * 0.3)}px;translate:-50% 0;z-index:8;padding:8px 18px;background:#ff69b4;color:#fff;border:2px solid #c23c84;border-radius:20px;font:700 18px ${FONT};white-space:nowrap;max-width:${w - 24}px;`, ctx.brand.text(ctx.item.name), 'over');
+  const el = ctx.el('div', `position:absolute;left:50%;top:${Math.round(H * 0.3)}px;translate:-50% 0;z-index:8;padding:8px 18px;background:var(--toast-bg);color:var(--toast-ink);border:2px solid var(--btn-edge);border-radius:20px;font:700 18px ${FONT};white-space:nowrap;max-width:${w - 24}px;`, ctx.brand.text(ctx.item.name), 'over');
   ctx.audio.play('assets/audio/sfx/reveal_chime.mp3', { bus: 'sfx', gain: 0.7 });
   const frames = ctx.gentle
     ? [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }]
@@ -94,7 +94,7 @@ export const COMBO_UNLOCKS = {
     const { el, wide } = slot(ctx, `position:relative;width:${ctx.bounds().w >= 1100 ? 170 : 82}px;height:${ctx.bounds().w >= 1100 ? 96 : 56}px;background:#1b1626;border:2px dashed #6a6490;color:#fff;overflow:hidden;`);
     const bars = wide ? 11 : 6;
     for (let i = 0; i < bars; i++) {
-      const b = h('i', `position:absolute;left:${6 + i * (wide ? 14 : 12)}px;top:${wide ? 12 : 8}px;width:${wide ? 8 : 7}px;height:${wide ? 54 : 30}px;background:#ff9ed2;border-radius:3px;transform-origin:50% 50%;`, null, el);
+      const b = h('i', `position:absolute;left:${6 + i * (wide ? 14 : 12)}px;top:${wide ? 12 : 8}px;width:${wide ? 8 : 7}px;height:${wide ? 54 : 30}px;background:var(--accent);border-radius:3px;transform-origin:50% 50%;`, null, el);
       if (ctx.gentle) b.style.transform = `scaleY(${0.3 + (i % 3) * 0.2})`;
       else ctx.anim(b, [{ transform: 'scaleY(.2)' }, { transform: 'scaleY(1)' }], { duration: 500 + (i * 83) % 420, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
     }

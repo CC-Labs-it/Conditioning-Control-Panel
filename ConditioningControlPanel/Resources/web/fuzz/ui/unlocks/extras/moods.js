@@ -33,7 +33,7 @@ function dressCard(ctx, id) {
     card.insertBefore(row, body);
     const end = MOODS.indexOf(m);
     let i = 0, steps = MOODS.length * 2 + end;
-    const paint = () => { list.forEach((e, j) => { const on = j === i % list.length; e.style.opacity = on ? '1' : '.35'; e.style.background = on ? '#ffdcee' : 'none'; }); };
+    const paint = () => { list.forEach((e, j) => { const on = j === i % list.length; e.style.opacity = on ? '1' : '.35'; e.style.background = on ? 'var(--ready)' : 'none'; }); };
     if (body) body.style.visibility = 'hidden';
     paint();
     const stop = ctx.every(110, () => {
