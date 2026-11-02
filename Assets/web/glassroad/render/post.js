@@ -19,6 +19,8 @@ import { Q } from './quality.js';
 
 // the SCREENFX lane's module; a missing or broken one leaves the plain scene (the race still runs)
 const screenMod = await import('./screenfx.js').catch((e) => { console.warn('[glassroad/post] no screenfx: ' + (e && e.message)); return null; });
+// the boost speed rim (render/boostRim.js): the same optional boundary, a missing module leaves no rim
+const rimMod = await import('./boostRim.js').catch((e) => { console.warn('[glassroad/post] no boost rim: ' + (e && e.message)); return null; });
 
 const rgb = (hex) => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
 const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, prevKind: 'none', prevK: 0,
@@ -45,6 +47,8 @@ export function createPost(three, scene, camera) {
     return tap(0.25).add(tap(0.5)).add(tap(0.75)).add(tap(1)).mul(0.25).sub(col.rgb);
   })();
   const base = blurDelta ? base0.add(abDelta).add(blurDelta) : base0.add(abDelta);
+  let rim = null;
+  try { rim = rimMod ? rimMod.createBoostRim() : null; } catch (e) { console.warn('[glassroad/post] boost rim failed: ' + (e && e.message)); }
   let bloomNode = null, builtBloom = null;
   // the hit cam inset: centre and half size in CSS px (rect), rotation (cos, sin), the CSS view size
   const insetTarget = new RenderTarget(2, 2, { type: HalfFloatType, depthBuffer: true, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
@@ -74,6 +78,8 @@ export function createPost(three, scene, camera) {
     out = mix(out, vec3(1, 1, 1), u.white).add(rgb(LOOK.flashTint).mul(u.flash));
     // A steady coolant tint eases with depth; no strobe, blur or loss of the driving corridor.
     out = mix(out, out.mul(vec3(0.48, 0.82, 1.02)).add(vec3(0.006, 0.035, 0.055)), u.submerged.mul(0.8));
+    // boost speed rim (render/boostRim.js): screen-space edges only, under the hit cam inset (the inset stays clean)
+    if (rim) out = rim.apply(out);
     const inset = insetOver(out);
     out = inset.rgb;
     // Only display-only world screens write zero alpha. Their DOM pictures sit
@@ -125,6 +131,7 @@ export function createPost(three, scene, camera) {
     retier() { if (builtBloom !== Q.bloom) build(); else if (bloomNode) bloomNode.setResolutionScale(Q.bloomScale); },
     update(fx, dt = 0, aspect = 16 / 9, view = {}) {
       if (screen) screen.update((fx && fx.screen) || NONE, dt, aspect, view, fx?.fog, fx?.fogTheme);
+      if (rim) rim.update(fx, dt, aspect, view && view.boostRim);
       if (!fx) return;
       u.strength.value = LOOK.bloomStrength * (1 + (fx.bloomBoost || 0) * LOOK.bloomBoostGain);
       u.white.value = fx.whiteFade || 0;
@@ -141,6 +148,8 @@ export function createPost(three, scene, camera) {
     },
     /** The composite uniforms (tests read them). */
     uniforms: u,
+    /** The boost speed rim (its stats feed the dev debug), or null. */
+    get boostRim() { return rim; },
     /** The hit cam's render target (its picture is drawn into it before render()). */
     inset: { target: insetTarget },
     /** r = { cx, cy, w, h, rotRad } in CSS px with the CSS view size, or null to turn the inset off. */

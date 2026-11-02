@@ -26,7 +26,7 @@ internal static class GlassroadRules
     /// them to sign in. <c>songs</c> stays empty: the private race song never ships in the app.
     /// </summary>
     public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null)
+        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null, bool toysConnected = false)
     {
         bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
         return new JObject
@@ -41,6 +41,10 @@ internal static class GlassroadRules
                 ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
                 // the pre-race room's "Invite a friend" asks this host (host/friendInvite.js)
                 ["friendInvite"] = true,
+                // the garage's Prize Counter row opens the counter window (host/prizeCounter.js)
+                ["prizeCounter"] = true,
+                // the race sends its toy plan here (host/raceToys.js); the Options row shows only with a toy connected
+                ["toys"] = true, ["toysConnected"] = toysConnected,
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
@@ -51,22 +55,49 @@ internal static class GlassroadRules
         };
     }
 
-    /// <summary>The Prize Counter grants the garage reads: <c>cos.kart.*</c> only, sorted, at most 64
-    /// (glassroad CONTRACT.md section 7 "Owned kart bodies"). Everything else the account owns stays home.</summary>
+    /// <summary>The Prize Counter grants the garage reads: <c>cos.kart.*</c> plus the two kart Prime families
+    /// (<c>cos.prime.paint.*</c>, <c>cos.prime.trail.*</c>), sorted, at most 64 (glassroad CONTRACT.md section 7
+    /// "Owned kart looks"). Everything else the account owns stays home.</summary>
     public static JArray KartGrants(IEnumerable<string>? grants)
     {
         var list = new SortedSet<string>(StringComparer.Ordinal);
         if (grants != null)
             foreach (var g in grants)
-                if (g is { Length: <= 64 } && g.StartsWith("cos.kart.", StringComparison.Ordinal)) list.Add(g);
+                if (g is { Length: <= 64 } && IsKartGrant(g)) list.Add(g);
         var rows = new JArray();
         foreach (var g in list) { if (rows.Count >= 64) break; rows.Add(g); }
         return rows;
     }
 
-    /// <summary>The host -> page push when the account's grants change while the window is up.</summary>
-    public static JObject OwnedFrame(IEnumerable<string>? grants)
-        => new JObject { ["type"] = "owned", ["grants"] = KartGrants(grants) };
+    private static bool IsKartGrant(string g)
+        => g.StartsWith("cos.kart.", StringComparison.Ordinal)
+        || g.StartsWith("cos.prime.paint.", StringComparison.Ordinal)
+        || g.StartsWith("cos.prime.trail.", StringComparison.Ordinal);
+
+    /// <summary>The Prize Counter tab the garage row asks for (<c>open-prize-counter { tab, from }</c>, 7.2
+    /// contract 1): Glassroad only ever opens on <c>kart</c>, whatever the page says.</summary>
+    public const string CounterTab = "kart";
+    public const string CounterFrom = "glassroad";
+
+    /// <summary>What the garage does when the counter over it closes (<c>PrizeCounterHostService.Close*</c>
+    /// reasons): panic and app exit close this window too, so nothing is re-sent or focused; Rain's Wear hands
+    /// the keyboard to the dressing room; anything else re-sends <c>owned</c> and takes the keyboard back.</summary>
+    public static (bool Resend, bool Focus) CounterReturn(string? reason, bool kartWorn = false)
+    {
+        bool calm = reason != PrizeCounter.PrizeCounterHostService.ClosePanic
+            && reason != PrizeCounter.PrizeCounterHostService.CloseAppExit;
+        // A kart's Wear closes back to the garage (fix wave F1): the garage takes the keyboard again.
+        return (calm, calm && (reason != PrizeCounter.PrizeCounterHostService.CloseWear || kartWorn));
+    }
+
+    /// <summary>The host -> page push when the account's grants change while the window is up. After a
+    /// kart's Wear in the counter it also names that item (<c>wear</c>), and the garage selects it.</summary>
+    public static JObject OwnedFrame(IEnumerable<string>? grants, string? wear = null)
+    {
+        var o = new JObject { ["type"] = "owned", ["grants"] = KartGrants(grants) };
+        if (!string.IsNullOrEmpty(wear)) o["wear"] = wear;
+        return o;
+    }
 
     /// <summary>The page's invite list (<c>friends-list-reply</c>): online friends with a name, as
     /// <c>{ uid, name }</c>, at most 50. Offline friends are left out: the server refuses them anyway.</summary>

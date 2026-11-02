@@ -261,6 +261,34 @@ GET /v2/race/profile (every platform, through the same lobby transport). The las
 `glassroad.owned.v1`; signed out owns nothing. A saved pick that is locked now falls back to the free kart.
 CLIENT LOCK ONLY: a room seat's `look.vehicle` is checked against `LOOK_VEHICLES`, never against ownership. Looks
 never reach the sim, `onlineCourseHash` or room validation, so no room redeploy follows a lock change.
+Owned kart looks (7.2, lane B3-G1, `hud/garageState.js` SHOP_*): the Prize Counter also sells three EMI outfits
+(`kart.outfit.pit-crew|ringmaster|ballerina`), the pattern bundle (`kart.paint.pattern-bundle` = hearts + spiral; the
+retired v1 rows `kart.paint.hearts` / `kart.paint.spiral` keep theirs, `pink-checker` is the free Checks), the lace
+glide umbrella (`kart.umbrella.lace`) and two Prime looks (`prime.paint.host-gold`, `prime.trail.podium`, grants
+`cos.prime.*`, so the owned snapshot and the desktop `KartGrants` keep `cos.prime.paint.*` and `cos.prime.trail.*` too).
+The nine free outfits and the four native patterns stay free. Unowned ones are dark with "In the Prize Counter" (Prime
+looks: "Prime, in the Prize Counter") and change nothing. The race look carries them next to the vehicle (NET.md
+looks): `outfit` (the shop ids join the list), `paint: hearts|spiral|host-gold` (only with a custom `skin`; the skin's
+pattern digit stays 0-3), `umbrella: lace` (opens in the glide cap's place) and `trail: podium` (ribbons behind the
+cup). They ride the lobby create / join / quick / claim bodies into the seat ticket; the room `look` message keeps
+its old keys (`roomLook`). Bots never wear them. Looks never touch feel.json or tracks: `onlineCourseHash` is pinned
+against the room cards in tests/garage-shop.test.mjs.
+Prize Counter row (7.2 contract 1, `host/prizeCounter.js`): a host that sets `caps.prizeCounter: true` gets a "Prize
+Counter" row on the garage menu. Page -> host `open-prize-counter { tab: 'kart', from: 'glassroad' }`; the host pauses
+the page, opens the counter over it (desktop: the counter window, `PrizeCounterHostService.Launch`; web:
+`/prize-counter?tab=kart&from=glassroad`; phone: the counter screen) and re-sends `owned { grants }` when it closes.
+Wear (7.2 fix wave, desktop only): after the counter's Wear on an owned kart look it closes with reason `wear` and
+re-sends `owned { grants, wear: '<counter row id>' }` (`kart.body.<id>`, `kart.outfit.<id>`, `kart.paint.pattern-bundle`,
+`kart.umbrella.lace`, `prime.paint.host-gold`, `prime.trail.podium`). The garage adopts the grants first, then puts the
+item on like its own picker (`hud/garageState.js wearPick`; the bundle keeps hearts or spiral if worn, else hearts),
+saves it, turns to the kart or opens Customize on the section, and shows a short note. Unknown or unowned ids are ignored.
+Toys (7.2, `host/raceToys.js`, the feel table is `fx/toyPlan.js`): a host with a toy stack sets `caps.toys: true`, and
+`caps.toysConnected` drives the Options "Toys" row (host -> page `toys { connected }` when it changes). page -> host:
+`toy { level 0..1, ms, tag }`, `toy-bed { level 0..1 }` re-sent while it runs (the host zeroes it within 1.5 s when the
+sends stop, so a dead page cannot pin a toy) and `toy-stop`. The player's own events only, nothing crosses the network.
+Pause, a hidden page and leaving send `toy-stop`. The host clamps everything and scales it: the page is untrusted.
+The numbers stay out of feel.json, which would move the course hash.
+
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
 { consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
 'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting
@@ -296,9 +324,10 @@ message: files never cross the bridge or the room. Only the choice is kept (`gla
 | `boost-start` | `{ kind: 'drift'\|'pad'\|'launch', tier, amount, holdS }` | kart (applyBoost) | fx (fovKick, speedLines, bandSpeedMul, shake boost), audio (low-pass opens) |
 | `boost-end` | `{ kind }` | kart | fx, audio (ease back over boost.tailTcS) |
 | `hop` | `{ speed }` | kart | fx (squash then stretch), audio |
-| `air-word-launch` | `{ id, section, index: 0 }` | scripted solo aerial route, initial lip | faint spring on the shared SFX bus; no speech |
-| `air-word-hop` | `{ id, section, index, s, p }` (one automatic word launch; index starts at 0 per crossing) | scripted solo aerial route | quiet ascending pluck and airy spring on the shared SFX bus; no speech |
+| `air-word-launch` | `{ id, section, index: 0 }` | scripted aerial route, initial lip | faint spring on the shared SFX bus; no speech |
+| `air-word-hop` | `{ id, section, index, s, p }` (one automatic word launch; index starts at 0 per crossing) | scripted aerial route | quiet ascending pluck and airy spring on the shared SFX bus; no speech |
 | `airborne` | `{ cause: 'lip'\|'edge' }` | kart | fx (stretch) |
+| `ramp` | `{ racer, id, purpose, upMps, s, x, speed }` (a jump ramp lip launched the kart; track `ramps`, sim/ramps.js; a bot's arrives as racer-event) | kart (sim/racers.js adds racer) | audio (soft whoosh from the existing bank); EMI air trick stage |
 | `land` | `{ tier: 0..3, airTime }` (0 = under air.lightS) | kart, respawn | fx (squash, dust, shake on 3), audio (cue on 2 and 3) |
 | `edge-enter` | `{ side: -1\|1 }` | kart | fx (edgeGlow), audio (hum) |
 | `edge-exit` | `{ to: 'road'\|'drop' }` | kart | fx (glow fade or hand over), audio |

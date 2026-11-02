@@ -6,13 +6,16 @@
  * results lines, the copy for lobby errors, aborts and close codes, and the race link (token, note, claim step).
  * Copy is dry and short.
  */
-import { LOOK_OUTFITS, LOOK_VEHICLES, DEFAULT_LOOK, normLook } from '../net/protocol.js';
+import { LOOK_OUTFITS, LOOK_VEHICLES, DEFAULT_LOOK, normLook, SHOP_LOOK_OUTFITS, LOOK_PAINTS, LOOK_UMBRELLAS, LOOK_TRAILS } from '../net/protocol.js';
+import { KARTS, PAINTS, UMBRELLAS, TRAILS, lockedKarts, ownedKarts, ownedLooks } from './garageState.js';
 import { formatTime, ordinal, BOT_NAMES } from './format.js';
 import { LINK_TOKEN } from '../net/lobbyApi.js';
+import { COURSES } from '../track/catalog.js';
 
 export const POLL_MS = 15000;
 export const PRIME_TIER = 2;
-export const TRACKS = Object.freeze({ threshold: 'Threshold' });
+export const TRACKS = Object.freeze(Object.fromEntries(COURSES.map((c) => [c.id, c.name])));
+const ONLINE_COURSES = COURSES.filter((c) => c.online);
 export const LOOK_KEY = 'glassroad.look.v1';
 
 const int = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
@@ -38,6 +41,8 @@ export function rowStartsIn(row, listMs, nowMs) {
   if (!row || row.startsIn == null || !(row.startsIn >= 0)) return null;
   return Math.max(0, Math.round(row.startsIn - Math.max(0, (nowMs - listMs) / 1000)));
 }
+/** The small line under an open table: who hosts it, its laps, when it starts. The course is the row's title. */
+export const tableLine = (r, starts) => 'Host ' + r.host + (r.friend ? ' (friend)' : '') + ', ' + r.laps + (r.laps === 1 ? ' lap, ' : ' laps, ') + startsLabel(starts);
 export const startsLabel = (s) => (s == null ? 'Host starts' : s <= 0 ? 'Starting' : s < 60 ? 'Starts in ' + s + ' s' : 'Starts in ' + Math.ceil(s / 60) + ' min');
 
 /**
@@ -88,14 +93,21 @@ const HOST_STEPS = { laps: [1, 9], seats: [2, 8] };
 export function cleanHost(f = {}) {
   const mode = f.mode === 'friends' ? 'friends' : 'open';
   return {
-    mode, laps: int(f.laps, 1, 9, 3), seats: int(f.seats, 2, 8, 8), botFill: f.botFill !== false,
+    mode, track: ONLINE_COURSES.some((c) => c.id === f.track) ? f.track : null, laps: int(f.laps, 1, 9, 3), seats: int(f.seats, 2, 8, 8), botFill: f.botFill !== false,
     laneKeeper: mode === 'friends' ? !!f.laneKeeper : false,
   };
 }
-/** One step of a host form row (dir +1 / -1). Numbers wrap; switches flip; lane keeper stays off on open tables. */
+/** One step of a host form row (dir +1 / -1). Numbers and courses wrap; switches flip; lane keeper stays off on open
+ * tables. A new course brings its own lap count unless the host already changed it. */
 export function stepHost(form, key, dir = 1) {
   const f = cleanHost(form);
   if (key === 'mode') f.mode = f.mode === 'open' ? 'friends' : 'open';
+  else if (key === 'track') {
+    const n = ONLINE_COURSES.length, at = Math.max(0, ONLINE_COURSES.findIndex((c) => c.id === f.track));
+    const was = ONLINE_COURSES[at], to = ONLINE_COURSES[(at + (dir < 0 ? -1 : 1) + n) % n];
+    if (f.laps === was.laps) f.laps = to.laps;
+    f.track = to.id;
+  }
   else if (HOST_STEPS[key]) { const [lo, hi] = HOST_STEPS[key], span = hi - lo + 1; f[key] = lo + (((f[key] - lo + (dir < 0 ? -1 : 1)) % span) + span) % span; }
   else if (key === 'botFill' || key === 'laneKeeper') f[key] = !f[key];
   return cleanHost(f);
@@ -103,7 +115,7 @@ export function stepHost(form, key, dir = 1) {
 /** POST /v2/race/open body (NET.md section 12). No stakes here: they wait for RACE_STAKES. */
 export function hostBody(form, look, track = 'threshold') {
   const f = cleanHost(form);
-  return { track, mode: f.mode, seats: f.seats, laps: f.laps, botFill: f.botFill, laneKeeper: f.laneKeeper, look: normLook(look) };
+  return { track: f.track || track, mode: f.mode, seats: f.seats, laps: f.laps, botFill: f.botFill, laneKeeper: f.laneKeeper, look: normLook(look) };
 }
 
 // ---- seats -------------------------------------------------------------------------------------
@@ -134,6 +146,21 @@ export function applySeat(seats, msg) {
   out[msg.seat] = s;
   return out;
 }
+
+/** Racers who were seated and are now gone (left, or the seat emptied), never `me`: [{ seat, name }] for the
+ *  '<name> left' line in the room and in the race. */
+export function seatsGone(was, now, me = -1) {
+  const out = [];
+  if (!Array.isArray(was) || !Array.isArray(now)) return out;
+  for (const a of was) {
+    if (!a || a.kind !== 'human' || a.left || a.seat === me) continue;
+    const b = now[a.seat];
+    if (!b || b.kind === 'empty' || b.left) out.push({ seat: a.seat, name: seatName(a) });
+  }
+  return out;
+}
+/** The line for one racer gone. */
+export const goneLine = (name) => (name || 'Racer') + ' left';
 
 /** The name a seat shows: its ticket name, our short names for bots, 'Open seat' when empty. */
 export function seatName(s) {
@@ -170,6 +197,27 @@ export const humans = (seats) => (seats || []).filter((s) => s.kind === 'human' 
 export const readyCount = (seats) => humans(seats).filter((s) => s.ready).length;
 /** The host may press Start in the lobby phase with at least one human seated. */
 export const canStart = (seats, mySeat, phase) => phase === 'lobby' && !!(seats && seats[mySeat] && seats[mySeat].host) && humans(seats).length > 0;
+/** The host's seat, or -1 (a quick room has none). A room with a host starts only when the host says (owner 2026-10-30). */
+export const hostSeat = (seats) => { const h = (seats || []).find((s) => s && s.kind === 'human' && s.host); return h ? h.seat : -1; };
+/** The lobby line under the room title: the host sees the ready count, everyone else waits for the host. */
+export function lobbyNote(seats, mySeat, mode) {
+  const me = (seats || [])[mySeat], count = readyCount(seats) + ' of ' + humans(seats).length + ' ready';
+  if (hostSeat(seats) >= 0 && !(me && me.host)) return 'Waiting for the host, ' + count;
+  return (mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + count;
+}
+/** The start is waiting on seats still loading: the line everyone sees, or '' when nobody is. */
+export function holdNote(seats, hold, mySeat) {
+  const w = (hold || []).filter((i) => seats && seats[i] && seats[i].kind === 'human' && !seats[i].left);
+  if (!w.length) return '';
+  if (w.length > 1) return 'Waiting for ' + w.length + ' players to load';
+  return w[0] === mySeat ? 'Still loading, the race waits for you' : 'Waiting for ' + (seats[w[0]].name || 'a player') + ' to load';
+}
+/** The host moved to another seat (the old host left the lobby): the line everyone sees, or '' when nothing moved. */
+export function hostMoved(was, now, mySeat) {
+  const a = hostSeat(was), b = hostSeat(now);
+  if (a < 0 || b < 0 || a === b) return '';
+  return b === mySeat ? 'You are the host now' : seatName(now[b]) + ' is the host now';
+}
 
 // ---- looks -------------------------------------------------------------------------------------
 
@@ -178,13 +226,57 @@ const pretty = (id) => String(id).replace(/^emi-(outfit|vehicle)-/, '').split('-
  * The picker lists from Astra's files (art/models/emi-bot-wardrobe.json `outfits`, emi-vehicle-variants.json
  * `vehicles`). Only ids the wire knows are offered; a known id missing from a file still shows with a plain label.
  */
-export function lookChoices(wardrobe = null, vehicles = null) {
+export function lookChoices(wardrobe = null, vehicles = null, owned = null) {
   const label = (list, id) => { const e = (Array.isArray(list) ? list : []).find((x) => x && x.id === id); return e && typeof e.label === 'string' ? e.label : pretty(id); };
   const ow = wardrobe && wardrobe.outfits, vv = vehicles && vehicles.vehicles;
-  return {
-    outfit: [{ id: null, label: 'None' }, ...LOOK_OUTFITS.map((id) => ({ id, label: label(ow, id) }))],
-    vehicle: LOOK_VEHICLES.map((id) => ({ id, label: id === DEFAULT_LOOK.vehicle ? 'Teacup' : label(vv, id) })),
+  const o = owned && typeof owned === 'object' ? owned : null;
+  const outfits = o ? [...LOOK_OUTFITS, ...SHOP_LOOK_OUTFITS.filter((id) => o.outfits && o.outfits.has(id))] : LOOK_OUTFITS;
+  const rides = o ? LOOK_VEHICLES.filter((id) => id === DEFAULT_LOOK.vehicle || (o.vehicles && o.vehicles.has(id))) : LOOK_VEHICLES;
+  const out = {
+    outfit: [{ id: null, label: 'None' }, ...outfits.map((id) => ({ id, label: label(ow, id) }))],
+    vehicle: rides.map((id) => ({ id, label: id === DEFAULT_LOOK.vehicle ? 'Teacup' : label(vv, id) })),
   };
+  // The Prize Counter extras (paint, umbrella, trail): a row only when the account owns one, owned ids only.
+  if (o) for (const k of EXTRA_KEYS) {
+    const ids = (Array.isArray(o[k]) ? o[k] : []).filter((id) => EXTRA_WIRE[k].includes(id));
+    if (ids.length) out[k] = [{ id: null, label: 'None' }, ...ids.map((id) => ({ id, label: EXTRA_LABEL.get(id) || pretty(id) }))];
+  }
+  if (o) Object.defineProperty(out, 'owned', { value: true });
+  return out;
+}
+const EXTRA_KEYS = Object.freeze(['paint', 'umbrella', 'trail']);
+const EXTRA_WIRE = Object.freeze({ paint: LOOK_PAINTS, umbrella: LOOK_UMBRELLAS, trail: LOOK_TRAILS });
+const EXTRA_LABEL = new Map([...PAINTS, ...UMBRELLAS, ...TRAILS]);
+/** The rows the picker draws: outfit and ride, then each owned extra (a paint needs a custom skin, as in raceLook). */
+export function lookKeys(look, choices = lookChoices()) {
+  const l = normLook(look);
+  return ['outfit', 'vehicle', ...EXTRA_KEYS.filter((k) => choices[k] && (k !== 'paint' || !!l.skin))];
+}
+export const LOOK_ROW_LABEL = Object.freeze({ outfit: 'Outfit', vehicle: 'Ride', paint: 'Paint', umbrella: 'Umbrella', trail: 'Trail' });
+/**
+ * What the lobby may offer this account (garage rules, hud/garageState.js): the teacup and every kart body the
+ * garage would not keep dark, the shop outfits owned, and the owned extras. `grants` are the account's cos.* grants,
+ * `unlocked` the logbook's unlock ids. Wire ids out.
+ */
+export function ownedChoices(grants = [], unlocked = new Set()) {
+  const dark = lockedKarts(unlocked, ownedKarts(grants));
+  const owns = ownedLooks(grants);
+  return {
+    vehicles: new Set(KARTS.map(([id]) => id).filter((id) => !dark.has(id)).map((id) => 'emi-vehicle-' + id)),
+    outfits: new Set([...owns.outfits].map((id) => 'emi-outfit-' + id)),
+    paint: [...owns.paints], umbrella: [...owns.umbrellas], trail: [...owns.trails],
+  };
+}
+/** A look kept inside an ownership-aware picker: a dark ride falls back to the free kart, a shop outfit or extra the
+ *  account does not hold comes off. Choices built without ownership leave the look as it is. */
+export function fitLook(look, choices) {
+  const l = normLook(look);
+  if (!choices || !choices.owned) return l;
+  const has = (k, id) => (choices[k] || []).some((c) => c.id === id);
+  if (!has('vehicle', l.vehicle)) l.vehicle = has('vehicle', 'emi-vehicle-lovebomb') ? 'emi-vehicle-lovebomb' : DEFAULT_LOOK.vehicle;
+  if (l.outfit && !has('outfit', l.outfit)) l.outfit = null;
+  for (const k of EXTRA_KEYS) if (l[k] !== undefined && !has(k, l[k])) delete l[k];
+  return l;
 }
 /** One step through a look row; an unknown current id starts from the default. */
 export function cycleLook(look, key, dir, choices = lookChoices()) {
@@ -192,7 +284,9 @@ export function cycleLook(look, key, dir, choices = lookChoices()) {
   if (!list || !list.length) return l;
   const i = Math.max(0, list.findIndex((c) => c.id === l[key]));
   const n = list.length;
-  return { ...l, [key]: list[(((i + (dir < 0 ? -1 : 1)) % n) + n) % n].id };
+  const next = { ...l, [key]: list[(((i + (dir < 0 ? -1 : 1)) % n) + n) % n].id };
+  if (next[key] === null && EXTRA_KEYS.includes(key)) delete next[key];
+  return next;
 }
 export function lookLabel(look, key, choices = lookChoices()) {
   const l = normLook(look), c = (choices[key] || []).find((x) => x.id === l[key]);

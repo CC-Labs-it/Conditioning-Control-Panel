@@ -32,6 +32,7 @@ import { logPipelineLinks } from './linkLog.js';
 import { isFirefox, concreteFloatConstants, uploadVideoThroughExternalTexture } from './firefoxWebgpu.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { deviceClass, memoryGuard, setDevice } from './deviceClass.js';
+import { isCompatOnly, compatLimits, COMPAT_DEAD_ERRORS } from './compatAdapter.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
@@ -69,19 +70,30 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   // Firefox runs WebGL2 unless ?renderer=webgpu: its WebGPU drew every lit prop as a black silhouette for the
   // owner (polish 4, Firefox 158) while its WebGL2 draws them right; a chosen WebGL2 still starts on high
   const firefox = !force && !!globalThis.navigator && (navigator.userAgent || '').includes('Firefox/');
-  let webgl2 = force === 'webgl2' || firefox, gpu = '', context = null, fallback = null;
+  let webgl2 = force === 'webgl2' || firefox, gpu = '', context = null, fallback = null, adapter = null;
   if (!webgl2) {
     try {
-      const ad = globalThis.navigator && navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance', featureLevel: 'compatibility' }) : null;
-      if (!ad) webgl2 = true;
-      else { const i = ad.info || {}; gpu = shortGpu([i.vendor, i.architecture, i.description].filter(Boolean).join(' ')); }
+      adapter = globalThis.navigator && navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance', featureLevel: 'compatibility' }) : null;
+      if (!adapter) webgl2 = true;
+      else { const i = adapter.info || {}; gpu = shortGpu([i.vendor, i.architecture, i.description].filter(Boolean).join(' ')); }
     } catch (e) { webgl2 = true; }
   }
   const glContext = (c) => c.getContext('webgl2', { antialias: false, alpha: true, depth: true, stencil: false, powerPreference: 'high-performance' });
-  if (webgl2) context = glContext(canvas);
+  // WebGPU on OpenGL ES (render/compatAdapter.js) reaches the same driver as WebGL2, on the path nobody tests: WebGL2
+  // goes first, and this WebGPU runs only with WebGL2 refused or ?renderer=webgpu, with its limits raised by name
+  const compat = !webgl2 && isCompatOnly(adapter);
+  if (compat && force !== 'webgpu') {
+    context = glContext(canvas);
+    if (context) { webgl2 = true; gpu = ''; }
+  } else if (webgl2) {
+    context = glContext(canvas);
+    // a null here is the browser's refusal, never another context: this canvas has held nothing yet
+    if (!context) throw new Error((force === 'webgl2' || firefox ? 'the browser refused a WebGL2 context on this device' : 'the browser refused both WebGPU and WebGL2 on this device') + '. After a graphics crash Chrome does this for about 2 minutes: close the tab and try again in 3 minutes.');
+  }
+  const limits = compat && !webgl2 ? { requiredLimits: compatLimits(adapter) } : {};
   setTier(pinOf() || capTier(pickTier({ override, coarse, webgl2: webgl2 && !firefox })));
 
-  let three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
+  let three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...limits, ...(context ? { context } : {}) });
   try {
     await three.init();
   } catch (e) {
@@ -115,6 +127,16 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     lost = { api: info && info.api, message: info && info.message, reason: info && info.reason, at: performance.now() };
     console.error('[glassroad/renderer] device lost: ' + (lost.api || '') + ' ' + (lost.message || '') + (lost.reason ? ' (' + lost.reason + ')' : ''));
     for (const fn of lostFns) { try { fn(lost); } catch (e) { console.warn('[glassroad/renderer] onLost', e); } }
+  };
+  // an uncaptured validation error throws nowhere: a compat device that keeps refusing frames draws a black world
+  // with the game running on behind it, so onCompatDead(fn) hears that once (a core device only counts them)
+  const gpuErrors = { count: 0, first: '' }, compatDeadFns = new Set();
+  const logGpuError = three.onError;
+  three.onError = (info) => {
+    gpuErrors.count++;
+    if (!gpuErrors.first) gpuErrors.first = String((info && info.message) || 'GPU error').slice(0, 160);
+    if (typeof logGpuError === 'function') logGpuError.call(three, info);
+    if (three.backend.compatibilityMode && gpuErrors.count === COMPAT_DEAD_ERRORS) for (const fn of compatDeadFns) { try { fn(gpuErrors.first); } catch (e) { console.warn('[glassroad/renderer] onCompatDead', e); } }
   };
   let compiledGraphs;
   if (qs.get('logLinks') === '1') logPipelineLinks(three, { Material: GPU.Material });   // dev: every program link, with its phase and pass
@@ -197,9 +219,11 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     if (!meter.t) meter.t = now;
     if (now - meter.t < 500) return;
     meter.fps = Math.round(meter.n * 1000 / (now - meter.t)); meter.n = 0; meter.t = now;
-    if (meter.el) { const s = scale(); meter.el.textContent = meter.fps + ' fps' + (s < 1 ? '  ' + Math.round(s * 100) + '%' : '') + LF + backend + (gpu ? ', ' + gpu : '') + (meter.art ? LF + meter.art : ''); }
+    if (meter.el) { const s = scale(); meter.el.textContent = meter.fps + ' fps' + (s < 1 ? '  ' + Math.round(s * 100) + '%' : '') + LF + backend + (three.backend.compatibilityMode ? ' compat' : '') + (gpu ? ', ' + gpu : '') + (meter.art ? LF + meter.art : '') + (gpuInfo && gpuErrors.count ? LF + gpuErrors.count + ' gpu errors: ' + gpuErrors.first : ''); }
   }
-  readout(opts.showFps);
+  // ?gpuinfo=1: the readout for a phone with no console (backend, compat, adapter, GPU errors); nothing else changes
+  const gpuInfo = qs.get('gpuinfo') === '1';
+  readout(opts.showFps || gpuInfo);
 
   const api = {
     backend,
@@ -212,6 +236,8 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     get lost() { return lost; },
     /** fn(lost) once when the GPU device or the WebGL context goes away. Returns the unsubscribe. */
     onLost(fn) { lostFns.add(fn); if (lost) { try { fn(lost); } catch (e) { /* told */ } } return () => lostFns.delete(fn); },
+    /** fn(firstMessage) once when a compat WebGPU device keeps refusing frames. Returns the unsubscribe. */
+    onCompatDead(fn) { compatDeadFns.add(fn); return () => compatDeadFns.delete(fn); },
     get tier() { return Q.name; },
     /** The device behind the tier ('phone' or 'desktop'): no Quality pin changes it (render/deviceClass.js). */
     get device() { return device; },
@@ -245,7 +271,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       if (opts.frameCap !== was.frameCap) gate.setCap(opts.frameCap);
       if (opts.renderScale !== was.renderScale) { dyn.reset(1); resize(); }
       if (opts.quality !== was.quality) setQuality();
-      if (opts.showFps !== was.showFps) readout(opts.showFps);
+      if (opts.showFps !== was.showFps) readout(opts.showFps || gpuInfo);
     },
     /** The art status for the fps readout: art.js loadArt's result, or null when the race runs without art. */
     setArt(art) {

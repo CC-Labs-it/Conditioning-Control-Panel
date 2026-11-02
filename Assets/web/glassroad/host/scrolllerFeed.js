@@ -56,7 +56,9 @@ export function feedCatalog(msg) {
 }
 
 export function createScrolllerFeed({ bridge, makeImage = () => new Image(), makeVideo = () => displayVideo(), now = () => Date.now() } = {}) {
-  let pictures = [], consent = null, disposed = false, catalog = null, expires = 0;
+  // stills: the flash burst's pictures, the image rows plus each clip's poster. The host sends a clip's poster on
+  // its row and never again as a still, so in a GIF niche the posters are the only stills (2026-10-30).
+  let pictures = [], stills = [], consent = null, disposed = false, catalog = null, expires = 0;
   const listeners = new Set();
   const notify = () => { for (const fn of listeners) { try { fn(consent); } catch (e) { console.warn('[scrolller]', e); } } };
   /** Release every element; a clip also drops its poster and load() frees its decoder. */
@@ -72,20 +74,21 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
     if (disposed) return;
     const next = feedCatalog(msg);
     if (next && JSON.stringify(next) !== JSON.stringify(catalog)) { catalog = next; notify(); }
-    const rows = consent === false ? [] : feedRows(msg), old = pictures;
+    const rows = consent === false ? [] : feedRows(msg), old = [...pictures, ...stills];
     expires = now() + 24 * 60 * 60 * 1000;
+    const still = (url) => { const img = makeImage(); img.decoding = 'async'; img.src = url; return img; };
+    stills = [];
     pictures = rows.map(({ url, kind, poster }) => {
       if (kind === 'video') {   // metadata only here: the world face that shows it loads the frames
         const v = makeVideo();
         if (!v) return null;
         v.preload = 'metadata';
-        if (poster) v.poster = poster;
+        if (poster) { v.poster = poster; stills.push(still(poster)); }
         v.src = url;
         return v;
       }
-      const img = makeImage();
-      img.decoding = 'async';
-      img.src = url;
+      const img = still(url);
+      stills.push(img);
       return img;
     }).filter(Boolean);
     drop(old);
@@ -93,30 +96,32 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
   function echo(m) {
     if (disposed || m?.key !== 'media.remoteConsent') return;
     consent = m.value === true;
-    if (!consent) { drop(pictures); pictures = []; }
+    if (!consent) release();
     notify();
   }
   const offFeed = bridge?.on('scrolller-feed', apply);
   const offEcho = bridge?.on('setting', echo);
+  const release = () => { drop(pictures); drop(stills); pictures = []; stills = []; };
   const current = () => {
-    if (now() >= expires || consent === false) { drop(pictures); pictures = []; }
+    if (now() >= expires || consent === false) release();
     return pictures;
   };
+  const readyStills = () => { current(); return stills.filter(loaded); };
   return {
     /** The stored consent from the last echo, or null before any echo. */
     get consent() { return consent; },
     get count() { return current().length; },
     get ready() { return current().filter(loaded).length; },
-    /** Loaded stills only: the flash burst shows at most this many cards per hit. */
-    get stillCount() { return current().filter((el) => !isVideo(el) && loaded(el)).length; },
+    /** Loaded stills only (clip posters count): the flash burst shows at most this many cards per hit. */
+    get stillCount() { return readyStills().length; },
     /** A loaded display-only picture or clip (<video>) for a world panel, or null. */
     sourceFor(seed = 0) {
       const ready = current().filter(loaded);
       return ready.length ? ready[Math.abs(Math.trunc(seed)) % ready.length] : null;
     },
-    /** A loaded still for the flash-burst page canvas, never a clip, or null. */
+    /** A loaded still (or a clip's poster) for the flash-burst page canvas, never a clip, or null. */
     stillFor(seed = 0) {
-      const ready = current().filter((el) => !isVideo(el) && loaded(el));
+      const ready = readyStills();
       return ready.length ? ready[Math.abs(Math.trunc(seed)) % ready.length] : null;
     },
     /** The niches the host can serve ([{ id, label }]), from its last feed; null until one lands. */
@@ -125,6 +130,6 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
     /** This course's niches (host/scrolllerNiches.js): the host draws the next pictures from them. */
     setNiches(track, niches) { bridge?.send({ type: 'scrolller-niches', track: String(track || ''), niches: [...niches] }); },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    dispose() { disposed = true; offFeed?.(); offEcho?.(); drop(pictures); pictures = []; listeners.clear(); },
+    dispose() { disposed = true; offFeed?.(); offEcho?.(); release(); listeners.clear(); },
   };
 }
