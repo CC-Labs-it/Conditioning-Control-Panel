@@ -1,4 +1,4 @@
-# Fuzz: CONTRACT (v1 draft, 2026-11-01)
+# Terms & Conditioning: CONTRACT (v1 draft, 2026-11-02)
 
 The wire between a host (WPF `ChaosWebViewHost`, the phone, the website shell) and this page. If code and
 this file disagree, this file wins until it is amended here first. Shape and hygiene follow
@@ -22,7 +22,7 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 | `boot-error` | `msg` | The page could not start. Allowed before init. |
 | `exit` | `reason:'back'\|'key'\|'drop'` | Player left. Host closes after `exit-done`. Allowed before init. |
 | `exit-done` | | Page settled: audio released, save flushed. |
-| `fuzz-ended` | `total, minutes, items, achievements, dayUtc` | The Drop happened. The host prices it (`SparklesClaim result.kind:'medal'`, one a day) and answers `sparkles-receipt`. |
+| `fuzz-ended` | `total, minutes, items, ending, route, dayUtc` | An ending happened (`ending` is its id, `route` the lanes picked). The host prices it (`SparklesClaim result.kind:'medal'`, one a day) and answers `sparkles-receipt`. |
 | `scrolller-niches` | `niches:[id]` | Ask for pictures for the feed panels (same wire as Glassroad CONTRACT 292-325). |
 | `set-setting` | `key:'media.remoteConsent', value, ask:true` | Only from the player's own press on the consent card. |
 | `haptic` | `level, ms, tag?` | Optional toy pulse on crits and the Drop; hosts clamp. |
@@ -64,5 +64,9 @@ CCP Default, Locked and every web/phone build use the Circe clips in `assets/aud
 
 ## 5. Save
 
-One localStorage key `fuzz.save.v1` (`sim/save.js`), written every 5 s and on each buy. Hosted, the save is
-still local: Fuzz is not synced and never becomes SP. Export shows the string on the pause card.
+One localStorage key `fuzz.save.v2` (`sim/save.js`): `{v, run, life, extras}`, written every 5 s, on each buy and on
+leaving. `life` outlives a run; New run writes `run: null`. A v1 save reads as no save. Hosted, the save is still local:
+it is not synced and never becomes SP. Export and import appear on the pause card after a first ending.
+
+Pictures have one source (`ui/pictures.js`): `online` (signed in; `scrolller-*` frames, placeholder art until that wire
+lands), `own` (the player's files, blob urls on the device, never uploaded), `none`.
