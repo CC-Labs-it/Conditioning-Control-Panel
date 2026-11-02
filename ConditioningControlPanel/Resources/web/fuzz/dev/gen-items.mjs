@@ -17,8 +17,13 @@ const cur = (s) => String(s ?? '').replace(/\bFuzz\b/g, '{cur}');
 const GROW = { stray: { ratio: 1.5, max: 12 } };
 
 /* A row whose parent is an ending can never open, because buying the parent ends the run. One Last Go sits
- * beside Go Outside instead of behind it: same gate, and its price keeps it late. */
-const REQ_OVERRIDE = { onemore: ['f5'] };
+ * behind the theme pick, and its price keeps it late. Go Outside waits for Spiral Overlay: leaving early should be a
+ * choice made late in a run, not a row a saver trips over at minute 15. */
+const REQ_OVERRIDE = { onemore: ['f5'], outside: ['overlay'] };
+
+/* The design sim paid for 30 minutes with nothing on top. The real game has prizes and modifiers on top (capped in
+ * sim/economy.js), so the plan pays 70% of the design's numbers and the whole run lands near 30. Measured: dev/measure.mjs. */
+const planPay = (n) => Math.max(1, Math.round(n * 0.7));
 
 const groupOf = (r) => (r.lane === 'meta' ? 'meta' : r.lane === 'after' ? 'after' : 'run');
 
@@ -28,8 +33,8 @@ export function buildItems() {
     const c = copy.items[r.id];
     if (!c) throw new Error(`copy.json has no ${r.id}`);
     const it = { id: r.id, emoji: r.emoji, name: cur(c.name), what: cur(c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
-    if (r.fps) it.fps = r.fps;
-    if (r.click) it.click = r.click;
+    if (r.fps) it.fps = planPay(r.fps);
+    if (r.click) it.click = planPay(r.click);
     if (r.wall) it.wall = r.wall;
     if (r.flags) it.flags = r.flags;
     it.kind = r.kind || 'item';
