@@ -12,6 +12,14 @@ const {
   THOUGHTS, thoughtsFor, QUESTIONS, TRICKS, ENDINGS, DROP_WORDS, THEMES, THEME_IDS,
   FAKE_ANTIVIRUS, FAKE_PAYWALL, FAKE_RENEWAL, NEW_TERMS, SUPPORT_MENU, FAKE_KEYHOLDER,
   FAKE_UPDATE, FAKE_CALL, FAKE_INBOX, FAKE_CHAT, FAKE_DESKTOP,
+  PRAISE, PRAISE_NAMED, REST_LINES, TUCK_LINES, GLOW_LINES, WARM_LINES, NAP_LINES,
+  ORDERS, DENIED_LINES, COUNT_LINES, BEAT_LINES, STILL_TEST, PHRASES, PHRASE_LINES, CORNER_LINES, REVIEWS,
+  IMAGINE, CAPTIONS, STORIES, RADIO_LINES, FILL_BLANKS, INK_ANSWERS, INK_REPLIES, FALSE_MEMORIES, LAZY_CAPTIONS,
+  EMI_HELLO, EMI_IDLE, EMI_PET, EMI_BUY_ANY, EMI_BUY_LANE, EMI_BUY_ITEM, EMI_HATS, EMI_JEALOUS, EMI_MINI, EMI_NAP, EMI_PLAY,
+  EMI_RENAMES, EMI_RENAME_TEMPLATES, EMI_BOSS_LINES, EMI_EARLY,
+  LISTENING_TEST, OPINIONS, LUCKY_WORDS, BOUNCE_WORDS, BIG_WORDS, EDGE_WORDS, STILL_WORDS, STARE_LINES, PHONES_PROMPT, TAB_TITLES,
+  GOLDEN, SCREEN_TIME, LEVELS, WHEEL, BOXES, APP_ONLY, FALLING_WORDS, REMOTE, DRIFT_LINES, FEED_LINES, ACHIEVEMENTS,
+  COMBO_LINES, SLEEP_STORY, AUDIO_DRAMA, INDUCTION, MOODS, MOOD_CARD, AFTER_RUN,
 } = content;
 
 const PINNED_ENDS = ['drop', 'o_out', 'p_life', 'tr_end', 'bi_end', 'dr_end', 'si_end', 'go_end', 'lo_end', 'ce_end', 'in_end', 'outside', 'onemore'];
@@ -170,11 +178,112 @@ test('adult, not explicit, and nothing young', () => {
 });
 
 test('the writing does not assume a gender of the player', () => {
-  const rows = strings({ THOUGHTS, QUESTIONS, THEMES, ENDINGS, SPONSORED_THOUGHTS, NATIVE_LINES, FAKE_CHAT, FAKE_INBOX, FAKE_KEYHOLDER });
-  none(rows, /\b(girl|girls|boy|boys|princess|lady|ladies|gentleman|sir|madam|miss|mister|woman|women|wife|husband)\b/i);
+  /* x_listener is the row's own joke about the podcast host, never about the player. */
+  const { x_listener: _host, ...combos } = COMBO_LINES;
+  const rows = strings({
+    THOUGHTS, QUESTIONS, THEMES, ENDINGS, SPONSORED_THOUGHTS, NATIVE_LINES, FAKE_CHAT, FAKE_INBOX, FAKE_KEYHOLDER,
+    PRAISE, PRAISE_NAMED, REST_LINES, TUCK_LINES, GLOW_LINES, WARM_LINES, NAP_LINES,
+    ORDERS, DENIED_LINES, COUNT_LINES, BEAT_LINES, STILL_TEST, PHRASES, PHRASE_LINES, CORNER_LINES, REVIEWS,
+    IMAGINE, CAPTIONS, STORIES, RADIO_LINES, FILL_BLANKS, INK_ANSWERS, INK_REPLIES, FALSE_MEMORIES, LAZY_CAPTIONS,
+    EMI_HELLO, EMI_IDLE, EMI_PET, EMI_BUY_ANY, EMI_BUY_LANE, EMI_BUY_ITEM, EMI_HATS, EMI_JEALOUS, EMI_MINI, EMI_NAP, EMI_PLAY,
+    EMI_RENAMES, EMI_RENAME_TEMPLATES, EMI_BOSS_LINES, EMI_EARLY,
+    LISTENING_TEST, OPINIONS, STILL_WORDS, STARE_LINES, GOLDEN, SCREEN_TIME, LEVELS, WHEEL, BOXES, FEED_LINES, ACHIEVEMENTS,
+    combos, SLEEP_STORY, AUDIO_DRAMA, INDUCTION, MOODS, AFTER_RUN,
+  });
+  none(rows,/\b(girl|girls|boy|boys|princess|lady|ladies|gentleman|sir|madam|miss|mister|woman|women|wife|husband)\b/i);
   none(rows.filter((r) => !/EMI|Circe/.test(r.text)), /\b(she|her|hers|he|him|his)\b/i);
 });
 
 test('EMI ad reads are short beats', () => {
   for (const read of EMI_AD_READS) assert.ok(read.length >= 3 && read.every((b) => b.length <= 24), read.join(' / '));
+});
+
+test('no export name is lost to a clash in the index', async () => {
+  const names = ['ads', 'thoughts', 'questions', 'endings', 'themes', 'fakes', 'sweet', 'strict', 'blind', 'emi', 'side', 'combos'];
+  const keys = (await Promise.all(names.map((n) => import(`../data/content/${n}.js`)))).flatMap((m) => Object.keys(m));
+  assert.equal(new Set(keys).size, keys.length);
+  assert.deepEqual([...keys].sort(), Object.keys(content).sort());
+});
+
+test('Praise: enough for a run, and the named lines name the buy', () => {
+  assert.ok(PRAISE.length >= 40 && new Set(PRAISE).size === PRAISE.length);
+  assert.ok(PRAISE_NAMED.length >= 10 && PRAISE_NAMED.every((l) => l.includes('{item}')));
+  assert.ok(REST_LINES.resting.length && REST_LINES.broken.length && TUCK_LINES.length && GLOW_LINES.length && WARM_LINES.length);
+  assert.ok(NAP_LINES.welcome.some((l) => l.includes('{pay}')));
+});
+
+test('Tap route: orders are shouted, phrases can be typed on a phone, every grade has a note', () => {
+  assert.ok(ORDERS.words.includes('TAP NOW') && ORDERS.words.every((w) => w === w.toUpperCase()));
+  assert.ok(PHRASES.length >= 10);
+  for (const p of PHRASES) assert.match(p, /^[a-z ]{4,32}$/);
+  for (const g of ['A', 'B', 'C', 'D', 'F']) assert.ok(REVIEWS[g].length >= 3, g);
+  for (const bank of [DENIED_LINES.refused, DENIED_LINES.next, COUNT_LINES.won, COUNT_LINES.lost, BEAT_LINES.faster, STILL_TEST.passed, PHRASE_LINES.right, CORNER_LINES.sent]) assert.ok(bank.length >= 2);
+});
+
+test('No Pictures: stories are three short lines, blanks come back, inkblots have four answers', () => {
+  assert.ok(CAPTIONS.length >= 20 && IMAGINE.length >= 8 && RADIO_LINES.length >= 12 && FALSE_MEMORIES.length >= 12 && LAZY_CAPTIONS.length >= 8);
+  assert.ok(STORIES.length >= 20, 'a new story each minute');
+  assert.equal(new Set(STORIES.map((s) => s.id)).size, STORIES.length);
+  for (const s of STORIES) {
+    assert.equal(s.lines.length, 3, s.id);
+    assert.ok(s.lines.every((l) => l.length <= 34), s.id);
+  }
+  for (const f of FILL_BLANKS) {
+    assert.ok(f.text.includes('____') && f.echo.includes('{word}') && f.options.length >= 3, f.id);
+  }
+  for (const a of INK_ANSWERS) assert.equal(a.length, 4);
+  assert.ok(INK_REPLIES.length >= 6);
+  for (const m of FALSE_MEMORIES) assert.equal(m.length, 2);
+});
+
+test('EMI: every buy lane has lines, the pet ladder matches the row, her lines name real unlocks', () => {
+  assert.ok(EMI_HELLO.length >= 3 && EMI_IDLE.length >= 15 && EMI_BUY_ANY.length >= 12 && EMI_EARLY.length >= 4);
+  assert.deepEqual(EMI_PET.stages.map((s) => s.mood), ['happy', 'happy', 'glee', 'annoyed', 'rage']);
+  assert.equal(EMI_HATS.length, 4);
+  assert.ok(EMI_JEALOUS.blocking.length && EMI_MINI.length && EMI_NAP.woken.length && EMI_PLAY.miss.length && EMI_BOSS_LINES.length);
+  assert.ok(EMI_RENAME_TEMPLATES.every((t) => t.includes('{name}')));
+  if (existsSync(ROWS)) {
+    const rows = JSON.parse(readFileSync(ROWS, 'utf8'));
+    const ids = new Set(rows.map((r) => r.id));
+    for (const id of [...Object.keys(EMI_RENAMES), ...Object.keys(EMI_BUY_ITEM), ...Object.keys(COMBO_LINES)]) assert.ok(ids.has(id), id);
+    for (const lane of new Set(rows.map((r) => r.lane))) {
+      if (lane !== 'meta' && lane !== 'after') assert.ok(EMI_BUY_LANE[lane]?.length >= 3, lane);
+    }
+    assert.deepEqual(MOODS.map((m) => m.id).sort(), rows.filter((r) => r.lane === 'meta' && r.id !== 'm_mood').map((r) => r.id).sort());
+    assert.deepEqual([...Object.keys(COMBO_LINES), 'x_story', 'x_audio', 'x_induct', 'x_what'].sort(), rows.filter((r) => r.lane === 'combo').map((r) => r.id).sort());
+  }
+});
+
+test('Listening Test and Voice Reactions only ever use recorded clips', () => {
+  assert.ok(LISTENING_TEST.words.length >= 16);
+  for (const w of LISTENING_TEST.words) {
+    assert.ok(CIRCE.includes(w.clip), w.clip);
+    assert.ok(w.decoys.length >= 2 && !w.decoys.includes(w.word), w.word);
+  }
+  assert.ok(LISTENING_TEST.wrong.every((l) => l.includes('{word}')));
+  for (const bank of Object.values(OPINIONS)) {
+    for (const o of bank) if (o.clip !== null) assert.ok(CIRCE.includes(o.clip), o.clip);
+  }
+});
+
+test('side toys: words, achievements and the honest app-only lines', () => {
+  for (const bank of [LUCKY_WORDS, BOUNCE_WORDS, BIG_WORDS, EDGE_WORDS, STILL_WORDS]) assert.ok(bank.length >= 8);
+  assert.ok(STARE_LINES.start.length && PHONES_PROMPT.ask && TAB_TITLES[0] === 'Quarterly Report.xlsx');
+  assert.deepEqual(GOLDEN.prizes.map((p) => p.key), ['lump', 'frenzy', 'free']);
+  assert.ok(SCREEN_TIME.tips.length && LEVELS.up.length && WHEEL.results.length && BOXES.opened.length && DRIFT_LINES.length && FEED_LINES.endNear.length);
+  assert.deepEqual(FALLING_WORDS.map((w) => w.word), ['FOCUS', 'BLANK', 'DEEPER']);
+  assert.ok(APP_ONLY.sparkle.tag === 'app only' && APP_ONLY.toy.tag === 'app only');
+  assert.ok(ACHIEVEMENTS.length >= 25);
+  assert.equal(new Set(ACHIEVEMENTS.map((a) => a.id)).size, ACHIEVEMENTS.length);
+  /* Remote: presets only, and panic stays off the list. */
+  assert.ok(REMOTE.presets.length >= 3 && REMOTE.presets.every((p) => !/panic|wake/i.test(p.label)));
+});
+
+test('combos, moods, after the run: scripts are there and the induction comes back up', () => {
+  assert.ok(SLEEP_STORY.length >= 12 && AUDIO_DRAMA.lines.length >= 8);
+  assert.ok(INDUCTION.length >= 25);
+  assert.match(INDUCTION.at(-1), /Awake/);
+  assert.equal(MOOD_CARD.button, 'Fine');
+  for (const m of MOODS) assert.ok(m.name && m.rule && m.line, m.id);
+  assert.ok(AFTER_RUN.map && AFTER_RUN.ends && AFTER_RUN.share.play.includes('{game}') && AFTER_RUN.save.done);
 });
