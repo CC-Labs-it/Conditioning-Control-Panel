@@ -36,7 +36,12 @@ export function makeContext(engine, scope) {
   const after = item.group === 'after';
   const bag = () => { const owner = after ? engine.life : engine.run; return (owner.store[item.id] ||= {}); };
 
-  const addEl = (el) => { scope.els.add(el); return el; };
+  const addEl = (el) => {
+    scope.els.add(el);
+    /* A long run makes thousands of short-lived nodes (feed tiles, a wall's fades). What has already left the page need not wait for the unlock. */
+    if (scope.els.size > 2048) for (const e of scope.els) if (!e.isConnected) scope.els.delete(e);
+    return el;
+  };
 
   const ctx = {
     item,
