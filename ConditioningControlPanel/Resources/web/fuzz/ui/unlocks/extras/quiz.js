@@ -117,7 +117,8 @@ function createQuiz(ctx) {
     for (const c of o.cancels) c();
     for (const a of o.anims) { try { a.cancel(); } catch { /* gone */ } }
     o.card.style.pointerEvents = 'none';
-    const a = ctx.anim(o.card, paid ? [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.06)', opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }], { duration: paid ? 170 : 320, easing: 'ease-out' });
+    const pop = paid && !ctx.gentle;
+    const a = ctx.anim(o.card, pop ? [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.06)', opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }], { duration: pop ? 170 : 320, easing: 'ease-out' });
     a.onfinish = () => o.card.remove();
     a.oncancel = () => o.card.remove();
   }

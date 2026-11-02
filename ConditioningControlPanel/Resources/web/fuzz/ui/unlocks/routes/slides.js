@@ -73,7 +73,7 @@ export default {
         cells.push(slot);
         n += 1;
       };
-      const stop = ctx.every(190, () => { add(); if (n >= cols * rows) stop(); });
+      const stop = ctx.every(ctx.gentle ? 400 : 190, () => { add(); if (n >= cols * rows) stop(); });
       ctx.every(1600, () => { if (cells.length) cells[Math.floor(ctx.rng() * cells.length)].next(niche(ctx.rng() < 0.5 ? NICHES.base : NICHES.second)); });
       ctx.on('pictures', () => { for (const c of cells) c.next(niche(NICHES.base)); });
       /* A plate in the page's own colour, so the page's ink always reads on it, whatever the theme did to both. */

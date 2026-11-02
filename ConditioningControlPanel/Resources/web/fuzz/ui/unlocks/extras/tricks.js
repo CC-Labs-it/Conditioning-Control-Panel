@@ -232,7 +232,7 @@ export const TRICK_FNS = {
         b.style.padding = '1px 2px';
         if (!t.gentle) t.anim(b, [{ transform: 'scale(.3)' }, { transform: 'none' }], { duration: 130 });
       };
-      t.every(110, add);
+      t.every(t.gentle ? 400 : 110, add);
       for (let k = 0; k < 4; k++) add();
     },
   },
