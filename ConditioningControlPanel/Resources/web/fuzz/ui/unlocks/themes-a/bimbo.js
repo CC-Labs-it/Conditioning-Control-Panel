@@ -7,6 +7,7 @@ import { mountPodcast } from '../podcast-player.js';
 import { bag, geo, counterEl, sheet, done, frame, sideFrames, shopWords, pick, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.bimbo.rules;
 const NICHES = ['pink', 'heels', 'gloss', 'curls', 'lashes'];
@@ -169,8 +170,7 @@ export default {
   bi_lips: {
     mount(ctx) {
       ctx.button.skin('bi-lips');
-      ctx.css(`#btn[data-skin=bi-lips]{width:132px;height:84px;font-size:0;background:radial-gradient(circle at 34% 26%,#fff 0 6%,#ff9cce 24%,#ff2f92);border-radius:42px;box-shadow:0 3px 0 #c9207a;}
-#btn[data-skin=bi-lips]::after{content:'👄';font-size:60px;line-height:84px;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;}`);
+      ctx.css(THEME_TASTES.bimbo.css);
       let n = 0;
       ctx.on('tap', (e) => {
         const g = bag(ctx).lipsAt || (bag(ctx).lipsAt = geo(ctx));

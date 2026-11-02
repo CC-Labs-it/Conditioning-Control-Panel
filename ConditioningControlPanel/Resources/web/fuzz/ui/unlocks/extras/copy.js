@@ -63,7 +63,7 @@ export const AFTER_COPY = Object.freeze({
   perkNone: 'No Looks bought yet. Buy one next run and it can come back.',
   perkKept: 'Kept. It will be there next run.',
   perkDrop: 'Keep nothing',
-  shuffleNote: 'Every run after the first, the side unlocks come in a different order.',
+  shuffleNote: 'The side unlocks in a new order each time you look. The shop itself stays put.',
   closeTab: 'Close this',
   closeTabHard: 'This tab will not close itself. Politeness has limits.',
   bye: 'Bye.',

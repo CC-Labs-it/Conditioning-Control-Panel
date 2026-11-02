@@ -18,10 +18,10 @@ export function sfx(ctx, file, gain = 0.6) {
 const BASE_CSS = `
 .fz-chip { min-height: 34px; padding: 2px 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); font-size: 13px; line-height: 1.1; touch-action: manipulation; pointer-events: auto; white-space: nowrap; }
 .fz-chip:active { transform: translateY(1px); }
-#fz-tools { order: 9; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin-top: 4px; pointer-events: auto; }
+#fz-tools { order: -1; flex: none; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin-top: 4px; pointer-events: auto; }
 #btn { position: relative; color: var(--btn-ink, inherit); transition: transform .07s ease-out, border-radius .35s ease-out, width .4s ease-out, height .4s ease-out; }
 #btn-zone { transition: height .4s ease-out; }
-@media (max-width: 759px) { .fz-chip { min-height: 32px; padding: 0 7px; font-size: 12px; } #fz-tools { gap: 3px; } }
+@media (max-width: 759px) { .fz-chip { flex: none; min-height: 32px; padding: 0 7px; font-size: 12px; } #fz-tools { gap: 3px; width: 100%; flex-wrap: nowrap; justify-content: safe center; overflow-x: auto; scrollbar-width: none; touch-action: pan-x; } }
 `;
 
 export function baseCss(ctx) {
@@ -170,7 +170,9 @@ export function spiralCanvas(ctx, css, parent, { px = 512, colors = ['#ff4fa8', 
   const g = c.getContext('2d');
   const params = normalizeParams({ arms, turns, style: 'log', duty: 0.5, colors, bg: bg || '#000000' });
   if (!bg) g.fillRect = () => {};   // the Loom paints its background first: skip it for a see-through spiral
-  drawSpiral(g, px, params, 0);
+  const DRAW = 2048;   // the Loom's rings follow the size it is told: a small canvas blown up to the page would show stairs
+  g.scale(px / DRAW, px / DRAW);
+  drawSpiral(g, DRAW, params, 0);
   const turn = ctx.anim(c, [{ rotate: '0deg' }, { rotate: '360deg' }], { duration: turnMs, iterations: Infinity });
   const hold = () => { if (ctx.gentle) turn.pause(); else if (turn.playState === 'paused' && !paused) turn.play(); };
   let paused = false;

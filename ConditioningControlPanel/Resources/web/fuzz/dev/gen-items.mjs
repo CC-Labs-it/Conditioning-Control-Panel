@@ -20,6 +20,19 @@ const GROW = { stray: { ratio: 1.5, max: 12 } };
  * beside Go Outside instead of behind it: same gate, and its price keeps it late. */
 const REQ_OVERRIDE = { onemore: ['f5'] };
 
+/* Copy the design source promises and the game does not do, or no longer does. */
+const WHAT_OVERRIDE = {
+  remote: 'Preset buttons that poke your own run. No friend is on the other end.',
+  z_shuffle: 'A little board of side unlocks that shuffles itself on the credits.',
+  tr_head: 'Trance pictures join the page, general hypnosis first.',
+  bi_head: 'Bimbo pictures join the page, and CCP ads now mention the Bambi mod.',
+  dr_head: 'Drone pictures join the page, and CCP ads now mention Drone mode.',
+  si_head: 'Sissy pictures join the page, and CCP ads now mention the Sissy mod.',
+  go_head: "Goon pictures join the page, and CCP ads now mention Goon, CCP's game.",
+  lo_head: 'Chastity pictures join the page, and CCP ads now mention its chastity features.',
+  ce_head: 'Pictures join the page, hidden behind bars.',
+};
+
 const groupOf = (r) => (r.lane === 'meta' ? 'meta' : r.lane === 'after' ? 'after' : 'run');
 
 export function buildItems() {
@@ -27,7 +40,7 @@ export function buildItems() {
   const items = rows.map((r) => {
     const c = copy.items[r.id];
     if (!c) throw new Error(`copy.json has no ${r.id}`);
-    const it = { id: r.id, emoji: r.emoji, name: cur(c.name), what: cur(c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
+    const it = { id: r.id, emoji: r.emoji, name: cur(c.name), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
     if (r.fps) it.fps = r.fps;
     if (r.click) it.click = r.click;
     if (r.wall) it.wall = r.wall;

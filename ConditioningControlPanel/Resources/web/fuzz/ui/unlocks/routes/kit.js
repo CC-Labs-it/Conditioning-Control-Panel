@@ -21,7 +21,7 @@ export const rectOf = (el) => el.getBoundingClientRect();
 export function btnCentre(ctx) { const r = rectOf(ctx.button.el); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right }; }
 /** The zone the button sits in: where the free space beside it ends. */
 export function zoneRect(ctx) { return rectOf(ctx.parts.buttonWrap.parentElement); }
-export function counterRect(ctx) { return rectOf(docOf(ctx).getElementById('counter')); }
+export function counterRect(ctx) { return rectOf(ctx.parts.counter); }
 
 /** A ring that opens and fades. Fades only, so it is fine under Gentle. */
 export function ring(ctx, x, y, size, color = '#7b5cff', ms = 800, parent = 'floaters') {
@@ -94,7 +94,8 @@ function layout(ctx) {
   }
   const zone = zoneRect(ctx), btn = rectOf(ctx.button.el);
   const flankW = Math.max(60, Math.min(240, (w - btn.width) / 2 - 16));
-  const top = counterRect(ctx).bottom + 2, bottom = zone.bottom - 4;
+  const metersBottom = rectOf(ctx.layer('meters')).bottom;
+  const top = Math.max(counterRect(ctx).bottom, Math.min(metersBottom, zone.bottom - 80)) + 2, bottom = zone.bottom - 4;
   docOf(ctx).documentElement.style.setProperty('--routes-mid', stacks.left.length || stacks.right.length ? `${w - 2 * (flankW + 10)}px` : '100%');
   for (const s of ['left', 'right']) {
     const list = stacks[s], gap = 4;

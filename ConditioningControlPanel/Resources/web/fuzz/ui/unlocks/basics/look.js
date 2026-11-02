@@ -150,7 +150,7 @@ body { transition: background-color .6s, color .6s; }
       ctx.css(`@font-face { font-family: "Fredoka"; src: url("assets/fonts/fredoka-latin.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }`);
       const swap = () => {
         ctx.vars({ '--font': '"Fredoka", "Segoe UI", system-ui, sans-serif', '--shop-font': '"Fredoka", "Segoe UI", system-ui, sans-serif' });
-        if (fresh(ctx)) for (const part of [ctx.parts.shop, ctx.parts.buttonWrap.closest('#stage')]) ctx.anim(part, [{ opacity: 0.2 }, { opacity: 1 }], { duration: 400 });
+        if (fresh(ctx)) for (const part of [ctx.parts.shop, ctx.parts.stage]) ctx.anim(part, [{ opacity: 0.2 }, { opacity: 1 }], { duration: 400 });
       };
       if (doc.fonts?.load) doc.fonts.load('16px "Fredoka"').then(swap, swap); else swap();
       return {};
@@ -209,7 +209,7 @@ body { transition: background-color .6s, color .6s; }
         const d = spawn(ctx, `width:44px;height:44px;margin:-22px 0 0 -22px;box-sizing:border-box;border:3px solid #ff4fa8;border-radius:50%;left:${x}px;top:${y}px;`);
         play(ctx, d, [{ transform: 'scale(.3)', opacity: 1 }, { transform: 'scale(1.1)', opacity: 0 }], { duration: ctx.gentle ? 400 : 480, easing: 'ease-out' });
       };
-      const onDown = (e) => ring(e.clientX, e.clientY);
+      const onDown = (e) => { if (!ctx.paused) ring(e.clientX, e.clientY); };
       win.addEventListener('pointerdown', onDown, true);
       if (fresh(ctx)) { const c = btnCenter(ctx); ring(c.x, c.y); ctx.after(180, () => ring(c.x, c.y)); }
       return { off() { win.removeEventListener('pointerdown', onDown, true); } };
@@ -229,9 +229,10 @@ body.gentle #fz-roll { display: none; }
 #fz-roll .d { height: 11em; transition: transform .45s cubic-bezier(.2,.8,.3,1); }
 #fz-roll .d > span { display: block; height: 1.1em; }
 `);
-      const roll = ctx.el('span', '', null, doc.getElementById('counter'));
+      const counter = ctx.parts.counter;
+      const roll = ctx.el('span', '', null, counter);
       roll.id = 'fz-roll';
-      doc.getElementById('counter').insertBefore(roll, doc.getElementById('count'));
+      counter.insertBefore(roll, counter.querySelector('#count'));
       const digits = [];
       let shown = '';
       const STACK = Array.from({ length: 10 }, (_, i) => `<span>${i}</span>`).join('');
@@ -272,7 +273,7 @@ body.gentle #fz-roll { display: none; }
       const pool = Array.from({ length: 14 }, () => ctx.el('div', 'position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:rgba(240,60,150,.45);opacity:0;pointer-events:none;will-change:transform,opacity;', null, 'over'));
       let i = 0, last = 0;
       const drop = (x, y) => {
-        if (ctx.gentle) return;
+        if (ctx.gentle || ctx.paused) return;
         const d = pool[i++ % pool.length];
         ctx.anim(d, [{ transform: `translate(${x}px,${y}px) scale(1)`, opacity: 0.9 }, { transform: `translate(${x}px,${y}px) scale(.3)`, opacity: 0 }], { duration: 700, easing: 'linear' });
       };

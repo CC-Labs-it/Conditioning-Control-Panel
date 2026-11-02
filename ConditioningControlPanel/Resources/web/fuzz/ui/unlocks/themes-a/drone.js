@@ -6,6 +6,7 @@ import { mountPodcast } from '../podcast-player.js';
 import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, shopWords, pick, railPanel, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.drone.rules;
 const NICHES = ['shiny', 'chrome', 'visor', 'gloss', 'mirror', 'latex'];
@@ -160,9 +161,7 @@ export default {
   dr_hex: {
     mount(ctx) {
       ctx.button.skin('dr-hex');
-      ctx.css(`#btn[data-skin=dr-hex]{width:112px;height:96px;font-size:14px;border:0;border-radius:0;box-shadow:none;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:linear-gradient(135deg,#f6f8f9,#8d99a1 40%,#e6ebee 62%,#6f7a82);}
-#btn[data-skin=dr-hex].down{transform:scale(.93);filter:brightness(1.25);}
-#btn-zone{min-height:104px;}`);
+      ctx.css(THEME_TASTES.drone.css);
       return {};
     },
   },

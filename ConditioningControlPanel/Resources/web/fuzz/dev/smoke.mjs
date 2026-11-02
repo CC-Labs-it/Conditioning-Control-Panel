@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runPileChecks } from './pile-check.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const shots = join(here, 'shots');
@@ -115,9 +116,9 @@ const bits = await page.evaluate(async () => {
   await new Promise((r) => setTimeout(r, 500));
   const ratio = (e.now - n0) / (e.real - r0);
   release();
-  return { shop: c.parts.shop.id, wrap: c.parts.buttonWrap.id, ending: c.layer('ending').id, ratio };
+  return { shop: c.parts.shop.id, wrap: c.parts.buttonWrap.id, counter: c.parts.counter.id, stage: c.parts.stage.id, ending: c.layer('ending').id, ratio };
 });
-if (bits.shop !== 'shop' || bits.wrap !== 'btn-wrap' || bits.ending !== 'l-ending') errors.push(`ctx.parts or the ending layer: ${JSON.stringify(bits)}`);
+if (bits.shop !== 'shop' || bits.wrap !== 'btn-wrap' || bits.counter !== 'counter' || bits.stage !== 'stage' || bits.ending !== 'l-ending') errors.push(`ctx.parts or the ending layer: ${JSON.stringify(bits)}`);
 if (bits.ratio > 0.85) errors.push(`ctx.speed(0.5) ran at ${bits.ratio}`);
 
 /* ---- the goal row's flash reads --ready ---- */
@@ -255,6 +256,10 @@ await phone.waitForSelector('.opt');
 await phone.waitForTimeout(1200);
 await phone.screenshot({ path: join(shots, 'b3-phone-fork.png') });
 await ctx2.close();
+
+/* ---- the hard rules with a whole route on at once ---- */
+const pile = await runPileChecks(browser, base, { routes: process.env.PILE_ALL ? undefined : [route, ['ears', 'strict', 'scroll', 'premium', 'locked']], seconds: 12 });
+errors.push(...pile.errors);
 
 await browser.close();
 console.log(JSON.stringify({ played, life, errors }, null, 1));

@@ -74,13 +74,13 @@ canvas.fz-sp { position: absolute; inset: 0; width: 100%; height: 100%; pointer-
     },
   },
 
-  /* Big Button: a third of the screen. The zone grows with it, so it pushes the shop down and never lies under it. */
+  /* Big Button: a third of the screen, a bit less on a phone. The zone grows with it, so it pushes the shop down and never lies under it. */
   bigbtn: {
     mount(ctx) {
       wear(ctx, 'big', `
 #btn[data-skin=big] { width: min(70vw, 520px); height: 30vh; font-size: clamp(30px, 7vh, 56px); border-radius: 22px; }
 #btn-zone:has(#btn[data-skin=big]) { height: calc(30vh + 16px); }
-@media (max-height: 620px) { #btn[data-skin=big] { height: 22vh; } #btn-zone:has(#btn[data-skin=big]) { height: calc(22vh + 12px); } }
+@media (max-height: 620px), (max-width: 759px) { #btn[data-skin=big] { height: 22vh; } #btn-zone:has(#btn[data-skin=big]) { height: calc(22vh + 12px); } }
 `);
       return {};
     },

@@ -34,7 +34,7 @@ carries on. An ending row may also export `ending(ctx) -> Promise`: its show bet
   intro, saves nothing. A row on a lane the route already locked is refused with a console warning.
 - `?pace=50`: income x50 (max 500). `?mood=m_pink`: force a run mood. `?fresh=1`: no save, no intro. `?pictures=none|own|online`: force a picture source. `online` is the only way to the placeholder art; without it the source is `none` until the player chooses, so frames are empty on a dev page.
 - `window.fuzz`: `.buy(id)` `.pick('f1','eyes')` `.add(1000)` `.grant(id)` `.tap(10)` `.end('drop')` `.newRun()`, `.state`, `.life`, `.items`, `.engine`.
-- `node dev/smoke.mjs` plays a whole route headless and fails on any page error. Screens land in `dev/shots/`.
+- `node dev/smoke.mjs` plays a whole route headless and fails on any page error, then runs `dev/pile-check.mjs`: with a whole route on at once, Wake Up, Escape and a host suspend freeze the page, the audio and every stream; a pop-up nobody answers lets go of the button and the goal row; nothing flickers above 3 Hz under Gentle or OS reduced motion. `PILE_ALL=1` does all eight themes. Screens land in `dev/shots/`.
 - `node dev/intro-drive.mjs` drives the contract, Decline, skimming, the host wire and the pictures card by real input, desktop and 390 px.
 - `node --test --test-concurrency=2 tests/*.test.mjs` includes the timing of all 192 routes.
 
@@ -50,6 +50,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.has(id)`, `ctx.pick('f1')` (the chosen lane or null), `ctx.fmt(n)`, `ctx.rng()`, `ctx.rates()` (`{fps, click, wall, walls}` right now, walls = hits per second per bouncing button), `ctx.config`.
 - `ctx.brand`: `.game .short .currency .currencyPlural`, `.text('{cur}')`, `.money(n)`. Never write the names; write `{game}`, `{short}`, `{cur}`.
   Text given to `el`, `say`, `toast`, `float`, `modal` is token-expanded for you.
+- `ctx.paused`: true during a pause or a suspend. Timers and frames stop by themselves; only your own window or document listeners need to ask.
 - `ctx.gentle`, `ctx.reduced`: live. Gentle: nothing above 3 Hz, flashes become fades of 250 ms or more, spiral still, no sway, no warp. If an effect cannot be gentle, leave it off.
 - `ctx.hosted`, `ctx.caps`, `ctx.host(type, fields)`: the app wire, see `CONTRACT.md`.
 - `ctx.openLink(url)`: the one way to open a real page. Only `https://cclabs.app` and its paths, and only called directly inside the player's own press on your element or card button: not after an `await` or `ctx.after`, not from a tap on the game button. Answers whether it opened. Never `window.open` or an `<a>` of your own.
@@ -61,7 +62,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.el(tag, cssText, text?, parent?)`: parent is an element or a layer name; default `floaters`.
 - `ctx.css(text)`: a stylesheet. `ctx.vars({'--page':'#ffdcee'})`: page variables, restored on off: `--page --ink --ink-soft --ink-faint --btn --panel --panel-short --line --fill --ready --stamp --font --shop-font`. `--ready` is the flash on a goal row you can afford: set it with your theme, never restyle `#goal`.
 - `ctx.world`: the element holding all layers and the page, for a lean or warp. Wake Up and the cards are outside it. Do not filter it every frame on a phone.
-- `ctx.parts`: `.shop`, `.buttonWrap`: the elements themselves, to measure or to animate with `ctx.anim` (`.buttonWrap` moves the button without touching its own transform). Use these, never `querySelector` into `ctx.world`.
+- `ctx.parts`: `.shop`, `.buttonWrap`, `.counter`, `.stage`: the elements themselves, to measure or to animate with `ctx.anim` (`.buttonWrap` moves the button without touching its own transform). Use these, never `querySelector` into `ctx.world`.
 - `ctx.bounds()`: `{w, h}` of the page, cached; use it instead of measuring each frame.
 - `ctx.every(ms, fn)`, `ctx.after(ms, fn)`, `ctx.frame(fn(dt, now))`: each returns a cancel function. Share these; live particles have a cap, so prefer `ctx.float(x, y, text, css?)` for rising numbers.
 - `ctx.anim(el, keyframes, opts)`: Web Animations. Keep loops at or under 3 Hz.
@@ -69,7 +70,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 **Money**
 
-- `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`.
+- `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`. An ad press uses the source `'ad'`, which is what the Broke mood doubles.
 - `ctx.spend(amount, reason?)`: takes from the bank, never below zero, answers what it took. No debt, and it does not touch `total`. Pace does not apply. Reasons add up in `ctx.state.spent`.
 - `ctx.guardBuy(fn(item) -> {refuse: 'line'} | null)`: refuse or delay a buy; the line shows as a toast. Returns a remover. Use this, never capture listeners on the shop. It cannot make a run impossible: a row goes through after 3 refusals whatever you answer, a fork or ending row never reaches you, and a throw lets the row through.
 - `ctx.wallHit({x, y, corner})`: a bouncing thing hit a wall: pays the wall value, emits `wall`, answers the gain.
@@ -86,8 +87,8 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 **Words and cards**
 
-- `ctx.say(text)`: the thought ticker. `ctx.toast(text)`: a line under the button; newest replaces.
-- `ctx.modal({title, body, buttons:[{label, onPress, keepOpen?}], node?, ms?})`: one at a time, queued; returns `{close()}`. No buttons and no `ms` gets a Close button. Must never cost the run. No text inputs, ever.
+- `ctx.say(text)`: the thought ticker. `ctx.sayRate(r)`: while held, only that share of every lane's thoughts gets through (0.5 = every second one; holds multiply; ends with your unlock). `ctx.toast(text)`: a line under the button; newest replaces.
+- `ctx.modal({title, body, buttons:[{label, onPress, keepOpen?}], node?, ms?})`: one at a time, queued; returns `{close()}`. No buttons and no `ms` gets a Close button. Must never cost the run. No text inputs, ever. Left alone for 15 s it takes its last button, so make that the harmless one; `noDefault: true` closes it without choosing.
 
 **Sound and media**
 

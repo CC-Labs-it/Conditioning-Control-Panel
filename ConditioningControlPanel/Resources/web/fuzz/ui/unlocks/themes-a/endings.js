@@ -50,6 +50,7 @@ async function trance(ctx, end) {
 
 /* ---- Empty Smile: pink, a blank face, hearts. ---- */
 async function bimbo(ctx, end) {
+  ctx.css('@font-face{font-family:"Fredoka";src:url("assets/fonts/fredoka-latin.woff2") format("woff2");font-weight:300 700;font-display:swap;}');  // the theme's own sheet went with it
   const s = stage(ctx, 'background:#ff9fd0;color:#8a0f5c;font-family:"Fredoka","Segoe UI",system-ui,sans-serif;');
   const face = ctx.el('div', 'position:absolute;left:50%;top:18%;width:min(60vw,300px);height:min(52vw,260px);transform:translateX(-50%);', null, s);
   ['16%', '72%'].forEach((x) => ctx.el('div', `position:absolute;top:12%;left:${x};width:12%;aspect-ratio:1;border-radius:50%;background:#fff;`, null, face));

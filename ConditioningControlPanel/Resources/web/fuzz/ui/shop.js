@@ -7,6 +7,8 @@ import { CONFIG } from '../data/config.js';
 import { whole, fmt } from '../sim/format.js';
 import { iconFor } from './icons.js';
 
+const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
+
 const payText = (it) => (it.fps ? `+${fmt(it.fps)}/s` : it.click ? `+${fmt(it.click)} a tap` : it.wall ? `+${fmt(it.wall)} a wall` : '');
 
 export function createShop({ doc, engine, onPress }) {
@@ -46,10 +48,11 @@ export function createShop({ doc, engine, onPress }) {
     const short = run.fuzz < p;
     r.el.classList.toggle('short', short);
     const fork = it.kind === 'fork';
-    r.costNum.textContent = fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p);
+    setText(r.costNum, fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p));
     if (isGoal) {
-      r.tag.textContent = fork ? 'Your choice' : it.kind === 'end' ? 'The end' : 'Next';
-      r.bar.style.transform = `scaleX(${short ? Math.min(1, run.fuzz / Math.max(1, p)) : 1})`;
+      setText(r.tag, fork ? 'Your choice' : it.kind === 'end' ? 'The end' : 'Next');
+      const fill = `scaleX(${(short ? Math.min(1, run.fuzz / Math.max(1, p)) : 1).toFixed(3)})`;
+      if (r.fill !== fill) { r.fill = fill; r.bar.style.transform = fill; }
       r.el.classList.toggle('ready', !short);
     }
   }
@@ -73,8 +76,8 @@ export function createShop({ doc, engine, onPress }) {
       if (rowsEl.children[i] !== r.el) rowsEl.insertBefore(r.el, rowsEl.children[i] || null);
       paint(r, false);
     });
-    moreEl.hidden = !win.more;
-    if (win.more) moreEl.textContent = `${win.more} more waiting behind these`;
+    if (moreEl.hidden !== !win.more) moreEl.hidden = !win.more;
+    if (win.more) setText(moreEl, `${win.more} more waiting behind these`);
   }
 
   /** How many rows fit. Called on resize. */

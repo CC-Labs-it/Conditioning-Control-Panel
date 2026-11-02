@@ -7,6 +7,7 @@ import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, pick, ring, rowsOf, sfx } from './kit.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.censored.rules;
 const RED = '#c2261f';
@@ -61,9 +62,7 @@ export default {
   /* The button is a bar. A tap shows a sliver of what is under it. */
   ce_bar: {
     mount(ctx) {
-      ctx.css(`#btn[data-skin=censorbar]{width:230px;height:40px;background:#000;color:#000;border:0;border-radius:0;font:700 15px var(--font);transition:color .08s ease-out;}
-        #btn[data-skin=censorbar].down{color:#fffdf6;transform:scale(.98);}
-        body.gentle #btn[data-skin=censorbar].down{color:#000;}`);
+      ctx.css(THEME_TASTES.censored.css);
       ctx.button.skin('censorbar');
       if (fresh(ctx)) ring(ctx, RED);
       return {};
@@ -185,7 +184,7 @@ export default {
           leave(card);
         });
         no.addEventListener('click', () => { ctx.toast(pick(ctx, F.declined)); leave(card); });
-        ctx.after(14000, () => { if (open === card) leave(card); });
+        ctx.after(7000, () => { if (open === card) leave(card); });  // it sits on the goal row: a nag, never a wall
         ctx.anim(card, [{ transform: 'translateY(30px)', opacity: 0 }, { transform: 'none', opacity: 1 }], 240);
       };
       ctx.after(1200, show);

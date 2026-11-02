@@ -49,7 +49,7 @@ export function makeContext(engine, scope) {
 
     layer: (name, side) => ui.layer(name, side),
     world: ui.world,
-    parts: Object.freeze({ get shop() { return ui.parts?.shop ?? null; }, get buttonWrap() { return ui.parts?.buttonWrap ?? null; } }),
+    parts: Object.freeze({ get shop() { return ui.parts?.shop ?? null; }, get buttonWrap() { return ui.parts?.buttonWrap ?? null; }, get counter() { return ui.parts?.counter ?? null; }, get stage() { return ui.parts?.stage ?? null; } }),
     bounds: () => ui.bounds(),
 
     el(tag, cssText = '', text = null, parent = null) {
@@ -116,10 +116,30 @@ export function makeContext(engine, scope) {
     get button() { return ui.buttonFor(scope); },
 
     say: (text) => ui.say(brandText(text)),
+    sayRate(rate) {
+      const off = ui.holdSayRate?.(rate) || (() => {});
+      const release = () => { off(); scope.cleanups.delete(release); };
+      scope.cleanups.add(release);
+      return release;
+    },
     toast: (text) => ui.toast(brandText(text)),
     float: (x, y, text, css) => ui.float(x, y, brandText(text), css),
+    /* A card nobody answers lets go of the page. It waits while the player is at it; left alone it takes its last button,
+     * the way out, unless the spec says the choice must not be made for them (noDefault). A card with `ms` runs its own time. */
     modal(spec) {
-      const h = ui.modal(spec, scope);
+      let cancel = null;
+      const doc = ui.doc;
+      const giveUp = () => {
+        h.close();
+        const last = spec.buttons?.[spec.buttons.length - 1];
+        if (last && !last.keepOpen && !spec.noDefault) last.onPress?.();
+      };
+      const arm = () => { cancel?.(); cancel = ctx.after(CONFIG.CARD_GIVE_UP_MS, giveUp); };
+      const h = ui.modal(spec.ms ? spec : {
+        ...spec,
+        onOpen(dom) { spec.onOpen?.(dom); arm(); dom.addEventListener('pointerdown', arm, true); doc.addEventListener?.('keydown', arm, true); },
+        onClose() { cancel?.(); cancel = null; doc.removeEventListener?.('keydown', arm, true); spec.onClose?.(); },
+      }, scope);
       scope.cleanups.add(h.close);
       return h;
     },
@@ -167,6 +187,7 @@ export function makeContext(engine, scope) {
       get jokesAreOff() { return engine.ads.jokesOff; },
     },
 
+    get paused() { return !!(engine.paused || engine.suspended); },
     get gentle() { return ui.gentle(); },
     get reduced() { return ui.reduced(); },
     host: (type, fields) => host.send?.(type, fields),
@@ -204,5 +225,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused',
 ]);

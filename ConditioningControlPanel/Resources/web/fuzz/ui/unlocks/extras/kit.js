@@ -32,8 +32,6 @@ export function picker(ctx, list) {
 /** Is a card up? Then nothing new should pop over it. */
 export const cardUp = () => !!document.getElementById('cards')?.childElementCount;
 
-export const rect = (id) => document.getElementById(id)?.getBoundingClientRect() || null;
-
 /** The bottom dock: captions above a strip of little widgets. Lives in `over`, ignores the pointer except its widgets. */
 function bottom(ctx) {
   if (dock?.root.isConnected) return dock;
@@ -70,6 +68,8 @@ export function captions(ctx, icon = '') {
     el: row,
     show(text, ms = 5000) {
       hide?.();
+      /* One line at a time on a narrow page: three stacked lines would sit on the shop. */
+      if (ctx.bounds().w < 1100) for (const other of row.parentElement.children) if (other !== row) other.style.display = 'none';
       row.style.display = 'block';
       row.textContent = ctx.brand.text(icon ? `${icon} ${text}` : text);
       ctx.anim(row, [{ opacity: 0 }, { opacity: 1 }], { duration: 350, easing: 'ease-out' });

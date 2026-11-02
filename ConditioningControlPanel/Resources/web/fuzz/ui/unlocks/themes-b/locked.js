@@ -7,6 +7,7 @@ import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, pick, ring, rowsOf, sfx, wide } from './kit.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.locked.rules;
 const BRASS = '#e3b341', STEEL = '#9fb3c6', BAD = '#ff7a6e', GOOD = '#7fe0a8';
@@ -240,9 +241,7 @@ export default {
   /* A padlock for a button. It rocks when tapped. It will not open. */
   lo_pad: {
     mount(ctx) {
-      ctx.css(`#btn[data-skin=padlock]{position:relative;width:108px;height:70px;margin-top:24px;background:linear-gradient(#c9d6e2,#7f94a8);color:#14202b;border:0;border-radius:10px;font:700 15px var(--font);overflow:visible;box-shadow:0 3px 0 #54677a;}
-        #btn[data-skin=padlock]::before{content:"";position:absolute;left:50%;top:-26px;width:58px;height:40px;margin-left:-29px;box-sizing:border-box;border:10px solid #9fb3c6;border-bottom:0;border-radius:30px 30px 0 0;transform:translateY(var(--shackle,0));transition:transform .1s ease-out;}
-        #btn[data-skin=padlock].down{transform:scale(.97);}`);
+      ctx.css(THEME_TASTES.locked.css);
       ctx.button.skin('padlock');
       const btn = ctx.button.el;
       let up = 0;

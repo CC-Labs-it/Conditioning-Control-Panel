@@ -8,6 +8,8 @@ import { EMI_COPY } from './copy.js';
 import { drawFace, getEmi, onEmiTap } from './emi.js';
 import { FONT, cardUp, h, pick, picker, slot } from './kit.js';
 
+const CALL_MS = 5000;
+
 const HAT_EMOJI = { top: '🎩', party: '🎉', duck: '🦆', globe: '🔮' };
 const mmss = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
@@ -223,7 +225,7 @@ export const EMI_UNLOCKS = {
       const stop = () => { e.napping = false; e.controls.style.display = ''; snore?.(); wake?.(); snore = wake = null; };
       const lie = () => {
         if (e.napping || e.blocking || cardUp()) return;
-        const c = document.getElementById('count')?.getBoundingClientRect();
+        const c = ctx.parts.counter?.querySelector('#count')?.getBoundingClientRect();
         if (!c) return;
         e.napping = true;
         e.controls.style.display = 'none';
@@ -257,7 +259,8 @@ export const EMI_UNLOCKS = {
     },
   },
 
-  /* A call from EMI fills the screen. It is plainly EMI, it has one button, and it gives up by itself. */
+  /* A call from EMI fills the screen. It is plainly EMI, it has one button, and it gives up by itself after a few seconds:
+   * ignoring it costs nothing and never holds the page. */
   em_call: {
     mount(ctx) {
       getEmi(ctx);
@@ -295,7 +298,7 @@ export const EMI_UNLOCKS = {
         ctx.anim(host, [{ opacity: 0 }, { opacity: 1 }], { duration: 220 });
         ctx.audio.play('assets/audio/sfx/chime2.mp3', { bus: 'sfx', gain: 0.7 });
         if (!ctx.gentle) pulse = ctx.anim(ring, [{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }], { duration: 700, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
-        cancels = [ctx.every(3200, () => { words.textContent = lineOf(); }), ctx.after(25000, () => close(false))];
+        cancels = [ctx.every(3200, () => { words.textContent = lineOf(); }), ctx.after(CALL_MS, () => close(false))];
         return true;
       };
       end.addEventListener('click', () => close(true));
