@@ -41,7 +41,7 @@ export const COMBO_UNLOCKS = {
     const r = ctx.parts.counter?.getBoundingClientRect();
     const narrow = ctx.bounds().w < 760;
     const size = narrow ? 40 : 54;
-    const word = ctx.el('div', `position:absolute;left:calc(50% - 372px);top:${Math.round((r?.top ?? 44) + 2)}px;display:flex;align-items:center;gap:2px;font:800 ${size}px/1 ${FONT};color:var(--ink);opacity:.82;`, null, 'floaters');
+    const word = ctx.el('div', `position:absolute;left:calc(50% - 372px);top:${Math.round((r?.top ?? 44) + 100)}px;display:flex;align-items:center;gap:2px;font:800 ${size}px/1 ${FONT};color:var(--ink);opacity:.82;`, null, 'floaters');
     if (narrow) { word.style.left = 'auto'; word.style.right = '6px'; word.style.top = `${Math.round(ctx.button.el.getBoundingClientRect().top)}px`; word.style.fontSize = '26px'; }
     const eyeSize = narrow ? 24 : size - 8;
     const pupils = [];
@@ -243,7 +243,7 @@ export const COMBO_UNLOCKS = {
 
   /* Swipe Feed + Goon: a streak that never drops, and a clock that runs too fast. */
   x_fourhr: combo((ctx) => {
-    const m = ctx.el('div', `font:600 15px ${FONT};color:#a3232b;font-variant-numeric:tabular-nums;`, '', 'meters');
+    const m = ctx.el('div', `font:600 15px ${FONT};color:var(--niche-text);font-variant-numeric:tabular-nums;`, '', 'meters');
     let n = ctx.store.get('n') || 0;
     const draw = () => {
       const min = Math.floor(ctx.state.clock / 15000);

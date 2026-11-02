@@ -209,7 +209,7 @@ export default {
   /* Glossy Icons: the same icons, in a shiny tile. Art comes later behind ui/icons.js; the tile stays. */
   glossy: {
     mount(ctx) {
-      ctx.css(`.row .ico { display: grid; place-items: center; width: 30px; height: 30px; font-size: 19px; border-radius: 8px; background: radial-gradient(circle at 32% 24%, #fff 0 12%, color-mix(in srgb, var(--hue-a, #ff69b4) 60%, #fff) 34%, color-mix(in srgb, var(--hue-b, #ff4fa8) 78%, #000) 92%); box-shadow: 0 2px 5px rgba(0,0,0,.4), inset 0 -2px 4px rgba(0,0,0,.25); }`);
+      ctx.css(`.row .ico { display: grid; place-items: center; width: 30px; height: 30px; font-size: 19px; border-radius: 8px; background: radial-gradient(circle at 32% 24%, #fff 0 12%, color-mix(in srgb, var(--hue-a, #ff69b4) 60%, #fff) 34%, color-mix(in srgb, var(--hue-b, #ff4fa8) 78%, #000) 92%); box-shadow: 0 2px 5px rgba(0,0,0,.4), inset 0 -2px 4px rgba(0,0,0,.25); } #goal .row .ico { width: 44px; height: 44px; font-size: 28px; border-radius: 11px; }`);
       if (fresh(ctx) && !ctx.gentle) {
         ctx.parts.shop.querySelectorAll('.row .ico').forEach((ic, i) => ctx.anim(ic, [{ transform: 'rotateY(90deg)' }, { transform: 'rotateY(0)' }], { duration: 360, delay: i * 80, fill: 'backwards' }));
       }
@@ -234,6 +234,7 @@ export default {
         const pic = await ctx.pictures.next({ niche: niches[Math.floor(ctx.rng() * niches.length)] });
         if (!frame) return;
         frame.img.style.display = pic ? 'block' : 'none';
+        frame.empty.style.display = pic ? 'none' : 'grid';
         if (pic) { frame.img.src = pic.url; ctx.anim(frame.img, [{ opacity: 0 }, { opacity: 1 }], { duration: 500 }); }
         frame.credit.textContent = pic?.credit || '';
       };
@@ -242,7 +243,8 @@ export default {
         const img = ctx.el('img', 'display:none;width:100%;height:100%;object-fit:cover;', null, box);
         img.alt = '';
         const credit = ctx.el('span', 'position:absolute;right:3px;bottom:2px;font-size:10px;color:#fff;text-shadow:0 1px 2px #000;', '', box);
-        frame = { box, img, credit };
+        const empty = ctx.el('div', 'position:absolute;inset:0;display:grid;place-items:center;padding:10px;text-align:center;font-size:13px;line-height:1.25;color:var(--ink-soft);', SECOND_THEME.empty, box);
+        frame = { box, img, credit, empty };
         showPicture(id);
       };
       let ask = null;
@@ -262,7 +264,7 @@ export default {
       };
       const openCard = () => {
         const others = THEME_IDS.filter((id) => id !== ctx.pick('f5'));
-        ctx.modal({ noDefault: true, title: SECOND_THEME.title, body: SECOND_THEME.ask, buttons: others.map((id) => ({ label: THEMES[id].label, onPress: () => apply(id, true) })) });
+        ctx.modal({ noDefault: true, title: SECOND_THEME.title, body: SECOND_THEME.ask, buttons: others.map((id) => ({ label: THEMES[id].label, css: `background:${THEME_PALETTES[id].a};color:${THEME_PALETTES[id].ink};border-color:${THEME_PALETTES[id].ink};font-weight:700;`, onPress: () => apply(id, true) })) });
       };
       const chosen = ctx.store.get('theme');
       if (chosen) apply(chosen, false);

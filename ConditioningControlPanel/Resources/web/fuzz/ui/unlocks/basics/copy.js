@@ -21,6 +21,7 @@ export const SECOND_THEME = Object.freeze({
   ask: 'Pick one more. It brings its button and its pictures.',
   chosen: '{theme} too. For research.',
   chip: 'Theme two',
+  empty: 'No pictures yet. Add your files from the Wake Up card.',
 });
 
 /* listen Listening Test */

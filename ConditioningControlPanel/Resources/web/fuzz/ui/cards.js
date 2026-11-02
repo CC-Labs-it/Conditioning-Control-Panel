@@ -28,6 +28,7 @@ export function createCards(doc, host) {
         el.type = 'button';
         el.textContent = brandText(b.label);
         if (i === 0) el.className = 'primary';
+        if (b.css) el.style.cssText = b.css;
         el.addEventListener('click', () => { if (b.keepOpen) { b.onPress?.(); return; } spec.handle.close(); b.onPress?.(); });
         row.appendChild(el);
       });

@@ -176,7 +176,7 @@ export function meterRow(ctx) {
 /* ---- tones: a route may repaint the page, and the Watch route stays dark under all of them ---- */
 export const DARK = { '--page': '#14101e', '--ink': '#f4eff8', '--ink-soft': '#cfc7dc', '--ink-faint': '#a79fb6', '--btn': '#3a3350', '--panel': '#2a2438', '--panel-short': '#201b2c', '--line': '#6a6180', '--fill': '#4a4162', '--stamp': '#ffb0d6', '--ready': '#4a4162' };
 export function darkCss(ctx) {
-  ctx.css('#btn{border-color:#8d84a5}#counter,#l-meters,#l-ticker{text-shadow:0 1px 4px #000,0 0 2px #000}');
+  ctx.css('#btn{border-color:#8d84a5}#counter,#l-meters,#l-ticker{text-shadow:0 0 2px var(--page),0 0 5px var(--page),0 0 9px var(--page)}');
 }
 export const onDark = (ctx) => ctx.has('e_spiral') || ctx.has('a_rain') || ctx.has('a_spiral');
 /** A colour that reads on the page as it is now. */
