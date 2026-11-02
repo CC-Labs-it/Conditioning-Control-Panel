@@ -125,7 +125,7 @@ export function makeContext(engine, scope) {
       scope.anims.add(a);
       a.finished?.then(() => scope.anims.delete(a), () => scope.anims.delete(a));
       a.playbackRate = engine.speedFactor();
-      if (engine.paused || engine.suspended) a.pause();
+      if (engine.paused || engine.suspended) { a.pause(); ui.holdLate?.(a); }
       return a;
     },
     speed: (multiplier) => engine.holdSpeed(multiplier, scope),

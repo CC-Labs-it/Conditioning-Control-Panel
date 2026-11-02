@@ -200,8 +200,9 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
   const inPress = () => !!pressTarget && !pressTarget.closest?.('#btn, #wake');
 
-  /** Pause and suspend freeze every animation in the world, CSS ones included, and thaw only those they froze. */
+  /** Pause and suspend freeze every animation in the world, CSS ones included, and thaw only those they froze, or that were born frozen. */
   let frozen = [];
+  const holdLate = (a) => { frozen.push(a); };
   function holdWorld(on) {
     if (on) {
       frozen = el.world.getAnimations?.({ subtree: true }).filter((a) => a.playState === 'running') || [];
@@ -340,7 +341,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     bounds: () => dims,
     buttonFor, buttonLocked: () => lockUntil > 0, inPress,
     pressed() { el.btn.classList.add('down'); clearTimeout(downTimer); downTimer = setTimeout(() => el.btn.classList.remove('down'), 90); },
-    holdWorld,
+    holdWorld, holdLate,
     paid, float, toast, say, holdSayRate, draw,
     modal: (spec) => cards.open(spec),
     denied: (id) => shop?.denied(id),
