@@ -150,7 +150,7 @@ body { transition: background-color .6s, color .6s; }
       ctx.css(`@font-face { font-family: "Fredoka"; src: url("assets/fonts/fredoka-latin.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }`);
       const swap = () => {
         ctx.vars({ '--font': '"Fredoka", "Segoe UI", system-ui, sans-serif', '--shop-font': '"Fredoka", "Segoe UI", system-ui, sans-serif' });
-        if (fresh(ctx)) for (const part of [ctx.parts.shop, ctx.parts.buttonWrap.closest('#stage')]) ctx.anim(part, [{ opacity: 0.2 }, { opacity: 1 }], { duration: 400 });
+        if (fresh(ctx)) for (const part of [ctx.parts.shop, ctx.parts.stage]) ctx.anim(part, [{ opacity: 0.2 }, { opacity: 1 }], { duration: 400 });
       };
       if (doc.fonts?.load) doc.fonts.load('16px "Fredoka"').then(swap, swap); else swap();
       return {};
@@ -229,9 +229,10 @@ body.gentle #fz-roll { display: none; }
 #fz-roll .d { height: 11em; transition: transform .45s cubic-bezier(.2,.8,.3,1); }
 #fz-roll .d > span { display: block; height: 1.1em; }
 `);
-      const roll = ctx.el('span', '', null, doc.getElementById('counter'));
+      const counter = ctx.parts.counter;
+      const roll = ctx.el('span', '', null, counter);
       roll.id = 'fz-roll';
-      doc.getElementById('counter').insertBefore(roll, doc.getElementById('count'));
+      counter.insertBefore(roll, counter.querySelector('#count'));
       const digits = [];
       let shown = '';
       const STACK = Array.from({ length: 10 }, (_, i) => `<span>${i}</span>`).join('');

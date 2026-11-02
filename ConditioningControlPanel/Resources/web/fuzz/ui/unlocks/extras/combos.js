@@ -38,7 +38,7 @@ export const COMBO_UNLOCKS = {
 
   /* Watch + Tap: a word with eyes in it, and the eyes follow you. */
   x_front: combo((ctx) => {
-    const r = rect('counter');
+    const r = ctx.parts.counter?.getBoundingClientRect();
     const narrow = ctx.bounds().w < 760;
     const size = narrow ? 40 : 54;
     const word = ctx.el('div', `position:absolute;left:50%;top:${Math.round((r?.top ?? 44) + (narrow ? 66 : 76))}px;translate:-50% 0;display:flex;align-items:center;gap:2px;font:800 ${size}px/1 ${FONT};color:var(--ink);opacity:.82;`, null, 'floaters');

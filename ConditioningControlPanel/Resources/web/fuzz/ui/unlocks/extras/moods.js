@@ -105,7 +105,7 @@ export const MOOD_UNLOCKS = {
   /* Rush: a car goes past, for no reason. */
   m_rush: mood((ctx) => {
     if (ctx.gentle) return;
-    const r = rect('counter');
+    const r = ctx.parts.counter?.getBoundingClientRect();
     const car = ctx.el('div', `position:absolute;left:0;top:${Math.round((r?.bottom ?? 90) + 2)}px;font:22px/1 ${EMOJI_FONT};transform:translateX(-40px) scaleX(-1);`, '🏎️', 'floaters');
     const go = () => { const { w } = ctx.bounds(); ctx.anim(car, [{ transform: 'translateX(-40px) scaleX(-1)' }, { transform: `translateX(${w + 40}px) scaleX(-1)` }], { duration: 1500, easing: 'ease-in' }); };
     ctx.after(1000, go);
@@ -123,7 +123,7 @@ export const MOOD_UNLOCKS = {
   /* Broke: every ad press says what it was worth to you. */
   m_broke: mood((ctx) => {
     ctx.on('ad', () => {
-      const r = rect('counter');
+      const r = ctx.parts.counter?.getBoundingClientRect();
       ctx.float((r?.left ?? 100) + (r?.width ?? 100) / 2, (r?.bottom ?? 90), 'x2', 'color:#1f9d55;font:800 20px sans-serif;');
     });
   }),

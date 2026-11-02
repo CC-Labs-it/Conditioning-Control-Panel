@@ -223,7 +223,7 @@ export const EMI_UNLOCKS = {
       const stop = () => { e.napping = false; e.controls.style.display = ''; snore?.(); wake?.(); snore = wake = null; };
       const lie = () => {
         if (e.napping || e.blocking || cardUp()) return;
-        const c = document.getElementById('count')?.getBoundingClientRect();
+        const c = ctx.parts.counter?.querySelector('#count')?.getBoundingClientRect();
         if (!c) return;
         e.napping = true;
         e.controls.style.display = 'none';

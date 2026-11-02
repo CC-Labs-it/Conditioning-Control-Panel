@@ -15,7 +15,7 @@ export const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length) % li
 
 /* ---- geometry ---- */
 /** The counter has no ctx.parts entry yet (named in the hand-back); this is the one place that finds it. */
-export const counterEl = (ctx) => ctx.parts.counter ?? ctx.parts.buttonWrap?.closest?.('#stage')?.querySelector?.('#counter') ?? null;
+export const counterEl = (ctx) => ctx.parts.counter;
 
 /** Page numbers, measured on purpose: call it from slow timers, never each frame. */
 export function geo(ctx) {

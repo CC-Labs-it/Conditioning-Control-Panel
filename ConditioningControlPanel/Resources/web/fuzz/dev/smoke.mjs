@@ -97,9 +97,9 @@ const bits = await page.evaluate(async () => {
   await new Promise((r) => setTimeout(r, 500));
   const ratio = (e.now - n0) / (e.real - r0);
   release();
-  return { shop: c.parts.shop.id, wrap: c.parts.buttonWrap.id, ending: c.layer('ending').id, ratio };
+  return { shop: c.parts.shop.id, wrap: c.parts.buttonWrap.id, counter: c.parts.counter.id, stage: c.parts.stage.id, ending: c.layer('ending').id, ratio };
 });
-if (bits.shop !== 'shop' || bits.wrap !== 'btn-wrap' || bits.ending !== 'l-ending') errors.push(`ctx.parts or the ending layer: ${JSON.stringify(bits)}`);
+if (bits.shop !== 'shop' || bits.wrap !== 'btn-wrap' || bits.counter !== 'counter' || bits.stage !== 'stage' || bits.ending !== 'l-ending') errors.push(`ctx.parts or the ending layer: ${JSON.stringify(bits)}`);
 if (bits.ratio > 0.85) errors.push(`ctx.speed(0.5) ran at ${bits.ratio}`);
 
 /* ---- the goal row's flash reads --ready ---- */

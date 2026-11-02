@@ -60,7 +60,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.el(tag, cssText, text?, parent?)`: parent is an element or a layer name; default `floaters`.
 - `ctx.css(text)`: a stylesheet. `ctx.vars({'--page':'#ffdcee'})`: page variables, restored on off: `--page --ink --ink-soft --ink-faint --btn --panel --panel-short --line --fill --ready --stamp --font --shop-font`. `--ready` is the flash on a goal row you can afford: set it with your theme, never restyle `#goal`.
 - `ctx.world`: the element holding all layers and the page, for a lean or warp. Wake Up and the cards are outside it. Do not filter it every frame on a phone.
-- `ctx.parts`: `.shop`, `.buttonWrap`: the elements themselves, to measure or to animate with `ctx.anim` (`.buttonWrap` moves the button without touching its own transform). Use these, never `querySelector` into `ctx.world`.
+- `ctx.parts`: `.shop`, `.buttonWrap`, `.counter`, `.stage`: the elements themselves, to measure or to animate with `ctx.anim` (`.buttonWrap` moves the button without touching its own transform). Use these, never `querySelector` into `ctx.world`.
 - `ctx.bounds()`: `{w, h}` of the page, cached; use it instead of measuring each frame.
 - `ctx.every(ms, fn)`, `ctx.after(ms, fn)`, `ctx.frame(fn(dt, now))`: each returns a cancel function. Share these; live particles have a cap, so prefer `ctx.float(x, y, text, css?)` for rising numbers.
 - `ctx.anim(el, keyframes, opts)`: Web Animations. Keep loops at or under 3 Hz.

@@ -309,7 +309,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
 
   const ui = {
     doc, win, world: el.world, layer, gentle, reduced, cards,
-    parts: Object.freeze({ shop: $('shop'), buttonWrap: el.wrap }),
+    parts: Object.freeze({ shop: $('shop'), buttonWrap: el.wrap, counter: el.counter, stage: el.stage }),
     bounds: () => dims,
     buttonFor, buttonLocked: () => lockUntil > 0, inPress,
     pressed() { el.btn.classList.add('down'); clearTimeout(downTimer); downTimer = setTimeout(() => el.btn.classList.remove('down'), 90); },

@@ -21,7 +21,7 @@ export const rectOf = (el) => el.getBoundingClientRect();
 export function btnCentre(ctx) { const r = rectOf(ctx.button.el); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right }; }
 /** The zone the button sits in: where the free space beside it ends. */
 export function zoneRect(ctx) { return rectOf(ctx.parts.buttonWrap.parentElement); }
-export function counterRect(ctx) { return rectOf(docOf(ctx).getElementById('counter')); }
+export function counterRect(ctx) { return rectOf(ctx.parts.counter); }
 
 /** A ring that opens and fades. Fades only, so it is fine under Gentle. */
 export function ring(ctx, x, y, size, color = '#7b5cff', ms = 800, parent = 'floaters') {

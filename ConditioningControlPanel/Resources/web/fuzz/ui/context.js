@@ -49,7 +49,7 @@ export function makeContext(engine, scope) {
 
     layer: (name, side) => ui.layer(name, side),
     world: ui.world,
-    parts: Object.freeze({ get shop() { return ui.parts?.shop ?? null; }, get buttonWrap() { return ui.parts?.buttonWrap ?? null; } }),
+    parts: Object.freeze({ get shop() { return ui.parts?.shop ?? null; }, get buttonWrap() { return ui.parts?.buttonWrap ?? null; }, get counter() { return ui.parts?.counter ?? null; }, get stage() { return ui.parts?.stage ?? null; } }),
     bounds: () => ui.bounds(),
 
     el(tag, cssText = '', text = null, parent = null) {

@@ -363,7 +363,7 @@ export default {
         }
       }
       const refresh = () => {
-        const stage = ctx.parts.buttonWrap.closest('#stage');
+        const stage = ctx.parts.stage;
         const copy = stage.cloneNode(true);
         copy.removeAttribute('id');
         copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
