@@ -292,7 +292,7 @@ export default {
     mount(ctx) {
       const sp = spiralCanvas(ctx, 'position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;opacity:0;pointer-events:none;', 'over', { px: 640, turnMs: 18000 });
       ctx.anim(sp.el, [{ opacity: 0 }, { opacity: 0.16 }], { duration: fresh(ctx) ? 1200 : 1, fill: 'forwards', easing: 'ease-in' });
-      return {};
+      return { off: sp.off };
     },
   },
 
@@ -335,7 +335,7 @@ export default {
           ],
         }));
       }
-      return {};
+      return { off: wall.off };
     },
   },
 

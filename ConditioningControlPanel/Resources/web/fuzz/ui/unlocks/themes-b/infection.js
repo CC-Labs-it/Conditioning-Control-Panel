@@ -331,7 +331,7 @@ export default {
           const c = ctx.el('canvas', `position:absolute;left:50%;top:50%;width:90vmin;height:90vmin;transform:translate(-50%,-50%);opacity:0;mix-blend-mode:screen;`, null, root);
           root.insertBefore(c, box);
           try {
-            const sp = createSpiral(c, { reduced: ctx.gentle, manual: true });
+            const sp = createSpiral(c, { reduced: ctx.gentle, manual: true, ctx });
             sp.show();
             ctx.frame((dt) => sp.step(dt));
             ctx.anim(c, [{ opacity: 0 }, { opacity: 0.8 }], { duration: 1500, fill: 'forwards' });

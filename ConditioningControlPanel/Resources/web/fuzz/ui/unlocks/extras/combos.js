@@ -282,7 +282,9 @@ export const COMBO_UNLOCKS = {
     const canvas = h('canvas', 'position:absolute;inset:0;width:100%;height:100%;', null, disc);
     canvas.width = canvas.height = D * 2;
     const g = canvas.getContext('2d', { alpha: false });
-    const params = normalizeParams({ arms: 4, turns: 2, style: 'log', duty: 0.5, speed: 2, colors: ['#ff69b4'], bg: '#14060f' });
+    let params = normalizeParams({ arms: 4, turns: 2, style: 'log', duty: 0.5, speed: 2, colors: ctx.palette().spiral, bg: '#14060f' });
+    /* The clock's own disc, drawn 20 times a second anyway: it takes the palette's threads and leaves the morph to the page's spiral. */
+    ctx.on('palette', () => { params = normalizeParams({ ...params, colors: ctx.palette().spiral }); if (ctx.gentle) drawSpiral(g, D * 2, params, phase); });
     let phase = 0, spent = 0;
     drawSpiral(g, D * 2, params, phase);
     ctx.frame((dt) => {

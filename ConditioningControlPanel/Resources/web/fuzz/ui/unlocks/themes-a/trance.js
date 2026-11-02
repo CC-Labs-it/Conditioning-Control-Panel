@@ -61,8 +61,7 @@ export default {
       let sp = null;
       if (!ctx.has('e_spiral') && !ctx.has('a_spiral')) {
         const c = ctx.el('canvas', 'position:absolute;left:50%;top:50%;width:110vmax;height:110vmax;transform:translate(-50%,-50%);opacity:.2;', null, 'back');
-        sp = createSpiral(c, { reduced: ctx.gentle, manual: true });
-        sp.recolour(['#8fd0ff', '#b79cff']);
+        sp = createSpiral(c, { reduced: ctx.gentle, manual: true, ctx });
         sp.show();
         ctx.frame((dt) => sp.step(dt));
         ctx.every(500, () => sp.setStill(ctx.gentle));
