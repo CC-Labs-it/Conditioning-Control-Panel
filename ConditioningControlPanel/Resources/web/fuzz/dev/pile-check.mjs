@@ -153,7 +153,7 @@ export async function checkIgnored(page, errors, where, seconds = 20, maxMs = 80
     release();
     return { long, maxOver, cards, clock: f.state.clock };
   }, { seconds });
-  for (const [k, ms] of Object.entries(res.long)) if (ms > maxMs && !k.includes('cards:')) errors.push(`${where}: ${k} held for ${Math.round(ms / 1000)} s of game time`);
+  for (const [k, ms] of Object.entries(res.long)) if (ms > (k.includes('cards:') ? 18000 : maxMs)) errors.push(`${where}: ${k} held for ${Math.round(ms / 1000)} s of game time`);
   if (res.maxOver > 40) errors.push(`${where}: ${res.maxOver} buttons piled up in the over layer with nobody pressing`);
   return res;
 }
@@ -224,7 +224,7 @@ export async function runPileChecks(browser, base, { routes = ROUTES, seconds = 
     await c.close();
   }
   /* Gentle by the switch, and by the OS. */
-  for (const [mode, route] of [['gentle', routes[0]], ['reduced', routes[1 % routes.length]]]) {
+  for (const [mode, route] of routes.map((r, i) => [i % 2 ? 'reduced' : 'gentle', r])) {
     const where = `${route[4]} ${mode}`;
     const c = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: mode === 'reduced' ? 'reduce' : 'no-preference' });
     await c.addInitScript(spy);

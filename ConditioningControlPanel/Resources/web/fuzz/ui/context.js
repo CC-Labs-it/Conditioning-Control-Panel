@@ -124,8 +124,22 @@ export function makeContext(engine, scope) {
     },
     toast: (text) => ui.toast(brandText(text)),
     float: (x, y, text, css) => ui.float(x, y, brandText(text), css),
+    /* A card nobody answers lets go of the page. It waits while the player is at it; left alone it takes its last button,
+     * the way out, unless the spec says the choice must not be made for them (noDefault). A card with `ms` runs its own time. */
     modal(spec) {
-      const h = ui.modal(spec, scope);
+      let cancel = null;
+      const doc = ui.doc;
+      const giveUp = () => {
+        h.close();
+        const last = spec.buttons?.[spec.buttons.length - 1];
+        if (last && !last.keepOpen && !spec.noDefault) last.onPress?.();
+      };
+      const arm = () => { cancel?.(); cancel = ctx.after(CONFIG.CARD_GIVE_UP_MS, giveUp); };
+      const h = ui.modal(spec.ms ? spec : {
+        ...spec,
+        onOpen(dom) { spec.onOpen?.(dom); arm(); dom.addEventListener('pointerdown', arm, true); doc.addEventListener?.('keydown', arm, true); },
+        onClose() { cancel?.(); cancel = null; doc.removeEventListener?.('keydown', arm, true); spec.onClose?.(); },
+      }, scope);
       scope.cleanups.add(h.close);
       return h;
     },

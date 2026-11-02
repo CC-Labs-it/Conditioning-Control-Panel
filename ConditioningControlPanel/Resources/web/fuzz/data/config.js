@@ -29,6 +29,9 @@ export const CONFIG = Object.freeze({
   /** A guarded row goes through after this many refusals, whatever the guard says. */
   GUARD_MAX_REFUSALS: 3,
 
+  /** An unlock's card nobody answers lets go after this long of game time, counted from the last press on it. */
+  CARD_GIVE_UP_MS: 15000,
+
   /** A button lock is always temporary. */
   LOCK_MAX_MS: 30000,
   /** How long an ending's own show may hold the credits back. */

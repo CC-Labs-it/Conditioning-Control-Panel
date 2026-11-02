@@ -87,7 +87,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 **Words and cards**
 
 - `ctx.say(text)`: the thought ticker. `ctx.sayRate(r)`: while held, only that share of every lane's thoughts gets through (0.5 = every second one; holds multiply; ends with your unlock). `ctx.toast(text)`: a line under the button; newest replaces.
-- `ctx.modal({title, body, buttons:[{label, onPress, keepOpen?}], node?, ms?})`: one at a time, queued; returns `{close()}`. No buttons and no `ms` gets a Close button. Must never cost the run. No text inputs, ever.
+- `ctx.modal({title, body, buttons:[{label, onPress, keepOpen?}], node?, ms?})`: one at a time, queued; returns `{close()}`. No buttons and no `ms` gets a Close button. Must never cost the run. No text inputs, ever. Left alone for 15 s it takes its last button, so make that the harmless one; `noDefault: true` closes it without choosing.
 
 **Sound and media**
 

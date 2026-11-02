@@ -76,7 +76,7 @@ export function createShop({ doc, engine, onPress }) {
       if (rowsEl.children[i] !== r.el) rowsEl.insertBefore(r.el, rowsEl.children[i] || null);
       paint(r, false);
     });
-    moreEl.hidden = !win.more;
+    if (moreEl.hidden !== !win.more) moreEl.hidden = !win.more;
     if (win.more) setText(moreEl, `${win.more} more waiting behind these`);
   }
 

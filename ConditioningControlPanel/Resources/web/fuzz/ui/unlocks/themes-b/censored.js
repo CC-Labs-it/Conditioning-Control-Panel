@@ -184,7 +184,7 @@ export default {
           leave(card);
         });
         no.addEventListener('click', () => { ctx.toast(pick(ctx, F.declined)); leave(card); });
-        ctx.after(14000, () => { if (open === card) leave(card); });
+        ctx.after(7000, () => { if (open === card) leave(card); });  // it sits on the goal row: a nag, never a wall
         ctx.anim(card, [{ transform: 'translateY(30px)', opacity: 0 }, { transform: 'none', opacity: 1 }], 240);
       };
       ctx.after(1200, show);

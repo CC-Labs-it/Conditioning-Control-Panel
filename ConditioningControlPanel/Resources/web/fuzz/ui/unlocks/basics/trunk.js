@@ -281,7 +281,7 @@ export default {
       };
       const openCard = () => {
         const others = THEME_IDS.filter((id) => id !== ctx.pick('f5'));
-        ctx.modal({ title: SECOND_THEME.title, body: SECOND_THEME.ask, buttons: others.map((id) => ({ label: THEMES[id].label, onPress: () => apply(id, true) })) });
+        ctx.modal({ noDefault: true, title: SECOND_THEME.title, body: SECOND_THEME.ask, buttons: others.map((id) => ({ label: THEMES[id].label, onPress: () => apply(id, true) })) });
       };
       const chosen = ctx.store.get('theme');
       if (chosen) apply(chosen, false);
