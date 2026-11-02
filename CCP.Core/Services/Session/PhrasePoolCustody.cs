@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Services
     /// assignment ModService's mirror sees is a genuine user edit; ModService's mod-driven
     /// assignments run with the mirror suppressed.
     ///
-    /// Deliberate difference from WPF (D1, docs/avalonia-decisions.md): a mid-session mod switch
+    /// Deliberate difference from WPF (D1, docs/avalonia-decisions.html): a mid-session mod switch
     /// re-bases the user snapshot onto the incoming mod's pools in <see cref="Reapply"/>, and
     /// <see cref="Restore"/> reconciles after all three pools, not between them.
     /// </summary>

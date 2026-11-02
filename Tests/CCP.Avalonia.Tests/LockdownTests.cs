@@ -18,7 +18,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>The three Lockdown shipping blockers (docs/avalonia-decisions.md, Lockdown / Emergency
+/// <summary>The three Lockdown shipping blockers (docs/avalonia-decisions.html, Lockdown / Emergency
 /// Exit): the phrase path works under Strict Lock through the real controls, keys are ignored only at
 /// the global layer, and a killed run gets its panic key and Strict Lock back.</summary>
 public sealed class LockdownTests

@@ -14,7 +14,7 @@ namespace CCP.Core.Tests;
 public sealed class ProgramStatics { public const string Name = "ProgramStatics"; }
 
 /// <summary>
-/// programs-3a decision (docs/avalonia-decisions.md, evidence/oracle/programs-3a-canenroll.md tests 1-2):
+/// programs-3a decision (docs/avalonia-decisions.html, evidence/oracle/programs-3a-canenroll.md tests 1-2):
 /// CanEnroll refuses a program whose required tasks the head can never raise. Unseeded = WPF, unchanged.
 /// </summary>
 [Collection(ProgramStatics.Name)]

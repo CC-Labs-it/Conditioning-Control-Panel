@@ -4,7 +4,7 @@
 // Services/Launcher/LauncherSfx.cs (the cues; the melody is Core's LauncherMelody).
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
-// ponytail: not ported (docs/avalonia-parity.md win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
+// ponytail: not ported (docs/avalonia-parity.html win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
 // perimeter comets, wordmark sheen, wordmark drift, running-dot breath, title tint, embers layer.
 using System;
 using System.Collections.Generic;

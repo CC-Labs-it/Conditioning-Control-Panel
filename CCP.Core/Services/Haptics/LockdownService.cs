@@ -28,7 +28,7 @@ public class LockdownService : IDisposable
     public static Action? PanicKeyUiSync { get; set; }
 
     /// <summary>The lockdown clock. UTC, not local: a DST fall-back or a clock set back must never
-    /// lengthen a lockdown (WPF used DateTime.Now; docs/avalonia-decisions.md). Tests swap it.</summary>
+    /// lengthen a lockdown (WPF used DateTime.Now; docs/avalonia-decisions.html). Tests swap it.</summary>
     internal Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
 
     private bool _isActive;

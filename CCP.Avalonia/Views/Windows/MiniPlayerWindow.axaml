@@ -11,7 +11,7 @@
        Style="{StaticResource {x:Type Slider}}" -> dropped; that was "use the default theme"
        vlc:VideoView                            -> an Image fed a WriteableBitmap from LibVLC's
                                                    video callbacks (LibVLCSharp.Avalonia targets
-                                                   Avalonia 11; see docs/avalonia-decisions.md)
+                                                   Avalonia 11; see docs/avalonia-decisions.html)
        gif: namespace                           -> dropped, XamlAnimatedGif is WPF-only
        <Button.Style> with a ControlTemplate    -> the default Button template plus the two
                                                    pointerover setters below. A property-only

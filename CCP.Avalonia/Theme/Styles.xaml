@@ -13,7 +13,7 @@
 
      Shared themes used by the ported views live here. MainWindow.xaml still has unported
      implicit scroll/tree styles and keyed session/art/emote themes; see theme-main-window
-     in docs/avalonia-parity.md for the named follow-up lane.
+     in docs/avalonia-parity.html for the named follow-up lane.
      Controls.xaml keys are shared here, including the three Deeper button themes.
      Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
      ponytail: SecondaryButton/PinkButton HudPlank depth and the ToggleStyle timing gaps below

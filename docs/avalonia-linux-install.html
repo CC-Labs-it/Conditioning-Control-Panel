@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Linux install experience (user request, 2026-09-28) — DO NOT DROP</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+</head>
+<body>
+<h1 id="linux-install-experience-user-request-2026-09-28--do-not-drop">Linux install experience (user request, 2026-09-28) — DO NOT DROP</h1>
+<p>Goal: installing CCP on Linux must be easy for a non-technical user. Installing CCP installs every dependency; the user
+never has to find packages by hand. This belongs to the installer / Linux package phase (phase 5) and must be done before
+&quot;retire WPF from shipping&quot; counts as finished.</p>
+<h2 id="why-this-came-up">Why this came up</h2>
+<p>On a fresh box, web features show &quot;WebKitGtk library is not installed. Install webkit2gtk 4.0+ package.&quot; The user had to
+install <code>webkit2gtk-4.1</code> by hand. Avalonia.Controls.WebView 12.1.0 loads the GTK3 builds only (libwebkit2gtk-4.0.so.37 or
+libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-6.0 (GTK4) does NOT work.</p>
+<h2 id="runtime-dependencies-to-declare-verify-the-list-again-at-packaging-time">Runtime dependencies to declare (verify the list again at packaging time)</h2>
+
+<table>
+<tr><th>Need</th><th>Arch / CachyOS</th><th>Debian / Ubuntu</th><th>Fedora</th></tr>
+<tr><td>Web views (WebHost)</td><td>webkit2gtk-4.1</td><td>libwebkit2gtk-4.1-0</td><td>webkit2gtk4.1</td></tr>
+<tr><td>Web page sound (GStreamer <code>autoaudiosink</code>, <code>libgstautodetect.so</code>; without it WebKitWebProcess aborts on a page's first WebAudio sound and the page freezes, webview-render 2026-10-13)</td><td>gst-plugins-good</td><td>gstreamer1.0-plugins-good</td><td>gstreamer1-plugins-good</td></tr>
+<tr><td>Web views, WPE path, opt-in only since 2026-10-13 (<code>CCP_LINUX_WEBVIEW=wpe</code>; WebKitGTK is the Linux engine; Avalonia WebView also loads libwpe-1.0.so.1, libWPEBackend-fdo-1.0.so.1, libWPEWebKit-2.0.so.1; user hit &quot;WPE WebKit libs not installed&quot;)</td><td>wpewebkit wpebackend-fdo libwpe (extra, verified <code>pacman -Si</code> 2026-10-10)</td><td>not packaged (Ubuntu 24.04: none; Debian 12 / Ubuntu 22.04: WebKit 1.x only, distro-check F2)</td><td>not packaged (Fedora 44, distro-check F2)</td></tr>
+<tr><td>Audio / video (LibVLCSharp; the runtime package's libvlc.so.5 is enough, LibVlcNative resolves the soname)</td><td>vlc (libvlc)</td><td>libvlc5 + vlc-plugin-base</td><td>vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio (vlc-libs alone has no plugins: &quot;Failed to perform instanciation&quot;)</td></tr>
+<tr><td>Ducking, microphone list, quest mic probe (<code>pactl</code>; works on PipeWire too)</td><td>libpulse</td><td>pulseaudio-utils</td><td>pulseaudio-utils (openSUSE: pulseaudio-utils)</td></tr>
+<tr><td>Fonts</td><td>none: Inter, Fredoka, Noto Sans Mono and Noto Emoji are bundled (a system emoji font is used first when present)</td><td>none</td><td>none</td></tr>
+<tr><td>Sign-in token store</td><td>libsecret</td><td>libsecret-1-0</td><td>libsecret</td></tr>
+<tr><td>Overlays, panic key (X11/XInput2)</td><td>libx11 libxi</td><td>libx11-6 libxi6</td><td>libX11 libXi</td></tr>
+</table>
+<p>.NET: publish self-contained, so no runtime dependency.
+openSUSE names (used by <code>packaging/linux/distro-check</code>): libwebkit2gtk-4_1-0, libWPEWebKit-2_0-1 libWPEBackend-fdo-1_0-1
+libwpe-1_0-1, libvlc5 vlc-noX, libsecret-1-0, libX11-6 libXi6.
+Measured 2026-10-10 on stock images (<code>distro-check</code>, ~/ccp-port/evidence/distro-check/findings.md): the WPE row is NOT
+installable on Ubuntu 24.04 (no WPE at all), Ubuntu 22.04 / Debian 12 (WebKit only as libwpewebkit-1.0-3 / -1.1-0) or
+Fedora 44 (none); Arch extra ships all three (<code>pacman -Si</code> 2026-10-10; the image check reported otherwise). libvlc5 / vlc-libs ship only <code>libvlc.so.5</code>,
+which LibVLCSharp does not find (audio disabled). None of the rows pulls a font or an emoji font.</p>
+<h2 id="plan-channel-order-confirmed-by-the-user-2026-09-28-own-flatpak-repo--aur-first-flathub-after-a-content-policy-check">Plan (channel order CONFIRMED by the user 2026-09-28: own Flatpak repo + AUR first; Flathub after a content-policy check)</h2>
+<ol>
+<li><strong>Flatpak (primary, every distro, one click).</strong> GNOME runtime already has WebKitGTK; bundle libVLC and the WPE libs (wpewebkit, wpebackend-fdo, libwpe) if the runtime lacks them; self-contained .NET.
+finish-args: <code>--socket=x11</code> (overlays need X11/XWayland; not fallback-x11), <code>--talk-name=org.kde.StatusNotifierWatcher</code>
+(tray), portals for notifications, GlobalShortcuts and Secret (libsecret uses the Secret portal inside Flatpak).
+Updates come from the store. Host: own Flatpak repo + <code>.flatpakref</code> on the website first; Flathub only after checking
+its content policy for this app.</li>
+<li><strong>AUR package</strong> (Arch/CachyOS): <code>depends=(webkit2gtk-4.1 gst-plugins-good vlc libpulse libsecret libx11 libxi icu)</code>, the WPE trio
+in <code>optdepends</code> (opt-in engine since 2026-10-13).
+Debian/Ubuntu/Fedora: no WPE packages exist, which no longer matters: web pages run on WebKitGTK there too, and the in-app
+messages (startup toast, WebHost panel) no longer name WPE (<code>LinuxDependencies.Required</code>/<code>WebViews</code>).</li>
+<li>Later, on demand: <code>.deb</code> / <code>.rpm</code> with the same dependency lists; AppImage only as a fallback (cannot pull WebKit).</li>
+</ol>
+<h2 id="in-app-work-that-goes-with-it">In-app work that goes with it</h2>
+<ul>
+<li>Distro-aware missing-dependency message: read <code>/etc/os-release</code> and show the exact command with a Copy button
+(pacman / apt / dnf) instead of the generic &quot;Install webkit2gtk 4.0+ package&quot;. Keep it as the fallback for tarball users.</li>
+<li>Desktop integration: <code>.desktop</code> file, icon, fixed app id (also fixes KDE filing the portal panic shortcut under the
+launching app; call <code>org.freedesktop.host.portal.Registry.Register</code>), optional &quot;start on login&quot;.</li>
+<li>Updater on Linux: &quot;update available — update via your store / package manager&quot; only; never replace files in place.</li>
+</ul>
+<h2 id="acceptance-when-this-is-built">Acceptance (when this is built)</h2>
+<ul>
+<li>Fresh VM/container per target (Flatpak on a non-Arch distro, AUR on Arch): install with one command/click, launch, and
+web views, audio/video, tray, overlays, panic shortcut and sign-in token storage all work with no manual package installs.</li>
+<li>Record a decision row in docs/avalonia-decisions.html and a ledger row for the installer.</li>
+</ul>
+<h2 id="carry-into-the-repo">Carry into the repo</h2>
+<p>The first branch after this note that touches docs must commit this file as <code>docs/avalonia-linux-install.html</code> (it lives in
+~/ccp-port/briefs only because every worktree had a worker writing to it when the note was made).</p>
+<h2 id="package-verification-avalonia-portpackage-verify-2026-10-07-705">Package verification (avalonia-port/package-verify, 2026-10-07, 7.0.5)</h2>
+<p>Evidence: ~/ccp-port/evidence/package-verify/.</p>
+<ul>
+<li><strong>Tarball:</strong> <code>packaging/linux/build-tarball.sh</code> (contents not listed in the evidence; includes Resources/web, libvosk,
+libOpenCvSharpExtern, onnxruntime) then <code>smoke-tarball.sh</code>: extracted, sandboxed (<code>CCP_USERDATA_DIR</code>), <code>--smoke</code> exit 0
+with LibVLC and the bundled Vosk model passing (<code>build-tarball.log</code>, <code>smoke-tarball.log</code>). <code>smoke-tarball.sh</code> now also
+fails when <code>packaging/aur/PKGBUILD</code> pkgver differs from the tarball version (it was 6.11.3 under 7.0.5; fixed;
+<code>smoke-tarball-pkgver-failproof.log</code>).</li>
+<li><strong>AUR:</strong> Docker on the dev box cannot start any container (overlayfs mount <code>invalid argument</code>, alpine included), so the
+archlinux-container run was replaced by <code>packaging/aur/test-local.sh</code> on the CachyOS host: <code>makepkg</code> (no install, no sudo),
+package extracted to a temp root, its <code>/opt</code> bound with <code>bwrap</code>, and the installed <code>/usr/bin/conditioning-control-panel --smoke</code> passes with the model loading from <code>/opt/conditioning-control-panel</code> (<code>aur-local.log</code>). It fails on a pkgver
+mismatch, a <code>depends=</code> entry the host lacks (<code>pacman -T</code>) and a missing packaged file (<code>aur-local-failproofs.log</code>).
+<code>ldd</code> over every bundled <code>.so</code>: all owning packages are inside the <code>pactree</code> closure of <code>depends=</code> (zlib via
+zlib-ng-compat's provide); only <code>liblttng-ust.so.0</code> (optional .NET tracing) is unresolved (<code>aur-native-deps.txt</code>).
+A clean-container proof of <code>depends=</code> sufficiency is still owed: the host has far more than the closure installed.</li>
+<li><strong>Flatpak:</strong> no flatpak-builder and no org.gnome.Sdk//50 on the box and Docker is down, so the manifest is still unbuilt.
+Substitute proof: the extracted tarball run inside the installed <code>org.gnome.Platform//50</code> runtime (<code>flatpak run --command=...</code>) passes every smoke check except LibVLC (<code>libvlc</code> absent), which is exactly the module the manifest
+bundles (<code>flatpak-runtime-smoke.log</code>). The runtime has webkit2gtk-4.1, javascriptcoregtk-4.1, soup-3, libsecret, libX11,
+libXi, libpulse, ICU and <code>parec</code>; it lacks libvlc and the WPE trio (<code>flatpak-runtime-libs.txt</code>).</li>
+<li><strong>Desktop/metainfo:</strong> <code>desktop-file-validate</code> clean; <code>appstreamcli validate --pedantic</code> passes with two pedantic notes
+(uppercase in the component id, which is the fixed app id, and no <code>&lt;releases&gt;</code>) (<code>validate.txt</code>).</li>
+</ul>
+<h2 id="installing-the-tarball-by-hand">Installing the tarball by hand</h2>
+<p>The tarball's <code>.desktop</code> runs <code>conditioning-control-panel</code> from <code>PATH</code>, so extracting it alone gives a menu entry that
+does not start. Lay it out the way the AUR package does (any prefix; <code>~/.local</code> needs no root). The last line points the
+menu entry at the launcher's absolute path, since <code>~/.local/bin</code> is often not on the desktop session's <code>PATH</code>:</p>
+<pre><code class="language-bash">mkdir -p ~/.local/opt ~/.local/bin
+tar -xzf ConditioningControlPanel-&lt;ver&gt;-linux-x64.tar.gz -C ~/.local/opt
+mv ~/.local/opt/ConditioningControlPanel ~/.local/opt/conditioning-control-panel
+printf '#!/bin/sh\nexec %s &quot;$@&quot;\n' ~/.local/opt/conditioning-control-panel/CCP.Avalonia &gt; ~/.local/bin/conditioning-control-panel
+chmod 755 ~/.local/bin/conditioning-control-panel
+cp -r ~/.local/opt/conditioning-control-panel/share/. ~/.local/share/
+sed -i &quot;s|^Exec=.*|Exec=$HOME/.local/bin/conditioning-control-panel|&quot; ~/.local/share/applications/io.github.CodeBambi.ConditioningControlPanel.desktop
+</code></pre>
+<p>Remove: delete <code>opt/conditioning-control-panel</code>, <code>bin/conditioning-control-panel</code> and the
+<code>io.github.CodeBambi.ConditioningControlPanel.*</code> files under <code>share/applications</code>, <code>share/icons/hicolor/*/apps</code>,
+<code>share/metainfo</code>.</p>
+<h2 id="installed-run-avalonia-portlinux-package-wired-715">Installed run (avalonia-port/linux-package-wired, 7.1.5)</h2>
+<p>Evidence: ~/ccp-port/evidence/linux-package-wired/ (scripts <code>install-run.sh</code>, <code>window-run.sh</code>, <code>wmclose.py</code> alongside).
+The CI tarball built locally, installed as above into a temp prefix, the <code>.desktop</code> <code>Exec</code> resolved through <code>PATH</code>, then:
+<code>--smoke</code> with the bundled model required passes; a real start in a throwaway <code>kwin_wayland --virtual --xwayland</code>
+(no Xvfb/weston on the box) maps the splash after 0.46 s and the interactive &quot;First run&quot; wizard after 5.80 s (also the
+main shell, Avatar Tube, Free Feature card; WM_CLASS = the app id); closing the wizard with <code>WM_DELETE_WINDOW</code> shuts the
+app down through the age-gate path, exit 0 (<code>install/first-window.txt</code>, <code>install/window-*.png</code>). Installed size 749 MiB
+(778,236,559 bytes; tarball 534 MB). <code>packaging/aur/test-local.sh</code> passes. Every library <code>ldd</code> resolves for the bundled <code>.so</code> files belongs to the <code>pactree</code> closure of <code>depends=</code>
+(zlib-ng-compat via its zlib provide; <code>ldd-outside-depends.txt</code>).</p>
+
+<script>
+(()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
+const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+</script>
+</body>
+</html>

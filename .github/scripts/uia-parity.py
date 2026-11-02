@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Diff the WPF and Avalonia UI Automation trees per view.
 
-usage: uia-parity.py <parity.md> <wpf-dir> <avalonia-dir> <out-dir>
+usage: uia-parity.py <parity.html> <wpf-dir> <avalonia-dir> <out-dir>
 
 Both dirs hold <view>.json from .github/wpf-uia (FlaUI on Windows) and CCP.Avalonia --uia-dump
 (headless peers): {head, view, window, title, nodes:[{depth,type,id,name,cls,enabled,offscreen,bounds}]}.
@@ -16,6 +16,8 @@ import re
 import sys
 from collections import Counter
 
+import avalonia_docs
+
 CAP = 40
 
 
@@ -25,9 +27,9 @@ def stems(cell):
 
 def parity_rows(path):
     out = []
-    for line in open(path, encoding="utf-8"):
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if not line.startswith("| ") or len(cells) < 4 or cells[0] in ("id", "---") or set(cells[0]) <= set("-"):
+    for r in avalonia_docs.rows(open(path, encoding="utf-8").read(), "id"):
+        cells = list(r.values())
+        if len(cells) < 4:
             continue
         out.append((cells[0].strip("`"), stems(cells[1]), stems(cells[2])))
     return out

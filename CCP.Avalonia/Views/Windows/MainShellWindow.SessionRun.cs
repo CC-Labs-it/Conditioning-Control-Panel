@@ -3,7 +3,7 @@
 // OnSessionProgressUpdated (:1838), OnSessionStarted (:1891), OnSessionStopped (:1936) and
 // BtnStopSession_Click (:1983); plus the stop-session branch of BtnStart_Click (MainWindow.StartStop.cs:58).
 // The head owns one Core SessionRunner (App.Sessions), which runs only the ported subset - flash,
-// subliminal, bouncing text, lock cards (docs/avalonia-decisions.md).
+// subliminal, bouncing text, lock cards (docs/avalonia-decisions.html).
 // BtnPauseSession_Click (:2021) too.
 // ponytail: dropped, each with no service on this head: remote gates, program/punch-card/Bark/profile-sync hooks, the
 // Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).

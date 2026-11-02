@@ -39,7 +39,7 @@ namespace ConditioningControlPanel
         public static volatile Func<RoadmapService?>? RoadmapProvider;
 
         /// <summary>Whether this head can ever raise the signal a task waits on (programs-3a decision,
-        /// docs/avalonia-decisions.md). Unseeded: every task is available, so WPF never seeds it.</summary>
+        /// docs/avalonia-decisions.html). Unseeded: every task is available, so WPF never seeds it.</summary>
         public static volatile Func<Models.Program.ProgramTask, bool>? TaskAvailableProvider;
 
         public static bool IsTaskAvailable(Models.Program.ProgramTask task)

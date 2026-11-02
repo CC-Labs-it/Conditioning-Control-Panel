@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// consent only admits to with Awareness v2 off (<c>awareness_consent_leaves_body_legacy</c>);
     /// with v2 on WPF's arbiter speaks instead and titles stay local. This head has no v2 observer,
     /// so with v2 on it says the preset and nothing leaves (<see cref="MaySendToAi"/>,
-    /// docs/avalonia-decisions.md). The deny list and incognito drop run in the poll, before any
+    /// docs/avalonia-decisions.html). The deny list and incognito drop run in the poll, before any
     /// event. An AI line is <see cref="GigglePriority"/>, a preset queues through <see cref="Giggle"/>
     /// (WPF Reactions.cs:145-153, 261-264).</para>
     /// </summary>

@@ -94,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <param name="persist">True only for an entitlement EVENT (tier change, day change, sign-in/out),
         /// which saves as WPF does. Startup and navigation clear the lapsed flags in memory only; see
-        /// avalonia-decisions.md "Entitlement lapse: startup write deferred".</param>
+        /// avalonia-decisions.html "Entitlement lapse: startup write deferred".</param>
         internal void RefreshEntitlementVeils(bool persist)
         {
             EnforceEntitlementLapse(persist);

@@ -11,7 +11,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>
-/// programs-3a decision (docs/avalonia-decisions.md; evidence/oracle/programs-3a-canenroll.md tests 4-5):
+/// programs-3a decision (docs/avalonia-decisions.html; evidence/oracle/programs-3a-canenroll.md tests 4-5):
 /// the head's static capability table decides which built-in programs it can ever finish.
 /// </summary>
 public sealed class ProgramCapabilitiesTests

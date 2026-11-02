@@ -86,7 +86,7 @@ public class ProgramService : IDisposable
     /// Load-only: no startup repair or rollover, no timers, never writes programs.json or moves a
     /// leftover temp, and every lifecycle call (Enroll, Pause, Resume, Withdraw, Restart, Dismiss,
     /// SubmitRitualTask) is refused. Set by the internal ctor (tests) or a newer SchemaVersion stamp; both heads
-    /// grey their lifecycle controls (docs/avalonia-decisions.md, programs CHECKPOINT A/B and 3a).
+    /// grey their lifecycle controls (docs/avalonia-decisions.html, programs CHECKPOINT A/B and 3a).
     /// </summary>
     private readonly bool _readOnly;
 

@@ -87,7 +87,7 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             MemLog(methodUnderTest);
         });
 
-    // Opt-in leak hunting (CCP_TEST_MEMLOG, CCP_TEST_HOLD_AT; docs/avalonia-decisions.md suite-memory): one line per test with RSS and the GC heap.
+    // Opt-in leak hunting (CCP_TEST_MEMLOG, CCP_TEST_HOLD_AT; docs/avalonia-decisions.html suite-memory): one line per test with RSS and the GC heap.
     private static readonly string? MemLogPath = Environment.GetEnvironmentVariable("CCP_TEST_MEMLOG");
     private static void MemLog(MethodInfo m)
     {

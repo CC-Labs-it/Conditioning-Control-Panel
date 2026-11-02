@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// The Esc grace pause (WPF #735) draws its Paused/Resume card inside each video window, not as a
     /// separate topmost window; the clip guards (Core <see cref="MandatoryVideoScheduler.Guard"/>) run
     /// on a 1 s UI timer: a dead (8 s) or lost (5 s without frames) output replays the clip once, as
-    /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.md). Ambient bubbles
+    /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.html). Ambient bubbles
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze

@@ -22,7 +22,7 @@ internal enum ScrolllerRelayRoute
 }
 
 /// <summary>
-/// The Avalonia head's Scrolller gate for web pages, the same on Windows and Linux (docs/avalonia-decisions.md
+/// The Avalonia head's Scrolller gate for web pages, the same on Windows and Linux (docs/avalonia-decisions.html
 /// "scrolller-web-gate"). WPF answers a page's Scrolller requests inside WebView2 (ScrolllerWebGate); this head's web
 /// engine cannot answer a request on WebKitGTK, so the host never hands a page a Scrolller CDN url: every frame it
 /// posts goes through <see cref="RewriteJson"/>, which turns each Scrolller media url into this head's loopback path

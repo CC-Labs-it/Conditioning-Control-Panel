@@ -1,7 +1,7 @@
 // PORTED from WPF LauncherWindow.xaml:597 (the veil), LauncherWindow.xaml.cs:70-74/658-669
 // (OnLockdownChanged / RefreshLockdownVeil) and LauncherWindow.Choreo.cs:557-600 (the breath).
 // WPF veils the launcher only; the panel stays usable under Lockdown (its own exits live there) and
-// refuses per control (docs/avalonia-decisions.md, Lockdown veil). The veil takes the pointer by
+// refuses per control (docs/avalonia-decisions.html, Lockdown veil). The veil takes the pointer by
 // covering every row; this file also swallows keys, so Tab/Enter/Space cannot reach a veiled control
 // (WPF leaves keyboard focus alone; here the veil is structural for both).
 using System;

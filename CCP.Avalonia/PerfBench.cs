@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia
     /// platform (headless numbers say nothing about startup). Cycles NavCheck's tab list through ShowTab, the
     /// call every rail handler makes, and times each switch to the next frame the render thread finished.
     /// Exit 0 with the JSON written; 3 on a tab that is missing or does not show; 4 on a timeout.
-    /// Shape <c>ccp-perf-bench/1</c> is shared with the WPF head's twin (docs/avalonia-perf.md).
+    /// Shape <c>ccp-perf-bench/1</c> is shared with the WPF head's twin (docs/avalonia-perf.html).
     /// </summary>
     internal static class PerfBench
     {

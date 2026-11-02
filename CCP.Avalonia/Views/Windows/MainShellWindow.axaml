@@ -209,7 +209,7 @@
          while the window is within 15% of the 1585:901 canvas aspect (every 16:10-16:9
          landscape screen), and Uniform - centred, top-aligned, DarkerBgBrush bands - outside it,
          so a portrait maximize no longer stretches the art ~2.2x. Chosen in code:
-         MainShellWindow.WindowChrome.cs UpdateShellStretch; docs/avalonia-decisions.md. -->
+         MainShellWindow.WindowChrome.cs UpdateShellStretch; docs/avalonia-decisions.html. -->
     <Viewbox x:Name="ShellViewbox" Stretch="Fill" HorizontalAlignment="Center" VerticalAlignment="Top">
         <!-- Design canvas at reference size. Phase 1 grew it 1489 -> 1679 by ADDING a
              190px nav-rail column on the left; column 1 is still exactly 1489 wide, so

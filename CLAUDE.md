@@ -136,7 +136,7 @@ Things that will bite, all found by rendering or running rather than by reading:
    key name produces a plausible-looking string that is also structurally wrong.
 
 3. **Icons are Fluent UI System Icons through `fx:IconGlyph`, not emoji** (decision 2026-10-10,
-   `docs/avalonia-decisions.md`). WPF's `EmojiToImageSource`/Twemoji SVGs, `helpers:EmojiTextBlock` and
+   `docs/avalonia-decisions.html`). WPF's `EmojiToImageSource`/Twemoji SVGs, `helpers:EmojiTextBlock` and
    MDL2 glyphs all become `<fx:IconGlyph Kind="LockClosed"/>` (`Controls/Icons`); a Core loc string with
    a leading icon ("⚙ System") becomes `<fx:IconLabel Key="section_system"/>` or `{loc:StrBare key}`
    beside its own `IconGlyph`. Never edit the JSON. Emoji stay only in content: chat text, user/mod

@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Services
     /// <para>The exclusion list, <see cref="IsExcludedFromBackup"/> and <see cref="PreserveLocalOnlyFields"/>
     /// are copies of WPF's, unchanged; WPF is frozen and keeps its own (P118), so this class has a new
     /// name (P25). <see cref="SettingsBackupBudget"/> moved here as is.</para>
-    /// <para>On top of WPF (docs/avalonia-decisions.md, cloud settings backup): <see cref="AbsolutePathFields"/>
+    /// <para>On top of WPF (docs/avalonia-decisions.html, cloud settings backup): <see cref="AbsolutePathFields"/>
     /// are never uploaded and a restore always keeps this machine's values, because one account has one
     /// backup slot shared by Windows and Linux and an absolute path from one OS means nothing on the other.</para>
     /// </summary>

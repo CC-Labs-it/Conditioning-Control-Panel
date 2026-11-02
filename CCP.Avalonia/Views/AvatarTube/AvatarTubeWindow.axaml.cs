@@ -88,7 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// <c>CoreAudio.PlayOneShot</c> exists - see its own remarks for the four things it drops.</para>
     ///
     /// <para>Windowing, speech queue, chat/brain, awareness and look selection live in the adjacent
-    /// partials. Remaining WPF parity work is tracked in docs/avalonia-parity.md.</para>
+    /// partials. Remaining WPF parity work is tracked in docs/avalonia-parity.html.</para>
     ///
     /// <para><b>The tube does not track a face.</b> Nothing here reads a camera. The webcam face
     /// tracker that drives the avatar's gaze on the WPF head is a device, so it stays in a head;

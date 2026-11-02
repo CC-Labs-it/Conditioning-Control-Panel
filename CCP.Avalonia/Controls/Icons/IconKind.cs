@@ -1,7 +1,7 @@
 // The one place the head names the icon package's enums. Every other file writes IconKind.X /
 // IconVariant.Filled, so swapping the package for a bundled font (oracle option B) edits only
 // Controls/Icons/*. IconKind is the RESIZABLE Fluent set (FluentIcons.Common.Symbol): an icon
-// name that does not exist is a compile error. See docs/avalonia-decisions.md (2026-10-10).
+// name that does not exist is a compile error. See docs/avalonia-decisions.html (2026-10-10).
 global using IconKind = FluentIcons.Common.Symbol;
 global using IconVariant = FluentIcons.Common.IconVariant;
 

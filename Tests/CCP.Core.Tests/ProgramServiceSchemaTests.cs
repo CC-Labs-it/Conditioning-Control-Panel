@@ -10,7 +10,7 @@ using Xunit;
 namespace CCP.Core.Tests;
 
 /// <summary>
-/// programs.json schema skew (docs/avalonia-decisions.md 2026-10-09, programs CHECKPOINT B, slice 3-0):
+/// programs.json schema skew (docs/avalonia-decisions.html 2026-10-09, programs CHECKPOINT B, slice 3-0):
 /// fields a newer build wrote survive this build's save, a file stamped with a newer SchemaVersion
 /// loads read-only, and the service's clock is a seam tests can step.
 /// </summary>

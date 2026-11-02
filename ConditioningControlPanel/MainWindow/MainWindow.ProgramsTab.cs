@@ -1391,7 +1391,7 @@ namespace ConditioningControlPanel
             ConditioningControlPanel.Services.Program.ProgramSessionProgress.Clock(span);
 
         /// <summary>programs.json stamped by a newer build loads read-only (ProgramService.IsReadOnly,
-        /// docs/avalonia-decisions.md programs 3a): every lifecycle control greys, since Core refuses them.</summary>
+        /// docs/avalonia-decisions.html programs 3a): every lifecycle control greys, since Core refuses them.</summary>
         private static bool ApplyProgramsReadOnly(ProgramsTabView tab)
         {
             if (App.Programs?.IsReadOnly != true) return false;

@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Avalonia test plan (alpha / beta testers)</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+</head>
+<body>
+<h1 id="avalonia-test-plan-alpha--beta-testers">Avalonia test plan (alpha / beta testers)</h1>
+<p>This is the hands-on checklist for the Linux app (the Avalonia head). Every area of
+<a href="avalonia-parity.html"><code>avalonia-parity.html</code></a> has a section here. You compare the Linux app with the
+Windows app (&quot;WPF&quot;). The <code>WPF file:line</code> after each step is the source line the expected behaviour
+comes from, so a developer can check a report quickly; you only need the Windows app itself.
+Paths are under <code>ConditioningControlPanel/</code> unless they start with <code>CCP.Core/</code> (Windows code that moved to
+the shared engine). Line numbers are the ones recorded in the ledger and may drift by a few lines.</p>
+<h2 id="how-to-report-a-result">How to report a result</h2>
+<p>One report per row id (a GitHub issue titled <code>[test] &lt;row id&gt;: pass</code> or <code>[test] &lt;row id&gt;: fail</code>), with:</p>
+<ul>
+<li><strong>Row id</strong> (the <code>code</code> name in the step or in the row list), and the step number if it has one.</li>
+<li><strong>Pass or fail.</strong></li>
+<li><strong>What differed from Windows</strong>: text, order, timing, sound, a missing button, a crash. &quot;Same as Windows&quot; is a valid pass note.</li>
+<li><strong>Screenshot or short screen recording</strong> of the Linux app (and of Windows when they differ).</li>
+<li>Your distro, desktop (KDE, GNOME, ...), X11 or Wayland, and the app version (Settings -&gt; Updates).</li>
+</ul>
+<p>A tester report is evidence that a developer adds to the ledger row, next to the automated test and the
+developers' own check of the running app; together they move a row to <code>verified</code>.</p>
+<h2 id="before-you-start">Before you start</h2>
+<ul>
+<li>Back up your settings folder first (<code>~/.local/share/ConditioningControlPanel</code>), or use a spare Linux user.</li>
+<li>Use a test account for anything that spends points, tokens or lock time. Never a wallet you care about.</li>
+<li>&quot;Panic key&quot; means the key in Settings (default Escape). &quot;Rail&quot; is the left navigation bar. &quot;Tray&quot; is the
+system tray icon menu.</li>
+<li>Some areas are not on Linux yet (the ledger says <code>missing</code>). Check that nothing broken shows up instead,
+and report it if it does; there is nothing else to compare.</li>
+</ul>
+<p><strong>[SAFETY] steps</strong> (panic, Lockdown, stop and lock paths) are marked <strong>[SAFETY] developers re-check this
+before release</strong>. Please test them, but a tester pass alone does not clear them: the developers repeat them
+on the release build first.</p>
+<p><strong>General check (G)</strong>, for every row in a &quot;Rows&quot; list below: open the screen named in the row (the
+Avalonia column of the ledger), click every button, toggle and tab on it, change the language once, and
+compare text, order, layout, sound and timing with the same screen on Windows. Report differences.</p>
+<h2 id="1-shell-and-platform-shell-platform">1. Shell and platform (<code>shell-platform</code>)</h2>
+<h3 id="start-stop-and-panic">Start, stop and panic</h3>
+<ol>
+<li>Home -&gt; press Start. Expect the engine to run and the button to read Stop; press Stop -&gt; everything ends. WPF <code>MainWindow/MainWindow.StartStop.cs:35</code>. Rows: <code>shell-start-stop</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Lab -&gt; Lockdown on, then press Stop. Expect a refusal message and nothing stops. WPF <code>MainWindow/MainWindow.StartStop.cs:45</code>. Rows: <code>shell-start-stop</code>, <code>shell-session-feature-lock</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Under Lockdown press the window close button. Expect the window to stay open (not even hidden). WPF <code>MainWindow/MainWindow.WindowChrome.cs:126-131</code>. Rows: <code>shell-window-chrome</code>, <code>shell-main-window</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Under Lockdown pick tray -&gt; Exit. Expect nothing to happen. WPF <code>MainWindow/MainWindow.Launcher.cs:184</code>. Rows: <code>shell-tray-icon</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> With the engine running press the panic key once. Expect every effect, sound and overlay to stop; the app stays open. WPF <code>MainWindow/MainWindow.xaml.cs:1548</code>, <code>:1934</code>. Rows: <code>shell-start-stop</code>, <code>shell-global-hotkeys</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> With nothing running press the panic key twice within 2 s. Expect the app to exit at once, with no Chaster bill. WPF <code>MainWindow/MainWindow.xaml.cs:1801-1905</code>. Rows: <code>shell-chaster-bill</code>, <code>shell-start-stop</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Tray -&gt; Stop everything (Linux only; Windows has the panic key instead). Expect the same result as one panic press. WPF <code>MainWindow/MainWindow.xaml.cs:1934</code>. Rows: <code>shell-tray-icon</code>.</li>
+<li>Tray menu: expect Show the window, Back to launcher (only while the launcher is open; greyed under Lockdown), Wake them up (Wake Bambi up in Bambi mode), then Stop everything (Linux only) and Exit. Windows also shows Cut leash after Wake while you are leashed; Linux does not have it yet (known gap, not a failure). WPF <code>Services/Notifications/TrayIconService.cs:98-135</code>. Rows: <code>shell-tray-icon</code>.</li>
+<li>Chaster linked with a bill: tray -&gt; Exit. Expect Circe's bill to hold the exit for a few seconds or one click, then the app closes. WPF <code>MainWindow/MainWindow.Launcher.cs:182</code>. Rows: <code>shell-chaster-bill</code>.</li>
+<li>Close the window (not under Lockdown). Expect it to go to the tray with a &quot;still running&quot; notification. WPF <code>Services/Notifications/TrayIconService.cs:191</code>. Rows: <code>shell-tray-icon</code>, <code>shell-window-chrome</code>.</li>
+</ol>
+<h3 id="navigation-window-and-startup">Navigation, window and startup</h3>
+<ol start="11">
+<li>Click every rail entry in turn. Expect each tab to open and the rail highlight to follow. WPF <code>MainWindow/MainWindow.TabNavigation.cs:868-895</code>. Rows: <code>shell-tab-navigation</code>, <code>shell-nav-rail</code>, <code>ctrl-section-tab-strip</code>.</li>
+<li>Resize, maximise and restore the window on a small screen. Expect it to stay inside the screen. Rows: <code>shell-work-area-fit</code>, <code>shell-window-chrome</code>.</li>
+<li>Start the app a second time. Expect the running window to come to the front, no second copy. Rows: <code>shell-single-instance</code>.</li>
+<li>Quit and start again. Expect the splash, then the launcher or the panel as on Windows. WPF <code>App.xaml.cs:3149</code>. Rows: <code>shell-app-startup</code>, <code>shell-launcher</code>.</li>
+<li>Settings -&gt; set a global hotkey, focus another app, press it. Expect the action to run. WPF <code>MainWindow/MainWindow.xaml.cs:914</code>. Rows: <code>shell-global-hotkeys</code>.</li>
+<li>Settings -&gt; Updates -&gt; check for updates. Expect the same version text and dialogs as Windows. WPF <code>App.xaml.cs:4858</code>. Rows: <code>shell-auto-updater</code>, <code>shell-ui-updates</code>.</li>
+<li>Settings -&gt; Account -&gt; sign in with Patreon, then Discord. Expect the tier card to update; sign out clears it. WPF <code>App.xaml.cs:2267</code>. Rows: <code>shell-login</code>, <code>shell-patreon</code>, <code>shell-subscribestar</code>, <code>shell-secret-store</code>, <code>shell-account-shell</code>.</li>
+</ol>
+<h3 id="tabs-and-features-hosted-by-the-shell">Tabs and features hosted by the shell</h3>
+<ol start="18">
+<li><strong>[SAFETY] developers re-check this before release.</strong> Takeover tab -&gt; enable, press Test. Expect a takeover action to run; panic stops it but keeps the switch on. WPF <code>MainWindow/MainWindow.StartStop.cs:485</code>. Rows: <code>shell-autonomy</code>, <code>shell-takeover-ui</code>.</li>
+<li>Awareness: turn it on (consent), switch between apps. Expect the companion to react to the window title (X11 apps only). WPF <code>MainWindow/MainWindow.CompanionRoom.cs:236</code>. Rows: <code>shell-awareness</code>.</li>
+<li>Programs tab -&gt; enrol in a program. Expect the banner and step list as on Windows. WPF <code>MainWindow/MainWindow.ProgramsTab.cs:605</code>, <code>:2251</code>. Rows: <code>shell-programs-tab</code>, <code>shell-program-banner</code>.</li>
+<li>Presets tab -&gt; apply, save and import a preset. WPF <code>MainWindow/MainWindow.Presets.cs:2202-2381</code>, <code>MainWindow/MainWindow.SessionIO.cs:453</code>. Rows: <code>shell-presets</code>, <code>shell-preset-io</code>, <code>shell-session-io</code>.</li>
+<li>Assets tab -&gt; tick and untick folders, preview a file. WPF <code>MainWindow/MainWindow.TabNavigation.cs:433-438</code>. Rows: <code>shell-assets</code>, <code>shell-assets-fx</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Blink Trainer tab -&gt; start a session with the webcam. Expect the dot to breathe while running and panic to stop it. WPF <code>MainWindow/MainWindow.BlinkTrainer.cs:671</code>. Rows: <code>shell-blink-trainer</code>, <code>shell-webcam</code>.</li>
+<li>Companion tab and Her Room: open each page. WPF <code>MainWindow/MainWindow.CompanionRoom.cs:121-178</code>, <code>MainWindow/MainWindow.Patreon.cs:1266</code>. Rows: <code>shell-companion</code>, <code>shell-companion-room</code>, <code>shell-companion-tab</code>.</li>
+<li>Spiral room, Lab tab, Quests, Achievements, Leaderboard, Roadmap, Profile: open each and use every control. WPF <code>MainWindow/MainWindow.SpiralRoom.cs:76</code>, <code>MainWindow/MainWindow.LabTab.cs:134-153</code>, <code>App.xaml.cs:414</code>. Rows: <code>shell-spiral-room</code>, <code>shell-lab-tab</code>, <code>shell-quests</code>, <code>shell-achievements-tab</code>, <code>shell-leaderboard</code>, <code>shell-roadmap</code>, <code>shell-profile-card</code>.</li>
+<li>Chaster tab: link a test lock. Expect the rail padlock and hero to update. WPF <code>App.xaml.cs:3149</code>. Rows: <code>shell-chaster</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Remote Control: let a controller connect, press panic. Expect the controller to drop and everything to stop. WPF <code>MainWindow/MainWindow.RemoteControl.cs:1401</code>. Rows: <code>shell-remote-control</code>.</li>
+</ol>
+<h3 id="possession">Possession</h3>
+<ol start="28">
+<li>Start a session with Possession on; watch shell buttons nudge, drift, breathe or wobble, then ease home. WPF <code>Services/Possession/Possession.cs</code>. Rows: <code>shell-possession</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Expect the panic control, the Lockdown tab and the safe word never to be possessed. WPF <code>Services/Possession/PossessionOffLimitsTree.cs</code>. Rows: <code>shell-possession</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> With two or more effects moving, press panic, then tray -&gt; Stop everything. Expect every moved control back in place at once. Rows: <code>shell-possession</code>.</li>
+</ol>
+<h3 id="web-pages-inside-the-app">Web pages inside the app</h3>
+<ol start="31">
+<li>Search for &quot;intake&quot; -&gt; start Graded Intake. Expect the page to draw and keep moving (not a frozen frame). WPF <code>MainWindow/MainWindow.Lab.cs:343</code>. Rows: <code>shell-webview2-hosts</code>, <code>views-tab-graded-intake</code>.</li>
+<li>Browser site buttons and Reload: each navigates and the status line says connected. WPF <code>MainWindow/MainWindow.Browser.cs:132-158</code>. Rows: <code>shell-browser</code>.</li>
+</ol>
+<h3 id="tray-friends-line">Tray friends line</h3>
+<ol start="33">
+<li>Have a friend poke you, hover the tray icon. Expect &quot;Conditioning Control Panel&quot; plus a 1-unread friends line; open and close the friends drawer, hover again: the line is gone. WPF <code>Services/Friends/FriendsFeedTray.cs:18</code>. Rows: <code>shell-tray-icon</code>, <code>feat-friends-feed</code>.</li>
+</ol>
+<h3 id="rows-general-check-g">Rows (general check G)</h3>
+<ul>
+<li>[ ] <code>shell-account-shell</code> - WPF <code>MainWindow/MainWindow.AccountShell.cs:261</code></li>
+<li>[ ] <code>shell-achievements-tab</code> - WPF <code>MainWindow/MainWindow.AchievementsTab.cs</code></li>
+<li>[ ] <code>shell-ambient-fx</code> - WPF <code>MainWindow/MainWindow.AmbientFx.cs</code></li>
+<li>[ ] <code>shell-animations</code> - WPF <code>MainWindow/MainWindow.Animations.cs</code></li>
+<li>[ ] <code>shell-assets</code> - WPF <code>MainWindow/MainWindow.TabNavigation.cs:433-438</code></li>
+<li>[ ] <code>shell-button-accessible-name</code> - WPF <code>ButtonBaseAutomationPeer</code></li>
+<li>[ ] <code>shell-assets-fx</code> - WPF <code>MainWindow/MainWindow.AssetsFx.cs</code></li>
+<li>[ ] <code>shell-autonomy</code> - WPF <code>MainWindow/MainWindow.StartStop.cs:485</code></li>
+<li>[ ] <code>shell-awareness</code> - WPF <code>MainWindow/MainWindow.CompanionRoom.cs:236</code></li>
+<li>[ ] <code>shell-bank-fx</code> - WPF <code>MainWindow/MainWindow.BankFx.cs</code></li>
+<li>[ ] <code>shell-blink-trainer</code> - WPF <code>MainWindow/MainWindow.BlinkTrainer.cs:671</code></li>
+<li>[ ] <code>shell-browser</code> - WPF <code>MainWindow/MainWindow.Browser.cs:132-158</code></li>
+<li>[ ] <code>shell-catalogue-submissions</code> - WPF <code>MainWindow/MainWindow.CatalogueSubmissions.cs</code></li>
+<li>[ ] <code>shell-chaster-bill</code> - WPF <code>MainWindow/MainWindow.ChasterBill.cs</code></li>
+<li>[ ] <code>shell-chaster</code> - WPF <code>App.xaml.cs:3149</code></li>
+<li>[ ] <code>shell-chrome-fx</code> - WPF <code>MainWindow/MainWindow.ChromeFx.cs</code></li>
+<li>[ ] <code>shell-cloud-backup</code> - WPF <code>MainWindow/MainWindow.CloudBackup.cs</code></li>
+<li>[ ] <code>shell-companion</code> - WPF <code>MainWindow/MainWindow.Companion.cs</code></li>
+<li>[ ] <code>shell-companion-fx</code> - WPF <code>MainWindow/MainWindow.CompanionFx.cs</code></li>
+<li>[ ] <code>shell-companion-room</code> - WPF <code>MainWindow/MainWindow.CompanionRoom.cs:121-178</code></li>
+<li>[ ] <code>shell-companion-tab</code> - WPF <code>MainWindow/MainWindow.Patreon.cs:1266</code></li>
+<li>[ ] <code>shell-dashboard-billboard</code> - WPF <code>MainWindow/MainWindow.DashboardBillboard.cs</code></li>
+<li>[ ] <code>shell-dashboard-fold</code> - WPF <code>MainWindow/MainWindow.DashboardFold.cs</code></li>
+<li>[ ] <code>shell-dashboard-fx</code> - WPF <code>Features/FeatureCard.xaml.cs:679-688</code></li>
+<li>[ ] <code>shell-deeper-fx</code> - WPF <code>MainWindow/MainWindow.DeeperFx.cs</code></li>
+<li>[ ] <code>shell-deeper-hub</code> - WPF <code>MainWindow/MainWindow.DeeperHub.cs</code></li>
+<li>[ ] <code>shell-deeper-submissions</code> - WPF <code>MainWindow/MainWindow.DeeperSubmissions.cs</code></li>
+<li>[ ] <code>shell-deeper-tab</code> - WPF <code>MainWindow/MainWindow.DeeperTab.cs</code></li>
+<li>[ ] <code>shell-descent-fuse</code> - WPF <code>MainWindow/MainWindow.DescentFuse.cs</code></li>
+<li>[ ] <code>shell-enhancements</code> - WPF <code>MainWindow/MainWindow.Enhancements.cs</code></li>
+<li>[ ] <code>shell-enhancements-fx</code> - WPF <code>MainWindow/MainWindow.EnhancementsFx.cs</code></li>
+<li>[ ] <code>shell-event-fx</code> - WPF <code>MainWindow/MainWindow.EventFx.cs</code></li>
+<li>[ ] <code>shell-exclusives</code> - WPF <code>MainWindow/MainWindow.Exclusives.cs</code></li>
+<li>[ ] <code>shell-favorites-rail</code> - WPF <code>Views/Tabs/SettingsTabView.xaml:349</code></li>
+<li>[ ] <code>shell-haptics</code> - WPF <code>MainWindow/MainWindow.Haptics.cs</code></li>
+<li>[ ] <code>shell-heartbeat</code> - WPF <code>Services/Settings/ProfileSyncService.cs:712</code></li>
+<li>[ ] <code>server-sync-contract</code> - WPF <code>/v2/user/sync</code></li>
+<li>[ ] <code>shell-hero-fx</code> - WPF <code>MainWindow/MainWindow.HeroFx.cs</code></li>
+<li>[ ] <code>shell-home-audio</code> - WPF <code>MainWindow/MainWindow.HomeAudio.cs</code></li>
+<li>[ ] <code>shell-inbox</code> - WPF <code>MainWindow/MainWindow.Inbox.cs</code></li>
+<li>[ ] <code>shell-just-drop</code> - WPF <code>MainWindow/MainWindow.JustDrop.cs</code></li>
+<li>[ ] <code>shell-keyword-triggers</code> - WPF <code>MainWindow/MainWindow.KeywordTriggers.cs</code></li>
+<li>[ ] <code>shell-lab</code> - WPF <code>MainWindow/MainWindow.Lab.cs</code></li>
+<li>[ ] <code>shell-lab-tab</code> - WPF <code>MainWindow/MainWindow.LabTab.cs:134-153</code></li>
+<li>[ ] <code>shell-launcher</code> - WPF <code>MainWindow/MainWindow.Launcher.cs</code></li>
+<li>[ ] <code>shell-leaderboard</code> - WPF <code>MainWindow/MainWindow.Leaderboard.cs</code></li>
+<li>[ ] <code>shell-leaderboard-fx</code> - WPF <code>MainWindow/MainWindow.LeaderboardFx.cs</code></li>
+<li>[ ] <code>shell-login</code> - WPF <code>App.xaml.cs:2267</code></li>
+<li>[ ] <code>shell-secret-store</code> - WPF <code>Services/Auth/SecureAuthTokenStore.cs</code></li>
+<li>[ ] <code>shell-marquee</code> - WPF <code>MainWindow/MainWindow.Marquee.cs</code></li>
+<li>[ ] <code>shell-marquee-reads</code> - WPF <code>MainWindow/MainWindow.MarqueeReads.cs</code></li>
+<li>[ ] <code>shell-mod-catalogue</code> - WPF <code>MainWindow/MainWindow.ModCatalogue.cs</code></li>
+<li>[ ] <code>shell-nav-premium-tags</code> - WPF <code>MainWindow/MainWindow.NavPremiumTags.cs</code> (gone from Windows; nothing to test)</li>
+<li>[ ] <code>shell-nav-rail</code> - WPF <code>MainWindow/MainWindow.NavRail.cs</code></li>
+<li>[ ] <code>ctrl-section-tab-strip</code> - WPF <code>Controls/NavRail/SectionTabStrip.xaml</code></li>
+<li>[ ] <code>shell-patreon</code> - WPF <code>MainWindow/MainWindow.Patreon.cs</code></li>
+<li>[ ] <code>shell-play-tab</code> - WPF <code>MainWindow/MainWindow.PlayTab.cs</code></li>
+<li>[ ] <code>shell-possession</code> - WPF <code>MainWindow/MainWindow.Possession.cs</code></li>
+<li>[ ] <code>shell-preset-io</code> - WPF <code>MainWindow/MainWindow.PresetIO.cs</code></li>
+<li>[ ] <code>shell-presets</code> - WPF <code>MainWindow/MainWindow.Presets.cs:2202-2381</code></li>
+<li>[ ] <code>shell-profile-bubble</code> - WPF <code>MainWindow/MainWindow.ProfileBubble.cs</code></li>
+<li>[ ] <code>shell-profile-card</code> - WPF <code>MainWindow/MainWindow.Browser.cs:1963-1981</code></li>
+<li>[ ] <code>shell-profile-cosmetics</code> - WPF <code>MainWindow/MainWindow.ProfileCosmetics.cs</code></li>
+<li>[ ] <code>shell-profile-faucet</code> - WPF <code>MainWindow/MainWindow.ProfileFaucet.cs</code></li>
+<li>[ ] <code>shell-profile-fx</code> - WPF <code>MainWindow/MainWindow.ProfileFx.cs</code></li>
+<li>[ ] <code>shell-profile-spiral</code> - WPF <code>MainWindow/MainWindow.ProfileSpiral.cs</code></li>
+<li>[ ] <code>shell-profile-vat</code> - WPF <code>MainWindow/MainWindow.ProfileVat.cs</code></li>
+<li>[ ] <code>shell-profile-wardrobe</code> - WPF <code>MainWindow/MainWindow.ProfileWardrobe.cs</code></li>
+<li>[ ] <code>shell-program-banner</code> - WPF <code>MainWindow/MainWindow.ProgramsTab.cs:2251</code></li>
+<li>[ ] <code>shell-programs-fx</code> - WPF <code>MainWindow/MainWindow.ProgramsFx.cs</code></li>
+<li>[ ] <code>shell-programs-tab</code> - WPF <code>MainWindow/MainWindow.ProgramsTab.cs:605</code></li>
+<li>[ ] <code>shell-quests</code> - WPF <code>App.xaml.cs:414</code></li>
+<li>[ ] <code>shell-quests-tab</code> - WPF <code>MainWindow/MainWindow.QuestsTab.cs</code></li>
+<li>[ ] <code>shell-quest-stamps</code> - WPF <code>MainWindow/MainWindow.QuestStamps.cs</code></li>
+<li>[ ] <code>shell-remember</code> - WPF <code>MainWindow/MainWindow.Remember.cs</code></li>
+<li>[ ] <code>shell-remote-control</code> - WPF <code>MainWindow/MainWindow.RemoteControl.cs</code></li>
+<li>[ ] <code>shell-roadmap</code> - WPF <code>MainWindow/MainWindow.Roadmap.cs</code></li>
+<li>[ ] <code>shell-session-feature-lock</code> - WPF <code>MainWindow/MainWindow.SessionFeatureLock.cs</code></li>
+<li>[ ] <code>shell-session-io</code> - WPF <code>MainWindow/MainWindow.SessionIO.cs:453</code></li>
+<li>[ ] <code>shell-settings</code> - WPF <code>MainWindow/MainWindow.Settings.cs</code></li>
+<li>[ ] <code>shell-she-listening</code> - WPF <code>Services/AutonomyService.Voice.cs:146</code></li>
+<li>[ ] <code>shell-sparkle-wallet</code> - WPF <code>MainWindow/MainWindow.SparkleWallet.cs</code></li>
+<li>[ ] <code>shell-spiral-room</code> - WPF <code>MainWindow/MainWindow.SpiralRoom.cs:76</code></li>
+<li>[ ] <code>shell-start-stop</code> - WPF <code>MainWindow/MainWindow.StartStop.cs:58</code></li>
+<li>[ ] <code>shell-subjects-fx</code> - WPF <code>MainWindow/MainWindow.SubjectsFx.cs</code></li>
+<li>[ ] <code>shell-subscribestar</code> - WPF <code>MainWindow/MainWindow.SubscribeStar.cs</code></li>
+<li>[ ] <code>shell-tab-fx-presets-quests-achievements</code> - WPF <code>MainWindow/MainWindow.TabFxPresetsQuestsAchievements.cs</code></li>
+<li>[ ] <code>shell-tab-fx-takeover-lab-status</code> - WPF <code>MainWindow/MainWindow.TabFxTakeoverLabStatus.cs</code></li>
+<li>[ ] <code>shell-tab-navigation</code> - WPF <code>MainWindow/MainWindow.TabNavigation.cs:868-895</code></li>
+<li>[ ] <code>shell-takeaway</code> - WPF <code>MainWindow/MainWindow.Takeaway.cs:107-185</code></li>
+<li>[ ] <code>shell-takeover-ui</code> - WPF <code>MainWindow/MainWindow.TakeoverUi.cs</code></li>
+<li>[ ] <code>shell-tooltip-hygiene</code> - WPF <code>MainWindow/MainWindow.ToolTipHygiene.cs</code></li>
+<li>[ ] <code>shell-ui-updates</code> - WPF <code>MainWindow/MainWindow.xaml.cs:3726</code></li>
+<li>[ ] <code>shell-window-chrome</code> - WPF <code>MainWindow/MainWindow.WindowChrome.cs</code></li>
+<li>[ ] <code>shell-work-area-fit</code> - WPF <code>MainWindow/MainWindow.WorkAreaFit.cs</code></li>
+<li>[ ] <code>shell-main-window</code> - WPF <code>MainWindow/MainWindow.xaml</code></li>
+<li>[ ] <code>shell-app-startup</code> - WPF <code>App.xaml</code></li>
+<li>[ ] <code>shell-tray-icon</code> - WPF <code>Services/Notifications/TrayIconService.cs:102</code></li>
+<li>[ ] <code>shell-global-hotkeys</code> - WPF <code>MainWindow/MainWindow.xaml.cs:914</code></li>
+<li>[ ] <code>shell-clickthrough-overlays</code> - WPF <code>Services/Notifications/OverlayService.cs</code></li>
+<li>[ ] <code>shell-multi-monitor</code> - WPF <code>Services/Video/DualMonitorVideoService.cs</code></li>
+<li>[ ] <code>shell-webview2-hosts</code> - WPF <code>Chaos/ChaosWebViewHost.cs</code></li>
+<li>[ ] <code>shell-audio-playback-devices</code> - WPF <code>Services/AudioService.cs</code></li>
+<li>[ ] <code>shell-video-playback</code> - WPF <code>Services/Video/VideoService.cs</code></li>
+<li>[ ] <code>shell-webcam</code> - WPF <code>Services/Webcam/WebcamTrackingService.cs</code></li>
+<li>[ ] <code>shell-haptics-device</code> - WPF <code>CCP.Core/Services/Haptics/HapticService.cs</code></li>
+<li>[ ] <code>shell-notifications-toasts</code> - WPF <code>Services/Notifications/NotificationService.cs</code></li>
+<li>[ ] <code>shell-auto-updater</code> - WPF <code>App.xaml.cs:4858</code></li>
+<li>[ ] <code>shell-single-instance</code> - WPF <code>App.xaml.cs</code></li>
+<li>[ ] <code>shell-file-dialogs</code> - WPF <code>MainWindow/MainWindow.Assets.cs</code></li>
+<li>[ ] <code>svc-prize-ownership</code> - WPF <code>Services/Prizes/OwnershipService.cs</code></li>
+<li>[ ] <code>svc-discord-rich-presence</code> - WPF <code>Services/BubbleService.cs:244</code></li>
+<li>[ ] <code>svc-media-session-watcher</code> - WPF <code>Services/Awareness/SmtcMediaWatcher.cs</code></li>
+<li>[ ] <code>svc-content-packs</code> - WPF <code>App.xaml.cs:3163</code></li>
+<li>[ ] <code>game-race</code> - WPF <code>Services/Chaos/CaucusHostService.cs:132</code></li>
+<li>[ ] <code>shell-installer</code> - WPF <code>installer.iss</code> (repo root)</li>
+</ul>
+<h2 id="2-windows-windows">2. Windows (<code>windows</code>)</h2>
+<h3 id="panic-key-on-pop-up-windows">Panic key on pop-up windows</h3>
+<p>Set the panic key to Enter for steps 1-4 (Settings -&gt; panic key).</p>
+<ol>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Mandatory video: press Escape (pause card), Tab to Resume, press Enter. Expect the video to stop and close, not resume. WPF <code>Services/Video/VideoService.cs:361</code>, <code>Windows/GracePauseOverlayWindow.cs:61</code>. Rows: <code>win-grace-pause-overlay</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Bubble Count game: press Enter during the clip. Expect the game to close. WPF <code>Services/BubbleCountService.cs:353</code>. Rows: <code>win-bubble-count</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Bubble Count answer box: type the right count, press Enter. Expect the windows to close with no &quot;CORRECT!&quot; and no XP. WPF <code>Services/BubbleCountService.cs:373</code>. Rows: <code>win-bubble-count</code>, <code>win-bubble-count-result</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> First show (welcome): Tab to a choice, press Enter. Expect the show to close without taking the choice. WPF <code>MainWindow/MainWindow.xaml.cs:546-553</code>. Rows: <code>feat-first-show</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Repeat step 1 with the panic key set to F12: Enter must not stop anything. Rows: <code>win-grace-pause-overlay</code>.</li>
+</ol>
+<h3 id="friend-invite-card">Friend invite card</h3>
+<ol start="6">
+<li>Have a friend send you a Back Room invite while the panel is open. Expect a &quot;dling&quot; sound and a card at the panel's top-right with name, art, Not now and x, a countdown ring; the panel keeps keyboard focus. WPF <code>Windows/Friends/KnockCard.cs:341</code>. Rows: <code>win-knock-card</code>, <code>feat-friends-landing</code>.</li>
+<li>A second invite stacks under the first. After 45 s both shrink; hovering one opens it again. WPF <code>Windows/Friends/KnockCard.cs</code>. Rows: <code>win-knock-card</code>.</li>
+<li>Click x: the card goes to the Inbox; opening the Inbox row brings it back. Click Not now: &quot;sink&quot; sound, card and row gone. WPF <code>Windows/Friends/KnockCard.cs</code>. Rows: <code>win-knock-card</code>, <code>shell-inbox</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Press the panic key with cards up. Expect every card to fold into the Inbox; panic otherwise behaves as usual. WPF <code>Windows/Friends/KnockCard.cs</code>. Rows: <code>win-knock-card</code>.</li>
+<li>Start a session with a card up. Expect it to fold into the Inbox within 3 s; new invites wait until the session ends. WPF <code>Windows/Friends/KnockCard.cs</code>. Rows: <code>win-knock-card</code>.</li>
+<li>A Ramp invite: with the panel hidden behind the launcher, press Join. Expect the panel on the Studio tab. WPF <code>Windows/Friends/KnockCard.cs</code>. Rows: <code>win-knock-card</code>, <code>feat-friends-landing</code>.</li>
+</ol>
+<h3 id="other-windows">Other windows</h3>
+<ol start="12">
+<li>First start on a fresh profile: the first-run wizard walks every page, Back and Next work. WPF <code>Windows/FirstRunWizard.xaml.cs:913-969</code>. Rows: <code>win-first-run-wizard</code>, <code>win-splash-screen</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Lock card: start one, type the phrase wrong, then right. Expect it to stay until the right phrase; panic closes it. WPF <code>Windows/LockCardWindow.xaml.cs:763</code>. Rows: <code>win-lock-card</code>.</li>
+<li>Unlock an achievement and finish a quest. Expect the pop-ups with the same text and sound. Rows: <code>win-achievement-popup</code>, <code>win-quest-complete</code>, <code>win-item-unlocked</code>.</li>
+<li>Lab -&gt; Quiz: play a round, report a question, edit a category. WPF <code>MainWindow/MainWindow.Lab.cs:116</code>, <code>:468</code>, <code>Windows/QuizWindow.xaml.cs:356</code>. Rows: <code>win-quiz</code>, <code>win-quiz-report</code>, <code>win-quiz-category-editor</code>, <code>win-pop-quiz</code>.</li>
+<li>Finish a session. Expect the summary, then the log history lists it. WPF <code>Windows/SessionLogHistoryWindow.xaml.cs:46</code>, <code>MainWindow/MainWindow.Presets.cs:1551</code>. Rows: <code>win-session-complete</code>, <code>win-session-log-history</code>, <code>win-session-editor</code>.</li>
+<li>Launcher: open every tile, then Back to the panel. WPF <code>CCP.Core/Services/BackRoom/BackRoomBridge.cs:208</code>. Rows: <code>win-launcher</code>, <code>win-launcher-media-dialog</code>.</li>
+<li>Help -&gt; Report a bug: fill and send to a test address. WPF <code>Windows/BugReportWindow.xaml.cs:87-101</code>. Rows: <code>win-bug-report</code>, <code>win-my-reports</code>.</li>
+<li>Webcam: calibrate, quick recalibrate, gaze tracker. WPF <code>MainWindow/MainWindow.LabTab.cs:1094</code>, <code>MainWindow/MainWindow.xaml.cs:3631</code>. Rows: <code>win-webcam-calibration</code>, <code>win-webcam-quick-recal</code>, <code>win-webcam-gaze-tracker</code>, <code>win-webcam-loading-splash</code>.</li>
+<li>Emi desk: open it, its options, ring and book; mute prompt. WPF <code>AvatarTube/AvatarTubeWindow.Speech.cs:461</code>. Rows: <code>win-emi-desk</code>, <code>win-emi-options</code>, <code>win-emi-ring</code>, <code>win-emi-book</code>, <code>win-emi-codex</code>, <code>win-emi-mute-prompt</code>.</li>
+<li>Settings palette shortcut opens the command palette. WPF <code>MainWindow/MainWindow.xaml.cs:280-283</code>. Rows: <code>win-settings-palette</code>.</li>
+</ol>
+<h3 id="down-the-rabbit-hole-game">Down the Rabbit Hole game</h3>
+<ol start="22">
+<li>Launcher -&gt; Down the Rabbit Hole -&gt; Play (signed in). Expect the game window and the Warren hub within 45 s. WPF <code>Services/Chaos/DtrhHostService.cs:94</code>. Rows: <code>win-launcher</code>.</li>
+<li>Start a descent. Expect the tube to draw and bubbles to spawn; note any missing pictures or sounds. Rows: <code>win-launcher</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Panic key = Escape: press it once mid-descent. Expect the game to pause and stay open; click the title bar, wait 2 s, press again: it still only pauses. WPF <code>MainWindow/MainWindow.xaml.cs:1651</code>, <code>Services/Chaos/DtrhHostService.cs:231</code>. Rows: <code>win-launcher</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Press Escape twice within 2 s. Expect the game window to close and the app to stay up; tray -&gt; Stop everything also closes it. Compare carefully: on Windows the game owns Escape (pause, hold to leave). Rows: <code>win-launcher</code>.</li>
+<li>Settings -&gt; Motion Reduced, then Off; reopen the game. Expect calmer, then no motion. Rows: <code>win-launcher</code>.</li>
+<li>Without Lab access press Play. Expect no window and a &quot;needs Lab&quot; message. Rows: <code>win-launcher</code>.</li>
+</ol>
+<h3 id="rows-general-check-g-1">Rows (general check G)</h3>
+<ul>
+<li>[ ] <code>win-achievement-popup</code> - WPF <code>Windows/AchievementPopup.xaml</code></li>
+<li>[ ] <code>win-announcement-popup</code> - WPF <code>Windows/AnnouncementPopup.xaml</code></li>
+<li>[ ] <code>win-bubble-count-result</code> - WPF <code>Windows/BubbleCountResultWindow.xaml</code></li>
+<li>[ ] <code>win-bubble-count</code> - WPF <code>Services/BubbleCountService.cs:373</code></li>
+<li>[ ] <code>win-bug-report</code> - WPF <code>Windows/BugReportWindow.xaml.cs:87-101</code></li>
+<li>[ ] <code>win-corner-gif</code> - WPF <code>App.xaml.cs:480</code></li>
+<li>[ ] <code>win-descent-fuse</code> - WPF <code>Services/Descent/DescentShowDirector.cs:130-170</code></li>
+<li>[ ] <code>win-easter-egg</code> - WPF <code>Windows/EasterEggWindow.xaml</code></li>
+<li>[ ] <code>win-emi-codex</code> - WPF <code>Windows/EmiCodexWindow.xaml</code></li>
+<li>[ ] <code>win-emi-book</code> - WPF <code>Windows/EmiDesk/EmiBookWindow.xaml</code></li>
+<li>[ ] <code>win-emi-desk</code> - WPF <code>AvatarTube/AvatarTubeWindow.Speech.cs:461</code></li>
+<li>[ ] <code>win-emi-mute-prompt</code> - WPF <code>Windows/EmiDesk/EmiMutePromptWindow.xaml</code></li>
+<li>[ ] <code>win-emi-options</code> - WPF <code>Windows/EmiDesk/EmiOptionsWindow.xaml</code></li>
+<li>[ ] <code>win-emi-ring</code> - WPF <code>Windows/EmiDesk/EmiRingWindow.xaml</code></li>
+<li>[ ] <code>win-feature-intro</code> - WPF <code>Windows/FeatureIntroPopup.xaml</code></li>
+<li>[ ] <code>win-feature-settings</code> - WPF <code>Windows/FeatureSettingsPopup.xaml</code></li>
+<li>[ ] <code>win-first-run-wizard</code> - WPF <code>Windows/FirstRunWizard.xaml.cs:913-969</code></li>
+<li>[ ] <code>win-floating-word</code> - WPF <code>Windows/Friends/FloatingWord.cs</code></li>
+<li>[ ] <code>win-friend-toast</code> - WPF <code>Windows/Friends/FriendToast.cs</code> (gone from Windows; nothing to test)</li>
+<li>[ ] <code>win-grace-pause-overlay</code> - WPF <code>Windows/GracePauseOverlayWindow.cs</code></li>
+<li>[ ] <code>win-haptics-setup</code> - WPF <code>MainWindow/MainWindow.Patreon.cs:263-269</code></li>
+<li>[ ] <code>win-help-video</code> - WPF <code>Windows/HelpVideoWindow.xaml</code></li>
+<li>[ ] <code>win-item-unlocked</code> - WPF <code>Windows/ItemUnlockedPopup.xaml</code></li>
+<li>[ ] <code>win-knock-card</code> - WPF <code>Windows/Friends/KnockCard.cs</code></li>
+<li>[ ] <code>win-launcher-media-dialog</code> - WPF <code>Windows/Launcher/LauncherMediaDialog.xaml</code></li>
+<li>[ ] <code>win-launcher</code> - WPF <code>CCP.Core/Services/BackRoom/BackRoomBridge.cs:208</code></li>
+<li>[ ] <code>win-layered-audio</code> - WPF <code>Windows/LayeredAudioWindow.xaml</code></li>
+<li>[ ] <code>win-lock-card</code> - WPF <code>Windows/LockCardWindow.xaml.cs:763</code></li>
+<li>[ ] <code>linux-package-vosk-model</code> - WPF <code>installer/publish</code></li>
+<li>[ ] <code>linux-package</code> - WPF <code>installer/publish</code></li>
+<li>[ ] <code>linux-package-flatpak</code> - WPF <code>installer/publish</code></li>
+<li>[ ] <code>win-mantra</code> - WPF <code>Windows/MantraWindow.xaml</code></li>
+<li>[ ] <code>win-media-history</code> - WPF <code>Windows/MediaHistoryWindow.xaml</code></li>
+<li>[ ] <code>win-mini-player</code> - WPF <code>MainWindow/MainWindow.Assets.cs:1233</code></li>
+<li>[ ] <code>win-mod-creator</code> - WPF <code>Windows/ModCreatorWindow.xaml</code></li>
+<li>[ ] <code>win-my-reports</code> - WPF <code>Windows/MyReportsWindow.xaml</code></li>
+<li>[ ] <code>win-phrase-input</code> - WPF <code>Windows/FeatureSettingsPopup.xaml.cs</code></li>
+<li>[ ] <code>win-pink-rush</code> - WPF <code>Windows/PinkRushPopup.xaml</code></li>
+<li>[ ] <code>win-pop-quiz</code> - WPF <code>MainWindow/MainWindow.StartStop.cs:393</code></li>
+<li>[ ] <code>win-programs-intro</code> - WPF <code>MainWindow/MainWindow.TabNavigation.cs:333</code></li>
+<li>[ ] <code>win-quest-complete</code> - WPF <code>Windows/QuestCompletePopup.xaml</code></li>
+<li>[ ] <code>win-quiz-category-editor</code> - WPF <code>Windows/QuizWindow.xaml.cs:356</code></li>
+<li>[ ] <code>win-quiz-report</code> - WPF <code>MainWindow/MainWindow.Lab.cs:468</code></li>
+<li>[ ] <code>win-quiz</code> - WPF <code>MainWindow/MainWindow.Lab.cs:116</code></li>
+<li>[ ] <code>win-session-complete</code> - WPF <code>Windows/SessionLogHistoryWindow.xaml.cs:46</code></li>
+<li>[ ] <code>win-session-editor</code> - WPF <code>MainWindow/MainWindow.SessionIO.cs:1739</code></li>
+<li>[ ] <code>win-session-log-history</code> - WPF <code>MainWindow/MainWindow.Presets.cs:1551</code></li>
+<li>[ ] <code>win-settings-palette</code> - WPF <code>MainWindow/MainWindow.xaml.cs:280-283</code></li>
+<li>[ ] <code>win-whatmoved-card</code> - WPF <code>Windows/WhatMovedCard.xaml</code></li>
+<li>[ ] <code>win-splash-screen</code> - WPF <code>Windows/SplashScreen.xaml</code></li>
+<li>[ ] <code>win-tease-reveal</code> - WPF <code>Windows/TeaseRevealPopup.xaml</code></li>
+<li>[ ] <code>win-tutorial-overlay</code> - WPF <code>Windows/TutorialOverlay.xaml</code></li>
+<li>[ ] <code>win-webcam-calibration</code> - WPF <code>Windows/WebcamCalibrationWindow.xaml</code></li>
+<li>[ ] <code>win-webcam-gaze-tracker</code> - WPF <code>MainWindow/MainWindow.LabTab.cs:1094</code></li>
+<li>[ ] <code>win-webcam-loading-splash</code> - WPF <code>MainWindow/MainWindow.xaml.cs:3631</code></li>
+<li>[ ] <code>win-webcam-quick-recal</code> - WPF <code>Windows/WebcamQuickRecalWindow.xaml</code></li>
+</ul>
+<h2 id="3-views-views">3. Views (<code>views</code>)</h2>
+<ol>
+<li>Settings: open every section (General, Audio, Data, Devices, Notifications, Performance, Updates, Account, Emi desk). Expect the same options in the same order. WPF <code>MainWindow/MainWindow.Presets.cs:54</code>, <code>MainWindow/MainWindow.UiUpdates.cs:2701</code>. Rows: <code>views-settings-*</code>, <code>views-tab-settings</code>, <code>views-tab-app-settings</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Lockdown tab: arm Lockdown, then try Stop, close, Exit and leaving the tab. Expect each to refuse with the Windows message; the wrong unlock phrase is refused. WPF <code>MainWindow/MainWindow.Lab.cs:672</code>, <code>:862</code>. Rows: <code>views-tab-lockdown</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Lockdown on: press Pause in a session. Expect it refused. WPF <code>MainWindow/MainWindow.Presets.cs:2033</code>. Rows: <code>views-tab-lockdown</code>, <code>views-tab-presets</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Her Room -&gt; chat History link opens &quot;Chat history&quot;; press panic. Expect it to close; a second press does nothing odd. WPF <code>Views/Controls/Companion/Runtime/CompanionTranscriptWindow.cs:121</code>. Rows: <code>views-companion-transcript-window</code>.</li>
+<li>Companion pages: Engine room, Memory diary, Constellation, Workshop cells, Make her yours, keyword triggers, chat threshold. WPF <code>MainWindow/MainWindow.CompanionTab.cs:85</code>, <code>MainWindow/MainWindow.xaml.cs:3164-3383</code>. Rows: <code>views-companion-*</code>.</li>
+<li>Studio: Ramp and Scheduler racks, Brain Drain card. WPF <code>Views/Tabs/StudioTabView.xaml.cs:1231</code>. Rows: <code>views-tab-studio</code>, <code>views-studio-*</code>.</li>
+<li>Achievements: filters, reward band, tile effects. WPF <code>MainWindow/MainWindow.AchievementsTab.cs:886</code>. Rows: <code>views-tab-achievements</code>.</li>
+<li>Quests: daily cards, reroll, stamps. WPF <code>MainWindow/MainWindow.Animations.cs:35</code>. Rows: <code>views-tab-quests</code>, <code>views-daily-quest-card</code>.</li>
+<li>Presets: load, save, session import/export. WPF <code>MainWindow/MainWindow.SessionIO.cs:911-972</code>. Rows: <code>views-tab-presets</code>.</li>
+<li>Awareness tab: consent, privacy rules, app picker. WPF <code>App.xaml.cs:1574</code>. Rows: <code>views-tab-awareness</code>, <code>views-companion-awareness-privacy</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Remote Control tab: share a code, let a controller in, end it from both sides. WPF <code>MainWindow/MainWindow.RemoteControl.cs:325-480</code>. Rows: <code>views-tab-remote-control</code>.</li>
+<li>Blink Trainer, Haptics, Discord, Leaderboard, Deeper, Enhancements, Exclusives, Friends, Leash, Play, Programs, She's Listening, Spiral, Chaster, Subjects, Takeover tabs: open each, use every control. WPF <code>MainWindow/MainWindow.Presets.cs:118</code> (Blink Trainer). Rows: <code>views-tab-*</code>.</li>
+<li>Deeper editor: new enhancement, URL prompt, gaze picker, play one. Rows: <code>views-deeper-*</code>.</li>
+</ol>
+<h3 id="rows-general-check-g-2">Rows (general check G)</h3>
+<ul>
+<li>[ ] <code>views-adorned-avatar</code> - WPF <code>Views/Controls/AdornedAvatar.xaml</code></li>
+<li>[ ] <code>views-settings-account</code> - WPF <code>Views/Controls/AppSettings/AccountSettingsSection.xaml</code></li>
+<li>[ ] <code>views-settings-audio</code> - WPF <code>MainWindow/MainWindow.Presets.cs:54</code></li>
+<li>[ ] <code>views-settings-data</code> - WPF <code>MainWindow/MainWindow.UiUpdates.cs:2701</code></li>
+<li>[ ] <code>views-settings-devices</code> - WPF <code>MainWindow/MainWindow.LabTab.cs:1094</code></li>
+<li>[ ] <code>views-settings-emidesk</code> - WPF <code>CCP.Core/Services/EmiDesk/EmiLineEngine.cs:946</code></li>
+<li>[ ] <code>views-settings-general</code> - WPF <code>Views/Controls/AppSettings/GeneralSettingsSection.xaml</code></li>
+<li>[ ] <code>views-settings-notifications</code> - WPF <code>Views/Controls/AppSettings/NotificationsSettingsSection.xaml</code></li>
+<li>[ ] <code>views-settings-performance</code> - WPF <code>Views/Controls/AppSettings/PerformanceSettingsSection.xaml</code></li>
+<li>[ ] <code>views-settings-updates</code> - WPF <code>Views/Controls/AppSettings/UpdatesSettingsSection.xaml</code></li>
+<li>[ ] <code>views-companion-ai-permissions-grid</code> - WPF <code>MainWindow/MainWindow.Patreon.cs:1619</code></li>
+<li>[ ] <code>views-companion-attention-gauge</code> - WPF <code>MainWindow/MainWindow.TabNavigation.cs:126</code></li>
+<li>[ ] <code>views-companion-awareness-privacy</code> - WPF <code>Views/Controls/Companion/AwarenessPrivacyView.xaml</code></li>
+<li>[ ] <code>views-companion-chat-threshold</code> - WPF <code>Views/Controls/Companion/ChatThresholdView.xaml</code></li>
+<li>[ ] <code>views-companion-hero-card</code> - WPF <code>App.xaml.cs:380</code></li>
+<li>[ ] <code>views-companion-room-preview</code> - WPF <code>Views/Controls/Companion/CompanionRoomPreviewWindow.xaml</code></li>
+<li>[ ] <code>views-companion-room</code> - WPF <code>Views/Controls/Companion/CompanionRoomView.xaml</code></li>
+<li>[ ] <code>views-companion-engine-room-drawer</code> - WPF <code>Views/Controls/Companion/EngineRoomDrawer.xaml</code></li>
+<li>[ ] <code>views-companion-keyword-triggers</code> - WPF <code>Views/Controls/Companion/KeywordTriggersPanel.xaml</code></li>
+<li>[ ] <code>views-companion-make-her-yours</code> - WPF <code>Views/Controls/Companion/MakeHerYoursView.xaml</code></li>
+<li>[ ] <code>views-companion-memory-diary</code> - WPF <code>Views/Controls/Companion/MemoryDiaryView.xaml</code></li>
+<li>[ ] <code>views-companion-relationship-constellation</code> - WPF <code>Views/Controls/Companion/RelationshipConstellation.xaml</code></li>
+<li>[ ] <code>views-companion-workshop-awareness-cell</code> - WPF <code>Views/Controls/Companion/Runtime/WorkshopAwarenessCell.xaml</code></li>
+<li>[ ] <code>views-companion-workshop-behavior-cell</code> - WPF <code>Views/Controls/Companion/Runtime/WorkshopBehaviorCell.xaml</code></li>
+<li>[ ] <code>views-companion-workshop-community-cell</code> - WPF <code>Views/Controls/Companion/Runtime/WorkshopCommunityCell.xaml</code></li>
+<li>[ ] <code>views-companion-workshop-library-cell</code> - WPF <code>MainWindow/MainWindow.xaml.cs:3164-3383</code></li>
+<li>[ ] <code>views-companion-workshop-roster-cell</code> - WPF <code>MainWindow/MainWindow.CompanionTab.cs:85</code></li>
+<li>[ ] <code>views-companion-workshop-triggers-cell</code> - WPF <code>Views/Controls/Companion/Runtime/WorkshopTriggersCell.xaml</code></li>
+<li>[ ] <code>views-companion-workshop-accordion</code> - WPF <code>Views/Controls/Companion/WorkshopAccordion.xaml</code></li>
+<li>[ ] <code>views-companion-transcript-window</code> - WPF <code>Views/Controls/Companion/Runtime/CompanionTranscriptWindow.cs</code></li>
+<li>[ ] <code>views-daily-quest-card</code> - WPF <code>Views/Controls/DailyQuestCard.xaml</code></li>
+<li>[ ] <code>views-emi-ring-picker</code> - WPF <code>Views/Controls/EmiRingPicker.xaml</code></li>
+<li>[ ] <code>views-profile-privacy-panel</code> - WPF <code>Views/Controls/ProfilePrivacyPanel.xaml</code></li>
+<li>[ ] <code>views-studio-brain-drain-feature</code> - WPF <code>Views/Controls/Studio/BrainDrainFeatureControl.xaml</code></li>
+<li>[ ] <code>views-studio-ramp-rack</code> - WPF <code>Views/Controls/Studio/RampRackPanel.xaml</code></li>
+<li>[ ] <code>views-studio-scheduler-rack</code> - WPF <code>Views/Controls/Studio/SchedulerRackPanel.xaml</code></li>
+<li>[ ] <code>views-deeper-editor-window</code> - WPF <code>Views/Deeper/DeeperEditorWindow.xaml</code></li>
+<li>[ ] <code>views-deeper-enhancement-player</code> - WPF <code>Views/Deeper/EnhancementPlayerWindow.xaml</code></li>
+<li>[ ] <code>views-deeper-gaze-picker</code> - WPF <code>Views/Deeper/GazePickerWindow.xaml</code></li>
+<li>[ ] <code>views-deeper-new-enhancement-dialog</code> - WPF <code>Views/Deeper/NewEnhancementDialog.xaml</code></li>
+<li>[ ] <code>views-deeper-url-prompt-dialog</code> - WPF <code>Views/Deeper/UrlPromptDialog.xaml</code></li>
+<li>[ ] <code>views-tab-achievements</code> - WPF <code>MainWindow/MainWindow.AchievementsTab.cs:886</code></li>
+<li>[ ] <code>views-tab-app-settings</code> - WPF <code>Views/Tabs/AppSettingsTabView.xaml</code></li>
+<li>[ ] <code>views-tab-assets</code> - WPF <code>Views/Tabs/AssetsTabView.xaml</code></li>
+<li>[ ] <code>views-tab-available-subjects</code> - WPF <code>Views/Tabs/AvailableSubjectsTabView.xaml</code></li>
+<li>[ ] <code>views-tab-awareness</code> - WPF <code>App.xaml.cs:1574</code></li>
+<li>[ ] <code>views-tab-bambi-takeover</code> - WPF <code>Views/Tabs/BambiTakeoverTabView.xaml</code></li>
+<li>[ ] <code>views-tab-blink-trainer</code> - WPF <code>MainWindow/MainWindow.Presets.cs:118</code></li>
+<li>[ ] <code>views-tab-chaster</code> - WPF <code>Views/Tabs/ChasterTabView.xaml</code></li>
+<li>[ ] <code>views-tab-companion</code> - WPF <code>Views/Tabs/CompanionTabView.xaml</code></li>
+<li>[ ] <code>views-tab-deeper</code> - WPF <code>Views/Tabs/DeeperTabView.xaml</code></li>
+<li>[ ] <code>views-tab-discord</code> - WPF <code>Views/Tabs/DiscordTabView.xaml</code></li>
+<li>[ ] <code>views-tab-enhancements</code> - WPF <code>Views/Tabs/EnhancementsTabView.xaml</code></li>
+<li>[ ] <code>views-tab-exclusives</code> - WPF <code>Views/Tabs/ExclusivesTabView.xaml</code></li>
+<li>[ ] <code>views-tab-haptics</code> - WPF <code>Views/Tabs/HapticsTabView.xaml</code></li>
+<li>[ ] <code>views-tab-graded-intake</code> - WPF <code>MainWindow/MainWindow.Lab.cs:343</code></li>
+<li>[ ] <code>views-tab-leaderboard</code> - WPF <code>Views/Tabs/LeaderboardTabView.xaml</code></li>
+<li>[ ] <code>views-tab-friends</code> - WPF <code>Views/Tabs/FriendsTabView.xaml</code></li>
+<li>[ ] <code>views-tab-leash</code> - WPF <code>Views/Tabs/LeashTabView.xaml</code></li>
+<li>[ ] <code>views-tab-lockdown</code> - WPF <code>MainWindow/MainWindow.Lab.cs:672</code></li>
+<li>[ ] <code>views-tab-play</code> - WPF <code>Views/Tabs/PlayTabView.xaml</code></li>
+<li>[ ] <code>views-tab-presets</code> - WPF <code>MainWindow/MainWindow.SessionIO.cs:911-972</code></li>
+<li>[ ] <code>views-tab-programs</code> - WPF <code>Views/Tabs/ProgramsTabView.xaml</code></li>
+<li>[ ] <code>views-tab-quests</code> - WPF <code>MainWindow/MainWindow.Animations.cs:35</code></li>
+<li>[ ] <code>views-tab-remote-control</code> - WPF <code>MainWindow/MainWindow.RemoteControl.cs:325-480</code></li>
+<li>[ ] <code>views-tab-settings</code> - WPF <code>Views/Tabs/SettingsTabView.xaml</code></li>
+<li>[ ] <code>views-tab-she-listening</code> - WPF <code>Views/Tabs/SheListeningTabView.xaml</code></li>
+<li>[ ] <code>views-tab-spiral</code> - WPF <code>Views/Tabs/SpiralTabView.xaml</code></li>
+<li>[ ] <code>views-tab-studio</code> - WPF <code>Views/Tabs/StudioTabView.xaml.cs:1231</code></li>
+<li>[ ] <code>views-companion-workshop-cell-theme</code> - WPF <code>Views/Controls/Companion/Runtime/WorkshopCellTheme.xaml</code></li>
+<li>[ ] <code>views-companion-theme</code> - WPF <code>Views/Controls/Companion/Themes/CompanionTheme.xaml</code></li>
+</ul>
+<h2 id="4-dialogs-dialogs">4. Dialogs (<code>dialogs</code>)</h2>
+<ol>
+<li>Sign in (Settings -&gt; Account). Expect the login dialog, username picker on first sign-in, display name editor. WPF <code>App.xaml.cs:2267</code>, <code>Services/Settings/ProfileSyncService.cs:4161</code>. Rows: <code>dialogs-login</code>, <code>dialogs-username-picker</code>, <code>dialogs-display-name</code>, <code>dialogs-offline-username</code>.</li>
+<li>Mod manager: open it, download a content pack, switch the active mod. WPF <code>MainWindow/MainWindow.xaml.cs:2910</code>, <code>:587-588</code>. Rows: <code>dialogs-mod-manager</code>, <code>dialogs-mod-picker</code>.</li>
+<li>Consent dialogs: webcam, microphone, awareness, explicit content. Expect the same text; Decline leaves the feature off. WPF <code>AvatarTube/AvatarTubeWindow.ChatInput.cs:1191</code>. Rows: <code>dialogs-webcam-consent</code>, <code>dialogs-mic-consent</code>, <code>dialogs-awareness-consent</code>, <code>dialogs-explicit-content-acknowledgement</code>, <code>dialogs-content-policy-warning</code>.</li>
+<li>Updates: trigger an update check with a newer version available; cancel; a failed download. Rows: <code>dialogs-update-notification</code>, <code>dialogs-update-progress</code>, <code>dialogs-update-failed</code>, <code>dialogs-whats-new</code>.</li>
+<li>Companion: phrase editor, prompt editor, local AI setup wizard, OpenAI sampler, knowledge link, chat shortcut capture. WPF <code>App.xaml.cs:342</code>. Rows: <code>dialogs-companion-*</code>, <code>dialogs-local-ai-setup-wizard</code>, <code>dialogs-openai-sampler-settings</code>, <code>dialogs-knowledge-link-editor</code>, <code>dialogs-chat-shortcut-capture</code>.</li>
+<li>Roadmap: start, step pop-up, diary, confirm. WPF <code>MainWindow/MainWindow.Roadmap.cs:457</code>. Rows: <code>dialogs-roadmap-*</code>.</li>
+<li>Programs: enrol dialog. WPF <code>MainWindow/MainWindow.ProgramsTab.cs:1999</code>. Rows: <code>dialogs-program-enroll</code>.</li>
+<li>Catalogue: pick from and submit to the catalogue (test entries only). WPF <code>MainWindow/MainWindow.DeeperTab.cs:1017-1204</code>, <code>MainWindow/MainWindow.DeeperHub.cs:225-266</code>, <code>MainWindow/MainWindow.Presets.cs:503</code>. Rows: <code>dialogs-catalogue-picker</code>, <code>dialogs-catalogue-submit</code>, <code>dialogs-asset-submit</code>.</li>
+<li>Profile: customise, privacy, wardrobe, colour editor, lock-card colour. Rows: <code>dialogs-profile-*</code>, <code>dialogs-wardrobe-editor</code>, <code>dialogs-color-editor</code>, <code>dialogs-lock-card-color</code>.</li>
+<li>Settings -&gt; link phone: the QR/code dialog. WPF <code>Views/Tabs/SettingsTabView.xaml.cs:242</code>. Rows: <code>dialogs-link-phone</code>.</li>
+<li>Awareness: preset detail, app picker, attention target editor. WPF <code>MainWindow/MainWindow.Awareness.cs:832</code>. Rows: <code>dialogs-awareness-*</code>, <code>dialogs-attention-target-editor</code>.</li>
+</ol>
+<h3 id="rows-general-check-g-3">Rows (general check G)</h3>
+<ul>
+<li>[ ] <code>dialogs-asset-submit</code> - WPF <code>MainWindow/MainWindow.Presets.cs:503</code></li>
+<li>[ ] <code>dialogs-attention-target-editor</code> - WPF <code>Dialogs/AttentionTargetEditorDialog.xaml</code></li>
+<li>[ ] <code>dialogs-awareness-app-picker</code> - WPF <code>Dialogs/AwarenessAppPickerDialog.xaml</code></li>
+<li>[ ] <code>dialogs-awareness-consent</code> - WPF <code>Dialogs/AwarenessConsentDialog.xaml</code></li>
+<li>[ ] <code>dialogs-awareness-preset-detail</code> - WPF <code>MainWindow/MainWindow.Awareness.cs:832</code></li>
+<li>[ ] <code>dialogs-catalogue-picker</code> - WPF <code>MainWindow/MainWindow.DeeperTab.cs:1017-1204</code></li>
+<li>[ ] <code>dialogs-catalogue-submit</code> - WPF <code>MainWindow/MainWindow.DeeperHub.cs:225-266</code></li>
+<li>[ ] <code>dialogs-chaster-import-confirm</code> - WPF <code>Dialogs/ChasterImportConfirmDialog.xaml</code></li>
+<li>[ ] <code>dialogs-chat-shortcut-capture</code> - WPF <code>Dialogs/ChatShortcutCaptureDialog.xaml</code></li>
+<li>[ ] <code>dialogs-color-editor</code> - WPF <code>Dialogs/ColorEditorDialog.xaml</code></li>
+<li>[ ] <code>dialogs-companion-phrase-editor</code> - WPF <code>App.xaml.cs:342</code></li>
+<li>[ ] <code>dialogs-companion-prompt-editor</code> - WPF <code>Dialogs/CompanionPromptEditorDialog.xaml</code></li>
+<li>[ ] <code>dialogs-content-policy-warning</code> - WPF <code>AvatarTube/AvatarTubeWindow.xaml.cs:396</code></li>
+<li>[ ] <code>dialogs-display-name</code> - WPF <code>Services/Settings/ProfileSyncService.cs:4161</code></li>
+<li>[ ] <code>dialogs-explicit-content-acknowledgement</code> - WPF <code>AvatarTube/AvatarTubeWindow.ChatInput.cs:1191</code></li>
+<li>[ ] <code>dialogs-input</code> - WPF <code>Dialogs/InputDialog.xaml</code></li>
+<li>[ ] <code>dialogs-knowledge-link-editor</code> - WPF <code>Dialogs/KnowledgeLinkEditorDialog.xaml</code></li>
+<li>[ ] <code>dialogs-link-phone</code> - WPF <code>Views/Tabs/SettingsTabView.xaml.cs:242</code></li>
+<li>[ ] <code>dialogs-local-ai-setup-wizard</code> - WPF <code>Dialogs/LocalAiSetupWizard.xaml</code></li>
+<li>[ ] <code>dialogs-lock-card-color</code> - WPF <code>Dialogs/LockCardColorDialog.xaml</code></li>
+<li>[ ] <code>dialogs-login</code> - WPF <code>Dialogs/LoginDialog.xaml</code></li>
+<li>[ ] <code>dialogs-mic-consent</code> - WPF <code>Dialogs/MicConsentDialog.xaml</code></li>
+<li>[ ] <code>dialogs-mod-manager</code> - WPF <code>MainWindow/MainWindow.xaml.cs:2910</code></li>
+<li>[ ] <code>dialogs-mod-picker</code> - WPF <code>MainWindow/MainWindow.xaml.cs:587-588</code></li>
+<li>[ ] <code>dialogs-offline-username</code> - WPF <code>Dialogs/OfflineUsernameDialog.xaml</code></li>
+<li>[ ] <code>dialogs-openai-sampler-settings</code> - WPF <code>Dialogs/OpenAiCompatibleSamplerSettingsDialog.xaml</code></li>
+<li>[ ] <code>dialogs-profile-customize</code> - WPF <code>Dialogs/ProfileCustomizeDialog.xaml</code></li>
+<li>[ ] <code>dialogs-profile-privacy</code> - WPF <code>Dialogs/ProfilePrivacyDialog.xaml</code></li>
+<li>[ ] <code>dialogs-program-enroll</code> - WPF <code>MainWindow/MainWindow.ProgramsTab.cs:1999</code></li>
+<li>[ ] <code>dialogs-roadmap-confirm</code> - WPF <code>Dialogs/RoadmapConfirmDialog.xaml</code></li>
+<li>[ ] <code>dialogs-roadmap-diary</code> - WPF <code>Dialogs/RoadmapDiaryDialog.xaml</code></li>
+<li>[ ] <code>dialogs-roadmap-start</code> - WPF <code>Dialogs/RoadmapStartDialog.xaml</code></li>
+<li>[ ] <code>dialogs-roadmap-step-popup</code> - WPF <code>MainWindow/MainWindow.Roadmap.cs:457</code></li>
+<li>[ ] <code>dialogs-text-editor</code> - WPF <code>Dialogs/TextEditorDialog.xaml</code></li>
+<li>[ ] <code>dialogs-tube-fit</code> - WPF <code>Dialogs/TubeFitDialog.xaml</code></li>
+<li>[ ] <code>dialogs-update-failed</code> - WPF <code>Dialogs/UpdateFailedDialog.xaml</code></li>
+<li>[ ] <code>dialogs-update-notification</code> - WPF <code>Dialogs/UpdateNotificationDialog.xaml</code></li>
+<li>[ ] <code>dialogs-update-progress</code> - WPF <code>Dialogs/UpdateProgressDialog.xaml</code></li>
+<li>[ ] <code>dialogs-username-picker</code> - WPF <code>Dialogs/UsernamePickerDialog.xaml</code></li>
+<li>[ ] <code>dialogs-wardrobe-editor</code> - WPF <code>Dialogs/WardrobeEditorDialog.xaml</code></li>
+<li>[ ] <code>dialogs-vault-gate</code> - WPF <code>Dialogs/VaultGateDialog.cs</code></li>
+<li>[ ] <code>dialogs-warning</code> - WPF <code>Dialogs/WarningDialog.xaml</code></li>
+<li>[ ] <code>dialogs-webcam-consent</code> - WPF <code>Dialogs/WebcamConsentDialog.xaml</code></li>
+<li>[ ] <code>dialogs-welcome-back-sheet</code> - WPF <code>Dialogs/WelcomeBackSheet.xaml</code></li>
+<li>[ ] <code>dialogs-welcome</code> - WPF <code>Dialogs/WelcomeDialog.xaml</code></li>
+<li>[ ] <code>dialogs-whats-new</code> - WPF <code>Dialogs/WhatsNewDialog.xaml</code></li>
+</ul>
+<h2 id="5-features-and-controls-features-controls">5. Features and controls (<code>features-controls</code>)</h2>
+<h3 id="effects-and-monitors-2-monitors-needed-for-1-4">Effects and monitors (2 monitors needed for 1-4)</h3>
+<ol>
+<li>Settings -&gt; Monitors -&gt; &quot;Show content on&quot;. Expect All monitors, Primary only, then <code>Monitor N (Primary, WxH)</code> per screen. WPF <code>Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35</code>. Rows: <code>feat-monitor-target-picker</code>, <code>shell-multi-monitor</code>.</li>
+<li>Pick Monitor 2; start pink filter, spiral, bubbles, a flash, a subliminal, bouncing text and a mandatory video. Expect each only on monitor 2. WPF <code>Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35</code>. Rows: <code>feat-monitor-target-picker</code>, <code>feat-pink-filter</code>, <code>feat-spiral</code>, <code>feat-bubble-pop</code>, <code>feat-flash</code>, <code>feat-subliminal</code>, <code>feat-bouncing-text</code>, <code>feat-video</code>.</li>
+<li>With them running switch to All monitors. Expect them on every screen without a restart. WPF <code>Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35</code>. Rows: <code>feat-monitor-target-picker</code>.</li>
+<li>Pick Monitor 2, quit, unplug it, start. Expect content on the primary; plug it back: Monitor 2 is chosen again. WPF <code>Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35</code>. Rows: <code>feat-monitor-target-picker</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Each effect card on Home/Studio: enable, change sliders, Test. Expect the same look and timing; panic clears all. WPF <code>MainWindow/MainWindow.Presets.cs:1360</code>, <code>:1380-1433</code>, <code>Services/BubbleService.cs:1089</code>, <code>Services/Subliminal/BouncingTextService.cs:372</code>, <code>Services/Video/VideoService.cs:3372</code>. Rows: <code>feat-*</code> effect rows, <code>feat-feature-card</code>.</li>
+<li>Corner hit with Bouncing Text: one &quot;did you see that&quot; line per session. Rows: <code>feat-bouncing-text</code>.</li>
+</ol>
+<h3 id="takeover-and-deeper-cues">Takeover and Deeper cues</h3>
+<ol start="7">
+<li>Takeover with announcements on: wait for an action. Expect &quot;TAKEOVER&quot; over the effect word near the top, with a glow and a short shake, gone after ~2 s; clicks pass through. WPF <code>Overlays/TakeoverAnnouncerOverlay.cs:69</code>. Rows: <code>overlay-takeover-announcer</code>.</li>
+<li>Two actions back to back: the second cue waits for the first. Rows: <code>overlay-takeover-announcer</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Press panic while a cue shows. Expect it gone at once and the queued one never shown. Rows: <code>overlay-takeover-announcer</code>.</li>
+<li>Deeper enhancement with a &quot;speak&quot; prompt: &quot;SAY IT&quot; over the line near the top; clicks pass through; it fades when answered. WPF <code>Overlays/SpeakCueOverlay.cs:39</code>. Rows: <code>overlay-speak-cue</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> With the speak cue up press panic, then tray -&gt; Stop everything, then close the app. Expect the cue gone every time. Rows: <code>overlay-speak-cue</code>.</li>
+</ol>
+<h3 id="chaster-pop">Chaster pop</h3>
+<ol start="12">
+<li>Chaster linked: pop a priced bubble. Expect a big &quot;+N:NN&quot; at the bubble that lifts and fades in ~1.5 s, clicks pass through; the rail padlock ring pulses. WPF <code>Controls/ChasterBookedPop.cs:117</code>. Rows: <code>ctrl-chaster-booked-pop</code>, <code>ctrl-chaster-rail-chip</code>.</li>
+<li>Two prices within half a second: one bigger number. Daily cap full: one lilac &quot;day is full&quot; tag. Motion Reduced or Off: no lift. Rows: <code>ctrl-chaster-booked-pop</code>.</li>
+</ol>
+<h3 id="chaos-mode">Chaos mode</h3>
+<ol start="14">
+<li>Rabbit Hole -&gt; FALL IN. Expect the hub to close, the HUD and countdown, then bubbles rising. WPF <code>Chaos/ChaosHubWindow.xaml.cs:1730</code>, <code>Services/Chaos/ChaosModeService.cs:297</code>. Rows: <code>chaos-hub-window</code>, <code>chaos-hud-window</code>, <code>chaos-overlay-window</code>, <code>chaos-bubble-host</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Pop a few bubbles, press panic. Expect HUD, overlay and every bubble gone at once, no recap, and drops/gold unchanged in the hub. WPF <code>Services/Chaos/ChaosModeService.cs:288</code>, <code>:3161</code>. Rows: <code>chaos-hud-window</code>, <code>chaos-overlay-window</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> FALL IN again, press panic twice within 2 s. Expect the run to end and the app to stay open. Rows: <code>chaos-hud-window</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Tray -&gt; Stop everything mid-run: same as step 15. Rows: <code>chaos-hud-window</code>.</li>
+<li>Let a run finish. Expect the recap; the hub then shows the recap's drops, +1 descent, more gold, and the XP bar moved. Rows: <code>chaos-hub-window</code>.</li>
+<li>First visit to the hub: the intro card appears; &quot;i understand. take me down&quot; closes it; <code>?</code> shows it again; it does not come back on reopen. WPF <code>Chaos/ChaosHubWindow.Reveals.cs:145-153</code>. Rows: <code>chaos-intro-window</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Intro card up: press panic with its button focused. Expect the card to close and panic to run. Rows: <code>chaos-intro-window</code>.</li>
+<li>Toy button (with a toy pocket): round button bottom-right with a key badge; click or press its key: &quot;20s&quot; countdown, then &quot;ready&quot;. It never steals focus. WPF <code>Chaos/ChaosToyButtonWindow.cs:42</code>. Rows: <code>chaos-toy-button</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Set the toy key to the panic key: pressing it panics and does not fire the toy. After panic the toy key does nothing. Rows: <code>chaos-toy-button</code>.</li>
+<li>Pocket Watch charm: a &quot;WAVE 1/N&quot; pill top-right; clock turns red under 10 s; &quot;LAST WAVE&quot; blinks. WPF <code>Chaos/ChaosWaveTimerOverlay.cs:23</code>. Rows: <code>chaos-wave-timer</code>.</li>
+<li>Announcer on: &quot;THE HOLE IS CLOSING...&quot; pops near the top, lines never overlap. WPF <code>Chaos/ChaosAnnouncerOverlay.cs:65</code>. Rows: <code>chaos-announcer</code>.</li>
+<li>Draft a mantra and a sin: tiles appear in a pill top-right, hover shows a card. WPF <code>Chaos/ChaosBoonBarOverlay.cs:34</code>. Rows: <code>chaos-boon-bar</code>.</li>
+<li>Heat bar full: warm edge tint fades in; off when &quot;colour flashes&quot; is off. WPF <code>Chaos/ChaosFxWindow.cs:26</code>. Rows: <code>chaos-fx-window</code>.</li>
+<li>Pop words (&quot;SNAP&quot;), effect banners, cursor halo, vibe trail, sparks, ripples, DVD logo, GIF rain, brain-drain wash, e-stim bolt: when each appears, clicks pass through and nothing takes focus. WPF <code>Chaos/ChaosPopText.cs:50</code>, <code>Chaos/ChaosEffectBannerOverlay.cs:57</code>, <code>Chaos/ChaosCursorGlowOverlay.cs:46</code>, <code>Chaos/ChaosVibeTrailOverlay.cs:58</code>, <code>Chaos/ChaosSkiaFxOverlay.cs:72</code>, <code>Chaos/ChaosFieldFxOverlay.cs:59</code>, <code>Chaos/ChaosDvdOverlay.cs:92</code>, <code>Chaos/ChaosGifCascadeOverlay.cs:51</code>, <code>Chaos/ChaosFlashOverlay.cs:44</code>, <code>Chaos/ChaosEStimOverlay.cs:40</code>. Rows: <code>chaos-pop-text</code>, <code>chaos-effect-banner</code>, <code>chaos-cursor-glow</code>, <code>chaos-vibe-trail</code>, <code>chaos-skia-fx</code>, <code>chaos-field-fx</code>, <code>chaos-dvd-overlay</code>, <code>chaos-dvd-host</code>, <code>chaos-gif-cascade</code>, <code>chaos-flash-overlay</code>, <code>chaos-estim-overlay</code>, <code>chaos-estim-glow</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> While any of step 27's effects or the wave pill, boon pill or announcer shows: panic, tray -&gt; Stop everything, and the safe word each close it at once with no window left behind. Rows: as step 27, plus <code>chaos-wave-timer</code>, <code>chaos-boon-bar</code>, <code>chaos-announcer</code>, <code>chaos-fx-window</code>, <code>chaos-toy-button</code>.</li>
+<li>Without a compositor (or on plain Wayland): those effects show nothing rather than a black or click-blocking sheet. Rows: as step 27.</li>
+<li>Click a bubble: it pops and the click does not reach the window below; empty space between bubbles stays clickable. WPF <code>Chaos/ChaosBubbleHostOverlay.cs:137</code>. Rows: <code>chaos-bubble-host</code>.</li>
+</ol>
+<h3 id="other-controls">Other controls</h3>
+<ol start="31">
+<li>Help &quot;?&quot; on a setting with a clip: a looping silent video with a caption; closing stops it; switching language re-translates the caption. WPF <code>Controls/InlineLoopVideo.cs:57</code>, <code>MainWindow/MainWindow.Presets.cs:130</code>. Rows: <code>ctrl-inline-loop-video</code>, <code>ctrl-help-popover</code>.</li>
+<li>Back Room counter (test account): open the Flashes card. Expect &quot;Checking...&quot;, a price and &quot;Get it&quot;; Cancel buys nothing; Yes buys, shows a toast and the row disappears; not enough points shows the Windows error text. WPF <code>Controls/V2GetItRow.xaml.cs:35</code>. Rows: <code>ctrl-v2-get-it-row</code>, <code>svc-prize-ownership</code>.</li>
+<li>Companion tube: shows beside the panel; minimise hides it; maximise detaches it; restore re-attaches. WPF <code>MainWindow/MainWindow.xaml.cs:3695</code>. Rows: <code>avatar-tube-window</code>, <code>shell-companion</code>.</li>
+<li>Season recap: Leaderboard -&gt; recap button opens the card window. Rows: <code>ctrl-season-recap-card</code>, <code>ctrl-season-recap-window</code>.</li>
+<li>Attention check during a session: the prompt appears and must be answered. WPF <code>App.xaml.cs:3229-3246</code>. Rows: <code>ctrl-attention-check</code>.</li>
+<li>Launcher tiles: hover sheen and the comet around the edge. WPF <code>Windows/Launcher/LauncherWindow.Fx.cs:141</code>, <code>:381</code>. Rows: <code>ctrl-card-sheen-adorner</code>, <code>ctrl-perimeter-comet-adorner</code>.</li>
+</ol>
+<h3 id="rows-general-check-g-4">Rows (general check G)</h3>
+<ul>
+<li>[ ] <code>feat-adaptive-side-art</code> - WPF <code>Features/AdaptiveSideArt.cs</code></li>
+<li>[ ] <code>feat-app-info</code> - WPF <code>Features/AppInfoFeatureControl.xaml</code></li>
+<li>[ ] <code>feat-bouncing-text</code> - WPF <code>Services/Subliminal/BouncingTextService.cs:372</code></li>
+<li>[ ] <code>feat-bubble-count</code> - WPF <code>Services/BubbleCountService.cs:353</code></li>
+<li>[ ] <code>feat-bubble-pop</code> - WPF <code>Services/BubbleService.cs:1089</code></li>
+<li>[ ] <code>feat-feature-card</code> - WPF <code>MainWindow/MainWindow.Presets.cs:1380-1433</code></li>
+<li>[ ] <code>feat-feature-popup</code> - WPF <code>Features/FeaturePopupWindow.xaml</code></li>
+<li>[ ] <code>feat-flash</code> - WPF <code>Features/FlashFeatureControl.xaml</code></li>
+<li>[ ] <code>feat-intensity-ramp</code> - WPF <code>Features/IntensityRampFeatureControl.xaml</code></li>
+<li>[ ] <code>feat-lock-card</code> - WPF <code>Features/LockCardFeatureControl.xaml</code></li>
+<li>[ ] <code>feat-mind-wipe</code> - WPF <code>Features/MindWipeFeatureControl.xaml</code></li>
+<li>[ ] <code>feat-monitor-target-picker</code> - WPF <code>Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35</code></li>
+<li>[ ] <code>feat-pink-filter</code> - WPF <code>MainWindow/MainWindow.Presets.cs:1360</code></li>
+<li>[ ] <code>feat-scheduler</code> - WPF <code>Features/SchedulerFeatureControl.xaml</code></li>
+<li>[ ] <code>feat-spiral</code> - WPF <code>Features/SpiralFeatureControl.xaml</code></li>
+<li>[ ] <code>feat-split-card</code> - WPF <code>Features/SplitFeatureCard.xaml</code></li>
+<li>[ ] <code>feat-subliminal</code> - WPF <code>Features/SubliminalFeatureControl.xaml</code></li>
+<li>[ ] <code>feat-system</code> - WPF <code>Features/SystemFeatureControl.xaml(.cs)</code> (gone from Windows; compare with the Windows app)</li>
+<li>[ ] <code>feat-video</code> - WPF <code>Services/Video/VideoService.cs:3372</code></li>
+<li>[ ] <code>feat-visuals</code> - WPF <code>Features/VisualsFeatureControl.xaml</code></li>
+<li>[ ] <code>ctrl-attention-check</code> - WPF <code>App.xaml.cs:3229-3246</code></li>
+<li>[ ] <code>ctrl-emi-dock</code> - WPF <code>MainWindow/MainWindow.xaml.cs:4202</code></li>
+<li>[ ] <code>ctrl-inbox-flyout</code> - WPF <code>Controls/InboxFlyout.xaml</code></li>
+<li>[ ] <code>ctrl-season-recap-card</code> - WPF <code>Controls/SeasonRecapCard.xaml</code></li>
+<li>[ ] <code>ctrl-season-recap-window</code> - WPF <code>Controls/SeasonRecapWindow.xaml</code></li>
+<li>[ ] <code>ctrl-sparkle-wallet</code> - WPF <code>Controls/SparkleWallet.xaml</code></li>
+<li>[ ] <code>ctrl-v2-get-it-row</code> - WPF <code>Controls/V2GetItRow.xaml</code></li>
+<li>[ ] <code>ctrl-ambient-fx-canvas</code> - WPF <code>Controls/AmbientFxCanvas.cs</code></li>
+<li>[ ] <code>ctrl-card-sheen-adorner</code> - WPF <code>Windows/Launcher/LauncherWindow.Fx.cs:381</code></li>
+<li>[ ] <code>ctrl-chaster-account-badge</code> - WPF <code>Controls/ChasterAccountBadge.cs</code></li>
+<li>[ ] <code>ctrl-chaster-booked-flash</code> - WPF <code>Controls/ChasterBookedFlash.cs</code></li>
+<li>[ ] <code>ctrl-chaster-booked-pop</code> - WPF <code>Controls/ChasterBookedPop.cs</code></li>
+<li>[ ] <code>ctrl-chaster-rail-chip</code> - WPF <code>Controls/ChasterRailChip.cs:645-665</code></li>
+<li>[ ] <code>ctrl-chaster-receipt-view</code> - WPF <code>Controls/ChasterReceiptView.cs</code></li>
+<li>[ ] <code>ctrl-chaster-trailer-view</code> - WPF <code>Controls/ChasterTrailerView.cs</code></li>
+<li>[ ] <code>ctrl-descent-fuse-rail-chip</code> - WPF <code>Controls/DescentFuseRailChip.cs</code></li>
+<li>[ ] <code>ctrl-descent-fuse-stage-visual</code> - WPF <code>Controls/DescentFuseStageVisual.cs</code></li>
+<li>[ ] <code>ctrl-friends-drawer</code> - WPF <code>Controls/Friends/FriendsDrawer.cs</code></li>
+<li>[ ] <code>ctrl-friends-rail-chip</code> - WPF <code>Controls/Friends/FriendsRailChip.cs</code></li>
+<li>[ ] <code>ctrl-help-popover</code> - WPF <code>MainWindow/MainWindow.Presets.cs:130</code></li>
+<li>[ ] <code>ctrl-inline-loop-video</code> - WPF <code>Controls/InlineLoopVideo.cs</code></li>
+<li>[ ] <code>ctrl-lock-title</code> - WPF <code>Controls/LockTitle.cs</code></li>
+<li>[ ] <code>ctrl-perimeter-comet-adorner</code> - WPF <code>Windows/Launcher/LauncherWindow.Fx.cs:141</code></li>
+<li>[ ] <code>ctrl-premium-gate-fx</code> - WPF <code>Controls/PremiumGateFx.cs</code></li>
+<li>[ ] <code>ctrl-row-sweep-adorner</code> - WPF <code>Controls/RowSweepAdorner.cs</code></li>
+<li>[ ] <code>ctrl-spiral-embed-view</code> - WPF <code>Controls/SpiralEmbedView.cs</code></li>
+<li>[ ] <code>ctrl-spiral-first-light-visual</code> - WPF <code>Controls/SpiralFirstLightVisual.cs</code></li>
+<li>[ ] <code>ctrl-spiral-glyph</code> - WPF <code>Controls/SpiralGlyph.cs</code></li>
+<li>[ ] <code>ctrl-spiral-rail-host</code> - WPF <code>Controls/SpiralRailHost.cs</code></li>
+<li>[ ] <code>ctrl-takeover-orb</code> - WPF <code>Controls/TakeoverOrb.cs</code></li>
+<li>[ ] <code>ctrl-tier-badge</code> - WPF <code>Controls/TierBadge.cs</code></li>
+<li>[ ] <code>ctrl-tier-fx-border</code> - WPF <code>Controls/TierFxBorder.cs</code></li>
+<li>[ ] <code>ctrl-vat-glass-canvas</code> - WPF <code>Controls/VatGlassCanvas.cs</code></li>
+<li>[ ] <code>chaos-hub-window</code> - WPF <code>Chaos/ChaosHubWindow.xaml</code></li>
+<li>[ ] <code>chaos-hud-window</code> - WPF <code>Chaos/ChaosHudWindow.xaml</code></li>
+<li>[ ] <code>chaos-overlay-window</code> - WPF <code>Chaos/ChaosOverlayWindow.xaml</code></li>
+<li>[ ] <code>chaos-slot-picker</code> - WPF <code>Chaos/ChaosSlotPickerWindow.xaml</code></li>
+<li>[ ] <code>chaos-intro-window</code> - WPF <code>Chaos/ChaosHubWindow.Reveals.cs:145-153</code></li>
+<li>[ ] <code>chaos-toy-button</code> - WPF <code>Chaos/ChaosToyButtonWindow.cs</code></li>
+<li>[ ] <code>chaos-skia-fx</code> - WPF <code>Chaos/ChaosSkiaFxOverlay.cs</code></li>
+<li>[ ] <code>chaos-pop-text</code> - WPF <code>Chaos/ChaosPopText.cs</code></li>
+<li>[ ] <code>chaos-gif-cascade</code> - WPF <code>Chaos/ChaosGifCascadeOverlay.cs</code></li>
+<li>[ ] <code>chaos-fx-window</code> - WPF <code>Chaos/ChaosFxWindow.cs</code></li>
+<li>[ ] <code>chaos-flash-overlay</code> - WPF <code>Chaos/ChaosFlashOverlay.cs</code></li>
+<li>[ ] <code>chaos-field-fx</code> - WPF <code>Chaos/ChaosFieldFxOverlay.cs</code></li>
+<li>[ ] <code>chaos-effect-banner</code> - WPF <code>Chaos/ChaosEffectBannerOverlay.cs</code></li>
+<li>[ ] <code>chaos-estim-overlay</code> - WPF <code>Chaos/ChaosEStimOverlay.cs</code></li>
+<li>[ ] <code>chaos-estim-glow</code> - WPF <code>Chaos/ChaosEStimOverlay.cs</code></li>
+<li>[ ] <code>chaos-dvd-overlay</code> - WPF <code>Chaos/ChaosDvdOverlay.cs</code></li>
+<li>[ ] <code>chaos-dvd-host</code> - WPF <code>Chaos/ChaosDvdHostOverlay.cs</code></li>
+<li>[ ] <code>chaos-cursor-glow</code> - WPF <code>Chaos/ChaosCursorGlowOverlay.cs</code></li>
+<li>[ ] <code>chaos-boon-bar</code> - WPF <code>Chaos/ChaosBoonBarOverlay.cs</code></li>
+<li>[ ] <code>chaos-bubble-host</code> - WPF <code>Chaos/ChaosBubbleHostOverlay.cs</code></li>
+<li>[ ] <code>chaos-announcer</code> - WPF <code>Chaos/ChaosAnnouncerOverlay.cs</code></li>
+<li>[ ] <code>chaos-wave-timer</code> - WPF <code>Chaos/ChaosWaveTimerOverlay.cs</code></li>
+<li>[ ] <code>chaos-vibe-trail</code> - WPF <code>Chaos/ChaosVibeTrailOverlay.cs</code></li>
+<li>[ ] <code>chaos-unlock-card</code> - WPF <code>Chaos/ChaosUnlockCardOverlay.cs</code></li>
+<li>[ ] <code>chaos-webview-host</code> - WPF <code>Chaos/ChaosWebViewHost.cs</code></li>
+<li>[ ] <code>avatar-tube-window</code> - WPF <code>MainWindow/MainWindow.xaml.cs:3695</code></li>
+<li>[ ] <code>lab-gaze-minigame</code> - WPF <code>Lab/GazeMinigame/GazeMinigameWindow.xaml</code></li>
+<li>[ ] <code>overlay-speak-cue</code> - WPF <code>Overlays/SpeakCueOverlay.cs</code></li>
+<li>[ ] <code>overlay-takeover-announcer</code> - WPF <code>Overlays/TakeoverAnnouncerOverlay.cs</code></li>
+<li>[ ] <code>behavior-hover-pop</code> - WPF <code>Behaviors/HoverPopBehavior.cs</code></li>
+<li>[ ] <code>theme-brushes</code> - WPF <code>Resources/Theme/Brushes.xaml</code></li>
+<li>[ ] <code>theme-colors</code> - WPF <code>Resources/Theme/Colors.xaml</code></li>
+<li>[ ] <code>theme-controls</code> - WPF <code>Resources/Theme/Controls.xaml</code></li>
+<li>[ ] <code>theme-converters</code> - WPF <code>Resources/Theme/Converters.xaml</code></li>
+<li>[ ] <code>theme-fonts</code> - WPF <code>Helpers/EmojiTextBlock.cs:11-14</code></li>
+<li>[ ] <code>theme-inputs</code> - WPF <code>Resources/Theme/Inputs.xaml</code></li>
+<li>[ ] <code>theme-main-window</code> - WPF <code>Resources/Theme/MainWindow.xaml</code></li>
+<li>[ ] <code>theme-season-recap-card</code> - WPF <code>Resources/Theme/SeasonRecapCard.xaml</code></li>
+<li>[ ] <code>feat-companion-ai-cloud-chat</code> - WPF <code>CCP.Core/Services/AiService.cs</code></li>
+<li>[ ] <code>feat-companion-ai-local-providers</code> - WPF <code>Services/AIService/{AiServiceStrategy,LocalAiService,OpenAiCompatibleService,TransportModeration,AiResponseParser,BrainAdapter}.cs</code></li>
+<li>[ ] <code>feat-companion-brain</code> - WPF <code>AvatarTube/AvatarTubeWindow.ChatInput.cs:772</code></li>
+<li>[ ] <code>feat-fyp-host</code> - WPF <code>Services/Video/VideoService.cs:1988</code></li>
+</ul>
+<h2 id="6-main-sync-2-additions-main-sync-2-additions">6. Main sync 2 additions (<code>main-sync-2 additions</code>)</h2>
+<ol>
+<li>Settings -&gt; &quot;?&quot; help loops: each plays its little animation and stops when closed. WPF <code>Views/Tabs/SettingsTabView.xaml:452</code>. Rows: <code>feat-help-loops</code>.</li>
+<li>Leash: accept a friend's leash; the gate card appears on the tabs it locks. WPF <code>App.xaml.cs:2991-3022</code>. Rows: <code>feat-leash</code>.</li>
+<li>Finish a session: the summary opens without stealing focus, only one at a time. Rows: <code>feat-session-summary-passive</code>.</li>
+<li>Chaster ladder and scrap: open the Chaster tab ladder. Rows: <code>views-chaster-ladder-scrap</code>.</li>
+<li>Mod manager: the Download button on a content pack shows progress and finishes. Rows: <code>release-content-mod-manager-rows</code>, <code>release-content-avalonia-service</code>, <code>release-content-pack-script</code>.</li>
+</ol>
+<h3 id="rows-general-check-g-5">Rows (general check G)</h3>
+<ul>
+<li>[ ] <code>feat-help-loops</code> - WPF <code>Views/Tabs/SettingsTabView.xaml:452</code></li>
+<li>[ ] <code>feat-leash</code> - WPF <code>App.xaml.cs:2991-3022</code></li>
+<li>[ ] <code>views-companion-picker-card</code> - WPF <code>Views/Controls/Companion/CompanionPickerCard.xaml</code></li>
+<li>[ ] <code>views-companion-v2-conversation</code> - WPF <code>Views/Controls/Companion/V2/ConversationPage.xaml</code></li>
+<li>[ ] <code>views-companion-ai-page</code> - WPF <code>Views/Controls/Companion/Pages/AiPage.xaml</code></li>
+<li>[ ] <code>views-awareness-companion</code> - WPF <code>Views/Tabs/AwarenessTabView.Companion.cs</code></li>
+<li>[ ] <code>views-chaster-ladder-scrap</code> - WPF <code>Views/Tabs/ChasterTabView.Ladder.cs</code></li>
+<li>[ ] <code>feat-first-show</code> - WPF <code>MainWindow/MainWindow.xaml.cs:546-553</code></li>
+<li>[ ] <code>feat-dashboard-logo</code> - WPF <code>Controls/AnimatedLogoImage.cs</code></li>
+<li>[ ] <code>feat-friends-open-tables</code> - WPF <code>Controls/Friends/FriendsDrawer.Tables.cs</code></li>
+<li>[ ] <code>win-emi-desk-extras</code> - WPF <code>Windows/EmiDesk/EmiDeskWindow.Presentation.cs</code></li>
+<li>[ ] <code>feat-session-summary-passive</code> - WPF <code>CCP.Core/Services/Session/SessionSummaryPresentation.cs</code></li>
+<li>[ ] <code>companion-ccp-default-voice</code> - WPF <code>builtin-ccp-default barks</code></li>
+<li>[ ] <code>release-content-pack-script</code> - WPF <code>Scripts/build-content-packs.ps1</code></li>
+<li>[ ] <code>release-content-avalonia-service</code> - WPF <code>App.xaml.cs:346-356</code></li>
+<li>[ ] <code>release-content-mod-manager-rows</code> - WPF <code>Dialogs/ModManagerDialog.xaml.cs:56-316</code></li>
+<li>[ ] <code>blocked-migration-input</code> - WPF <code>Tests (migration)</code></li>
+</ul>
+<h2 id="7-main-sync-3-additions-main-sync-3-additions">7. Main sync 3 additions (<code>main-sync-3 additions</code>)</h2>
+<h3 id="leash-hold-to-cut">Leash hold-to-cut</h3>
+<ol>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Leashed, tap the panic key once. Expect a normal panic and no ring. WPF <code>MainWindow/MainWindow.Leash.cs:307</code>. Rows: <code>feat-leash-receipts-hold</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Hold it ~3 s and let go. Expect a small countdown ring (5, 4, 3) bottom-centre that vanishes on release; still leashed. WPF <code>MainWindow/MainWindow.Leash.cs:323-350</code>, <code>Controls/Leash/LeashHoldRing.cs:20</code>. Rows: <code>feat-leash-receipts-hold</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Hold 5 s. Expect &quot;Cut the leash?&quot; centred; held keys do not answer it. &quot;No&quot; keeps the leash; &quot;Yes, cut it&quot; shows &quot;Cut. You are off the leash.&quot; WPF <code>MainWindow/MainWindow.Leash.cs:358</code>. Rows: <code>feat-leash-receipts-hold</code>, <code>feat-leash</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Panic key turned off in Settings, leashed: holding it 5 s still asks. Not leashed: holding it is one panic only, never an exit. WPF <code>MainWindow/MainWindow.Leash.cs:316</code>, <code>:347</code>. Rows: <code>feat-leash-receipts-hold</code>.</li>
+<li>The ring never takes clicks or focus. Rows: <code>feat-leash-receipts-hold</code>.</li>
+</ol>
+<h3 id="companion-voice-lines">Companion voice lines</h3>
+<ol start="6">
+<li>Default mod, companion on: open a tab with a voice line (e.g. Leaderboard). Expect a speech bubble and the voice, at most one per minute. WPF <code>MainWindow/MainWindow.xaml.cs:1755</code>. Rows: <code>feat-companion-barks</code>, <code>companion-ccp-default-voice</code>.</li>
+<li>Master volume 0: text only. Companion muted: text, no voice. Rows: <code>feat-companion-barks</code>.</li>
+<li><strong>[SAFETY] developers re-check this before release.</strong> Press panic while she speaks. Expect the voice cut at once. Rows: <code>feat-companion-barks</code>.</li>
+</ol>
+<h3 id="other">Other</h3>
+<ol start="9">
+<li>Friends drawer: feed, trail, blocked list, presence setting. Rows: <code>feat-friends-feed</code>, <code>feat-friends-blocked-presence</code>, <code>feat-friends-landing</code>.</li>
+<li>Flash card: exit and stay options behave as on Windows. WPF <code>Features/FlashFeatureControl.xaml:166-193</code>. Rows: <code>feat-flash-exit-stay</code>.</li>
+<li>Haptics -&gt; Intiface address: type a host without <code>ws://</code>; it connects the same as Windows. Rows: <code>feat-intiface-url</code>.</li>
+<li>Piece by Piece: launch from the launcher, play, close. Rows: <code>feat-pbp-host</code>.</li>
+<li>Chaster: Circe's mood meter and lines after a booking. Rows: <code>views-chaster-circe-mood</code>.</li>
+</ol>
+<h3 id="rows-general-check-g-6">Rows (general check G)</h3>
+<ul>
+<li>[ ] <code>feat-stakes</code> - WPF <code>Services/Stakes/**</code></li>
+<li>[ ] <code>views-chaster-circe-mood</code> - WPF <code>Controls/CirceSays.cs</code></li>
+<li>[ ] <code>views-chaster-help-price-edit</code> - WPF <code>Views/Tabs/ChasterTabView.Help.cs</code></li>
+<li>[ ] <code>feat-friends-feed</code> - WPF <code>Controls/Friends/FriendsDrawer.Feed.cs</code></li>
+<li>[ ] <code>feat-friends-blocked-presence</code> - WPF <code>Controls/Friends/FriendsBlockList.cs</code></li>
+<li>[ ] <code>feat-friends-landing</code> - WPF <code>Services/Friends/FriendsLanding.cs</code></li>
+<li>[ ] <code>feat-companion-barks</code> - WPF <code>MainWindow/MainWindow.xaml.cs:1755</code></li>
+<li>[ ] <code>feat-leash-receipts-hold</code> - WPF <code>CCP.Core/Services/Leash/LeashReceipts.cs</code></li>
+<li>[ ] <code>feat-flash-exit-stay</code> - WPF <code>Features/FlashFeatureControl.xaml:166-193</code></li>
+<li>[ ] <code>feat-brain-drain-keep-clear</code> - WPF <code>CCP.Core/Services/Notifications/BrainDrainKeepClear.cs</code></li>
+<li>[ ] <code>win-launcher-edge</code> - WPF <code>Windows/Launcher/LauncherWindow.Edge.cs</code></li>
+<li>[ ] <code>feat-intiface-url</code> - WPF <code>CCP.Core/Services/Haptics/ButtplugUrl.cs</code></li>
+<li>[ ] <code>feat-pbp-host</code> - WPF <code>Services/PieceByPiece/PieceByPieceHostService.cs</code></li>
+<li>[ ] <code>feat-pbp-media-friends</code> - WPF <code>Services/PieceByPiece/PieceByPieceHostService.Media.cs</code></li>
+<li>[ ] <code>feat-mod-personality-picks</code> - WPF <code>CCP.Core/Services/Companion/ModPersonalityPicks.cs</code></li>
+<li>[ ] <code>core-sync-server-clock</code> - WPF <code>Services/Settings/ProfileSyncService.cs</code></li>
+<li>[ ] <code>core-sync-failure-backoff</code> - WPF <code>Services/Settings/ProfileSyncService.cs</code></li>
+<li>[ ] <code>core-dead-refresh-tokens</code> - WPF <code>Services/Account/DiscordService.cs</code></li>
+</ul>
+<h2 id="8-main-syncs-4-5-and-6">8. Main syncs 4, 5 and 6</h2>
+<p>These sections of the ledger point at per-commit lists (<a href="avalonia-main-sync-20261005.html"><code>avalonia-main-sync-20261005.html</code></a>,
+<a href="avalonia-main-sync-20261008.html"><code>avalonia-main-sync-20261008.html</code></a>, <a href="avalonia-main-sync-20261009.html"><code>avalonia-main-sync-20261009.html</code></a>),
+one row per Windows commit, not per screen. Test them through the screen each commit touched, using the
+area sections above; report against the commit row only when no screen row fits.</p>
+<h2 id="still-to-write">Still to write</h2>
+<ul>
+<li>Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.</li>
+<li>Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.</li>
+</ul>
+
+<script>
+(()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
+const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+</script>
+</body>
+</html>

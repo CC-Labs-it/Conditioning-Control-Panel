@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Main-sync delta ledger: DTRH feel rework (dtrh-feel 17-pace)</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+<script type="application/json" id="ledger-meta">{"total": 27}</script>
+</head>
+<body>
+<h1 id="main-sync-delta-ledger-dtrh-feel-rework-dtrh-feel-17-pace">Main-sync delta ledger: DTRH feel rework (dtrh-feel 17-pace)</h1>
+<p>Range: <code>git log --no-merges 11d7c3afc..46e9e908d</code> (27 commits), imported by merge <code>23054e370</code>
+(&quot;merge: import head dev DTRH feel rework ... into Avalonia continuation&quot;).</p>
+<p>Web pages: every file the range added or changed under <code>ConditioningControlPanel/Resources/web/dtrh/</code>
+(54 files) is byte-identical at <code>Assets/web/dtrh/</code> on <code>23054e370</code> (blob compare, lane dtrh-feel-port).
+No new non-text asset types (no audio/images), so <code>CCP.Avalonia.csproj</code> links need no change.</p>
+<p>Status legend: <strong>ported-by-merge</strong> = web-only change now served from <code>Assets/web/dtrh</code>;
+<strong>ported-here</strong> = landed in lane <code>avalonia-port/dtrh-feel-port</code>, <code>avalonia-port/game-dtrh-host</code> or <code>avalonia-port/game-dtrh-host-b</code>; <strong>needs-port</strong> = open, with reason;
+<strong>n/a</strong> = nothing to port, with reason.</p>
+<p>Lane <strong>game-dtrh-host</strong> (slice A, parity row <code>game-dtrh</code>) registered <code>dtrh/index.html</code> on
+<code>CCP.Avalonia/Views/Games/GameWindow.cs</code> (<code>GameWindow.Dtrh.cs</code>): init with <code>motionLevel</code>, the local manifest, the run
+lifecycle, Escape as the game's pause (<code>MainShellWindow.PanicKey.cs</code> -&gt; <code>PanicPolicy.GameClaimsEscapeAsPause</code> /
+<code>KeptEscapeGoesTo</code> -&gt; kept-escape) and panic closing it (PanicSurfaces &quot;games&quot;). Lane <strong>game-dtrh-host-b</strong> moved the
+<code>DtrhAssetManifest</code> remote half (online media copies, loops lane, loops-dry back-off) to Core <code>DtrhRemoteMedia</code>.</p>
+<p><span class="counts"></span>. A row whose host part is open counts as needs-port.</p>
+
+<table>
+<tr><th>#</th><th>sha</th><th>subject</th><th>WPF files outside web/dtrh</th><th>Avalonia/Core counterpart</th><th>status</th></tr>
+<tr><td>1</td><td><code>d0d263396</code></td><td>feat(dtrh): shared motion level module for the feel pass</td><td>none</td><td><code>Assets/web/dtrh/shared/motion.js</code></td><td>ported-by-merge</td></tr>
+<tr><td>2</td><td><code>92f83a77e</code></td><td>feat(dtrh): feel pass, audio lane - pop ladder, failure subtracts, depth drives the mix</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>3</td><td><code>89f028807</code></td><td>feat(dtrh): feel pass, field lane - squash, breath, reward flights</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>4</td><td><code>753eb26c4</code></td><td>feat(dtrh): feel pass, chrome lane - motion levels, press states</td><td><code>Services/Chaos/DtrhHostService.cs</code> (init <code>motionLevel</code>), <code>Services/Chaos/DtrhMotionWire.cs</code> (new), <code>Tests/.../DtrhMotionWireTests.cs</code> (new)</td><td><code>CCP.Core/Services/Chaos/DtrhMotionWire.cs</code> (git mv; <code>App.Settings</code> -&gt; <code>CoreSettings</code>, WPF caller unchanged); tests moved to <code>Tests/CCP.Core.Tests/DtrhMotionWireTests.cs</code> (+ <code>CurrentReadsThePlayersSetting</code>), fail-proven (~/ccp-port/evidence/review-dtrh-feel-port/fail-proofs.txt); web part in <code>Assets/web/dtrh</code></td><td>ported-here (wire word, Core; init <code>motionLevel = DtrhMotionWire.Current()</code> in <code>CCP.Avalonia/Views/Games/GameWindow.Dtrh.cs</code> DtrhInitMessage, lane game-dtrh-host, test <code>GameWindowTests.Dtrh_LabDoor_BootRunLifecycle_AndCloseBanks</code>)</td></tr>
+<tr><td>5</td><td><code>952d91f4d</code></td><td>fix(dtrh): feel pass seams - pulse cap lives in fx.pulseFlash, detonation loses its brightness punch, reduced detonation uses the field fade</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>6</td><td><code>20117b70f</code></td><td>feat(dtrh): feel wave 2 base - every game moment is a dtrh:feel event</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>7</td><td><code>33c296db5</code></td><td>feat(dtrh): feel wave 2 moments - phase events, countdown breath, ink banner, edge bloom, recap count-up</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>8</td><td><code>b1181bc99</code></td><td>feat(dtrh): feel wave 2, field lane - the field answers holds, counts and streaks</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>9</td><td><code>41aa2c9ac</code></td><td>feat(dtrh): feel wave 2, world lane - the tube warms and settles with the run</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>10</td><td><code>28eda3c39</code></td><td>feat(dtrh): feel wave 2, audio lane - moments, phases and holds have a sound</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>11</td><td><code>36484d3b2</code></td><td>feat(dtrh): feel wave 2, hub lane - the Warren breathes</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>12</td><td><code>c2312ba44</code></td><td>feat(dtrh): feel wave 2 seams - the audio lane hears moments, phases and holds</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>13</td><td><code>820811b9d</code></td><td>fix(dtrh): feel wave 2 review - a click is not a hold, one figure per streak pop, the melt does not end a hold</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>14</td><td><code>ce65441e6</code></td><td>fix(dtrh): Escape only pauses the game, it never closes the window</td><td><code>MainWindow/MainWindow.xaml.cs</code> (dtrhInFront joins GameClaimsEscapeAsPause, KeptEscapePage.Dtrh -&gt; PostKeptEscape), <code>Services/Chaos/DtrhHostService.cs</code> (IsInFront, IsReady, PostKeptEscape), <code>Services/Safety/PanicPolicy.cs</code></td><td><code>CCP.Core/Services/Safety/PanicPolicy.cs</code> (KeptEscapePage.Dtrh + dtrh args, merged); page side (<code>engine/scene.js</code>, <code>exit.js</code>) in <code>Assets/web/dtrh</code></td><td>ported-by-merge (Core rule + page) / ported-here (panel routing <code>MainShellWindow.PanicKey.cs</code> TryGamePauseOnEscape + <code>GameWindow.Dtrh.cs</code> PostKeptEscape, lane game-dtrh-host, test <code>GameWindowTests.Dtrh_EscapePauses_ASecondEscapeInsideTwoSecondsClosesIt</code>)</td></tr>
+<tr><td>15</td><td><code>02e141d0d</code></td><td>fix(dtrh): emotes no longer fly to the counter (owner call); gold still flies</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>16</td><td><code>724ac82bc</code></td><td>fix(dtrh): online media gets a copy on this machine so the tube can draw it</td><td><code>Services/Chaos/DtrhAssetManifest.cs</code> (local copies of the remote pool, ccp.assets urls, re-post manifest, library steps aside at 8 copies), <code>Services/Chaos/DtrhHostService.cs</code></td><td><code>CCP.Core/Services/Chaos/DtrhRemoteMedia.cs</code> (the remote half moved to Core, WPF <code>DtrhAssetManifest</code> now calls it with <code>RemoteMediaCache</code> as the copier); Avalonia copier writes <code>&lt;assets&gt;/.temp/ccp_temp_remote_*</code>, <code>WebAssetServer</code> serves exactly those, <code>GameWindow.Dtrh.cs</code> re-posts the manifest on <code>CopiesReady</code> with root-relative asset urls; tests <code>DtrhRemoteMediaTests</code>, <code>GameWindowTests.Dtrh_OnlineCopiesLand_TheManifestIsRepostedWithThemAsAssetUrls</code></td><td>ported-here (lane game-dtrh-host-b)</td></tr>
+<tr><td>17</td><td><code>c59173385</code></td><td>feat(dtrh): the bubbles' own pictures move</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>18</td><td><code>7860abdb2</code></td><td>feat(dtrh): thread layers on the tube</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>19</td><td><code>e69254f33</code></td><td>feat(dtrh): the Loom weaves the Descent's spirals</td><td>none</td><td><code>Assets/web/dtrh</code> (Loom store already Core <code>DtrhLoomStore</code>)</td><td>ported-by-merge</td></tr>
+<tr><td>20</td><td><code>c591701b0</code></td><td>feat(dtrh): pictures first in the tube, clips sparse later</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>21</td><td><code>c648d30b8</code></td><td>feat(dtrh): the dock toys wake on their own</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>22</td><td><code>d86c3586a</code></td><td>feat(dtrh): online gifs move, flash cards leave in style</td><td><code>Services/Chaos/DtrhAssetManifest.cs</code> (loops lane: <code>RemoteEntry.IsLoop</code>, <code>loop:</code> name prefix, copy order loops &gt; stills &gt; clips)</td><td><code>Core DtrhRemoteMedia</code> (<code>RemoteEntry.IsLoop</code>, <code>EntryName</code> <code>loop:</code> marker, <code>CopyOrder</code> loops &gt; stills &gt; clips, <code>PickRefill</code>); page <code>hostMedia.js</code> in <code>Assets/web/dtrh</code></td><td>ported-here (lane game-dtrh-host-b)</td></tr>
+<tr><td>23</td><td><code>4f4195f05</code></td><td>fix(dtrh): flashes pick a moving picture whenever there is one; pause is a real pause in the app</td><td>none (page only: <code>engine/scene.js</code>, <code>engine/spawner.js</code>)</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>24</td><td><code>f96e84ed4</code></td><td>fix(dtrh): review of the play-session work - panic still closes the game, leaks and a flicker closed</td><td><code>MainWindow/MainWindow.xaml.cs</code> (unclaimed panic Escape closes the DTRH window: <code>DtrhHostService.CloseActive()</code>), <code>Services/Chaos/DtrhAssetManifest.cs</code> (loops-dry back-off 30 min)</td><td>page fixes in <code>Assets/web/dtrh</code>; panic close = PanicSurfaces &quot;games&quot; once a DTRH GameWindow exists</td><td>ported-by-merge (page leaks/flicker) / ported-here (panic close: PanicSurfaces &quot;games&quot; closes the DTRH GameWindow, lane game-dtrh-host) / ported-here (loops-dry back-off: Core <code>DtrhRemoteMedia.PickRefill</code>/<code>MarkLoopsDry</code> 30 min, lane game-dtrh-host-b)</td></tr>
+<tr><td>25</td><td><code>d3bf87937</code></td><td>feat(dtrh): no still pictures where a moving one can be had; flash bubble loses its dark core; quieter defaults</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>26</td><td><code>7db2f6c12</code></td><td>feat(dtrh): chrome drops more often; material bubbles wear a ring of drifting motes</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+<tr><td>27</td><td><code>46e9e908d</code></td><td>feat(dtrh): the fall gathers pace, junction tubes rush, toy wakes are seen, the guide's voice obeys its level</td><td>none</td><td><code>Assets/web/dtrh</code></td><td>ported-by-merge</td></tr>
+</table>
+
+<script>
+(()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
+const m=document.getElementById('ledger-meta');for(const s of document.querySelectorAll('.counts'))if(m){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+</script>
+</body>
+</html>

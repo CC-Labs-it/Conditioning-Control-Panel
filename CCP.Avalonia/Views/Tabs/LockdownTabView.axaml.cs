@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para>The running half (MainWindow.Lab.cs on WPF) drives the Core <see cref="LockdownService"/>:
     /// Activate, the panel swap, the clock and the secret phrase. The Emergency Exit slab has no exit
-    /// games here and follows docs/avalonia-decisions.md (Lockdown / Emergency Exit).</para>
+    /// games here and follows docs/avalonia-decisions.html (Lockdown / Emergency Exit).</para>
     /// </summary>
     public partial class LockdownTabView : UserControl
     {
@@ -449,7 +449,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// WPF opens the Emergency Exit games here (EmergencyExitHostService, WebView2; not on this
-        /// head). docs/avalonia-decisions.md, Lockdown / Emergency Exit: only while a lockdown runs,
+        /// head). docs/avalonia-decisions.html, Lockdown / Emergency Exit: only while a lockdown runs,
         /// fire the EmergencyExit tripwire and Chaster's safety hold, then state the phrase steps
         /// and the time left. Never RestartTimer, never Deactivate, never open the phrase box.
         /// </summary>

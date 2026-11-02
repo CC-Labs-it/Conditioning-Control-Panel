@@ -194,7 +194,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
 
             // Importing replaces the current phrase pools — confirm first. WPF's two-button styled
-            // confirm (MainWindow.PresetIO.cs:115); Enter lands on Cancel (docs/avalonia-decisions.md).
+            // confirm (MainWindow.PresetIO.cs:115); Enter lands on Cancel (docs/avalonia-decisions.html).
             if (!await Dialogs.MessageDialog.ConfirmAsync(owner, "Import Phrases?",
                     "This replaces your current lock-card phrases, subliminals, mantras and other " +
                     "custom text with the ones in the backup file. Continue?",

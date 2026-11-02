@@ -19,7 +19,7 @@
 #define MyAppExeName "ConditioningControlPanel.exe"
 ; 7.2+: the Avalonia head's exe as published. It is installed under MyAppExeName (DestName) so the
 ; AppId, folder, exe name, shortcuts, taskkill and the updater's relaunch all stay what WPF had
-; (docs/avalonia-decisions.md, "Upgrade in place from WPF").
+; (docs/avalonia-decisions.html, "Upgrade in place from WPF").
 #define SourceExeName "CCP.Avalonia.exe"
 #define MyAppDescription "A professional visual conditioning application with gamification features"
 

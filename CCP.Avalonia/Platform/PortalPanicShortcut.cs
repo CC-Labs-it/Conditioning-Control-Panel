@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <para><b>Unlike the X11 listener this CONSUMES the key desktop-wide</b> - it is a compositor
 /// grab, and the compositor (KDE: kglobalaccel) may show the user a confirmation dialog and lets
 /// them rebind or refuse it. WHEN to bind is therefore the caller's policy
-/// (docs/avalonia-decisions.md, panic key row); this class only binds and unbinds.</para>
+/// (docs/avalonia-decisions.html, panic key row); this class only binds and unbinds.</para>
 /// </summary>
 internal static class PortalPanicShortcut
 {

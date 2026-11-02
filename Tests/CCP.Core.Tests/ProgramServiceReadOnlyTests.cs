@@ -13,7 +13,7 @@ namespace CCP.Core.Tests;
 /// programs.json against a golden file in the shape WPF's ProgramService writes (default
 /// System.Text.Json options, WriteIndented, Local-kind dates under TZ=Europe/Berlin), and the
 /// load-only mode the Avalonia head runs until it can run a program's days
-/// (docs/avalonia-decisions.md 2026-10-09, programs CHECKPOINT A). The golden was written by the
+/// (docs/avalonia-decisions.html 2026-10-09, programs CHECKPOINT A). The golden was written by the
 /// shared Core Save (the code WPF runs) under TZ=Europe/Berlin, not captured on Windows; regenerate
 /// it the same way when a persisted field is added on purpose.
 /// </summary>

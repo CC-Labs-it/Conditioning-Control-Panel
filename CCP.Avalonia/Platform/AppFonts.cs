@@ -4,7 +4,7 @@ using Avalonia.Media;
 namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
-    /// The head's font setup (distro-check F1/F4, decision 2026-10-10 in docs/avalonia-decisions.md).
+    /// The head's font setup (distro-check F1/F4, decision 2026-10-10 in docs/avalonia-decisions.html).
     /// - Default family = the bundled Inter: never empty, so a system with no fonts at all starts instead
     ///   of aborting with "Default font family name can't be null or empty".
     /// - "Fredoka" resolves to the bundled Fredoka.ttf (WPF packs the same file as /Fonts/#Fredoka), so

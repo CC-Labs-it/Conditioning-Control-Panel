@@ -57,7 +57,7 @@ internal static class ChasterHead
             // WPF ChasterServiceApp.cs:40,49 MinutesFromDayLog: the day log's minutes, fed by the conditioning-time
             // tracker (MainShellWindow.UiUpdates.cs). Null without a log = "nobody can tell". Also null for a day
             // before the log's first conditioning day: on upgrade that day predates the tracker and reads 0, which
-            // would charge an idle day the user may have conditioned (docs/avalonia-decisions.md 2026-10-12).
+            // would charge an idle day the user may have conditioned (docs/avalonia-decisions.html 2026-10-12).
             MinutesOn = dayKey => App.FeatureDayLog is { } log && log.FirstConditioningDay() is { } first
                                   && string.CompareOrdinal(dayKey, first) >= 0
                 ? log.ConditioningMinutesOn(dayKey) : null,

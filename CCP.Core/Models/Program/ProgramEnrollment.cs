@@ -335,7 +335,7 @@ public class ProgramState
     /// Bump only for a change that is not additive (a rename or a change of meaning); additive
     /// fields ride in <see cref="Extra"/>. A file stamped newer than this build loads read-only.
     /// At 0 it is never written, so existing files keep their bytes
-    /// (docs/avalonia-decisions.md 2026-10-09, programs CHECKPOINT B).
+    /// (docs/avalonia-decisions.html 2026-10-09, programs CHECKPOINT B).
     /// </summary>
     public const int CurrentSchemaVersion = 0;
 

@@ -264,7 +264,7 @@ public sealed class WebAssetServer : IDisposable
     static readonly TimeSpan RelayFetchBudget = TimeSpan.FromMinutes(3);
 
     /// <summary>
-    /// <c>/scrolller-media/&lt;sub&gt;/&lt;path&gt;</c>: the page gate for Scrolller media (docs/avalonia-decisions.md
+    /// <c>/scrolller-media/&lt;sub&gt;/&lt;path&gt;</c>: the page gate for Scrolller media (docs/avalonia-decisions.html
     /// "scrolller-web-gate", Core <see cref="ScrolllerRelay"/>). Same admission as every page file; 404 for anything that
     /// is not Scrolller media (never an open proxy); 403 while the switch is off or when nothing is cached and no fresh
     /// fetch is allowed; otherwise the device cache's copy, with Range, always no-store.

@@ -147,7 +147,7 @@ jobs:
           path: ${{ runner.temp }}/render/
 
   # --perf-bench on a real X server (xvfb), not headless: startup, per-tab switch median/p95, working set.
-  # The numbers are report-only (docs/avalonia-perf.md; Linux is never compared against WPF). The missing-tab
+  # The numbers are report-only (docs/avalonia-perf.html; Linux is never compared against WPF). The missing-tab
   # step is NOT report-only: it proves the bench can fail (exit 3), so a broken tab lookup cannot pass silently.
   perf-bench-linux:
     if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
@@ -422,3 +422,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash .github/scripts/core-guards.sh
+      # The port docs parse: every ledger table row on one line, main-sync meta totals match, the dashboard builds
+      # (shallow checkout, so its over-time chart has one point here; that is fine for a build check).
+      - run: |
+          python3 .github/scripts/avalonia_docs.py
+          python3 - <<'PY'
+          import glob, sys
+          sys.path.insert(0, ".github/scripts"); import avalonia_docs as A
+          bad = []
+          for p in glob.glob("docs/avalonia-*.html"):
+              t = open(p, encoding="utf-8").read()
+              bad += [f"{p}:{n}: table row spans lines" for n in A.bad_lines(t)]
+              m = A.meta(t)
+              if p.startswith("docs/avalonia-main-sync-"):
+                  n = len([r for r in A.rows(t, "#") if r.get("sha", "").startswith("`")])
+                  if not m or m.get("total") != n: bad.append(f"{p}: {n} rows, ledger-meta {m}")
+          print("\n".join(bad) or "port docs OK"); sys.exit(1 if bad else 0)
+          PY
+          python3 .github/scripts/port-dashboard.py . --out "$RUNNER_TEMP/dashboard.html"

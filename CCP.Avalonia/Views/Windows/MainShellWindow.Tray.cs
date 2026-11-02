@@ -2,7 +2,7 @@
 // half of MainWindow.WindowChrome.cs OnClosing (X -> tray) and MainWindow.Launcher.cs RequestExit.
 //
 // Avalonia's TrayIcon is StatusNotifierItem over D-Bus on Linux and a native icon on Windows.
-// Divergences, on purpose (docs/avalonia-decisions.md, tray row):
+// Divergences, on purpose (docs/avalonia-decisions.html, tray row):
 //   - The icon stays visible while the window is up (WPF shows it only while hidden). On this head
 //     the tray is the panic control a takeover needs without a global hotkey, so it must always be
 //     reachable.

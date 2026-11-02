@@ -491,7 +491,7 @@ namespace ConditioningControlPanel.Services
     }
 
     /// <summary>
-    /// Escape integrity (docs/avalonia-decisions.md, 2026-09-30): a controller may never remove the
+    /// Escape integrity (docs/avalonia-decisions.html, 2026-09-30): a controller may never remove the
     /// subject's last means of escape. disable_panic is always refused (WPF saved it); under Lockdown
     /// enable_strict_lock is refused. Verbs that only reduce restraint run as on WPF and never touch the
     /// Lockdown timer; Lockdown restores the pre-lockdown settings when it ends. Strict lock stays the
