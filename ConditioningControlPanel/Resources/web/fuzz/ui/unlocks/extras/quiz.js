@@ -70,7 +70,7 @@ function createQuiz(ctx) {
     const { w, h: H } = ctx.bounds();
     const cw = card.offsetWidth;
     const b = ctx.button.el.getBoundingClientRect();
-    /* Below the button so tapping goes on; beside the shop on a wide screen, so the shop goes on too. */
+    /* Below the goal row, so tapping and the next buy go on; beside the shop on a wide screen. */
     let x, y;
     if (w >= 1120) {
       const side = ctx.rng() < 0.5;
@@ -78,7 +78,8 @@ function createQuiz(ctx) {
       y = 60 + ctx.rng() * Math.max(0, H - cardH - 130);
     } else {
       x = (w - cw) / 2 + (ctx.rng() - 0.5) * Math.max(0, w - cw - 16);
-      y = Math.min(b.bottom + 8, H - cardH - 8);
+      const goal = ctx.parts.shop.querySelector('#goal')?.getBoundingClientRect();
+      y = Math.min((goal?.height ? goal.bottom : b.bottom) + 8, H - cardH - 8);
     }
     card.style.left = `${Math.max(4, x)}px`;
     card.style.top = `${Math.max(46, y)}px`;

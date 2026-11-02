@@ -94,7 +94,8 @@ function layout(ctx) {
   }
   const zone = zoneRect(ctx), btn = rectOf(ctx.button.el);
   const flankW = Math.max(60, Math.min(240, (w - btn.width) / 2 - 16));
-  const top = counterRect(ctx).bottom + 2, bottom = zone.bottom - 4;
+  const metersBottom = rectOf(ctx.layer('meters')).bottom;
+  const top = Math.max(counterRect(ctx).bottom, Math.min(metersBottom, zone.bottom - 80)) + 2, bottom = zone.bottom - 4;
   docOf(ctx).documentElement.style.setProperty('--routes-mid', stacks.left.length || stacks.right.length ? `${w - 2 * (flankW + 10)}px` : '100%');
   for (const s of ['left', 'right']) {
     const list = stacks[s], gap = 4;

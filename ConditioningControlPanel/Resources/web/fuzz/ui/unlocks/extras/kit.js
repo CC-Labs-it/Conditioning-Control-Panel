@@ -68,6 +68,8 @@ export function captions(ctx, icon = '') {
     el: row,
     show(text, ms = 5000) {
       hide?.();
+      /* One line at a time on a narrow page: three stacked lines would sit on the shop. */
+      if (ctx.bounds().w < 1100) for (const other of row.parentElement.children) if (other !== row) other.style.display = 'none';
       row.style.display = 'block';
       row.textContent = ctx.brand.text(icon ? `${icon} ${text}` : text);
       ctx.anim(row, [{ opacity: 0 }, { opacity: 1 }], { duration: 350, easing: 'ease-out' });
