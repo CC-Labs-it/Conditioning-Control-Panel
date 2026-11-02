@@ -25,6 +25,7 @@ export function createRun({ pace = 1, mood = null, seed = 1, perk = null } = {})
     order: ['start'],
     picks: {},
     sources: {},
+    spent: {},         // ctx.spend by reason
     store: {},         // ctx.store per unlock
     endless: false,
     ended: null,       // {id, at}
@@ -128,6 +129,14 @@ function credit(s, amount, source) {
 }
 
 export const lump = (s, amount, source = 'lump') => credit(s, Math.max(0, amount), source);
+
+/** Takes from the bank, never below zero, and answers what it took. No debt. Pace does not apply: it is the player's money. */
+export function spend(s, amount, reason = 'spent') {
+  const took = Math.min(s.fuzz, Number.isFinite(amount) ? Math.max(0, amount) : 0);
+  s.fuzz -= took;
+  s.spent[reason] = (s.spent[reason] || 0) + took;
+  return took;
+}
 
 export function tap(s, mods = null, now = s.clock) {
   s.taps += 1;
