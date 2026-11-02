@@ -26,7 +26,9 @@ export async function pileUp(page, base, route, query = '') {
   await page.waitForFunction(() => !!window.fuzz);
   await page.evaluate((r) => {
     const f = window.fuzz;
-    ['f1', 'f2', 'f3', 'f4', 'f5'].forEach((k, i) => { f.grant(k); f.state.picks[k] = r[i]; });
+    /* Picks first: a granted fork with no pick takes its first lane, and every pile would wear the first theme. */
+    ['f1', 'f2', 'f3', 'f4', 'f5'].forEach((k, i) => { f.state.picks[k] = r[i]; });
+    f.engine.emit('page-colour', {});
     for (const it of f.items) if (it.kind !== 'end' && it.group === 'run') f.grant(it.id);
     f.add(1e9);
     /* A real stream and a real loop, so "every stream" is not a claim about silence. */
@@ -246,7 +248,8 @@ export async function runPileChecks(browser, base, { routes = ROUTES, seconds = 
 async function pileUp2(page, r) {
   await page.evaluate((route) => {
     const f = window.fuzz;
-    ['f1', 'f2', 'f3', 'f4', 'f5'].forEach((k, i) => { f.grant(k); f.state.picks[k] = route[i]; });
+    ['f1', 'f2', 'f3', 'f4', 'f5'].forEach((k, i) => { f.state.picks[k] = route[i]; });
+    f.engine.emit('page-colour', {});
     for (const it of f.items) if (it.kind !== 'end' && it.group === 'run') f.grant(it.id);
     f.add(1e9);
   }, r);

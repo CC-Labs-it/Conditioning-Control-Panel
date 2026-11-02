@@ -30,7 +30,8 @@ export function adCard(ctx, parent, rec, css = '') {
 /** The ad panel that sits low on the page, shared by a few rows. Never takes a press outside its own button. */
 function lowPanel(ctx, height) {
   const { w, h } = ctx.bounds(), pw = Math.min(300, w - 24);
-  return ctx.el('div', `position:absolute;z-index:3;left:${(w - pw) / 2}px;top:${h - height - 8}px;width:${pw}px;height:${height}px;background:#111;color:#fff;border:2px solid #000;box-shadow:0 4px 14px rgba(0,0,0,.5);overflow:hidden;font:13px/1.2 ${FONT};`, null, 'over');
+  const strip = ctx.parts.shop.ownerDocument.getElementById('dock-strip')?.offsetHeight || 0;   // on a phone the dock strip takes the bottom edge
+  return ctx.el('div', `position:absolute;z-index:3;left:${(w - pw) / 2}px;top:${h - height - 8 - strip}px;width:${pw}px;height:${height}px;background:#111;color:#fff;border:2px solid #000;box-shadow:0 4px 14px rgba(0,0,0,.5);overflow:hidden;font:13px/1.2 ${FONT};`, null, 'over');
 }
 
 /* Ending shows, shared with the Fewer Ads lane. The credits card comes after. */
@@ -242,7 +243,7 @@ export default {
         const beats0 = 4;
         if (!claim(ctx, 'emi', beats0 * 1250 + 900, 'low')) { ctx.after(5000, read); return; }
         const beats = reads(), { w, h } = ctx.bounds();
-        const box = ctx.el('div', `position:absolute;right:8px;top:${h - 66}px;height:58px;width:${Math.min(290, w - 16)}px;`, null, 'over');
+        const box = ctx.el('div', `position:absolute;right:8px;top:${h - 66 - (ctx.parts.shop.ownerDocument.getElementById('dock-strip')?.offsetHeight || 0)}px;height:58px;width:${Math.min(290, w - 16)}px;`, null, 'over');
         const head = ctx.el('div', 'position:absolute;right:0;top:0;width:58px;height:58px;border-radius:50%;background:#ffe0d2;border:2px solid #d4488f;box-sizing:border-box;overflow:hidden;', null, box);
         ctx.el('div', 'position:absolute;left:-2px;top:-2px;width:60px;height:21px;background:#ff69b4;', null, head);
         [13, 32].forEach((x) => ctx.el('div', `position:absolute;left:${x}px;top:27px;width:7px;height:10px;border-radius:50%;background:#2a0f22;`, null, head));

@@ -320,7 +320,7 @@ export default {
         const lines = REVIEWS[grade], line = lines[Math.floor(ctx.rng() * lines.length)];
         if (!claim(ctx, 'review', 4300, 'low')) { ctx.after(3000, review); return; }
         const { w, h } = ctx.bounds(), pw = Math.min(280, w - 60);
-        const p = ctx.el('div', `position:absolute;z-index:3;left:${(w - pw) / 2}px;top:${h - 176}px;height:168px;width:${pw}px;overflow:hidden;box-sizing:border-box;padding:14px;background:#fbf7ea;color:#222;border:1px solid #999;box-shadow:0 3px 10px rgba(0,0,0,.35);font:15px/1.3 "Times New Roman",Times,serif;`, null, 'over');
+        const p = ctx.el('div', `position:absolute;z-index:3;left:${(w - pw) / 2}px;top:${h - 176 - (ctx.parts.shop.ownerDocument.getElementById('dock-strip')?.offsetHeight || 0)}px;height:168px;width:${pw}px;overflow:hidden;box-sizing:border-box;padding:14px;background:#fbf7ea;color:#222;border:1px solid #999;box-shadow:0 3px 10px rgba(0,0,0,.35);font:15px/1.3 "Times New Roman",Times,serif;`, null, 'over');
         ctx.el('div', 'font-weight:700;font-size:17px;margin-bottom:6px;', REVIEWS.title, p);
         for (let i = 0; i < 3; i++) ctx.el('div', 'height:3px;width:70%;background:#ccc;margin:6px 0;', null, p);
         ctx.el('div', 'margin-top:8px;padding-right:60px;', line, p);
