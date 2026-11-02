@@ -79,7 +79,13 @@ function createQuiz(ctx) {
     } else {
       x = (w - cw) / 2 + (ctx.rng() - 0.5) * Math.max(0, w - cw - 16);
       const goal = ctx.parts.shop.querySelector('#goal')?.getBoundingClientRect();
-      y = Math.min((goal?.height ? goal.bottom : b.bottom) + 8, H - cardH - 8);
+      const below = (goal?.height ? goal.bottom : b.bottom) + 8;
+      const room = H - below - 8;
+      if (cardH > room) {
+        card.style.transformOrigin = '50% 100%';
+        card.style.scale = String(Math.max(0.68, room / cardH));
+      }
+      y = Math.min(below, H - cardH - 8);
     }
     card.style.left = `${Math.max(4, x)}px`;
     card.style.top = `${Math.max(46, y)}px`;

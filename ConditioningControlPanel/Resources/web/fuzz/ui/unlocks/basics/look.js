@@ -209,7 +209,7 @@ body { transition: background-color .6s, color .6s; }
         const d = spawn(ctx, `width:44px;height:44px;margin:-22px 0 0 -22px;box-sizing:border-box;border:3px solid #ff4fa8;border-radius:50%;left:${x}px;top:${y}px;`);
         play(ctx, d, [{ transform: 'scale(.3)', opacity: 1 }, { transform: 'scale(1.1)', opacity: 0 }], { duration: ctx.gentle ? 400 : 480, easing: 'ease-out' });
       };
-      const onDown = (e) => ring(e.clientX, e.clientY);
+      const onDown = (e) => { if (!ctx.paused) ring(e.clientX, e.clientY); };
       win.addEventListener('pointerdown', onDown, true);
       if (fresh(ctx)) { const c = btnCenter(ctx); ring(c.x, c.y); ctx.after(180, () => ring(c.x, c.y)); }
       return { off() { win.removeEventListener('pointerdown', onDown, true); } };
@@ -273,7 +273,7 @@ body.gentle #fz-roll { display: none; }
       const pool = Array.from({ length: 14 }, () => ctx.el('div', 'position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:rgba(240,60,150,.45);opacity:0;pointer-events:none;will-change:transform,opacity;', null, 'over'));
       let i = 0, last = 0;
       const drop = (x, y) => {
-        if (ctx.gentle) return;
+        if (ctx.gentle || ctx.paused) return;
         const d = pool[i++ % pool.length];
         ctx.anim(d, [{ transform: `translate(${x}px,${y}px) scale(1)`, opacity: 0.9 }, { transform: `translate(${x}px,${y}px) scale(.3)`, opacity: 0 }], { duration: 700, easing: 'linear' });
       };

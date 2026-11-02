@@ -376,7 +376,8 @@ export const COMBO_UNLOCKS = {
     const adHost = ctx.el('div', 'position:absolute;inset:0;z-index:1;pointer-events:none;', null, 'over');
     ctx.every(1700, () => {
       /* A caption or a widget may have arrived since this one landed. */
-      for (const a of [...live]) if (a.y + AH > dockTop(ctx) - 4) kill(a);
+      const b = ctx.button.el.getBoundingClientRect();   // and the button may have grown under one
+      for (const a of [...live]) if (a.y + AH > dockTop(ctx) - 4 || (a.x + AW > b.left - 4 && a.x < b.right + 4 && a.y + AH > b.top - 4 && a.y < b.bottom + 4)) kill(a);
       const list = [...live];
       spawn(list.length && ctx.rng() < 0.8 ? list[Math.floor(ctx.rng() * list.length)] : null);
     });

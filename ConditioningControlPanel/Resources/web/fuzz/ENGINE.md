@@ -34,7 +34,7 @@ carries on. An ending row may also export `ending(ctx) -> Promise`: its show bet
   intro, saves nothing. A row on a lane the route already locked is refused with a console warning.
 - `?pace=50`: income x50 (max 500). `?mood=m_pink`: force a run mood. `?fresh=1`: no save, no intro. `?pictures=none`: force a picture source.
 - `window.fuzz`: `.buy(id)` `.pick('f1','eyes')` `.add(1000)` `.grant(id)` `.tap(10)` `.end('drop')` `.newRun()`, `.state`, `.life`, `.items`, `.engine`.
-- `node dev/smoke.mjs` plays a whole route headless and fails on any page error. Screens land in `dev/shots/`.
+- `node dev/smoke.mjs` plays a whole route headless and fails on any page error, then runs `dev/pile-check.mjs`: with a whole route on at once, Wake Up, Escape and a host suspend freeze the page, the audio and every stream; a pop-up nobody answers lets go of the button and the goal row; nothing flickers above 3 Hz under Gentle or OS reduced motion. `PILE_ALL=1` does all eight themes. Screens land in `dev/shots/`.
 - `node --test --test-concurrency=2 tests/*.test.mjs` includes the timing of all 192 routes.
 
 ## ctx
@@ -49,6 +49,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.has(id)`, `ctx.pick('f1')` (the chosen lane or null), `ctx.fmt(n)`, `ctx.rng()`, `ctx.rates()` (`{fps, click, wall, walls}` right now, walls = hits per second per bouncing button), `ctx.config`.
 - `ctx.brand`: `.game .short .currency .currencyPlural`, `.text('{cur}')`, `.money(n)`. Never write the names; write `{game}`, `{short}`, `{cur}`.
   Text given to `el`, `say`, `toast`, `float`, `modal` is token-expanded for you.
+- `ctx.paused`: true during a pause or a suspend. Timers and frames stop by themselves; only your own window or document listeners need to ask.
 - `ctx.gentle`, `ctx.reduced`: live. Gentle: nothing above 3 Hz, flashes become fades of 250 ms or more, spiral still, no sway, no warp. If an effect cannot be gentle, leave it off.
 - `ctx.hosted`, `ctx.caps`, `ctx.host(type, fields)`: the app wire, see `CONTRACT.md`.
 - `ctx.openLink(url)`: the one way to open a real page. Only `https://cclabs.app` and its paths, and only called directly inside the player's own press on your element or card button: not after an `await` or `ctx.after`, not from a tap on the game button. Answers whether it opened. Never `window.open` or an `<a>` of your own.

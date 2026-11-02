@@ -173,6 +173,7 @@ export function makeContext(engine, scope) {
       get jokesAreOff() { return engine.ads.jokesOff; },
     },
 
+    get paused() { return !!(engine.paused || engine.suspended); },
     get gentle() { return ui.gentle(); },
     get reduced() { return ui.reduced(); },
     host: (type, fields) => host.send?.(type, fields),
@@ -210,5 +211,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused',
 ]);

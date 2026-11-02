@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runPileChecks } from './pile-check.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const shots = join(here, 'shots');
@@ -236,6 +237,10 @@ await phone.waitForSelector('.opt');
 await phone.waitForTimeout(1200);
 await phone.screenshot({ path: join(shots, 'b3-phone-fork.png') });
 await ctx2.close();
+
+/* ---- the hard rules with a whole route on at once ---- */
+const pile = await runPileChecks(browser, base, { routes: process.env.PILE_ALL ? undefined : [route, ['ears', 'strict', 'scroll', 'premium', 'locked']], seconds: 12 });
+errors.push(...pile.errors);
 
 await browser.close();
 console.log(JSON.stringify({ played, life, errors }, null, 1));
