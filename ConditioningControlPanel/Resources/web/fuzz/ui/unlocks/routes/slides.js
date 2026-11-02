@@ -98,6 +98,8 @@ export default {
         h.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (h.dataset.cool) return;
+          h.dataset.cool = '1';
           h.style.color = '#ff3b7a';
           shared.favs += 1;
           ctx.store.set('n', shared.favs);
@@ -106,7 +108,7 @@ export default {
           ring(ctx, x, y, 90, '#ff3b7a', 500, 'over');
           ctx.pay(ctx.rates().fps * 2, 'fav', { x, y });
           ctx.toast(line());
-          ctx.after(1500, () => { h.style.color = '#fff'; });
+          ctx.after(1500, () => { h.style.color = '#fff'; delete h.dataset.cool; });
         });
         hearts.push(h);
       };
