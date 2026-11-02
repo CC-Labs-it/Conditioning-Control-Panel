@@ -4,7 +4,7 @@ import { THEMES } from '../../../data/content/themes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
-import { adStrip, buttonCentre, docOf, endingStage, endingWords, fresh, gallery, moment, motion, pick, ring, sfx, slot, tile } from './kit.js';
+import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, moment, motion, pick, ring, sfx, slot, tile } from './kit.js';
 
 const R = THEMES.goon.rules;
 const HOT = '#f2a33c';
@@ -23,7 +23,6 @@ export default {
       const g = gallery(ctx, { niche: 'goon', mode: 'swap' });
       if (ctx.has('go_feed')) g.hide();
       ctx.on('buy', (e) => { if (e.item.id === 'go_feed') g.hide(); });
-      adStrip(ctx, 'goon');
       return {};
     },
   },
@@ -31,7 +30,7 @@ export default {
   /* Hold to Earn owns the meter and the release. Release Zone only turns the zone on. */
   go_hold: {
     mount(ctx) {
-      const btn = ctx.button.el, wrap = btn.parentElement, win = docOf(ctx).defaultView;
+      const btn = ctx.button.el, wrap = ctx.parts.buttonWrap, win = docOf(ctx).defaultView;
       ctx.css('#btn{touch-action:none;}');
       const box = ctx.el('div', 'position:absolute;left:calc(100% + 14px);top:50%;width:20px;height:92px;margin-top:-46px;background:rgba(0,0,0,.45);border:1px solid var(--line);border-radius:4px;overflow:hidden;pointer-events:none;', null, wrap);
       const fillEl = ctx.el('div', `position:absolute;inset:0;background:${HOT};transform-origin:50% 100%;transform:scaleY(0);`, null, box);

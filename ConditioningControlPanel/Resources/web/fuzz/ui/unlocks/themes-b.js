@@ -1,7 +1,7 @@
 /* Lanes: goon locked censored infection. See ENGINE.md. One file per theme in ./themes-b/.
  *
- * f5 (Pick a Theme) is registered here because the page has to change on the pick, not on the later buy. It only acts on
- * this lane's four themes. start is registered only to give a friend who opened a share link their one spot. */
+ * f5 (Pick a Theme) has a handler here because the page has to change on the pick, not on the later buy. It returns early
+ * unless the pick is one of this lane's four themes. start is registered only to give a friend who opened a share link their one spot. */
 
 import goon, { goonPick } from './themes-b/goon.js';
 import locked, { lockedPick } from './themes-b/locked.js';
@@ -22,7 +22,7 @@ export default {
       const unword = buttonWords(ctx, lane);
       tickerLines(ctx, lane);
       shopFlavour(ctx, lane);
-      if (fresh(ctx)) PICKS[lane].arrive(ctx);
+      if (fresh(ctx, 'tb_seen')) PICKS[lane].arrive(ctx);
       return { off() { undress(); unword(); } };
     },
   },

@@ -6,7 +6,7 @@ import { FAKE_KEYHOLDER } from '../../../data/content/fakes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
-import { adStrip, buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, pick, ring, sfx, wide } from './kit.js';
+import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, pick, ring, rowsOf, sfx, wide } from './kit.js';
 
 const R = THEMES.locked.rules;
 const BRASS = '#e3b341', STEEL = '#9fb3c6', BAD = '#ff7a6e', GOOD = '#7fe0a8';
@@ -109,7 +109,6 @@ export default {
       const g = gallery(ctx, { niche: 'chastity', mode: 'swap', decorate: lockTile(ctx) });
       if (ctx.has('lo_feed')) g.hide();
       ctx.on('buy', (e) => { if (e.item.id === 'lo_feed') g.hide(); });
-      adStrip(ctx, 'locked');
       return {};
     },
   },
@@ -152,7 +151,7 @@ export default {
   /* Beg: usually nothing. A pity count makes sure it is never nothing for long. */
   lo_beg: {
     mount(ctx) {
-      const wrap = ctx.button.el.parentElement;
+      const wrap = ctx.parts.buttonWrap;
       const beg = ctx.el('button', `position:absolute;right:calc(100% + 12px);top:50%;width:80px;height:46px;margin-top:-23px;background:${BRASS};color:#2a1e00;border:0;border-radius:23px;font:700 16px var(--font);touch-action:manipulation;pointer-events:auto;box-shadow:0 2px 0 #8a6a16;`, COPY.locked.beg, wrap);
       beg.type = 'button';
       beg.dataset.tbBeg = '1';
@@ -258,39 +257,39 @@ export default {
     },
   },
 
-  /* Some buys get a NO stamp. One beg lifts it; twenty seconds lift it anyway. Never a choice, never the goal. */
+  /* Some buys get a NO stamp. One beg lifts it; twenty seconds lift it anyway. The engine lets a row through after 3 refusals. */
   lo_refuse: {
     mount(ctx) {
-      const shop = docOf(ctx).getElementById('shop');
-      let refused = false, liftAt = 0, presses = 0, stamp = null;
+      let refused = false, liftAt = 0, tries = 0, stamp = null;
       const lift = () => {
         if (!refused) return;
         refused = false;
         ctx.emit('lo:refused', { on: false });
         if (stamp) { const s = stamp; stamp = null; ctx.anim(s, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' }); ctx.after(320, () => s.remove()); }
       };
-      const capture = (ev) => {
-        const row = ev.target.closest?.('.row');
-        if (!row || row.classList.contains('short')) return;
-        if (row.parentElement?.id !== 'rows') return;
-        if (refused) { ev.stopPropagation(); ev.preventDefault(); sfx(ctx, 'ui_denied'); return; }
-        presses += 1;
-        if (presses % 3 !== 0) return;
-        ev.stopPropagation();
-        ev.preventDefault();
-        refused = true;
-        liftAt = ctx.state.clock + 20000;
+      const stampOn = (id) => {
+        const row = rowsOf(ctx).find((r) => r.dataset.id === id);
+        if (!row) return;
         const r = row.getBoundingClientRect();
         stamp = ctx.el('div', `position:absolute;left:${r.left + r.width / 2 - 46}px;top:${r.top + r.height / 2 - 26}px;width:92px;height:52px;display:grid;place-items:center;border:4px solid #ff5a4a;border-radius:6px;color:#ff5a4a;background:rgba(29,41,53,.86);font:800 28px var(--font);transform:rotate(-12deg);pointer-events:none;`, COPY.locked.no, 'over');
         if (!ctx.gentle) ctx.anim(stamp, [{ transform: 'rotate(-12deg) scale(1.7)', opacity: 0 }, { transform: 'rotate(-12deg) scale(1)', opacity: 1 }], 200);
-        ctx.toast(pick(ctx, R.refused));
-        sfx(ctx, 'snap');
-        ctx.emit('lo:refused', { on: true });
       };
-      shop.addEventListener('click', capture, true);
+      ctx.guardBuy((item) => {
+        if (!refused) {
+          tries += 1;
+          if (tries % 3 !== 0) return null;
+          refused = true;
+          liftAt = ctx.state.clock + 20000;
+          stampOn(item.id);
+          sfx(ctx, 'snap');
+          ctx.emit('lo:refused', { on: true });
+        } else sfx(ctx, 'ui_denied');
+        return { refuse: pick(ctx, R.refused) };
+      });
       ctx.on('lo:beg', lift);
+      ctx.on('buy', lift);
       ctx.every(500, () => { if (refused && ctx.state.clock >= liftAt) lift(); });
-      return { off() { shop.removeEventListener('click', capture, true); } };
+      return {};
     },
   },
 
@@ -338,7 +337,7 @@ export default {
         card.appendChild(wheelNode(ctx));
         return {};
       }
-      const wrap = ctx.button.el.parentElement;
+      const wrap = ctx.parts.buttonWrap;
       const chip = ctx.el('button', 'position:absolute;left:calc(100% + 12px);top:50%;width:68px;height:46px;margin-top:-23px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:23px;font:700 14px var(--font);touch-action:manipulation;pointer-events:auto;', COPY.locked.wheel, wrap);
       chip.type = 'button';
       const node = wheelNode(ctx);

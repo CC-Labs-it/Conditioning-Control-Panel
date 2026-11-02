@@ -1,12 +1,11 @@
 /* ui/unlocks/themes-b/kit.js - what the four themes of this lane share: the page dress, the arrival moment, button words,
- * ticker lines, flavour on shop rows, picture tiles and galleries, the theme ad strip, cards, and the ending stage. */
+ * ticker lines, flavour on shop rows, picture tiles and galleries, cards, and the ending stage. */
 
 import { THEMES } from '../../../data/content/themes.js';
-import { CCP_THEME_ADS } from '../../../data/content/ads.js';
 
 export const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length)];
 export const docOf = (ctx) => ctx.button.el.ownerDocument;
-export const rowsOf = (ctx) => [...docOf(ctx).querySelectorAll('#shop .row')];
+export const rowsOf = (ctx) => [...ctx.parts.shop.querySelectorAll('.row')];
 export const sfx = (ctx, name, gain = 0.8) => ctx.audio.play(`assets/audio/sfx/${name}.mp3`, { bus: 'sfx', gain });
 export const gutter = (ctx) => Math.max(0, (ctx.bounds().w - 760) / 2);
 export const wide = (ctx) => ctx.bounds().w >= 1100;
@@ -40,11 +39,10 @@ export const DRESS = {
 /** The whole page changes character. Called once on the pick; theme variables win over later look buys. */
 export function dress(ctx, lane) {
   const d = DRESS[lane];
-  ctx.vars(d.vars);
+  const vars = { ...d.vars, '--ready': d.ready };
+  ctx.vars(vars);
   ctx.css(`${d.css}
     body{transition:background-color .35s ease-out,color .35s ease-out;}
-    #goal .row.ready{animation-name:tb-ready;}
-    @keyframes tb-ready{50%{background:${d.ready};}}
     .tb-card{box-sizing:border-box;padding:8px 10px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;font:13px/1.25 var(--font);}
     .tb-chip{min-height:30px;padding:2px 12px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;font:600 13px var(--font);touch-action:manipulation;pointer-events:auto;}
     .tb-tile{position:absolute;overflow:hidden;background:rgba(127,127,127,.14);border:1px dashed var(--line);border-radius:3px;}
@@ -52,7 +50,7 @@ export function dress(ctx, lane) {
     .tb-credit{position:absolute;right:2px;bottom:1px;font:10px var(--font);color:#fff;text-shadow:0 0 2px #000;}
     @media (max-width:759px){.tb-wide{display:none;}}`);
   const root = docOf(ctx).documentElement.style;
-  const assert_ = () => { for (const [k, v] of Object.entries(d.vars)) root.setProperty(k, v); };
+  const assert_ = () => { for (const [k, v] of Object.entries(vars)) root.setProperty(k, v); };
   ctx.on('buy', assert_);
   ctx.after(0, assert_);
   const body = docOf(ctx).body;
@@ -181,48 +179,6 @@ export function gallery(ctx, { niche, mode = 'swap', decorate = null, parent = '
   return { tiles: live, hide() { for (const o of live) o.el.style.display = 'none'; } };
 }
 
-/* ---- theme ads ---- */
-
-/** A slim strip in the ad slot with this theme's honest CCP cards. One payment per ad, as the config says. */
-export function adStrip(ctx, lane) {
-  const ads = (CCP_THEME_ADS[lane] || []).filter((a) => a.kind === 'banner');
-  if (!ads.length) return;
-  const a = ctx.el('a', 'display:flex;gap:8px;align-items:center;justify-content:center;min-height:30px;padding:3px 10px;margin:2px 0;background:var(--panel);color:var(--ink);border:1px solid var(--line);font:13px var(--font);text-decoration:none;pointer-events:auto;overflow:hidden;white-space:nowrap;', null, 'banner');
-  a.rel = 'noopener';
-  a.target = '_blank';
-  const head = ctx.el('span', 'overflow:hidden;text-overflow:ellipsis;', null, a);
-  const cta = ctx.el('b', 'flex:none;color:var(--stamp);', null, a);
-  let i = 0, ad = null;
-  const paid = new Set(ctx.store.get('paid') || []);
-  const show = () => { ad = ads[i++ % ads.length]; a.href = ad.url; head.textContent = ctx.brand.text(ad.headline); cta.textContent = ctx.brand.text(ad.cta); };
-  show();
-  ctx.every(20000, show);
-  a.addEventListener('click', (ev) => {
-    if (!ad || paid.has(ad.id)) return;
-    paid.add(ad.id);
-    ctx.store.set('paid', [...paid]);
-    ctx.pay(ctx.rates().fps * ctx.config.AD_CLICK_PAYS_SECONDS, 'ad', { x: ev.clientX, y: ev.clientY });
-    ctx.emit('ad', { id: ad.id });
-  });
-}
-
-/* ---- spending ---- */
-
-/** The engine has no way to take currency off the counter yet. Until it does, a charge lands on the next buy: a price
- *  modifier adds what is owed, and the buy clears it. Forks and endings are never surcharged. */
-const owed = new WeakMap();
-export function spend(ctx, n) {
-  if (ctx.spend) { ctx.spend(n); return; }
-  let bill = owed.get(ctx);
-  if (!bill) {
-    bill = { n: 0 };
-    owed.set(ctx, bill);
-    ctx.mod({ price: (v, s, now, it) => (it.kind === 'item' ? v + bill.n : v) });
-    ctx.on('buy', () => { bill.n = 0; });
-  }
-  bill.n += n;
-}
-
 /* ---- small surfaces ---- */
 
 /** A card in a side rail when there is room, else one line in the meters. Answers the element to fill. */
@@ -237,7 +193,7 @@ export function slot(ctx, css = '') {
 
 /** A padded ring out of the button: the party for a good moment. */
 export function ring(ctx, color) {
-  const wrap = ctx.button.el.parentElement;
+  const wrap = ctx.parts.buttonWrap;
   const el = ctx.el('div', `position:absolute;left:50%;top:50%;width:150px;height:150px;margin:-75px 0 0 -75px;border:3px solid ${color};border-radius:50%;pointer-events:none;`, null, wrap);
   ctx.anim(el, ctx.gentle ? [{ opacity: 0.8 }, { opacity: 0 }] : [{ transform: 'scale(.4)', opacity: 1 }, { transform: 'scale(1.5)', opacity: 0 }], { duration: ctx.gentle ? 400 : 480, easing: 'ease-out', fill: 'forwards' });
   ctx.after(520, () => el.remove());
@@ -251,12 +207,12 @@ export function buttonCentre(ctx) {
 /** The ending stage: above the end fade, below the credits. A press after two seconds moves on; never held past ms. */
 export function endingStage(ctx, css, ms, build) {
   return new Promise((done) => {
-    const root = ctx.el('div', `position:absolute;inset:0;z-index:85;overflow:hidden;pointer-events:auto;${css}`, null, ctx.world);
+    const root = ctx.el('div', `position:absolute;inset:0;overflow:hidden;pointer-events:auto;${css}`, null, 'ending');
     let can = false, over = false;
     const finish = () => { if (over) return; over = true; root.remove(); done(); };
     ctx.after(2000, () => { can = true; });
     ctx.after(ms, finish);
-    root.addEventListener('click', (ev) => { if (ev.target.closest?.('a')) return; if (can) finish(); });
+    root.addEventListener('click', (ev) => { if (ev.target.closest?.('button')) return; if (can) finish(); });
     build(root, finish);
   });
 }
@@ -266,10 +222,9 @@ export function endingWords(ctx, root, data, css = '') {
   const box = ctx.el('div', `position:absolute;left:16px;right:16px;bottom:12%;text-align:center;font:18px/1.35 var(--font);${css}`, null, root);
   ctx.el('p', 'margin:0 0 10px;', data.result, box);
   if (data.link) {
-    const a = ctx.el('a', 'display:inline-block;padding:8px 14px;color:inherit;border:1px solid currentColor;text-decoration:none;font-size:15px;', data.link.label, box);
-    a.href = data.link.url;
-    a.rel = 'noopener';
-    a.target = '_blank';
+    const go = ctx.el('button', 'display:inline-block;min-height:40px;padding:8px 14px;background:transparent;color:inherit;border:1px solid currentColor;font:15px var(--font);touch-action:manipulation;', data.link.label, box);
+    go.type = 'button';
+    go.addEventListener('click', () => ctx.openLink(data.link.url));
   }
   ctx.anim(box, [{ opacity: 0 }, { opacity: 1 }], { duration: 900, fill: 'both', delay: 1200 });
   return box;

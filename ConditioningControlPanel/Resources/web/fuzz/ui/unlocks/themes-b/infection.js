@@ -7,7 +7,7 @@ import { ENDINGS } from '../../../data/content/endings.js';
 import { createSpiral } from '../../../fx/spiral.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
-import { adStrip, buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, moment, motion, pick, rowsOf, sfx, slot, wide } from './kit.js';
+import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, moment, motion, pick, rowsOf, sfx, slot, wide } from './kit.js';
 
 const R = THEMES.infection.rules;
 const PINK = '#ff2f92';
@@ -33,20 +33,22 @@ function spotField(ctx) {
   const safe = (x, y, r) => {
     const c = buttonCentre(ctx);
     if (Math.abs(x - c.x) <= 120 + r && Math.abs(y - c.y) <= 60 + r) return false;
-    const s = docOf(ctx).getElementById('shop')?.getBoundingClientRect();
+    const m = ctx.layer('meters').getBoundingClientRect();
+    if (Math.abs(x - c.x) <= 170 + r && y - r < m.bottom) return false;
+    const s = ctx.parts.shop?.getBoundingClientRect();
     return !s?.width || x + r < s.left || x - r > s.right || y + r < s.top;
   };
   const spawn = (x0, y0) => {
-    if (spots.size >= MAX_SPOTS) return;
+    if (spots.size >= (ctx.bounds().w < 760 ? 12 : MAX_SPOTS)) return;
     const b = ctx.bounds();
-    const shop = docOf(ctx).getElementById('shop')?.getBoundingClientRect();
+    const shop = ctx.parts.shop?.getBoundingClientRect();
     const floor = shop?.width && b.w < 760 ? shop.top : b.h;
     const r = 9 + ctx.rng() * 15;
     let x = x0, y = y0, tries = 0;
     do {
       if (x0 === undefined || tries) { x = r + ctx.rng() * (b.w - 2 * r); y = 40 + r + ctx.rng() * Math.max(10, floor - 40 - 2 * r); }
       tries += 1;
-    } while (!safe(x, y, r) && tries < 12);
+    } while (!safe(x, y, r) && tries < 24);
     if (!safe(x, y, r)) return;
     const e = ctx.el('div', `position:absolute;left:${x - r}px;top:${y - r}px;width:${2 * r}px;height:${2 * r}px;border-radius:50%;background:${SPOT_BG};pointer-events:auto;touch-action:manipulation;`);
     e.dataset.tbSpot = '1';
@@ -72,7 +74,6 @@ export default {
     mount(ctx) {
       const f = spotField(ctx);
       f.spawn();
-      adStrip(ctx, 'infection');
       ctx.every(14000, () => { if (f.spots.size < 3) f.spawn(); });
       return {};
     },
@@ -156,10 +157,10 @@ export default {
       const ill = (id) => { let h = 7; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 997; return h % 3 === 0; };
       const free = (it) => it.kind === 'item' && it.lane !== 'trunk';
       ctx.mod({ price: (v, s, now, it) => (free(it) && ill(it.id) ? v * (1.15 + (extra[it.id] || 0) * 0.05) : v) });
-      const shop = docOf(ctx).getElementById('shop');
-      const hit = (ev) => {
-        const row = ev.target.closest?.('.row');
-        if (!row || !row.classList.contains('tb-ill') || !row.classList.contains('short')) return;
+      let gone = false;
+      /* A press on a row you cannot afford yet: each sick row answers for itself. A row you can afford just buys. */
+      const hit = (row, ev) => {
+        if (gone || !row.classList.contains('short')) return;
         const id = row.dataset.id, n = extra[id] || 0;
         if (n >= 10) return;
         extra[id] = n + 1;
@@ -167,18 +168,18 @@ export default {
         ctx.pay(ctx.rates().click * 6, 'infected', { x: ev.clientX, y: ev.clientY });
         ctx.emit('in:spawn', { n: 1 });
       };
-      shop.addEventListener('click', hit, true);
       const mark = () => {
         for (const row of rowsOf(ctx)) {
           if (row.dataset.tbIll !== undefined || row.parentElement?.id !== 'rows') continue;
           const on = ill(row.dataset.id);
           row.dataset.tbIll = on ? '1' : '0';
           row.classList.toggle('tb-ill', on);
+          if (on) row.addEventListener('click', (ev) => hit(row, ev));
         }
       };
       mark();
       ctx.every(500, mark);
-      return { off() { shop.removeEventListener('click', hit, true); } };
+      return { off() { gone = true; } };
     },
   },
 
@@ -230,10 +231,10 @@ export default {
   /* The stage wobbles and the page warms. A thermometer keeps score. Gentle keeps the warmth and drops the wobble. */
   in_fever: {
     mount(ctx) {
-      const doc = docOf(ctx);
       const warm = ctx.el('div', 'position:absolute;inset:0;background:#ff8a5c;opacity:.12;', null, 'wash');
       ctx.anim(warm, [{ opacity: 0.1 }, { opacity: 0.3 }], { duration: 3200, iterations: Infinity, direction: 'alternate' });
-      motion(ctx, doc.getElementById('stage'), [{ transform: 'rotate(-.7deg) skewX(.6deg)' }, { transform: 'rotate(.7deg) skewX(-.6deg)' }], { duration: 1500, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
+      // Added on top, so a Swap or a lean from another unlock still shows through the wobble.
+      for (const el of [ctx.parts.buttonWrap, ctx.parts.shop, ctx.layer('meters')]) motion(ctx, el, [{ transform: 'rotate(-.7deg) skewX(.6deg)' }, { transform: 'rotate(.7deg) skewX(-.6deg)' }], { duration: 1500, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out', composite: 'add' });
       const s = slot(ctx);
       const line = ctx.el(s.roomy ? 'div' : 'span', '', '', s.el);
       let i = 0;
@@ -277,9 +278,9 @@ export default {
   /* Every couple of minutes one shop rule changes, for a while. Nothing here can stop a run. */
   in_mut: {
     mount(ctx) {
-      const doc = docOf(ctx), M = R.mutations, shop = doc.getElementById('shop');
+      const M = R.mutations, shop = ctx.parts.shop;
       let cur = null, n = ctx.store.get('n') || 0;
-      ctx.css(`#shop.tb-m-flip #rows{transform:scaleY(-1);}#shop.tb-m-flip #rows .row{transform:scaleY(-1);}
+      ctx.css(`#shop.tb-m-flip #rows{transform:scaleY(-1);}#shop.tb-m-flip #rows .row{transform:scaleY(-1);animation:none;}
         #shop.tb-m-pink .row{background:#ff9fcd;}
         #shop.tb-m-noNames .row b{visibility:hidden;}
         #shop.tb-m-mystery{filter:hue-rotate(70deg);}`);
@@ -288,7 +289,8 @@ export default {
         click: (v) => (cur === 'tapsDouble' ? v * 2 : v),
         fps: (v) => (cur === 'rateHalf' ? v / 2 : v),
       });
-      const banner = ctx.el('div', `position:absolute;left:0;right:0;top:40%;text-align:center;font:800 24px var(--font);color:${PINK};text-shadow:0 0 6px #fff;pointer-events:none;opacity:0;`, '', 'over');
+      const bannerBox = ctx.el('div', 'position:absolute;left:0;right:0;top:40%;text-align:center;pointer-events:none;', null, 'over');
+      const banner = ctx.el('span', `display:inline-block;max-width:92%;padding:4px 14px;background:#fff0f7;color:${PINK};border:2px solid ${PINK};border-radius:6px;font:800 22px/1.15 var(--font);opacity:0;`, '', bannerBox);
       const clear = () => {
         if (cur) shop.classList.remove(`tb-m-${cur}`);
         if (cur === 'shuffle') for (const r of rowsOf(ctx)) r.style.order = '';

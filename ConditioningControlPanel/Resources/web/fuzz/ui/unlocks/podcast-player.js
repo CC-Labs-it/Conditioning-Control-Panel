@@ -1,13 +1,14 @@
 /* ui/unlocks/podcast-player.js - the small player behind every theme podcast. Reads
  * assets/audio/podcast/<theme>/manifest.json (shape: handoff-1102/GAME-PODCAST-HANDOFF.md). Anything missing is silence and the
- * card stays. Episodes stream through a media element and are never decoded whole. */
+ * card stays. Episodes go through ctx.audio.stream, so mute, pause, suspend, panic and the end stop them in the kit's own
+ * call; this file never holds an audio element and never polls. Clips are short and play over a ducked episode. */
 
-/** The media element cannot join the game's audio buses, so it follows them by hand. The check runs on a real timer on
- *  purpose: the game clock stops on pause, suspend and the end, which is exactly when the sound has to stop. */
-const WATCH_MS = 250;
+const DUCK = 0.25;
+const AD_EVERY_MS = 210000;
+const REACT_GAP_MS = 60000;
+const IDLE_MS = 45000;
 
 export function mountPodcast(ctx, { theme, show }) {
-  const doc = ctx.button.el.ownerDocument;
   const roomy = ctx.bounds().w >= 1100;
   const box = roomy
     ? ctx.el('div', 'box-sizing:border-box;padding:8px 10px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;font:13px/1.25 var(--font);', null, ctx.layer('side'))
@@ -17,51 +18,58 @@ export function mountPodcast(ctx, { theme, show }) {
   const track = ctx.el('div', `height:4px;background:var(--fill);border-radius:2px;overflow:hidden;${roomy ? 'margin-top:6px;' : 'flex:0 1 60px;'}`, null, box);
   const fill = ctx.el('div', 'height:100%;width:100%;background:var(--stamp);transform-origin:0 50%;transform:scaleX(0);', null, track);
 
-  const audio = doc.createElement('audio');
-  audio.preload = 'none';
-  audio.volume = 0.5;
-  let episodes = [], at = ctx.store.get('ep') || 0, wanted = false, seen = performance.now();
   const base = `assets/audio/podcast/${theme}/`;
+  let manifest = null, ep = null, at = ctx.store.get('ep') || 0, gone = false;
+  let lastReact = -REACT_GAP_MS, lastTap = ctx.state.clock, lastAd = ctx.state.clock;
 
   function next() {
-    if (!episodes.length) return;
-    const ep = episodes[at % episodes.length];
+    const list = manifest?.episodes || [];
+    if (!list.length || gone) return;
+    const e = list[at % list.length];
     at += 1;
     ctx.store.set('ep', at);
-    sub.textContent = ep.title ? ctx.brand.text(ep.title) : '';
-    audio.src = base + ep.file;
-    wanted = true;
-    audio.play?.().catch(() => {});
+    sub.textContent = e.title ? ctx.brand.text(e.title) : '';
+    ep?.stop();
+    fill.style.transform = 'scaleX(0)';
+    ep = ctx.audio.stream(base + e.file, { bus: 'podcast' });
+    const el = ep.el;
+    if (!el) return;
+    el.addEventListener('ended', next);
+    el.addEventListener('error', () => { sub.textContent = ''; });
+    el.addEventListener('timeupdate', () => { if (el.duration) fill.style.transform = `scaleX(${Math.min(1, el.currentTime / el.duration)})`; });
   }
-  audio.addEventListener('ended', next);
-  audio.addEventListener('error', () => { wanted = false; });
-  audio.addEventListener('timeupdate', () => {
-    if (audio.duration) fill.style.transform = `scaleX(${Math.min(1, audio.currentTime / audio.duration)})`;
+
+  /** A short clip over a ducked episode. A missing or broken one is silence and the duck still lifts. */
+  function clip(kinds) {
+    const pool = kinds.flatMap((k) => manifest?.clips?.[k] || []).filter((c) => c && c.file);
+    if (!pool.length || gone) return false;
+    const c = pool[Math.floor(ctx.rng() * pool.length)];
+    ep?.setGain(DUCK);
+    ctx.audio.play(base + c.file, { bus: 'podcast' });
+    ctx.after(Math.max(1, Number(c.seconds) || 8) * 1000, () => ep?.setGain(1));
+    return true;
+  }
+
+  const react = (kinds) => {
+    const clock = ctx.state.clock;
+    if (clock - lastReact < REACT_GAP_MS) return;
+    if (clip(kinds)) lastReact = clock;
+  };
+  ctx.on('buy', () => react(['react_buy']));
+  ctx.on('tap', (e) => { if (!e.auto) lastTap = ctx.state.clock; });
+  ctx.every(5000, () => {
+    const clock = ctx.state.clock;
+    if (clock - lastTap > IDLE_MS) { lastTap = clock; react(['react_idle']); }
+    if (clock - lastAd > AD_EVERY_MS) { lastAd = clock; clip(['ad_ccp', 'ad_joke']); }
   });
 
-  ctx.frame(() => { seen = performance.now(); });
-  const watch = setInterval(() => {
-    const running = performance.now() - seen < WATCH_MS * 2;
-    const muted = !!doc.getElementById('mute')?.checked;
-    audio.muted = muted;
-    if (!running && !audio.paused) audio.pause();
-    else if (running && wanted && audio.paused) audio.play?.().catch(() => {});
-  }, WATCH_MS);
-
   fetch(`${base}manifest.json`).then((r) => (r.ok ? r.json() : null)).then((m) => {
-    if (!m || !box.isConnected) return;
+    if (!m || gone) return;
+    manifest = m;
     if (m.show) name.textContent = `▶ ${ctx.brand.text(m.show)}`;
-    episodes = Array.isArray(m.episodes) ? m.episodes.filter((e) => e && e.file) : [];
     next();
+    clip(['opener']);
   }).catch(() => {});
 
-  return {
-    off() {
-      clearInterval(watch);
-      wanted = false;
-      audio.pause();
-      audio.removeAttribute('src');
-      audio.load?.();
-    },
-  };
+  return { off() { gone = true; } };
 }

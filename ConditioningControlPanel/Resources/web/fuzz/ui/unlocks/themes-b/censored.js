@@ -6,7 +6,7 @@ import { FAKE_PAYWALL } from '../../../data/content/fakes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
-import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, pick, ring, rowsOf, sfx, spend } from './kit.js';
+import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, pick, ring, rowsOf, sfx } from './kit.js';
 
 const R = THEMES.censored.rules;
 const RED = '#c2261f';
@@ -115,7 +115,7 @@ export default {
   /* Hold to look. Every bar lifts, and the rate pays for it for a while afterwards. */
   ce_peek: {
     mount(ctx) {
-      const doc = docOf(ctx), win = doc.defaultView, wrap = ctx.button.el.parentElement;
+      const doc = docOf(ctx), win = doc.defaultView, wrap = ctx.parts.buttonWrap;
       const peek = ctx.el('button', `position:absolute;right:calc(100% + 8px);top:50%;width:70px;height:44px;margin-top:-22px;background:var(--panel);color:var(--ink);border:2px solid ${RED};font:700 14px var(--font);touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none;`, COPY.censored.peek, wrap);
       peek.type = 'button';
       let held = false, cost = 0;
@@ -162,7 +162,7 @@ export default {
       };
       const show = () => {
         if (open) return;
-        const goal = docOf(ctx).querySelector('#goal .row');
+        const goal = rowsOf(ctx).find((row) => row.parentElement?.id === 'goal');
         if (!goal || !goal.offsetParent) return;
         const r = goal.getBoundingClientRect();
         const price = Math.max(100, Math.round(ctx.rates().fps * 4));
@@ -177,7 +177,7 @@ export default {
         pay.type = no.type = 'button';
         pay.addEventListener('click', (ev) => {
           if (ctx.state.fuzz < price) { ctx.toast(fill(F.poor)); return; }
-          spend(ctx, price);
+          ctx.spend(price, 'paywall');
           boostUntil = ctx.state.clock + 30000;
           ctx.float(ev.clientX, ev.clientY - 20, `-${ctx.fmt(price)}`, `color:${RED};font-weight:700;font-size:16px;`);
           ctx.toast(pick(ctx, F.paid));
@@ -241,7 +241,7 @@ export default {
       const bars = [];
       const place = () => {
         const c = buttonCentre(ctx), hole = { top: c.y - 62, bottom: c.y + 62 };
-        const rowsTop = docOf(ctx).getElementById('shop')?.getBoundingClientRect().top ?? b.h * 0.5;
+        const rowsTop = ctx.parts.shop?.getBoundingClientRect().top || b.h * 0.5;
         const slots = [];
         for (let y = 0; y < rowsTop; y += 26 + ctx.rng() * 34) {
           const h = 12 + ctx.rng() * 18;
