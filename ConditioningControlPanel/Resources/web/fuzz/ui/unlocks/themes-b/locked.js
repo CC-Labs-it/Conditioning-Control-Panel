@@ -5,6 +5,7 @@ import { THEMES } from '../../../data/content/themes.js';
 import { FAKE_KEYHOLDER } from '../../../data/content/fakes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
+import { COPY } from './copy.js';
 import { adStrip, buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, pick, ring, sfx, wide } from './kit.js';
 
 const R = THEMES.locked.rules;
@@ -39,7 +40,7 @@ export const lockedPick = {
     const shut = ctx.gentle ? [{ opacity: 1 }, { opacity: 1 }] : [{ transform: `translateY(${-size * 0.28}px)` }, { transform: `translateY(${-size * 0.28}px)`, offset: 0.55 }, { transform: 'none', offset: 0.68 }, { transform: 'none' }];
     ctx.anim(lock.shackle, shut, { duration: 1100 });
     ctx.anim(hold, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }] : [{ transform: 'translateY(-60vh)' }, { transform: 'none', offset: 0.32, easing: 'cubic-bezier(.3,1.5,.5,1)' }, { transform: 'none', opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 1500, fill: 'forwards' });
-    ctx.after(700, () => { sfx(ctx, 'snap'); ctx.float(b.w / 2, b.h * 0.32 + size * 1.2, 'click', `color:${STEEL};font-size:22px;`); });
+    ctx.after(700, () => { sfx(ctx, 'snap'); ctx.float(b.w / 2, b.h * 0.32 + size * 1.2, COPY.locked.click, `color:${STEEL};font-size:22px;`); });
     ctx.after(1560, () => hold.remove());
   },
 };
@@ -75,7 +76,7 @@ function wheelNode(ctx) {
   const spin = doc.createElement('button');
   spin.type = 'button';
   spin.className = 'tb-chip';
-  spin.textContent = 'Spin';
+  spin.textContent = COPY.locked.spin;
   const note = doc.createElement('small');
   note.textContent = R.wheelNote;
   note.style.cssText = 'text-align:center;opacity:.8;';
@@ -118,7 +119,8 @@ export default {
     mount(ctx) {
       if (ctx.store.get('start') === undefined) ctx.store.set('start', ctx.state.clock);
       let extra = ctx.store.get('extra') || 0, shown = null;
-      const seconds = () => Math.max(60, (ctx.state.clock - ctx.store.get('start')) / 1000 * 60 + extra);
+      const climbed = () => (ctx.state.clock - ctx.store.get('start')) / 1000 * 60;
+      const seconds = () => Math.max(60, climbed() + extra);
       const base = ctx.item.fps;
       const bonus = () => base * Math.min(6, seconds() / 3600 / 5);
       ctx.mod({ fps: (v) => v + bonus() });
@@ -127,11 +129,12 @@ export default {
       const big = ctx.el('div', `font:700 26px Consolas,"Courier New",monospace;color:${BRASS};font-variant-numeric:tabular-nums;`, '', box);
       const rate = ctx.el('div', 'font:12px var(--font);color:var(--ink-soft);', '', box);
       if (fresh(ctx)) ctx.toast(R.timerNote);
-      const paint = () => { big.textContent = clockText(shown ?? seconds()); rate.textContent = `+${ctx.fmt(bonus())}/s from the lock`; };
+      const paint = () => { big.textContent = clockText(shown ?? seconds()); rate.textContent = COPY.locked.lockRate(ctx.fmt(bonus())); };
       paint();
       ctx.every(ctx.gentle ? 1000 : 250, paint);
       ctx.on('lo:add', ({ minutes }) => {
-        extra = Math.max(-3600 * 8, extra + minutes * 60);
+        // Time off can reach the floor but never bank below it, or the timer would sit still for an hour afterwards.
+        extra = Math.max(60 - climbed(), extra + minutes * 60);
         ctx.store.set('extra', extra);
         paint();
         if (minutes) {
@@ -150,7 +153,7 @@ export default {
   lo_beg: {
     mount(ctx) {
       const wrap = ctx.button.el.parentElement;
-      const beg = ctx.el('button', `position:absolute;right:calc(100% + 12px);top:50%;width:80px;height:46px;margin-top:-23px;background:${BRASS};color:#2a1e00;border:0;border-radius:23px;font:700 16px var(--font);touch-action:manipulation;pointer-events:auto;box-shadow:0 2px 0 #8a6a16;`, 'Beg', wrap);
+      const beg = ctx.el('button', `position:absolute;right:calc(100% + 12px);top:50%;width:80px;height:46px;margin-top:-23px;background:${BRASS};color:#2a1e00;border:0;border-radius:23px;font:700 16px var(--font);touch-action:manipulation;pointer-events:auto;box-shadow:0 2px 0 #8a6a16;`, COPY.locked.beg, wrap);
       beg.type = 'button';
       beg.dataset.tbBeg = '1';
       let since = 0, coolUntil = 0, window_ = false;
@@ -169,7 +172,7 @@ export default {
         if (window_) {
           window_ = false;
           ctx.pay(rates.fps * 14 + rates.click * 20, 'almost', { x, y });
-          ctx.float(x, y - 22, 'Did you hope.', `color:${BRASS};font-size:18px;font-weight:700;`);
+          ctx.float(x, y - 22, COPY.locked.hoped, `color:${BRASS};font-size:18px;font-weight:700;`);
           ring(ctx, BRASS);
           sfx(ctx, 'chime2');
           return;
@@ -225,7 +228,7 @@ export default {
         if (gutter(ctx) < 110) break;
         t.el.style.pointerEvents = 'auto';
         t.el.addEventListener('click', (ev) => {
-          ctx.float(ev.clientX, ev.clientY - 20, 'look only', `color:${BRASS};font-weight:700;`);
+          ctx.float(ev.clientX, ev.clientY - 20, COPY.locked.lookOnly, `color:${BRASS};font-weight:700;`);
           sfx(ctx, 'ui_denied', 0.4);
           const img = t.el.querySelector('img');
           if (!ctx.gentle && img) ctx.anim(img, [{ transform: 'translateX(0)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'translateX(0)' }], 300);
@@ -278,7 +281,7 @@ export default {
         refused = true;
         liftAt = ctx.state.clock + 20000;
         const r = row.getBoundingClientRect();
-        stamp = ctx.el('div', `position:absolute;left:${r.left + r.width / 2 - 46}px;top:${r.top + r.height / 2 - 26}px;width:92px;height:52px;display:grid;place-items:center;border:4px solid #ff5a4a;border-radius:6px;color:#ff5a4a;background:rgba(29,41,53,.86);font:800 28px var(--font);transform:rotate(-12deg);pointer-events:none;`, 'NO', 'over');
+        stamp = ctx.el('div', `position:absolute;left:${r.left + r.width / 2 - 46}px;top:${r.top + r.height / 2 - 26}px;width:92px;height:52px;display:grid;place-items:center;border:4px solid #ff5a4a;border-radius:6px;color:#ff5a4a;background:rgba(29,41,53,.86);font:800 28px var(--font);transform:rotate(-12deg);pointer-events:none;`, COPY.locked.no, 'over');
         if (!ctx.gentle) ctx.anim(stamp, [{ transform: 'rotate(-12deg) scale(1.7)', opacity: 0 }, { transform: 'rotate(-12deg) scale(1)', opacity: 1 }], 200);
         ctx.toast(pick(ctx, R.refused));
         sfx(ctx, 'snap');
@@ -310,7 +313,7 @@ export default {
           t += dt;
           if (t < 3.4) ctx.emit('lo:show', { seconds: 3 + (from - 3) * Math.pow(1 - t / 3.4, 2) });
           else if (t < 5.2) {
-            if (!isOpen) { isOpen = true; ctx.emit('lo:window', { on: true }); ctx.emit('lo:show', { seconds: 3 }); const c = buttonCentre(ctx); ctx.float(c.x, c.y - 50, 'So close.', `color:${GOOD};font-size:18px;font-weight:700;`); sfx(ctx, 'heartbeat', 0.6); }
+            if (!isOpen) { isOpen = true; ctx.emit('lo:window', { on: true }); ctx.emit('lo:show', { seconds: 3 }); const c = buttonCentre(ctx); ctx.float(c.x, c.y - 50, COPY.locked.soClose, `color:${GOOD};font-size:18px;font-weight:700;`); sfx(ctx, 'heartbeat', 0.6); }
           } else {
             isOpen = false;
             t = -1;
@@ -336,7 +339,7 @@ export default {
         return {};
       }
       const wrap = ctx.button.el.parentElement;
-      const chip = ctx.el('button', 'position:absolute;left:calc(100% + 12px);top:50%;width:68px;height:46px;margin-top:-23px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:23px;font:700 14px var(--font);touch-action:manipulation;pointer-events:auto;', 'Wheel', wrap);
+      const chip = ctx.el('button', 'position:absolute;left:calc(100% + 12px);top:50%;width:68px;height:46px;margin-top:-23px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:23px;font:700 14px var(--font);touch-action:manipulation;pointer-events:auto;', COPY.locked.wheel, wrap);
       chip.type = 'button';
       const node = wheelNode(ctx);
       node.style.color = '#000';

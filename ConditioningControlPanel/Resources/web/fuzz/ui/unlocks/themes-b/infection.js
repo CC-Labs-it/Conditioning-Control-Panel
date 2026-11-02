@@ -6,7 +6,8 @@ import { FAKE_ANTIVIRUS } from '../../../data/content/fakes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { createSpiral } from '../../../fx/spiral.js';
 import { mountPodcast } from '../podcast-player.js';
-import { adStrip, buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, moment, pick, rowsOf, sfx, slot, wide } from './kit.js';
+import { COPY } from './copy.js';
+import { adStrip, buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, moment, motion, pick, rowsOf, sfx, slot, wide } from './kit.js';
 
 const R = THEMES.infection.rules;
 const PINK = '#ff2f92';
@@ -92,7 +93,7 @@ export default {
         const c = cover();
         blob.style.transform = `scale(${(0.02 + c * 0.98).toFixed(3)})`;
         const stage = R.stages[Math.min(R.stages.length - 1, Math.floor(c * R.stages.length))];
-        line.textContent = `Coverage ${Math.round(c * 100)}%. ${stage} +${ctx.fmt(base * 6 * c)}/s`;
+        line.textContent = COPY.infection.coverage(Math.round(c * 100), stage, ctx.fmt(base * 6 * c));
       };
       draw();
       ctx.every(1000, draw);
@@ -125,7 +126,7 @@ export default {
           m.style.right = `${6 + b.querySelectorAll('.tb-dot').length * 15}px`;
           m.style.top = '4px';
           b.appendChild(m);
-          ctx.float(bx, by - 6, 'Do not scratch.', `color:${PINK};font-size:12px;`);
+          ctx.float(bx, by - 6, COPY.infection.scratch, `color:${PINK};font-size:12px;`);
         });
       });
       return {};
@@ -140,7 +141,7 @@ export default {
           const tint = ctx.el('div', `position:absolute;inset:0;background:${PINK};opacity:0;`, null, t.el);
           const o = { duration: 3600, iterations: Infinity, direction: 'alternate', delay: -ctx.rng() * 3600 };
           ctx.anim(tint, [{ opacity: 0 }, { opacity: 0.6 }], o);
-          if (!ctx.gentle) ctx.anim(t.el.querySelector('img'), [{ transform: 'none', borderRadius: '2px' }, { transform: 'skewX(4deg) scaleY(1.08)', borderRadius: '34% 14% 28% 20%' }], o);
+          motion(ctx, t.el.querySelector('img'), [{ transform: 'none', borderRadius: '2px' }, { transform: 'skewX(4deg) scaleY(1.08)', borderRadius: '34% 14% 28% 20%' }], o);
         },
       });
       return {};
@@ -232,16 +233,13 @@ export default {
       const doc = docOf(ctx);
       const warm = ctx.el('div', 'position:absolute;inset:0;background:#ff8a5c;opacity:.12;', null, 'wash');
       ctx.anim(warm, [{ opacity: 0.1 }, { opacity: 0.3 }], { duration: 3200, iterations: Infinity, direction: 'alternate' });
-      if (!ctx.gentle) {
-        const stage = doc.getElementById('stage');
-        ctx.anim(stage, [{ transform: 'rotate(-.7deg) skewX(.6deg)' }, { transform: 'rotate(.7deg) skewX(-.6deg)' }], { duration: 1500, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
-      }
+      motion(ctx, doc.getElementById('stage'), [{ transform: 'rotate(-.7deg) skewX(.6deg)' }, { transform: 'rotate(.7deg) skewX(-.6deg)' }], { duration: 1500, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
       const s = slot(ctx);
       const line = ctx.el(s.roomy ? 'div' : 'span', '', '', s.el);
       let i = 0;
       const draw = () => {
         const t = (37.4 + Math.min(3.4, ctx.state.clock / 600000)).toFixed(1);
-        line.textContent = `${t} deg. ${R.fever[i++ % R.fever.length]}`;
+        line.textContent = COPY.infection.fever(t, R.fever[i++ % R.fever.length]);
       };
       draw();
       ctx.every(8000, draw);
@@ -304,7 +302,7 @@ export default {
         shop.classList.add(`tb-m-${cur}`);
         if (cur === 'shuffle') for (const r of rowsOf(ctx)) r.style.order = String(Math.floor(ctx.rng() * 8));
         banner.textContent = ctx.brand.text(m.label);
-        ctx.anim(banner, [{ opacity: 0, transform: 'scale(.8)' }, { opacity: 1, transform: 'none', offset: 0.1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 3000, fill: 'forwards' });
+        ctx.anim(banner, [{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 3000, fill: 'forwards' });
         sfx(ctx, 'rank_settle', 0.6);
         ctx.after(45000, clear);
       };

@@ -67,6 +67,16 @@ export function fresh(ctx, key = 'seen') {
   return true;
 }
 
+/** A looping motion that stops the moment Gentle goes on and comes back when it goes off. */
+export function motion(ctx, el, frames, opts) {
+  let a = null;
+  const sync = () => {
+    if (ctx.gentle) { if (a) { a.cancel(); a = null; } } else if (!a) a = ctx.anim(el, frames, opts);
+  };
+  sync();
+  ctx.every(500, sync);
+}
+
 /** A short full-page moment in the over layer: never takes a press, always removes itself. */
 export function moment(ctx, css, frames, ms, text = null) {
   const el = ctx.el('div', `position:absolute;inset:0;pointer-events:none;${css}`, text, 'over');
@@ -155,19 +165,18 @@ export function gallery(ctx, { niche, mode = 'swap', decorate = null, parent = '
     decorate?.(t, w, h);
     return { ...t, ...p };
   });
-  const scroll = mode === 'scroll' && roomy && !ctx.gentle;
-  if (scroll) {
+  if (mode === 'scroll' && roomy) {
     ctx.frame((dt) => {
+      if (ctx.gentle) return;
       for (const o of live) {
         o.y -= 20 * dt;
         if (o.y < -h) { o.y += o.span; o.fill(); }
         o.el.style.transform = `translate3d(${o.x}px,${o.y}px,0)`;
       }
     });
-  } else {
-    let n = 0;
-    ctx.every(mode === 'scroll' ? 3500 : 6000, () => { live[n++ % live.length].fill(); });
   }
+  let n = 0;
+  ctx.every(mode === 'scroll' ? 3500 : 6000, () => { if (mode !== 'scroll' || !roomy || ctx.gentle) live[n++ % live.length].fill(); });
   ctx.on('pictures', () => live.forEach((o) => o.fill()));
   return { tiles: live, hide() { for (const o of live) o.el.style.display = 'none'; } };
 }

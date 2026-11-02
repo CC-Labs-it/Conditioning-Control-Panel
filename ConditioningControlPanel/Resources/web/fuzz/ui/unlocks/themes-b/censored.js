@@ -5,6 +5,7 @@ import { THEMES } from '../../../data/content/themes.js';
 import { FAKE_PAYWALL } from '../../../data/content/fakes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
+import { COPY } from './copy.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, pick, ring, rowsOf, sfx, spend } from './kit.js';
 
 const R = THEMES.censored.rules;
@@ -19,7 +20,7 @@ export const censoredPick = {
       ctx.anim(bar, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }] : [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)', offset: 0.25 }, { transform: 'scaleX(1)', offset: 0.65 }, { transform: 'scaleX(0)' }], { duration: 1200, delay: i * 30, easing: 'ease-in-out', fill: 'both' });
       ctx.after(1500, () => bar.remove());
     }
-    const stamp = ctx.el('div', `position:absolute;left:50%;top:38%;width:300px;margin-left:-150px;padding:6px 0;text-align:center;border:5px solid ${RED};color:${RED};font:800 34px "Courier New",monospace;transform:rotate(-8deg);pointer-events:none;`, 'CENSORED', 'over');
+    const stamp = ctx.el('div', `position:absolute;left:50%;top:38%;width:300px;margin-left:-150px;padding:6px 0;text-align:center;border:5px solid ${RED};color:${RED};font:800 34px "Courier New",monospace;transform:rotate(-8deg);pointer-events:none;`, COPY.censored.stamp, 'over');
     ctx.anim(stamp, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }] : [{ opacity: 0, transform: 'rotate(-8deg) scale(1.8)' }, { opacity: 1, transform: 'rotate(-8deg) scale(1)', offset: 0.2 }, { opacity: 1, transform: 'rotate(-8deg) scale(1)', offset: 0.75 }, { opacity: 0, transform: 'rotate(-8deg) scale(1)' }], { duration: 1500, delay: 200, fill: 'both' });
     ctx.after(450, () => sfx(ctx, 'snap'));
     ctx.after(1750, () => stamp.remove());
@@ -115,7 +116,7 @@ export default {
   ce_peek: {
     mount(ctx) {
       const doc = docOf(ctx), win = doc.defaultView, wrap = ctx.button.el.parentElement;
-      const peek = ctx.el('button', `position:absolute;right:calc(100% + 8px);top:50%;width:70px;height:44px;margin-top:-22px;background:var(--panel);color:var(--ink);border:2px solid ${RED};font:700 14px var(--font);touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none;`, 'Peek', wrap);
+      const peek = ctx.el('button', `position:absolute;right:calc(100% + 8px);top:50%;width:70px;height:44px;margin-top:-22px;background:var(--panel);color:var(--ink);border:2px solid ${RED};font:700 14px var(--font);touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none;`, COPY.censored.peek, wrap);
       peek.type = 'button';
       let held = false, cost = 0;
       ctx.mod({ fps: (v) => v * (1 - cost) });
@@ -273,11 +274,12 @@ export default {
       const data = ENDINGS.ce_end;
       return endingStage(ctx, 'background:#efece4;color:#141414;--font:"Courier New",monospace;', 14000, (root) => {
         const b = ctx.bounds();
+        const clip = ctx.el('div', 'position:absolute;left:0;right:0;top:0;bottom:34%;overflow:hidden;', null, root);
+        const roll = ctx.el('div', 'position:absolute;left:0;right:0;top:0;text-align:center;font:600 18px/2 var(--font);', null, clip);
         const bar = ctx.el('div', `position:absolute;left:0;right:0;top:50%;height:${b.h}px;margin-top:${-b.h / 2}px;background:#000;`, null, root);
         ctx.anim(bar, [{ transform: 'scaleY(.02) scaleX(0)' }, { transform: 'scaleY(.02) scaleX(1)', offset: 0.3 }, { transform: 'scaleY(.02) scaleX(1)', offset: 0.6 }, { transform: 'scaleY(.06) scaleX(1)' }], { duration: 3000, fill: 'forwards' });
-        const roll = ctx.el('div', 'position:absolute;left:0;right:0;top:0;text-align:center;font:600 18px/2 var(--font);', null, root);
         data.credits.forEach((line) => ctx.el('div', '', line, roll));
-        ctx.anim(roll, [{ transform: `translateY(${b.h}px)` }, { transform: `translateY(${-roll.offsetHeight - 40}px)` }], { duration: 11000, delay: 2600, easing: 'linear', fill: 'both' });
+        ctx.anim(roll, [{ transform: `translateY(${b.h * 0.66}px)` }, { transform: `translateY(${-roll.offsetHeight - 40}px)` }], { duration: 11000, delay: 2600, easing: 'linear', fill: 'both' });
         endingWords(ctx, root, data, `bottom:6%;background:#efece4;padding:8px;`);
         sfx(ctx, 'snap');
       });

@@ -3,7 +3,8 @@
 import { THEMES } from '../../../data/content/themes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
-import { adStrip, buttonCentre, docOf, endingStage, endingWords, fresh, gallery, moment, pick, ring, sfx, slot, tile } from './kit.js';
+import { COPY } from './copy.js';
+import { adStrip, buttonCentre, docOf, endingStage, endingWords, fresh, gallery, moment, motion, pick, ring, sfx, slot, tile } from './kit.js';
 
 const R = THEMES.goon.rules;
 const HOT = '#f2a33c';
@@ -69,7 +70,7 @@ export default {
           streak += 1;
           fill = 0;
         } else {
-          ctx.float(x, y - 44, 'Not yet.', 'color:var(--ink-soft);');
+          ctx.float(x, y - 44, COPY.goon.notYet, 'color:var(--ink-soft);');
           streak = 0;
         }
         bank = 0;
@@ -217,7 +218,7 @@ export default {
       if (s.roomy) {
         const face = ctx.el('div', 'position:relative;flex:none;width:48px;height:48px;border:2px solid var(--ink);border-radius:50%;', null, s.el);
         hand = ctx.el('div', `position:absolute;left:21px;top:3px;width:2px;height:20px;background:${HOT};transform-origin:50% 100%;`, null, face);
-        if (!ctx.gentle) ctx.anim(hand, [{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 1200, iterations: Infinity, easing: 'linear' });
+        motion(ctx, hand, [{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 1200, iterations: Infinity, easing: 'linear' });
       }
       const line = ctx.el('div', 'min-width:0;', '', s.el);
       let i = 0;
@@ -249,7 +250,7 @@ export default {
           const cell = ctx.el('div', 'position:relative;height:34px;background:#2a2019;border:1px solid var(--line);overflow:hidden;', null, grid);
           const head = ctx.el('div', `position:absolute;left:50%;top:6px;width:13px;height:13px;margin-left:-6px;border-radius:50%;background:${HOT};`, null, cell);
           ctx.el('div', 'position:absolute;left:10%;right:10%;top:22px;height:18px;border-radius:50%;background:#7a4a1c;', null, cell);
-          if (!ctx.gentle) ctx.anim(head, [{ transform: 'translateY(0)' }, { transform: 'translateY(5px)' }, { transform: 'translateY(0)' }], { duration: 1400, iterations: Infinity, delay: -k * 90 });
+          motion(ctx, head, [{ transform: 'translateY(0)' }, { transform: 'translateY(5px)' }, { transform: 'translateY(0)' }], { duration: 1400, iterations: Infinity, delay: -k * 90 });
         }
       }
       return {};
@@ -270,7 +271,7 @@ export default {
           const c = ctx.el('div', `position:absolute;top:0;bottom:0;${side}:0;width:50%;background:repeating-linear-gradient(90deg,#3f2714 0 14px,#2d1b0e 14px 28px);`, null, win);
           ctx.anim(c, [{ width: '50%' }, { width: '32%' }], { duration: 7000, easing: 'ease-out', fill: 'forwards' });
         }
-        ctx.el('div', `position:absolute;left:0;right:0;top:calc(12% + ${h + 22}px);text-align:center;font:600 20px var(--font);`, 'Four hours later', root);
+        ctx.el('div', `position:absolute;left:0;right:0;top:calc(12% + ${h + 22}px);text-align:center;font:600 20px var(--font);`, COPY.goon.later, root);
         endingWords(ctx, root, data);
         sfx(ctx, 'reveal_chime', 0.5);
       });
