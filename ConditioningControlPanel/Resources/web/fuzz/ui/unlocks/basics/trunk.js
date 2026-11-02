@@ -6,11 +6,6 @@ import { FORKS } from '../../../data/items.js';
 import { SECOND_THEME, THEME_TINTS } from './copy.js';
 import { beatAt, BEAT_MS, burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
 
-const openLink = (ctx, url) => {
-  if (!/^https:\/\/([a-z0-9-]+\.)?cclabs\.app(\/|$)/.test(url)) return;
-  docOf(ctx).defaultView.open(url, '_blank', 'noopener');
-};
-
 /* A fork lands like a stamp: the choice crosses the middle of the screen. */
 const stampFork = {
   mount(ctx) {
@@ -192,11 +187,9 @@ export default {
 `);
       const slot = ctx.el('button', 'display:none;', null, ctx.layer('banner'));
       slot.type = 'button';
-      let ad = null, paid = false, retried = false;
+      let ad = null, paid = false;
       const show = () => {
         ad = ctx.ads.next({ kind: 'banner' });
-        // The first call starts loading the pool and answers a stand-in; ask again as soon as the real ads are in.
-        if (String(ad.id).startsWith('standin') && !retried) { retried = true; ctx.after(300, show); }
         paid = false;
         const doc = docOf(ctx);
         slot.className = `fz-ad ${ad.ccp ? 'ccp' : ad.tone || ''}`;
@@ -217,10 +210,11 @@ export default {
           sfx(ctx, 'sfx/dling.mp3', 0.5);
         }
         ctx.emit('ad', { ccp: !!ad.ccp, id: ad.id });
-        if (ad.url) openLink(ctx, ad.url);
+        if (ad.url) ctx.openLink(ad.url);
       });
       show();
       ctx.every(13000, show);
+      ctx.on('ads', ({ jokesOff }) => { if (jokesOff && ad && !ad.ccp) show(); });
       return {};
     },
   },
@@ -230,7 +224,7 @@ export default {
     mount(ctx) {
       ctx.css(`.row .ico { display: grid; place-items: center; width: 30px; height: 30px; font-size: 19px; border-radius: 8px; background: radial-gradient(circle at 32% 24%, #fff 0 12%, #ff9ccf 34%, #c21f7f 92%); box-shadow: 0 2px 5px rgba(90,0,60,.45), inset 0 -2px 4px rgba(90,0,60,.3); }`);
       if (fresh(ctx) && !ctx.gentle) {
-        docOf(ctx).querySelectorAll('.row .ico').forEach((ic, i) => ctx.anim(ic, [{ transform: 'rotateY(90deg)' }, { transform: 'rotateY(0)' }], { duration: 360, delay: i * 80, fill: 'backwards' }));
+        ctx.parts.shop.querySelectorAll('.row .ico').forEach((ic, i) => ctx.anim(ic, [{ transform: 'rotateY(90deg)' }, { transform: 'rotateY(0)' }], { duration: 360, delay: i * 80, fill: 'backwards' }));
       }
       return {};
     },
@@ -343,7 +337,7 @@ export default {
           title: FAKE_DESKTOP.title,
           body: FAKE_DESKTOP.body,
           buttons: [
-            { label: FAKE_DESKTOP.button, onPress: () => openLink(ctx, 'https://cclabs.app') },
+            { label: FAKE_DESKTOP.button, onPress: () => ctx.openLink('https://cclabs.app') },
             { label: FAKE_DESKTOP.close },
           ],
         }));
@@ -356,7 +350,6 @@ export default {
    * slowly; they are decoration and take no input. Gentle: no warp at all. */
   tunnel: {
     mount(ctx) {
-      const doc = docOf(ctx);
       const COPIES = 5, LOOP = 6000;
       const hole = ctx.el('div', 'position:absolute;inset:0;overflow:hidden;', null, 'back');
       const frames = [];
@@ -370,7 +363,7 @@ export default {
         }
       }
       const refresh = () => {
-        const stage = doc.getElementById('stage');
+        const stage = ctx.parts.buttonWrap.closest('#stage');
         const copy = stage.cloneNode(true);
         copy.removeAttribute('id');
         copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
@@ -381,7 +374,7 @@ export default {
       ctx.every(4000, refresh);
       // Gentle can be switched on mid-run: the copies stop where they are.
       ctx.every(1000, () => { if (ctx.gentle) for (const f of frames) for (const a of f.getAnimations()) a.pause(); });
-      if (fresh(ctx) && !ctx.gentle) ctx.anim(doc.getElementById('page'), [{ transform: 'scale(1.06)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 800, easing: 'ease-out' });
+      if (fresh(ctx) && !ctx.gentle) ctx.anim(ctx.parts.shop, [{ transform: 'scale(1.06)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 800, easing: 'ease-out' });
       return {};
     },
   },
@@ -392,13 +385,11 @@ export default {
     ending(ctx) {
       return new Promise((done) => {
         const { w, h } = ctx.bounds();
-        // The fade stays up inside the world through the show, so the words sit on their own sheet above it (and below Wake Up).
-        const sheet = ctx.el('div', 'position:fixed;inset:0;z-index:85;pointer-events:none;overflow:hidden;font-family:var(--font);', null, docOf(ctx).body);
         const list = DROP_WORDS.filter((_, i) => i < 2 || i % 3 === 0 || i === DROP_WORDS.length - 1);
         const GAP = 1500;
         list.forEach((d, i) => {
           ctx.after(500 + i * GAP, () => {
-            pop(ctx, w / 2, h * 0.45, d.word, { color: '#b03a7a', size: 46, ms: GAP - 100, weight: 600, parent: sheet });
+            pop(ctx, w / 2, h * 0.45, d.word, { color: '#b03a7a', size: 46, ms: GAP - 100, weight: 600, parent: 'ending' });
             if (d.clip) ctx.voice(d.clip, { gain: 0.7 });
           });
         });

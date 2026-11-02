@@ -1,7 +1,7 @@
 /* ui/unlocks/basics/look2.js - the late look rows: heart, mirror, spiral, big, tiny. Each skin leaves a rectangle of at
  * least 48 px to press, whatever it draws, so nothing here can make the button hard to finish with. */
 
-import { beatAt, baseCss, burst, btnCenter, docOf, fresh, sfx, spiralCanvas, squish } from './fx.js';
+import { beatAt, baseCss, gentleEndsLoops, burst, btnCenter, docOf, fresh, sfx, spiralCanvas, squish } from './fx.js';
 
 function wear(ctx, name, css) {
   baseCss(ctx);
@@ -49,6 +49,7 @@ export default {
 #btn[data-skin=mirror]::after { content: "Click"; position: absolute; left: 0; right: 0; top: 100%; height: 58px; display: grid; place-items: center; color: #123; font-weight: 700; border-radius: 6px; pointer-events: none; scale: 1 -1; opacity: .28; background: linear-gradient(160deg, #fff, #b8c4d4 45%, #7d8ca0 55%, #e6edf5); -webkit-mask-image: linear-gradient(to top, #000, transparent 75%); mask-image: linear-gradient(to top, #000, transparent 75%); }
 body.gentle #btn[data-skin=mirror] { animation: none; }
 `);
+      gentleEndsLoops(ctx);
       return {};
     },
   },

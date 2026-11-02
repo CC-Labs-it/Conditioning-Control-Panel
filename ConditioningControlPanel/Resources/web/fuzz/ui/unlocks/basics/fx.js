@@ -16,7 +16,6 @@ export function sfx(ctx, file, gain = 0.6) {
 }
 
 const BASE_CSS = `
-@keyframes ready { 50% { background: var(--ready, #f4f2ec); } }
 .fz-chip { min-height: 34px; padding: 2px 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); font-size: 13px; line-height: 1.1; touch-action: manipulation; pointer-events: auto; white-space: nowrap; }
 .fz-chip:active { transform: translateY(1px); }
 #fz-tools { order: 9; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin-top: 4px; pointer-events: auto; }
@@ -32,6 +31,14 @@ export function baseCss(ctx) {
   s.id = 'fz-basics-css';
   s.textContent = BASE_CSS;
   doc.head.appendChild(s);
+}
+
+/** Gentle switched on in the pause card removes a skin's CSS loop, but the resume plays the frozen animation back. Stop it here. */
+export function gentleEndsLoops(ctx) {
+  ctx.on('resume', () => {
+    if (!ctx.gentle) return;
+    for (const a of ctx.button.el.getAnimations()) if (a.animationName && a.animationName !== 'none') a.cancel();
+  });
 }
 
 /** A node that lives as long as its animation. */

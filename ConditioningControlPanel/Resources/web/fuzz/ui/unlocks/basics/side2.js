@@ -89,7 +89,7 @@ export default {
           sfx(ctx, 'sfx/chime1.mp3', 0.5);
           if (word.effect === 'crit') { ctx.pay(ctx.rates().click * 10, 'trigger', { x: cx, y: cy }); ctx.emit('lucky', { x: cx, y: cy, auto: true }); }
           else if (word.effect === 'speed') fastUntil = now + 12000;
-          else if (word.effect === 'mute') ctx.audio.muteFor?.(6000);
+          else if (word.effect === 'mute') ctx.audio.muteFor(6000);
           ctx.say(word.line);
         });
       };
@@ -205,7 +205,7 @@ export default {
         else if (p.key === 'spin') { if (!ctx.gentle) ctx.anim(el, [{ rotate: '0deg' }, { rotate: '360deg' }], { duration: 700 }); }
         else if (p.key === 'pink') { setPalette(ctx, 'pink'); ctx.emit('palette', { name: 'pink' }); }
         else if (p.key === 'tap') ctx.button.press();
-        else if (p.key === 'hush') ctx.audio.muteFor?.(3000);
+        else if (p.key === 'hush') ctx.audio.muteFor(3000);
         ctx.toast(REMOTE_SOLO.toasts[p.key]);
       };
       const open = () => {

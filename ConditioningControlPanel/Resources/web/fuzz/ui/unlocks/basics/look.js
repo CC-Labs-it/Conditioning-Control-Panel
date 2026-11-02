@@ -3,7 +3,7 @@
 
 import { TAB_TITLES } from '../../../data/content/index.js';
 import { whole } from '../../../sim/format.js';
-import { baseCss, burst, btnCenter, chip, docOf, fresh, play, pop, PALETTES, setPalette, sfx, spawn, squish, tools } from './fx.js';
+import { baseCss, gentleEndsLoops, burst, btnCenter, chip, docOf, fresh, play, pop, PALETTES, setPalette, sfx, spawn, squish, tools } from './fx.js';
 
 /* ---- button wardrobe: latest skin wins, the chip goes back to any owned one ---- */
 const SKIN_OF = Object.freeze({ rounded: 'round', bubble: 'bubble', watch: 'watch', heartbtn: 'heart', mirror: 'mirror', spirbtn: 'spiral', bigbtn: 'big', tinybtn: 'tiny' });
@@ -150,7 +150,7 @@ body { transition: background-color .6s, color .6s; }
       ctx.css(`@font-face { font-family: "Fredoka"; src: url("assets/fonts/fredoka-latin.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }`);
       const swap = () => {
         ctx.vars({ '--font': '"Fredoka", "Segoe UI", system-ui, sans-serif', '--shop-font': '"Fredoka", "Segoe UI", system-ui, sans-serif' });
-        if (fresh(ctx)) for (const id of ['stage', 'shop']) ctx.anim(doc.getElementById(id), [{ opacity: 0.2 }, { opacity: 1 }], { duration: 400 });
+        if (fresh(ctx)) for (const part of [ctx.parts.shop, ctx.parts.buttonWrap.closest('#stage')]) ctx.anim(part, [{ opacity: 0.2 }, { opacity: 1 }], { duration: 400 });
       };
       if (doc.fonts?.load) doc.fonts.load('16px "Fredoka"').then(swap, swap); else swap();
       return {};
@@ -296,6 +296,7 @@ body.gentle #fz-roll { display: none; }
 #btn[data-skin=watch]::before { content: ""; position: absolute; left: 50%; bottom: 100%; width: 3px; height: 34px; margin-left: -1.5px; pointer-events: none; background: repeating-linear-gradient(#8a6d1f 0 4px, #d9b94f 4px 8px); }
 body.gentle #btn[data-skin=watch] { animation: none; }
 `);
+      gentleEndsLoops(ctx);
       ctx.every(1500, () => { if (ctx.button.el.dataset.skin === 'watch' && !ctx.gentle) sfx(ctx, 'sfx/tally_tick.mp3', 0.12); });
       return {};
     },
