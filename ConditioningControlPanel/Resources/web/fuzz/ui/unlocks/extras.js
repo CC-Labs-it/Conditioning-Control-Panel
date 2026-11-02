@@ -1,5 +1,6 @@
 /* Lanes: trouble emi combo exit meta after. See ENGINE.md. The bulky parts live in ./extras/. */
 
 import { EMI_UNLOCKS } from './extras/emi-unlocks.js';
+import { QUIZ_UNLOCKS } from './extras/quiz.js';
 
-export default { ...EMI_UNLOCKS };
+export default { ...QUIZ_UNLOCKS, ...EMI_UNLOCKS };
