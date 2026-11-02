@@ -16,7 +16,6 @@ import { createLife, forget, load, parse, serialize, store, SAVE_KEY } from './s
 import { createUi } from './ui/app.js';
 import { createEngine } from './ui/engine.js';
 import { REGISTRY } from './ui/unlocks/index.js';
-import { loadAds } from './ui/ads.js';
 import { runIntro } from './ui/intro.js';
 
 const qs = new URLSearchParams(location.search);
@@ -83,8 +82,8 @@ function start(init) {
   const escape = createHostEscape();
   bridge.on('kept-escape', () => escape.kept());
   bridge.on('suspend', (f) => {
-    if (f.on) { ui.pause(); engine.setSuspended(true); }
-    else engine.setSuspended(false);
+    if (f.on) { ui.pause(); engine.setSuspended(true, f.reason); }
+    else engine.setSuspended(false, f.reason);
   });
   bridge.on('close', () => { audio.hold(true); persist(); bridge.send('exit-done'); });
   bridge.on('setting', (f) => { if (f.key === 'gentle') ui.setInit({ gentle: !!f.value }); });
@@ -119,7 +118,6 @@ function start(init) {
     }
     ui.draw(true);
     ui.start();
-    loadAds();
     persist();
     bridge.log('info', `booted pace=${run.pace} hosted=${bridge.isHosted}`);
   };

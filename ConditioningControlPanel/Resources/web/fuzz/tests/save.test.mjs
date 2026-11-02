@@ -27,6 +27,16 @@ test('a save round-trips the run and the lifetime', () => {
   assert.deepEqual(back.extras, { muted: true });
 });
 
+test('what was spent survives a save, and a save from before ctx.spend still reads', () => {
+  const s = E.createRun();
+  E.lump(s, 10);
+  E.spend(s, 4, 'fine');
+  assert.deepEqual(parse(serialize(s, createLife())).run.spent, { fine: 4 });
+  const old = JSON.parse(serialize(s, createLife()));
+  delete old.run.spent;
+  assert.deepEqual(parse(JSON.stringify(old)).run.spent, {});
+});
+
 test('garbage and the old v1 ladder read as no save, never a throw', () => {
   assert.equal(parse('not json'), null);
   assert.equal(parse(JSON.stringify({ v: 1, s: { fuzz: 5 } })), null);

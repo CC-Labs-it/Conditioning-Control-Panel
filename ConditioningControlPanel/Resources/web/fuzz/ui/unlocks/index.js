@@ -6,6 +6,7 @@ import routes from './routes.js';
 import themesA from './themes-a.js';
 import themesB from './themes-b.js';
 import extras from './extras.js';
+import { mergeGroups } from './merge.js';
 
 export const GROUPS = Object.freeze({ basics, routes, 'themes-a': themesA, 'themes-b': themesB, extras });
-export const REGISTRY = Object.freeze(Object.assign({}, basics, routes, themesA, themesB, extras));
+export const REGISTRY = Object.freeze(mergeGroups([basics, routes, themesA, themesB, extras]));
