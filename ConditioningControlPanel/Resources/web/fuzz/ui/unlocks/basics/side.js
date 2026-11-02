@@ -209,7 +209,7 @@ export default {
   wheel: {
     mount(ctx) {
       const WAIT = 90;
-      const labels = ['x0.5', 'x1', 'x2', 'x4', 'x1', 'x0.5'], mult = [0.5, 1, 2, 4, 1, 0.5];
+      const labels = ['A bit', 'Some', 'More', 'Most', 'Some', 'A bit'], mult = [0.5, 1, 2, 4, 1, 0.5];
       const stops = ['#ff9ccf', '#c9b6ff', '#ffe08a', '#ff69b4', '#9ee6dd', '#d9d4c8'];
       let wait = fresh(ctx) ? 0 : (ctx.store.get('wait') ?? 0);
       const c = chip(ctx, '', () => { if (wait <= 0) open(); else ctx.toast(WHEEL.wait.replace('{n}', String(Math.ceil(wait)))); });

@@ -168,6 +168,7 @@
         over60: P.gaps.filter((g) => g.gap > 60).length,
         meanGap: Math.round((P.t / Math.max(1, P.gaps.length)) * 10) / 10,
         forks: P.forks, endings: P.endings, pressed: P.pressed,
+        pod: P.gaps.find((g) => g.next.endsWith('_pod'))?.at ?? null,
       };
     },
   };

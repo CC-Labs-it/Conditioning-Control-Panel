@@ -49,7 +49,7 @@ export default {
       };
       newZone();
       const multOf = () => 1 + Math.min(4, streak) * 0.5;
-      const drawMult = () => { mult.textContent = streak ? `x${multOf()}` : ''; };
+      const drawMult = () => { mult.textContent = '+'.repeat(Math.min(4, streak)); };
       drawMult();
 
       const down = (ev) => { if (ev.button > 0) return; held = true; heldFor = 0; payT = 0; said = 0; };

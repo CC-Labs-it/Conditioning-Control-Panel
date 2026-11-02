@@ -82,7 +82,7 @@ export const GOLDEN = Object.freeze({
   pickLine: 'Keep the change.',
   prizes: Object.freeze([
     Object.freeze({ key: 'lump', label: '+{n}', line: 'That is real pretend money.' }),
-    Object.freeze({ key: 'frenzy', label: 'x7', line: 'For a little while. Tap, then.' }),
+    Object.freeze({ key: 'frenzy', label: 'Frenzy', line: 'For a little while. Tap, then.' }),
     Object.freeze({ key: 'free', label: 'Free buy', line: 'The next one is on us. We will regret it.' }),
   ]),
   missed: ['It left. It is not hurt. It is a little hurt.', 'That was a gold button. Was it. Who can say now.'],
@@ -117,7 +117,7 @@ export const WHEEL = Object.freeze({
   spin: 'Spin',
   wait: 'Next spin in {n} s',
   note: 'Free. Pays only {cur}.',
-  results: ['Spun. Paid. Nobody has learned anything.', 'The house would like you to know it is fine.', 'Daily Daze, hourly.', 'x0.5. Half is still some.', 'A big one. Do not tell the wheel.'],
+  results: ['Spun. Paid. Nobody has learned anything.', 'The house would like you to know it is fine.', 'Daily Daze, hourly.', 'A bit. A bit is still some.', 'A big one. Do not tell the wheel.'],
 });
 
 /* boxes Mystery Boxes */
@@ -136,7 +136,7 @@ export const APP_ONLY = Object.freeze({
 
 /* triggers Falling Words: rows name these three. */
 export const FALLING_WORDS = Object.freeze([
-  Object.freeze({ word: 'FOCUS', effect: 'crit', label: 'crit x10', line: 'Caught.' }),
+  Object.freeze({ word: 'FOCUS', effect: 'crit', label: 'Crit', line: 'Caught.' }),
   Object.freeze({ word: 'BLANK', effect: 'mute', label: 'mute 6 s', line: 'Six seconds of nothing. You are welcome.' }),
   Object.freeze({ word: 'DEEPER', effect: 'speed', label: 'faster', line: 'They are all going faster now. Good.' }),
 ]);

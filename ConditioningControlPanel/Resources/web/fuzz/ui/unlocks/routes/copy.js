@@ -8,7 +8,7 @@ export const ROUTE_COPY = Object.freeze({
   whispers: Object.freeze(['psst', 'shh']),
   volume: 'volume', far: 'far', close: 'close', left: 'left', right: 'right',
   finally: 'finally',
-  onTick: 'on the tick x{n}',
+  onTick: 'on the tick +{n}',
   phonesTitle: 'Headphones',
   /* Rest */
   napTag: 'z', napTitle: 'Back', napOk: 'Good',
@@ -16,7 +16,7 @@ export const ROUTE_COPY = Object.freeze({
   refused: 'NO',
   notNow: 'Not now', space: 'space',
   fileOpened: 'A file has been opened on you.',
-  gradeBoost: 'x2 for 30 s',
+  gradeBoost: 'More pay for 30 s',
   /* Slideshow and Swipe Feed */
   gif: 'GIF', muted: 'muted',
   wakeStill: 'Wake Up still works, top right.',

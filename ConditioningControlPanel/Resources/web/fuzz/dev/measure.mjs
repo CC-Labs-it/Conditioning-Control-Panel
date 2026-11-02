@@ -60,7 +60,7 @@ for (const profile of profiles) {
     all.push(row);
     const top = Object.entries(row.share).sort((a, b) => b[1] - a[1]).slice(0, 9).map(([k, v]) => `${k} ${v}`).join(', ');
     console.log(`\n${route} [${profile}] ended ${row.ended || 'NOT'} at ${m(row.t)} min, ${row.buys} buys, ${row.total.toExponential(2)} total, ${Math.round(row.fps)}/s fps x${row.fpsBoost} click ${Math.round(row.click)} x${row.clickBoost}, ${row.wallS} s wall`);
-    console.log(`  forks  ${Object.entries(row.forks).map(([k, v]) => `${k} ${m(v)}`).join(' ')}`);
+    console.log(`  forks  ${Object.entries(row.forks).map(([k, v]) => `${k} ${m(v)}`).join(' ')}  podcast ${m(row.pod)}`);
     console.log(`  gaps   longest ${row.longest.gap} s at ${m(row.longest.at)} min (for ${row.longest.next}), over 60 s: ${row.over60}, mean ${row.meanGap} s`);
     console.log(`  ends   ${Object.entries(row.endings).map(([k, v]) => `${k} ${m(v)}`).join(' ')}`);
     console.log(`  money  ${top}`);
@@ -71,8 +71,8 @@ for (const profile of profiles) {
 }
 await browser.close();
 
-console.log('\nroute                                     prof    drop  first-alt  gap  f1   f5   lumps mods');
+console.log('\nroute                                     prof    drop  first-alt  gap  f1   f5   pod  lumps mods');
 for (const r of all) {
   const alts = Object.entries(r.endings).filter(([k]) => k !== 'drop' && k !== 'onemore').map(([, v]) => v).filter((v) => v != null);
-  console.log(`${r.route.padEnd(41)} ${r.profile.padEnd(6)} ${m(r.t)} ${m(alts.length ? Math.min(...alts) : null)}  ${String(r.longest.gap).padStart(4)} ${m(r.forks.f1)} ${m(r.forks.f5)} ${String(r.lumpShare).padStart(4)}% ${String(r.modShare).padStart(4)}%`);
+  console.log(`${r.route.padEnd(41)} ${r.profile.padEnd(6)} ${m(r.t)} ${m(alts.length ? Math.min(...alts) : null)}  ${String(r.longest.gap).padStart(4)} ${m(r.forks.f1)} ${m(r.forks.f5)} ${m(r.pod)} ${String(r.lumpShare).padStart(4)}% ${String(r.modShare).padStart(4)}%`);
 }

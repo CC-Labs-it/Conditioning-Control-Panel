@@ -124,7 +124,7 @@ export const MOOD_UNLOCKS = {
   m_broke: mood((ctx) => {
     ctx.on('ad', () => {
       const r = rect('counter');
-      ctx.float((r?.left ?? 100) + (r?.width ?? 100) / 2, (r?.bottom ?? 90), 'x2', 'color:#1f9d55;font:800 20px sans-serif;');
+      ctx.float((r?.left ?? 100) + (r?.width ?? 100) / 2, (r?.bottom ?? 90), 'Worth it', 'color:#1f9d55;font:800 20px sans-serif;');
     });
   }),
 

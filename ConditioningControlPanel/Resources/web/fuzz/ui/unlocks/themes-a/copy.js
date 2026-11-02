@@ -8,7 +8,7 @@ export const COPY = Object.freeze({
     handsOff: 'hands off',
     deeper: 'deeper',
     middle: 'middle',
-    breathPay: (n) => `x4 +${n}`,
+    breathPay: (n) => `+${n}`,
   },
   bimbo: {
     moment: 'Hi.',
@@ -21,8 +21,8 @@ export const COPY = Object.freeze({
     /* The head's small taste of the queue, before Task Queue is bought. */
     order: 'TASK: TAP',
     orderPay: (n) => `Complied +${n}`,
-    taskPay: (n) => `x10 +${n}`,
-    armPay: (n) => `arm x3 +${n}`,
+    taskPay: (n) => `+${n}`,
+    armPay: (n) => `arm +${n}`,
     rank: (r) => `Rank: ${r}. Unit 7 is still ahead.`,
   },
   sissy: {
@@ -32,9 +32,9 @@ export const COPY = Object.freeze({
     wardrobeDone: 'That will do',
     houseRules: 'House Rules',
     matchCount: (n) => `${n} of 5 match`,
-    matchDone: (set) => `${set} set. Pay doubled.`,
-    testBoost: 'Pass. Taps x3.',
-    testPass: 'Pass. Taps x3 for a while.',
+    matchDone: (set) => `${set} set. Pay goes up.`,
+    testBoost: 'Pass. Taps pay more.',
+    testPass: 'Pass. Taps pay more for a while.',
     testFail: 'We will say no more about it.',
   },
 });

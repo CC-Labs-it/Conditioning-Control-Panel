@@ -361,18 +361,18 @@ body.gentle #btn[data-skin=watch] { animation: none; }
       const glow = (css, at) => ctx.el('div', `position:absolute;${css};width:90px;height:90px;background:radial-gradient(circle at ${at},rgba(240,194,75,.75),transparent 70%);pointer-events:none;`, null, 'wash');
       const spots = [glow('left:0;top:0', '0 0'), glow('right:0;top:0', '100% 0'), glow('left:0;bottom:0', '0 100%'), glow('right:0;bottom:0', '100% 100%')];
       if (!ctx.gentle) for (const s of spots) ctx.anim(s, [{ opacity: 0.45 }, { opacity: 1 }], { duration: 1600, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
-      const party = (x, y) => {
+      const party = (x, y, paid) => {
         const { w, h } = ctx.bounds();
         const cx = x < w / 2 ? 0 : w, cy = y < h / 2 ? 0 : h;
         const aim = Math.atan2(h / 2 - cy, w / 2 - cx);
         burst(ctx, cx, cy, { color: '#f0c24b', n: 24, reach: 150, size: 9, ms: 900, from: aim - 1, to: aim + 1 });
-        pop(ctx, Math.max(70, Math.min(w - 70, cx)), Math.max(60, Math.min(h - 60, cy)), 'x10', { color: '#c79400', size: 44, ms: 1300 });
+        if (paid) pop(ctx, Math.max(70, Math.min(w - 70, cx)), Math.max(60, Math.min(h - 60, cy)), `+${ctx.fmt(paid)}`, { color: '#c79400', size: 44, ms: 1300 });
       };
       ctx.on('wall', ({ corner, x, y }) => {
         if (!corner) return;
-        ctx.pay(ctx.rates().wall * 9, 'corner', { x, y });
+        const got = ctx.pay(ctx.rates().wall * 9, 'corner', { x, y });
         ctx.emit('cornered', { x, y });
-        party(x, y);
+        party(x, y, got);
         sfx(ctx, 'sfx/pb_fanfare.mp3', 0.5);
       });
       if (fresh(ctx)) { const { w } = ctx.bounds(); party(0, 0); ctx.after(220, () => party(w, 0)); }
