@@ -293,7 +293,7 @@ const eggBack = async (page, sel) => { await page.locator(sel).scrollIntoViewIfN
   await page.evaluate(() => { const f = window.fuzz; for (const it of f.engine.shop(50).rows) if (it.lane === 'slides' && it.kind !== 'fork') f.buy(it.id); });
   await page.waitForTimeout(3800);
   await page.screenshot({ path: join(shots, 'intro-14-slideshow.png') });
-  const shown = await page.evaluate(() => [...document.querySelectorAll('#world *')].filter((e) => (e.style?.background || '').includes('blob:')).length);
+  const shown = await page.evaluate(() => [...document.querySelectorAll('#world *')].filter((e) => (e.style?.background || '').includes('blob:') || (e.tagName === 'IMG' && e.src.startsWith('blob:') && e.naturalWidth > 0)).length);
   check(shown > 0, 'no frame is showing the file');
 
   /* The pause row changes it. */
