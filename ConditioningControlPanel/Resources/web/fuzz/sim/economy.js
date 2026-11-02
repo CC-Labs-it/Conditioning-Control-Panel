@@ -1,158 +1,202 @@
 /* ============================================================================
- * sim/economy.js - the whole economy as pure functions over one state object.
- * No DOM, no timers, no audio: ui/ and fx/ react to what these return.
- * Tested by tests/economy.test.mjs.
- *
- * Time is always passed in (ms); randomness is always passed in (rng in [0,1)).
+ * sim/economy.js - the graph-aware economy. Pure: no DOM, no timers; rng and clock are passed in. `mods` is a list of
+ * {fps?, click?, wall?, price?, walls?} modifiers, each (value, state, now[, item]) => value, folded in order.
+ * The UI registers them through ctx.mod; the route test can pass the same list.
  * ==========================================================================*/
 
-import { ITEMS, BY_ID, PINNED, ENDING_ID, DEEPER_STEP } from '../data/items.js';
+import { ITEMS, BY_ID, FORKS, FORK_OF_LANE } from '../data/items.js';
+import { CONFIG } from '../data/config.js';
+import { moodOf } from './moods.js';
 
-export const BASE_CLICK = 1;
-export const CRIT_CHANCE = 0.05;
-export const CRIT_MUL = 8;
-export const CORNER_MUL = 10;
-export const POP2_SHARE = 0.01;          // Bubble Pop II: each click also pays this share of FPS
-export const SHOP_WINDOW = 5;
-export const MAX_PACE = 50;
+export const WALL_BASE = 1;
 
-export function createState({ now = 0, pace = 1 } = {}) {
+export function createRun({ pace = 1, mood = null, seed = 1, perk = null } = {}) {
+  const s = {
+    pace: Math.max(1, Math.min(CONFIG.MAX_PACE, pace)),
+    seed,
+    mood,
+    clock: 0,          // ms played: stops on pause, suspend and end
+    fuzz: 0,
+    total: 0,          // ever earned this run
+    taps: 0,
+    walls: 0,
+    buys: 0,
+    owned: { start: 1 },
+    order: ['start'],
+    picks: {},
+    sources: {},
+    store: {},         // ctx.store per unlock
+    endless: false,
+    ended: null,       // {id, at}
+    base: { fps: 0, click: 1, wall: WALL_BASE },
+  };
+  if (perk && BY_ID[perk] && BY_ID[perk].lane === 'look') { s.owned[perk] = 1; s.order.push(perk); }
+  recalc(s);
+  return s;
+}
+
+export const has = (s, id) => (s.owned[id] || 0) > 0;
+export const count = (s, id) => s.owned[id] || 0;
+export const pick = (s, f) => s.picks[f] || null;
+
+/** Income from what is owned, after the mood. Cached in s.base, rebuilt on every buy. A stacking row pays once:
+ *  its count is how many bouncing buttons there are, not how much each wall pays. */
+export function recalc(s) {
+  let fps = 0, click = 1, wall = WALL_BASE;
+  const pay = moodOf(s)?.pay;
+  for (const id of s.order) {
+    const it = BY_ID[id];
+    if (!it) continue;
+    if (it.fps) fps += pay ? pay(it.fps, it) : it.fps;
+    if (it.click) click += pay ? pay(it.click, it) : it.click;
+    if (it.wall) wall += pay ? pay(it.wall, it) : it.wall;
+  }
+  s.base = { fps, click, wall };
+  return s.base;
+}
+
+function fold(field, value, s, mods, now, item) {
+  if (!mods) return value;
+  for (const m of mods) {
+    const f = m[field];
+    if (!f) continue;
+    const next = item ? f(value, s, now, item) : f(value, s, now);
+    if (Number.isFinite(next)) value = next;
+  }
+  return value;
+}
+
+/** Everything that decides income right now. walls = hits per second per bouncing button. */
+export function rates(s, mods = null, now = s.clock) {
+  const mood = moodOf(s);
   return {
-    v: 1,
-    fuzz: 0,                 // the bank
-    total: 0,                // lifetime earned (unlocks, achievements, the final number)
-    clicks: 0,
-    crits: 0,
-    bounces: 0,
-    corners: 0,
-    owned: {},               // id -> count
-    bought: [],              // ids in purchase order (pluck ladder, firsts)
-    achievements: [],        // ids, in order
-    sources: { clicks: 0, layers: 0, bounces: 0, boxes: 0, golden: 0, levels: 0 },
-    effects: { frenzyUntil: 0, frenzyMul: 1, clickFrenzyUntil: 0, clickFrenzyMul: 1, focusUntil: 0, deeperUntil: 0, blankUntil: 0 },
-    pace: Math.max(1, Math.min(MAX_PACE, pace)),
-    startedAt: now,
-    ended: false,
-    endedAt: 0,
+    fps: Math.max(0, fold('fps', s.base.fps, s, mods, now)),
+    click: Math.max(0, fold('click', s.base.click, s, mods, now)),
+    wall: Math.max(0, fold('wall', s.base.wall, s, mods, now)),
+    walls: Math.max(0, fold('walls', CONFIG.WALLS_PER_STRAY * (mood?.walls || 1), s, mods, now)),
   };
 }
 
-export const owned = (s, id) => s.owned[id] || 0;
-export const has = (s, id) => owned(s, id) > 0;
-
-export function priceOf(item, count = 0) {
-  const grow = item.grow || 1;
-  return Math.round(item.cost * Math.pow(grow, count));
+export function price(s, id, mods = null, now = s.clock) {
+  const it = BY_ID[id];
+  if (!it) return Infinity;
+  let v = it.cost;
+  if (it.grow) v = it.cost * Math.pow(it.grow.ratio, count(s, id));
+  const mp = moodOf(s)?.price;
+  if (mp) v = mp(v, it);
+  v = fold('price', v, s, mods, now, it);
+  return Math.max(0, Math.round(v));
 }
 
-export function price(s, id) { return priceOf(BY_ID[id], owned(s, id)); }
+const laneOpen = (s, it) => { const f = FORK_OF_LANE[it.lane]; return !f || s.picks[f] === it.lane; };
+const canHaveMore = (s, it) => (it.grow ? count(s, it.id) < it.grow.max : !has(s, it.id));
 
-/** Visible in the shop: prerequisites owned, achievements reached, not sold out. */
-export function isUnlocked(s, item) {
-  if (item.req && !item.req.every((r) => has(s, r))) return false;
-  if (item.achNeed && s.achievements.length < item.achNeed) return false;
-  const n = owned(s, item.id);
-  if (item.grow) return n < (item.max ?? Infinity);
-  return n === 0;
+/** On offer ignoring price: right lane for the picks made, parents owned, not already owned. */
+export function isOpen(s, it) {
+  if (it.group !== 'run' || it.id === 'start' || s.ended) return false;
+  if (!laneOpen(s, it) || !canHaveMore(s, it)) return false;
+  return it.req.every((q) => has(s, q));
 }
 
-export function canBuy(s, id) {
-  const item = BY_ID[id];
-  return !!item && !s.ended && isUnlocked(s, item) && s.fuzz >= price(s, id);
+export const openItems = (s, mods = null) => ITEMS.filter((it) => isOpen(s, it))
+  .map((it) => ({ it, c: price(s, it.id, mods) }))
+  .sort((a, b) => a.c - b.c || a.it.cost - b.it.cost)
+  .map((x) => x.it);
+
+/** The next row on the main path: always in sight, always one press away. */
+export function goal(s) {
+  if (s.ended) return null;
+  for (const it of ITEMS) if (it.lane === 'trunk' && it.group === 'run' && !has(s, it.id)) return it;
+  return null;
 }
 
-/** The rolling window: pinned first, then the cheapest unlocked by current price. */
-export function shopWindow(s, size = SHOP_WINDOW) {
-  const open = ITEMS.filter((it) => isUnlocked(s, it));
-  const pinned = open.filter((it) => PINNED.includes(it.id));
-  const rest = open.filter((it) => !PINNED.includes(it.id)).sort((a, b) => price(s, a.id) - price(s, b.id) || ITEMS.indexOf(a) - ITEMS.indexOf(b));
-  return [...pinned, ...rest].slice(0, size);
+/** A row shows once the player has earned most of its price: strangers read what they can nearly have. */
+export const revealed = (s, cost) => cost <= Math.max(8, s.total * 1.5);
+
+/** The rolling window: the goal plus the next few by price. */
+export function shopWindow(s, mods = null, size = 6) {
+  const g = goal(s);
+  const rest = openItems(s, mods).filter((it) => it !== g && revealed(s, price(s, it.id, mods)));
+  const cap = Math.min(size, moodOf(s)?.window ?? size);
+  return { goal: g, rows: rest.slice(0, cap), more: Math.max(0, rest.length - cap) };
 }
 
-export function deeperMul(s) {
-  const deepers = ['deep1', 'deep2', 'deep3'].filter((id) => has(s, id)).length;
-  return 1 + DEEPER_STEP * deepers;
-}
-
-/** Fuzz per second from the layers, before pace. */
-export function baseFps(s) {
-  let sum = 0;
-  for (const it of ITEMS) if (it.fps) sum += it.fps * owned(s, it.id);
-  return sum * deeperMul(s);
-}
-
-export function frenzyMul(s, now) { return now < s.effects.frenzyUntil ? s.effects.frenzyMul : 1; }
-
-/** What the counter shows and what tick() pays, per second. */
-export function fps(s, now) { return baseFps(s) * frenzyMul(s, now) * s.pace; }
-
-export function clickPower(s, now) {
-  let p = BASE_CLICK;
-  for (const it of ITEMS) if (it.click && has(s, it.id)) p += it.click;
-  if (has(s, 'pop2')) p += POP2_SHARE * baseFps(s) * frenzyMul(s, now);
-  return p * s.pace;
-}
-
-export function bounceValue(s, corner = false) {
-  let v = 1;
-  for (const it of ITEMS) if (it.bounce && has(s, it.id)) v += it.bounce;
-  if (corner && has(s, 'corner')) v *= CORNER_MUL;
-  return v * s.pace;
-}
-
-function pay(s, amount, source) {
-  s.fuzz += amount;
-  s.total += amount;
+function credit(s, amount, source) {
+  s.fuzz += amount; s.total += amount;
   s.sources[source] = (s.sources[source] || 0) + amount;
   return amount;
 }
 
-/** Advance the layers by ms of real time. Returns what was paid. */
-export function tick(s, ms, now) {
-  if (s.ended || ms <= 0) return 0;
-  return pay(s, fps(s, now) * (ms / 1000), 'layers');
+export const lump = (s, amount, source = 'lump') => credit(s, Math.max(0, amount), source);
+
+export function tap(s, mods = null, now = s.clock) {
+  s.taps += 1;
+  return credit(s, rates(s, mods, now).click * s.pace, 'tap');
 }
 
-/** One bubble pop. rng decides the crit (only with Trigger Words). */
-export function click(s, now, rng = Math.random) {
-  if (s.ended) return { gain: 0, crit: false };
-  s.clicks += 1;
-  let gain = clickPower(s, now);
-  let crit = false;
-  if (has(s, 'trig') && rng() < CRIT_CHANCE) { crit = true; gain *= CRIT_MUL; s.crits += 1; }
-  if (now < s.effects.clickFrenzyUntil || now < s.effects.focusUntil) gain *= s.effects.clickFrenzyMul || 1;
-  pay(s, gain, 'clicks');
-  return { gain, crit };
+export function wallHit(s, mods = null, now = s.clock) {
+  s.walls += 1;
+  return credit(s, rates(s, mods, now).wall * s.pace, 'wall');
 }
 
-/** A drifting bubble hit an edge (or a corner). */
-export function bounce(s, corner = false) {
+/** Advance the game clock and pay the per-second income. */
+export function tick(s, dtMs, mods = null) {
   if (s.ended) return 0;
-  s.bounces += 1;
-  if (corner && has(s, 'corner')) s.corners += 1;
-  return pay(s, bounceValue(s, corner), 'bounces');
+  s.clock += dtMs;
+  return credit(s, rates(s, mods, s.clock).fps * s.pace * (dtMs / 1000), 'fps');
 }
 
-/** A lump from a side system (box, golden bubble, level). */
-export function lump(s, amount, source) {
-  if (s.ended || amount <= 0) return 0;
-  return pay(s, amount, source);
-}
-
-/** Buy one. Returns {ok, reason, item, count}. The ending item flips s.ended. */
-export function buy(s, id, now) {
-  const item = BY_ID[id];
-  if (!item) return { ok: false, reason: 'unknown' };
-  if (s.ended) return { ok: false, reason: 'ended' };
-  if (!isUnlocked(s, item)) return { ok: false, reason: 'locked' };
-  const cost = price(s, id);
-  if (s.fuzz < cost) return { ok: false, reason: 'short', short: cost - s.fuzz };
+/** A plain buy. A fork answers {reason:'fork'}: take it with choose(). */
+export function buy(s, id, mods = null) {
+  const it = BY_ID[id];
+  if (!it) return { ok: false, reason: 'unknown' };
+  if (!isOpen(s, it)) return { ok: false, reason: 'closed' };
+  if (it.kind === 'fork') return { ok: false, reason: 'fork' };
+  const cost = price(s, id, mods);
+  if (s.fuzz < cost) return { ok: false, reason: 'short', cost };
   s.fuzz -= cost;
-  s.owned[id] = owned(s, id) + 1;
-  s.bought.push(id);
-  if (id === ENDING_ID) { s.ended = true; s.endedAt = now; }
-  return { ok: true, item, count: s.owned[id], cost };
+  add(s, id);
+  if (it.kind === 'end') {
+    if (id === 'onemore') s.endless = true;
+    else s.ended = { id, at: s.clock };
+  }
+  return { ok: true, item: it, count: count(s, id), cost };
 }
 
-/** Minutes played, for the final card. */
-export function minutesPlayed(s, now) { return Math.max(0, Math.round(((s.ended ? s.endedAt : now) - s.startedAt) / 60000)); }
+/** A fork costs nothing to take; it only needs its cost reached. The lanes not picked stay locked this run. */
+export function choose(s, forkId, lane, mods = null) {
+  const it = BY_ID[forkId], f = FORKS[forkId];
+  if (!it || !f || !f.opts[lane]) return { ok: false, reason: 'unknown' };
+  if (!isOpen(s, it)) return { ok: false, reason: 'closed' };
+  if (s.fuzz < price(s, forkId, mods)) return { ok: false, reason: 'short' };
+  s.picks[forkId] = lane;
+  add(s, forkId);
+  return { ok: true, item: it, lane };
+}
+
+function add(s, id) {
+  s.owned[id] = (s.owned[id] || 0) + 1;
+  if (!s.order.includes(id)) s.order.push(id);
+  s.buys += 1;
+  recalc(s);
+}
+
+/** Dev door: own an item and everything above it, free. Picks the lanes its parents need. Answers the ids it added. */
+export function grant(s, id, added = []) {
+  const it = BY_ID[id];
+  if (!it || it.group !== 'run' || has(s, id)) return added;
+  const f = FORK_OF_LANE[it.lane];
+  if (f) {
+    if (s.picks[f] && s.picks[f] !== it.lane) return added;
+    s.picks[f] = it.lane;
+    grant(s, f, added);
+  }
+  for (const q of it.req) grant(s, q, added);
+  if (it.kind === 'fork' && !s.picks[id]) s.picks[id] = Object.keys(FORKS[id].opts)[0];
+  add(s, id);
+  added.push(id);
+  return added;
+}
+
+/** The route as lanes picked, in fork order. */
+export const routeOf = (s) => Object.keys(FORKS).map((f) => s.picks[f]).filter(Boolean);
