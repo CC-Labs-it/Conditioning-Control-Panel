@@ -1,9 +1,11 @@
 /* Swipe Feed: a thumb game. Every swipe up is a tap, and all the rows after the first change what a swipe is worth.
- * The feed lives in a rail when there is room; on a phone it sits beside the button and opens full screen on a press. */
+ * The feed is a screen (ui/screens.js): it earns per second as well, and its bar drags it anywhere, since a drag on the feed
+ * itself is a swipe. On a phone it sits beside the button and opens full screen on a press. */
 
 import { FEED_LINES } from '../../../data/content/index.js';
-import { panel, deck, burst, ring, railsRoom, fill, CLIP_PICTURES } from './kit.js';
+import { deck, burst, ring, railsRoom, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
+import { screen, mediaEl, dropMedia, holdMedia, testCard, themeLists, themeNiche } from '../../screens.js';
 
 /* The one feed. d_scroll builds it; the later rows hang off it. Module state is reset when d_scroll goes. */
 let feed = null;
@@ -12,16 +14,16 @@ const hooks = { swipe: [], doubleTap: [], pull: [], tile: [] };
 const KINDS = ['pretty', 'close'];
 
 function makeFeed(ctx) {
-  const shell = panel(ctx, { side: 'left', height: Math.min(ctx.bounds().h - 120, 520), css: 'pointer-events:auto;' });
-  const root = ctx.el('div', 'position:absolute;inset:0;background:#111;border:2px solid #222;border-radius:12px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;pointer-events:auto;', null, shell);
-  shell.style.position = shell.style.position || 'relative';
+  const scr = screen(ctx, { handle: true, ratio: 1.75, hint: !ctx.store.get('spot') });
+  const shell = scr.body;
+  const root = ctx.el('div', 'position:absolute;inset:0;background:#111;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;pointer-events:auto;', null, shell);
   const col = ctx.el('div', 'position:absolute;left:0;right:0;top:0;transition:transform .28s ease-out;will-change:transform;', null, root);
   const hud = ctx.el('div', 'position:absolute;inset:0;pointer-events:none;z-index:5;', null, root);
   const hint = ctx.el('div', 'position:absolute;left:0;right:0;bottom:12px;text-align:center;font:700 13px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', ROUTE_COPY.feedSwipe, hud);
   hint.className = 'routes-hint';
 
-  const f = { root, shell, col, hud, tiles: [], index: 0, h: 0, swipes: 0, fullscreen: false, sheetClose: null };
-  ctx.css('.routes-small .routes-big{display:none !important}.routes-full .routes-fy{top:48px !important;right:8px}.routes-full .routes-endbox{bottom:72px !important}.routes-full .routes-hint{bottom:auto !important;top:58%}');
+  const f = { scr, root, shell, col, hud, tiles: [], index: 0, h: 0, swipes: 0, fullscreen: false, sheetClose: null };
+  ctx.css('.routes-small .scr-card{justify-content:flex-start;padding-top:6px}.routes-small .scr-card b{display:none}.routes-small .routes-big{display:none !important}.routes-full .routes-fy{top:48px !important;right:8px}.routes-full .routes-endbox{bottom:72px !important}.routes-full .routes-hint{bottom:auto !important;top:58%}');
   const sizeMode = () => { root.classList.toggle('routes-small', !railsRoom(ctx) && !f.fullscreen); hint.textContent = (!railsRoom(ctx) && !f.fullscreen) ? ROUTE_COPY.feedPress : ROUTE_COPY.feedSwipe; };
   sizeMode();
   f.sizeMode = sizeMode;
@@ -32,13 +34,33 @@ function makeFeed(ctx) {
     t.clip = hooks.clip ? hooks.clip() : false;
     t.seenAt = 0;
     t.liked = false;
-    const pic = await ctx.pictures.next(t.clip && CLIP_PICTURES ? { niche: kind, kind: 'clip' } : { niche: kind });
+    const wanted = t.clip ? 'clip' : 'picture';
+    const pic = await ctx.pictures.next({ niche: themeNiche(themeLists(ctx), kind, ctx.rng), kind: wanted });
     if (!t.el.isConnected) return;
-    t.el.style.background = pic ? `center/cover no-repeat url("${pic.url}") #222` : 'repeating-linear-gradient(45deg,#2a2a33 0 10px,#222 10px 20px)';
+    dropMedia(t.media);
+    t.media = null;
+    t.card?.remove();
+    t.card = null;
+    if (pic) {
+      t.media = mediaEl(ctx, t.el, pic);
+      t.el.insertBefore(t.media, t.credit);
+      t.media.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
+      if (t.media.tagName === 'IMG') t.media.draggable = false;
+      else t.media.addEventListener('loadeddata', () => syncClips(), { once: true });
+    } else {
+      t.card = testCard(ctx, t.el, wanted);
+    }
+    t.real = !!pic;
     t.credit.textContent = pic?.credit || '';
     t.deco.textContent = '';
     for (const fn of hooks.tile) fn(t);
   }
+  /* One clip plays at a time, the one on show. Wake Up, a suspend and Gentle stop it. */
+  function syncClips() { for (const t of f.tiles) holdMedia(ctx, t.media, t.n === f.index); }
+  ctx.on('pause', syncClips);
+  ctx.on('resume', syncClips);
+  ctx.on('suspend', syncClips);
+  ctx.on('pictures', () => { for (const t of f.tiles) fillTile(t); });
   function addTile() {
     const el = ctx.el('div', `position:absolute;left:3px;right:3px;border-radius:9px;overflow:hidden;background:#222;`, null, col);
     const credit = ctx.el('div', 'position:absolute;right:4px;bottom:2px;font:10px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 2px #000;', '', el);
@@ -46,13 +68,14 @@ function makeFeed(ctx) {
     const t = { el, credit, deco, n: f.tiles.length ? f.tiles[f.tiles.length - 1].n + 1 : 0 };
     f.tiles.push(t);
     fillTile(t);
-    if (f.tiles.length > 5) f.tiles.shift().el.remove();
+    if (f.tiles.length > 5) { const gone = f.tiles.shift(); dropMedia(gone.media); gone.el.remove(); }
     return t;
   }
   function place() {
     f.h = root.clientHeight || 100;
     for (const t of f.tiles) { t.el.style.top = `${t.n * (f.h + 4)}px`; t.el.style.height = `${f.h - 4}px`; }
     col.style.transform = `translateY(${-f.index * (f.h + 4)}px)`;
+    syncClips();
   }
   f.place = place;
   f.current = () => f.tiles.find((t) => t.n === f.index) || f.tiles[0];
@@ -78,11 +101,14 @@ function makeFeed(ctx) {
   }
   f.swipe = swipe;
 
-  /* gestures: drag up = swipe, drag down = pull, two quick presses = like, wheel = swipe. */
+  /* gestures: drag up = swipe, drag down = pull, two quick presses = like, wheel = swipe. The bar above the feed moves it. */
   let down = null, lastTapAt = 0;
   root.addEventListener('pointerdown', (e) => {
-    down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
-    try { root.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    if (ctx.paused) return;
+    /* A swipe may start on the test card's button; left still, the press stays the button's. */
+    const onButton = !!e.target.closest?.('button');
+    down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, onButton };
+    if (!onButton) { try { root.setPointerCapture(e.pointerId); } catch { /* fine */ } }
     col.style.transition = 'none';
   });
   root.addEventListener('pointermove', (e) => {
@@ -100,7 +126,7 @@ function makeFeed(ctx) {
     place();
     if (dy > 46) { for (const fn of hooks.pull) fn({ x: e.clientX, y: e.clientY }); return; }
     for (const fn of hooks.drag || []) fn(0);
-    if (Math.abs(dy) < 12 && Math.abs(dx) < 12 && performance.now() - d.t < 350) {
+    if (!d.onButton && Math.abs(dy) < 12 && Math.abs(dx) < 12 && performance.now() - d.t < 350) {
       const now = performance.now();
       if (now - lastTapAt < 340) { lastTapAt = 0; for (const fn of hooks.doubleTap) fn({ x: e.clientX, y: e.clientY }); return; }
       lastTapAt = now;
@@ -133,7 +159,7 @@ function makeFeed(ctx) {
   }
   function close() {
     f.fullscreen = false;
-    root.style.position = 'absolute'; root.style.borderRadius = '12px'; root.style.border = '2px solid #222';
+    root.style.position = 'absolute'; root.style.borderRadius = '0'; root.style.border = '0';
     shell.appendChild(root);
     back.style.display = count.style.display = 'none';
     root.classList.remove('routes-full');
@@ -185,9 +211,8 @@ export default {
       hooks.clip = () => ctx.rng() < 0.34;
       listen(ctx, 'tile', (t) => {
         if (!t.clip) return;
-        ctx.el('div', 'position:absolute;left:50%;top:50%;margin:-18px 0 0 -12px;width:0;height:0;border-left:26px solid rgba(255,255,255,.8);border-top:18px solid transparent;border-bottom:18px solid transparent;', null, t.deco);
         ctx.el('div', 'position:absolute;right:6px;top:6px;font:700 11px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 2px #000;', ROUTE_COPY.muted, t.deco);
-        t.bar = ctx.el('div', 'position:absolute;left:0;right:0;bottom:0;height:5px;background:#ff69b4;transform-origin:0 50%;transform:scaleX(0);', null, t.deco);
+        t.bar = ctx.el('div', 'position:absolute;left:0;right:0;bottom:0;height:5px;background:var(--niche);transform-origin:0 50%;transform:scaleX(0);', null, t.deco);
         t.watch = 0;
       });
       return {
@@ -216,7 +241,7 @@ export default {
       box.className = 'routes-big routes-fy';
       const label = ctx.el('div', 'font:11px Arial,Helvetica,sans-serif;color:#f0a8cc;text-shadow:0 1px 2px #000;', lines(), box);
       const mk = (c) => { const o = ctx.el('div', 'height:6px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden;', null, box); return ctx.el('div', `height:100%;background:${c};transform-origin:0 50%;transition:transform .4s;`, null, o); };
-      const a = mk('#c23a83'), b = mk('#2f8fd0');
+      const a = mk('var(--niche)'), b = mk('var(--niche-2)');
       const paint = () => { const s = weights[KINDS[0]] + weights[KINDS[1]]; a.style.transform = `scaleX(${weights[KINDS[0]] / s})`; b.style.transform = `scaleX(${weights[KINDS[1]] / s})`; };
       paint();
       let sat = 0;

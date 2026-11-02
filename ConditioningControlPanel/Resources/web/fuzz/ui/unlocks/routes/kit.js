@@ -206,8 +206,6 @@ export function mountSpiral(ctx, { opacity = 0.6, fadeMs = 1400 } = {}) {
 }
 export const spiral = () => spiralNow;
 
-/** Flip when ctx.pictures can answer {kind:'clip'} with a muted video: Corner GIF, Video Clips and Mandatory Video stop panning a still. */
-export const CLIP_PICTURES = false;
 
 /* ---- ads: one look, one rule. Only a real card links out, on the player's own press, paying once per ad ---- */
 export const nextAd = (ctx, kind, opts = {}) => ctx.ads.next({ kind, ...opts });
