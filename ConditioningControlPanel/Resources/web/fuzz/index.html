@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Terms &amp; Conditioning</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="ui/legal.css">
 </head>
 <body>
   <div id="world">
@@ -15,7 +16,8 @@
         <div id="l-ticker" class="ticker"></div>
         <div id="counter" aria-live="off"><span id="count">0</span> <span id="cur"></span></div>
         <div id="l-meters"></div>
-        <div id="btn-zone"><div id="btn-wrap"><button id="btn" type="button">Click</button><span id="btn-lock" hidden></span></div></div>
+        <p id="phrase" hidden>Click here to Accept the Terms and Conditioning</p>
+        <div id="btn-zone"><div id="btn-wrap"><button id="btn" type="button">Accept</button><span id="btn-lock" hidden></span></div></div>
       </main>
       <div id="l-banner"></div>
       <section id="shop" aria-label="Shop" hidden>
@@ -41,6 +43,7 @@
       <div class="card-buttons"><button id="resume" type="button" class="primary">Resume</button></div>
       <label class="check"><input id="mute" type="checkbox"> Mute</label>
       <label class="check"><input id="gentle" type="checkbox"> Gentle visuals</label>
+      <div class="pics-row"><span id="pics-now"></span><button id="pics-change" type="button">Change</button></div>
       <div class="card-buttons small">
         <button id="save-out" type="button" hidden>Export save</button>
         <button id="save-in" type="button" hidden>Import save</button>

@@ -11,6 +11,7 @@ import { SAVE_EVERY_MS } from '../sim/save.js';
 import { createCards } from './cards.js';
 import { createShop } from './shop.js';
 import { openFork } from './fork.js';
+import { pictureRow } from './picture-card.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -212,15 +213,22 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
 
   /* ---- pause card ---- */
-  function pause() {
+  let wakeGate = null;   // the intro: Wake Up and Escape have nothing to stop yet, and say so
+  function pause(host) {
+    if (wakeGate && host !== true) { wakeGate(); return; }
     if (engine.paused) { el.resume.focus(); return; }
     engine.setPaused(true);
     el.pause.hidden = false;
     const after = engine.life.runs > 0;
     $('save-out').hidden = $('save-in').hidden = !after;
     el.saveBox.hidden = true;
+    drawPictureRow();
     el.resume.focus();
     engine.save();
+  }
+  function drawPictureRow() {
+    $('pics-now').textContent = pictureRow(engine.pictures);
+    $('pics-change').hidden = !!wakeGate;
   }
   function resume() {
     if (engine.suspended) return;
@@ -229,8 +237,9 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
 
   function wirePause(hooks) {
-    el.wake.addEventListener('click', pause);
+    el.wake.addEventListener('click', () => pause());
     el.resume.addEventListener('click', resume);
+    $('pics-change').addEventListener('click', () => { if (!engine.suspended) hooks.changePictures?.(drawPictureRow); });
     el.mute.checked = !!extras.muted;
     audio?.setMuted(!!extras.muted);
     el.gentle.checked = gentleOn;
@@ -239,6 +248,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     doc.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
+      if (hooks.escapeTaken?.()) return;
       if (engine.paused) resume(); else pause();
     });
     const forget = $('forget');
@@ -317,7 +327,18 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     paid, float, toast, say, draw,
     modal: (spec) => cards.open(spec),
     denied: (id) => shop?.denied(id),
+    /** The page's opening line goes with the first thing bought. */
+    drawPhrase() {
+      const p = $('phrase');
+      const show = engine.run.order.length <= 1;
+      if (p.hidden === !show) return;
+      p.hidden = !show;
+      shop?.fit();
+    },
+    showCount(n) { el.count.textContent = whole(n); shown = -1; },
+    setWakeGate(fn) { wakeGate = fn; },
     bought(item) {
+      ui.drawPhrase();
       if (item.kind === 'fork') return;
       if (item.line) toast(brandText(item.line));
       bumpCounter();
@@ -341,6 +362,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       win.addEventListener('resize', onResize);
       onResize();
       drawCounter();
+      ui.drawPhrase();
       shop.draw();
       shop.fit();
     },
