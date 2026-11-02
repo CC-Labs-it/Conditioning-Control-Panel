@@ -5,6 +5,7 @@ import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
 import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, startTheme, modChip, pick, pop, railPanel } from './kit.js';
 import { endingShow } from './endings.js';
+import { COPY } from './copy.js';
 
 const R = THEMES.sissy.rules;
 const NICHES = ['lace', 'bows', 'pearls', 'frills', 'gloves', 'satin'];
@@ -37,11 +38,11 @@ const CSS = `#btn{border:1px solid #c96a8c;border-radius:14px;color:#7a2f4b;back
 function moment(ctx) {
   ctx.audio.play('assets/audio/sfx/reveal_chime.mp3', { bus: 'sfx', gain: 0.7 });
   if (ctx.gentle) {
-    const s = sheet(ctx, 'background:#c96a8c;display:grid;place-items:center;color:#fff;font:italic clamp(30px,7vw,60px) Georgia,serif;', 'Shoulders back.');
+    const s = sheet(ctx, 'background:#c96a8c;display:grid;place-items:center;color:#fff;font:italic clamp(30px,7vw,60px) Georgia,serif;', COPY.sissy.moment);
     done(ctx.anim(s, [{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }], { duration: 1300 }), s);
     return;
   }
-  const title = sheet(ctx, 'display:grid;place-items:center;color:#fff;font:italic clamp(30px,7vw,60px) Georgia,serif;z-index:2;text-shadow:0 2px 0 #8d1830;', 'Shoulders back.');
+  const title = sheet(ctx, 'display:grid;place-items:center;color:#fff;font:italic clamp(30px,7vw,60px) Georgia,serif;z-index:2;text-shadow:0 2px 0 #8d1830;', COPY.sissy.moment);
   const cloth = 'position:absolute;top:0;bottom:0;width:50.5%;background:repeating-linear-gradient(90deg,#c96a8c 0 16px,#b5587b 16px 32px);pointer-events:none;';
   const l = ctx.el('div', `${cloth}left:0;`, null, 'over'), r = ctx.el('div', `${cloth}right:0;`, null, 'over');
   const o = { duration: 1250, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'forwards' };
@@ -72,6 +73,30 @@ export default {
       ctx.el('div', 'position:absolute;inset:4px;border:2px dotted #e7b6c8;border-radius:10px;', null, 'wash');
       sideFrames(ctx, ['lace', 'bows', 'pearls', 'satin'], 'border-radius:50%;outline:2px dotted #c96a8c;outline-offset:3px;');
       modChip(ctx, 'sissy');
+      /* A taste of the signature before House Rules is bought: one small manner beside the button, and it pays. */
+      const manner = ctx.el('button', 'position:absolute;left:0;top:0;width:84px;min-height:48px;padding:2px 4px;background:#fff;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:12px/1.1 Georgia,serif;pointer-events:auto;cursor:pointer;opacity:0;visibility:hidden;', null, 'floaters');
+      manner.type = 'button';
+      let i = Math.floor(ctx.rng() * R.rules.length), shown = false;
+      const say = () => {
+        if (shown || ctx.has('si_rules')) return;
+        shown = true;
+        const g = geo(ctx);
+        manner.textContent = `☐ ${R.rules[i++ % R.rules.length]}`;
+        manner.style.transform = `translate(${Math.min(g.w - 92, g.cx + g.bw / 2 + 12)}px,${g.cy - 24}px)`;
+        manner.style.visibility = 'visible';
+        ctx.anim(manner, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, fill: 'forwards' });
+      };
+      const gone = () => { shown = false; manner.style.visibility = 'hidden'; };
+      manner.addEventListener('click', () => {
+        if (!shown) return;
+        const r = manner.getBoundingClientRect();
+        ctx.pay(ctx.rates().fps * 2, 'si_head', { x: r.left + r.width / 2, y: r.top });
+        ctx.audio.play('assets/audio/sfx/tally_tick.mp3', { bus: 'sfx', gain: 0.6 });
+        manner.textContent = `☑ ${pick(ctx, R.ruleDone)}`;
+        ctx.after(800, gone);
+      });
+      ctx.after(2500, say);
+      ctx.every(9000, say);
       return { off() { theme.off(); } };
     },
   },
@@ -163,12 +188,12 @@ export default {
       let chip = null;
       if (g.wide) {
         const panel = railPanel(ctx, 'left', 'display:flex;flex-direction:column;gap:4px;border-radius:8px;');
-        ctx.el('div', 'font-style:italic;', 'Wardrobe', panel);
+        ctx.el('div', 'font-style:italic;', COPY.sissy.wardrobe, panel);
         b.wardPanel = panel;
         R.slots.forEach((_, i) => tile(i, panel));
       } else {
         /* A phone has no rail: one chip beside the button opens the same five slots. */
-        chip = ctx.el('button', `position:absolute;left:8px;top:${g.cy - 22}px;width:56px;height:44px;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:12px;pointer-events:auto;cursor:pointer;`, 'Dress', 'floaters');
+        chip = ctx.el('button', `position:absolute;left:8px;top:${g.cy - 22}px;width:56px;height:44px;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:12px;pointer-events:auto;cursor:pointer;`, COPY.sissy.wardrobeShort, 'floaters');
         chip.type = 'button';
         ctx.every(1500, () => { chip.style.top = `${geo(ctx).cy - 22}px`; });
         chip.addEventListener('click', () => {
@@ -177,7 +202,7 @@ export default {
           node.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
           R.slots.forEach((_, i) => tile(i, node));
           paint();
-          ctx.modal({ title: 'Wardrobe', node, buttons: [{ label: 'That will do' }] });
+          ctx.modal({ title: COPY.sissy.wardrobe, node, buttons: [{ label: COPY.sissy.wardrobeDone }] });
         });
       }
       paint();
@@ -198,7 +223,7 @@ export default {
         const [top, n] = Object.entries(counts).sort((a, c) => c[1] - a[1])[0];
         const was = on;
         on = n === 5;
-        line.textContent = on ? `${top[0].toUpperCase()}${top.slice(1)} set. Pay doubled.` : `${n} of 5 match`;
+        line.textContent = on ? COPY.sissy.matchDone(`${top[0].toUpperCase()}${top.slice(1)}`) : COPY.sissy.matchCount(n);
         line.style.color = on ? GOLD : '';
         line.style.fontWeight = on ? 700 : '';
         if (on && !was) {
@@ -290,7 +315,7 @@ export default {
       };
       if (g.wide) {
         const panel = railPanel(ctx, 'right', 'background:#fff;border-radius:2px;box-shadow:2px 2px 0 #f2c5d2;display:flex;flex-direction:column;gap:2px;');
-        ctx.el('div', 'font-style:italic;margin-bottom:2px;', 'House Rules', panel);
+        ctx.el('div', 'font-style:italic;margin-bottom:2px;', COPY.sissy.houseRules, panel);
         const fill = () => {
           for (let n = 0; n < 4; n++) {
             const rule = ctx.el('button', 'display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:2px;background:transparent;border:0;color:var(--ink);text-align:left;font-size:14px;cursor:pointer;', null, panel);
@@ -371,7 +396,7 @@ export default {
       let until = 0, i = Math.floor(ctx.rng() * R.manners.length);
       const BOOST_MS = 30000, TIME_MS = 5500;
       ctx.mod({ click: (v, s, now) => (now < until ? v * 3 : v) });
-      const tag = ctx.el('div', `height:0;overflow:hidden;font-size:14px;font-weight:700;color:${GOLD};font-style:italic;`, 'Pass. Taps x3.', 'meters');
+      const tag = ctx.el('div', `height:0;overflow:hidden;font-size:14px;font-weight:700;color:${GOLD};font-style:italic;`, COPY.sissy.testBoost, 'meters');
       const b_ = bag(ctx);
       const show = () => {
         if (b_.popBusy) { ctx.after(9000, show); return; }
@@ -397,10 +422,10 @@ export default {
               tag.style.height = '20px';
               ctx.after(BOOST_MS, () => { tag.style.height = '0'; });
               b.style.background = GOLD;
-              ctx.toast('Pass. Taps x3 for a while.');
+              ctx.toast(COPY.sissy.testPass);
               ctx.audio.play('assets/audio/sfx/pb_fanfare.mp3', { bus: 'sfx', gain: 0.5 });
             } else {
-              ctx.toast('We will say no more about it.');
+              ctx.toast(COPY.sissy.testFail);
             }
             ctx.after(700, () => p.close());
           });

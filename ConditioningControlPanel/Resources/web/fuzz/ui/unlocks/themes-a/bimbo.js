@@ -4,8 +4,9 @@
 import { BY_ID } from '../../../data/items.js';
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, q, sheet, done, frame, refillOnChange, sideFrames, startTheme, shopWords, modChip, pick } from './kit.js';
+import { bag, geo, q, sheet, done, frame, sideFrames, startTheme, shopWords, modChip, pick, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
+import { COPY } from './copy.js';
 
 const R = THEMES.bimbo.rules;
 const NICHES = ['pink', 'heels', 'gloss', 'curls', 'lashes'];
@@ -40,30 +41,48 @@ function moment(ctx) {
   ctx.audio.play('assets/audio/sfx/golden_pop.mp3', { bus: 'sfx', gain: 0.8 });
   ctx.voice('blank-and-happy');
   const g = geo(ctx);
-  const s = sheet(ctx, 'background:#ff2f92;display:grid;place-items:center;color:#fff;font-size:clamp(60px,18vw,150px);font-weight:600;', 'Hi.');
+  const s = sheet(ctx, 'background:#ff2f92;display:grid;place-items:center;color:#fff;font-size:clamp(60px,18vw,150px);font-weight:600;');
+  const word = ctx.el('div', '', COPY.bimbo.moment, s);
   if (ctx.gentle) { done(ctx.anim(s, [{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }], { duration: 1100 }), s); return; }
   const R0 = Math.hypot(g.w, g.h);
+  /* Fast in, a held beat to read the word, out. Easing per step: one global curve swallows the hold. */
   done(ctx.anim(s, [
-    { clipPath: `circle(0px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0 },
-    { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0.3 },
-    { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0.55 },
+    { clipPath: `circle(0px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0, easing: 'cubic-bezier(.2,.9,.3,1)' },
+    { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0.2 },
+    { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0.62, easing: 'ease-in' },
     { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 0, offset: 1 },
-  ], { duration: 1050, easing: 'cubic-bezier(.2,.9,.3,1)' }), s);
+  ], { duration: 1200 }), s);
+  ctx.anim(word, [{ transform: 'scale(.2) rotate(-14deg)', offset: 0, easing: 'cubic-bezier(.2,1.7,.4,1)' }, { transform: 'scale(1.15) rotate(3deg)', offset: 0.22 }, { transform: 'scale(1) rotate(0deg)', offset: 0.36 }, { transform: 'scale(1) rotate(0deg)', offset: 0.62 }, { transform: 'scale(1.6) rotate(0deg)', offset: 1 }], { duration: 1200 });
   for (let i = 0; i < 14; i++) {
     const h = ctx.el('div', `position:absolute;left:${g.cx}px;top:${g.cy}px;color:#fff;font-size:${16 + ctx.rng() * 26}px;`, '♡', 'over');
     const a = ctx.rng() * Math.PI * 2, d = 120 + ctx.rng() * Math.max(g.w, g.h) * 0.45;
-    done(ctx.anim(h, [{ transform: 'translate(0,0) scale(.4)', opacity: 1 }, { transform: `translate(${Math.cos(a) * d}px,${Math.sin(a) * d}px) scale(1.2)`, opacity: 0 }], { duration: 900 + ctx.rng() * 500, easing: 'cubic-bezier(.1,.8,.3,1)' }), h);
+    done(ctx.anim(h, [{ transform: 'translate(0,0) scale(.4)', opacity: 1 }, { transform: `translate(${Math.cos(a) * d}px,${Math.sin(a) * d}px) scale(1.2)`, opacity: 0 }], { duration: 1000 + ctx.rng() * 500, easing: 'cubic-bezier(.1,.8,.3,1)' }), h);
   }
 }
 
 /** Longest match first, whole words, the capital kept. */
 function swapper(ctx) {
-  const list = R.swaps.map(([a, b]) => [ctx.brand.text(a), b]).sort((x, y) => y[0].length - x[0].length)
-    .map(([a, b]) => [new RegExp(`(^|[^\\p{L}])(${a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\p{L}])`, 'giu'), b]);
+  const cur = ctx.brand.text('{cur}');
+  /* The words the shop says most go first, so the first swap is one you can see. Matching stays longest first. */
+  const FIRST = ['button', cur, 'spiral', 'pictures', 'choose', 'second', 'earn', 'increase', 'bonus', 'effect'];
+  const rank = (w) => { const i = FIRST.indexOf(w); return i < 0 ? FIRST.length : i; };
+  const rows = R.swaps.map(([a, b]) => ({ word: ctx.brand.text(a), to: b })).sort((x, y) => rank(x.word) - rank(y.word));
+  rows.forEach((r, i) => {
+    r.turn = i;
+    r.re = new RegExp(`(^|[^\\p{L}])(${r.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\p{L}])`, 'giu');
+  });
+  const byLength = [...rows].sort((x, y) => y.word.length - x.word.length);
   return (text, upTo) => {
     let t = text;
-    for (let i = 0; i < upTo && i < list.length; i++) {
-      t = t.replace(list[i][0], (m, pre, w) => pre + (w[0] === w[0].toUpperCase() ? list[i][1][0].toUpperCase() + list[i][1].slice(1) : list[i][1]));
+    for (const r of byLength) {
+      if (r.turn >= upTo) continue;
+      t = t.replace(r.re, (m, pre, w, at) => {
+        /* "A second button" is not a tick. */
+        if (r.word === 'second' && /\ba\s$/i.test(t.slice(0, at + pre.length))) return m;
+        /* The currency is a name, not a sentence start. */
+        const cap = r.word === cur ? at === 0 && !pre : w[0] === w[0].toUpperCase();
+        return pre + (cap ? r.to[0].toUpperCase() + r.to.slice(1) : r.to);
+      });
     }
     return t;
   };
@@ -118,13 +137,6 @@ export default {
   bi_feed: {
     mount(ctx) {
       const live = [];
-      if (ctx.gentle) {
-        const list = [0, 1, 2].map((i) => frame(ctx, `position:absolute;left:${4 + i * 33}%;top:6px;width:29%;max-width:190px;height:${Math.min(geo(ctx).stageBottom - 8, 200)}px;border-radius:16px;opacity:.55;`, NICHES[i]));
-        refillOnChange(ctx, list);
-        let k = 0;
-        ctx.every(8000, () => list[k++ % 3].next());
-        return {};
-      }
       let col = 0;
       const spawn = (lead = 0) => {
         if (live.length >= 7) return;
@@ -138,11 +150,20 @@ export default {
         live.push(f);
         const a = ctx.anim(f.el, [{ transform: `translateY(${-th}px) rotate(-2deg)` }, { transform: `translateY(${h}px) rotate(2deg)` }], { duration: 12000, easing: 'linear' });
         if (lead) a.currentTime = lead;
-        a.finished?.then(() => { f.el.remove(); live.splice(live.indexOf(f), 1); }, () => {});
+        a.finished?.then(() => { f.el.remove(); const n = live.indexOf(f); if (n >= 0) live.splice(n, 1); }, () => {});
       };
-      [0, 2000, 4000, 6000, 8000].forEach((t) => spawn(t));
-      ctx.every(2000, () => spawn());
       ctx.on('pictures', () => { for (const f of live) f.next(); });
+      gentleSwitch(ctx, () => {
+        [0, 2000, 4000, 6000, 8000].forEach((t) => spawn(t));
+        const stop = ctx.every(2000, () => spawn());
+        return () => { stop(); for (const f of [...live]) f.el.remove(); live.length = 0; };
+      }, () => {
+        const list = [0, 1, 2].map((i) => frame(ctx, `position:absolute;left:${4 + i * 33}%;top:6px;width:29%;max-width:190px;height:${Math.min(geo(ctx).stageBottom - 8, 200)}px;border-radius:16px;opacity:.55;`, NICHES[i]));
+        live.push(...list);
+        let k = 0;
+        const stop = ctx.every(8000, () => list[k++ % 3].next());
+        return () => { stop(); for (const f of list) f.el.remove(); live.length = 0; };
+      });
       return {};
     },
   },
@@ -158,7 +179,7 @@ export default {
         const g = bag(ctx).lipsAt || (bag(ctx).lipsAt = geo(ctx));
         const x = e.x ?? g.cx, y = e.y ?? g.cy;
         ctx.float(x + (ctx.rng() - 0.5) * 70, y - 16, '💋', 'font-size:20px;');
-        if (n++ % 4 === 0) { ctx.float(x + 44, y - 40, 'mwah', 'color:#ff2f92;font-style:italic;font-weight:600;'); ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.5 }); }
+        if (n++ % 4 === 0) { ctx.float(x + 44, y - 40, COPY.bimbo.kiss, 'color:#ff2f92;font-style:italic;font-weight:600;'); ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.5 }); }
       });
       return { off() { bag(ctx).lipsAt = null; } };
     },
@@ -170,11 +191,15 @@ export default {
       const b = bag(ctx), swap = swapper(ctx);
       const lines = THEMES.bimbo.shopLines;
       const handle = shopWords(ctx, (text, node) => {
-        const iq = b.iq ?? 100, upTo = Math.ceil(((100 - iq) / 100) * R.swaps.length * 1.5);
+        const iq = b.iq ?? 100, upTo = Math.ceil(((100 - iq) / 60) * R.swaps.length);
         if (iq <= 24 && node.tagName === 'SMALL') return lines[Math.abs([...text].reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)) % lines.length];
         return swap(text, upTo);
       });
-      const refresh = () => handle.refresh();
+      const refresh = () => {
+        handle.refresh();
+        if (ctx.gentle) return;
+        for (const r of ctx.world.querySelectorAll('#rows .row small,#goal .row small')) ctx.anim(r, [{ opacity: 0.1, transform: 'scale(.97)' }, { opacity: 1, transform: 'scale(1)' }], 350);
+      };
       b.onIq?.add(refresh);
       ctx.after(0, refresh);
       return { off() { b.onIq?.delete(refresh); handle.off(); } };
@@ -212,11 +237,12 @@ export default {
     mount(ctx) {
       ctx.css(`.row{background:linear-gradient(#fff,#ffd9ec);box-shadow:inset 0 1px 0 #fff,0 1px 0 #ff8ac2;}
 .row.short{background:linear-gradient(#ffeaf4,#ffc9e2);}`);
-      if (!ctx.gentle) {
+      gentleSwitch(ctx, () => {
         const sheen = ctx.el('div', 'position:absolute;top:0;bottom:0;left:0;width:120px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);will-change:transform;', null, 'over');
         const { w } = ctx.bounds();
         ctx.anim(sheen, [{ transform: `translateX(-200px) skewX(-20deg)` }, { transform: `translateX(${w + 100}px) skewX(-20deg)` }], { duration: 3600, iterations: Infinity, easing: 'ease-in-out' });
-      }
+        return () => sheen.remove();
+      });
       const rects = () => {
         const out = [];
         for (const r of ctx.world.querySelectorAll('.row,#btn,#counter')) { const b = r.getBoundingClientRect(); if (b.width) out.push(b); }
@@ -251,7 +277,7 @@ export default {
         const g = geo(ctx);
         const x = e.x ?? g.cx, y = e.y ?? g.cy;
         const gain = ctx.pay(Math.max(ctx.rates().click * 10, ctx.rates().fps * 2), 'bi_giggle', { x, y: y - 20 });
-        ctx.float(x, y - 54, `hehe +${ctx.fmt(gain)}`, 'color:#ff2f92;font-size:22px;font-style:italic;font-weight:600;');
+        ctx.float(x, y - 54, COPY.bimbo.giggle(ctx.fmt(gain)), 'color:#ff2f92;font-size:22px;font-style:italic;font-weight:600;');
         ctx.audio.play(`assets/audio/themes/bimbo/giggle${1 + Math.floor(ctx.rng() * 3)}.mp3`, { bus: 'voice', gain: 0.8 });
         ctx.audio.play('assets/audio/sfx/chain_pop.mp3', { bus: 'sfx', gain: 0.5 });
         if (!ctx.gentle) {

@@ -3,8 +3,9 @@
 
 import { THEMES, ENDINGS, FAKE_UPDATE } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, q, sheet, done, frame, refillOnChange, sideFrames, startTheme, shopWords, modChip, pick, railPanel } from './kit.js';
+import { bag, geo, q, sheet, done, frame, refillOnChange, sideFrames, startTheme, shopWords, modChip, pick, railPanel, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
+import { COPY } from './copy.js';
 
 const R = THEMES.drone.rules;
 const NICHES = ['shiny', 'chrome', 'visor', 'gloss', 'mirror', 'latex'];
@@ -26,14 +27,23 @@ const CSS = `#btn{border:0;border-radius:3px;color:#111;font-weight:700;letter-s
 function moment(ctx) {
   ctx.audio.play('assets/audio/sfx/rank_up.mp3', { bus: 'sfx', gain: 0.6 });
   ctx.voice('obey');
-  const s = sheet(ctx, `background:#070b09;display:grid;place-items:center;color:#3dff8e;font:700 clamp(24px,6vw,56px) ${MONO};text-align:center;`, 'UNIT ONLINE');
+  const s = sheet(ctx, `background:#070b09;display:grid;place-items:center;color:#3dff8e;font:700 clamp(24px,6vw,56px) ${MONO};text-align:center;white-space:nowrap;`);
+  const word = ctx.el('div', 'min-height:1.3em;', ctx.gentle ? COPY.drone.moment : '', s);
   if (ctx.gentle) { done(ctx.anim(s, [{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }], { duration: 1200 }), s); return; }
+  /* It types itself once the scan has passed, and a bright edge leads the wipe in and out. */
+  [...COPY.drone.moment].forEach((ch, i) => ctx.after(300 + i * 32, () => { word.textContent += ch; }));
+  const { h } = ctx.bounds();
+  const edge = sheet(ctx, 'height:4px;bottom:auto;background:#3dff8e;box-shadow:0 0 16px 3px #3dff8e;');
+  done(ctx.anim(edge, [
+    { transform: 'translateY(0)', offset: 0 }, { transform: `translateY(${h}px)`, offset: 0.2 },
+    { transform: `translateY(${h}px)`, offset: 0.68 }, { transform: 'translateY(0)', offset: 0.681 }, { transform: `translateY(${h}px)`, offset: 1 },
+  ], { duration: 1300, easing: 'linear' }), edge);
   done(ctx.anim(s, [
     { clipPath: 'inset(0 0 100% 0)', offset: 0 },
-    { clipPath: 'inset(0 0 0 0)', offset: 0.3 },
-    { clipPath: 'inset(0 0 0 0)', offset: 0.7 },
+    { clipPath: 'inset(0 0 0 0)', offset: 0.2 },
+    { clipPath: 'inset(0 0 0 0)', offset: 0.68 },
     { clipPath: 'inset(100% 0 0 0)', offset: 1 },
-  ], { duration: 1100, easing: 'linear' }), s);
+  ], { duration: 1300, easing: 'linear' }), s);
 }
 
 const rollSerial = (ctx) => {
@@ -48,6 +58,29 @@ export default {
       const theme = startTheme(ctx, { theme: 'drone', vars: VARS, css: CSS, moment });
       sideFrames(ctx, ['shiny', 'chrome', 'visor', 'mirror'], 'border-radius:2px;outline:1px solid #46535a;');
       modChip(ctx, 'drone');
+      /* A taste of the signature before Task Queue is bought: now and then an order, and a tap on it pays. */
+      const tag = ctx.el('div', `position:absolute;left:0;top:0;padding:4px 10px;background:#3dff8e;color:#070b09;font:700 14px ${MONO};white-space:nowrap;opacity:0;`, COPY.drone.order, 'floaters');
+      let up = false;
+      const hide = () => { up = false; ctx.anim(tag, [{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' }); };
+      const order = () => {
+        if (up || ctx.has('dr_task')) return;
+        up = true;
+        const g = geo(ctx);
+        const left = Math.min(g.w - 110, g.cx + g.bw / 2 + 8);
+        tag.style.transform = `translate(${left}px,${g.cy - 14}px)`;
+        ctx.anim(tag, [{ opacity: 0 }, { opacity: 1 }], { duration: ctx.gentle ? 300 : 100, fill: 'forwards' });
+        ctx.audio.play('assets/audio/sfx/ui_equip.mp3', { bus: 'sfx', gain: 0.5 });
+        ctx.after(3000, () => { if (up) hide(); });
+      };
+      ctx.after(2500, order);
+      ctx.every(11000, order);
+      ctx.on('tap', (e) => {
+        if (!up || e.auto) return;
+        hide();
+        const g = geo(ctx);
+        const got = ctx.pay(Math.max(ctx.rates().click * 5, ctx.rates().fps), 'dr_head', { x: e.x ?? g.cx, y: e.y ?? g.cy });
+        ctx.float(e.x ?? g.cx, (e.y ?? g.cy) - 34, COPY.drone.orderPay(ctx.fmt(got)), 'color:#3dff8e;font-size:18px;font-weight:700;');
+      });
       return { off() { theme.off(); } };
     },
   },
@@ -65,7 +98,7 @@ export default {
       const first = !ctx.store.get('typed');
       ctx.store.set('typed', 1);
       if (first && !ctx.gentle) {
-        name.textContent = 'YOUR NAME';
+        name.textContent = COPY.drone.yourName;
         const strike = ctx.el('span', 'position:absolute;left:30px;right:12px;top:50%;height:2px;background:#a3232b;transform-origin:0 50%;', null, plate);
         done(ctx.anim(strike, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 400, fill: 'forwards', delay: 350 }), strike);
         const u = label.toUpperCase();
@@ -117,10 +150,11 @@ export default {
       refillOnChange(ctx, tiles);
       let i = 0;
       ctx.every(1400, () => { tiles[i++ % tiles.length].next(pick(ctx, NICHES)); });
-      if (!ctx.gentle) {
+      gentleSwitch(ctx, () => {
         const scan = ctx.el('div', 'position:absolute;left:0;right:0;top:0;height:3px;background:#3dff8e;box-shadow:0 0 10px #3dff8e;opacity:.7;will-change:transform;', null, 'back');
         ctx.anim(scan, [{ transform: 'translateY(0)' }, { transform: `translateY(${h}px)` }], { duration: 5200, iterations: Infinity, easing: 'linear' });
-      }
+        return () => scan.remove();
+      });
       return {};
     },
   },
@@ -141,7 +175,7 @@ export default {
     mount(ctx) {
       const b = bag(ctx);
       let open = false, n = ctx.store.get('n') || 1, until = 0, next = ctx.state.clock + 900;
-      ctx.mod({ click: (v) => (open ? v * 10 : 0) });
+      ctx.mod({ click: (v) => (open ? v * (b.armStroke ? 3 : 10) : 0) });
       const box = ctx.el('div', `position:relative;width:min(280px,84vw);height:26px;margin-top:2px;overflow:hidden;text-align:center;font:700 14px/26px ${MONO};color:var(--ink-soft);background:var(--panel);border:1px solid var(--line);`, null, 'meters');
       const bar = ctx.el('div', 'position:absolute;inset:0;background:#3dff8e;transform-origin:0 50%;transform:scaleX(0);', null, box);
       const text = ctx.el('div', 'position:relative;white-space:nowrap;', pick(ctx, R.taskIdle), box);
@@ -154,7 +188,8 @@ export default {
         text.textContent = pick(ctx, R.tasks).replace(/\{n\}/g, n);
         text.style.color = '#070b09';
         ctx.audio.play('assets/audio/sfx/ui_equip.mp3', { bus: 'sfx', gain: 0.55 });
-        if (!ctx.gentle) ctx.anim(box, [{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], 200);
+        if (ctx.gentle) ctx.anim(bar, [{ opacity: 0 }, { opacity: 1 }], 300);
+        else ctx.anim(box, [{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], 200);
       };
       ctx.on('tap', (e) => {
         if (!open) {
@@ -166,7 +201,8 @@ export default {
         ctx.store.set('n', n);
         next = ctx.state.clock + 1500 + ctx.rng() * 3000;
         const g = geo(ctx);
-        ctx.float(e.x ?? g.cx, (e.y ?? g.cy) - 34, `x10 +${ctx.fmt(e.gain)}`, 'color:#3dff8e;font-size:22px;font-weight:700;');
+        if (e.auto) ctx.float(g.cx, g.cy - 34, COPY.drone.armPay(ctx.fmt(e.gain)), 'color:#9aa8b0;font-size:16px;');
+        else ctx.float(e.x ?? g.cx, (e.y ?? g.cy) - 34, COPY.drone.taskPay(ctx.fmt(e.gain)), 'color:#3dff8e;font-size:22px;font-weight:700;');
         ctx.audio.play('assets/audio/sfx/rank_settle.mp3', { bus: 'sfx', gain: 0.5 });
         idle();
       });
@@ -185,6 +221,7 @@ export default {
   /* Auto Tap: an arm taps once a second. It takes the tasks too. Manual input no longer required. */
   dr_auto: {
     mount(ctx) {
+      const b = bag(ctx);
       let g = geo(ctx);
       /* A piston from the right: the row above the button is full of readings, the side of it is free. */
       const arm = ctx.el('div', 'position:absolute;left:0;top:0;width:70px;height:44px;will-change:transform;', null, 'floaters');
@@ -193,7 +230,7 @@ export default {
       const gears = [-1, 1].map((d) => {
         const e = ctx.el('div', 'position:absolute;left:0;top:0;width:34px;height:34px;text-align:center;font:400 34px/34px "Segoe UI Symbol",serif;color:#9aa8b0;', '⚙', 'floaters');
         e.dataset.d = d;
-        if (!ctx.gentle) ctx.anim(e, [{ rotate: '0deg' }, { rotate: `${d * 360}deg` }], { duration: 5000, iterations: Infinity, easing: 'linear' });
+        gentleSwitch(ctx, () => { const a = ctx.anim(e, [{ rotate: '0deg' }, { rotate: `${d * 360}deg` }], { duration: 5000, iterations: Infinity, easing: 'linear' }); return () => a.cancel(); });
         return e;
       });
       const place = () => {
@@ -205,7 +242,7 @@ export default {
       ctx.every(1000, place);
       ctx.every(1000, () => {
         if (!ctx.gentle) ctx.anim(arm, [{ translate: '0 0' }, { translate: '-22px 0', offset: 0.4 }, { translate: '-22px 0', offset: 0.55 }, { translate: '0 0' }], { duration: 700 });
-        ctx.after(280, () => ctx.button.press());
+        ctx.after(280, () => { b.armStroke = true; try { ctx.button.press(); } finally { b.armStroke = false; } });
       });
       return {};
     },
@@ -246,7 +283,7 @@ export default {
           paintRank();
           const r = rank.getBoundingClientRect();
           ctx.pay(ctx.rates().fps * 15, 'dr_hive', { x: r.left + 40, y: r.top + 8 });
-          ctx.toast(`Rank: ${R.rank[tier]}. Unit 7 is still ahead.`);
+          ctx.toast(COPY.drone.rank(R.rank[tier]));
           ctx.audio.play('assets/audio/sfx/rank_up.mp3', { bus: 'sfx', gain: 0.5 });
         }
       });
@@ -263,6 +300,7 @@ export default {
         const r = q(ctx, '#shop')?.getBoundingClientRect?.();
         if (!r || !r.width) return;
         const cover = ctx.el('div', `position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;pointer-events:auto;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:14px;box-sizing:border-box;background:rgba(7,11,9,.86);color:var(--stamp);font:600 15px ${MONO};border:1px solid var(--line);text-align:center;`, null, 'over');
+        ctx.anim(cover, [{ opacity: 0 }, { opacity: 1 }], ctx.gentle ? 400 : 180);
         ctx.el('div', 'font-size:20px;', FAKE_UPDATE.title, cover);
         const step = ctx.el('div', 'min-height:20px;', FAKE_UPDATE.steps[0], cover);
         const track = ctx.el('div', 'height:12px;border:1px solid currentColor;overflow:hidden;', null, cover);

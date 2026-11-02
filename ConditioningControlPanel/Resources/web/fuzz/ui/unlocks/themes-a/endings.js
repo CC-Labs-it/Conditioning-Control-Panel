@@ -1,7 +1,8 @@
 /* The four endings' shows. Each runs between the fade and the credits, draws above the end fade, and ends on its own or on
  * the player's press. Copy comes from data/content/endings.js. */
 
-import { openLink, pick } from './kit.js';
+import { openLink } from './kit.js';
+import { COPY } from './copy.js';
 
 const wait = (ctx, ms) => new Promise((res) => ctx.after(ms, res));
 
@@ -19,7 +20,7 @@ function outro(ctx, host, end, css, ms = 26000) {
     a.type = 'button';
     a.addEventListener('click', () => openLink(ctx, end.link.url));
   }
-  const go = ctx.el('button', 'min-height:44px;padding:6px 16px;background:transparent;color:inherit;border:0;text-decoration:underline;font-size:15px;cursor:pointer;', 'Go on', row);
+  const go = ctx.el('button', 'min-height:44px;padding:6px 16px;background:transparent;color:inherit;border:0;text-decoration:underline;font-size:15px;cursor:pointer;', COPY.go, row);
   go.type = 'button';
   if (!ctx.gentle) ctx.anim(row, [{ opacity: 0 }, { opacity: 1 }], { duration: 900 });
   return new Promise((res) => {
@@ -53,11 +54,11 @@ async function bimbo(ctx, end) {
   const s = stage(ctx, 'background:#ff9fd0;color:#8a0f5c;font-family:"Fredoka","Segoe UI",system-ui,sans-serif;');
   const face = ctx.el('div', 'position:absolute;left:50%;top:18%;width:min(60vw,300px);height:min(52vw,260px);transform:translateX(-50%);', null, s);
   ['16%', '72%'].forEach((x) => ctx.el('div', `position:absolute;top:12%;left:${x};width:12%;aspect-ratio:1;border-radius:50%;background:#fff;`, null, face));
-  ctx.el('div', 'position:absolute;left:8%;right:8%;top:38%;height:46%;box-sizing:border-box;border:clamp(10px,3vw,18px) solid #fff;border-top:0;border-radius:0 0 999px 999px;', null, face);
+  ctx.el('div', 'position:absolute;left:8%;right:8%;top:38%;height:46%;box-sizing:border-box;border:clamp(10px,3vw,18px) solid #fff;border-top:0;border-radius:0 0 50% 50%/0 0 100% 100%;', null, face);
   if (!ctx.gentle) ctx.anim(face, [{ transform: 'translateX(-50%) scale(1)' }, { transform: 'translateX(-50%) scale(1.04)' }, { transform: 'translateX(-50%) scale(1)' }], { duration: 3600, iterations: Infinity });
   const heart = () => {
     const { w, h } = ctx.bounds();
-    const e = ctx.el('div', `position:absolute;left:${ctx.rng() * (w - 30)}px;top:${ctx.rng() * h * 0.7}px;color:#fff;font-size:${18 + ctx.rng() * 18}px;`, '♡', s);
+    const e = ctx.el('div', `position:absolute;left:${ctx.rng() * (w - 30)}px;top:${ctx.rng() * h * 0.5}px;color:#fff;font-size:${18 + ctx.rng() * 18}px;`, '♡', s);
     ctx.anim(e, [{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }], { duration: 2400 }).finished?.then(() => e.remove(), () => e.remove());
   };
   ctx.every(900, heart);
@@ -101,4 +102,3 @@ async function sissy(ctx, end) {
 
 const SHOWS = { trance, bimbo, drone, sissy };
 export function endingShow(ctx, end, theme) { return SHOWS[theme](ctx, end); }
-export { pick };

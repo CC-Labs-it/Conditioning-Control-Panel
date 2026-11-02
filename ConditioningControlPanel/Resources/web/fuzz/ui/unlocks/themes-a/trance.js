@@ -4,8 +4,9 @@
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { createSpiral } from '../../../fx/spiral.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, q, sheet, done, frame, refillOnChange, sideFrames, startTheme } from './kit.js';
+import { bag, geo, q, sheet, done, frame, refillOnChange, sideFrames, startTheme, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
+import { COPY } from './copy.js';
 
 const R = THEMES.trance.rules;
 const NICHES = ['spirals', 'soft voices', 'pendulum', 'eyes closed'];
@@ -32,15 +33,17 @@ function moment(ctx) {
   ctx.audio.play('assets/audio/sfx/reveal_chime.mp3', { bus: 'sfx', gain: 0.7 });
   ctx.voice('sink');
   const g = geo(ctx);
-  const s = sheet(ctx, 'background:#15123a;display:grid;place-items:center;color:#dfe4ff;font-size:clamp(34px,8vw,72px);letter-spacing:.08em;', 'Sink');
+  const s = sheet(ctx, 'background:#15123a;display:grid;place-items:center;color:#dfe4ff;font-size:clamp(34px,8vw,72px);letter-spacing:.08em;');
+  const word = ctx.el('div', '', COPY.trance.moment, s);
   if (ctx.gentle) { done(ctx.anim(s, [{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 1400 }), s); return; }
   const R0 = Math.hypot(g.w, g.h);
+  ctx.anim(word, [{ transform: 'translateY(-46px)', opacity: 0, letterSpacing: '.5em' }, { transform: 'translateY(0)', opacity: 1, letterSpacing: '.08em', offset: 0.36 }, { transform: 'translateY(16px)', opacity: 1, letterSpacing: '.06em', offset: 0.62 }, { transform: 'translateY(80px)', opacity: 0, letterSpacing: '.02em' }], { duration: 2000, easing: 'ease-in-out', fill: 'forwards' });
   done(ctx.anim(s, [
-    { clipPath: `circle(0px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0 },
-    { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0.42 },
-    { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0.6 },
+    { clipPath: `circle(0px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0, easing: 'ease-out' },
+    { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0.3 },
+    { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 1, offset: 0.62, easing: 'ease-in-out' },
     { clipPath: `circle(${R0}px at ${g.cx}px ${g.cy}px)`, opacity: 0, offset: 1 },
-  ], { duration: 1500, easing: 'ease-out' }), s);
+  ], { duration: 2000 }), s);
 }
 
 /** A line of its own that fades in and out above the button. Calm words never pile up. */
@@ -63,6 +66,7 @@ export default {
         sp.show();
         bag(ctx).spiral = sp;
         ctx.frame((dt) => sp.step(dt));
+        ctx.every(500, () => sp.setStill(ctx.gentle));
       }
       sideFrames(ctx, ['spirals', 'soft voices', 'hypnosis', 'pendulum'], 'border-radius:12px;opacity:.85;');
       return { off() { theme.off(); sp?.dispose(); bag(ctx).spiral = null; } };
@@ -80,7 +84,7 @@ export default {
       const line = ctx.el('div', 'display:flex;align-items:center;justify-content:center;gap:12px;height:22px;font-size:14px;color:var(--ink-soft);', null, 'meters');
       b.meterRow = line;
       const box = ctx.el('span', 'display:flex;align-items:center;gap:6px;', null, line);
-      ctx.el('span', '', 'hands off', box);
+      ctx.el('span', '', COPY.trance.handsOff, box);
       const track = ctx.el('span', 'position:relative;width:clamp(48px,12vw,110px);height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden;', null, box);
       const fill = ctx.el('span', 'position:absolute;inset:0;border-radius:4px;background:linear-gradient(90deg,#b79cff,#8fd0ff);transform-origin:0 50%;transform:scaleX(0);', null, track);
       const num = ctx.el('span', 'min-width:2em;color:var(--stamp);font-variant-numeric:tabular-nums;', 'x1.0', box);
@@ -112,7 +116,7 @@ export default {
       const b = bag(ctx);
       b.breathOpenNow = () => isOpen(ctx.state.clock);
       ctx.mod({ click: (v, s, now) => (isOpen(now) ? v * 4 : v) });
-      const size = () => Math.max(132, Math.min(170, geo(ctx).bw * 1.15));
+      const size = () => (ctx.bounds().w < 760 ? 148 : 170);
       let g = geo(ctx), D = size();
       const wrap = ctx.el('div', `position:absolute;left:0;top:0;width:${D}px;height:${D}px;`, null, 'floaters');
       const rim = ctx.el('div', 'position:absolute;inset:0;border-radius:50%;box-sizing:border-box;border:2px dashed #8fd0ff;opacity:.55;', null, wrap);
@@ -135,7 +139,7 @@ export default {
       });
       ctx.on('tap', (e) => {
         if (!isOpen(ctx.state.clock) || e.auto) return;
-        ctx.float(g.cx, g.cy - g.bh, `x4 +${ctx.fmt(e.gain)}`, 'color:#8fd0ff;font-size:20px;');
+        ctx.float(g.cx, g.cy - g.bh, COPY.trance.breathPay(ctx.fmt(e.gain)), 'color:#8fd0ff;font-size:20px;');
         ctx.audio.play('assets/audio/sfx/chime1.mp3', { bus: 'sfx', gain: 0.5 });
         if (!ctx.gentle) ctx.anim(rim, [{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }], 360);
       });
@@ -157,19 +161,21 @@ export default {
         const ms = ((pw + w) / 34) * 1000;
         const a = ctx.anim(f.el, [{ transform: `translateX(${pw}px)` }, { transform: `translateX(${-w}px)` }], { duration: ms, easing: 'linear' });
         if (lead) a.currentTime = lead;
-        a.finished?.then(() => { f.el.remove(); belt.splice(belt.indexOf(f), 1); }, () => {});
+        a.finished?.then(() => { f.el.remove(); const n = belt.indexOf(f); if (n >= 0) belt.splice(n, 1); }, () => {});
       };
-      if (ctx.gentle) {
+      ctx.on('pictures', () => { for (const f of belt) f.next(); });
+      gentleSwitch(ctx, () => {
+        spawn(); spawn(5200); spawn(10400);
+        const stop = ctx.every(5600, () => spawn());
+        return () => { stop(); for (const f of [...belt]) f.el.remove(); belt.length = 0; };
+      }, () => {
         /* Gentle: no belt. Three still frames that change one at a time. */
         const list = [0, 1, 2].map((i) => frame(ctx, `position:absolute;left:${6 + i * 33}%;top:6px;width:30%;max-width:190px;height:${Math.min(geo(ctx).stageBottom - 8, 220)}px;border-radius:10px;opacity:.5;`, NICHES[i]));
-        refillOnChange(ctx, list);
+        belt.push(...list);
         let k = 0;
-        ctx.every(8000, () => list[k++ % 3].next());
-        return {};
-      }
-      spawn(); spawn(5200); spawn(10400);
-      ctx.every(5600, () => spawn());
-      ctx.on('pictures', () => { for (const f of belt) f.next(); });
+        const stop = ctx.every(8000, () => list[k++ % 3].next());
+        return () => { stop(); for (const f of list) f.el.remove(); belt.length = 0; };
+      });
       return {};
     },
   },
@@ -183,12 +189,12 @@ export default {
 #btn[data-skin=tr-pendulum]::before{content:'';position:absolute;left:50%;bottom:100%;width:2px;height:46px;margin-left:-1px;background:#8fd0ff;opacity:.8;}
 #btn[data-skin=tr-pendulum].down{transform:none;filter:brightness(1.2);}`);
       const mid = (now) => Math.abs(Math.sin((now / SWING_MS) * Math.PI * 2)) < 0.26;
-      if (!ctx.gentle) ctx.mod({ click: (v, s, now) => (mid(now) ? v * 2 : v) });
+      ctx.mod({ click: (v, s, now) => (!ctx.gentle && mid(now) ? v * 2 : v) });
       const el = b.el;
       ctx.frame(() => { if (!ctx.gentle) el.style.rotate = `${(Math.sin((ctx.state.clock / SWING_MS) * Math.PI * 2) * 15).toFixed(2)}deg`; else el.style.rotate = ''; });
       ctx.on('tap', (e) => {
         if (e.auto || ctx.gentle || !mid(ctx.state.clock)) return;
-        ctx.float(e.x ?? ctx.bounds().w / 2, (e.y ?? 150) - 26, 'middle', 'color:#b79cff;');
+        ctx.float(e.x ?? ctx.bounds().w / 2, (e.y ?? 150) - 26, COPY.trance.middle, 'color:#b79cff;');
       });
       return { off() { el.style.rotate = ''; } };
     },
@@ -267,7 +273,7 @@ export default {
       ctx.mod({ fps: (v) => v * (1 + depth) });
       ctx.on('tap', (e) => { if (!e.auto && !b.breathOpenNow?.()) depth = Math.max(0, depth - 0.08); });
       const box = ctx.el('span', 'display:flex;align-items:center;gap:6px;', null, b.meterRow || ctx.layer('meters'));
-      ctx.el('span', '', 'deeper', box);
+      ctx.el('span', '', COPY.trance.deeper, box);
       const track = ctx.el('span', 'position:relative;width:clamp(48px,12vw,110px);height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden;', null, box);
       const fill = ctx.el('span', 'position:absolute;inset:0;background:#b79cff;transform-origin:0 50%;', null, track);
       const pct = ctx.el('span', 'min-width:2em;color:var(--stamp);font-variant-numeric:tabular-nums;', null, box);

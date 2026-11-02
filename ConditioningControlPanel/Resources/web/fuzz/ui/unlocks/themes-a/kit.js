@@ -53,6 +53,9 @@ export function startTheme(ctx, spec) {
   if (first) crossfade(ctx);
   ctx.vars(spec.vars);
   if (spec.css) ctx.css(spec.css);
+  ctx.css(`#cards .card{background:var(--panel);color:var(--ink);border:1px solid var(--line);font-family:var(--font);}
+#cards .card .card-sub,#cards .opt small{color:var(--ink-soft);}
+#cards .card button{background:var(--panel-short);color:var(--ink);border:1px solid var(--line);}`);
   if (first && spec.moment) spec.moment(ctx);
 
   /* The button says the theme's words, one every few seconds. A skin that hides the label simply hides them. */
@@ -80,6 +83,19 @@ export function sheet(ctx, css, text) {
 export function done(a, e) {
   a.finished?.then(() => e.remove(), () => e.remove());
   return a;
+}
+
+/**
+ * Gentle can change mid-run. Runs motion() or still(), each returning its own stop, and swaps when the switch moves.
+ */
+export function gentleSwitch(ctx, motion, still = () => () => {}) {
+  let on = ctx.gentle, stop = (on ? still : motion)();
+  ctx.every(500, () => {
+    if (ctx.gentle === on) return;
+    on = ctx.gentle;
+    stop?.();
+    stop = (on ? still : motion)();
+  });
 }
 
 /* ---- pictures ---- */
