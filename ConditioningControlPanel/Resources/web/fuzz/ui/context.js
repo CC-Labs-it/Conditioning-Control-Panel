@@ -4,6 +4,7 @@
  * ==========================================================================*/
 
 import { BRAND, brandText } from '../data/brand.js';
+import { BY_ID } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { clipUrl } from '../data/words.js';
 import { fmt, money } from '../sim/format.js';
@@ -184,6 +185,14 @@ export function makeContext(engine, scope) {
       set: (k, v) => { bag()[k] = v; },
     },
     config: CONFIG,
+    /** Keep one owned Look for the next run (z_perk), or null for none. Refuses anything that is not a Look the player has owned. */
+    setPerk(id) {
+      if (id === null) engine.life.perk = null;
+      else if (BY_ID[id]?.lane === 'look' && engine.life.seen[id]) engine.life.perk = id;
+      else return false;
+      engine.save();
+      return true;
+    },
   };
   return ctx;
 }
@@ -195,5 +204,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk',
 ]);

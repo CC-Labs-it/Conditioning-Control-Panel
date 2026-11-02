@@ -116,7 +116,7 @@ return { off() { sp.dispose(); } };
 - Forks: a fork row (`f1` to `f5`) may be registered by several group files; all of them mount when it is taken, on one shared `ctx`. Every handler checks `ctx.pick('f5')` and returns early if the pick is not its own, and keeps its `ctx.store` keys to itself. No other row may be claimed twice. Already mounted unlocks can also hear the `fork` event.
 
 - `meta`: moods. The sim numbers live in `sim/moods.js`. The entry for `state.mood` mounts at run start; there is none on the first run.
-- `after`: every `z_*` entry mounts when the credits card is up and draws into `ctx.layer('credits')`. `ctx.life` holds what it needs; set a perk through a later API (ask the main session).
+- `after`: every `z_*` entry mounts when the credits card is up and draws into `ctx.layer('credits')`. `ctx.life` holds what it needs; `ctx.setPerk(id|null)` keeps one owned Look for the next run.
 - Endings: `drop`, `outside` and the rest all go through one flow (`engine.end`). `onemore` does not end the run; `state.endless` turns on.
 
 ## Rules that bite
