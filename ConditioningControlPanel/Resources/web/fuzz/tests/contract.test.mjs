@@ -6,6 +6,7 @@ import { createEngine } from '../ui/engine.js';
 import { CTX_MEMBERS } from '../ui/context.js';
 import { allowedLink } from '../ui/links.js';
 import { GROUPS, REGISTRY } from '../ui/unlocks/index.js';
+import { mergeGroups } from '../ui/unlocks/merge.js';
 import { BY_ID } from '../data/items.js';
 import * as E from '../sim/economy.js';
 import { createLife } from '../sim/save.js';
@@ -375,13 +376,44 @@ test('an id with no entry still sells, pays and draws nothing', () => {
   assert.equal(engine.rates().click, 2);
 });
 
+test('a fork row can have a handler in several groups: all mount, one failing does not stop the others', () => {
+  const realError = console.error;
+  console.error = () => {};
+  try {
+    const log = [];
+    const merged = mergeGroups([
+      { f5: { mount(c) { log.push(`a ${c.pick('f5')}`); return { tick() { log.push('a tick'); }, off() { log.push('a off'); } }; } } },
+      { f5: { mount() { throw new Error('boom'); } } },
+      { f5: { mount() { log.push('c'); return { tick() { throw new Error('boom'); }, off() { log.push('c off'); } }; } } },
+    ]);
+    const run = E.createRun();
+    E.grant(run, 'f5');
+    const engine = createEngine({ run, life: createLife(), ui: fakeUi(), registry: merged });
+    engine.mount('f5');
+    assert.deepEqual(log, [`a ${run.picks.f5}`, 'c']);
+    log.length = 0;
+    for (let i = 0; i < 5; i++) engine.step(16);
+    assert.equal(log.filter((l) => l === 'a tick').length, 5, 'a throwing tick beside it does not stop this one');
+    log.length = 0;
+    engine.unmount('f5');
+    assert.deepEqual(log, ['a off', 'c off']);
+  } finally { console.error = realError; }
+});
+
+test('a single fork handler and a plain row pass through untouched', () => {
+  const one = { mount() { return {}; } }, row = { mount() { return {}; } };
+  const merged = mergeGroups([{ f5: one, stray: row }, {}]);
+  assert.equal(merged.f5, one);
+  assert.equal(merged.stray, row);
+});
+
 test('the registry merges five independent group files, no id claimed twice, every id real', () => {
   assert.deepEqual(Object.keys(GROUPS).sort(), ['basics', 'extras', 'routes', 'themes-a', 'themes-b']);
   const seen = new Set();
   for (const [name, group] of Object.entries(GROUPS)) {
     for (const [id, entry] of Object.entries(group)) {
       assert.ok(BY_ID[id], `${name} registers ${id}, which is not an item`);
-      assert.ok(!seen.has(id), `${id} is registered twice`);
+      assert.ok(!seen.has(id) || BY_ID[id].kind === 'fork', `${id} is registered twice`);
       seen.add(id);
       assert.equal(typeof entry.mount, 'function', id);
     }
