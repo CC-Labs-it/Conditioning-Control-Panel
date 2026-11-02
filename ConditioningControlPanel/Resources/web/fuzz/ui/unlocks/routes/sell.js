@@ -116,7 +116,7 @@ export default {
       const pop = () => {
         if (open.size >= 2) return;
         const rec = nextAd(ctx, 'popup'), { w, h } = ctx.bounds(), pw = Math.min(270, w - 30), ph = 170;
-        const x = 10 + ctx.rng() * (w - pw - 20), y = 50 + ctx.rng() * (h - ph - 70);
+        const x = 10 + ctx.rng() * (w - pw - 20), y = 50 + ctx.rng() * Math.max(0, h - ph - 200);
         const win = ctx.el('div', `position:absolute;left:${x}px;top:${y}px;width:${pw}px;height:${ph}px;background:${rec.ccp ? '#2a0f22' : '#fffbe4'};color:${rec.ccp ? '#fff' : '#111'};border:3px solid #000;border-radius:10px;box-shadow:5px 5px 0 rgba(0,0,0,.45);font:14px/1.25 ${FONT};pointer-events:auto;overflow:hidden;transform:rotate(${(ctx.rng() * 4 - 2).toFixed(1)}deg);`, null, 'over');
         open.add(win);
         ctx.el('div', 'height:32px;background:repeating-linear-gradient(135deg,#ff69b4 0 12px,#ffd24d 12px 24px);border-bottom:3px solid #000;', null, win);
@@ -236,6 +236,8 @@ export default {
     mount(ctx) {
       const reads = deck(EMI_AD_READS, ctx);
       const read = () => {
+        const beats0 = 4;
+        if (!claim(ctx, 'emi', beats0 * 1250 + 900, 'low')) { ctx.after(5000, read); return; }
         const beats = reads(), { w, h } = ctx.bounds();
         const box = ctx.el('div', `position:absolute;right:8px;top:${h - 66}px;height:58px;width:${Math.min(290, w - 16)}px;`, null, 'over');
         const head = ctx.el('div', 'position:absolute;right:0;top:0;width:58px;height:58px;border-radius:50%;background:#ffe0d2;border:2px solid #d4488f;box-sizing:border-box;overflow:hidden;', null, box);
@@ -250,7 +252,7 @@ export default {
         }));
         ctx.after(beats.length * 1250 + 500, () => {
           ctx.anim(box, [{ opacity: 1 }, { opacity: 0 }], { duration: 280, fill: 'both' });
-          ctx.after(300, () => box.remove());
+          ctx.after(300, () => { box.remove(); release('emi', 'low'); });
         });
       };
       ctx.after(1000, read);

@@ -198,9 +198,11 @@ export const spiral = () => spiralNow;
 /* ---- ads: one look, one rule. Only a real card links out, on the player's own press, paying once per ad ---- */
 const shown = { ccpOnly: false, hidden: false };
 export const adFlags = shown;
+/** The stand-ins ui/ads.js serves before data/ads.js has loaded have another shape: read both. */
+const adShape = (rec) => (rec.headline ? rec : { ...rec, ccp: rec.kind === 'ccp', headline: rec.text, sub: '', cta: 'Look' });
 export function nextAd(ctx, kind) {
-  let rec = ctx.ads.next({ kind });
-  for (let i = 0; shown.ccpOnly && !rec.ccp && i < 40; i++) rec = ctx.ads.next({ kind });
+  let rec = adShape(ctx.ads.next({ kind }));
+  for (let i = 0; shown.ccpOnly && !rec.ccp && i < 40; i++) rec = adShape(ctx.ads.next({ kind }));
   return rec;
 }
 /** Hooks a press on a real ad: opens cclabs.app in a new tab and pays once for this ad. */
