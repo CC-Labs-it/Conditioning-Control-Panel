@@ -12,6 +12,7 @@ import { createCards } from './cards.js';
 import { createShop } from './shop.js';
 import { openFork } from './fork.js';
 import { pictureRow } from './picture-card.js';
+import { createDock } from './dock.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -21,6 +22,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     wrap: $('btn-wrap'), lock: $('btn-lock'), pause: $('pause'), wake: $('wake'), resume: $('resume'), mute: $('mute'), gentle: $('gentle'),
     toast: $('l-toast'), fx: $('l-fx'), cards: $('cards'), saveBox: $('save-box'),
   };
+  const sideRails = $('l-side').children;
+  const dock = createDock({ doc, rails: { left: sideRails[0], right: sideRails[1] }, strip: $('dock-strip'), onStrip: () => shop?.fit() });
   const LAYERS = { back: 'l-back', wash: 'l-wash', floaters: 'l-floaters', ticker: 'l-ticker', meters: 'l-meters', banner: 'l-banner', side: 'l-side', over: 'l-over', toast: 'l-toast', ending: 'l-ending' };
   const cards = createCards(doc, el.cards);
   const motionQuery = win.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -332,7 +335,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
 
   const ui = {
-    doc, win, world: el.world, layer, gentle, reduced, cards,
+    doc, win, world: el.world, layer, gentle, reduced, cards, dock,
     parts: Object.freeze({ shop: $('shop'), buttonWrap: el.wrap, counter: el.counter, stage: el.stage }),
     bounds: () => dims,
     buttonFor, buttonLocked: () => lockUntil > 0, inPress,

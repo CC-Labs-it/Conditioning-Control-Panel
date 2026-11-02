@@ -11,6 +11,7 @@ import { fmt, money } from '../sim/format.js';
 import * as E from '../sim/economy.js';
 import { allowedLink } from './links.js';
 import { paletteOf } from './palette.js';
+import { slotOrder } from './dock.js';
 
 /** A deep read-only view: unlocks read the state and change it only through the verbs. */
 const views = new WeakMap();
@@ -51,8 +52,35 @@ export function makeContext(engine, scope) {
     layer: (name, side) => ui.layer(name, side),
     /* The run's colours: { a, b, soft, ink, spiral: [c1, c2], themes }. Event 'palette' fires when they change. */
     palette: () => paletteOf(engine.run),
-    /* A passive widget's place at the screen's edge: returns an element in the dock. STUB until the edges lane fills it in. */
-    dock(opts = {}) { return ctx.el('div', `pointer-events:auto;padding:8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-size:14px;`, null, ui.layer('side', opts.edge)); },
+    /* A passive widget's place at the screen's edge: answers the element to fill. See ENGINE.md. Its rail and whether it is
+     * folded are kept for this unlock, so a reload or a remount lands in the same place. */
+    dock(opts = {}) {
+      scope.docks = (scope.docks || 0) + 1;
+      const key = `_dock${scope.docks}`;
+      const saved = bag()[key] || {};
+      const bought = engine.run.order.indexOf(item.id);
+      const s = ui.dock.add({
+        edge: opts.edge || saved.edge,
+        title: brandText(opts.title ?? item.name),
+        icon: opts.icon ?? item.emoji ?? '',
+        order: opts.order ?? slotOrder(bought, scope.docks - 1),
+        chip: opts.chip !== false,
+        onChip: opts.onChip || null,
+        pin: !!opts.pin,
+        keep: !!opts.keep,
+        min: !!saved.min,
+        onMin(v) { bag()[key].min = v; },
+      });
+      /* The first time only: it slides in from its own edge, and its chip gives a little bounce. */
+      if (!saved.edge && !ctx.gentle) {
+        ctx.anim(s.root, [{ transform: `translateX(${s.side === 'left' ? -40 : 40}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'ease-out' });
+        if (s.chip) ctx.anim(s.chip, [{ transform: 'scale(.6)' }, { transform: 'scale(1.12)', offset: 0.6 }, { transform: 'none' }], { duration: 300, easing: 'ease-out' });
+        if (ui.dock.isRail()) s.root.scrollIntoView?.({ block: 'nearest' });
+      }
+      bag()[key] = { edge: s.side, min: !!saved.min };
+      scope.cleanups.add(s.remove);
+      return s.body;
+    },
     world: ui.world,
     parts: Object.freeze({ get shop() { return ui.parts?.shop ?? null; }, get buttonWrap() { return ui.parts?.buttonWrap ?? null; }, get counter() { return ui.parts?.counter ?? null; }, get stage() { return ui.parts?.stage ?? null; } }),
     bounds: () => ui.bounds(),

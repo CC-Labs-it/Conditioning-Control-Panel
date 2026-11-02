@@ -19,6 +19,8 @@
   --niche-2: #8a867d;     /* the second theme, or the first again */
   --niche-soft: #e4e1da;
   --niche-ink: #000;
+  --rail-w: 0px;          /* the dock: see ui/dock.js */
+  --dock-h: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -104,9 +106,43 @@ button { font: inherit; color: inherit; }
 @keyframes ready { 50% { background: var(--ready); } }
 body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 
-/* ---- side rails, toast ---- */
-#l-side { position: absolute; inset: 44px 0 0 0; z-index: 25; display: flex; justify-content: space-between; pointer-events: none; }
-.rail { width: max(0px, calc((100vw - 800px) / 2)); min-width: 56px; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; }
+/* ---- the dock: passive things at the edges. Rails on a wide page, a chip strip and a tray on a narrow one. ui/dock.js ---- */
+#l-side { position: absolute; inset: 0; z-index: 25; display: flex; justify-content: space-between; pointer-events: none; }
+.rail { flex: none; width: var(--rail-w); display: flex; flex-direction: column; gap: 6px; padding: 8px 6px; overflow: hidden auto; scrollbar-width: none; }
+.rail::-webkit-scrollbar { display: none; }
+.rail.right { padding-top: 48px; }   /* under Wake Up */
+.dk { flex: none; display: flex; flex-direction: column; pointer-events: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font-size: 14px; }
+.dk.pin { position: sticky; top: 0; z-index: 3; }
+.dk-t { flex: none; display: flex; align-items: center; gap: 5px; width: 100%; min-height: 24px; padding: 1px 6px; background: transparent; color: var(--ink-soft); border: 0; font: 13px/1.2 var(--font); text-align: left; cursor: default; touch-action: manipulation; }
+.dk-t:hover { color: var(--ink); }
+.dk-i { flex: none; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", var(--font); }
+.dk-n { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dk-f { flex: none; width: 8px; height: 8px; margin-right: 2px; border: solid currentColor; border-width: 0 0 1px 1px; transform: rotate(135deg) translate(-2px, 2px); }
+.dk.min .dk-f, .dk.auto .dk-f { transform: rotate(-45deg); }
+.dk-b { min-width: 0; padding: 0 6px 6px; }
+.dk.min .dk-b, .dk.auto .dk-b { display: none; }
+#dock-strip { position: relative; z-index: 31; flex: none; display: flex; align-items: center; gap: 4px; width: calc(100vw - 16px); height: var(--dock-h); padding: 3px 0; overflow: auto hidden; scrollbar-width: none; touch-action: pan-x; }
+#dock-strip::-webkit-scrollbar { display: none; }
+.dk-chip { flex: none; display: flex; align-items: center; gap: 4px; height: 100%; padding: 0 8px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font: 13px/1 var(--font); white-space: nowrap; touch-action: manipulation; }
+.dk-chip.on { background: var(--niche); color: var(--niche-ink); }
+@media (min-width: 1100px) {
+  :root { --rail-w: clamp(200px, calc((100vw - 776px) / 2), 300px); }
+  #page { padding-left: var(--rail-w); padding-right: var(--rail-w); }
+  #dock-strip { display: none; }
+}
+@media (max-width: 1099.98px) {
+  :root { --dock-h: 46px; }
+  #l-side { z-index: 62; display: block; }   /* a tray and its strip stay above whatever is on the page, under the rising numbers */
+  #dock-strip { z-index: 62; }
+  .rail { display: contents; }
+  .dk { display: none; }
+  .dk.open { display: flex; position: absolute; left: 8px; right: 8px; bottom: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 4px); max-width: 520px; margin: 0 auto; max-height: min(58vh, 460px); box-shadow: 2px 2px 0 rgba(0, 0, 0, .35); }
+  .dk.open .dk-b { display: block; overflow-y: auto; }
+  .dk-t { min-height: 34px; }
+  .dk-f { transform: rotate(-45deg); }
+}
+
+/* ---- toast ---- */
 #l-toast { position: absolute; left: 0; right: 0; z-index: 70; display: flex; justify-content: center; pointer-events: none; padding: 0 16px; }
 .toast { max-width: 560px; padding: 3px 10px; background: var(--ink); color: var(--page); font-size: 15px; text-align: center; }
 
@@ -162,7 +198,6 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
   #rows { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
   .row .ico { font-size: 30px; }
   #goal .row .ico { font-size: 38px; }
-  .rail { min-width: 0; width: 0; padding: 0; }
   #counter { font-size: 34px; }
   #btn-zone { height: 96px; }
   #btn { width: 170px; height: 58px; }
