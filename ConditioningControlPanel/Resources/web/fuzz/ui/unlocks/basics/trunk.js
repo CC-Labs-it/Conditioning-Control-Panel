@@ -43,7 +43,7 @@ function achieved(st, seen) {
 export default {
   f1: stampFork, f2: stampFork, f3: stampFork, f4: stampFork, f5: stampFork,
 
-  /* Lucky Taps: about one in eight, never more than sixteen dry. Word on the button, x8, and a `lucky` event for others. */
+  /* Lucky Taps: about one in twenty-five, never more than forty dry. Word on the button, what it paid, and a `lucky` event for others. */
   softw: {
     mount(ctx) {
       const el = ctx.button.el;
@@ -56,13 +56,13 @@ export default {
       };
       ctx.on('tap', ({ x, y, auto }) => {
         dry += 1;
-        if (ctx.rng() > 0.125 && dry < 16) return;
+        if (ctx.rng() > 0.04 && dry < 40) return;
         dry = 0;
         const c = btnCenter(ctx);
         const at = x == null ? c : { x, y };
-        ctx.pay(ctx.rates().click * 7, 'lucky', at);
+        const got = ctx.pay(ctx.rates().click * 7, 'lucky', at);
         word(c);
-        ctx.float(c.x + c.w / 2 + 24, c.y - 12, 'x8', 'color:var(--stamp);font-size:22px;font-weight:700;');
+        ctx.float(c.x + c.w / 2 + 24, c.y - 12, `+${ctx.fmt(got)}`, 'color:var(--stamp);font-size:22px;font-weight:700;');
         if (!auto) squish(ctx, el, 0.8);
         sfx(ctx, 'sfx/chip_pop.mp3', 0.45);
         ctx.emit('lucky', { x: at.x, y: at.y, auto });

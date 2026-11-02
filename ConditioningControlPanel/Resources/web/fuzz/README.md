@@ -20,6 +20,23 @@ Debug door: `?pace=N`, `?buy=id,id`, `?mood=m_x`, `?pictures=none`, `?fresh=1`, 
 
 Do not open `index.html` from `file://`: modules and the Loom need a server rooted at `Resources/web`.
 
+## How long a run takes
+
+`tests/routes.test.mjs` pins route timing with pure numbers: every route takes 25 to 37 minutes at 4 taps/s with side money and
+modifiers on (`sim/route.js`, option `side` and `mods`). What keeps that true whatever an unlock pays: everything through
+`ctx.pay` shares a budget (`SIDE_SHARE` in `data/config.js`, `sideLump` in `sim/economy.js`), and modifiers past a knee count at
+a fraction (`MOD_*`). To check the real game, which is too slow for CI:
+
+```bash
+node dev/serve.mjs 8811 &
+node dev/measure.mjs --port 8811                     # 8 routes, all themes, both sides of each fork, 4 taps/s; 20 to 30 min of wall time
+node dev/measure.mjs --routes "eyes,sweet,slides,sell,trance" --profile both --out run.json
+```
+
+It plays the real page on a stepped clock with a scripted person (one muted Firefox, nothing left behind) and prints minutes to
+each ending, money by source, longest gap between buys and fork times. Aim: `drop` in 25 to 37 minutes, 50 at 2 taps/s, no alternate
+ending before 20, gaps under about 60 s, side money 10 to 25% of income.
+
 ## Module map
 
 | Path | What | Rule |

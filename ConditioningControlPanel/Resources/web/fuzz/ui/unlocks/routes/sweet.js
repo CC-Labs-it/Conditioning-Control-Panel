@@ -38,7 +38,7 @@ export default {
       const rest = restClock(ctx), resting = deck(REST_LINES.resting, ctx), broken = deck(REST_LINES.broken, ctx);
       const row = ctx.el('div', 'display:flex;align-items:center;gap:5px;font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', REST_LINES.label, meterRow(ctx));
       const m = bar(ctx, row, 'width:60px;height:7px;', '#f0a060');
-      const x = ctx.el('b', 'font-size:15px;color:#d4488f;opacity:.25;transition:opacity .3s;', 'x1.5', row);
+      const x = ctx.el('b', 'font-size:15px;color:#d4488f;opacity:.25;transition:opacity .3s;', 'More', row);
       let lit = false;
       ctx.mod({ fps: (v) => (lit ? v * 1.5 : v) });
       ctx.on('tap', ({ auto }) => {
@@ -160,7 +160,7 @@ export default {
         const m = mul();
         g.style.transform = `scale(${0.2 + (m - 1) * 0.9})`;
         g.style.opacity = String(0.4 + (m - 1) * 0.3);
-        num.textContent = `x${m.toFixed(2)}`;
+        num.textContent = `x${(ctx.rates().fps / Math.max(1, ctx.state.base.fps)).toFixed(2)}`;
         if (m > 1.25) wasHigh = true;
         if (++n % 30 === 0 && m > 1.2) ctx.toast(lines());
       });
@@ -185,9 +185,9 @@ export default {
       let oldTitle = null;
       const wake = (ms) => {
         if (ms < 15000) return;
-        const capped = ms >= MAX, pay = ctx.rates().fps * Math.min(ms, MAX) / 1000;
+        const capped = ms >= MAX, ask = ctx.rates().fps * Math.min(ms, MAX) / 1000;
         const b = btnCentre(ctx);
-        ctx.pay(pay, 'away', { x: b.x, y: b.y });
+        const pay = ctx.pay(ask, 'away', { x: b.x, y: b.y });
         burst(ctx, b.x, b.y, '#ffd24d', 14, 100);
         ctx.modal({ title: ROUTE_COPY.napTitle, body: fill(welcome(), { pay: ctx.fmt(pay) }) + (capped ? ` ${NAP_LINES.capped}` : ''), ms: 0, buttons: [{ label: ROUTE_COPY.napOk }] });
       };

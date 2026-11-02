@@ -20,6 +20,28 @@ test('no row sits behind an ending: buying the ending would end the run first', 
   for (const it of ITEMS) for (const q of it.req) assert.notEqual(BY_ID[q].kind, 'end', it.id);
 });
 
+test('no row is cheaper than a parent, and each theme opens on its head then its podcast', () => {
+  for (const it of ITEMS) for (const q of it.req) assert.ok(it.cost >= BY_ID[q].cost, `${it.id} ${it.cost} is cheaper than ${q} ${BY_ID[q].cost}`);
+  for (const lane of Object.keys(FORKS.f5.opts)) {
+    const rows = ITEMS.filter((i) => i.lane === lane && i.kind !== 'end').sort((a, b) => a.cost - b.cost);
+    assert.ok(rows[1].id.endsWith('_pod'), `${lane} opens with ${rows[1].id}`);
+    assert.deepEqual(rows[1].req, [rows[0].id]);
+    assert.ok(rows[0].req.includes('f5'));
+  }
+});
+
+test('a label never names a multiple: modifiers bend and prizes share a budget, so a shown number is a paid number', () => {
+  const walk = (d) => readdirSync(d).flatMap((n) => { const p = join(d, n); return statSync(p).isDirectory() ? walk(p) : p.endsWith('.js') ? [p] : []; });
+  const allowed = /Prices x2/;  // a real price modifier, nothing bends those
+  for (const f of [...walk(join(tree, 'ui', 'unlocks')), ...walk(join(tree, 'data', 'content'))]) {
+    for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
+      if (/^\s*(\/\*|\*|\/\/)/.test(line) || allowed.test(line)) continue;
+      assert.ok(!/['"`][^'"`]*(?<![{\w])x\d+(\.\d+)?\b[^'"`]*['"`]/.test(line), `${f}: ${line.trim().slice(0, 90)}`);
+    }
+  }
+  for (const it of ITEMS) if (it.lane !== 'meta') assert.ok(!/\b(double|doubles|triple|triples)\b(?! tap)/i.test(it.what), `${it.id}: ${it.what}`);
+});
+
 test('thirteen endings, five forks, every fork lane named', () => {
   assert.equal(ITEMS.filter((i) => i.kind === 'end').length, 13);
   assert.deepEqual(Object.keys(FORKS), ['f1', 'f2', 'f3', 'f4', 'f5']);

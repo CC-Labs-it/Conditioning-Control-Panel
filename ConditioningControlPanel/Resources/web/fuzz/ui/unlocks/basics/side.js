@@ -23,9 +23,8 @@ export default {
         const key = pick(ctx, GOLDEN.prizes).key;
         const p = GOLDEN.prizes.find((q) => q.key === key);
         if (key === 'lump') {
-          const n = worth(ctx, 45);
-          ctx.pay(n, 'golden', { x, y });
-          pop(ctx, x, y - 30, p.label.replace('{n}', ctx.fmt(n * ctx.state.pace)), { color: '#b8860b', size: 34, ms: 1500 });
+          const n = ctx.pay(worth(ctx, 45), 'golden', { x, y });
+          pop(ctx, x, y - 30, p.label.replace('{n}', ctx.fmt(n)), { color: '#b8860b', size: 34, ms: 1500 });
         } else if (key === 'frenzy') {
           frenzyUntil = now + 12000;
           pop(ctx, x, y - 30, p.label, { color: '#b8860b', size: 44, ms: 1500 });
@@ -193,7 +192,7 @@ export default {
           const cx = x + 34, cy = y + 30;
           stop();
           leave();
-          ctx.pay(worth(ctx, 22), 'boxes', { x: cx, y: cy });
+          ctx.pay(worth(ctx, 12), 'boxes', { x: cx, y: cy });
           burst(ctx, cx, cy, { color: '#ff69b4', n: 16, reach: 80 });
           sfx(ctx, 'sfx/chain_pop.mp3', 0.6);
           ctx.say(pick(ctx, BOXES.opened));
@@ -210,7 +209,7 @@ export default {
   wheel: {
     mount(ctx) {
       const WAIT = 90;
-      const labels = ['x0.5', 'x1', 'x2', 'x4', 'x1', 'x0.5'], mult = [0.5, 1, 2, 4, 1, 0.5];
+      const labels = ['A bit', 'Some', 'More', 'Most', 'Some', 'A bit'], mult = [0.5, 1, 2, 4, 1, 0.5];
       const stops = ['#ff9ccf', '#c9b6ff', '#ffe08a', '#ff69b4', '#9ee6dd', '#d9d4c8'];
       let wait = fresh(ctx) ? 0 : (ctx.store.get('wait') ?? 0);
       const c = chip(ctx, '', () => { if (wait <= 0) open(); else ctx.toast(WHEEL.wait.replace('{n}', String(Math.ceil(wait)))); });

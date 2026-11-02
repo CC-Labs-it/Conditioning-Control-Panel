@@ -34,7 +34,7 @@ function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 }
       el.style.color = COLOURS[c];
       const gain = ctx.wallHit({ x: x + w / 2, y: y + h / 2, corner });
       if (corner) {
-        const r = ctx.rates(), big = Math.max(r.wall * 25, r.fps * 6);
+        const r = ctx.rates(), big = Math.max(r.wall * 25, r.fps * 2);
         ctx.pay(big, 'corner', { x: x + w / 2, y: y + h / 2 });
         burst(ctx, x + w / 2, y + h / 2, '#ffd24d', 18, 110);
         ctx.audio.play('assets/audio/sfx/golden_pop.mp3', { bus: 'sfx', gain: 0.6 });

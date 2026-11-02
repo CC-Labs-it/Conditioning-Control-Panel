@@ -44,8 +44,8 @@ export default {
         close();
         release('orders');
         const b = btnCentre(ctx), r = ctx.rates();
-        ctx.pay(r.click * 5 + r.fps, 'order', { x: x ?? b.x, y: y ?? b.y });
-        ctx.float(b.x, b.top - 8, 'x5', `color:${red(ctx)};font:800 22px Arial,Helvetica,sans-serif;`);
+        const got = ctx.pay(r.click * 5 + r.fps, 'order', { x: x ?? b.x, y: y ?? b.y });
+        ctx.float(b.x, b.top - 8, `+${ctx.fmt(got)}`, `color:${red(ctx)};font:800 22px Arial,Helvetica,sans-serif;`);
         ring(ctx, b.x, b.y, 170, red(ctx), 500);
         good(ctx, obeyed());
         ctx.voice('obey', { gain: 0.5 });

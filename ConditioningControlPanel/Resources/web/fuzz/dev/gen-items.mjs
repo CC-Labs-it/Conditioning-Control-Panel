@@ -17,11 +17,50 @@ const cur = (s) => String(s ?? '').replace(/\bFuzz\b/g, '{cur}');
 const GROW = { stray: { ratio: 1.5, max: 12 } };
 
 /* A row whose parent is an ending can never open, because buying the parent ends the run. One Last Go sits
- * beside Go Outside instead of behind it: same gate, and its price keeps it late. */
-const REQ_OVERRIDE = { onemore: ['f5'] };
+ * behind the theme pick, and its price keeps it late. Go Outside waits for Spiral Overlay: leaving early should be a
+ * choice made late in a run, not a row a saver trips over at minute 15. */
+const REQ_OVERRIDE = { onemore: ['f5'], outside: ['overlay'] };
 
-/* Copy the design source promises and the game does not do, or no longer does. */
+/* The design sim paid for 30 minutes with nothing on top. The real game has prizes and modifiers on top (capped in
+ * sim/economy.js), so the plan pays 70% of the design's numbers and the whole run lands near 30. Measured: dev/measure.mjs. */
+const planPay = (n, lane) => Math.max(1, Math.round(n * (LANE_PAY[lane] ?? 0.7)));
+/* Tap on Command and Bimbo earn from taps, which a real player does every moment: they run ahead of the Rest route without this. */
+const LANE_PAY = { strict: 0.6, bimbo: 0.55 };
+
+/* The theme pick comes at about minute 8 and its podcast at about minute 10 (owner, 2026-11-02). The trunk up to the pick
+ * gets cheaper, each theme opens with its head and then its podcast, and the rows that sat before the podcast each take the
+ * price of the row before them, so everything above the podcast's old place keeps its price and no late gap opens. A row
+ * that moves keeps its value for money: pay follows price along the design's own curve. */
+const TRUNK_MOVES = { f3: 4000, banner: 5000, f4: 6500, glossy: 8000, f5: 9000 };
+const THEME_LANES = ['trance', 'bimbo', 'drone', 'sissy', 'goon', 'locked', 'censored', 'infection'];
+const HEAD_COST = 10000, POD_COST = 12000;
+const moved = (r, cost) => {
+  const k = (cost / r.cost) ** 0.8;
+  return { ...r, cost, ...(r.fps ? { fps: Math.round(r.fps * k) } : {}), ...(r.click ? { click: Math.round(r.click * k) } : {}) };
+};
+function moveRows(rows) {
+  const out = rows.map((r) => (TRUNK_MOVES[r.id] ? moved(r, TRUNK_MOVES[r.id]) : r));
+  const byId = new Map(out.map((r) => [r.id, r]));
+  for (const lane of THEME_LANES) {
+    const chain = out.filter((r) => r.lane === lane && r.kind !== 'end').sort((a, b) => a.cost - b.cost);
+    const p = chain.findIndex((r) => r.id.endsWith('_pod'));
+    const [head, pod, after] = [chain[0], chain[p], chain[p + 1]];
+    const slots = chain.map((r) => r.cost);
+    for (let i = 1; i < p; i++) byId.set(chain[i].id, moved(chain[i], slots[i - 1]));
+    byId.set(head.id, moved(head, HEAD_COST));
+    byId.set(pod.id, { ...moved(pod, POD_COST), req: [head.id] });
+    if (after) byId.set(after.id, { ...after, req: [chain[p - 1].id] });
+  }
+  return out.map((r) => byId.get(r.id));
+}
+
+/* Row text that named a multiple. Modifiers bend past a knee (sim/economy.js), so a row says more, never how many times. */
 const WHAT_OVERRIDE = {
+  t_denied: 'Some taps are refused, and the next one pays more.',
+  t_grade: 'Every two minutes you get a score, and a top score raises earnings for a while.',
+  si_set: 'Dressing the button in a full matching set raises its pay.',
+  x_later: 'Pick Tap and Chastity: refused taps and purchases pay more.',
+  /* Copy the design source promises and the game does not do, or no longer does. */
   remote: 'Preset buttons that poke your own run. No friend is on the other end.',
   z_shuffle: 'A little board of side unlocks that shuffles itself on the credits.',
   tr_head: 'Trance pictures join the page, general hypnosis first.',
@@ -36,13 +75,13 @@ const WHAT_OVERRIDE = {
 const groupOf = (r) => (r.lane === 'meta' ? 'meta' : r.lane === 'after' ? 'after' : 'run');
 
 export function buildItems() {
-  const rows = read('rows.json'), copy = read('copy.json'), lanes = read('lanes.json');
+  const rows = moveRows(read('rows.json')), copy = read('copy.json'), lanes = read('lanes.json');
   const items = rows.map((r) => {
     const c = copy.items[r.id];
     if (!c) throw new Error(`copy.json has no ${r.id}`);
     const it = { id: r.id, emoji: r.emoji, name: cur(c.name), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
-    if (r.fps) it.fps = r.fps;
-    if (r.click) it.click = r.click;
+    if (r.fps) it.fps = planPay(r.fps, r.lane);
+    if (r.click) it.click = planPay(r.click, r.lane);
     if (r.wall) it.wall = r.wall;
     if (r.flags) it.flags = r.flags;
     it.kind = r.kind || 'item';

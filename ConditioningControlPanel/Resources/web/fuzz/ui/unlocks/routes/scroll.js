@@ -244,7 +244,7 @@ export default {
     mount(ctx) {
       const words = deck(FEED_LINES.streak, ctx), lost = deck(FEED_LINES.streakLost, ctx);
       const COL = ['#ffb36b', '#ff9a3c', '#ff6a2c', '#ff3b2c'];
-      const x = ctx.el('div', 'position:absolute;left:0;right:0;top:36%;text-align:center;font:800 26px/1 Arial,Helvetica,sans-serif;color:#ffb36b;text-shadow:0 2px 6px #000;transition:font-size .2s;opacity:0;', 'x1', feed.hud);
+      const x = ctx.el('div', 'position:absolute;left:0;right:0;top:36%;text-align:center;font:800 26px/1 Arial,Helvetica,sans-serif;color:#ffb36b;text-shadow:0 2px 6px #000;transition:font-size .2s;opacity:0;', '', feed.hud);
       let n = 0, last = 0, cancel = null;
       listen(ctx, 'swipe', (p) => {
         const t = ctx.state.clock;
@@ -253,8 +253,8 @@ export default {
         const mul = Math.min(4, 1 + Math.floor(n / 3));
         if (mul > 1) {
           const r = ctx.rates();
-          ctx.pay(r.click * (mul - 1), 'streak', p);
-          x.textContent = `x${mul}`;
+          const got = ctx.pay(r.click * (mul - 1), 'streak', p);
+          x.textContent = `+${ctx.fmt(got)}`;
           x.style.fontSize = `${20 + mul * 13}px`;
           x.style.color = COL[mul - 1];
           x.style.opacity = '1';

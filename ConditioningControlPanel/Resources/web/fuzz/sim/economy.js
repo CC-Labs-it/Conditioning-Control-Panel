@@ -26,6 +26,7 @@ export function createRun({ pace = 1, mood = null, seed = 1, perk = null } = {})
     picks: {},
     sources: {},
     spent: {},         // ctx.spend by reason
+    side: { budget: 0, asked: 0, paid: 0 },  // side money: see sideLump
     store: {},         // ctx.store per unlock
     endless: false,
     ended: null,       // {id, at}
@@ -67,12 +68,19 @@ function fold(field, value, s, mods, now, item) {
   return value;
 }
 
+/** Modifiers past the knee keep counting, at MOD_SLOPE of their strength: a run stays about 30 minutes whichever stack.
+ *  The small constant leaves the first minutes alone, where base pay is a handful. */
+const soft = (value, base, knee) => {
+  const top = base * knee + 10;
+  return value <= top ? value : top + (value - top) * CONFIG.MOD_SLOPE;
+};
+
 /** Everything that decides income right now. walls = hits per second per bouncing button. */
 export function rates(s, mods = null, now = s.clock) {
   const mood = moodOf(s);
   return {
-    fps: Math.max(0, fold('fps', s.base.fps, s, mods, now)),
-    click: Math.max(0, fold('click', s.base.click, s, mods, now)),
+    fps: Math.max(0, soft(fold('fps', s.base.fps, s, mods, now), s.base.fps, CONFIG.MOD_FPS_KNEE)),
+    click: Math.max(0, soft(fold('click', s.base.click, s, mods, now), s.base.click, CONFIG.MOD_CLICK_KNEE)),
     wall: Math.max(0, fold('wall', s.base.wall, s, mods, now)),
     walls: Math.max(0, fold('walls', CONFIG.WALLS_PER_STRAY * (mood?.walls || 1), s, mods, now)),
   };
@@ -133,6 +141,25 @@ function credit(s, amount, source) {
 
 export const lump = (s, amount, source = 'lump') => credit(s, Math.max(0, amount), source);
 
+/** Planned income: taps, walls, per-second pay. Each bit also fills the side money budget. */
+export function earn(s, amount, source = 'earn') {
+  s.side.budget += amount * CONFIG.SIDE_SHARE;
+  return credit(s, amount, source);
+}
+
+/** Side money. Every prize asks for a sum, usually seconds of the player's rate. While all prizes together ask for less than
+ *  the budget each pays in full; past it each pays the same part of its ask, so a golden prize stays ten scratches. */
+export function sideLump(s, amount, source = 'lump') {
+  const ask = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  const g = s.side;
+  g.asked += ask;
+  const fair = g.asked > 0 ? ask * Math.min(1, g.budget / g.asked) : 0;
+  const paid = Math.min(fair, Math.max(g.budget - g.paid, ask * CONFIG.SIDE_FLOOR));
+  const got = Math.max(paid, ask * CONFIG.SIDE_FLOOR);
+  g.paid += got;
+  return credit(s, got, source);
+}
+
 /** Takes from the bank, never below zero, and answers what it took. No debt. Pace does not apply: it is the player's money. */
 export function spend(s, amount, reason = 'spent') {
   const took = Math.min(s.fuzz, Number.isFinite(amount) ? Math.max(0, amount) : 0);
@@ -143,19 +170,19 @@ export function spend(s, amount, reason = 'spent') {
 
 export function tap(s, mods = null, now = s.clock) {
   s.taps += 1;
-  return credit(s, rates(s, mods, now).click * s.pace, 'tap');
+  return earn(s, rates(s, mods, now).click * s.pace, 'tap');
 }
 
 export function wallHit(s, mods = null, now = s.clock) {
   s.walls += 1;
-  return credit(s, rates(s, mods, now).wall * s.pace, 'wall');
+  return earn(s, rates(s, mods, now).wall * s.pace, 'wall');
 }
 
 /** Advance the game clock and pay the per-second income. */
 export function tick(s, dtMs, mods = null) {
   if (s.ended) return 0;
   s.clock += dtMs;
-  return credit(s, rates(s, mods, s.clock).fps * s.pace * (dtMs / 1000), 'fps');
+  return earn(s, rates(s, mods, s.clock).fps * s.pace * (dtMs / 1000), 'fps');
 }
 
 /** A plain buy. A fork answers {reason:'fork'}: take it with choose(). */

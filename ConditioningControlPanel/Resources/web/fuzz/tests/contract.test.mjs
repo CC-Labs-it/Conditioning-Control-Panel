@@ -114,13 +114,13 @@ test('off tears down elements, timers, listeners, modifiers and animations', () 
         c.anim(c.el('div'), [], 100);
         c.every(10, () => fired++);
         c.on('tap', () => heard++);
-        c.mod({ click: (v) => v + 100 });
+        c.mod({ click: (v) => v + 5 });
         return { off() { offCalled++; } };
       },
     },
   });
   engine.mount('stray');
-  assert.equal(engine.rates().click, 101);
+  assert.equal(engine.rates().click, 6);
   assert.equal(ui.layers.over.children.length, 1);
   engine.unmount('stray');
   assert.equal(offCalled, 1);

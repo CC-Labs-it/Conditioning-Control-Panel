@@ -86,7 +86,7 @@ export default {
       ctx.el('span', '', COPY.trance.handsOff, box);
       const track = ctx.el('span', 'position:relative;width:clamp(48px,12vw,110px);height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden;', null, box);
       const fill = ctx.el('span', 'position:absolute;inset:0;border-radius:4px;background:linear-gradient(90deg,#b79cff,#8fd0ff);transform-origin:0 50%;transform:scaleX(0);', null, track);
-      const num = ctx.el('span', 'min-width:2em;color:var(--stamp);font-variant-numeric:tabular-nums;', 'x1.0', box);
+      const num = ctx.el('span', 'min-width:2em;color:var(--stamp);font-variant-numeric:tabular-nums;', '', box);
       ctx.on('tap', (e) => {
         if (e.auto) return;
         if (ctx.has('tr_breath') && b.breathOpenNow?.()) return;   // the one tap that does not count as moving
@@ -99,7 +99,7 @@ export default {
         fill.style.transform = `scaleX(${(m - 1).toFixed(3)})`;
         if (now > lineAt) {
           lineAt = now + 500;
-          num.textContent = `x${m.toFixed(1)}`;
+          num.textContent = `x${(ctx.rates().fps / Math.max(1, ctx.state.base.fps)).toFixed(1)}`;
           const s = stillFor(ctx.state.clock);
           if (s > 12 + li * 12 && li < 4) { murmur(ctx, R.still[li]); li += 1; }
           if (s < 2) li = 0;
@@ -289,7 +289,7 @@ export default {
         fill.style.transform = `scaleX(${depth.toFixed(3)})`;
         if (now > lineAt) {
           lineAt = now + 500;
-          pct.textContent = `x${(1 + depth).toFixed(1)}`;
+          pct.textContent = `x${(ctx.rates().fps / Math.max(1, ctx.state.base.fps)).toFixed(1)}`;
           if (depth > 0.3 * (li + 1) && li < R.deep.length) { murmur(ctx, R.deep[li]); li += 1; }
         }
       });

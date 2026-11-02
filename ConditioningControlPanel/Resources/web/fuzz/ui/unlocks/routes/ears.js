@@ -81,8 +81,8 @@ export default {
         if (Math.abs(gap) > 130) { streak = 0; return; }
         streak += 1;
         const b = btnCentre(ctx), r = ctx.rates();
-        ctx.pay(Math.max(1, r.click) * Math.min(4, streak), 'tick', { x: x ?? b.x, y: y ?? b.top });
-        if (streak >= 2) ctx.float(b.x, b.top - 22, fill(ROUTE_COPY.onTick, { n: Math.min(4, streak) }), 'color:var(--stamp);font-weight:700;');
+        const got = ctx.pay(Math.max(1, r.click) * Math.min(4, streak), 'tick', { x: x ?? b.x, y: y ?? b.top });
+        if (streak >= 2) ctx.float(b.x, b.top - 22, fill(ROUTE_COPY.onTick, { n: ctx.fmt(got) }), 'color:var(--stamp);font-weight:700;');
       });
       return {};
     },

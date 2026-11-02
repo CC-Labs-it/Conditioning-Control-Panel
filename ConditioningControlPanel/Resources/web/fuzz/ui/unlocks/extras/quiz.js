@@ -158,7 +158,7 @@ function createQuiz(ctx) {
         if (open !== o) return;
         const r = (b || card).getBoundingClientRect();
         const rates = ctx.rates();
-        const secs = tone(ans) === 'no' ? 8 : 15;
+        const secs = tone(ans) === 'no' ? 2 : 4;
         const amount = Math.max(rates.fps * secs, rates.click * 10) * mult;
         ctx.pay(amount, 'quiz', { x: r.left + r.width / 2, y: r.top });
         ctx.audio.play(tone(ans) === 'no' ? 'assets/audio/sfx/ui_click.mp3' : 'assets/audio/sfx/chime1.mp3', { bus: 'sfx', gain: 0.7 });

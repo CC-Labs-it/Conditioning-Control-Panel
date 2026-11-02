@@ -5,11 +5,11 @@ export const COPY = Object.freeze({
   goon: { notYet: 'Not yet.', later: 'Four hours later' },
   locked: {
     click: 'click', beg: 'Beg', no: 'NO', lookOnly: 'look only', spin: 'Spin', wheel: 'Wheel', soClose: 'So close.', hoped: 'Did you hope.',
-    lockRate: (n) => `+${n}/s from the lock`,
+    lockRate: () => 'The lock is paying',
   },
   censored: { stamp: 'CENSORED', peek: 'Peek' },
   infection: {
-    coverage: (pct, stage, rate) => `Coverage ${pct}%. ${stage} +${rate}/s`,
+    coverage: (pct, stage) => `Coverage ${pct}%. ${stage}`,
     fever: (t, line) => `${t} deg. ${line}`,
     scratch: 'Do not scratch.',
   },

@@ -232,8 +232,8 @@ export const COMBO_UNLOCKS = {
       n = 0;
       const r = el.getBoundingClientRect();
       const amount = ctx.rates().click * need * 2;
-      ctx.pay(amount, 'x_compl', { x: r.left + r.width / 2, y: r.top });
-      pay.textContent = C.taskDone.replace('{n}', ctx.fmt(amount * ctx.state.pace));
+      const got = ctx.pay(amount, 'x_compl', { x: r.left + r.width / 2, y: r.top });
+      pay.textContent = C.taskDone.replace('{n}', ctx.fmt(got));
       stamp.style.opacity = '1';
       ctx.anim(stamp, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: 'rotate(-12deg) scale(1.8)', opacity: 0 }, { transform: 'rotate(-12deg) scale(1)', opacity: 1 }], { duration: 220 });
       ctx.after(900, () => { stamp.style.opacity = '0'; show(); });
