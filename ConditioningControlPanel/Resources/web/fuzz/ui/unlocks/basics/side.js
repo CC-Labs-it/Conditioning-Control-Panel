@@ -275,7 +275,11 @@ export default {
       /* A wide page keeps them in the rail, so they never lie over the other panels. A phone has no room to spare: they stay on top. */
       const inRail = () => ctx.bounds().w >= 1100;
       const railTray = () => {
-        tray ||= ctx.el('div', 'display:flex;flex-direction:column;gap:3px;min-height:128px;', null, ctx.dock({ edge: 'right', chip: false }));
+        if (!tray) {
+          ctx.css(".fz-inbox:empty::before{content:'Nothing new.';font-size:12px;color:var(--ink-faint);}");
+          tray = ctx.el('div', 'display:flex;flex-direction:column;gap:3px;min-height:128px;', null, ctx.dock({ edge: 'right', chip: false }));
+          tray.className = 'fz-inbox';
+        }
         return tray;
       };
       if (inRail()) railTray();
