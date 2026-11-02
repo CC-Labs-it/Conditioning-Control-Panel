@@ -9,10 +9,11 @@ import { drawSpiral, normalizeParams } from '../../arcademy/engine/loom/loomSpir
 
 export const FPS_CAP = 30;
 
-export function createSpiral(canvas, { reduced = false } = {}) {
+/** manual: the caller drives it from ctx.frame with step(dt), so the page keeps one shared rAF and pause stops it. */
+export function createSpiral(canvas, { reduced = false, manual = false } = {}) {
   const ctx = canvas.getContext('2d', { alpha: false });
   let params = normalizeParams({ arms: 4, turns: 2, style: 'log', duty: 0.5, speed: 2, colors: ['#ff69b4'], bg: '#14060f' });
-  let on = false, still = reduced, phase = 0, speed = 1, pulse = 0, last = 0, size = 0;
+  let on = false, still = reduced, phase = 0, speed = 1, pulse = 0, last = 0, size = 0, spent = 0;
 
   function fit() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -24,12 +25,7 @@ export function createSpiral(canvas, { reduced = false } = {}) {
   window.addEventListener('resize', fit);
   fit();
 
-  function frame(now) {
-    if (!on) return;
-    requestAnimationFrame(frame);
-    if (now - last < 1000 / FPS_CAP) return;
-    const dt = Math.min(0.1, (now - last) / 1000);
-    last = now;
+  function draw(dt) {
     if (!still) phase = (phase + dt * 0.08 * speed) % 1;
     pulse = Math.max(0, pulse - dt * 2);
     const drawSize = size * (1 + pulse * 0.03);
@@ -39,13 +35,31 @@ export function createSpiral(canvas, { reduced = false } = {}) {
     ctx.restore();
   }
 
+  function frame(now) {
+    if (!on) return;
+    requestAnimationFrame(frame);
+    if (now - last < 1000 / FPS_CAP) return;
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    draw(dt);
+  }
+
   return {
-    show() { if (on) return; on = true; last = performance.now(); canvas.classList.add('on'); requestAnimationFrame(frame); },
+    show() { if (on) return; on = true; last = performance.now(); canvas.classList.add('on'); if (!manual) requestAnimationFrame(frame); },
     hide() { on = false; canvas.classList.remove('on'); },
+    /** One step at most FPS_CAP times a second. */
+    step(dt) {
+      if (!on) return;
+      spent += dt;
+      if (spent < 1 / FPS_CAP) return;
+      draw(Math.min(0.1, spent));
+      spent = 0;
+    },
     faster(mul) { speed = mul; },
     beat() { pulse = 1; },
     setStill(v) { still = !!v; },
     recolour(colors) { params = normalizeParams({ ...params, colors }); },
+    dispose() { on = false; window.removeEventListener('resize', fit); },
     get on() { return on; },
   };
 }

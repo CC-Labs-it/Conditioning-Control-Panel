@@ -3,48 +3,54 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Untitled</title>
+  <title>Terms &amp; Conditioning</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <canvas id="spiral" class="spiral" aria-hidden="true"></canvas>
-  <div id="pinkwash" class="pinkwash" aria-hidden="true"></div>
-
-  <header class="top">
-    <div id="ticker" class="ticker" hidden></div>
-    <button id="wake" class="wake" type="button">Wake Up</button>
-  </header>
-
-  <main id="stage" class="stage">
-    <div class="counter">
-      <div id="fuzz" class="fuzz" aria-live="off">0 Fuzz</div>
-      <div id="fps" class="fps" hidden>0 Fuzz per second</div>
-      <div id="meters" class="meters"></div>
+  <div id="world">
+    <div id="l-back" class="layer"></div>
+    <div id="l-wash" class="layer"></div>
+    <div id="page">
+      <main id="stage">
+        <div id="l-ticker" class="ticker"></div>
+        <div id="counter" aria-live="off"><span id="count">0</span> <span id="cur"></span></div>
+        <div id="l-meters"></div>
+        <div id="btn-zone"><div id="btn-wrap"><button id="btn" type="button">Click</button><span id="btn-lock" hidden></span></div></div>
+      </main>
+      <div id="l-banner"></div>
+      <section id="shop" aria-label="Shop" hidden>
+        <div id="goal"></div>
+        <div id="rows"></div>
+        <div id="more" hidden></div>
+      </section>
     </div>
-    <button id="bubble" class="bubble" type="button" aria-label="Pop">
-      <img src="assets/img/bubble.png" alt="" draggable="false">
-    </button>
-    <section id="shop" class="shop" aria-label="Shop"></section>
-  </main>
+    <div id="l-floaters" class="layer"></div>
+    <div id="l-side"><div class="rail left"></div><div class="rail right"></div></div>
+    <div id="l-over" class="layer"></div>
+    <div id="l-fx" class="layer"></div>
+    <div id="l-toast"></div>
+  </div>
 
-  <div id="widgets" class="widgets"></div>
-  <div id="fx" class="fx" aria-hidden="true"></div>
+  <div id="cards"></div>
 
-  <div id="pause" class="pause" hidden>
-    <div class="card">
-      <p class="card-title">Paused</p>
-      <div class="card-rows">
-        <button id="resume" type="button">Resume</button>
-        <label><input id="mute" type="checkbox"> Mute</label>
-        <label><input id="photosafe" type="checkbox"> Photosafe</label>
-        <button id="export" type="button">Export save</button>
-        <button id="forget" type="button" data-sure="">Forget everything</button>
+  <div id="pause" class="backdrop" hidden>
+    <div class="card" role="dialog" aria-modal="true" aria-label="Paused">
+      <h2>Paused</h2>
+      <p class="card-sub">Everything is stopped and muted.</p>
+      <div class="card-buttons"><button id="resume" type="button" class="primary">Resume</button></div>
+      <label class="check"><input id="mute" type="checkbox"> Mute</label>
+      <label class="check"><input id="gentle" type="checkbox"> Gentle visuals</label>
+      <div class="card-buttons small">
+        <button id="save-out" type="button" hidden>Export save</button>
+        <button id="save-in" type="button" hidden>Import save</button>
+        <button id="forget" type="button">Forget everything</button>
+        <button id="leave" type="button" hidden>Leave</button>
       </div>
-      <textarea id="exportbox" rows="3" readonly hidden></textarea>
+      <textarea id="save-box" rows="3" hidden spellcheck="false" aria-label="Save"></textarea>
     </div>
   </div>
 
-  <div id="ending" class="ending" hidden></div>
+  <button id="wake" type="button">Wake Up</button>
 
   <script type="module" src="main.js"></script>
 </body>
