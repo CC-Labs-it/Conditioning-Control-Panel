@@ -90,7 +90,8 @@ export default {
       let live = false, done = 0, line = null, num = null, m = null, stopTick = null, left = 0;
       const clear = () => { live = false; stopTick?.(); dropLine(line); num?.remove(); m?.el.remove(); line = num = m = null; release('count'); };
       const go = () => {
-        if (live || !claim(ctx, 'count', 8500)) return;
+        if (live) return;
+        if (!claim(ctx, 'count', 8500)) { ctx.after(3000, go); return; }
         live = true; done = 0; left = 8;
         const b = btnCentre(ctx);
         line = setLine(ctx, fill(start(), { n: NEED }), STAMP(ctx, 18), 0);
@@ -143,7 +144,8 @@ export default {
         cancel = ctx.after(gap, beat);
       };
       const start = () => {
-        if (live || !claim(ctx, 'beat', 20000)) return;
+        if (live) return;
+        if (!claim(ctx, 'beat', 20000)) { ctx.after(3000, start); return; }
         live = true; gap = 850; i = 0; beats = 0; streak = 0;
         beat();
       };
@@ -175,7 +177,8 @@ export default {
       const clear = () => { live = false; cancel?.(); dropLine(line); m?.el.remove(); line = m = null; ctx.button.el.classList.remove('routes-hands'); release('still'); };
       ctx.css(`#btn.routes-hands{outline:2px dashed ${red(ctx)};outline-offset:3px}`);
       const go = () => {
-        if (live || !claim(ctx, 'still', 5200)) return;
+        if (live) return;
+        if (!claim(ctx, 'still', 5200)) { ctx.after(3000, go); return; }
         live = true;
         const b = btnCentre(ctx);
         line = setLine(ctx, words(), STAMP(ctx, 21), 0);
@@ -280,7 +283,8 @@ export default {
       let on = false;
       ctx.mod({ click: (v) => (on ? v * 1.5 : v) });
       const go = () => {
-        if (on || !claim(ctx, 'corner', 10500)) return;
+        if (on) return;
+        if (!claim(ctx, 'corner', 10500)) { ctx.after(3000, go); return; }
         on = true;
         const { w } = ctx.bounds(), b = btnCentre(ctx);
         const dx = Math.min(300, (w - b.w * 0.72) / 2 - 8);

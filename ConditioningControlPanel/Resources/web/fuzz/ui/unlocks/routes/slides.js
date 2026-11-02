@@ -141,6 +141,7 @@ export default {
           const r = p.getBoundingClientRect();
           ctx.pay(ctx.rates().fps * 12, 'video', { x: r.left + r.width / 2, y: r.top + r.height / 2 });
         }
+        if (!paid) { p.remove(); return; }   // Wake Up: timers and animations are frozen now, so it goes at once
         ctx.anim(p, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'both' });
         ctx.after(320, () => p.remove());
       };

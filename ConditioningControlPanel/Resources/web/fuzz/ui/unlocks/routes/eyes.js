@@ -153,7 +153,8 @@ export default {
         release('stare');
       };
       const start = () => {
-        if (on || !claim(ctx, 'stare', 7000)) return;
+        if (on) return;
+        if (!claim(ctx, 'stare', 7000)) { ctx.after(3000, start); return; }
         on = true;
         const b = btnCentre(ctx);
         label = setLine(ctx, nextStart(), 'font-weight:700;color:#fff;text-shadow:0 1px 4px #000;', 0);

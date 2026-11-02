@@ -13,14 +13,15 @@ const KINDS = ['pretty', 'close'];
 function makeFeed(ctx) {
   const doc = docOf(ctx);
   const shell = panel(ctx, { side: 'left', height: Math.min(ctx.bounds().h - 120, 520), css: 'pointer-events:auto;' });
-  const root = ctx.el('div', 'position:absolute;inset:0;background:#111;border:2px solid #222;border-radius:12px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;', null, shell);
+  const root = ctx.el('div', 'position:absolute;inset:0;background:#111;border:2px solid #222;border-radius:12px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;pointer-events:auto;', null, shell);
   shell.style.position = shell.style.position || 'relative';
   const col = ctx.el('div', 'position:absolute;left:0;right:0;top:0;transition:transform .28s ease-out;will-change:transform;', null, root);
   const hud = ctx.el('div', 'position:absolute;inset:0;pointer-events:none;z-index:5;', null, root);
-  const hint = ctx.el('div', 'position:absolute;left:0;right:0;bottom:8px;text-align:center;font:700 13px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', 'swipe up', hud);
+  const hint = ctx.el('div', 'position:absolute;left:0;right:0;bottom:12px;text-align:center;font:700 13px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', 'swipe up', hud);
+  hint.className = 'routes-hint';
 
   const f = { root, shell, col, hud, tiles: [], index: 0, h: 0, swipes: 0, fullscreen: false, sheetClose: null };
-  ctx.css('.routes-small .routes-big{display:none !important}');
+  ctx.css('.routes-small .routes-big{display:none !important}.routes-full .routes-fy{top:48px !important;right:8px}.routes-full .routes-endbox{bottom:72px !important}.routes-full .routes-hint{bottom:auto !important;top:58%}');
   const sizeMode = () => { root.classList.toggle('routes-small', !railsRoom(ctx) && !f.fullscreen); hint.textContent = (!railsRoom(ctx) && !f.fullscreen) ? 'press to open' : 'swipe up'; };
   sizeMode();
   f.sizeMode = sizeMode;
@@ -126,7 +127,7 @@ function makeFeed(ctx) {
     ctx.layer('over').appendChild(root);
     back.style.display = count.style.display = 'block';
     hint.style.opacity = '1';
-    hint.style.bottom = '66px';
+    root.classList.add('routes-full');
     sizeMode();
     ctx.after(40, place);
   }
@@ -135,7 +136,7 @@ function makeFeed(ctx) {
     root.style.position = 'absolute'; root.style.borderRadius = '12px'; root.style.border = '2px solid #222';
     shell.appendChild(root);
     back.style.display = count.style.display = 'none';
-    hint.style.bottom = '8px';
+    root.classList.remove('routes-full');
     sizeMode();
     ctx.after(40, place);
   }
@@ -214,7 +215,7 @@ export default {
       const weights = { [KINDS[0]]: 1, [KINDS[1]]: 1 };
       hooks.pick = () => (ctx.rng() < weights[KINDS[0]] / (weights[KINDS[0]] + weights[KINDS[1]]) ? KINDS[0] : KINDS[1]);
       const box = ctx.el('div', 'position:absolute;left:8px;right:8px;top:8px;display:flex;flex-direction:column;gap:3px;', null, feed.hud);
-      box.className = 'routes-big';
+      box.className = 'routes-big routes-fy';
       const label = ctx.el('div', 'font:11px Arial,Helvetica,sans-serif;color:#f0a8cc;text-shadow:0 1px 2px #000;', lines(), box);
       const mk = (c) => { const o = ctx.el('div', 'height:6px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden;', null, box); return ctx.el('div', `height:100%;background:${c};transform-origin:0 50%;transition:transform .4s;`, null, o); };
       const a = mk('#c23a83'), b = mk('#2f8fd0');
@@ -312,7 +313,7 @@ export default {
     mount(ctx) {
       const near = deck(FEED_LINES.endNear, ctx);
       const box = ctx.el('div', 'position:absolute;left:8px;right:8px;bottom:30px;text-align:center;font:800 22px/1 Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', '', feed.hud);
-      box.className = 'routes-big';
+      box.className = 'routes-big routes-endbox';
       const pct = ctx.el('div', '', '0%', box);
       const o = ctx.el('div', 'height:9px;margin-top:5px;border-radius:5px;background:rgba(255,255,255,.25);overflow:hidden;', null, box);
       const fillEl = ctx.el('div', 'height:100%;background:#ffd24d;transform-origin:0 50%;transform:scaleX(0);transition:transform .3s;', null, o);
