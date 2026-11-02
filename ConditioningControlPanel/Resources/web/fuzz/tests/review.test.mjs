@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cardUp } from '../ui/unlocks/extras/kit.js';
-import { bankOf, collect, levelSeconds, xpNeed } from '../sim/levels.js';
+import { bankOf, collect, levelSeconds, xpNeed, COLLECT_MAX_SECONDS } from '../sim/levels.js';
 import { createEngine } from '../ui/engine.js';
 import { REGISTRY } from '../ui/unlocks/index.js';
 import { fresh, sfx } from '../ui/unlocks/basics/fx.js';
@@ -34,7 +34,7 @@ test('Levels: a huge bank answers at once and the sums match the slow way', () =
     const now = bankOf(lvl, xp), got = collect(lvl, xp);
     assert.equal(now.banked, banked, `banked at ${lvl}, ${xp}`);
     assert.ok(Math.abs(now.left - left) < 1e-6, `left at ${lvl}, ${xp}`);
-    assert.equal(got.seconds, seconds, `seconds at ${lvl}, ${xp}`);
+    assert.equal(got.seconds, Math.min(COLLECT_MAX_SECONDS, seconds), `seconds at ${lvl}, ${xp}`);
     assert.equal(got.lvl, lvl + banked);
   }
 });
