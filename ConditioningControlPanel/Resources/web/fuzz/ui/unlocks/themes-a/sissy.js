@@ -6,6 +6,7 @@ import { mountPodcast } from '../podcast-player.js';
 import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, pick, pop, railPanel } from './kit.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.sissy.rules;
 const NICHES = ['lace', 'bows', 'pearls', 'frills', 'gloves', 'satin'];
@@ -102,8 +103,7 @@ export default {
   si_bow: {
     mount(ctx) {
       ctx.button.skin('si-bow');
-      ctx.css(`#btn[data-skin=si-bow]{width:128px;height:90px;font-size:0;background:transparent;border:0;box-shadow:none;}
-#btn[data-skin=si-bow]::after{content:'🎀';font-size:76px;line-height:90px;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;font-style:normal;}`);
+      ctx.css(THEME_TASTES.sissy.css);
       ctx.on('tap', () => {
         if (ctx.gentle || ctx.has('si_ward')) return;
         ctx.anim(ctx.button.el, [{ rotate: '0deg' }, { rotate: '-7deg' }, { rotate: '6deg' }, { rotate: '0deg' }], 340);

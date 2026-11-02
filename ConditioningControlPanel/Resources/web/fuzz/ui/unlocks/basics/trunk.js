@@ -5,6 +5,7 @@ import { ACHIEVEMENTS, DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS,
 import { FORKS } from '../../../data/items.js';
 import { SECOND_THEME, THEME_TINTS } from './copy.js';
 import { beatAt, BEAT_MS, burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 /* A fork lands like a stamp: the choice crosses the middle of the screen. */
 const stampFork = {
@@ -236,13 +237,15 @@ export default {
     mount(ctx) {
       let frame = null;
       const wearIt = (id) => {
-        const tint = THEME_TINTS[id] || '#777777';
-        ctx.css(`#btn[data-skin=taste-${id}] { background: ${tint}; color: #fff; border: 2px solid rgba(0,0,0,.35); border-radius: 12px; box-shadow: 0 3px 0 rgba(0,0,0,.35); font-weight: 700; }`);
-        ctx.button.skin(`taste-${id}`);
+        const t = THEME_TASTES[id];
+        if (!t) return;
+        ctx.css(t.css);
+        ctx.button.skin(t.skin);
       };
       const showPicture = async (id) => {
         if (!frame) return;
-        const pic = await ctx.pictures.next({ niche: id });
+        const niches = THEME_TASTES[id]?.niches || [id];
+        const pic = await ctx.pictures.next({ niche: niches[Math.floor(ctx.rng() * niches.length)] });
         if (!frame) return;
         frame.img.style.display = pic ? 'block' : 'none';
         if (pic) { frame.img.src = pic.url; ctx.anim(frame.img, [{ opacity: 0 }, { opacity: 1 }], { duration: 500 }); }

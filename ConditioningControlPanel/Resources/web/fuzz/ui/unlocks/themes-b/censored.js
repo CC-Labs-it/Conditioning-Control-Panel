@@ -7,6 +7,7 @@ import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, pick, ring, rowsOf, sfx } from './kit.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.censored.rules;
 const RED = '#c2261f';
@@ -61,9 +62,7 @@ export default {
   /* The button is a bar. A tap shows a sliver of what is under it. */
   ce_bar: {
     mount(ctx) {
-      ctx.css(`#btn[data-skin=censorbar]{width:230px;height:40px;background:#000;color:#000;border:0;border-radius:0;font:700 15px var(--font);transition:color .08s ease-out;}
-        #btn[data-skin=censorbar].down{color:#fffdf6;transform:scale(.98);}
-        body.gentle #btn[data-skin=censorbar].down{color:#000;}`);
+      ctx.css(THEME_TASTES.censored.css);
       ctx.button.skin('censorbar');
       if (fresh(ctx)) ring(ctx, RED);
       return {};

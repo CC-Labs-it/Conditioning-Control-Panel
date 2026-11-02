@@ -5,6 +5,7 @@ import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, moment, motion, pick, ring, sfx, slot, tile } from './kit.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.goon.rules;
 const HOT = '#f2a33c';
@@ -173,7 +174,7 @@ export default {
   /* Rubbed shiny in the middle. Every tap wears it more, and the label goes first. */
   go_worn: {
     mount(ctx) {
-      ctx.css(`#btn[data-skin=worn]{background:radial-gradient(ellipse at 50% 55%,rgba(255,255,255,calc(.08 + var(--worn,0) * .6)) 0 14%,rgba(255,255,255,calc(var(--worn,0) * .25)) 38%,transparent 66%),#6a6660;border:2px solid #4a4640;color:rgba(247,230,207,calc(1 - var(--worn,0) * .7));box-shadow:none;}`);
+      ctx.css(THEME_TASTES.goon.css);
       ctx.button.skin('worn');
       const btn = ctx.button.el;
       let taps = ctx.store.get('t') || 0;

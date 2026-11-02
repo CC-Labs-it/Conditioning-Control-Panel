@@ -7,6 +7,7 @@ import { mountPodcast } from '../podcast-player.js';
 import { bag, geo, counterEl, sheet, done, frame, sideFrames, gentleSwitch } from './kit.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
+import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.trance.rules;
 const NICHES = ['spirals', 'soft voices', 'pendulum', 'eyes closed'];
@@ -185,9 +186,7 @@ export default {
     mount(ctx) {
       const b = ctx.button;
       b.skin('tr-pendulum');
-      ctx.css(`#btn[data-skin=tr-pendulum]{width:118px;height:54px;border-radius:50%;background:radial-gradient(circle at 36% 30%,#d8ccff,#b79cff 45%,#6f5fd0);border:0;color:#15123a;transform-origin:50% -46px;}
-#btn[data-skin=tr-pendulum]::before{content:'';position:absolute;left:50%;bottom:100%;width:2px;height:46px;margin-left:-1px;background:#8fd0ff;opacity:.8;}
-#btn[data-skin=tr-pendulum].down{transform:none;filter:brightness(1.2);}`);
+      ctx.css(THEME_TASTES.trance.css);
       const mid = (now) => Math.abs(Math.sin((now / SWING_MS) * Math.PI * 2)) < 0.26;
       ctx.mod({ click: (v, s, now) => (!ctx.gentle && mid(now) ? v * 2 : v) });
       const el = b.el;
