@@ -112,6 +112,54 @@ test('a stop still fading dies at once on a hold', () => {
   assert.equal(s.playing, false);
 });
 
+/* A graph that records what connects to what. */
+function graphKit() {
+  const log = { panners: [], sources: 0, chains: [] };
+  const node = (name, extra = {}) => ({ name, connect(n) { log.chains.push(`${name}>${n.name}`); return n; }, ...extra });
+  globalThis.window = { AudioContext: class {
+    constructor() { this.state = 'running'; this.currentTime = 0; this.destination = { name: 'out' }; }
+    createGain() { const g = { value: 1, cancelScheduledValues() {}, setTargetAtTime() {}, setValueAtTime() {}, exponentialRampToValueAtTime() {} }; return node('gain', { gain: g }); }
+    createStereoPanner() { const p = node('pan', { pan: { value: 0 } }); log.panners.push(p); return p; }
+    createBufferSource() { return node('src', { playbackRate: { value: 1 }, start() {} }); }
+    createMediaElementSource() { log.sources += 1; return node('media'); }
+    decodeAudioData() { return Promise.resolve({}); }
+    suspend() { return Promise.resolve(); }
+    resume() { return Promise.resolve(); }
+  } };
+  globalThis.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) });
+  const made = [];
+  const kit = createKit({ makeMedia: () => { const m = new FakeMedia(); made.push(m); return m; } });
+  kit.arm();
+  return { kit, made, log };
+}
+
+test('pan on play and loop goes through a panner, clamped; no pan adds no node', async () => {
+  const { kit, log } = graphKit();
+  await kit.play('a.mp3');
+  assert.equal(log.panners.length, 0);
+  await kit.play('a.mp3', { pan: -0.5 });
+  assert.equal(log.panners[0].pan.value, -0.5);
+  kit.loop('b.mp3', { pan: 9 });
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(log.panners[1].pan.value, 1);
+});
+
+test('a panned stream joins the graph once, before it plays; a plain one stays off it', () => {
+  const { kit, made, log } = graphKit();
+  kit.stream('a.mp3');
+  assert.equal(log.sources, 0);
+  assert.equal(made[0].crossOrigin, undefined);
+  const s = kit.stream('b.mp3', { pan: 1 });
+  assert.equal(log.sources, 1);
+  assert.equal(made[1].crossOrigin, 'anonymous');
+  assert.equal(log.panners[0].pan.value, 1);
+  kit.hold(true);
+  assert.equal(made[1].paused, true, 'a panned stream pauses at once too');
+  kit.hold(false);
+  s.play();
+  assert.equal(log.sources, 1, 'an element can join only once');
+});
+
 test('the end of a run kills every stream', () => {
   const { kit, made } = armedKit();
   kit.stream('a.mp3');
