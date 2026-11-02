@@ -85,6 +85,7 @@ body.gentle .scr.held .scr-in{transform:none}
 .scr-card b{display:block;max-width:100%;padding:1px 4px;background:var(--niche-soft);font:400 12px/1.15 Arial,Helvetica,sans-serif}
 .scr-card button{min-height:36px;max-width:100%;padding:2px 8px;background:var(--niche-soft);color:var(--niche-ink);border:2px solid var(--niche-ink);font:700 12px/1.1 Arial,Helvetica,sans-serif;pointer-events:auto;cursor:pointer}
 .scr-card button:active{transform:translateY(1px)}
+.scr-small .scr-card b,.scr-small .scr-hint{display:none}
 `;
 
 const live = new Set();
@@ -107,7 +108,7 @@ function room(ctx) {
   const btn = ctx.button.el.getBoundingClientRect();
   /* The shop can still be hidden at the first mount of a load: it will start about here. */
   const free = shop && shop.width ? shop.top : btn.bottom + 12;
-  return { W, H, shop, railW: (W - 800) / 2, flank: clamp((W - btn.width) / 2 - PAD, 60, 240), maxH: free - TOP - 6, flankTop: Math.max(TOP, Math.round(btn.top) - 8) };
+  return { W, H, shop, railW: (W - 800) / 2, flank: clamp((W - btn.width) / 2 - PAD, 60, 240), maxH: free - ((W - 800) / 2 >= 170 ? TOP : Math.max(TOP, Math.round(btn.top) - 8)) - 6, flankTop: Math.max(TOP, Math.round(btn.top) - 8) };
 }
 
 /** The file picker has to open inside the press itself. Own files stay on this device. */
@@ -283,6 +284,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
       size.w = s.w; size.h = s.h;
       el.style.width = `${s.w}px`;
       el.style.height = `${s.h}px`;
+      el.classList.toggle('scr-small', s.w < 150);
       place?.({ ...size, rail: r.railW >= 170 });
     }
   };
@@ -434,6 +436,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
   if (!ctx.gentle) ctx.anim(inner, [{ transform: 'translateY(-14px) scale(.9)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,1.4,.5,1)' });
   if (hint) {
     const h = ctx.el('div', 'position:absolute;left:0;right:0;top:4px;z-index:4;text-align:center;font:700 12px Arial,Helvetica,sans-serif;color:var(--niche-ink);pointer-events:none;', C.screenDrag, body);
+    h.classList.add('scr-hint');
     h.style.textShadow = '0 0 3px var(--niche-soft),0 0 3px var(--niche-soft)';
     ctx.anim(h, [{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 3600, fill: 'both' });
     ctx.after(3700, () => h.remove());

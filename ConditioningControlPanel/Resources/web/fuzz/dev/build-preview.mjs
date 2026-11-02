@@ -41,7 +41,10 @@ const html = readFileSync(join(tree, 'index.html'), 'utf8');
 const head = /<head>([\s\S]*?)<\/head>/.exec(html)[1];
 const body = /<body[^>]*>([\s\S]*?)<\/body>/.exec(html)[1];
 const keep = head.split(/\r?\n/).filter((l) => /<title|<link/.test(l)).join('\n');
-writeFileSync(join(out, 'index.html'), keep + '\n' + body, 'utf8');
+/* The viewer puts all of this in its body, after its head. Every sheet the game adds later goes in the head, so a <link> left here would come
+ * after them and win every tie: no theme colours, no unlock css. Move the links up before the game starts. */
+const hoist = "<script>for (const l of document.querySelectorAll('link[rel=stylesheet]')) document.head.appendChild(l);</script>";
+writeFileSync(join(out, 'index.html'), keep + '\n' + hoist + '\n' + body, 'utf8');
 
 const all = walk(out);
 const size = all.reduce((n, f) => n + statSync(f).size, 0);
