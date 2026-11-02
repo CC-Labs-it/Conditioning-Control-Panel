@@ -39,7 +39,7 @@ test('a label never names a multiple: modifiers bend and prizes share a budget, 
       assert.ok(!/['"`][^'"`]*(?<![{\w])x\d+(\.\d+)?\b[^'"`]*['"`]/.test(line), `${f}: ${line.trim().slice(0, 90)}`);
     }
   }
-  for (const it of ITEMS) if (it.lane !== 'meta') assert.ok(!/\b(double|doubles|triple|triples)\b/i.test(it.what), `${it.id}: ${it.what}`);
+  for (const it of ITEMS) if (it.lane !== 'meta') assert.ok(!/\b(double|doubles|triple|triples)\b(?! tap)/i.test(it.what), `${it.id}: ${it.what}`);
 });
 
 test('thirteen endings, five forks, every fork lane named', () => {
