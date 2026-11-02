@@ -1,11 +1,11 @@
-/* ui/unlocks/basics/trunk.js - the main path: forks stamp, Lucky Taps, the ticker, achievements, heartbeat, the ad banner,
+/* ui/unlocks/basics/trunk.js - the main path: forks stamp, Lucky Taps, the ticker, achievements, the ad banner,
  * glossy icons, spiral overlay, page tilt, the fake desktop, the warp and the Drop. */
 
 import { moan } from '../moan.js';
 import { ACHIEVEMENTS, DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS, thoughtsFor } from '../../../data/content/index.js';
 import { FORKS } from '../../../data/items.js';
 import { SECOND_THEME, THEME_TINTS } from './copy.js';
-import { beatAt, BEAT_MS, burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
+import { burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
 import { THEME_TASTES } from '../theme-skins.js';
 
 /* A fork lands like a stamp: the choice crosses the middle of the screen. */
@@ -155,23 +155,6 @@ export default {
       check();
       ctx.every(1000, check);
       return {};
-    },
-  },
-
-  /* Heartbeat: a big soft heart behind the page, on the one beat clock, with the thump under it. */
-  heart: {
-    mount(ctx) {
-      const size = 'min(92vw,78vh)';
-      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 29"><path d="M16 29C16 29 0 19 0 9 0 3 5 0 9 0c3 0 6 2 7 5 1-3 4-5 7-5 4 0 9 3 9 9 0 10-16 20-16 20z" fill="#e8518a"/></svg>';
-      const h = ctx.el('div', `position:absolute;left:50%;top:50%;width:${size};height:${size};margin:calc(${size} / -2) 0 0 calc(${size} / -2);background:url("data:image/svg+xml,${encodeURIComponent(svg)}") center/contain no-repeat;will-change:transform,opacity;`, null, 'back');
-      ctx.every(BEAT_MS, () => { sfx(ctx, 'sfx/heartbeat.mp3', 0.28); });
-      return {
-        tick(dt, now) {
-          const b = ctx.gentle ? 0.2 : beatAt(now);
-          h.style.transform = `scale(${(0.9 + b * 0.09).toFixed(3)})`;
-          h.style.opacity = (0.16 + b * 0.22).toFixed(3);
-        },
-      };
     },
   },
 

@@ -327,7 +327,6 @@ export default {
         box.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><path d="${d}" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/></svg>`;
         const path = box.querySelector('path');
         ctx.anim(path, [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: ctx.gentle ? 400 : 6000, easing: 'linear', fill: 'forwards' });
-        sfx(ctx, 'heartbeat', 0.6);
         ctx.after(6200, () => {
           const c = ctx.el('canvas', `position:absolute;left:50%;top:50%;width:90vmin;height:90vmin;transform:translate(-50%,-50%);opacity:0;mix-blend-mode:screen;`, null, root);
           root.insertBefore(c, box);

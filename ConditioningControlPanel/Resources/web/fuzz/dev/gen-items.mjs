@@ -19,7 +19,22 @@ const GROW = { stray: { ratio: 1.5, max: 12 } };
 /* A row whose parent is an ending can never open, because buying the parent ends the run. One Last Go sits
  * behind the theme pick, and its price keeps it late. Go Outside waits for Spiral Overlay: leaving early should be a
  * choice made late in a run, not a row a saver trips over at minute 15. */
-const REQ_OVERRIDE = { onemore: ['f5'], outside: ['overlay'] };
+const REQ_OVERRIDE = {
+  onemore: ['f5'], outside: ['overlay'],
+  /* Owner, 2026-11-02: the theme comes early and colours everything, pictures right after it. No Heartbeat row. */
+  f5: ['ticker'], f3: ['f5'], depth: ['f3'], f2: ['depth'], banner: ['f2'], f4: ['banner'], glossy: ['f4'], taste2: ['glossy'], quiz: ['f2'],
+};
+/* The main path in the order it is walked: E.goal takes the first unowned row, so ITEMS keeps this order. */
+const TRUNK_ORDER = ['start', 'stray', 'fpsv', 'f1', 'softw', 'ticker', 'f5', 'f3', 'depth', 'f2', 'banner', 'f4', 'glossy', 'taste2', 'overlay', 'takeover', 'wallpaper', 'tunnel', 'drop'];
+const DROPPED = new Set(['heart']);   // owner, 2026-11-02: no heartbeat
+/* Rows that came after the design source. A row with `any` needs at least one of those as well as all of `req`. */
+const EXTRA_ROWS = [
+  { id: 'sp_colors', emoji: '🎨', name: 'Spiral Colours', what: 'The spiral slowly drifts through your colours.', line: 'It will not sit still.', cost: 5000, lane: 'look', req: [], any: ['e_spiral', 'a_spiral'], pay: '-' },
+  { id: 'sp_shapes', emoji: '🧿', name: 'Spiral Shapes', what: 'The spiral keeps melting into new shapes.', line: 'Follow it anyway.', cost: 15000, lane: 'look', req: ['sp_colors'], pay: '-' },
+  { id: 'asmr', emoji: '🎧', name: 'ASMR', what: 'A player for soft ASMR sits at the edge of the screen. Off air for now.', line: 'Closer than you think.', cost: 3000, lane: 'side', req: ['f5'], pay: 'f', fps: 20 },
+  { id: 'guide', emoji: '🗺️', name: 'Guide', what: 'Open a map of every unlock and where it leads.', line: 'Now you can see what you skipped.', cost: 7000, lane: 'side', req: ['screen'], pay: '-' },
+  { id: 'panel', emoji: '🎛️', name: 'Control Panel', what: 'Turn anything you have unlocked on or off.', line: 'You were always in control. Sure.', cost: 400000, lane: 'side', req: ['overlay'], pay: '-' },
+];
 
 /* The design sim paid for 30 minutes with nothing on top. The real game has prizes and modifiers on top (capped in
  * sim/economy.js), so the plan pays 70% of the design's numbers and the whole run lands near 30. Measured: dev/measure.mjs. */
@@ -31,9 +46,9 @@ const LANE_PAY = { strict: 0.6, bimbo: 0.55 };
  * gets cheaper, each theme opens with its head and then its podcast, and the rows that sat before the podcast each take the
  * price of the row before them, so everything above the podcast's old place keeps its price and no late gap opens. A row
  * that moves keeps its value for money: pay follows price along the design's own curve. */
-const TRUNK_MOVES = { f3: 4000, banner: 5000, f4: 6500, glossy: 8000, f5: 9000 };
+const TRUNK_MOVES = { f5: 600, f3: 1000, depth: 1200, f2: 1500, banner: 5000, f4: 6500, glossy: 8000, v_frame: 1200, d_scroll: 1200 };
 const THEME_LANES = ['trance', 'bimbo', 'drone', 'sissy', 'goon', 'locked', 'censored', 'infection'];
-const HEAD_COST = 10000, POD_COST = 12000;
+const HEAD_COST = 800, POD_COST = 12000;
 const moved = (r, cost) => {
   const k = (cost / r.cost) ** 0.8;
   return { ...r, cost, ...(r.fps ? { fps: Math.round(r.fps * k) } : {}), ...(r.click ? { click: Math.round(r.click * k) } : {}) };
@@ -57,6 +72,7 @@ function moveRows(rows) {
 /* Row text that named a multiple. Modifiers bend past a knee (sim/economy.js), so a row says more, never how many times. */
 const WHAT_OVERRIDE = {
   softw: 'Some taps pay extra, a word fades in on the button, and you hear a moan.',
+  heartbtn: 'The button becomes a squishy heart.',
   t_denied: 'Some taps are refused, and the next one pays more.',
   t_grade: 'Every two minutes you get a score, and a top score raises earnings for a while.',
   si_set: 'Dressing the button in a full matching set raises its pay.',
@@ -73,18 +89,28 @@ const WHAT_OVERRIDE = {
   ce_head: 'Pictures join the page, hidden behind bars.',
 };
 
+/* Trunk rows walk in TRUNK_ORDER, in the slots trunk rows already hold; every other row stays where it is. */
+function walkOrder(rows) {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const next = TRUNK_ORDER.map((id) => byId.get(id));
+  if (next.some((r) => !r)) throw new Error('TRUNK_ORDER names a missing row');
+  let i = 0;
+  return rows.map((r) => (r.lane === 'trunk' ? next[i++] : r));
+}
+
 const groupOf = (r) => (r.lane === 'meta' ? 'meta' : r.lane === 'after' ? 'after' : 'run');
 
 export function buildItems() {
-  const rows = moveRows(read('rows.json')), copy = read('copy.json'), lanes = read('lanes.json');
+  const rows = walkOrder(moveRows([...read('rows.json').filter((r) => !DROPPED.has(r.id)), ...EXTRA_ROWS])), copy = read('copy.json'), lanes = read('lanes.json');
   const items = rows.map((r) => {
-    const c = copy.items[r.id];
+    const c = r.name ? r : copy.items[r.id];
     if (!c) throw new Error(`copy.json has no ${r.id}`);
     const it = { id: r.id, emoji: r.emoji, name: cur(c.name), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
     if (r.fps) it.fps = planPay(r.fps, r.lane);
     if (r.click) it.click = planPay(r.click, r.lane);
     if (r.wall) it.wall = r.wall;
     if (r.flags) it.flags = r.flags;
+    if (r.any) it.any = r.any;
     it.kind = r.kind || 'item';
     it.group = groupOf(r);
     if (GROW[r.id]) it.grow = GROW[r.id];

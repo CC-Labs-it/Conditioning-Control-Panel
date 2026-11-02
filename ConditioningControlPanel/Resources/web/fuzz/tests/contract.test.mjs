@@ -409,8 +409,8 @@ test('a single fork handler and a plain row pass through untouched', () => {
   assert.equal(merged.stray, row);
 });
 
-test('the registry merges five independent group files, no id claimed twice, every id real', () => {
-  assert.deepEqual(Object.keys(GROUPS).sort(), ['basics', 'extras', 'routes', 'themes-a', 'themes-b']);
+test('the registry merges independent group files, no id claimed twice, every id real', () => {
+  assert.deepEqual(Object.keys(GROUPS).sort(), ['basics', 'edges', 'extras', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
   const seen = new Set();
   for (const [name, group] of Object.entries(GROUPS)) {
     for (const [id, entry] of Object.entries(group)) {

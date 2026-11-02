@@ -8,7 +8,7 @@ let demos = null;
 function loadDemos() {
   demos ||= (async () => {
     const { Demo } = await import('./demos/kit.js');
-    await Promise.all([import('./demos/basics.js'), import('./demos/routes.js'), import('./demos/themes1.js'), import('./demos/themes2.js'), import('./demos/extras.js')]);
+    await Promise.all([import('./demos/basics.js'), import('./demos/routes.js'), import('./demos/themes1.js'), import('./demos/themes2.js'), import('./demos/extras.js'), import('./demos/wave2-spiral.js'), import('./demos/wave2-edges.js'), import('./demos/wave2-meta.js')]);
     return Demo;
   })();
   return demos;

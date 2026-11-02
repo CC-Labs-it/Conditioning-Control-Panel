@@ -104,7 +104,7 @@ const canHaveMore = (s, it) => (it.grow ? count(s, it.id) < it.grow.max : !has(s
 export function isOpen(s, it) {
   if (it.group !== 'run' || it.id === 'start' || s.ended) return false;
   if (!laneOpen(s, it) || !canHaveMore(s, it)) return false;
-  return it.req.every((q) => has(s, q));
+  return it.req.every((q) => has(s, q)) && (!it.any || it.any.some((q) => has(s, q)));
 }
 
 /** Shuffled Shop: from the second run on (a mood means not the first), open side rows sort by a price scaled per run. */

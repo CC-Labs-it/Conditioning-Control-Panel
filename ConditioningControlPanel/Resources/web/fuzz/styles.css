@@ -15,6 +15,10 @@
   --stamp: #a3232b;
   --font: "Times New Roman", Times, serif;
   --shop-font: var(--font);
+  --niche: #8a867d;       /* the picked theme: see ui/palette.js */
+  --niche-2: #8a867d;     /* the second theme, or the first again */
+  --niche-soft: #e4e1da;
+  --niche-ink: #000;
 }
 
 * { box-sizing: border-box; }

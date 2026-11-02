@@ -10,6 +10,7 @@ import { clipUrl } from '../data/words.js';
 import { fmt, money } from '../sim/format.js';
 import * as E from '../sim/economy.js';
 import { allowedLink } from './links.js';
+import { paletteOf } from './palette.js';
 
 /** A deep read-only view: unlocks read the state and change it only through the verbs. */
 const views = new WeakMap();
@@ -48,6 +49,10 @@ export function makeContext(engine, scope) {
     brand: brandObj,
 
     layer: (name, side) => ui.layer(name, side),
+    /* The run's colours: { a, b, soft, ink, spiral: [c1, c2], themes }. Event 'palette' fires when they change. */
+    palette: () => paletteOf(engine.run),
+    /* A passive widget's place at the screen's edge: returns an element in the dock. STUB until the edges lane fills it in. */
+    dock(opts = {}) { return ctx.el('div', `pointer-events:auto;padding:8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-size:14px;`, null, ui.layer('side', opts.edge)); },
     world: ui.world,
     parts: Object.freeze({ get shop() { return ui.parts?.shop ?? null; }, get buttonWrap() { return ui.parts?.buttonWrap ?? null; }, get counter() { return ui.parts?.counter ?? null; }, get stage() { return ui.parts?.stage ?? null; } }),
     bounds: () => ui.bounds(),
@@ -225,5 +230,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock',
 ]);

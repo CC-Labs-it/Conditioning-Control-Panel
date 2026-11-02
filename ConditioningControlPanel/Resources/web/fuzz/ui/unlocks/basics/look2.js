@@ -1,7 +1,7 @@
 /* ui/unlocks/basics/look2.js - the late look rows: heart, mirror, spiral, big, tiny. Each skin leaves a rectangle of at
  * least 48 px to press, whatever it draws, so nothing here can make the button hard to finish with. */
 
-import { beatAt, baseCss, gentleEndsLoops, burst, btnCenter, docOf, fresh, sfx, spiralCanvas, squish } from './fx.js';
+import { baseCss, gentleEndsLoops, burst, btnCenter, docOf, fresh, sfx, spiralCanvas, squish } from './fx.js';
 
 function wear(ctx, name, css) {
   baseCss(ctx);
@@ -19,7 +19,7 @@ function wear(ctx, name, css) {
 const HEART = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 29"><path d="M16 29C16 29 0 19 0 9 0 3 5 0 9 0c3 0 6 2 7 5 1-3 4-5 7-5 4 0 9 3 9 9 0 10-16 20-16 20z" fill="#e8306f"/><ellipse cx="9" cy="8" rx="4" ry="2.6" fill="#fff" opacity=".45" transform="rotate(-25 9 8)"/></svg>');
 
 export default {
-  /* Heart Button: beats on the same clock as the Heartbeat row, and squashes hard when pressed. */
+  /* Heart Button: squashes hard when pressed. */
   heartbtn: {
     mount(ctx) {
       wear(ctx, 'heart', `
@@ -28,14 +28,7 @@ export default {
 `);
       const el = ctx.button.el;
       ctx.on('tap', () => { if (el.dataset.skin === 'heart') squish(ctx, el, 1.2); });
-      return {
-        tick(dt, now) {
-          if (el.dataset.skin !== 'heart') return;
-          const k = ctx.gentle ? 1 : 1 + beatAt(now) * 0.12;
-          el.style.backgroundSize = `${(84 * k).toFixed(1)}% auto`;
-        },
-        off() { el.style.backgroundSize = ''; },
-      };
+      return {};
     },
   },
 

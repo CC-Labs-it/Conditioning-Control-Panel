@@ -133,14 +133,6 @@ export function chip(ctx, label, onPress) {
   return b;
 }
 
-/* ---- the one heartbeat clock: lub, dub, rest. 0 to 1. ---- */
-export const BEAT_MS = 1700;
-export function beatAt(now) {
-  const t = (now % BEAT_MS) / BEAT_MS;
-  const hit = (at, w) => Math.max(0, 1 - Math.abs(t - at) / w);
-  return Math.max(hit(0.1, 0.1), hit(0.32, 0.1) * 0.65);
-}
-
 /* ---- the palette ---- */
 const pal = (page, ink, soft, faint, btn, btnInk, btnEdge, panel, panelShort, line, fill, stamp, ready) => ({
   '--page': page, '--ink': ink, '--ink-soft': soft, '--ink-faint': faint, '--btn': btn, '--btn-ink': btnInk, '--btn-edge': btnEdge,
