@@ -5,9 +5,14 @@
  * rotation, so it draws one frame and turns the canvas, 30 fps, and holds still
  * when Gentle, photosafe or OS reduced motion is on. Redrawing every frame cost
  * more than the rest of the late game's scripts together.
+ *
+ * Pass ctx and it follows the run: ctx.palette()'s colours, Spiral Colours and
+ * Spiral Shapes, all through fx/spiral-bus.js, which paints this same canvas
+ * only while something is actually changing.
  * ==========================================================================*/
 
 import { drawSpiral, loopSpanRad, normalizeParams } from '../../arcademy/engine/loom/loomSpiral.js';
+import { spiralBus } from './spiral-bus.js';
 
 export const FPS_CAP = 30;
 const BACKING_MAX = 1024;   // canvas pixels: it is stripes, and a phone pays for every one
@@ -15,28 +20,45 @@ const DRAW_SIZE = 2048;     // the Loom's rings follow the size it is told, so a
 const COVER = 1.42;         // a turning square still covers the page
 
 /** manual: the caller drives it from ctx.frame with step(dt), so the page keeps one shared rAF and pause stops it. */
-export function createSpiral(canvas, { reduced = false, manual = false } = {}) {
-  const ctx = canvas.getContext('2d', { alpha: false });
+export function createSpiral(canvas, { reduced = false, manual = false, ctx = null } = {}) {
+  const g = canvas.getContext('2d', { alpha: false });
   let params = normalizeParams({ arms: 4, turns: 2, style: 'log', duty: 0.5, speed: 2, colors: ['#ff69b4'], bg: '#14060f' });
   let on = false, still = reduced, phase = 0, speed = 1, pulse = 0, last = 0, size = 0, spent = 0, shown = '';
   const base = canvas.style.transform || '';
   canvas.style.willChange = 'transform';
 
-  function paint() {
+  function paint(at = 0) {
     if (!size) return;
-    ctx.save();
-    ctx.scale(size / DRAW_SIZE, size / DRAW_SIZE);
-    drawSpiral(ctx, DRAW_SIZE, { ...params, direction: 1 }, 0);
-    ctx.restore();
+    if (canvas.width !== size) canvas.width = canvas.height = size;
+    if (site) {
+      const s = site.still();
+      params = normalizeParams({ ...params, colors: s.colors, bg: s.bg });
+      if (site.stillOnField(at)) return;
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.scale(size / DRAW_SIZE, size / DRAW_SIZE);
+    drawSpiral(g, DRAW_SIZE, { ...params, direction: 1 }, at);
+    g.setTransform(1, 0, 0, 1, 0, 0);
   }
+
+  const site = ctx ? spiralBus.site(ctx, canvas, g, {
+    label: 'page',
+    warm: true,
+    ground: null,
+    rates: { morph: 30, hold: 24, drift: 8, fade: 15 },
+    /* The copy out of the field is what costs, and it goes with the area: start near the page's own size, at most 768. The site steps down if a paint runs long. */
+    liveMax: Math.min(768, Math.ceil(Math.max(window.innerWidth, window.innerHeight) * 0.8 * Math.min(2, window.devicePixelRatio || 1))),
+    paintStill: (at) => paint(at),
+  }) : null;
 
   function fit() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const s = Math.min(BACKING_MAX, Math.ceil(Math.max(window.innerWidth, window.innerHeight) * 1.1 * dpr));
     if (s === size) return;
     size = s;
+    if (site?.live) return;
     canvas.width = canvas.height = s;
-    paint();
+    paint(site ? ((site.phase % 1) + 1) % 1 : 0);
   }
   window.addEventListener('resize', fit);
   fit();
@@ -47,6 +69,7 @@ export function createSpiral(canvas, { reduced = false, manual = false } = {}) {
     const rot = (params.direction ?? 1) * phase * loopSpanRad(params);
     const next = `${base} rotate(${rot.toFixed(4)}rad) scale(${(COVER * (1 + pulse * 0.03)).toFixed(4)})`;
     if (next !== shown) { shown = next; canvas.style.transform = next; }
+    if (site) { site.speed = speed; site.frame(dt); }
   }
 
   function frame(now) {
@@ -72,8 +95,9 @@ export function createSpiral(canvas, { reduced = false, manual = false } = {}) {
     faster(mul) { speed = mul; },
     beat() { pulse = 1; },
     setStill(v) { still = !!v; },
-    recolour(colors) { params = normalizeParams({ ...params, colors }); paint(); },
-    dispose() { on = false; window.removeEventListener('resize', fit); },
+    /** With ctx the palette holds the colours, so this is only for a spiral made without one. */
+    recolour(colors) { if (site) return; params = normalizeParams({ ...params, colors }); paint(); },
+    dispose() { on = false; window.removeEventListener('resize', fit); site?.remove(); },
     get on() { return on; },
   };
 }

@@ -57,13 +57,13 @@ body.gentle #btn[data-skin=mirror] { animation: none; }
 #btn:not([data-skin=spiral]) canvas.fz-sp { display: none; }
 canvas.fz-sp { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 `);
-      const sp = spiralCanvas(ctx, '', el, { px: 192, bg: '#ffffff', colors: ['#ff4fa8', '#6a3cff'], turnMs: 9000 });
+      const sp = spiralCanvas(ctx, '', el, { px: 192, bg: '#ffffff', turnMs: 9000, liveMax: 192, rates: { morph: 15, hold: 10, drift: 5, fade: 10 }, visible: () => el.dataset.skin === 'spiral' });
       sp.el.className = 'fz-sp';
       ctx.on('tap', () => {
         if (el.dataset.skin !== 'spiral' || ctx.gentle) return;
         ctx.anim(sp.el, [{ transform: 'rotate(0deg)' }, { transform: 'rotate(-360deg)' }], { duration: 700, easing: 'ease-out' });
       });
-      return {};
+      return { off: sp.off };
     },
   },
 

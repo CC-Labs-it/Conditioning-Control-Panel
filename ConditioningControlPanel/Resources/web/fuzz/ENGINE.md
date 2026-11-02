@@ -115,11 +115,13 @@ Every spiral comes from the Loom, never a fork of it. Import `createSpiral` from
 
 ```js
 const c = ctx.el('canvas', 'position:absolute;left:50%;top:50%;width:110vmax;height:110vmax;transform:translate(-50%,-50%);', null, 'back');
-const sp = createSpiral(c, { reduced: ctx.gentle, manual: true });
+const sp = createSpiral(c, { reduced: ctx.gentle, manual: true, ctx });
 sp.show();
 ctx.frame((dt) => sp.step(dt));
 return { off() { sp.dispose(); } };
 ```
+
+Pass `ctx` and it follows the run by itself: `ctx.palette().spiral` (a slow fade on the `palette` event), Spiral Colours and Spiral Shapes. Do not recolour it. `spiralCanvas` in `ui/unlocks/basics/fx.js` is the same for small or see-through spirals; return its `off`. Everything goes through `fx/spiral-bus.js`; the shapes live in `fx/spiral-patterns.js`.
 
 ## Special lanes
 

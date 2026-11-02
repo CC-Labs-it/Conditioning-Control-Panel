@@ -5,6 +5,7 @@
 import { brandText } from '../../../data/brand.js';
 import { THEME_PAGES } from '../../palette.js';
 import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/loomSpiral.js';
+import { spiralBus } from '../../../fx/spiral-bus.js';
 
 export const docOf = (ctx) => ctx.button.el.ownerDocument;
 
@@ -158,16 +159,33 @@ export function setPalette(ctx, name) {
 
 /* ---- the Loom, once ---- */
 /** Draw one frame of the Loom to a small canvas and turn the canvas: the spiral's motion is a pure rotation, so this
- *  looks the same as redrawing, costs nothing per frame, and Gentle just holds it still. */
-export function spiralCanvas(ctx, css, parent, { px = 512, colors = ['#ff4fa8', '#6a3cff'], arms = 4, turns = 2, bg = null, turnMs = 16000 } = {}) {
+ *  looks the same as redrawing, costs nothing per frame, and Gentle just holds it still. Colours come from the palette, and
+ *  Spiral Colours and Spiral Shapes repaint it through the bus at a low rate. No bg: see-through. */
+export function spiralCanvas(ctx, css, parent, { px = 512, arms = 4, turns = 2, bg = null, turnMs = 16000, liveMax = 320, rates = { morph: 8, hold: 0, drift: 3, fade: 6 }, visible = null } = {}) {
   const c = ctx.el('canvas', css, null, parent);
   c.width = c.height = px;
-  const g = c.getContext('2d');
-  const params = normalizeParams({ arms, turns, style: 'log', duty: 0.5, colors, bg: bg || '#000000' });
+  const g = c.getContext('2d', bg ? {} : { willReadFrequently: true });
   if (!bg) g.fillRect = () => {};   // the Loom paints its background first: skip it for a see-through spiral
   const DRAW = 2048;   // the Loom's rings follow the size it is told: a small canvas blown up to the page would show stairs
-  g.scale(px / DRAW, px / DRAW);
-  drawSpiral(g, DRAW, params, 0);
+  const site = spiralBus.site(ctx, c, g, {
+    label: 'small',
+    ground: bg || 'clear',
+    rates,
+    liveMax,
+    visible: () => c.style.display !== 'none' && (!visible || visible()),
+    paintStill: (at) => stillFrame(at),
+  });
+  const stillFrame = (at = 0) => {
+    if (c.width !== px) c.width = c.height = px;
+    const s = site.still();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (!bg) g.clearRect(0, 0, px, px);
+    g.scale(px / DRAW, px / DRAW);
+    drawSpiral(g, DRAW, normalizeParams({ arms, turns, style: 'log', duty: 0.5, colors: s.colors, bg: s.bg }), at);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+  };
+  stillFrame();
+  ctx.frame((dt) => site.frame(dt));
   const turn = ctx.anim(c, [{ rotate: '0deg' }, { rotate: '360deg' }], { duration: turnMs, iterations: Infinity });
   const hold = () => { if (ctx.gentle) turn.pause(); else if (turn.playState === 'paused' && !paused) turn.play(); };
   let paused = false;
@@ -175,5 +193,5 @@ export function spiralCanvas(ctx, css, parent, { px = 512, colors = ['#ff4fa8', 
   ctx.on('resume', () => { paused = false; hold(); });
   hold();
   ctx.every(1000, hold);
-  return { el: c, turn };
+  return { el: c, turn, off() { site.remove(); } };
 }
