@@ -21,7 +21,9 @@ const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 /** What outlives a run: every ending seen, what the After lane needs. */
 export function createLife() {
   return {
-    age: false,        // the one-tap adults card
+    age: false,        // said yes to the age box at least once (it is asked again on every load)
+    contract: false,   // signed the long contract; later visits get the short update window
+    updates: 0,        // update windows accepted: picks the next llama line
     runs: 0,           // runs finished
     endings: {},       // ending id -> times seen
     seen: {},          // unlock id -> 1, ever owned
@@ -84,6 +86,8 @@ function parseLife(src) {
   const life = createLife();
   if (!src || typeof src !== 'object') return life;
   life.age = !!src.age;
+  life.contract = !!src.contract;
+  life.updates = Math.floor(num(src.updates));
   life.runs = Math.floor(num(src.runs));
   for (const [id, n] of Object.entries(obj(src.endings))) if (ENDING_IDS.includes(id)) life.endings[id] = Math.floor(num(n, 0, 1e6));
   for (const id of Object.keys(obj(src.seen))) if (BY_ID[id]) life.seen[id] = 1;
