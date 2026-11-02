@@ -192,7 +192,7 @@ export default {
       const lines = THEMES.bimbo.shopLines;
       const handle = shopWords(ctx, (text, node) => {
         const iq = b.iq ?? 100, upTo = Math.ceil(((100 - iq) / 60) * R.swaps.length);
-        if (iq <= 24 && node.tagName === 'SMALL') return lines[Math.abs([...text].reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)) % lines.length];
+        if (iq <= 34 && node.tagName === 'SMALL') return lines[Math.abs([...text].reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)) % lines.length];
         return swap(text, upTo);
       });
       const refresh = () => {

@@ -188,10 +188,9 @@ export function shopWords(ctx, rewrite) {
 
 /* ---- the small CCP chip a theme's head brings ---- */
 
+/** Called straight from the player's own press. ctx.openLink checks the address and the press. */
 export function openLink(ctx, url) {
-  if (!/^https:\/\/([a-z0-9-]+\.)*cclabs\.app(\/|$)/i.test(url)) return;
-  if (ctx.hosted) ctx.host('open-url', { url });
-  else window.open(url, '_blank', 'noopener,noreferrer');
+  ctx.openLink?.(url);
 }
 
 /** A slim line above the shop that names the mod. Honest copy from content. One payment per ad, on the player's press. */
