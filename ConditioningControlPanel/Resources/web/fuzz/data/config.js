@@ -19,6 +19,16 @@ export const CONFIG = Object.freeze({
   SHOP_MIN: 3,
   SHOP_MAX: 8,
 
+  /** Side money: everything ctx.pay hands out (prizes, lumps, ad clicks) shares a budget of this much of what taps, walls
+   * and per-second pay earned, so it stays about a fifth of a run's income however many side games are on. */
+  SIDE_SHARE: 0.2,
+  /** A prize never pays less than this part of what it asked for, so a press always shows something. */
+  SIDE_FLOOR: 0.1,
+  /** Value modifiers keep working past these multiples of the plan, at MOD_SLOPE of their strength. */
+  MOD_FPS_KNEE: 1.1,
+  MOD_CLICK_KNEE: 1.5,
+  MOD_SLOPE: 0.2,
+
   /** Pace is a dev door: it multiplies income, not the clock. */
   MAX_PACE: 500,
 

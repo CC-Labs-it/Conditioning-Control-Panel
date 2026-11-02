@@ -84,15 +84,15 @@ test('grant walks the parents and refuses a lane the route locked', () => {
 test('modifiers fold in order, can read state and clock, and a bad value is ignored', () => {
   const s = rich(E.createRun());
   const mods = [
-    { fps: (v) => v + 10, click: (v) => v * 3, price: (v, _s, _n, item) => (item.id === 'stray' ? 1 : v) },
+    { fps: (v) => v + 5, click: (v) => v * 3, price: (v, _s, _n, item) => (item.id === 'stray' ? 1 : v) },
     { fps: (v, st, now) => v + (st.taps + now), wall: () => NaN },
   ];
-  assert.equal(E.rates(s, mods, 5).fps, 15);
+  assert.equal(E.rates(s, mods, 5).fps, 10);
   assert.equal(E.rates(s, mods).click, 3);
   assert.equal(E.rates(s, mods).wall, 1);
   assert.equal(E.price(s, 'stray', mods), 1);
   assert.equal(E.tap(s, mods), 3);
-  assert.equal(E.rates(s, mods, 0).fps, 11, 'the tap moved state, the modifier saw it');
+  assert.equal(E.rates(s, mods, 0).fps, 6, 'the tap moved state, the modifier saw it');
 });
 
 test('per-second income follows the game clock and pace', () => {

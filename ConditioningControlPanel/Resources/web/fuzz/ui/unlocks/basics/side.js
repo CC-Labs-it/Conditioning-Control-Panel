@@ -23,9 +23,8 @@ export default {
         const key = pick(ctx, GOLDEN.prizes).key;
         const p = GOLDEN.prizes.find((q) => q.key === key);
         if (key === 'lump') {
-          const n = worth(ctx, 45);
-          ctx.pay(n, 'golden', { x, y });
-          pop(ctx, x, y - 30, p.label.replace('{n}', ctx.fmt(n * ctx.state.pace)), { color: '#b8860b', size: 34, ms: 1500 });
+          const n = ctx.pay(worth(ctx, 45), 'golden', { x, y });
+          pop(ctx, x, y - 30, p.label.replace('{n}', ctx.fmt(n)), { color: '#b8860b', size: 34, ms: 1500 });
         } else if (key === 'frenzy') {
           frenzyUntil = now + 12000;
           pop(ctx, x, y - 30, p.label, { color: '#b8860b', size: 44, ms: 1500 });
@@ -193,7 +192,7 @@ export default {
           const cx = x + 34, cy = y + 30;
           stop();
           leave();
-          ctx.pay(worth(ctx, 22), 'boxes', { x: cx, y: cy });
+          ctx.pay(worth(ctx, 12), 'boxes', { x: cx, y: cy });
           burst(ctx, cx, cy, { color: '#ff69b4', n: 16, reach: 80 });
           sfx(ctx, 'sfx/chain_pop.mp3', 0.6);
           ctx.say(pick(ctx, BOXES.opened));

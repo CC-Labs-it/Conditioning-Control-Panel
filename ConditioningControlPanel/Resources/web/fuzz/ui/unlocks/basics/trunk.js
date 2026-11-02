@@ -55,7 +55,7 @@ export default {
       };
       ctx.on('tap', ({ x, y, auto }) => {
         dry += 1;
-        if (ctx.rng() > 0.125 && dry < 16) return;
+        if (ctx.rng() > 0.04 && dry < 40) return;
         dry = 0;
         const c = btnCenter(ctx);
         const at = x == null ? c : { x, y };

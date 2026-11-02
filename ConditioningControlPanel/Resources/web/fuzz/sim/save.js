@@ -73,6 +73,8 @@ function parseRun(src) {
   for (const [f, lane] of Object.entries(obj(src.picks))) if (FORKS[f]?.opts[lane] && s.owned[f]) s.picks[f] = lane;
   for (const [k, v] of Object.entries(obj(src.sources))) s.sources[k] = num(v);
   for (const [k, v] of Object.entries(obj(src.spent))) s.spent[k] = num(v);
+  const side = obj(src.side);
+  s.side = { budget: num(side.budget), asked: num(side.asked), paid: num(side.paid) };
   s.store = obj(src.store);
   s.endless = !!src.endless && !!s.owned.onemore;
   s.ended = src.ended && s.owned[src.ended.id] && BY_ID[src.ended.id]?.kind === 'end' ? { id: src.ended.id, at: num(src.ended.at) } : null;

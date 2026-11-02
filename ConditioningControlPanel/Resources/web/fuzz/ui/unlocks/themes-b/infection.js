@@ -59,7 +59,7 @@ function spotField(ctx) {
       spots.delete(e);
       e.remove();
       const rates = ctx.rates();
-      ctx.pay(rates.fps * 0.8 + rates.click * 3, 'scratch', { x: ev.clientX, y: ev.clientY });
+      ctx.pay(rates.fps * 0.1 + rates.click, 'scratch', { x: ev.clientX, y: ev.clientY });
       sfx(ctx, 'chip_pop', 0.5);
       ctx.emit('in:scratch', {});
       ctx.after(500, () => { spawn(); spawn(); });

@@ -172,7 +172,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
 
   function pay(amount, source = 'lump', at = null) {
     if (stopped) return 0;
-    const got = E.lump(run, amount * run.pace, source);
+    const got = E.sideLump(run, amount * run.pace, source);
     ui.paid?.(got, at);
     ui.draw?.();
     return got;
