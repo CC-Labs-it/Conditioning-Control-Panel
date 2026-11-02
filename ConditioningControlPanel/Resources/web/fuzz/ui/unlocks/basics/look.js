@@ -224,10 +224,10 @@ body { transition: background-color .6s, color .6s; }
 #count { display: none; }
 body.gentle #count { display: inline; }
 body.gentle #fz-roll { display: none; }
-#fz-roll { display: inline-flex; vertical-align: top; height: 1.1em; overflow: hidden; }
-#fz-roll .d { display: inline-block; height: 1.1em; line-height: 1.1; transition: transform .45s cubic-bezier(.2,.8,.3,1); }
+#fz-roll { display: inline-flex; vertical-align: top; height: 1.1em; overflow: hidden; white-space: nowrap; }
+#fz-roll > span { flex: none; display: block; height: 1.1em; line-height: 1.1; }
+#fz-roll .d { height: 11em; transition: transform .45s cubic-bezier(.2,.8,.3,1); }
 #fz-roll .d > span { display: block; height: 1.1em; }
-#fz-roll .c { display: inline-block; height: 1.1em; line-height: 1.1; }
 `);
       const roll = ctx.el('span', '', null, doc.getElementById('counter'));
       roll.id = 'fz-roll';
@@ -250,6 +250,10 @@ body.gentle #fz-roll { display: none; }
           if (d.ch === ch) return;
           const was = d.ch;
           d.ch = ch;
+          // A digit changing faster than it can roll just changes: only the slow digits get the odometer.
+          const t = docOf(ctx).defaultView.performance.now();
+          d.el.style.transition = t - (d.t || 0) < 300 ? 'none' : '';
+          d.t = t;
           if (ch === ',') { d.el.className = 'c'; d.el.textContent = ','; d.el.style.transform = ''; return; }
           if (d.el.className !== 'd' || was === ',') { d.el.className = 'd'; d.el.innerHTML = STACK; }
           d.el.style.transform = `translateY(${-1.1 * Number(ch)}em)`;
