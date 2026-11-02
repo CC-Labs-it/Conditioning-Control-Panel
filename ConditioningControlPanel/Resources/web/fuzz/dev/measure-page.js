@@ -57,10 +57,10 @@
 
   let P = null;
   window.__play = {
-    start({ picks, taps, frame }) {
+    start({ picks, taps, frame, collect = 30, right = 0.6, panelOff = false }) {
       const f = window.fuzz;
       P = {
-        picks, taps, frame, t: 0, tapDebt: 0, lastBuy: 0, nextBuy: 0, nextScan: 0, nextCard: 0, cardSeen: 0, cardEl: null, cardPress: 0,
+        picks, taps, frame, collect, right, panelOff, nextCollect: collect, lastSrc: {}, lumps: {}, sideLog: [], nextSide: 0, t: 0, tapDebt: 0, lastBuy: 0, nextBuy: 0, nextScan: 0, nextCard: 0, cardSeen: 0, cardEl: null, cardPress: 0,
         seen: new WeakMap(), gaps: [], forks: {}, endings: {}, pressed: 0, resting: 0,
         buys: [], fpsBase: 0, fpsReal: 0, clickBase: 0, clickReal: 0, nextSample: 0,
         ends: f.items.filter((i) => i.kind === 'end' && i.group === 'run'),
@@ -101,13 +101,31 @@
             btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0, pointerId: 1 }));
           }
 
+          /* Levels: the one button that stays and keeps asking. Everything else below is pressed once per element. */
+          if (P.collect > 0 && t >= P.nextCollect) {
+            P.nextCollect = t + P.collect;
+            const lv = document.querySelector('#l-meters .fz-lvl-ready');
+            if (lv) { press(lv); P.pressed += 1; }
+          }
+
+          /* A question: a person reads it for two seconds, and gets P.right of them right. */
+          const qc = document.querySelector('.xq:not(.xq-done)');
+          if (qc && qc !== P.qCard) { P.qCard = qc; P.qAt = t; P.qGood = Math.random() < P.right; }
+          if (qc && t - P.qAt > 2) {
+            const as = [...qc.querySelectorAll('.xq-a')].filter((b) => !b.blocked && !b.disabled);
+            const wanted = as.filter((b) => window.__yes?.has(b.textContent.trim()));
+            const other = as.filter((b) => !wanted.includes(b));
+            const b = (P.qGood ? wanted[0] : other[0]) || wanted[0] || other[0];
+            if (b) { P.qAsked = (P.qAsked || 0) + 1; if (wanted.includes(b)) P.qRight = (P.qRight || 0) + 1; press(b); P.pressed += 1; P.qAt = t + 0.5; }
+          }
+
           /* Anything tappable that drifts by: press it after a human moment. */
           if (t >= P.nextScan) {
             P.nextScan = t + 0.5;
             for (const el of document.querySelectorAll(TAPPABLE)) {
               const first = P.seen.get(el);
               if (first === undefined) { P.seen.set(el, t); continue; }
-              if (first < 0 || t - first < 0.9) continue;
+              if (first < 0 || t - first < 0.9 || el.classList.contains('xq-a')) continue;
               const r = el.getBoundingClientRect();
               if (r.width < 4 || r.height < 4 || r.right < 0 || r.bottom < 0 || r.left > innerWidth || r.top > innerHeight) continue;
               P.seen.set(el, -1);
@@ -134,6 +152,31 @@
               }
             }
           }
+        }
+
+        /* Every lump as it lands, in seconds of what the player earns right now: is a press still worth it? */
+        {
+          const r = e.rates(), rate = Math.max(1, r.fps + r.click * P.taps);
+          for (const [k, v] of Object.entries(s.sources)) {
+            const was = P.lastSrc[k] || 0;
+            if (v === was) continue;
+            P.lastSrc[k] = v;
+            if (k === 'tap' || k === 'wall' || k === 'fps') continue;
+            const l = P.lumps[k] ||= { n: 0, got: 0, secs: 0, lateN: 0, lateSecs: 0, best: 0 };
+            const secs = (v - was) / rate;
+            l.n += 1; l.got += v - was; l.secs += secs; l.best = Math.max(l.best, secs);
+            if (s.total > 2e5) { l.lateN += 1; l.lateSecs += secs; }
+          }
+          if (t >= P.nextSide) {
+            P.nextSide = t + 120;
+            P.sideLog.push({ min: Math.round(t / 60), budget: Math.round(s.side.budget), asked: Math.round(s.side.asked), paid: Math.round(s.side.paid), fps: Math.round(r.fps), click: Math.round(r.click) });
+          }
+        }
+
+        /* Control Panel: the worst tidy-up there is. The moment it is owned, everything goes off. */
+        if (P.panelOff && !P.panelDone && s.owned.panel && f.engine.switches) {
+          P.panelDone = t;
+          for (const g of f.engine.switches.groups()) for (const row of g.rows) f.engine.switches.set(row.id, false);
         }
 
         /* When each ending could first have been bought. */
@@ -169,6 +212,8 @@
         meanGap: Math.round((P.t / Math.max(1, P.gaps.length)) * 10) / 10,
         forks: P.forks, endings: P.endings, pressed: P.pressed,
         pod: P.gaps.find((g) => g.next.endsWith('_pod'))?.at ?? null,
+        at: Object.fromEntries(P.gaps.map((g) => [g.next, Math.round(g.at)])),
+        qAsked: P.qAsked || 0, qRight: P.qRight || 0, lumps: P.lumps, sideLog: P.sideLog, side: { ...s.side }, panelDone: P.panelDone || null,
       };
     },
   };
