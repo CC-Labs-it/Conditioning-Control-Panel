@@ -3,6 +3,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cardUp } from '../ui/unlocks/extras/kit.js';
 import { bankOf, collect, levelSeconds, xpNeed } from '../sim/levels.js';
+import { createEngine } from '../ui/engine.js';
+import { REGISTRY } from '../ui/unlocks/index.js';
+import { fresh } from '../ui/unlocks/basics/fx.js';
+import * as E from '../sim/economy.js';
+import { createLife } from '../sim/save.js';
 
 test('a closed Guide or Control Panel sheet is not a card up', () => {
   const was = globalThis.document;
@@ -32,4 +37,40 @@ test('Levels: a huge bank answers at once and the sums match the slow way', () =
     assert.equal(got.seconds, seconds, `seconds at ${lvl}, ${xp}`);
     assert.equal(got.lvl, lvl + banked);
   }
+});
+
+class El {
+  constructor() { this.children = []; this.style = { setProperty() {}, getPropertyValue: () => '', removeProperty() {} }; this.dataset = {}; this.classList = { add() {}, remove() {}, toggle() {}, contains: () => false }; }
+  appendChild(c) { this.children.push(c); return c; }
+  remove() {}
+  animate() { return { cancel() {}, pause() {}, play() {}, finished: new Promise(() => {}) }; }
+  addEventListener() {}
+  get ownerDocument() { return doc; }
+  getBoundingClientRect() { return { left: 0, top: 0, width: 10, height: 10, right: 10, bottom: 10 }; }
+}
+const doc = { createElement: () => new El(), head: new El(), documentElement: new El(), querySelectorAll: () => [], getElementById: () => null };
+doc.head.querySelectorAll = () => [];
+doc.head.insertBefore = (a) => a;
+function engineFor(registry, ids) {
+  const run = E.createRun();
+  for (const id of ids) E.grant(run, id);
+  const layers = {}, button = new El();
+  const ui = { doc, world: new El(), layer: (n) => (layers[n] ||= new El()), bounds: () => ({ w: 800, h: 600 }), gentle: () => false, reduced: () => false,
+    buttonFor: () => ({ el: button, skin() {}, press() {}, melt() {}, swap() {}, lockFor() {} }), say() {}, toast() {}, float() {}, draw() {}, modal: () => ({ close() {} }),
+    dock: { add: () => ({ root: new El(), body: new El(), side: 'left', remove() {} }), isRail: () => true } };
+  return { run, engine: createEngine({ run, life: createLife(), ui, registry }) };
+}
+
+test('a reload from a save is not an arrival: Levels keeps its XP, the wheel its wait', () => {
+  const seen = [];
+  const { engine: a } = engineFor({ stray: { mount(ctx) { seen.push(fresh(ctx)); return {}; } } }, ['stray']);
+  a.mountAll();
+  a.mountAll(true);
+  assert.deepEqual(seen, [true, false], 'a new buy arrives, a reload does not');
+
+  const { run, engine } = engineFor({ levels: REGISTRY.levels }, ['levels']);
+  run.store.levels = { lvl: 1, xp: 500 };
+  engine.mountAll(true);
+  engine.step(1000);
+  assert.ok(run.store.levels.xp >= 500, `xp after a reload is ${run.store.levels.xp}`);
 });

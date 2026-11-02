@@ -79,9 +79,10 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     dropScope(scope);
   }
 
-  const mountAll = () => {
-    if (run.mood) mount(run.mood);
-    for (const id of [...run.order]) if (liveOn(run.off, id)) mount(id);
+  /** restored: this run came from a save, so nothing here just arrived. */
+  const mountAll = (restored = false) => {
+    if (run.mood) mount(run.mood, restored);
+    for (const id of [...run.order]) if (liveOn(run.off, id)) mount(id, restored);
   };
   const unmountAll = () => { for (const id of [...scopes.keys()]) unmount(id); };
 

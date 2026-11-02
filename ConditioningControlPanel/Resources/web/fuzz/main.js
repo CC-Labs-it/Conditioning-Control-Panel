@@ -155,7 +155,7 @@ function start(init) {
   const go = () => {
     bindPalette(engine, document);
     if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
-    engine.mountAll();
+    engine.mountAll(!!saved?.run);
     engine.syncQuiet();
     ui.drawPhrase();
     if (run.mood && run.clock < 500) {
