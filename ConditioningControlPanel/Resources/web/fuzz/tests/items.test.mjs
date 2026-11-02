@@ -85,3 +85,10 @@ test('data/items.js is what the generator makes, when the design source is on th
   const lf = (s) => s.split('\r\n').join('\n');
   assert.equal(lf(readFileSync(join(tree, 'data', 'items.js'), 'utf8')), lf(itemsSource()));
 });
+
+test('every row has a name and words for its card', () => {
+  for (const it of ITEMS) {
+    assert.ok(it.name, `${it.id} has no name`);
+    assert.ok(it.what, `${it.id} has no words`);
+  }
+});
