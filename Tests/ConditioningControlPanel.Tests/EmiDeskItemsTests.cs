@@ -12,15 +12,6 @@ namespace ConditioningControlPanel.Tests;
 /// <summary>The Prize Counter's EMI desk family: the owned clamp, the art on disk, the equip wire.</summary>
 public class EmiDeskItemsTests
 {
-    private static string AppDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "repo root not found");
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel");
-    }
-
     [Fact]
     public void Owned_items_stay_on()
     {
@@ -50,7 +41,9 @@ public class EmiDeskItemsTests
     [Fact]
     public void Every_item_has_all_ten_pose_sheets()
     {
-        var root = AppDir();
+        // The art lives in Assets/emi/desk-items and reaches Resources/emi/desk-items through the app's Content link,
+        // which flows to the test host's output through the ProjectReference.
+        var root = AppContext.BaseDirectory;
         Assert.Equal(4, EmiDeskItems.Items.Count);
         foreach (var item in EmiDeskItems.Items)
             foreach (var pose in EmiChains.BodyFrameFile.Keys)
@@ -61,11 +54,10 @@ public class EmiDeskItemsTests
     [Fact]
     public void Registry_and_names_cover_every_item()
     {
-        var root = AppDir();
-        var reg = JObject.Parse(File.ReadAllText(Path.Combine(root, "Resources", "emi", "desk-items", "registry.json")));
+        var reg = JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.RepoRoot, "Assets", "emi", "desk-items", "registry.json")));
         var ids = ((JArray)reg["items"]!).Select(i => (string)i["id"]!).OrderBy(x => x);
         Assert.Equal(EmiDeskItems.Items.Select(i => i.Id).OrderBy(x => x), ids);
-        var en = JObject.Parse(File.ReadAllText(Path.Combine(root, "Localization", "Languages", "en.json")));
+        var en = JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, "en.json")));
         foreach (var item in EmiDeskItems.Items)
             Assert.False(string.IsNullOrWhiteSpace((string?)en[item.NameKey]), item.NameKey);
     }

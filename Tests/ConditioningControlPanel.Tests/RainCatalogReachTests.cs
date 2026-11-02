@@ -20,7 +20,7 @@ public sealed class RainCatalogReachTests
     public void Every_rain_row_the_counter_ships_reaches_the_wardrobe_as_a_shop_item()
     {
         var root = RepoRoot();
-        var counter = (JArray)JObject.Parse(File.ReadAllText(Path.Combine(root, "ConditioningControlPanel", "Resources", "web", "prizecounter", "assets", "manifest.json")))["items"]!;
+        var counter = (JArray)JObject.Parse(File.ReadAllText(Path.Combine(root, "Assets", "web", "prizecounter", "assets", "manifest.json")))["items"]!;
         var rainIds = counter.Where(t => (string?)t["family"] == "rain").Select(t => (string)t["id"]!).ToList();
         Assert.Equal(19, rainIds.Count);   // server catalog v2: 7 dresses, 2 suits, 6 hair, 4 accessories
         foreach (var must in new[] { "rain.suit.action-yellow", "rain.acc.hazmat-mask", "rain.acc.back-katana" })
@@ -70,5 +70,5 @@ public sealed class RainCatalogReachTests
     }
 
     private static RainItemManifest LoadManifest() =>
-        RainItemManifest.Load(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "web", "rain-wardrobe", RainItemManifest.FileName));
+        RainItemManifest.Load(Path.Combine(RepoRoot(), "Assets", "web", "rain-wardrobe", RainItemManifest.FileName));
 }

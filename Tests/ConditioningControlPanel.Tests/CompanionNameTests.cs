@@ -69,12 +69,5 @@ public class CompanionNameTests
         }
     }
 
-    private static string LangPath(string lang)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", "Localization", "Languages", lang + ".json");
-    }
+    private static string LangPath(string lang) => Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json");
 }

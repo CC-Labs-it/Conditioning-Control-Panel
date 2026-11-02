@@ -595,7 +595,7 @@ namespace ConditioningControlPanel.Models
             Ly(HapticLayer.Video, _videoEnabled, 1.0);
             Ly(HapticLayer.AudioSync, _audioSync?.Enabled ?? false, 1.0);
             Ly(HapticLayer.Dtrh, _dtrhEnabled, 1.0);
-            Ly(HapticLayer.Race, true, RaceHapticDirector.DefaultScale);
+            Ly(HapticLayer.Race, true, HapticSettingsV2.RaceDefaultScale);
             Ly(HapticLayer.Luminance, false, 1.0);   // Phase F, off until it exists
             Ly(HapticLayer.Session, true, 1.0);
             Ly(HapticLayer.Manual, true, 1.0);
@@ -777,6 +777,9 @@ namespace ConditioningControlPanel.Models
     /// </summary>
     public class HapticSettingsV2
     {
+        /// <summary>The Racing Thoughts row starts at the owner's 60% (2026-10-31); the WPF RaceHapticDirector reads it.</summary>
+        public const double RaceDefaultScale = 0.6;
+
         private readonly object _gate = new();
 
         /// <summary>0 = never migrated. Bump when a future release needs another seeding pass.</summary>
@@ -857,7 +860,7 @@ namespace ConditioningControlPanel.Models
 
         /// <summary>A row a settings file does not have yet. The race starts at the owner's 60% (2026-10-31).</summary>
         private static HapticLayerRule NewLayerRule(HapticLayer layer)
-            => layer == HapticLayer.Race ? new HapticLayerRule { Intensity = RaceHapticDirector.DefaultScale } : new HapticLayerRule();
+            => layer == HapticLayer.Race ? new HapticLayerRule { Intensity = RaceDefaultScale } : new HapticLayerRule();
 
         public HapticLayerRule Rule(HapticLayer layer)
         {

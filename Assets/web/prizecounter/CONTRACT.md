@@ -18,6 +18,7 @@ Scope and owner calls: `handoff-1029/B3-SHOP-DECISIONS.md` (sections 5 and 6 are
 | `preview/` | B3-W5 | the HUD preview box: `catalog.js` (item id -> spec over `assets/preview/index.json`), `loader.js` (rests 140 ms, drops stale loads, disposes on leave, frees a kind's shared art when the focus leaves it), `stage.js` (3D turntable: Rain, kart bodies, outfits, trail, chess), `pictures.js` (frames, avatars, EMI desk sheets, paints). |
 | `assets/preview/` | B3-W5 (art is Astra's) | byte copies from `out/preview` and `out/art` (only what the box draws: the knight variants, idle desk overlays, one Rain attribution) plus the approved `piecebypiece` knight and the arcademy EMI idle body; `index.json` = one spec per item id. Budget: no file over 8 MB, the tree under 10 MB (`tests/preview.test.mjs`). Kart outfits and the lace umbrella preview WORN on the rigged kart base (F5: Astra's decoded `sources-decoded/emi-teacup-kart.glb`, PNG textures, since r169 here has no KTX2Loader), paints on its shell (glassroad `art/paints` masks, flat swatch when there is no 3D); Rain coverage follows the wardrobe (`preview/fit.js`). |
 | `index.html`, `main.js`, `dev.html` | B3-W1 creates, others add one line each | page entry; `dev.html` runs on the mock with no host. |
+| `hud/guide.js`, `state/guide.js`, `art/guide/` | G3 | the "How it works" card (see Rules). Its prints are real captures: kart shelf only, no chess, no Rain. |
 | `tests/*.test.mjs` | every lane | `node --test tests/*.test.mjs` from this folder (the bare folder form fails on Node 24). Every lane runs the whole folder. |
 
 ## Assets (glTF Y up, front +Z, metres)
@@ -57,7 +58,7 @@ The page talks to whoever hosts it through `host.js`, never `fetch` to the serve
 - out: `request('shop-state')`, `request('shop-buy', {itemId, catalogVersion, week}, idem)` -> the server body as above,
   or `{ ok:false, reason:'offline'|'signed_out' }` from the host itself.
 - out: `wallet { sp }` after a receipt (the WPF host adopts it with `V2WalletAdoption`, `fromBuy = true`).
-- out: `close { reason:'back'|'panic' }`. Esc ladder: confirm card -> preview -> close.
+- out: `close { reason:'back'|'panic' }`. Esc ladder: how-to card -> confirm card -> preview -> close.
 - out: `wear { id }` from an owned card's Wear (frame `{type:'wear', id}`). WPF: a Rain row (`cos.<id>` in
   `rain-wardrobe/items.json`) closes the counter and opens Rain's dressing room with that piece tried on. Fix wave F1:
   `init.wears` lists the families the host puts on (rain, desk, chess, profile; kart only from the garage). Desk, chess
@@ -86,3 +87,7 @@ Standalone frames (`host.js`): out `{type:'ready', protocol:1}`, `{type:'request
   on RELEASE of a press that began after the window had focus 600 ms and the card had been up 400 ms; a repeat or a
   key held from before focus never counts, and a key's synthetic click on the action is dropped. A key's select never
   reaches an open card from the shelves. Pointer clicks act as before, after the same 400 ms on a fresh card.
+- How it works (`hud/guide.js`): opens by itself once per account (`localStorage` key `pc.howto.seen.<unifiedId>`, in try/catch;
+  a blocked store reads as seen) on a ready counter with no card, and its door in the top line reopens it. Skipped, and not marked seen, when
+  the counter opens to put something on (`state/guide.js opensToWear`: `init.wear`, or the door is the dressing room). While it is up nothing
+  reaches the shelves: select and back close it through the press guard, and it closes with nothing focused.

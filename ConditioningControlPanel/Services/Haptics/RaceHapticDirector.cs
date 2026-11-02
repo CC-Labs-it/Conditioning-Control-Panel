@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Services.Haptics
     internal static class RaceHapticDirector
     {
         public const int MinMs = 100, MaxMs = 4000, BedAutoZeroMs = 1500;
-        public const double DefaultScale = 0.6;
+        public const double DefaultScale = HapticSettingsV2.RaceDefaultScale;
 
         public readonly record struct Pulse(double Level, int Ms);
 

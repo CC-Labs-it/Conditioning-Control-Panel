@@ -9,7 +9,7 @@ import { LEX, tabKey, itemKey, itemDesc, makeT } from '../state/strings.js';
 import { TAB_ORDER } from '../state/shop.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url)), page = path.join(here, '..');
-const LANG_DIR = path.join(page, '../../../Localization/Languages');
+const LANG_DIR = path.join(page, '../../../CCP.Core/Localization/Languages');   // Assets/web/prizecounter -> the Core catalogue
 const LANGS = ['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'pt-BR', 'ru', 'zh-CN'];
 const read = (lang) => fs.readFileSync(path.join(LANG_DIR, `${lang}.json`), 'utf8');
 const shopKeys = (text) => Object.keys(JSON.parse(text)).filter((k) => k.startsWith('shop_')).sort();

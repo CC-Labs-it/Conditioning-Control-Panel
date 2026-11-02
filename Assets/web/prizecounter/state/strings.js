@@ -38,6 +38,17 @@ export const LEX = {
   shop_tab_desk: 'Desk',
   shop_tab_prime: 'Prime',
   shop_tab_backroom: 'Back Room',
+  shop_howto: 'How it works',
+  shop_howto_go: 'To the shelves',
+  shop_howto_earn_title: 'Earn',
+  shop_howto_earn_gist: 'Games pay Sparkles by finishing place',
+  shop_howto_earn_cap: 'Sparkles are the only money here',
+  shop_howto_pick_title: 'Pick',
+  shop_howto_pick_gist: 'One shelf per family, new stock weekly',
+  shop_howto_pick_cap: 'Opens from the wallet chip or a game\'s Prize Counter button',
+  shop_howto_buy_title: 'Buy, wear',
+  shop_howto_buy_gist: 'A buy asks once, no refunds',
+  shop_howto_buy_cap: 'Owned stays stamped, Wear puts it on. Kart bodies change how you drive',
 };
 
 export const itemKey = (id) => `shop_item_${String(id).replace(/[.-]/g, '_')}_name`;

@@ -230,12 +230,12 @@
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
     <!-- profile.avatar.rain-portrait is Rain-derived (CC BY 4.0): its attribution ships beside it. -->
-    <Content Include="Resources\cosmetics\shop\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Assets\cosmetics\shop\ATTRIBUTION.txt" Link="Resources\cosmetics\shop\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- EMI desk Prize Counter items (Resources\emi\desk-items\<id>\over-body-*.png, Astra's ten-pose
          over-layer sheets): read off disk by Services\EmiDesk\EmiDeskItems like the outfit overlays.
          The registry.json beside them already ships through the Resources\emi\**\*.json Content below. -->
-    <None Remove="Resources\emi\desk-items\**\*.png" />
-    <Content Include="Resources\emi\desk-items\**\*.png">
+    <None Remove="..\Assets\emi\desk-items\**\*.png" />
+    <Content Include="..\Assets\emi\desk-items\**\*.png" Link="Resources\emi\desk-items\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
