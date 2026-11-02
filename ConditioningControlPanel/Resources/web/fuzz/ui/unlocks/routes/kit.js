@@ -60,14 +60,15 @@ export function bar(ctx, parent, css, color = '#ff69b4', bg = 'rgba(128,128,128,
 }
 
 /* ---- one thing wants the player's attention at a time: a stare and a tap order must never ask at once ---- */
-const attention = { until: 0, who: null };
-export function claim(ctx, who, ms) {
-  const t = nowOf(ctx);
-  if (attention.until > t && attention.until - t < 120000 && attention.who !== who) return false;
-  attention.until = t + ms; attention.who = who;
+const attention = { main: { until: 0, who: null }, low: { until: 0, who: null } };
+/** ns 'low' is the one low panel on the page, shared by the video and ad rows. */
+export function claim(ctx, who, ms, ns = 'main') {
+  const t = nowOf(ctx), a = attention[ns];
+  if (a.until > t && a.until - t < 120000 && a.who !== who) return false;
+  a.until = t + ms; a.who = who;
   return true;
 }
-export function release(who) { if (attention.who === who) { attention.until = 0; attention.who = null; } }
+export function release(who, ns = 'main') { const a = attention[ns]; if (a.who === who) { a.until = 0; a.who = null; } }
 
 /* ---- furniture ---- */
 const stacks = { left: [], right: [] };
