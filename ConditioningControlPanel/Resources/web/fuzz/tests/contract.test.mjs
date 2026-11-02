@@ -264,6 +264,83 @@ test('ctx.openLink opens only inside a press; hosted goes down the wire, unhoste
   assert.equal(sent.length, 1);
 });
 
+test('ctx.spend never goes below zero, answers what it took, and is kept apart from what was earned', () => {
+  let ctx;
+  const { run, engine } = setup({ stray: { mount(c) { ctx = c; return {}; } } });
+  engine.mount('stray');
+  E.lump(run, 10);
+  const total = run.total;
+  assert.equal(ctx.spend(4, 'fine'), 4);
+  assert.equal(ctx.spend(100, 'fine'), 6);
+  assert.equal(run.fuzz, 0);
+  assert.equal(run.total, total);
+  assert.deepEqual(run.spent, { fine: 10 });
+  assert.equal(ctx.spend(5), 0);
+  for (const bad of [-5, NaN, Infinity]) { E.lump(run, 1); const f = run.fuzz; assert.ok(ctx.spend(bad) <= f); assert.ok(run.fuzz >= 0); }
+});
+
+test('ctx.guardBuy refuses a capped number of times, then the row goes through', () => {
+  const asked = [];
+  const toasts = [];
+  const { run, ui, engine } = setup({ stray: { mount(c) { c.guardBuy((it) => { asked.push(it.id); return { refuse: 'Not in {cur}' }; }); return {}; } } });
+  ui.toast = (t) => toasts.push(t);
+  engine.mount('stray');
+  E.lump(run, 1000);
+  const money = run.fuzz;
+  for (let i = 0; i < 3; i++) {
+    const r = engine.buy('rounded');
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, 'guarded');
+  }
+  assert.equal(run.fuzz, money, 'a refusal costs nothing');
+  assert.equal(toasts.length, 3);
+  assert.ok(!toasts[0].includes('{cur}'));
+  assert.equal(engine.buy('rounded').ok, true);
+  assert.equal(asked.length, 3, 'the guard is not even asked the fourth time');
+});
+
+test('a stacking row gets its own count of refusals per copy', () => {
+  const { run, engine } = setup({ stray: { mount(c) { c.guardBuy(() => ({ refuse: 'no' })); return {}; } } });
+  engine.mount('stray');
+  E.lump(run, 1000);
+  for (let copy = 0; copy < 2; copy++) {
+    for (let i = 0; i < 3; i++) assert.equal(engine.buy('stray').reason, 'guarded');
+    assert.equal(engine.buy('stray').ok, true);
+  }
+});
+
+test('a guard never sees a fork or an ending, nor a buy that would fail anyway', () => {
+  const asked = [];
+  const { run, engine } = setup({ stray: { mount(c) { c.guardBuy((it) => { asked.push(it.id); return { refuse: 'no' }; }); return {}; } } }, 'tunnel');
+  engine.mount('stray');
+  assert.equal(engine.buy('rounded').reason, 'short');
+  assert.deepEqual(asked, []);
+  E.lump(run, 1e8);
+  assert.equal(engine.buy('drop').ok, true);
+  assert.deepEqual(asked, []);
+  const fresh = setup({ stray: { mount(c) { c.guardBuy(() => ({ refuse: 'no' })); return {}; } } });
+  fresh.engine.mount('stray');
+  E.grant(fresh.run, 'fpsv');
+  E.lump(fresh.run, 1000);
+  assert.equal(fresh.engine.choose('f1', 'eyes').ok, true);
+});
+
+test('a throwing guard lets the row through, and a guard ends with its unlock', () => {
+  const realError = console.error;
+  console.error = () => {};
+  try {
+    const a = setup({ stray: { mount(c) { c.guardBuy(() => { throw new Error('boom'); }); return {}; } } });
+    a.engine.mount('stray');
+    E.lump(a.run, 1000);
+    assert.equal(a.engine.buy('rounded').ok, true);
+  } finally { console.error = realError; }
+  const b = setup({ stray: { mount(c) { c.guardBuy(() => ({ refuse: 'no' })); return {}; } } });
+  b.engine.mount('stray');
+  b.engine.unmount('stray');
+  E.lump(b.run, 1000);
+  assert.equal(b.engine.buy('rounded').ok, true);
+});
+
 test('a stacking row stays mounted and hears grow; a row without grow remounts', () => {
   let mounts = 0, grown = null;
   const { run, engine } = setup({ stray: { mount() { mounts++; return { grow(n) { grown = n; } }; } } });

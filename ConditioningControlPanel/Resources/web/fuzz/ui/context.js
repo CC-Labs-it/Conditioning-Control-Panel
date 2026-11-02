@@ -100,6 +100,8 @@ export function makeContext(engine, scope) {
     emit: (event, data) => engine.emit(event, data),
 
     pay: (amount, source = item.id, at = null) => engine.pay(amount, source, at),
+    spend: (amount, reason = item.id) => engine.spend(amount, reason),
+    guardBuy: (fn) => engine.addGuard(fn, scope),
     wallHit: (at) => engine.wallHit(at),
     rates: () => engine.rates(),
     mod(m) {
@@ -193,5 +195,5 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink',
+  'speed', 'parts', 'openLink', 'spend', 'guardBuy',
 ]);

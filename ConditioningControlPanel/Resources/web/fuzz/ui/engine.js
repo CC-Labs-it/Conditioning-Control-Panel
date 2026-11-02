@@ -6,6 +6,7 @@
 
 import { BY_ID, ITEMS } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
+import { brandText } from '../data/brand.js';
 import * as E from '../sim/economy.js';
 import { moodOf } from '../sim/moods.js';
 import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
@@ -23,6 +24,8 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   let paused = false, suspended = false, stopped = !!run.ended, now = run.clock;
   let endingBegun = false, creditsUp = false, real = run.clock;
   const speeds = new Set();
+  const guards = new Set();
+  const refusals = new Map();        // row id + count -> times refused
   const ads = createAds();
   const pictures = createPictures({ source: env.pictureSource, onChange: (source) => { emit('pictures', { source }); save(); } });
 
@@ -175,6 +178,36 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     return got;
   }
 
+  function spend(amount, reason) {
+    if (stopped) return 0;
+    const took = E.spend(run, amount, reason);
+    ui.draw?.();
+    return took;
+  }
+
+  /* ---- ctx.guardBuy: a guard may refuse a row a few times. A fork or ending row is never refused, a row goes through
+   * after GUARD_MAX_REFUSALS whatever the guard says, and a guard that throws lets it through. Never an impossible run. */
+  function refusal(id) {
+    const it = BY_ID[id];
+    if (!it || it.kind === 'fork' || it.kind === 'end' || !guards.size) return null;
+    if (!E.isOpen(run, it) || run.fuzz < E.price(run, id, mods)) return null;  // would fail anyway: nothing to refuse
+    const key = `${id}:${E.count(run, id)}`;
+    const n = refusals.get(key) || 0;
+    if (n >= CONFIG.GUARD_MAX_REFUSALS) return null;
+    for (const g of [...guards]) {
+      const ans = guard(g.scope, g.fn, it);
+      if (ans?.refuse) { refusals.set(key, n + 1); return ans; }
+    }
+    return null;
+  }
+  function addGuard(fn, scope) {
+    const g = { fn, scope };
+    guards.add(g);
+    const off = () => { guards.delete(g); scope.cleanups.delete(off); };
+    scope.cleanups.add(off);
+    return off;
+  }
+
   function wallHit({ x, y, corner = false } = {}) {
     if (paused || suspended || stopped) return 0;
     const gain = E.wallHit(run, mods, now);
@@ -197,6 +230,12 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
 
   function buy(id) {
     if (stopped) return { ok: false, reason: 'ended' };
+    const refused = refusal(id);
+    if (refused) {
+      ui.denied?.(id, refused);
+      if (typeof refused.refuse === 'string') ui.toast?.(brandText(refused.refuse));
+      return { ok: false, reason: 'guarded', line: refused.refuse };
+    }
     const res = E.buy(run, id, mods);
     if (!res.ok) { ui.denied?.(id, res); return res; }
     afterGain(id, res);
@@ -272,7 +311,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     get suspended() { return suspended; },
     get stopped() { return stopped; },
     mount, unmount, mountAll, unmountAll, emit, subscribe, step,
-    setPaused, setSuspended, tap, pay, wallHit, buy, choose, end, grant, syncQuiet, save,
+    setPaused, setSuspended, tap, pay, spend, addGuard, wallHit, buy, choose, end, grant, syncQuiet, save,
     rates: () => E.rates(run, mods, now),
     price: (id) => E.price(run, id, mods, now),
     shop: (size) => E.shopWindow(run, mods, size),

@@ -45,7 +45,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 **Reading**
 
 - `ctx.item`: the row (`id, name, what, line, cost, lane, req, fps, click, wall, grow`). `ctx.count`: how many are owned.
-- `ctx.state`: the run, read only, live: `fuzz total taps walls buys clock owned order picks mood sources endless`. `ctx.life`: the lifetime, read only: `runs endings seen routes bestMs perk`.
+- `ctx.state`: the run, read only, live: `fuzz total taps walls buys clock owned order picks mood sources spent endless`. `ctx.life`: the lifetime, read only: `runs endings seen routes bestMs perk`.
 - `ctx.has(id)`, `ctx.pick('f1')` (the chosen lane or null), `ctx.fmt(n)`, `ctx.rng()`, `ctx.rates()` (`{fps, click, wall, walls}` right now, walls = hits per second per bouncing button), `ctx.config`.
 - `ctx.brand`: `.game .short .currency .currencyPlural`, `.text('{cur}')`, `.money(n)`. Never write the names; write `{game}`, `{short}`, `{cur}`.
   Text given to `el`, `say`, `toast`, `float`, `modal` is token-expanded for you.
@@ -69,6 +69,8 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 **Money**
 
 - `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`.
+- `ctx.spend(amount, reason?)`: takes from the bank, never below zero, answers what it took. No debt, and it does not touch `total`. Pace does not apply. Reasons add up in `ctx.state.spent`.
+- `ctx.guardBuy(fn(item) -> {refuse: 'line'} | null)`: refuse or delay a buy; the line shows as a toast. Returns a remover. Use this, never capture listeners on the shop. It cannot make a run impossible: a row goes through after 3 refusals whatever you answer, a fork or ending row never reaches you, and a throw lets the row through.
 - `ctx.wallHit({x, y, corner})`: a bouncing thing hit a wall: pays the wall value, emits `wall`, answers the gain.
 - `ctx.mod({fps?, click?, wall?, walls?, price?})`: value modifiers `(value, state, now) => value`, `price` also gets `item` last. Pure: no DOM, no rng, no writes. Registered on each mount, folded in order. For a chance-based payoff use `ctx.on('tap', ...)` + `ctx.pay`.
 
