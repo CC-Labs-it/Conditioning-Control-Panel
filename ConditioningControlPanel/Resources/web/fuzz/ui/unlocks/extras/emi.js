@@ -8,7 +8,7 @@ const SWAY = ['body-sway1', 'body-sway2', 'body-sway3', 'body-sway4'];
 const art = (name) => `assets/img/emi/${name}.png`;
 
 const CSS = `
-.xe{position:absolute;left:0;top:0;pointer-events:auto;touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer;will-change:transform;}
+.xe{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:auto;touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer;will-change:transform;}
 .xe img{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;}
 .xe-f{position:absolute;left:28.5%;top:25%;width:44.5%;height:37%;pointer-events:none;}
 .xe-f i{position:absolute;display:block;background:#ff7ac0;}

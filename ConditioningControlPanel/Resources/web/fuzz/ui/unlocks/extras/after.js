@@ -200,16 +200,14 @@ export const AFTER_UNLOCKS = {
       const route = routeNames(ctx).join(', ') || BY_ID.start.name;
       const id = endedId(ctx);
       const min = Math.max(1, Math.round(ctx.state.clock / 60000));
-      const lines = [fill(S.diagnosis, { route }), fill(S.ending, { ending: endTitle(id) }), fill(S.minutes, { min })];
+      const lines = [fill(S.diagnosis, { route }), fill(S.ending, { ending: endTitle(id) }), fill(S.minutes, { min }).replace(/^1 minutes/, '1 minute')];
       const card = h('div', '', null, node);
       card.className = 'xa-share';
       h('b', '', ctx.brand.game, card);
       for (const l of lines) h('div', '', ctx.brand.text(l), card);
-      const a = h('a', 'display:inline-block;margin-top:6px;color:#c23c84;', ctx.brand.text(S.play), card);
-      a.href = LINK;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.addEventListener('click', (ev) => { if (ctx.openLink) { ev.preventDefault(); ctx.openLink(LINK); } });
+      const a = button(ctx.brand.text(S.play), card);
+      a.style.cssText = 'display:block;margin:6px auto 0;min-height:36px;background:none;border:0;color:#c23c84;text-decoration:underline;';
+      a.addEventListener('click', () => ctx.openLink(LINK));
       const b = button(S.button, node, true);
       b.addEventListener('click', async () => {
         const ok = await sendOut(lines.join('. '));

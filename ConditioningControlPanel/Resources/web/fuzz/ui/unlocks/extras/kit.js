@@ -39,7 +39,7 @@ function bottom(ctx) {
   if (dock?.root.isConnected) return dock;
   const root = h('div', 'position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 8px max(6px,env(safe-area-inset-bottom,0));pointer-events:none;', null, ctx.layer('over'));
   const lines = h('div', 'display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;', null, root);
-  const strip = h('div', 'display:flex;justify-content:center;align-items:flex-end;gap:6px;max-width:100%;overflow:hidden;', null, root);
+  const strip = h('div', 'display:flex;justify-content:safe center;align-items:flex-end;gap:6px;max-width:100%;overflow-x:auto;scrollbar-width:none;pointer-events:auto;', null, root);
   dock = { root, lines, strip };
   return dock;
 }

@@ -114,7 +114,7 @@ export const COMBO_UNLOCKS = {
   /* Slideshow + Fewer Ads: a velvet rope in front of the art. Touching it is noticed. */
   x_gallery: combo((ctx) => {
     const line = picker(ctx, COMBO_LINES.x_gallery);
-    const b = rect('btn-zone');
+    const b = { top: ctx.parts.buttonWrap.getBoundingClientRect().top - 24 };
     const { w } = ctx.bounds();
     const rw = Math.min(760, w - 8);
     const wrap = ctx.el('div', `position:absolute;left:${(w - rw) / 2}px;top:${Math.round((b?.top ?? 100) - 8)}px;width:${rw}px;height:60px;z-index:1;`, null, 'floaters');
@@ -185,13 +185,19 @@ export const COMBO_UNLOCKS = {
       ctx.audio.play('assets/audio/sfx/ui_denied.mp3', { bus: 'sfx', gain: 0.5 });
     };
     beg.addEventListener('click', () => { const r = beg.getBoundingClientRect(); refused(r.left + r.width / 2, r.top); });
-    /* Anything else that says no: a locked main button, or a shop row that cannot be afforded. */
+    /* A locked main button says no as well. */
     const onBtn = (ev) => { if (ctx.button.el.classList.contains('locked')) refused(ev.clientX, ev.clientY); };
-    const shop = document.getElementById('shop');
-    const onShop = (ev) => { const row = ev.target.closest?.('.row.short'); if (row) refused(ev.clientX, ev.clientY); };
     ctx.button.el.addEventListener('pointerdown', onBtn);
-    shop?.addEventListener('click', onShop);
-    return { off() { ctx.button.el.removeEventListener('pointerdown', onBtn); shop?.removeEventListener('click', onShop); } };
+    /* Now and then a buy is refused too, and the refusal pays. Pressing again goes through. */
+    let nextNo = 0;
+    ctx.guardBuy(() => {
+      if (ctx.state.clock < nextNo || ctx.rng() > 0.34) return null;
+      nextNo = ctx.state.clock + 20000;
+      const r = ctx.rates(), s = ctx.parts.shop.getBoundingClientRect();
+      ctx.pay(Math.max(r.click * 2, r.fps * 2), 'x_later', { x: s.left + s.width / 2, y: s.top + 20 });
+      return { refuse: line() };
+    });
+    return { off() { ctx.button.el.removeEventListener('pointerdown', onBtn); } };
   }),
 
   /* Listen + Bimbo: the podcast gains a second voice. Pairs show as captions until the show's clips arrive. */
@@ -212,7 +218,7 @@ export const COMBO_UNLOCKS = {
   /* Tap + Drone: a task card, double the pay, a stamp nobody asked for. */
   x_compl: combo((ctx) => {
     const line = picker(ctx, COMBO_LINES.x_compl);
-    const { el } = slot(ctx, card('position:relative;width:150px;height:56px;padding:4px 44px 4px 6px;'));
+    const { el } = slot(ctx, card(`position:relative;width:${ctx.bounds().w >= 1100 ? 150 : 122}px;height:56px;padding:3px 34px 3px 5px;font-size:12px;`));
     const text = h('div', '', COMBO_LINES.x_compl[1], el);
     const pay = h('div', 'font-weight:500;color:#555;', '', el);
     const stamp = h('div', `position:absolute;right:4px;top:8px;width:34px;height:34px;box-sizing:border-box;border:3px solid #c21f2f;border-radius:50%;color:#c21f2f;display:grid;place-items:center;font:800 20px ${FONT};transform:rotate(-12deg);opacity:0;`, 'A', el);
@@ -326,8 +332,15 @@ export const COMBO_UNLOCKS = {
       const b = ctx.button.el.getBoundingClientRect();
       if (x + AW > b.left - 8 && x < b.right + 8 && y + AH > b.top - 8 && y < b.bottom + 8) return false;
       /* Never over the shop rows: they stay pressable, however viral this gets. */
-      const top = document.getElementById('goal')?.getBoundingClientRect();
-      const end = (document.getElementById('more')?.offsetParent ? document.getElementById('more') : document.getElementById('rows'))?.getBoundingClientRect();
+      const shop = ctx.parts.shop;
+      const top = shop.querySelector('#goal')?.getBoundingClientRect();
+      const more = shop.querySelector('#more');
+      const end = (more?.offsetParent ? more : shop.querySelector('#rows'))?.getBoundingClientRect();
+      /* Nor over the number: that is the one thing on the page everybody reads. */
+      for (const id of ['counter', 'l-meters']) {
+        const c = rect(id);
+        if (c && x + AW > c.left + c.width * 0.1 && x < c.right - c.width * 0.1 && y + AH > c.top && y < c.bottom) return false;
+      }
       if (!top?.height) return false;
       if (y + AH > dockTop(ctx) - 4) return false;
       if (top && end && x + AW > top.left - 4 && x < top.right + 4 && y + AH > top.top - 4 && y < end.bottom + 4) return false;

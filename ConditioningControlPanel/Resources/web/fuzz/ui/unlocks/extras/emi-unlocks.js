@@ -6,7 +6,7 @@ import { FAKE_CALL } from '../../../data/content/fakes.js';
 import { BY_ID } from '../../../data/items.js';
 import { EMI_COPY } from './copy.js';
 import { drawFace, getEmi, onEmiTap } from './emi.js';
-import { FONT, cardUp, h, pick, picker, rect, slot } from './kit.js';
+import { FONT, cardUp, h, pick, picker, slot } from './kit.js';
 
 const HAT_EMOJI = { top: '🎩', party: '🎉', duck: '🦆', globe: '🔮' };
 const mmss = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -149,7 +149,7 @@ export const EMI_UNLOCKS = {
         if (gone < WARN_MS) warned = false;
         else if (!warned) { warned = true; e.say(warn()); }
         if (gone < IGNORE_MS) return;
-        const row = document.querySelector('#rows .row');
+        const row = ctx.parts.shop.querySelector('#rows .row');
         if (!row) return;
         const r = row.getBoundingClientRect();
         const s = Math.min(1.8, (r.height + 18) / e.size);
@@ -177,7 +177,7 @@ export const EMI_UNLOCKS = {
         const m = { el, x: 40 + i * 90, y: 0, tx: 0, ty: 0, state: 'walk', wait: 0, dir: i % 2 ? -1 : 1 };
         return m;
       });
-      const floorY = () => { const r = rect('btn-zone'); return r ? r.bottom - size - 2 : 150; };
+      const floorY = () => ctx.parts.buttonWrap.getBoundingClientRect().bottom + 22 - size;
       for (const m of minis) { m.y = floorY(); m.x = Math.min(ctx.bounds().w - size, m.x); }
       let turn = 0;
       ctx.every(3400, () => {
@@ -227,10 +227,10 @@ export const EMI_UNLOCKS = {
         if (!c) return;
         e.napping = true;
         e.controls.style.display = 'none';
-        /* Curled up against the first digit, on its left, so the number stays readable. */
+        /* Curled up to the left of the number, with room for it to grow, so it stays readable. */
         const s = Math.min(1, 46 / e.size);
         const y = c.bottom - e.size * s - 4;
-        e.moveTo(Math.max(2, c.left - e.size * s - 2), y, s, 600);
+        e.moveTo(Math.max(2, c.left - e.size * s - 26), y, s, 600);
         e.mood('sleep');
         e.say(asleep(), 2600);
         snore = ctx.every(1600, () => {
@@ -369,7 +369,7 @@ export const EMI_UNLOCKS = {
       /* The shop builds rows with their catalog name, so a kept name goes back on each time a row appears. */
       const apply = () => {
         const kept = names();
-        for (const row of document.querySelectorAll('#rows .row, #goal .row')) {
+        for (const row of ctx.parts.shop.querySelectorAll('#rows .row, #goal .row')) {
           const n = kept[row.dataset.id];
           const b = n && row.querySelector('b');
           if (b && b.textContent !== n) b.textContent = ctx.brand.text(n);
@@ -378,7 +378,7 @@ export const EMI_UNLOCKS = {
       const renameOne = () => {
         if (cardUp()) return;
         const kept = names();
-        const rows = [...document.querySelectorAll('#rows .row, #goal .row')];
+        const rows = [...ctx.parts.shop.querySelectorAll('#rows .row, #goal .row')];
         const row = rows.find((r) => !kept[r.dataset.id]);
         if (!row) return;
         kept[row.dataset.id] = nameOf(row.dataset.id);

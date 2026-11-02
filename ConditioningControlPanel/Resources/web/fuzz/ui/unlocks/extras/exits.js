@@ -7,12 +7,6 @@ import { FONT, h, pick } from './kit.js';
 
 const EMOJI_FONT = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
 
-/** The fade sits above `over`, so a show goes in the ending layer once it lands, and on the cards host until then. */
-function showHost(ctx) {
-  try { const l = ctx.layer('ending'); if (l) return l; } catch { /* not there yet */ }
-  return document.getElementById('cards') || ctx.layer('over');
-}
-
 export const EXIT_UNLOCKS = {
   outside: {
     /* Nothing to draw during the run; the row is the door. */
@@ -21,7 +15,7 @@ export const EXIT_UNLOCKS = {
     ending(ctx) {
       return new Promise((done) => {
         const E = ENDINGS.outside;
-        const sky = ctx.el('div', `position:fixed;inset:0;z-index:91;overflow:hidden;background:linear-gradient(#bfe6ff,#e8f6ff 68%);color:#124;font:600 17px/1.3 ${FONT};pointer-events:auto;`, null, showHost(ctx));
+        const sky = ctx.el('div', `position:absolute;inset:0;overflow:hidden;background:linear-gradient(#bfe6ff,#e8f6ff 68%);color:#124;font:600 17px/1.3 ${FONT};pointer-events:auto;`, null, 'ending');
         h('div', 'position:absolute;left:0;right:0;bottom:0;height:26%;background:#7cc66b;', null, sky);
         h('div', `position:absolute;right:10%;top:9%;font:64px/1 ${EMOJI_FONT};`, '☀️', sky);
         h('div', `position:absolute;left:10%;bottom:16%;font:120px/1 ${EMOJI_FONT};`, '🌳', sky);
