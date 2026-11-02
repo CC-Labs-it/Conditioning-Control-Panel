@@ -1,4 +1,4 @@
-/* ui/picture-card.js - Addendum A: where the pictures come from (owner: Scrolller pictures need a sign-in, otherwise the
+/* ui/picture-card.js - Addendum A: where the pictures, gifs and clips come from (owner: Scrolller pictures need a sign-in, otherwise the
  * player loads their own files). Own files are object URLs for this visit only: nothing uploaded, nothing stored. A reload
  * offers the picker again and the frames stay empty meanwhile. Sign-in is honest about not existing yet: no fake sign-in,
  * no fetch. Comes up on the Slideshow and Swipe Feed routes, and from the pause card. */
@@ -30,7 +30,7 @@ export function openPictureCard({ doc = document, pictures, lane = null, lost = 
     head: C.head,
     body: `<p class="intro">${esc(brandText(line))}</p>`
       + `<div class="src">${choice('signin', C.signin, C.signinSub)}${choice('files', C.files, C.filesSub)}${choice('none', C.none, C.noneSub)}</div>`
-      + `<input class="tc-file" id="pic-files" type="file" multiple accept="image/*,.gif" tabindex="-1" aria-label="${esc(C.filesLabel)}">`
+      + `<input class="tc-file" id="pic-files" type="file" multiple accept="image/*,video/*,.gif" tabindex="-1" aria-label="${esc(C.filesLabel)}">`
       + `<p class="status" id="pic-status" role="status"></p>`
       + (above ? `<div class="foot"><button class="link" id="pic-back" type="button">${esc(C.back)}</button></div>` : ''),
   });
