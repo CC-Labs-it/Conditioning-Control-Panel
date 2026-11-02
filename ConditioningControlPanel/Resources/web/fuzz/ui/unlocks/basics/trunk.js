@@ -237,12 +237,7 @@ export default {
         frame.credit.textContent = pic?.credit || '';
       };
       const buildFrame = (id) => {
-        const rail = ctx.layer('side', 'left');
-        const wide = rail.clientWidth >= 120;
-        const box = ctx.el('div', wide
-          ? 'position:relative;flex:none;width:100%;max-width:190px;height:150px;border:2px dashed var(--line);background:var(--panel);overflow:hidden;'
-          : 'position:absolute;right:6px;width:58px;height:78px;border:2px dashed var(--line);background:var(--panel);overflow:hidden;', null, wide ? rail : 'floaters');
-        if (!wide) box.style.top = `${btnCenter(ctx).y - 39}px`;
+        const box = ctx.el('div', 'position:relative;width:100%;max-width:190px;height:150px;margin:0 auto;border:2px dashed var(--line);background:var(--panel);overflow:hidden;', null, ctx.dock({ edge: 'left', title: THEMES[id].label }));
         const img = ctx.el('img', 'display:none;width:100%;height:100%;object-fit:cover;', null, box);
         img.alt = '';
         const credit = ctx.el('span', 'position:absolute;right:3px;bottom:2px;font-size:10px;color:#fff;text-shadow:0 1px 2px #000;', '', box);

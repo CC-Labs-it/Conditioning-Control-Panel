@@ -250,11 +250,8 @@ export default {
   dr_hive: {
     mount(ctx) {
       const STEPS = [0, 200, 600, 1500, 3000];
-      const g = geo(ctx);
-      const wide = g.wide;
-      const panel = wide
-        ? railPanel(ctx, 'left', `font:13px/1.3 ${MONO};display:flex;flex-direction:column;overflow:hidden;`)
-        : ctx.el('div', `display:flex;gap:8px;align-items:center;max-width:94vw;height:20px;font:12px/20px ${MONO};color:var(--ink-soft);white-space:nowrap;overflow:hidden;`, null, 'meters');
+      const wide = true;   // a dock slot has the room on every screen
+      const panel = railPanel(ctx, 'left', `font:13px/1.3 ${MONO};display:flex;flex-direction:column;overflow:hidden;`);
       const rank = ctx.el('div', wide ? 'font-weight:700;margin-bottom:6px;color:var(--stamp);' : 'flex:none;font-weight:700;color:var(--stamp);', null, panel);
       const log = ctx.el('div', wide ? 'display:flex;flex-direction:column;overflow:hidden;' : 'min-width:0;overflow:hidden;text-overflow:ellipsis;', null, panel);
       let tier = ctx.store.get('tier') || 0, seat = 9;

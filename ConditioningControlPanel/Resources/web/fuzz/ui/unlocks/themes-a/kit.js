@@ -129,16 +129,13 @@ export function refillOnChange(ctx, frames) {
   ctx.on('pictures', () => { for (const f of frames) f.next(); });
 }
 
-/** Two to four frames in the gutters on a wide page, two beside the counter on a phone. */
+/** A little wall of pictures in one dock slot. */
 export function sideFrames(ctx, niches, css = '') {
-  ctx.css(`.ta-side{position:absolute;width:clamp(74px,calc((100vw - 800px)/2 - 24px),210px);aspect-ratio:3/4;${css}}
-.ta-side.l{left:12px}.ta-side.r{right:12px}
-.ta-side.b0{bottom:20px}.ta-side.b1{bottom:calc(20px + clamp(74px,calc((100vw - 800px)/2 - 24px),210px)*1.333 + 14px)}
-@media(max-height:900px){.ta-side.b1{display:none}}
-@media(max-width:1000px){.ta-side{bottom:auto !important;top:50px;width:70px;opacity:.5}.ta-side.b1{display:none}}`);
-  const out = niches.map((n, i) => {
-    const f = frame(ctx, '', n);
-    f.el.className = `ta-side ${i % 2 ? 'r' : 'l'} b${Math.floor(i / 2)}`;
+  ctx.css(`.ta-side{position:relative;aspect-ratio:1;${css}}`);
+  const wall = ctx.el('div', 'display:grid;grid-template-columns:1fr 1fr;gap:6px;', null, ctx.dock());
+  const out = niches.map((n) => {
+    const f = frame(ctx, '', n, wall);
+    f.el.className = 'ta-side';
     return f;
   });
   refillOnChange(ctx, out);
@@ -186,9 +183,9 @@ export function shopWords(ctx, rewrite) {
   };
 }
 
-/** A small panel in the side rail, for a page wide enough to have one. */
+/** A small panel in the dock. */
 export function railPanel(ctx, side, css = '') {
-  return ctx.el('div', `pointer-events:auto;padding:8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-size:14px;${css}`, null, ctx.layer('side', side));
+  return ctx.el('div', `pointer-events:auto;font-size:14px;${css}`, null, ctx.dock({ edge: side }));
 }
 
 /** A self-closing pop-up in `over` that is not a modal: the game keeps running behind it and it costs nothing to ignore. */

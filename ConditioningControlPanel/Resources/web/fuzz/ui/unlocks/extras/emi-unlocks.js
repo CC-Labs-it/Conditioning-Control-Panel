@@ -401,4 +401,4 @@ export const EMI_UNLOCKS = {
   },
 };
 
-function wide0(ctx) { return ctx.bounds().w >= 1100; }
+function wide0() { return true; }   // a dock slot has the room on every screen

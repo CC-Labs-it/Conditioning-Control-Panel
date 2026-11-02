@@ -105,27 +105,9 @@ export default {
         draw();
         return { draw, tip };
       };
-      const rail = ctx.layer('side', 'left');
-      const wide = () => rail.clientWidth >= 170;
-      let card = null;
-      const place = () => {
-        if (card && !wide()) { card.box.remove(); card = null; }
-        if (!card && wide()) {
-          const box = ctx.el('div', 'padding:8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;font-family:var(--font);', null, rail);
-          card = { box, ...build(box) };
-          if (fresh(ctx)) ctx.anim(box, [{ transform: 'translateX(-40px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 350, easing: 'ease-out' });
-        }
-      };
-      place();
-      ctx.every(2000, () => { place(); card?.draw(); open.style.display = wide() ? 'none' : ''; });
-      ctx.every(20000, () => { if (card) card.tip.textContent = pick(ctx, SCREEN_TIME.tips); });
-      const open = chip(ctx, SCREEN_TIME.title, () => {
-        const node = docOf(ctx).createElement('div');
-        const m = build(node);
-        ctx.modal({ title: SCREEN_TIME.title, node });
-        m.draw();
-      });
-      open.style.display = wide() ? 'none' : '';
+      const card = build(ctx.dock({ edge: 'left' }));
+      ctx.every(2000, () => card.draw());
+      ctx.every(20000, () => { card.tip.textContent = pick(ctx, SCREEN_TIME.tips); });
       return {};
     },
   },
@@ -286,10 +268,17 @@ export default {
     },
   },
 
-  /* Fake Inbox: notices from nobody. One at a time on a phone, two on a desktop. They close by themselves or on a tap. */
+  /* Fake Inbox: notices from nobody. One at a time on a phone, two in a slot of their own on a desktop. They close by themselves or on a tap. */
   inbox: {
     mount(ctx) {
-      let shown = 0, n = ctx.store.get('n') || 0;
+      let shown = 0, n = ctx.store.get('n') || 0, tray = null;
+      /* A wide page keeps them in the rail, so they never lie over the other panels. A phone has no room to spare: they stay on top. */
+      const inRail = () => ctx.bounds().w >= 1100;
+      const railTray = () => {
+        tray ||= ctx.el('div', 'display:flex;flex-direction:column;gap:3px;min-height:128px;', null, ctx.dock({ edge: 'right', chip: false }));
+        return tray;
+      };
+      if (inRail()) railTray();
       const post = () => {
         const { w } = ctx.bounds();
         const cap = w < 760 ? 1 : 2;
@@ -299,7 +288,8 @@ export default {
         ctx.store.set('n', n);
         shown += 1;
         const width = Math.min(230, w - 130);
-        const box = ctx.el('button', `position:absolute;top:${52 + (shown - 1) * 66}px;right:8px;width:${width}px;min-height:44px;padding:5px 8px;text-align:left;background:#fff;color:#111;border:1px solid #333;border-left:5px solid #ff69b4;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:12px;line-height:1.15;pointer-events:auto;touch-action:manipulation;`, null, 'over');
+        const spot = inRail() ? 'position:relative;display:block;flex:none;width:100%;' : `position:absolute;top:${52 + (shown - 1) * 66}px;right:8px;width:${width}px;`;
+        const box = ctx.el('button', `${spot}min-height:44px;padding:5px 8px;text-align:left;background:#fff;color:#111;border:1px solid #333;border-left:5px solid var(--niche);border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:12px;line-height:1.15;pointer-events:auto;touch-action:manipulation;`, null, inRail() ? railTray() : 'over');
         box.type = 'button';
         ctx.el('b', 'display:block;font-size:13px;', m.from, box);
         ctx.el('span', '', m.text, box);
@@ -325,15 +315,10 @@ export default {
   /* Fake Live Chat: preset lines from nobody, reacting to what happens. A rail on a desktop, a two line strip on a phone. */
   fakechat: {
     mount(ctx) {
-      const rail = ctx.layer('side', 'right');
-      const wide = rail.clientWidth >= 170;
-      const parent = wide ? rail : ctx.layer('banner');
-      const css = wide
-        ? 'display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:min(46vh,340px);padding:6px;background:#17132c;color:#fff;border-radius:6px;overflow:hidden;font:500 12px/1.2 "Segoe UI",system-ui,sans-serif;'
-        : 'display:flex;flex-direction:column;justify-content:flex-end;gap:1px;height:36px;margin:3px 0;padding:2px 8px;background:#17132c;color:#fff;border-radius:4px;overflow:hidden;font:500 12px/1.2 "Segoe UI",system-ui,sans-serif;';
-      const box = ctx.el('div', css, null, parent);
+      const css = 'display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:170px;padding:6px;background:#17132c;color:#fff;border-radius:4px;overflow:hidden;font:500 12px/1.2 "Segoe UI",system-ui,sans-serif;';
+      const box = ctx.el('div', css, null, ctx.dock({ edge: 'right' }));
       const COLS = ['#ff9ccf', '#8fd4ff', '#ffe08a', '#a6f0b0'];
-      const cap = wide ? 20 : 3;
+      const cap = 12;
       let n = 0;
       const say = (list) => {
         const d = docOf(ctx).createElement('div');

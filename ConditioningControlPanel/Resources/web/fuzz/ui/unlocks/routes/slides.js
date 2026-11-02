@@ -119,7 +119,7 @@ export default {
       };
       const scan = () => {
         for (const layer of [ctx.layer('side', 'left'), ctx.layer('side', 'right'), ctx.layer('floaters')]) {
-          for (const el of layer.children) if (el.style.borderColor === 'rgb(107, 74, 43)' || el.style.border.includes('rgb(107, 74, 43)')) addTo(el);
+          for (const el of layer.querySelectorAll(':scope > *, .dk-b > *')) if (el.style.borderColor === 'rgb(107, 74, 43)' || el.style.border.includes('rgb(107, 74, 43)')) addTo(el);
         }
       };
       scan();

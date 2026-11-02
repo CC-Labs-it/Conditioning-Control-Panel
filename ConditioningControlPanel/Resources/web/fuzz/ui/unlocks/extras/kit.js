@@ -1,6 +1,6 @@
-/* ui/unlocks/extras/kit.js - small helpers the extras lane shares: a slot for a little widget (a rail on a wide screen,
- * a strip along the bottom on a phone), one caption dock, and a raw element maker for things that come and go often
- * (ctx.el keeps a reference to everything it makes until the unlock dies). Nothing here runs at import time. */
+/* ui/unlocks/extras/kit.js - small helpers the extras lane shares: a slot for a little widget (ctx.dock), one caption
+ * line above the dock strip, and a raw element maker for things that come and go often (ctx.el keeps a reference to
+ * everything it makes until the unlock dies). Nothing here runs at import time. */
 
 let dock = null;
 
@@ -32,31 +32,29 @@ export function picker(ctx, list) {
 /** Is a card up? Then nothing new should pop over it. */
 export const cardUp = () => !!document.getElementById('cards')?.childElementCount;
 
-/** The bottom dock: captions above a strip of little widgets. Lives in `over`, ignores the pointer except its widgets. */
+/** Captions along the bottom. Lives in `over`, above the dock strip, and ignores the pointer. */
 function bottom(ctx) {
   if (dock?.root.isConnected) return dock;
-  const root = h('div', 'position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 8px max(6px,env(safe-area-inset-bottom,0));pointer-events:none;', null, ctx.layer('over'));
+  const root = h('div', 'position:absolute;left:0;right:0;bottom:var(--dock-h,0px);z-index:2;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 8px max(6px,env(safe-area-inset-bottom,0));pointer-events:none;', null, ctx.layer('over'));
   const lines = h('div', 'display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;', null, root);
-  const strip = h('div', 'display:flex;justify-content:safe center;align-items:flex-end;gap:6px;max-width:100%;overflow-x:auto;scrollbar-width:none;pointer-events:auto;', null, root);
-  dock = { root, lines, strip };
+  dock = { root, lines };
   return dock;
 }
 
-/** Where the dock's reserved space starts: every caption row counts even while it is between lines. */
+/** Where the reserved space along the bottom starts: every caption row counts even while it is between lines. */
 export function dockTop(ctx) {
-  const H = ctx.bounds().h;
-  if (!dock?.root.isConnected) return H;
-  const strip = dock.strip.childElementCount ? dock.strip.offsetHeight + 4 : 0;
+  const H = ctx.bounds().h, strip = document.getElementById('dock-strip')?.offsetHeight || 0;
+  if (!dock?.root.isConnected) return H - strip;
   return H - strip - dock.lines.childElementCount * 34 - 8;
 }
 
-/** A place for a small widget. The rail on a wide screen, otherwise the bottom strip, and the shop scrolls clear of it. */
+/** A dock slot has room on every screen: a rail on a wide page, the tray on a phone. So a widget always draws its full size. */
+export const roomy = () => true;
+
+/** A place for a small widget: ctx.dock, centred in its slot. */
 export function slot(ctx, css = '') {
-  const wide = ctx.bounds().w >= 1100;
-  const base = 'pointer-events:auto;flex:none;box-sizing:border-box;';
-  if (wide) return { el: ctx.el('div', base + css, null, ctx.layer('side')), wide };
-  ctx.css('#shop{padding-bottom:84px}');
-  return { el: ctx.el('div', base + css, null, bottom(ctx).strip), wide };
+  const base = 'pointer-events:auto;flex:none;box-sizing:border-box;margin:0 auto;';
+  return { el: ctx.el('div', base + css, null, ctx.dock()), wide: true };
 }
 
 /** One caption row per unlock. Silent audio shows here, so Sleep Story and friends still make sense. */

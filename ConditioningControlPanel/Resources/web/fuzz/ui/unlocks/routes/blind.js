@@ -2,7 +2,7 @@
  * answering things, which all pay, because the answer was never the point. */
 
 import { IMAGINE, CAPTIONS, STORIES, RADIO_LINES, FILL_BLANKS, INK_ANSWERS, INK_REPLIES, FALSE_MEMORIES } from '../../../data/content/index.js';
-import { panel, deck, flash, tone, ring, btnCentre, fill, docOf, railsRoom, meterRow } from './kit.js';
+import { panel, deck, flash, tone, ring, btnCentre, fill, docOf } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
 import { WOOD } from './slides.js';
 
@@ -76,20 +76,14 @@ export default {
     mount(ctx) {
       const next = deck(RADIO_LINES, ctx);
       ctx.audio.loop('assets/audio/ambient/radio.mp3', { bus: 'ambient', gain: 0.5 });
-      const wide = railsRoom(ctx);
-      const host = wide ? panel(ctx, { side: 'left', height: 130, css: 'background:#6b4a2b;border-radius:8px;box-sizing:border-box;padding:8px;' }) : ctx.el('div', 'width:120px;', null, meterRow(ctx));
+      const host = ctx.el('div', 'height:130px;background:#6b4a2b;border-radius:6px;box-sizing:border-box;padding:8px;', null, ctx.dock({ edge: 'left' }));
       const dial = ctx.el('div', 'position:relative;height:18px;background:#f3e6c0;border:1px solid #3a2815;box-sizing:border-box;overflow:hidden;', null, host);
       const needle = ctx.el('div', 'position:absolute;top:0;left:2px;width:2px;height:100%;background:#b3121d;', null, dial);
       if (!ctx.gentle) ctx.anim(needle, [{ left: '2%' }, { left: '96%' }], { duration: 3200, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
-      if (wide) {
-        const text = ctx.el('div', `margin-top:8px;color:#f3e6c0;font:italic 14px/1.25 ${SERIF};min-height:60px;`, '', host);
-        const say = () => { const line = next(); text.textContent = line; ctx.anim(text, [{ opacity: 0 }, { opacity: 1 }, { opacity: 1, offset: 0.85 }, { opacity: 0.2 }], { duration: 3100 }); };
-        say();
-        ctx.every(3200, say);
-      } else {
-        ctx.say(next());
-        ctx.every(9000, () => ctx.say(next()));
-      }
+      const text = ctx.el('div', `margin-top:8px;color:#f3e6c0;font:italic 14px/1.25 ${SERIF};min-height:60px;`, '', host);
+      const say = () => { const line = next(); text.textContent = line; ctx.anim(text, [{ opacity: 0 }, { opacity: 1 }, { opacity: 1, offset: 0.85 }, { opacity: 0.2 }], { duration: 3100 }); };
+      say();
+      ctx.every(3200, say);
       return {};
     },
   },

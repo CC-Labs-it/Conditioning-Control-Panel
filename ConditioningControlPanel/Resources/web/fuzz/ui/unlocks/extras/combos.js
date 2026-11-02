@@ -6,7 +6,7 @@ import { AUDIO_DRAMA, COMBO_LINES, INDUCTION, SLEEP_STORY } from '../../../data/
 import { LAZY_CAPTIONS } from '../../../data/content/blind.js';
 import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/loomSpiral.js';
 import { COMBO_COPY as C } from './copy.js';
-import { FONT, captions, cardUp, dockTop, h, pick, picker, slot } from './kit.js';
+import { FONT, captions, cardUp, dockTop, h, pick, picker, roomy, slot } from './kit.js';
 
 /** The secret stamp: two ingredients slide together into the name. Once per run. */
 function found(ctx) {
@@ -91,7 +91,7 @@ export const COMBO_UNLOCKS = {
 
   /* Listen + No Pictures: one episode, in the dark, in captions and a wave. There is no episode two. */
   x_audio: combo((ctx) => {
-    const { el, wide } = slot(ctx, `position:relative;width:${ctx.bounds().w >= 1100 ? 170 : 82}px;height:${ctx.bounds().w >= 1100 ? 96 : 56}px;background:#1b1626;border:2px dashed #6a6490;color:#fff;overflow:hidden;`);
+    const { el, wide } = slot(ctx, `position:relative;width:${roomy() ? 170 : 82}px;height:${roomy() ? 96 : 56}px;background:#1b1626;border:2px dashed #6a6490;color:#fff;overflow:hidden;`);
     const bars = wide ? 11 : 6;
     for (let i = 0; i < bars; i++) {
       const b = h('i', `position:absolute;left:${6 + i * (wide ? 14 : 12)}px;top:${wide ? 12 : 8}px;width:${wide ? 8 : 7}px;height:${wide ? 54 : 30}px;background:#ff9ed2;border-radius:3px;transform-origin:50% 50%;`, null, el);
@@ -135,7 +135,7 @@ export const COMBO_UNLOCKS = {
 
   /* Swipe Feed + More Ads: a little feed where every third post is an ad. */
   x_infinite: combo((ctx) => {
-    const wideNow = ctx.bounds().w >= 1100;
+    const wideNow = roomy();
     const pw = wideNow ? 110 : 70, ph = wideNow ? 150 : 62, rowH = wideNow ? 46 : 28;
     const { el } = slot(ctx, `position:relative;width:${pw}px;height:${ph}px;background:#111;border:2px solid #111;border-radius:7px;overflow:hidden;`);
     const lines = COMBO_LINES.x_infinite;
@@ -158,7 +158,7 @@ export const COMBO_UNLOCKS = {
 
   /* No Pictures + Censored: an empty frame with a black bar over it. Peak. */
   x_nothing: combo((ctx) => {
-    const wideNow = ctx.bounds().w >= 1100;
+    const wideNow = roomy();
     const fw = wideNow ? 150 : 76, fh = wideNow ? 110 : 56;
     const { el } = slot(ctx, `position:relative;width:${fw}px;height:${fh}px;background:#fff;border:3px solid #8a6f3a;`);
     const bar = h('div', `position:absolute;left:-8px;right:-8px;top:42%;height:18%;background:#000;`, null, el);
@@ -218,7 +218,7 @@ export const COMBO_UNLOCKS = {
   /* Tap + Drone: a task card, double the pay, a stamp nobody asked for. */
   x_compl: combo((ctx) => {
     const line = picker(ctx, COMBO_LINES.x_compl);
-    const { el } = slot(ctx, card(`position:relative;width:${ctx.bounds().w >= 1100 ? 150 : 122}px;height:56px;padding:3px 34px 3px 5px;font-size:12px;`));
+    const { el } = slot(ctx, card(`position:relative;width:${roomy() ? 150 : 122}px;height:56px;padding:3px 34px 3px 5px;font-size:12px;`));
     const text = h('div', '', COMBO_LINES.x_compl[1], el);
     const pay = h('div', 'font-weight:500;color:#555;', '', el);
     const stamp = h('div', `position:absolute;right:4px;top:8px;width:34px;height:34px;box-sizing:border-box;border:3px solid #c21f2f;border-radius:50%;color:#c21f2f;display:grid;place-items:center;font:800 20px ${FONT};transform:rotate(-12deg);opacity:0;`, 'A', el);
@@ -258,7 +258,7 @@ export const COMBO_UNLOCKS = {
 
   /* Fewer Ads + Sissy: the house rules, on gold paper. */
   x_manners: combo((ctx) => {
-    const wideNow = ctx.bounds().w >= 1100;
+    const wideNow = roomy();
     const { el } = slot(ctx, `position:relative;width:${wideNow ? 190 : 150}px;height:${wideNow ? 96 : 60}px;padding:4px 8px;background:linear-gradient(135deg,#f7dc8a,#e0b23f 55%,#fbeeb8);border:1px solid #9a7a22;box-shadow:2px 3px 0 rgba(0,0,0,.25);color:#3a2a06;font:500 ${wideNow ? 13 : 11}px/1.2 Georgia,serif;text-align:center;overflow:hidden;`);
     if (!ctx.gentle) ctx.anim(el, [{ transform: 'translateY(-60px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'ease-out' });
     h('div', 'font-weight:700;', `🎀 ${C.gold}`, el);
@@ -276,7 +276,7 @@ export const COMBO_UNLOCKS = {
     const cap = captions(ctx, '🕯️');
     /* A small disc with the clock on it, like the demo. The Loom's canvas is opaque (dark ground, hot pink arms), so spread
        over the page at any opacity it reads as loud stripes; it stays in a disc of its own at full strength. */
-    const big = ctx.bounds().w >= 1100;
+    const big = roomy();
     const D = big ? 150 : 60;
     const { el: disc } = slot(ctx, `position:relative;width:${D}px;height:${D}px;border-radius:50%;overflow:hidden;background:#14060f;`);
     const canvas = h('canvas', 'position:absolute;inset:0;width:100%;height:100%;', null, disc);
@@ -387,7 +387,7 @@ export const COMBO_UNLOCKS = {
 
   /* No Pictures + Bimbo: the captions under the empty frame give up. */
   x_what: combo((ctx) => {
-    const wideNow = ctx.bounds().w >= 1100;
+    const wideNow = roomy();
     const { el } = slot(ctx, `position:relative;width:${wideNow ? 170 : 110}px;height:${wideNow ? 110 : 56}px;background:#fff;border:2px dashed #999;display:grid;align-items:end;justify-items:center;`);
     const cap = h('div', `padding:2px 4px;font:600 ${wideNow ? 14 : 12}px/1.1 ${FONT};color:#222;text-align:center;`, '', el);
     let i = ctx.store.get('at') || 0;

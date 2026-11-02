@@ -181,14 +181,11 @@ export function gallery(ctx, { niche, mode = 'swap', decorate = null, parent = '
 
 /* ---- small surfaces ---- */
 
-/** A card in a side rail when there is room, else one line in the meters. Answers the element to fill. */
+/** A card in the dock. Answers the element to fill. */
 export function slot(ctx, css = '') {
-  if (wide(ctx)) {
-    const el = ctx.el('div', css, null, ctx.layer('side'));
-    el.className = 'tb-card';
-    return { el, roomy: true };
-  }
-  return { el: ctx.el('div', 'font:13px/1.3 var(--font);max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;', null, 'meters'), roomy: false };
+  const el = ctx.el('div', css, null, ctx.dock());
+  el.className = 'tb-card';
+  return { el, roomy: true };
 }
 
 /** A padded ring out of the button: the party for a good moment. */

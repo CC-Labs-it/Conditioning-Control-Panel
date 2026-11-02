@@ -1,8 +1,9 @@
 /* ui/unlocks/routes/kit.js - helpers shared by the choice routes. Nothing touches the DOM at import time.
- * panel() is the one place that decides where a route's furniture sits: in a side rail when there is room for one, and
- * in the free space beside the button when there is not (phones, narrow windows). */
+ * panel() is the one place that decides where a route's furniture sits: in a dock slot when the page has rails, and
+ * in the free space beside the button when there are none (phones, narrow windows). */
 
 import { createSpiral } from '../../../fx/spiral.js';
+import { dockIsRail, railWidth } from '../../dock.js';
 
 export const docOf = (ctx) => ctx.layer('over').ownerDocument;
 export const fill = (s, map) => String(s).replace(/\{(\w+)\}/g, (m, k) => (k in map ? map[k] : m));
@@ -74,20 +75,19 @@ export function release(who, ns = 'main') { const a = attention[ns]; if (a.who =
 /* ---- furniture ---- */
 const stacks = { left: [], right: [] };
 const prune = () => { for (const s of ['left', 'right']) stacks[s] = stacks[s].filter((p) => p.el.isConnected); };
-const RAIL_MIN = 170;
 
 function layout(ctx) {
   prune();
   const { w } = ctx.bounds();
-  const railW = (w - 800) / 2;
-  if (railW >= RAIL_MIN) {
+  if (railsRoom(ctx)) {
     docOf(ctx).documentElement.style.setProperty('--routes-mid', '100%');
+    const inner = railWidth(w) - 26;   // the rail's padding, the slot's border and padding
     for (const s of ['left', 'right']) {
       for (const p of stacks[s]) {
-        const rail = ctx.layer('side', s);
-        if (p.el.parentElement !== rail) rail.appendChild(p.el);
-        p.el.style.cssText = `${p.css};position:relative;left:auto;right:auto;top:auto;width:100%;height:${p.height}px;flex:none;`;
-        p.place?.({ w: railW - 16, h: p.height, rail: true });
+        p.slot ||= p.ctx.dock({ edge: s, chip: false });
+        if (p.el.parentElement !== p.slot) p.slot.appendChild(p.el);
+        p.el.style.cssText = `${p.css};position:relative;left:auto;right:auto;top:auto;width:100%;height:${p.height}px;`;
+        p.place?.({ w: inner, h: p.height, rail: true });
       }
     }
     return;
@@ -126,7 +126,7 @@ export function panel(ctx, { side = '', height = 170, css = '', place = null } =
   const s = side || (stacks.left.length <= stacks.right.length ? 'left' : 'right');
   const el = ctx.el('div', css);
   baseCss(ctx);
-  stacks[s].push({ el, side: s, height, css, place });
+  stacks[s].push({ el, side: s, height, css, place, ctx });
   if (s === 'right') ctx.on('routes:corner', ({ on }) => el.classList.toggle('routes-cornered', on && !railsRoom(ctx)));
   layout(ctx);
   let seen = ctx.bounds(), zoneBottom = zoneRect(ctx).bottom;
@@ -136,7 +136,7 @@ export function panel(ctx, { side = '', height = 170, css = '', place = null } =
   });
   return el;
 }
-export const railsRoom = (ctx) => (ctx.bounds().w - 800) / 2 >= RAIL_MIN;
+export const railsRoom = (ctx) => dockIsRail(ctx.bounds().w);
 /** The one line of free page just above the main button. One speaker at a time: a new line takes it from the last.
  *  ms 0 holds it until dropLine. Toasts keep the line under the button. */
 let lineNow = null;

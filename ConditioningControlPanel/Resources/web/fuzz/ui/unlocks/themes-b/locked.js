@@ -331,7 +331,7 @@ export default {
   lo_wheel: {
     mount(ctx) {
       if (wide(ctx)) {
-        const card = ctx.el('div', 'pointer-events:auto;', null, ctx.layer('side'));
+        const card = ctx.el('div', 'pointer-events:auto;', null, ctx.dock());
         card.className = 'tb-card';
         card.appendChild(wheelNode(ctx));
         return {};
