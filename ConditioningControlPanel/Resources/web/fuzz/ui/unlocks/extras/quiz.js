@@ -5,6 +5,7 @@
  * answer pays nothing and costs nothing. tricks.js holds the 20 ways to be annoying. */
 
 import { QUESTIONS, TRICKS, quizPay } from '../../../data/content/questions.js';
+import { QUIZ_THEMES, lessonAnswer, takeThemedQuestion } from '../../../data/content/themed-questions.js';
 import { dockIsRail } from '../../dock.js';
 import { QUIZ_COPY as C } from './copy.js';
 import { FONT, cardUp, h, pick } from './kit.js';
@@ -16,6 +17,9 @@ const CSS = `
 .xq-tb{position:absolute;left:0;bottom:0;width:100%;height:3px;background:var(--niche-soft);transform-origin:0 50%;}
 .xq-q{padding:9px 10px 8px;font-size:17px;line-height:1.2;text-align:center;}
 .xq-q.said{font-weight:700;}
+.xq-lesson{padding:0 8px 6px;text-align:center;font-size:11px;color:#555;font-variant-numeric:tabular-nums;}
+.xq-compact .xq-q{font-size:15px;line-height:1.25;}
+.xq-compact .xq-a{font-size:12px;line-height:1.2;}
 .xq-z{position:relative;margin:0 8px 10px;}
 .xq-a{position:absolute;box-sizing:border-box;min-height:44px;padding:4px 6px;background:color-mix(in srgb,var(--niche) 26%,#fff);color:#111;border:2px solid color-mix(in srgb,var(--niche) 60%,#000);border-bottom-width:4px;border-radius:4px;font:600 15px/1.1 ${FONT};touch-action:manipulation;transition:left .2s ease-in-out,top .2s ease-in-out,opacity .3s;}
 .xq-a:active{border-bottom-width:2px;}
@@ -59,6 +63,7 @@ function createQuiz(ctx) {
   const idle = ctx.el('div', '', '', spot);
   idle.className = 'xq-idle';
   let open = null, lastId = null, dueAt = 0;
+  let lesson = lessonAnswer(ctx.store.get('lesson'), false).progress;
 
   const liveRow = (id) => ctx.has(id) && ctx.switches.isOn(id);
   const ownedTricks = () => Object.keys(TRICKS).filter((t) => liveRow(TRICKS[t].unlock));
@@ -68,10 +73,17 @@ function createQuiz(ctx) {
     const all = ownedTricks();
     if (all.length > 1 && ctx.rng() < 0.15) return all[Math.floor(ctx.rng() * all.length)];
     const recent = all.slice(-4);
-    return recent[Math.floor(ctx.rng() * recent.length)];
+    return recent[Math.floor(ctx.rng() * recent.length)] || 'none';
   }
 
   function chooseQuestion(trick) {
+    const theme = ctx.pick('f5');
+    const decks = ctx.store.get('questionDecks') || {};
+    const themed = takeThemedQuestion(theme, trick, decks[theme], ctx.rng);
+    if (themed) {
+      ctx.store.set('questionDecks', { ...decks, [theme]: themed.deck });
+      return themed.question;
+    }
     const pool = QUESTIONS.filter((q) => q.trick === trick);
     let q = pick(ctx, pool);
     if (q.id === lastId && pool.length > 1) q = pool[(pool.indexOf(q) + 1) % pool.length];
@@ -118,31 +130,42 @@ function createQuiz(ctx) {
     for (const a of o.anims) { try { a.cancel(); } catch { /* gone */ } }
     o.card.style.pointerEvents = 'none';
     const pop = paid && !ctx.gentle;
-    const a = ctx.anim(o.card, pop ? [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.06)', opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }], { duration: pop ? 170 : 320, easing: 'ease-out' });
+    const a = ctx.anim(o.card, pop ? [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.06)', opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }], { duration: pop ? 170 : ctx.gentle ? 1200 : 320, easing: 'ease-out' });
     a.onfinish = () => o.card.remove();
     a.oncancel = () => o.card.remove();
   }
 
   /** Ask now. The new one replaces whatever was up. */
   function ask(trick = chooseTrick()) {
+    if (ctx.paused) return null;
     if (open) close(false);
     const q = chooseQuestion(trick);
     const W = cardWidth();
     const card = h('div', `width:${W}px;left:-999px;top:0;`, null, host);
-    card.className = 'xq';
-    const title = h('div', '', C.title, card);
+    card.className = W < 240 ? 'xq xq-compact' : 'xq';
+    card.dataset.quizTheme = ctx.pick('f5') || '';
+    card.dataset.quizQuestion = q.id;
+    /* Trick-specific DOM handlers also obey the host pause, including dragging and held answers. */
+    for (const event of ['pointerdown', 'pointermove', 'pointerup', 'click', 'keydown']) card.addEventListener(event, (ev) => {
+      if (!ctx.paused) return;
+      ev.preventDefault(); ev.stopImmediatePropagation();
+    }, true);
+    const themeName = QUIZ_THEMES[ctx.pick('f5')];
+    const title = h('div', '', themeName ? `${themeName} quiz` : C.title, card);
     title.className = 'xq-t';
     const tb = h('div', '', null, title);
     tb.className = 'xq-tb';
     const text = h('div', '', ctx.brand.text(q.text), card);
     text.className = 'xq-q';
+    const lessonLabel = h('div', '', `Lesson ${lesson}/3`, card);
+    lessonLabel.className = 'xq-lesson';
     const zone = h('div', '', null, card);
     zone.className = 'xq-z';
     const zw = W - 18;
 
     const o = { card, cancels: [], anims: [], trick, done: false, buttons: new Map(), melted: 0 };
     open = o;
-    const live = () => open === o && !o.done;
+    const live = () => open === o && !o.done && !ctx.paused;
 
     /* What a trick gets. Everything it starts goes in o, so it stops when the card goes. */
     /* Only Yes: every wrong answer turns into another way of saying yes. All four pay. */
@@ -192,22 +215,27 @@ function createQuiz(ctx) {
         const r = (b || card).getBoundingClientRect();
         const x = r.left + r.width / 2, y = r.top;
         const amount = quizPay(ctx.rates(), right) * mult * Math.max(0.4, 1 - o.melted * 0.2);
-        ctx.pay(amount, 'quiz', { x, y });
-        ctx.audio.play(right ? 'assets/audio/sfx/chime1.mp3' : 'assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.7 });
+        const result = lessonAnswer(lesson, right);
+        lesson = result.progress;
+        ctx.store.set('lesson', lesson);
+        const bonus = result.complete ? quizPay(ctx.rates(), false) * 3 : 0;
+        const credited = ctx.pay(amount + bonus, 'quiz', { x, y });
+        ctx.audio.play(right ? 'assets/audio/sfx/chime1.mp3' : 'assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.18 });
         for (const c of o.cancels) c();
         o.cancels.length = 0;
         for (const a of o.anims) { try { a.cancel(); } catch { /* gone */ } }
         o.anims.length = 0;
         card.classList.add('xq-done');
-        text.textContent = pick(ctx, right ? C.right : C.wrong);
+        text.textContent = `${pick(ctx, right ? C.right : C.wrong)} +${ctx.fmt(credited)} ${ctx.brand.currencyPlural}`;
+        lessonLabel.textContent = result.complete ? 'Lesson complete. Bonus included.' : `Lesson ${lesson}/3`;
         text.classList.add('said');
         b?.classList.add(right ? 'ok' : 'bad');
         if (!right) o.buttons.get(t.yes)?.classList.add('ok');
         if (right && !ctx.gentle) ctx.anim(card, [{ transform: 'none' }, { transform: 'scale(1.04)', offset: 0.35 }, { transform: 'none' }], { duration: 240, easing: 'ease-out' });
-        ctx.after(right ? 560 : 1100, () => { if (open === o) close(true); });
+        ctx.after(result.complete ? 1400 : 1100, () => { if (open === o) close(true); });
       },
-      pop() { ctx.audio.play(POP, { bus: 'sfx', gain: 0.7 }); },
-      deny() { ctx.audio.play('assets/audio/sfx/ui_denied.mp3', { bus: 'sfx', gain: 0.6 }); },
+      pop() { if (!ctx.paused) ctx.audio.play(POP, { bus: 'sfx', gain: 0.08 }); },
+      deny() { if (!ctx.paused) ctx.audio.play('assets/audio/sfx/ui_denied.mp3', { bus: 'sfx', gain: 0.12 }); },
       nudge(el) { if (!ctx.gentle) t.anim(el, [{ translate: '-4px 0' }, { translate: '4px 0' }, { translate: '0 0' }], { duration: 180 }); },
     };
 
@@ -217,8 +245,8 @@ function createQuiz(ctx) {
     const cardH = card.offsetHeight;
     place(card, cardH);
     t.anim(tb, [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: giveUpMs, easing: 'linear', fill: 'forwards' });
-    ctx.anim(card, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, translate: '0 12px' }, { opacity: 1, translate: '0 0' }], { duration: 240, easing: 'ease-out' });
-    ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.5 });
+    ctx.anim(card, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, translate: '0 12px' }, { opacity: 1, translate: '0 0' }], { duration: ctx.gentle ? 1200 : 240, easing: 'ease-out' });
+    ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.08 });
     t.after(giveUpMs, () => { ctx.toast(pick(ctx, C.giveUp)); close(false); });
     /* Same spot after a resize. */
     let seen = ctx.bounds();
@@ -236,7 +264,7 @@ function createQuiz(ctx) {
   schedule(FIRST_MS);
   const drawIdle = () => {
     const s = Math.max(0, Math.ceil((dueAt - ctx.state.clock) / 1000));
-    idle.textContent = open ? C.idleNow : C.idleNext.replace('{n}', String(s));
+    idle.textContent = `Lesson ${lesson}/3 | ${open ? C.idleNow : C.idleNext.replace('{n}', String(s))}`;
   };
   drawIdle();
   ctx.every(1000, drawIdle);
