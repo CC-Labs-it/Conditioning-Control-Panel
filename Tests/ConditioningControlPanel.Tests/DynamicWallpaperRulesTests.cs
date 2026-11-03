@@ -74,6 +74,42 @@ public class DynamicWallpaperRulesTests
     public void Only_a_window_hiding_the_whole_monitor_pauses_the_draw(int l, int t, int r, int b, bool zoomed, bool covered)
         => Assert.Equal(covered, DynamicFrameBudget.Covers(l, t, r, b, zoomed, 0, 0, 1920, 1080));
 
+    // ---- #1544: a portrait monitor crops the shared collage, never squashes it
+
+    [Theory]
+    [InlineData(1920, 1080)]   // same as the collage
+    [InlineData(1080, 1920)]   // portrait
+    [InlineData(3440, 1440)]   // ultrawide
+    [InlineData(1280, 1024)]   // 5:4
+    public void Every_monitor_gets_one_uniform_scale_that_covers_it(int monW, int monH)
+    {
+        var (k, ox, oy) = DynamicFrameBudget.CoverFit(monW, monH, 1920, 1080);
+        float drawnW = 1920 * k, drawnH = 1080 * k;
+        Assert.True(drawnW >= monW - 0.01f && drawnH >= monH - 0.01f);          // no black edge
+        Assert.True(Math.Abs(drawnW - monW) < 0.01f || Math.Abs(drawnH - monH) < 0.01f);   // crops one axis only
+        Assert.Equal((monW - drawnW) / 2f, ox, 2);                               // centred
+        Assert.Equal((monH - drawnH) / 2f, oy, 2);
+    }
+
+    [Fact]
+    public void The_render_no_longer_scales_each_axis_on_its_own()
+    {
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Video", "DynamicWallpaperService.cs"));
+        Assert.DoesNotContain("s.Width / c.RefW, s.Height / c.RefH", src);
+        Assert.Contains("DynamicFrameBudget.CoverFit(", src);
+    }
+
+    [Theory]
+    [InlineData("10", "0", "Fill")]
+    [InlineData("2", "0", "Stretch")]
+    [InlineData("22", "0", "Span")]
+    [InlineData("6", "0", "Fit")]
+    [InlineData("0", "1", "Tile")]
+    [InlineData("0", "0", "Center")]
+    [InlineData("", "", "unknown")]
+    public void The_log_names_the_users_own_desktop_fit(string style, string tile, string name)
+        => Assert.Equal(name, WallpaperService.WallpaperStyleName(style, tile));
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

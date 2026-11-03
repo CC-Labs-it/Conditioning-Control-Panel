@@ -1610,6 +1610,8 @@
   "btn_choose_color": "Scegli",
   "setting_filter_color": "Colore del filtro",
   "tooltip_pink_filter_color": "Scegli un colore di tinta personalizzato, o torna al rosa predefinito.",
+  "setting_pink_filter_under_effects": "Sotto spirali e testo",
+  "tooltip_pink_filter_under_effects": "Applica la tinta sotto spirali, subliminali, bolle e testo che rimbalza, così mantengono il loro colore. Spento: la tinta li copre.",
   "btn_export": "Esporta",
   "btn_export_session": "Esporta sessione",
   "btn_import": "Importa",

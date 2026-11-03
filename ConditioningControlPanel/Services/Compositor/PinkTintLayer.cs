@@ -14,9 +14,32 @@ public class PinkTintLayer : BaseLayer
     private bool _dirty = true;   // #550: a steady tint is static - only repaint when it changes
     private readonly SKPaint _paint = new();
 
-    public PinkTintLayer(CompositorEngine engine) : base(engine) { }
+    private readonly CompositorEngine _engine;
+    private int _sortedZ;
 
-    public override int ZIndex => CompositorLayers.PinkTint;
+    public PinkTintLayer(CompositorEngine engine) : base(engine)
+    {
+        _engine = engine;
+        _sortedZ = ZIndex;   // RegisterLayer sorts on the value read right after this
+    }
+
+    /// <summary>Over every session effect (today's look), or under spirals, subliminals, bubbles and
+    /// bouncing text when the user asks for it (#1546). Read live; <see cref="SyncOrder"/> re-sorts.</summary>
+    public override int ZIndex => ZFor(App.Settings?.Current?.PinkFilterUnderEffects == true);
+
+    internal static int ZFor(bool underEffects)
+        => underEffects ? CompositorLayers.PinkTintUnder : CompositorLayers.PinkTint;
+
+    /// <summary>Re-sort the engine when the setting moved the slot since the last sort. Cheap when
+    /// nothing changed; called on every show and by the feature page toggle. UI thread.</summary>
+    public void SyncOrder()
+    {
+        int z = ZIndex;
+        if (z == _sortedZ) return;
+        _sortedZ = z;
+        _engine.ResortLayers();
+        _dirty = true;   // repaint the surface in the new order
+    }
 
     protected override bool GentleFades => true;   // gentle visuals: tint fades in and out
 
@@ -35,6 +58,7 @@ public class PinkTintLayer : BaseLayer
     public void Show(byte r, byte g, byte b, double opacity)
     {
         Set(r, g, b, opacity);
+        SyncOrder();              // a setting changed since the last show (cloud restore, preset) takes effect here
         _dirty = true;            // guarantee a paint on (re)show even if the values were unchanged
         SetActive(true);
     }

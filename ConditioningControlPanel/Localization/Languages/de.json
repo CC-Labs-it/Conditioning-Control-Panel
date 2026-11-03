@@ -4544,6 +4544,8 @@
   "btn_choose_color": "Wählen",
   "setting_filter_color": "Filterfarbe",
   "tooltip_pink_filter_color": "Wähle eine eigene Tönungsfarbe oder setze auf das Standard-Rosa zurück.",
+  "setting_pink_filter_under_effects": "Unter Spiralen und Text",
+  "tooltip_pink_filter_under_effects": "Legt die Tönung unter Spiralen, Subliminals, Blasen und springenden Text, damit sie ihre volle Farbe behalten. Aus: die Tönung liegt darüber.",
   "btn_report_bug": "Fehler melden",
   "bug_report_title": "Einen Fehler melden",
   "bug_report_description_label": "Was ist passiert?",

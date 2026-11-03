@@ -4544,6 +4544,8 @@
   "btn_choose_color": "Elegir",
   "setting_filter_color": "Color del filtro",
   "tooltip_pink_filter_color": "Elige un color de tinte personalizado, o vuelve al rosa predeterminado.",
+  "setting_pink_filter_under_effects": "Bajo espirales y texto",
+  "tooltip_pink_filter_under_effects": "Pone el tinte bajo espirales, subliminales, burbujas y texto rebotante, para que conserven su color. Apagado: el tinte los cubre.",
   "btn_report_bug": "Reportar Error",
   "bug_report_title": "Reportar un Error",
   "bug_report_description_label": "¿Qué pasó?",

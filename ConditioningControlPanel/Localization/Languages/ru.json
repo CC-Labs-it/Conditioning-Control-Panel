@@ -4544,6 +4544,8 @@
   "btn_choose_color": "Выбрать",
   "setting_filter_color": "Цвет фильтра",
   "tooltip_pink_filter_color": "Выбери свой оттенок или вернись к розовому по умолчанию.",
+  "setting_pink_filter_under_effects": "Под спиралями и текстом",
+  "tooltip_pink_filter_under_effects": "Кладёт оттенок под спирали, сублиминалы, пузыри и прыгающий текст, чтобы они сохраняли цвет. Выкл.: оттенок поверх них.",
   "btn_report_bug": "Сообщить о баге",
   "bug_report_title": "Сообщить о баге",
   "bug_report_description_label": "Что произошло?",

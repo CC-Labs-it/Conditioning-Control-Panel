@@ -16,6 +16,16 @@ namespace ConditioningControlPanel.Services
         /// <summary>A longer source stays a still: every frame has to be decoded even when few are kept.</summary>
         public const int MaxSourceFrames = 900;
 
+        /// <summary>Fill one monitor with the shared collage: one uniform scale, centred, the overflow
+        /// cropped. Scaling each axis on its own squashed a landscape collage onto a portrait monitor
+        /// (ccp-bugs #1544); this keeps every picture's shape on any monitor.</summary>
+        public static (float Scale, float OffsetX, float OffsetY) CoverFit(float monW, float monH, float refW, float refH)
+        {
+            if (monW <= 0 || monH <= 0 || refW <= 0 || refH <= 0) return (1f, 0f, 0f);
+            float k = Math.Max(monW / refW, monH / refH);
+            return (k, (monW - refW * k) / 2f, (monH - refH * k) / 2f);
+        }
+
         /// <summary>Keep every Nth frame so that at most <see cref="MaxFramesKept"/> remain.</summary>
         public static int Stride(int frameCount)
             => frameCount <= MaxFramesKept ? 1 : (int)Math.Ceiling(frameCount / (double)MaxFramesKept);
