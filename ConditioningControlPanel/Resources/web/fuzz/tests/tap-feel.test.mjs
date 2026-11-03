@@ -85,17 +85,17 @@ test('changing motion preference clears active effects, including on resume', ()
 
 test('tap notes form a bounded phrase and restart after a break', () => {
   const phrase = createTapPhrase();
-  const cues = Array.from({ length: 16 }, (_, i) => phrase.tap(i * 120));
+  const cues = Array.from({ length: 32 }, (_, i) => phrase.tap(i * 120));
   assert.deepEqual(cues.filter((c) => c.note != null).map((c) => c.note), [3, 5, 6, 8, 6, 5, 3, 1]);
-  assert.equal(phrase.tap(3500).note, 3);
-  assert.equal(phrase.tap(3501), null);
+  assert.equal(phrase.tap(6000).note, 3);
+  assert.equal(phrase.tap(6001), null);
   phrase.reset();
-  assert.equal(phrase.tap(3501).note, 3);
+  assert.equal(phrase.tap(6001).note, 3);
 });
 
-test('autotaps are quieter and rate limited without adding melody', () => {
+test('autotaps are silent and do not steal the next manual click', () => {
   const phrase = createTapPhrase();
-  assert.deepEqual(phrase.tap(0, true), { note: null, gain: .18 });
+  assert.equal(phrase.tap(0, true), null);
   assert.equal(phrase.tap(100, true), null);
-  assert.deepEqual(phrase.tap(240, true), { note: null, gain: .18 });
+  assert.deepEqual(phrase.tap(100), { note: 3, gain: .18 });
 });

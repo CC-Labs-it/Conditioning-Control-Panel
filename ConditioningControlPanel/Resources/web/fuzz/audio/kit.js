@@ -4,15 +4,25 @@
  * Buses: sfx, ambient, voice, podcast.
  * ==========================================================================*/
 
-export const BUS = Object.freeze({ sfx: 0.6, ambient: 0.2, voice: 0.5, podcast: 0.5 });
+import { createCueBudget } from './repetition.js';
+
+export const BUS = Object.freeze({ sfx: 0.3, ambient: 0.2, voice: 0.5, podcast: 0.5 });
 export const PLUCKS = Array.from({ length: 18 }, (_, i) => `assets/audio/pluck/wood_${String(i).padStart(2, '0')}.wav`);
 
-export function createKit({ makeMedia = () => new Audio() } = {}) {
+export function createKit({ makeMedia = () => new Audio(), now = () => performance.now() } = {}) {
   let ctx = null, master = null, armed = false;
   let muted = false, quiet = false, held = false, blank = false;
   const buffers = new Map();
   const loops = new Set();
   const streams = new Set();
+  const shots = new Set(), cueBudget = createCueBudget();
+  let generation = 0;
+
+  function clearShots() {
+    generation++;
+    for (const shot of [...shots]) { try { shot.src.stop(); } catch { /* already ended */ } shot.done(); }
+    cueBudget.reset();
+  }
 
   function load(url) {
     if (!buffers.has(url)) {
@@ -23,6 +33,7 @@ export function createKit({ makeMedia = () => new Audio() } = {}) {
 
   const level = () => (muted || quiet || held || blank ? 0 : 1);
   function applyLevel(fadeMs = 200) {
+    if (!level()) clearShots();
     for (const s of streams) syncStream(s);
     if (!armed) return;
     master.gain.cancelScheduledValues(ctx.currentTime);
@@ -36,6 +47,7 @@ export function createKit({ makeMedia = () => new Audio() } = {}) {
   function toMaster(node, pan) {
     const p = Number.isFinite(pan) && pan !== 0 && ctx.createStereoPanner ? ctx.createStereoPanner() : null;
     if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); node.connect(p).connect(master); } else node.connect(master);
+    return p;
   }
 
   /** A panned stream goes through the graph, once, as soon as there is one. Unpanned ones stay off it. */
@@ -129,16 +141,24 @@ export function createKit({ makeMedia = () => new Audio() } = {}) {
   }
 
   async function play(url, { bus = 'sfx', gain = 1, rate = 1, pan = 0 } = {}) {
-    if (!armed || !url) return;
+    if (!armed || !url || !level()) return;
+    const issued = generation, requestedAt = now();
+    const ticket = bus === 'sfx' ? cueBudget.request(url, requestedAt) : null;
+    if (bus === 'sfx' && !ticket) return;
     const buf = await load(url);
-    if (!buf || !armed || held) return;
+    if (!buf || !armed || !level() || issued !== generation || now() - requestedAt > (bus === 'sfx' ? 250 : 1500)) return;
+    const release = bus === 'sfx' ? cueBudget.start(ticket, now()) : () => {};
+    if (!release) return;
     const src = ctx.createBufferSource();
     src.buffer = buf; src.playbackRate.value = rate;
     const g = ctx.createGain();
-    g.gain.value = (BUS[bus] ?? BUS.sfx) * gain;
+    g.gain.value = (BUS[bus] ?? BUS.sfx) * gain * (ticket?.scale ?? 1);
     src.connect(g);
-    toMaster(g, pan);
-    src.start();
+    const panner = toMaster(g, pan);
+    const shot = { src, done() { if (!shots.delete(shot)) return; release(); src.disconnect?.(); g.disconnect?.(); panner?.disconnect?.(); } };
+    shots.add(shot);
+    src.onended = shot.done;
+    try { src.start(); } catch { shot.done(); }
   }
 
   /** A loop asked for before the first gesture starts on the first gesture. Returns {stop(fadeMs)}. */
@@ -161,7 +181,7 @@ export function createKit({ makeMedia = () => new Audio() } = {}) {
   return {
     arm, play, loop, stream,
     /** The end of a run: every stream dead at once, whoever started it. */
-    stopStreams() { for (const s of [...streams]) killStream(s); },
+    stopStreams() { clearShots(); for (const s of [...streams]) killStream(s); },
     /** The player's own switch. */
     setMuted(v) { muted = !!v; applyLevel(); },
     /** A run mood may keep the page silent for a while. */

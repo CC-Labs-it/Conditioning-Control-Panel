@@ -88,16 +88,16 @@ export default {
         const cue = phrase.tap(ctx.state.clock, auto);
         if (!cue) return;
         ctx.audio.play('assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: cue.gain });
-        if (cue.note != null) pluck(cue.note, .28);
+        if (cue.note != null) pluck(cue.note, .16);
       });
       ctx.on('buy', () => {
         phrase.reset();
-        pluck(6, .55);
-        ctx.after(100, () => pluck(3, .4));
+        pluck(6, .34);
+        ctx.after(100, () => pluck(3, .25));
       });
       ctx.on('pause', () => phrase.reset());
       // A muted player still sees that the button found its voice.
-      if (fresh(ctx)) { const c = btnCenter(ctx); rings(ctx, c.x, c.y); ctx.float(c.x, c.y - 34, 'click', 'font-size:20px;font-weight:700;'); ctx.audio.play('assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.8 }); }
+      if (fresh(ctx)) { const c = btnCenter(ctx); rings(ctx, c.x, c.y); ctx.float(c.x, c.y - 34, 'click', 'font-size:20px;font-weight:700;'); ctx.audio.play('assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.25 }); }
       return {};
     },
   },

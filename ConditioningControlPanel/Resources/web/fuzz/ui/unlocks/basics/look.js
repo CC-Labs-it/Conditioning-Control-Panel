@@ -143,19 +143,20 @@ body { transition: background-color .6s, color .6s; }
   wallpop: {
     mount(ctx) {
       const pops = ['pop/Pop.mp3', 'pop/Pop2.mp3', 'pop/Pop3.mp3'];
-      let lastPop = 0, clock = 0;
+      let lastPop = -Infinity;
       const blast = (x, y, n = 8) => {
         const { w, h } = ctx.bounds();
         const hit = [x < 50 ? 0 : null, x > w - 50 ? Math.PI : null, y < 30 ? Math.PI / 2 : null, y > h - 30 ? -Math.PI / 2 : null].find((a) => a != null);
         const a = hit ?? 0;
         burst(ctx, Math.max(0, Math.min(w, x)), Math.max(0, Math.min(h, y)), { n, reach: 58, size: 8, from: a - 1.3, to: a + 1.3 });
       };
-      ctx.on('wall', ({ x, y }) => {
+      ctx.on('wall', ({ x, y, corner }) => {
         blast(x, y);
-        if (clock - lastPop > 140) { lastPop = clock; sfx(ctx, pops[Math.floor(ctx.rng() * 3)], 0.35); }
+        const clock = ctx.state.clock;
+        if (clock - lastPop > (corner ? 450 : 1100)) { lastPop = clock; sfx(ctx, pops[Math.floor(clock / 1100) % pops.length], corner ? .16 : .1); }
       });
       if (fresh(ctx)) { const { w, h } = ctx.bounds(); blast(0, h * 0.4, 12); blast(w, h * 0.6, 12); blast(w * 0.5, 0, 12); }
-      return { tick(dt) { clock += dt * 1000; } };
+      return {};
     },
   },
 
@@ -205,9 +206,9 @@ body { transition: background-color .6s, color .6s; }
 #world:has(#btn[data-skin=bubble]) [data-stray] { border-radius: 50%; width: 26px !important; height: 26px !important; border: 1.5px solid rgba(120,170,220,.9) !important; background: radial-gradient(circle at 32% 28%, #fff 0 12%, rgba(190,225,255,.5) 50%, rgba(120,190,255,.8)) !important; }
 `);
       wardrobe(ctx);
-      ctx.on('tap', ({ x, y }) => {
+      ctx.on('tap', ({ x, y, auto }) => {
         if (ctx.button.el.dataset.skin !== 'bubble') return;
-        sfx(ctx, `pop/Pop${['', '2', '3'][Math.floor(ctx.rng() * 3)]}.mp3`, 0.4);
+        if (!auto) sfx(ctx, `pop/Pop${['', '2', '3'][Math.floor(ctx.state.clock / 300) % 3]}.mp3`, .16);
         const c = x == null ? btnCenter(ctx) : { x, y };
         burst(ctx, c.x, c.y, { color: 'rgba(120,190,255,.9)', n: 6, reach: 40, size: 5 });
       });

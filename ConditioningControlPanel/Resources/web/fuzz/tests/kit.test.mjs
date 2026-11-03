@@ -137,7 +137,7 @@ test('pan on play and loop goes through a panner, clamped; no pan adds no node',
   const { kit, log } = graphKit();
   await kit.play('a.mp3');
   assert.equal(log.panners.length, 0);
-  await kit.play('a.mp3', { pan: -0.5 });
+  await kit.play('c.mp3', { pan: -0.5 });
   assert.equal(log.panners[0].pan.value, -0.5);
   kit.loop('b.mp3', { pan: 9 });
   await new Promise((r) => setTimeout(r, 5));

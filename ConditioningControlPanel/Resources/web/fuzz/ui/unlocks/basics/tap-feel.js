@@ -74,13 +74,12 @@ export function createTapPhrase() {
   let last = -Infinity, lastBody = -Infinity, step = 0, taps = 0;
   return {
     tap(now, auto = false) {
-      if (now - lastBody < (auto ? 220 : 55)) return null;
+      if (auto || now - lastBody < 100) return null;
       lastBody = now;
-      if (auto) return { note: null, gain: .18 };
       if (now - last > 1100) { step = 0; taps = 0; }
       last = now;
-      const note = taps++ % 2 === 0 ? notes[step++ % notes.length] : null;
-      return { note, gain: .44 };
+      const note = taps++ % 4 === 0 ? notes[step++ % notes.length] : null;
+      return { note, gain: .18 };
     },
     reset() { last = lastBody = -Infinity; step = taps = 0; },
   };
