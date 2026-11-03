@@ -21,8 +21,11 @@ import { openIntro } from './ui/intro.js';
 import { openPictureCard, pictureCardDue, PICTURE_ROUTES } from './ui/picture-card.js';
 
 const qs = new URLSearchParams(location.search);
+const toyPreview = qs.get('preview') === 'toys';
 const paceArg = Number(qs.get('pace')) || 0;
-const buyArg = (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
+const buyArg = toyPreview
+  ? ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_frame', 'quiz', 'toy_box', 'mini_breakout', 'mini_race', 'mini_slots', 'dispenser_faster']
+  : (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const moodArg = qs.get('mood');
 const fresh = qs.has('fresh') || buyArg.length > 0;
 const devDoor = fresh || paceArg > 0 || !!moodArg;
@@ -45,7 +48,7 @@ function start(init) {
   /* New run reloads the page: that is not a visit, so it does not ask again. One shot, set only by newRun below. */
   const newRunReload = !!extras.again && life.contract;
   delete extras.again;
-  const pictureDoor = qs.get('pictures');
+  const pictureDoor = qs.get('pictures') || (toyPreview ? 'online' : null);
   /* A saved 'online' is the old placeholder default. Only the dev door reaches it now. */
   const savedPictures = extras.pictures === 'online' ? 'none' : extras.pictures;
   const mood = MOODS[moodArg] ? moodArg : rollMood(life.runs);
@@ -136,6 +139,16 @@ function start(init) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
 
   /* The debug door. */
+  if (toyPreview) {
+    const theme = qs.get('theme');
+    run.picks.f1 = 'ears';
+    run.picks.f3 = 'slides';
+    run.picks.f5 = FORKS.f5.opts[theme] ? theme : 'trance';
+    run.store.a_phones = { on: true };
+    run.store.mini_slots = { machine: { coins: 3, last: [1, 3, 0] } };
+    run.store.mini_race = { race: { leftMs: 0 } };
+    E.lump(run, 100000, 'dev');
+  }
   for (const id of buyArg) {
     if (!BY_ID[id]) console.warn(`?buy: no item ${id}`);
     else if (!E.grant(run, id).length && !E.has(run, id)) console.warn(`?buy: ${id} is on a lane this route locked`);
