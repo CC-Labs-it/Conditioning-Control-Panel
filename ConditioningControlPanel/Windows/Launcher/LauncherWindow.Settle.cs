@@ -20,6 +20,10 @@ namespace ConditioningControlPanel.Launcher;
 /// full opacity with its rise cleared, and the window is asked to repaint. It logs what it found
 /// (how many tiles were still faded, the render tier and mode), so the next report says whether the
 /// stagger stalled or the paint was lost. It never runs while the Play beat has dimmed the others.</para>
+///
+/// <para>The screenshot later showed the WHOLE client unpainted, so the real fix is the render
+/// target work in LauncherWindow.Render.cs; this pass also runs its paint probe and logs monitor,
+/// DPI and cloak state.</para>
 /// </summary>
 public partial class LauncherWindow
 {
@@ -79,12 +83,20 @@ public partial class LauncherWindow
 
             string mode = "?";
             try { mode = HwndSource.FromHwnd(hwnd)?.CompositionTarget?.RenderMode.ToString() ?? "?"; } catch { }
-            if (faded > 0)
-                Log.Information("[Launcher] tile settle ({Why}): {Faded} of {Count} tiles were still faded, forced visible (tier {Tier}, {Mode}, {W:0}x{H:0})",
-                    _tileSettleWhy, faded, _tiles.Count, RenderCapability.Tier >> 16, mode, ActualWidth, ActualHeight);
+            // #1548: the screenshot showed the whole client unpainted, not faded tiles. Read the
+            // screen behind the window and say where it is, so the next report proves which.
+            string probe;
+            try { probe = ProbePaint(hwnd); }
+            catch (Exception ex) { probe = "probe failed (" + ex.GetType().Name + ")"; }
+            bool blank = probe.Contains("BLANK", StringComparison.Ordinal);
+            if (faded > 0 || blank)
+                Log.Information("[Launcher] tile settle ({Why}): {Faded} of {Count} tiles were still faded, forced visible (tier {Tier}, {Mode}, {W:0}x{H:0} DIP, {Cloak}, last kick {Kick}; {Monitor}; {Probe})",
+                    _tileSettleWhy, faded, _tiles.Count, RenderCapability.Tier >> 16, mode, ActualWidth, ActualHeight,
+                    CloakState(hwnd), _lastKick, DescribeMonitor(), probe);
             else
-                Log.Debug("[Launcher] tile settle ({Why}): {Count} tiles visible (tier {Tier}, {Mode}, {W:0}x{H:0})",
-                    _tileSettleWhy, _tiles.Count, RenderCapability.Tier >> 16, mode, ActualWidth, ActualHeight);
+                Log.Debug("[Launcher] tile settle ({Why}): {Count} tiles visible (tier {Tier}, {Mode}, {W:0}x{H:0} DIP, {Cloak}, last kick {Kick}; {Monitor}; {Probe})",
+                    _tileSettleWhy, _tiles.Count, RenderCapability.Tier >> 16, mode, ActualWidth, ActualHeight,
+                    CloakState(hwnd), _lastKick, DescribeMonitor(), probe);
         }
         catch (Exception ex) { Log.Debug(ex, "[Launcher] tile settle failed"); }
     }
