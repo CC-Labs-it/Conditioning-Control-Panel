@@ -1,6 +1,6 @@
 /* ============================================================================
  * audio/kit.js - the one audio surface. Armed on the first gesture, one master gain every voice passes through (mute,
- * pause, panic and the Drop all pull it). Recorded clips only, never synthesis. A missing or broken file is silence.
+ * pause, panic and the Drop all pull it). Pre-rendered clips only; spoken words are real recordings. Missing files stay silent.
  * Buses: sfx, ambient, voice, podcast.
  * ==========================================================================*/
 
@@ -140,7 +140,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     return armed;
   }
 
-  async function play(url, { bus = 'sfx', gain = 1, rate = 1, pan = 0 } = {}) {
+  async function play(url, { bus = 'sfx', gain = 1, rate = 1, pan = 0, fadeInMs = 0, fadeOutMs = 0 } = {}) {
     if (!armed || !url || !level()) return;
     const issued = generation, requestedAt = now();
     const ticket = bus === 'sfx' ? cueBudget.request(url, requestedAt) : null;
@@ -152,7 +152,20 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     const src = ctx.createBufferSource();
     src.buffer = buf; src.playbackRate.value = rate;
     const g = ctx.createGain();
-    g.gain.value = (BUS[bus] ?? BUS.sfx) * gain * (ticket?.scale ?? 1);
+    const peak = (BUS[bus] ?? BUS.sfx) * gain * (ticket?.scale ?? 1);
+    const duration = Number.isFinite(buf.duration) ? buf.duration / Math.max(.01, Math.abs(rate)) : 0;
+    const attack = Math.min(duration / 2, Math.max(0, fadeInMs) / 1000);
+    const releaseTime = Math.min(duration / 2, Math.max(0, fadeOutMs) / 1000);
+    const start = ctx.currentTime;
+    g.gain.value = attack ? 0 : peak;
+    if (attack) {
+      g.gain.setValueAtTime(0, start);
+      g.gain.linearRampToValueAtTime(peak, start + attack);
+    }
+    if (releaseTime) {
+      g.gain.setValueAtTime(peak, start + duration - releaseTime);
+      g.gain.linearRampToValueAtTime(0, start + duration);
+    }
     src.connect(g);
     const panner = toMaster(g, pan);
     const shot = { src, done() { if (!shots.delete(shot)) return; release(); src.disconnect?.(); g.disconnect?.(); panner?.disconnect?.(); } };

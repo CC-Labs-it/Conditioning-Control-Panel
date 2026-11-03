@@ -274,7 +274,7 @@ export default {
         const x = e.x ?? g.cx, y = e.y ?? g.cy;
         const gain = ctx.pay(Math.max(ctx.rates().click * 10, ctx.rates().fps * 2), 'bi_giggle', { x, y: y - 20 });
         ctx.float(x, y - 54, COPY.bimbo.giggle(ctx.fmt(gain)), 'color:#ff2f92;font-size:22px;font-style:italic;font-weight:600;');
-        ctx.audio.play(`assets/audio/themes/bimbo/giggle${1 + Math.floor(ctx.rng() * 3)}.mp3`, { bus: 'voice', gain: 0.8 });
+        ctx.audio.play(`assets/audio/themes/bimbo/giggle${1 + Math.floor(ctx.rng() * 3)}.mp3`, { bus: 'voice', gain: 0.4, fadeInMs: 400, fadeOutMs: 180 });
         ctx.audio.play('assets/audio/sfx/chain_pop.mp3', { bus: 'sfx', gain: 0.5 });
         moan(ctx);
         if (!ctx.gentle) {

@@ -311,7 +311,7 @@ export default {
           t += dt;
           if (t < 3.4) ctx.emit('lo:show', { seconds: 3 + (from - 3) * Math.pow(1 - t / 3.4, 2) });
           else if (t < 5.2) {
-            if (!isOpen) { isOpen = true; ctx.emit('lo:window', { on: true }); ctx.emit('lo:show', { seconds: 3 }); const c = buttonCentre(ctx); ctx.float(c.x, c.y - 50, COPY.locked.soClose, `color:${GOOD};font-size:18px;font-weight:700;`); sfx(ctx, 'heartbeat', 0.6); }
+            if (!isOpen) { isOpen = true; ctx.emit('lo:window', { on: true }); ctx.emit('lo:show', { seconds: 3 }); const c = buttonCentre(ctx); ctx.float(c.x, c.y - 50, COPY.locked.soClose, `color:${GOOD};font-size:18px;font-weight:700;`); }
           } else {
             isOpen = false;
             t = -1;

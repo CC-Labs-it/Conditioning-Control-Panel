@@ -78,7 +78,7 @@ export default {
   b_radio: {
     mount(ctx) {
       const next = deck(RADIO_LINES, ctx);
-      ctx.audio.loop('assets/audio/ambient/radio.mp3', { bus: 'ambient', gain: 0.5 });
+      ctx.audio.loop('assets/audio/ambient/radio.wav', { bus: 'ambient', gain: 0.5 });
       const host = ctx.el('div', 'height:130px;background:#6b4a2b;border-radius:6px;box-sizing:border-box;padding:8px;', null, ctx.dock({ edge: 'left' }));
       const dial = ctx.el('div', 'position:relative;height:18px;background:#f3e6c0;border:1px solid #3a2815;box-sizing:border-box;overflow:hidden;', null, host);
       const needle = ctx.el('div', 'position:absolute;top:0;left:2px;width:2px;height:100%;background:#b3121d;', null, dial);

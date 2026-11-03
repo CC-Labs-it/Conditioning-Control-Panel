@@ -1,12 +1,14 @@
 /* Listen: the game plays for your ears, and the play is timing. Tapping on the tick and on the spoken word is what pays.
- * Hum, rain and the rest are recorded loops: a missing file is silence, so everything here also draws what it does. */
+ * Nonverbal beds are pre-rendered loops. Spoken words always use real recordings. */
 
 import { EDGE_WORDS, PHONES_PROMPT } from '../../../data/content/index.js';
 import { MANTRA } from '../../../data/words.js';
 import { DARK, darkCss, mountSpiral, spiral, deck, ring, flash, bar, panel, btnCentre, meterRow, setLine, burst, railsRoom, ink, freeSpot, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
+import { mountMetronome } from './metronome.js';
 
-const LOOP = (name) => `assets/audio/ambient/${name}.mp3`;
+const LOOP = (name) => `assets/audio/ambient/${name}.wav`;
+const binauralOn = (ctx) => ctx.has('a_bin') && ctx.switches.isOn('a_bin');
 const say = (slug) => slug.replace(/-/g, ' ');
 
 /* One wide wave behind the button. The Low Hum draws it, Headphones widen it, Binaural Hum splits it. */
@@ -50,7 +52,7 @@ export default {
   /* Low Hum: fades in under the game, as a wave behind the button. */
   a_hum: {
     mount(ctx) {
-      ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.8, fadeMs: 2500 });
+      if (!binauralOn(ctx)) ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.8, fadeMs: 2500 });
       hum.wide = 1; hum.split = false;
       const draw = drawHum(ctx);
       return { tick: draw };
@@ -58,36 +60,7 @@ export default {
   },
 
   /* Metronome: one tick a second. A tap on the tick pays it again. */
-  a_tick: {
-    mount(ctx) {
-      const box = panel(ctx, { side: 'right', height: 150, css: 'display:flex;align-items:flex-end;justify-content:center;' });
-      const body = ctx.el('div', 'position:relative;width:60px;height:86px;flex:none;background:#6b4a2b;clip-path:polygon(30% 0,70% 0,100% 100%,0 100%);', null, box);
-      const arm = ctx.el('div', 'position:absolute;left:28px;bottom:6px;width:4px;height:74px;background:#f3efe4;transform-origin:50% 100%;', null, body);
-      ctx.el('div', 'position:absolute;left:-4px;top:16px;width:12px;height:9px;background:#ffd24d;', null, arm);
-      let side = 0, lastTick = 0, streak = 0;
-      const swing = () => {
-        side = 1 - side;
-        lastTick = ctx.state.clock;
-        if (!ctx.gentle) arm.style.transform = `rotate(${side ? 24 : -24}deg)`;
-        arm.style.transition = ctx.gentle ? 'none' : 'transform 1s ease-in-out';
-        ctx.audio.play('assets/audio/sfx/count_tick.mp3', { bus: 'sfx', gain: 0.35, pan: ctx.has('a_phones') ? (side ? 0.6 : -0.6) : 0 });
-        const r = box.getBoundingClientRect();
-        ring(ctx, r.left + r.width / 2, r.top + r.height / 2, 90, 'var(--accent-2)', 500);
-      };
-      swing();
-      ctx.every(1000, swing);
-      ctx.on('tap', ({ auto, x, y }) => {
-        if (auto) return;
-        const gap = Math.min(ctx.state.clock - lastTick, lastTick + 1000 - ctx.state.clock);
-        if (Math.abs(gap) > 130) { streak = 0; return; }
-        streak += 1;
-        const b = btnCentre(ctx), r = ctx.rates();
-        const got = ctx.pay(Math.max(1, r.click) * Math.min(4, streak), 'tick', { x: x ?? b.x, y: y ?? b.top });
-        if (streak >= 2) ctx.float(b.x, b.top - 22, fill(ROUTE_COPY.onTick, { n: ctx.fmt(got) }), 'color:var(--stamp);font-weight:700;');
-      });
-      return {};
-    },
-  },
+  a_tick: { mount: mountMetronome },
 
   /* Headphones: it asks once, they drop on, and the wave gets wider. */
   a_phones: {
@@ -97,7 +70,7 @@ export default {
       [0, 21].forEach((x) => ctx.el('div', `position:absolute;left:${x}px;top:9px;width:7px;height:11px;border-radius:3px;background:var(--ink);`, null, icon));
       const landed = () => {
         hum.wide = ctx.store.get('on') === false ? 1.1 : 1.6;
-        if (ctx.store.get('on') !== false) { ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, pan: -0.8 }); ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, pan: 0.8 }); }
+        if (ctx.store.get('on') !== false && !binauralOn(ctx)) { ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, pan: -0.8 }); ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, pan: 0.8 }); }
         if (!ctx.gentle) ctx.anim(icon, [{ transform: 'translateY(-60px)' }, { transform: 'translateY(0)' }], { duration: 500, easing: 'ease-in' });
       };
       if (ctx.store.get('on') !== undefined) { landed(); return {}; }

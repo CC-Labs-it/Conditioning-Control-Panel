@@ -40,9 +40,15 @@ function fixture() {
   const node = (props = {}) => ({ connect(n) { return n; }, disconnect() { this.disconnected = true; }, ...props });
   globalThis.window = { AudioContext: class {
     constructor() { this.state = 'running'; this.currentTime = 0; this.destination = node(); }
-    createGain() { const g = node({ gain: { value: 1, cancelScheduledValues() {}, setTargetAtTime() {} } }); gains.push(g); return g; }
+    createGain() {
+      const events = [];
+      const g = node({ events, gain: { value: 1, cancelScheduledValues() {}, setTargetAtTime() {},
+        setValueAtTime(value, time) { events.push(['set', value, time]); },
+        linearRampToValueAtTime(value, time) { events.push(['ramp', value, time]); } } });
+      gains.push(g); return g;
+    }
     createBufferSource() { const s = node({ playbackRate: { value: 1 }, started: false, stopped: false, start() { this.started = true; }, stop() { this.stopped = true; this.onended?.(); } }); sources.push(s); return s; }
-    decodeAudioData() { return Promise.resolve({}); }
+    decodeAudioData() { return Promise.resolve({ duration: 1.44 }); }
     suspend() { return Promise.resolve(); }
     resume() { return Promise.resolve(); }
   } };
@@ -96,4 +102,23 @@ test('completed short cues disconnect and release their shared slot', async () =
   assert.equal(f.sources[0].disconnected, true);
   f.at(200); await f.kit.play('ui_click.mp3');
   assert.equal(f.sources.length, 2);
+});
+
+test('a soft voice starts at silence, eases in, fades out and still stops on pause', async () => {
+  const f = fixture();
+  const pending = f.kit.play('moan.mp3', { bus: 'voice', gain: .4, fadeInMs: 400, fadeOutMs: 180 });
+  f.loads.shift()(); await pending;
+  assert.equal(f.gains[1].gain.value, 0);
+  assert.deepEqual(f.gains[1].events, [['set', 0, 0], ['ramp', .2, .4], ['set', .2, 1.26], ['ramp', 0, 1.44]]);
+  assert.equal(f.sources[0].started, true);
+  f.kit.hold(true);
+  assert.equal(f.sources[0].stopped, true);
+  assert.equal(f.sources[0].disconnected, true);
+});
+
+test('fades fit within the actual duration even when a short voice plays faster', async () => {
+  const f = fixture();
+  const pending = f.kit.play('moan.mp3', { bus: 'voice', gain: .4, rate: 2, fadeInMs: 800, fadeOutMs: 800 });
+  f.loads.shift()(); await pending;
+  assert.deepEqual(f.gains[1].events, [['set', 0, 0], ['ramp', .2, .36], ['set', .2, .36], ['ramp', 0, .72]]);
 });
