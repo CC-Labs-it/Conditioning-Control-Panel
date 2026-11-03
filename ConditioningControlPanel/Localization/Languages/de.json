@@ -681,6 +681,7 @@
   "chaster_raffle_ticket_on": "Losnummer am {0}",
   "chaster_raffle_rule": "Jedes Hinzufügen zählt den Tag. Gelesen bei Chaster, nicht auf diesem PC.",
   "chaster_raffle_rules": "Regeln",
+  "chaster_raffle_net_note": "Die Summe ist netto: Zeit, die diesen Monat jemand abzieht, geht davon ab.",
   "chaster_raffle_off": "Die Verlosung ist noch nicht offen.",
   "chaster_raffle_post_days": "Meine Tage auf Discord posten",
   "chaster_raffle_post_days_tip": "Ein Post pro Tag: dein Name, die gestern hinzugefügte Zeit, die Monatssumme und deine Tage. Aus heißt, du tauchst nie auf.",

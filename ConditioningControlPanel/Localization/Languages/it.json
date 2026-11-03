@@ -818,6 +818,7 @@
   "chaster_raffle_ticket_on": "Numero del biglietto dal {0}",
   "chaster_raffle_rule": "Basta un'aggiunta per far contare il giorno. I dati vengono da Chaster, non da questo PC.",
   "chaster_raffle_rules": "Regole",
+  "chaster_raffle_net_note": "Il totale è netto: il tempo tolto questo mese, da chiunque, viene sottratto.",
   "chaster_raffle_off": "Il sorteggio non è ancora aperto.",
   "chaster_raffle_post_days": "Pubblica i miei giorni su Discord",
   "chaster_raffle_post_days_tip": "Un post al giorno: il tuo nome, il tempo aggiunto ieri, il totale del mese e i tuoi giorni. Da spento non compari mai.",

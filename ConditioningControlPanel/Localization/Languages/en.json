@@ -841,6 +841,7 @@
   "chaster_raffle_ticket_on": "Ticket number on {0}",
   "chaster_raffle_rule": "Any add counts the day. Read off Chaster, not this PC.",
   "chaster_raffle_rules": "Rules",
+  "chaster_raffle_net_note": "This total is net: time anyone takes off this month comes out of it.",
   "chaster_raffle_off": "The raffle is not open yet.",
   "chaster_raffle_post_days": "Post my days in Discord",
   "chaster_raffle_post_days_tip": "One daily post: your name, yesterday's added time, the month's total and your days. Off means you never appear.",

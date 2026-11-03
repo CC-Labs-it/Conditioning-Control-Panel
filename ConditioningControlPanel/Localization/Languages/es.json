@@ -681,6 +681,7 @@
   "chaster_raffle_ticket_on": "Número de papeleta el {0}",
   "chaster_raffle_rule": "Cualquier suma cuenta el día. Se lee de Chaster, no de este PC.",
   "chaster_raffle_rules": "Reglas",
+  "chaster_raffle_net_note": "Este total es neto: el tiempo que cualquiera quite este mes se descuenta.",
   "chaster_raffle_off": "El sorteo aún no está abierto.",
   "chaster_raffle_post_days": "Publicar mis días en Discord",
   "chaster_raffle_post_days_tip": "Una publicación al día: tu nombre, el tiempo añadido ayer, el total del mes y tus días. Apagado, nunca apareces.",

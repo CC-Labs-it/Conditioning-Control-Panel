@@ -681,6 +681,7 @@
   "chaster_raffle_ticket_on": "Número do bilhete em {0}",
   "chaster_raffle_rule": "Qualquer adição conta o dia. Lido no Chaster, não neste PC.",
   "chaster_raffle_rules": "Regras",
+  "chaster_raffle_net_note": "Este total é líquido: o tempo que qualquer pessoa tirar neste mês sai dele.",
   "chaster_raffle_off": "O sorteio ainda não abriu.",
   "chaster_raffle_post_days": "Postar meus dias no Discord",
   "chaster_raffle_post_days_tip": "Um post por dia: seu nome, o tempo adicionado ontem, o total do mês e seus dias. Desligado, você nunca aparece.",
