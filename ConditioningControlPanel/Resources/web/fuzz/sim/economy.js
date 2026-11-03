@@ -155,6 +155,7 @@ export function earn(s, amount, source = 'earn') {
  *  fall to the floor for a moment and the sum still holds. */
 export function sideLump(s, amount, source = 'lump') {
   const ask = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  if (CONFIG.FULL_PRIZE_SOURCES.includes(source)) return credit(s, ask, source);
   const g = s.side;
   const w = CONFIG.SIDE_WEIGHT[source] || 1;
   g.asked += ask * w;
