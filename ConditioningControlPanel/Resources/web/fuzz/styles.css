@@ -102,8 +102,8 @@ button { font: inherit; color: inherit; }
 #goal .row .ico { font-size: 46px; }
 #goal .row img.ico { width: 56px; height: 56px; }
 .row .tag { font-size: 12px; line-height: 1; color: var(--ink-soft); }
-#goal .bar { position: absolute; inset: 0; background: var(--fill); transform-origin: 50% 100%; transform: scaleY(0); transition: transform .2s linear; }
-#goal .row:not(.short) .bar { background: transparent; }
+.row .bar { position: absolute; inset: 0; background: var(--fill); transform-origin: 50% 100%; transform: scaleY(0); transition: transform .2s linear; pointer-events: none; }
+.row:not(.short) .bar { opacity: .35; }
 #goal .row.ready { animation: ready 1.6s ease-in-out infinite; }
 
 /* ---- the card over a tile ---- */
@@ -235,7 +235,7 @@ body.mixed #counter { text-shadow: none !important; filter: drop-shadow(0 0 3px 
 :where(body.niched) .row:not(.short):hover, :where(body.niched) .row.peek { outline-color: var(--hue-a); }
 :where(body.niched) #goal .row { border-color: transparent; background: linear-gradient(var(--panel-short), var(--panel-short)) padding-box, linear-gradient(135deg, var(--hue-a), var(--hue-b)) border-box; }
 :where(body.niched) #goal .row:not(.short) { background: linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 62%, var(--panel)), color-mix(in srgb, var(--hue-b) 62%, var(--panel))) padding-box, linear-gradient(135deg, var(--hue-a), var(--hue-b)) border-box; }
-:where(body.niched) #goal .bar { background: linear-gradient(135deg, color-mix(in srgb, var(--hue-a) 62%, var(--panel-short)), color-mix(in srgb, var(--hue-b) 62%, var(--panel-short))); }
+:where(body.niched) .row .bar { background: color-mix(in srgb, var(--hue-a) 36%, var(--panel-short)); }
 :where(body.niched) #goal .row .cost { padding: 0 4px; background: color-mix(in srgb, var(--panel) 86%, transparent); color: var(--ink); }
 
 :where(body.niched) .row.tip { border: 2px solid transparent; background: linear-gradient(var(--panel), var(--panel)) padding-box, linear-gradient(135deg, var(--hue-a), var(--hue-b)) border-box; box-shadow: 3px 3px 0 color-mix(in srgb, var(--hue-a) 50%, transparent); }

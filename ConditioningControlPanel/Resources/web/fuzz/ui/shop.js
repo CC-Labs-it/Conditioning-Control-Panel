@@ -52,7 +52,10 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const pay = doc.createElement('i');
     pay.textContent = payText(item);
     cost.append(costNum, pay);
-    if (isGoal) { const bar = doc.createElement('span'); bar.className = 'bar'; el.appendChild(bar); }
+    const bar = doc.createElement('span');
+    bar.className = 'bar';
+    bar.setAttribute('aria-hidden', 'true');
+    el.appendChild(bar);
     if (tag) el.appendChild(tag);
     el.append(iconFor(doc, item), body, cost);
     el.setAttribute('aria-label', name.textContent);
@@ -81,10 +84,10 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     r.el.classList.toggle('short', short);
     const fork = it.kind === 'fork';
     setText(r.costNum, fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p));
+    const fill = `scaleY(${Math.max(0, Math.min(1, run.fuzz / Math.max(1, p))).toFixed(3)})`;
+    if (r.fill !== fill) { r.fill = fill; r.bar.style.transform = fill; }
     if (isGoal) {
       setText(r.tag, fork ? 'Your choice' : it.kind === 'end' ? 'The end' : short ? 'Next' : 'Ready');
-      const fill = `scaleY(${(short ? Math.min(1, run.fuzz / Math.max(1, p)) : 1).toFixed(3)})`;
-      if (r.fill !== fill) { r.fill = fill; r.bar.style.transform = fill; }
       r.el.classList.toggle('ready', !short);
       r.el.classList.toggle('near', short && run.fuzz / Math.max(1, p) >= .75);
       const state = goalState(r.affordable, !short, r.announced);
