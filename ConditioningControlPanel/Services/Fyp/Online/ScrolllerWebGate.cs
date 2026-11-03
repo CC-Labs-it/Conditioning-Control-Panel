@@ -340,6 +340,7 @@ internal static partial class ScrolllerWebGate
         if (core == null) return;
         try
         {
+            global::ConditioningControlPanel.Services.Audio.WebAudioWatch.Attach(core);
             if (Attached.TryGetValue(core, out _)) return;
             var state = new CoreState();
             Attached.Add(core, state);

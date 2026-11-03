@@ -111,6 +111,7 @@ public partial class LauncherWindow : Window
             if (MotionFx.AllowTransitions)
                 foreach (var t in _tiles) t.Opacity = 0;
             MotionFx.StaggerIn(_tiles);
+            ScheduleTileSettle("show");
 
             LauncherSfx.Open();
             FxOnShown(_firstShow);
@@ -299,6 +300,7 @@ public partial class LauncherWindow : Window
             if (MotionFx.AllowTransitions)
                 foreach (var t in _tiles) t.Opacity = 0;
             MotionFx.StaggerIn(_tiles);
+            ScheduleTileSettle("rebuild");
         }
         catch (Exception ex) { Log.Warning(ex, "[Launcher] tile refresh on {Trigger} failed", trigger); }
     }
@@ -388,6 +390,7 @@ public partial class LauncherWindow : Window
         if (MotionFx.AllowTransitions)
             foreach (var t in _tiles) t.Opacity = 0;
         MotionFx.StaggerIn(_tiles);
+        ScheduleTileSettle("rebuild");
     }
 
     // ------------------------------------------------------------------ the panel card
@@ -524,6 +527,7 @@ public partial class LauncherWindow : Window
 
     private void BuildTiles()
     {
+        _tilesDimmed = false;
         GamesGrid.Children.Clear();
         _tiles.Clear();
         _tileById.Clear();
@@ -605,6 +609,7 @@ public partial class LauncherWindow : Window
         Height = grown;
         Top = Math.Max(waTop, Math.Min(top, waTop + waHeight - grown));
         Log.Debug("[Launcher] grew {Old:0} -> {New:0} px to seat every tile row", old, grown);
+        ScheduleTileSettle("grow");
     }
 
     // ------------------------------------------------------------------ the stats strip
