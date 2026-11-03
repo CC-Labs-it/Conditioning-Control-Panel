@@ -1,12 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampSpot, defaultSpot, fromShare, GRIP, screenSize, themeNiche, toShare } from '../ui/screens.js';
+import { clampSpot, defaultSpot, fromShare, GRIP, screenSize, shopContent, themeNiche, toShare } from '../ui/screens.js';
 import { createPictures, ownKind } from '../ui/pictures.js';
 import { BY_ID, ITEMS } from '../data/items.js';
 
 const rect = (left, top, right, bottom) => ({ left, top, right, bottom, width: right - left, height: bottom - top });
 const DESK = { W: 1280, H: 800, shop: rect(260, 220, 1020, 800) };
 const PHONE = { W: 390, H: 800, shop: rect(16, 200, 374, 800) };
+
+test('an empty first-frame shop does not reserve the empty lower half of a phone', () => {
+  const box = { getBoundingClientRect: () => PHONE.shop, children: [] };
+  const shop = shopContent(box);
+  assert.equal(shop.bottom, 200);
+  const initial = defaultSpot({ ...PHONE, railW: 0, floor: 750 }, { w: 164, h: 180 });
+  assert.deepEqual(clampSpot({ ...initial, w: 164, h: 180 }, { ...PHONE, shop }), initial);
+  box.children.push({ getBoundingClientRect: () => rect(16, 200, 374, 425) });
+  assert.equal(shopContent(box).bottom, 425);
+  assert.deepEqual(clampSpot({ ...initial, w: 164, h: 180 }, { ...PHONE, shop: shopContent(box) }), initial);
+});
 
 test('a spot stays in the window', () => {
   assert.deepEqual(clampSpot({ x: -50, y: -9, w: 200, h: 100 }, { W: 1280, H: 800 }), { x: 0, y: 0 });

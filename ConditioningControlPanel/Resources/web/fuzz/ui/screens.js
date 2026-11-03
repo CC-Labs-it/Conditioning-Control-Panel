@@ -6,6 +6,7 @@
 
 import { THEME_TASTES } from './unlocks/theme-skins.js';
 import { ROUTE_COPY as C } from './unlocks/routes/copy.js';
+import { incomeFeel } from './income-feel.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 /** How much of a screen must stand clear of the shop, so there is always something to grab. */
@@ -104,11 +105,14 @@ function ensureCss(ctx) {
 }
 
 /** What the shop really holds. Its box runs to the foot of the page and lets the pointer through; only the tiles are in the way. */
-function shopContent(box) {
+export function shopContent(box) {
   const whole = box?.getBoundingClientRect();
   if (!whole?.width) return whole || null;
   const kids = [...box.children].map((k) => k.getBoundingClientRect()).filter((r) => r.width && r.height);
-  return kids.length ? { top: whole.top, left: whole.left, right: whole.right, width: whole.width, bottom: Math.max(...kids.map((r) => r.bottom)) } : whole;
+  // Before the first shop draw the flex box fills the page but contains no tiles.
+  // Reserving that empty box would push a fresh screen up behind the future shop.
+  return { top: whole.top, left: whole.left, right: whole.right, width: whole.width,
+    bottom: kids.length ? Math.min(whole.bottom, Math.max(...kids.map((r) => r.bottom))) : whole.top };
 }
 
 function room(ctx) {
@@ -279,6 +283,7 @@ export function mediaSlot(ctx, parent, { kind = 'picture', card = true } = {}) {
 export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1, handle = false, niche = 'pretty', every = 0, first = 0, card = true, css = '', place = null, hint = false, key = 'spot', pays = true } = {}) {
   ensureCss(ctx);
   const el = ctx.el('div', '', null, 'screens');
+  if (pays) incomeFeel(ctx, () => el);
   el.className = handle ? 'scr handle' : 'scr';
   const inner = ctx.el('div', css, null, el);
   inner.className = 'scr-in';
@@ -289,6 +294,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
 
   const size = { w: 0, h: 0 };
   let spot = { x: 0, y: 0 };
+  let freshSpot = false;
   const apply = () => { el.style.transform = `translate3d(${Math.round(spot.x)}px,${Math.round(spot.y)}px,0)`; };
   const resize = (r) => {
     const s = screenSize(r, { ratio, wide, scale });
@@ -315,9 +321,9 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
     resize(r);
     const saved = ctx.store.get(key);
     const placed = liveScreens().map((s) => s.frame());
-    spot = saved && Number.isFinite(saved.fx) && Number.isFinite(saved.fy) ? fromShare(saved, size, r) : defaultSpot({ ...r, top: r.railW >= 170 ? TOP : r.flankTop }, size, placed);
+    freshSpot = !(saved && Number.isFinite(saved.fx) && Number.isFinite(saved.fy));
+    spot = freshSpot ? defaultSpot({ ...r, top: r.railW >= 170 ? TOP : r.flankTop }, size, placed) : fromShare(saved, size, r);
     settle(r);
-    if (!saved) remember(r);
   }
   me.frame = () => ({ ...spot, ...size });
   live.add(me);
@@ -327,6 +333,19 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
    * a drag may start on that button too: if it never moves, the press stays the button's. A heart or a fake close (they
    * stop the event themselves) stay theirs. */
   let drag = null;
+  // ui.draw runs after mounting. Resolve an unsaved default against its real tile
+  // height on the next game frame, then save it. Never relocate a player-set spot.
+  ctx.after(0, () => {
+    if (!freshSpot || drag) return;
+    freshSpot = false;
+    const r = room(ctx);
+    resize(r);
+    const placed = liveScreens().filter((s) => s !== me).map((s) => s.frame());
+    spot = defaultSpot({ ...r, top: r.railW >= 170 ? TOP : r.flankTop }, size, placed);
+    settle(r);
+    remember(r);
+    tellDock();
+  });
   const from = handle ? grip : el;
   const lift = (on) => { el.classList.toggle('held', on); el.parentElement?.classList.toggle('lifted', on); };
   /* Can it still be grabbed where it landed? Under the counter, the button or a dock panel may leave nothing to press. */
@@ -380,6 +399,7 @@ export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1,
   };
   from.addEventListener('pointerdown', (e) => {
     if (e.button > 0 || ctx.paused) return;
+    if (freshSpot) { freshSpot = false; remember(room(ctx)); }
     const onButton = !!e.target.closest?.('button,a,input');
     if (!onButton) e.preventDefault();
     drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: spot.x, oy: spot.y, start: { ...spot }, moved: false, r: room(ctx) };

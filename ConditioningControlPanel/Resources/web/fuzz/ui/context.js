@@ -12,6 +12,7 @@ import * as E from '../sim/economy.js';
 import { allowedLink } from './links.js';
 import { paletteOf } from './palette.js';
 import { slotOrder } from './dock.js';
+import { incomeFeel } from './income-feel.js';
 
 /** A deep read-only view: unlocks read the state and change it only through the verbs. */
 const views = new WeakMap();
@@ -84,6 +85,9 @@ export function makeContext(engine, scope) {
         if (ui.dock.isRail()) s.root.scrollIntoView?.({ block: 'nearest' });
       }
       bag()[key] = { edge: s.side, min: !!saved.min };
+      s.root.dataset.fzOwner = item.id;
+      if (s.chip) s.chip.dataset.fzOwner = item.id;
+      incomeFeel(ctx, () => ui.dock.isRail() ? s.root : s.chip);
       scope.cleanups.add(s.remove);
       return s.body;
     },
@@ -93,6 +97,7 @@ export function makeContext(engine, scope) {
 
     el(tag, cssText = '', text = null, parent = null) {
       const e = ui.doc.createElement(tag);
+      e.dataset.fzOwner = item.id;
       if (cssText) e.style.cssText = cssText;
       if (text != null) e.textContent = brandText(text);
       const host_ = typeof parent === 'string' ? ui.layer(parent) : (parent || ui.layer('floaters'));
