@@ -9,7 +9,8 @@ import extras from './extras.js';
 import spiral from './wave2/spiral.js';
 import edges from './wave2/edges.js';
 import meta from './wave2/meta.js';
+import arcade from './arcade.js';
 import { mergeGroups } from './merge.js';
 
-export const GROUPS = Object.freeze({ basics, routes, 'themes-a': themesA, 'themes-b': themesB, extras, spiral, edges, meta });
-export const REGISTRY = Object.freeze(mergeGroups([basics, routes, themesA, themesB, extras, spiral, edges, meta]));
+export const GROUPS = Object.freeze({ basics, routes, 'themes-a': themesA, 'themes-b': themesB, extras, spiral, edges, meta, arcade });
+export const REGISTRY = Object.freeze(mergeGroups([basics, routes, themesA, themesB, extras, spiral, edges, meta, arcade]));

@@ -78,6 +78,9 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 
 **Money**
 
+Mini Slots uses `mini_slots`, the explicit full-prize exception in config. Other sources share the usual side budget.
+Always show the returned credited amount, and consume a saved claim before paying it.
+
 - `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`. An ad press uses the source `'ad'`, which is what the Broke mood doubles.
 - `ctx.spend(amount, reason?)`: takes from the bank, never below zero, answers what it took. No debt, and it does not touch `total`. Pace does not apply. Reasons add up in `ctx.state.spent`.
 - `ctx.guardBuy(fn(item) -> {refuse: 'line'} | null)`: refuse or delay a buy; the line shows as a toast. Returns a remover. Use this, never capture listeners on the shop. It cannot make a run impossible: a row goes through after 3 refusals whatever you answer, a fork or ending row never reaches you, and a throw lets the row through.
@@ -85,6 +88,8 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.mod({fps?, click?, wall?, walls?, price?})`: value modifiers `(value, state, now) => value`, `price` also gets `item` last. Pure: no DOM, no rng, no writes. Registered on each mount, folded in order. For a chance-based payoff use `ctx.on('tap', ...)` + `ctx.pay`.
 
 **Events**
+
+- `ending {id}` fires immediately when an ending starts, before its visual fade. Video owners pause on this event and release their media on cleanup.
 
 - `ctx.on(event, fn)`: `tap {gain,x,y,auto}`, `buy {item,count,cost}`, `fork {fork,lane}`, `wall {gain,x,y,corner}`, `pause`, `resume`, `suspend {on, reason}` (the host's panic or focus stop; sound and clocks are already stopped when you hear it), `golden`, `ad`, `pictures {source}`, `ads {jokesOff}`. `ctx.emit(event, data)` sends one: Golden Button emits `golden`, an ad click emits `ad`.
 

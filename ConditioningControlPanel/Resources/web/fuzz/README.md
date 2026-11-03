@@ -23,9 +23,10 @@ Do not open `index.html` from `file://`: modules and the Loom need a server root
 ## How long a run takes
 
 `tests/routes.test.mjs` pins route timing with pure numbers: every route takes 25 to 37 minutes at 4 taps/s with side money and
-modifiers on (`sim/route.js`, option `side` and `mods`). What keeps that true whatever an unlock pays: everything through
-`ctx.pay` shares a budget (`SIDE_SHARE` in `data/config.js`, `sideLump` in `sim/economy.js`), and modifiers past a knee count at
-a fraction (`MOD_*`). To check the real game, which is too slow for CI:
+modifiers on (`sim/route.js`, option `side` and `mods`). Ordinary `ctx.pay` prizes share a budget (`SIDE_SHARE` in
+`data/config.js`, `sideLump` in `sim/economy.js`), and modifiers past a knee count at a fraction (`MOD_*`). Mini Slots is the
+explicit exception: scarce free coins limit spins, and its wins pay in full. The pure sim cannot predict these interactions.
+The no-prizes run buys every optional toy and remains below 51 minutes. To check the real game, which is too slow for CI:
 
 ```bash
 node dev/serve.mjs 8811 &
@@ -71,7 +72,14 @@ ending before 20, gaps under about 60 s, side money 10 to 25% of income.
 - Juice (`docs/JUICE-PLAYBOOK.md`): every effect has an IN and an OUT, rewards fly to the counter, failure subtracts.
 - Plain first: colour, fonts, sound and motion are things the player buys, so app code adds none of them.
 
-## Owed
+## Small arcade widgets
 
-Wave 1 fills `ui/unlocks/` lane by lane. Later: icons, real Scrolller pictures, CCP clip ads, podcast clips, per-ending art, desktop,
-website and phone doors, the rename.
+`ui/unlocks/arcade/` contains Toy Box, Mini Breakout, Racing Thoughts footage, Mini Slots and the Prize Dispenser. Each has
+its own purchase and saved state; the existing quiz uses the chosen T&C theme. Clock and payout models have Node tests.
+`dev/arcade-drive.mjs` checks real desktop/touch interactions. `dev/measure.mjs` exercises their controls and reports action
+counts. The race clip is authentic recorded gameplay, muted; it never controls the collect bonus. MP4 files are in Git LFS.
+
+## Still separate
+
+Real Scrolller sign-in/feed, CCP clip ads, finished podcast recordings, per-ending art, desktop/web/phone doors and the final
+currency name remain separate work.

@@ -155,7 +155,8 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 }
 @media (max-width: 1099.98px) {
   :root { --dock-h: 46px; }
-  #l-side { z-index: 62; display: block; }   /* a tray and its strip stay above whatever is on the page, under the rising numbers */
+  #l-side { z-index: 62; display: block; }   /* Trays clear the page; active questions still sit above them. */
+  #l-over { z-index: 63; }
   #dock-strip { z-index: 62; }
   .rail { display: contents; }
   .dk { display: none; }

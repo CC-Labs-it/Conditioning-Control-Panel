@@ -34,6 +34,13 @@ const EXTRA_ROWS = [
   { id: 'asmr', emoji: '🎧', name: 'ASMR', what: 'A player for soft ASMR sits at the edge of the screen. Off air for now.', line: 'Closer than you think.', cost: 5000, lane: 'side', req: ['f5'], pay: 'f', fps: 20 },
   { id: 'guide', emoji: '🗺️', name: 'Guide', what: 'Open a map of every unlock and where it leads.', line: 'Now you can see what you skipped.', cost: 9000, lane: 'side', req: ['screen'], pay: '-' },
   { id: 'panel', emoji: '🎛️', name: 'Control Panel', what: 'Turn anything you have unlocked on or off.', line: 'You were always in control. Sure.', cost: 400000, lane: 'side', req: ['overlay'], pay: '-' },
+  { id: 'toy_box', emoji: '', name: 'Toy Box', what: 'Fit the chess pieces into their matching slots. Pack the box, collect a prize, then flip it for another set.', line: 'Everything in its place.', cost: 2500, lane: 'side', req: ['f5'], pay: '-' },
+  { id: 'mini_breakout', emoji: '', name: 'Mini Breakout', what: 'An endless little Breakout plays itself. Hover to take the paddle. Clearing a board pays, and playing earns extra.', line: 'Just one more brick.', cost: 4800, lane: 'side', req: ['f2'], pay: '-' },
+  { id: 'mini_race', emoji: '', name: 'Racing Thoughts', what: 'Actual Racing Thoughts gameplay loops in a little window. A separate bonus waits for you to collect.', line: 'Watch the road.', cost: 7500, lane: 'side', req: ['f4'], pay: '-' },
+  { id: 'mini_slots', emoji: '', name: 'Mini Slots', what: 'A free coin every 45 seconds, with room for three. Spin for pictures, spirals and prizes. Two wins in every six spins.', line: 'The house is feeling generous.', cost: 12500, lane: 'side', req: ['glossy'], pay: '-' },
+  { id: 'dispenser', emoji: '', name: 'Prize Dispenser', what: 'Turn the crank, then catch the prize bubble within 2.5 seconds of landing. Ready again after 30 seconds.', line: 'Catch it before it goes.', cost: 22000, lane: 'side', req: ['mini_slots'], pay: '-' },
+  { id: 'dispenser_fast', emoji: '', name: 'Quick Refill', what: 'The prize dispenser refills in 22 seconds.', line: 'Less waiting. Same small window.', cost: 40000, lane: 'side', req: ['dispenser'], pay: '-' },
+  { id: 'dispenser_faster', emoji: '', name: 'Express Refill', what: 'The prize dispenser refills in 15 seconds.', line: 'Keep a finger free.', cost: 75000, lane: 'side', req: ['dispenser_fast'], pay: '-' },
 ];
 
 /* The design sim paid for 30 minutes with nothing on top. The real game has prizes and modifiers on top (capped in
@@ -90,7 +97,7 @@ function moveRows(rows) {
 /* Row text that named a multiple. Modifiers bend past a knee (sim/economy.js), so a row says more, never how many times. */
 const WHAT_OVERRIDE = {
   /* Pop-up questions have four answers now, in one fixed spot. */
-  quiz: 'A question pops up at the edge of the screen with four answers. The one the game wants pays a lot, the others a little.',
+  quiz: 'A four-answer pop quiz follows your chosen theme. The intended answer pays more, silly answers pay a little. Three right answers complete a lesson.',
   swap: 'Answers trade places when your pointer gets close.',
   flee: 'The wrong answers slide away from your finger.',
   crowd: 'Fake answer buttons multiply across the card, and the real four hide among them.',

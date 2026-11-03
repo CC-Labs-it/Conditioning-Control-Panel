@@ -335,6 +335,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     endingBegun = true;
     stopped = true;
     audio?.stopStreams?.();
+    emit('ending', { id });
     if (!restored) {
       recordEnding(life, run, id);
       save();

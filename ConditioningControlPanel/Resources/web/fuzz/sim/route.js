@@ -1,7 +1,7 @@
 /* sim/route.js - a greedy player through one route, on the real economy. Same method as the design's sim.js: buys
  * everything it can reach in price order, skips alternate endings. With side: false no side game ever pays, which is the
- * slowest a real run can be. With side: true every side game pays the whole budget, which with `mods` set to a steady
- * boost is the fastest. A real run lies between the two; dev/measure.mjs plays the real thing. */
+ * slowest a real run can be. With side: true the shared side budget pays in full. Scarce slot wins pay outside that budget,
+ * so this is a planning estimate rather than a bound. dev/measure.mjs plays the real page and its arcade interactions. */
 
 import { ITEMS, FORKS, FORK_OF_LANE } from '../data/items.js';
 import { CONFIG } from '../data/config.js';

@@ -166,6 +166,18 @@ test('a stream dies with its unlock and at the end; suspend holds audio before a
   assert.equal(log[0], 'stopStreams');
 });
 
+test('ending notifies video owners before waiting for the visual fade', async () => {
+  let finishFade, heard = false;
+  const { engine, ui } = setup({ stray: { mount(c) { c.on('ending', () => { heard = true; }); return {}; } } });
+  engine.mount('stray');
+  ui.ending = () => new Promise((resolve) => { finishFade = resolve; });
+  const ending = engine.end('drop');
+  assert.equal(heard, true);
+  assert.equal(engine.scopes.has('stray'), true);
+  finishFade(); await ending;
+  assert.equal(engine.scopes.has('stray'), false);
+});
+
 test('with no kit a stream is a harmless stand-in', () => {
   let s;
   const { engine } = setup({ stray: { mount(c) { s = c.audio.stream('a.mp3'); return {}; } } });
@@ -410,7 +422,7 @@ test('a single fork handler and a plain row pass through untouched', () => {
 });
 
 test('the registry merges independent group files, no id claimed twice, every id real', () => {
-  assert.deepEqual(Object.keys(GROUPS).sort(), ['basics', 'edges', 'extras', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
+  assert.deepEqual(Object.keys(GROUPS).sort(), ['arcade', 'basics', 'edges', 'extras', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
   const seen = new Set();
   for (const [name, group] of Object.entries(GROUPS)) {
     for (const [id, entry] of Object.entries(group)) {
