@@ -5,6 +5,7 @@
  * ==========================================================================*/
 
 import { createCueBudget } from './repetition.js';
+import { createMixer } from './mixer.js';
 
 export const BUS = Object.freeze({ sfx: 0.3, ambient: 0.2, voice: 0.5, podcast: 0.5 });
 export const PLUCKS = Array.from({ length: 18 }, (_, i) => `assets/audio/pluck/wood_${String(i).padStart(2, '0')}.wav`);
@@ -16,7 +17,27 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
   const loops = new Set();
   const streams = new Set();
   const shots = new Set(), cueBudget = createCueBudget();
+  const mixer = createMixer(), sourceNodes = new Set(), sourceLevels = new Map();
   let generation = 0;
+
+  const sourceLevel = (id) => sourceLevels.get(id) ?? 1;
+  function registerSource(bus, source, sourceLabel) {
+    const id = typeof source === 'string' && source.length && source.length <= 128 ? source : bus === 'voice' ? 'voices' : bus;
+    const label = sourceLabel || ({ sfx: 'Effects', ambient: 'Ambient', voices: 'Voices', podcast: 'Podcast' }[id]);
+    mixer.register(id, label);
+    return id;
+  }
+  mixer.subscribe((sources) => {
+    sourceLevels.clear();
+    for (const s of sources) sourceLevels.set(s.id, s.muted ? 0 : s.volume);
+    for (const route of sourceNodes) {
+      const v = sourceLevel(route.source), param = route.g.gain;
+      param.cancelScheduledValues(ctx.currentTime);
+      if (v === 0) param.setValueAtTime(0, ctx.currentTime);
+      else param.setTargetAtTime(v, ctx.currentTime, .015);
+    }
+    for (const s of streams) syncStream(s);
+  });
 
   function clearShots() {
     generation++;
@@ -44,23 +65,37 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
    * and its pause itself, in the same call that changes the state, so panic never waits on an unlock. Hands on `el` are
    * put back: a volume or muted change is reverted, a play during a hold is paused. `muted` beside `volume` because iOS
    * ignores volume on media elements. */
-  function toMaster(node, pan) {
+  function toMaster(node, pan, source) {
+    const g = ctx.createGain();
+    g.gain.value = sourceLevel(source);
+    node.connect(g);
     const p = Number.isFinite(pan) && pan !== 0 && ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-    if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); node.connect(p).connect(master); } else node.connect(master);
-    return p;
+    if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p).connect(master); } else g.connect(master);
+    const route = { source, g, disconnect() { sourceNodes.delete(route); g.disconnect?.(); p?.disconnect?.(); } };
+    sourceNodes.add(route);
+    return route;
   }
 
-  /** A panned stream goes through the graph, once, as soon as there is one. Unpanned ones stay off it. */
+  /** Route once so source sliders also work where media-element volume is read-only. */
   function routeStream(s) {
-    if (!armed || s.routed || !s.pan) return;
-    s.routed = true;
-    try { toMaster(ctx.createMediaElementSource(s.el), s.pan); } catch { /* plays unpanned */ }
+    if (!armed || s.routeTried) return;
+    s.routeTried = true;
+    try {
+      s.media = ctx.createMediaElementSource(s.el);
+      s.g = ctx.createGain();
+      s.media.connect(s.g);
+      s.route = toMaster(s.g, s.pan, s.source);
+      s.routed = true;
+    } catch { /* native playback remains available without Web Audio media routing */ }
+    syncStream(s);
   }
 
   function syncStream(s) {
-    s.expected = Math.min(1, Math.max(0, (BUS[s.bus] ?? BUS.sfx) * s.gain * s.fade));
+    const envelope = Math.min(1, Math.max(0, (BUS[s.bus] ?? BUS.sfx) * s.gain * s.fade));
+    if (s.routed) s.g.gain.value = envelope;
+    s.expected = s.routed ? 1 : Math.min(1, envelope * sourceLevel(s.source));
     if (s.el.volume !== s.expected) s.el.volume = s.expected;
-    const silent = level() === 0;
+    const silent = level() === 0 || sourceLevel(s.source) === 0;
     if (s.el.muted !== silent) s.el.muted = silent;
   }
 
@@ -76,13 +111,15 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     streams.delete(s);
     clearInterval(s.fadeTimer);
     try { s.el.pause(); s.el.removeAttribute?.('src'); s.el.load?.(); } catch { /* already gone */ }
+    s.media?.disconnect?.(); s.g?.disconnect?.(); s.route?.disconnect();
   }
 
   /** Returns {el, play(), pause(), setGain(v), stop(ms), playing}. Starts on the first gesture unless autoplay is false. */
-  function stream(url, { bus = 'podcast', gain = 1, loop: looped = false, autoplay = true, pan = 0 } = {}) {
+  function stream(url, { bus = 'podcast', gain = 1, loop: looped = false, autoplay = true, pan = 0, source, sourceLabel } = {}) {
+    source = registerSource(bus, source, sourceLabel);
     const el = makeMedia();
-    const s = { el, bus, gain, pan: Number.isFinite(pan) ? pan : 0, routed: false, fade: 1, expected: 0, wanted: !!autoplay, dead: false, fadeTimer: 0 };
-    if (s.pan) el.crossOrigin = 'anonymous';  // the graph hears nothing from a cross-origin file without it
+    const s = { el, bus, gain, source, pan: Number.isFinite(pan) ? pan : 0, routed: false, routeTried: false, fade: 1, expected: 0, wanted: !!autoplay, dead: false, fadeTimer: 0 };
+    el.crossOrigin = 'anonymous';  // the graph hears nothing from a cross-origin file without it
     el.preload = 'auto';
     el.loop = !!looped;
     el.addEventListener('play', () => { if (held || s.dead) el.pause(); else s.wanted = true; });
@@ -120,7 +157,8 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
       l.g.gain.setValueAtTime(0.0001, ctx.currentTime);
       l.g.gain.exponentialRampToValueAtTime(Math.max(0.0001, (BUS[l.bus] ?? BUS.sfx) * l.gain), ctx.currentTime + l.fadeMs / 1000);
       l.src.connect(l.g);
-      toMaster(l.g, l.pan);
+      l.route = toMaster(l.g, l.pan, l.source);
+      l.src.onended = () => { l.src.disconnect?.(); l.g.disconnect?.(); l.route.disconnect(); };
       l.src.start();
     });
   }
@@ -140,13 +178,14 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     return armed;
   }
 
-  async function play(url, { bus = 'sfx', gain = 1, rate = 1, pan = 0, fadeInMs = 0, fadeOutMs = 0 } = {}) {
-    if (!armed || !url || !level()) return;
+  async function play(url, { bus = 'sfx', gain = 1, rate = 1, pan = 0, fadeInMs = 0, fadeOutMs = 0, source, sourceLabel } = {}) {
+    source = registerSource(bus, source, sourceLabel);
+    if (!armed || !url || !level() || !sourceLevel(source)) return;
     const issued = generation, requestedAt = now();
     const ticket = bus === 'sfx' ? cueBudget.request(url, requestedAt) : null;
     if (bus === 'sfx' && !ticket) return;
     const buf = await load(url);
-    if (!buf || !armed || !level() || issued !== generation || now() - requestedAt > (bus === 'sfx' ? 250 : 1500)) return;
+    if (!buf || !armed || !level() || !sourceLevel(source) || issued !== generation || now() - requestedAt > (bus === 'sfx' ? 250 : 1500)) return;
     const release = bus === 'sfx' ? cueBudget.start(ticket, now()) : () => {};
     if (!release) return;
     const src = ctx.createBufferSource();
@@ -167,16 +206,17 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
       g.gain.linearRampToValueAtTime(0, start + duration);
     }
     src.connect(g);
-    const panner = toMaster(g, pan);
-    const shot = { src, done() { if (!shots.delete(shot)) return; release(); src.disconnect?.(); g.disconnect?.(); panner?.disconnect?.(); } };
+    const route = toMaster(g, pan, source);
+    const shot = { src, done() { if (!shots.delete(shot)) return; release(); src.disconnect?.(); g.disconnect?.(); route.disconnect(); } };
     shots.add(shot);
     src.onended = shot.done;
     try { src.start(); } catch { shot.done(); }
   }
 
   /** A loop asked for before the first gesture starts on the first gesture. Returns {stop(fadeMs)}. */
-  function loop(url, { bus = 'ambient', gain = 1, fadeMs = 1500, pan = 0 } = {}) {
-    const l = { url, bus, gain, fadeMs, pan, src: null, g: null, stopped: false };
+  function loop(url, { bus = 'ambient', gain = 1, fadeMs = 1500, pan = 0, source, sourceLabel } = {}) {
+    source = registerSource(bus, source, sourceLabel);
+    const l = { url, bus, gain, fadeMs, pan, source, src: null, g: null, stopped: false };
     loops.add(l);
     if (armed) startLoop(l);
     return {
@@ -185,6 +225,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
         l.stopped = true; loops.delete(l);
         if (!l.src) return;
         l.g.gain.cancelScheduledValues(ctx.currentTime);
+        if (!(ms > 0)) { try { l.src.stop(); } catch { /* already stopped */ } return; }
         l.g.gain.setTargetAtTime(0.0001, ctx.currentTime, ms / 3000);
         setTimeout(() => { try { l.src.stop(); } catch { /* already stopped */ } }, ms + 50);
       },
@@ -192,7 +233,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
   }
 
   return {
-    arm, play, loop, stream,
+    arm, play, loop, stream, mixer,
     /** The end of a run: every stream dead at once, whoever started it. */
     stopStreams() { clearShots(); for (const s of [...streams]) killStream(s); },
     /** The player's own switch. */

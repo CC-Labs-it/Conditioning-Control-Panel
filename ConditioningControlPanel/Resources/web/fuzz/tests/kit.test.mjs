@@ -144,20 +144,22 @@ test('pan on play and loop goes through a panner, clamped; no pan adds no node',
   assert.equal(log.panners[1].pan.value, 1);
 });
 
-test('a panned stream joins the graph once, before it plays; a plain one stays off it', () => {
+test('all streams join the graph once for source volume; only panned streams add a panner', () => {
   const { kit, made, log } = graphKit();
   kit.stream('a.mp3');
-  assert.equal(log.sources, 0);
-  assert.equal(made[0].crossOrigin, undefined);
-  const s = kit.stream('b.mp3', { pan: 1 });
   assert.equal(log.sources, 1);
+  assert.equal(made[0].crossOrigin, 'anonymous');
+  assert.equal(log.panners.length, 0);
+  assert.equal(made[0].volume, 1, 'the graph owns the gain, without a second element gain');
+  const s = kit.stream('b.mp3', { pan: 1 });
+  assert.equal(log.sources, 2);
   assert.equal(made[1].crossOrigin, 'anonymous');
   assert.equal(log.panners[0].pan.value, 1);
   kit.hold(true);
   assert.equal(made[1].paused, true, 'a panned stream pauses at once too');
   kit.hold(false);
   s.play();
-  assert.equal(log.sources, 1, 'an element can join only once');
+  assert.equal(log.sources, 2, 'an element can join only once');
 });
 
 test('the end of a run kills every stream', () => {
