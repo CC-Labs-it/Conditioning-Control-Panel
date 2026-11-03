@@ -64,8 +64,9 @@
     const blocked = (reason) => { P.hudBlocked[owner] = { reason, at: Math.round(t), n: (P.hudBlocked[owner]?.n || 0) + 1 }; return false; };
     const dock = el.closest('.dk');
     if (dock?.classList.contains('auto') || dock?.classList.contains('min')) {
-      dock.querySelector('.dk-t')?.click();
+      dock.querySelector('.dk-f')?.click();
     }
+    dock?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height || r.bottom <= 0 || r.top >= innerHeight) return blocked(`hidden: ${dock?.className}`);
@@ -96,7 +97,7 @@
     if (race && !race.disabled && hudPress(race, t)) { P.hud.raceCollections++; return; }
 
     const toy = document.querySelector('[data-arcade=toy_box]');
-    if (toy && t >= P.nextToy && !toy.querySelector('.tb-lid')) {
+    if (toy?.dataset.phase === 'play' && t >= P.nextToy) {
       const selected = toy.querySelector('.tb-piece.selected:not(:disabled)');
       if (selected) {
         const id = selected.dataset.toyPiece;
@@ -104,14 +105,14 @@
         if (hudPress(slot, t)) {
           P.hud.toyPieces++;
           if (!toy.querySelector('.tb-piece:not(:disabled)')) {
-            P.hud.toyBoxes++; P.nextToy = Math.max(t, (P.toyStartedAt ?? t) + 30); P.toyStartedAt = null;
+            P.hud.toyBoxes++; P.nextToy = t + 1; P.toyStartedAt = null;
           }
-          else P.nextHud = t + 1;
+          else P.nextHud = t + .45;
           return;
         }
       } else {
         const piece = toy.querySelector('.tb-piece:not(:disabled)');
-        if (hudPress(piece, t)) { P.toyStartedAt ??= t; P.nextHud = t + 1; return; }
+        if (hudPress(piece, t)) { P.toyStartedAt ??= t; P.nextHud = t + .45; return; }
       }
     }
     if (phase === 'ready' && hudPress(dispenser.querySelector('.prize-crank'), t)) {
@@ -199,7 +200,7 @@
             P.nextScan = t + 0.5;
             for (const el of document.querySelectorAll(TAPPABLE)) {
               // Guide and settings are navigation, not repeatable prize controls.
-              if (el.closest('.dk.door')) continue;
+              if (el.closest('.dk.door') || el.matches('.dk-f')) continue;
               if (el.closest('[data-arcade]') || (el.matches('.dk-t') && el.closest('.dk')?.querySelector('[data-arcade]'))) continue;
               const first = P.seen.get(el);
               if (first === undefined) { P.seen.set(el, t); continue; }

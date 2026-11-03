@@ -22,10 +22,43 @@ async function expose(page, id, phone) {
     const chip = page.locator(`.dk-chip[data-fz-owner="${id}"]`);
     await chip.scrollIntoViewIfNeeded(); await chip.click();
   }
-  if (!(await root.isVisible())) await page.locator(`.dk[data-fz-owner="${id}"] .dk-t`).click();
+  const dock = page.locator(`.dk[data-fz-owner="${id}"]`);
+  // Titles raise/drag. Only the explicit fold control minimizes or restores.
+  let point;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    point = await page.evaluate((id) => {
+      const target = document.querySelector(`.dk[data-fz-owner="${id}"]`), head = target.querySelector('.dk-t'), r = head.getBoundingClientRect();
+      for (let y = r.top + 8; y < r.bottom - 3; y += 8) for (let x = r.left + 10; x < r.right - 38; x += 16) {
+        const hit = document.elementFromPoint(x, y);
+        if (head.contains(hit) && !hit.closest('button')) return { x, y, target: true };
+      }
+      // If a title is completely covered, a player can minimize its covering window first.
+      for (const other of [...document.querySelectorAll('.dk:not(.min)')].reverse()) {
+        if (other === target) continue;
+        const b = other.querySelector('.dk-f'), s = b.getBoundingClientRect(), x = s.x + s.width / 2, y = s.y + s.height / 2;
+        if (document.elementFromPoint(x, y) === b) return { x, y, target: false };
+      }
+      return null;
+    }, id);
+    assert.ok(point, `${id}: no reachable title or covering-window control`);
+    if (point.target) break;
+    if (phone) await page.touchscreen.tap(point.x, point.y); else await page.mouse.click(point.x, point.y);
+  }
+  assert.ok(point?.target, `${id}: could not expose title`);
+  await page.mouse.move(point.x, point.y); await page.mouse.down(); await page.mouse.up();
+  if (await dock.evaluate((el) => el.classList.contains('min'))) await dock.locator('.dk-f').click();
   await root.waitFor({ state: 'visible' });
   await page.waitForTimeout(180);
   return root;
+}
+async function nextToyOpening(page) {
+  // Read the deadline and advance in the same page turn, without overwriting the saved phase or deal.
+  await page.evaluate(() => {
+    let ms = window.fuzz.state.store.toy_box.box.nextIn * 1000;
+    while (ms > 0) { const dt = Math.min(100, ms); window.fuzz.engine.step(dt); ms -= dt; }
+  });
+  await page.waitForFunction(() => window.fuzz.state.store.toy_box.box.phase === 'play');
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-arcade=toy_box] img')].every((i) => i.complete && i.naturalWidth));
 }
 async function open(page, id, phone) {
   await page.goto(`${base}?buy=${id},colour,sound&fresh=1`);
@@ -65,7 +98,8 @@ try {
 
     await run(`${label} toy-box`, async () => {
       const root = await open(page, 'toy_box', phone);
-      await page.waitForFunction(() => [...document.querySelectorAll('[data-arcade=toy_box] img')].every((i) => i.complete && i.naturalWidth));
+      assert.equal((await state(page, 'toy_box', 'box')).phase, 'closed');
+      await nextToyOpening(page);
       const s = await state(page, 'toy_box', 'box'), before = await source(page, 'toy_box');
       const first = s.pieces[0];
       if (phone) { await page.locator(`[data-toy-piece=${first}]`).tap(); await page.locator(`[data-toy-slot=${first}]`).tap(); }
@@ -80,8 +114,23 @@ try {
       await page.evaluate(() => { for (const e of document.querySelectorAll('[data-toy-slot]')) e.click(); });
       assert.equal(await source(page, 'toy_box'), paid);
       await common(page, root, `${label}-toy-packed`);
-      await step(page, 1300); assert.equal((await state(page, 'toy_box', 'box')).round, 1);
+      await step(page, 1300); assert.equal((await state(page, 'toy_box', 'box')).completed, 1);
+      assert.equal((await state(page, 'toy_box', 'box')).phase, 'closed');
+      await nextToyOpening(page);
+      const next = await state(page, 'toy_box', 'box'); assert.equal(next.pieces.length, 3);
       await common(page, root, `${label}-toy-next`);
+      const partial = next.pieces[0];
+      await root.locator(`[data-toy-piece=${partial}]`).click(); await root.locator(`[data-toy-slot=${partial}]`).click();
+      await page.click('#wake'); const held = await state(page, 'toy_box', 'box');
+      await step(page, 2000); assert.deepEqual(await state(page, 'toy_box', 'box'), held);
+      await page.click('#resume'); await expose(page, 'toy_box', phone);
+      await step(page, 5600);
+      const missed = await state(page, 'toy_box', 'box');
+      assert.equal(missed.outcome, 'miss'); assert.deepEqual(missed.placed, []);
+      assert.equal(missed.completed, 1); assert.equal(await source(page, 'toy_box'), paid);
+      await nextToyOpening(page);
+      const redealt = await state(page, 'toy_box', 'box');
+      assert.equal(redealt.phase, 'play'); assert.equal(redealt.pieces.length, 3); assert.deepEqual(redealt.placed, []);
     });
 
     await run(`${label} breakout`, async () => {
