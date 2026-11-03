@@ -3,6 +3,7 @@
 
 import { TAB_TITLES } from '../../../data/content/index.js';
 import { whole } from '../../../sim/format.js';
+import { buttonImpulse, contactSparks } from './tap-feel.js';
 import { baseCss, gentleEndsLoops, burst, btnCenter, chip, docOf, fresh, play, pop, PALETTES, setPalette, sfx, spawn, squish, tools } from './fx.js';
 
 /* ---- button wardrobe: latest skin wins, the chip goes back to any owned one ---- */
@@ -63,7 +64,13 @@ function wipe(ctx, color, then) {
 export default {
   /* Round Corners: the first change the button ever gets. */
   rounded: {
-    mount(ctx) { wear(ctx, 'round', '#btn[data-skin=round] { border-radius: 16px; }'); return {}; },
+    mount(ctx) {
+      wear(ctx, 'round', '#btn[data-skin=round] { border-radius: 16px; }');
+      ctx.on('tap', ({ auto }) => {
+        if (!auto && ctx.button.el.dataset.skin !== 'heart') buttonImpulse(ctx);
+      });
+      return {};
+    },
   },
 
   /* Disguised Tab: the real tab title goes boring, and a little tab flies up so the buy is seen on screen too. */
@@ -108,6 +115,7 @@ export default {
   colour: {
     mount(ctx) {
       baseCss(ctx);
+      ctx.on('tap', (event) => contactSparks(ctx, event));
       ctx.css(`
 body { transition: background-color .6s, color .6s; }
 #btn { background: var(--btn-fill); border: 2px solid var(--btn-edge); box-shadow: 0 3px 0 var(--btn-edge); font-weight: 600; }

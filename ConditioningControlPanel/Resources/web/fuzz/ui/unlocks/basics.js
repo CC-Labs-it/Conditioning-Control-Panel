@@ -6,6 +6,7 @@ import trunk from './basics/trunk.js';
 import side from './basics/side.js';
 import side2 from './basics/side2.js';
 import { btnCenter, fresh, rings } from './basics/fx.js';
+import { createTapPhrase } from './basics/tap-feel.js';
 
 const CORNER_NEAR = 6;
 
@@ -78,14 +79,23 @@ export default {
     },
   },
 
-  /* Click Sound: the first audio of the run. Taps click, buys pluck up a scale. */
+  /* Click Sound: a tactile click under a small plucked phrase; a purchase resolves it. */
   sound: {
     mount(ctx) {
-      ctx.on('tap', () => ctx.audio.play('assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.8 }));
-      ctx.on('buy', () => {
-        const n = String(ctx.state.buys % 18).padStart(2, '0');
-        ctx.audio.play(`assets/audio/pluck/wood_${n}.wav`, { bus: 'sfx', gain: 0.8 });
+      const phrase = createTapPhrase();
+      const pluck = (n, gain) => ctx.audio.play(`assets/audio/pluck/wood_${String(n).padStart(2, '0')}.wav`, { bus: 'sfx', gain });
+      ctx.on('tap', ({ auto }) => {
+        const cue = phrase.tap(ctx.state.clock, auto);
+        if (!cue) return;
+        ctx.audio.play('assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: cue.gain });
+        if (cue.note != null) pluck(cue.note, .28);
       });
+      ctx.on('buy', () => {
+        phrase.reset();
+        pluck(6, .55);
+        ctx.after(100, () => pluck(3, .4));
+      });
+      ctx.on('pause', () => phrase.reset());
       // A muted player still sees that the button found its voice.
       if (fresh(ctx)) { const c = btnCenter(ctx); rings(ctx, c.x, c.y); ctx.float(c.x, c.y - 34, 'click', 'font-size:20px;font-weight:700;'); ctx.audio.play('assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.8 }); }
       return {};

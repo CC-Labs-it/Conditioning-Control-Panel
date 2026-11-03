@@ -2,6 +2,7 @@
  * least 48 px to press, whatever it draws, so nothing here can make the button hard to finish with. */
 
 import { baseCss, gentleEndsLoops, burst, btnCenter, docOf, fresh, sfx, spiralCanvas, squish } from './fx.js';
+import { buttonImpulse } from './tap-feel.js';
 
 function wear(ctx, name, css) {
   baseCss(ctx);
@@ -27,7 +28,7 @@ export default {
 #btn[data-skin=heart].down { border: 0; box-shadow: none; transform: scale(1.14,.8); }
 `);
       const el = ctx.button.el;
-      ctx.on('tap', () => { if (el.dataset.skin === 'heart') squish(ctx, el, 1.2); });
+      ctx.on('tap', ({ auto }) => { if (!auto && el.dataset.skin === 'heart') buttonImpulse(ctx, 1.4); });
       return {};
     },
   },

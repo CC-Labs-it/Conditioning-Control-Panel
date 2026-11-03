@@ -8,6 +8,7 @@ import { SECOND_THEME } from './copy.js';
 import { THEME_PALETTES } from '../../palette.js';
 import { burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
 import { THEME_TASTES } from '../theme-skins.js';
+import { buttonImpulse, contactSparks } from './tap-feel.js';
 
 /* A fork lands like a stamp: the choice crosses the middle of the screen. */
 const stampFork = {
@@ -65,7 +66,8 @@ export default {
         const got = ctx.pay(ctx.rates().click * 7, 'lucky', at);
         word(c);
         ctx.float(c.x + c.w / 2 + 24, c.y - 12, `+${ctx.fmt(got)}`, 'color:var(--stamp);font-size:22px;font-weight:700;');
-        if (!auto) squish(ctx, el, 0.8);
+        if (!auto) buttonImpulse(ctx, 1.7, true);
+        contactSparks(ctx, { ...at, auto }, true);
         sfx(ctx, 'sfx/chip_pop.mp3', 0.45);
         if (!auto) moan(ctx);
         ctx.emit('lucky', { x: at.x, y: at.y, auto });
