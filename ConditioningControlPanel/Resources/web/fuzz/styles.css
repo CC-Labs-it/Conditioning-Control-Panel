@@ -126,44 +126,33 @@ button { font: inherit; color: inherit; }
 @keyframes ready { 50% { background-color: var(--ready); filter: brightness(1.14) saturate(1.1); } }
 body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 
-/* ---- the dock: passive things at the edges. Rails on a wide page, a chip strip and a tray on a narrow one. ui/dock.js ---- */
-#l-side { position: absolute; inset: 0; z-index: 25; display: flex; justify-content: space-between; pointer-events: none; }
-.rail { flex: none; width: var(--rail-w); display: flex; flex-direction: column; gap: 6px; padding: 8px 6px; overflow: hidden auto; scrollbar-width: none; }
-.rail::-webkit-scrollbar { display: none; }
-.rail.right { padding-top: 48px; }   /* under Wake Up */
-.dk { flex: none; display: flex; flex-direction: column; pointer-events: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font-size: 14px; }
-.dk.pin { position: sticky; top: 0; z-index: 3; }
-.dk-t { flex: none; display: flex; align-items: center; gap: 5px; width: 100%; min-height: 24px; padding: 1px 6px; background: transparent; color: var(--ink-soft); border: 0; font: 13px/1.2 var(--font); text-align: left; cursor: default; touch-action: manipulation; }
+/* ---- movable widget windows. Edges are starting positions, not fences. ui/dock.js ---- */
+#l-side { position: absolute; inset: 0; z-index: 62; pointer-events: none; }
+#l-over { z-index: 63; }
+.rail { display: contents; }
+.dk { position: absolute; display: flex; flex-direction: column; pointer-events: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font-size: 14px; box-shadow: 2px 2px 0 rgba(0, 0, 0, .25); }
+.dk-t { flex: none; display: flex; align-items: center; gap: 5px; width: 100%; min-height: 32px; padding: 1px 4px 1px 6px; background: color-mix(in srgb, var(--niche) 12%, var(--panel)); color: var(--ink-soft); border: 0; font: 13px/1.2 var(--font); text-align: left; cursor: grab; touch-action: none; user-select: none; }
+.dk.dragging .dk-t { cursor: grabbing; }
 .dk-t:hover { color: var(--ink); }
 .dk-i { flex: none; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", var(--font); }
 .dk-n { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.dk-f { flex: none; width: 8px; height: 8px; margin-right: 2px; border: solid currentColor; border-width: 0 0 1px 1px; transform: rotate(135deg) translate(-2px, 2px); }
-.dk.min .dk-f, .dk.auto .dk-f { transform: rotate(-45deg); }
-.dk-b { min-width: 0; padding: 0 6px 6px; }
-.dk.min .dk-b, .dk.auto .dk-b, .dk.door .dk-b { display: none; }
-.dk.door .dk-t { min-height: 30px; color: var(--ink); font-weight: 700; cursor: pointer; }
-.dk.door .dk-t:hover { background: color-mix(in srgb, var(--niche) 22%, transparent); }
-.dk.door .dk-f { transform: rotate(-135deg) translate(-1px, 1px); }
-#dock-strip { position: relative; z-index: 31; flex: none; display: flex; align-items: center; gap: 4px; width: calc(100vw - 16px); height: var(--dock-h); padding: 3px 0; overflow: auto hidden; scrollbar-width: none; touch-action: pan-x; }
+.dk-f { flex: none; width: 30px; height: 28px; padding: 0; background: var(--panel); color: var(--ink); border: 1px solid var(--line); font: 20px/1 Arial, sans-serif; cursor: pointer; touch-action: manipulation; }
+.dk-b { min-width: 0; min-height: 0; padding: 0 6px 6px; overflow: auto; overscroll-behavior: contain; }
+.dk.min .dk-b, .dk.door .dk-b { display: none; }
+.dk.door .dk-n { padding: 4px 0; background: transparent; color: var(--ink); border: 0; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+#dock-strip { position: relative; z-index: 64; flex: none; display: flex; align-items: center; gap: 4px; width: calc(100vw - 16px); height: var(--dock-h); padding: 3px 0; overflow: auto hidden; scrollbar-width: none; touch-action: pan-x; }
 #dock-strip::-webkit-scrollbar { display: none; }
 .dk-chip { flex: none; display: flex; align-items: center; gap: 4px; height: 100%; padding: 0 8px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font: 13px/1 var(--font); white-space: nowrap; touch-action: manipulation; }
 .dk-chip.on { background: var(--niche); color: var(--niche-ink); }
 @media (min-width: 1100px) {
-  :root { --rail-w: clamp(200px, calc((100vw - 776px) / 2), 300px); }
+  :root { --rail-w: clamp(200px, calc((100vw - 776px) / 2), 300px); --dock-h: 36px; }
   #page { padding-left: var(--rail-w); padding-right: var(--rail-w); }
-  #dock-strip { display: none; }
 }
 @media (max-width: 1099.98px) {
   :root { --dock-h: 46px; }
-  #l-side { z-index: 62; display: block; }   /* Trays clear the page; active questions still sit above them. */
-  #l-over { z-index: 63; }
-  #dock-strip { z-index: 62; }
-  .rail { display: contents; }
-  .dk { display: none; }
-  .dk.open { display: flex; position: absolute; left: 8px; right: 8px; bottom: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 4px); max-width: 520px; margin: 0 auto; max-height: min(58vh, 460px); box-shadow: 2px 2px 0 rgba(0, 0, 0, .35); }
-  .dk.open .dk-b { display: block; overflow-y: auto; }
-  .dk-t { min-height: 34px; }
-  .dk-f { transform: rotate(-45deg); }
+  .dk.min, .dk.nochip { display: none; }
+  .dk-t { min-height: 44px; }
+  .dk-f { width: 40px; height: 40px; }
 }
 
 /* ---- toast ---- */

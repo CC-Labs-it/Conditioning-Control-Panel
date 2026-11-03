@@ -59,15 +59,14 @@ export function makeContext(engine, scope) {
     layer: (name, side) => ui.layer(name, side),
     /* The run's colours: { a, b, soft, ink, spiral: [c1, c2], themes }. Event 'palette' fires when they change. */
     palette: () => paletteOf(engine.run),
-    /* A passive widget's place at the screen's edge: answers the element to fill. See ENGINE.md. Its rail and whether it is
-     * folded are kept for this unlock, so a reload or a remount lands in the same place. */
+    /* A movable widget window. Layout stays in this run's store, including the preview's in-memory run. */
     dock(opts = {}) {
       scope.docks = (scope.docks || 0) + 1;
       const key = `_dock${scope.docks}`;
       const saved = bag()[key] || {};
       const bought = engine.run.order.indexOf(item.id);
       const s = ui.dock.add({
-        edge: opts.edge || saved.edge,
+        edge: saved.edge || opts.edge,
         title: brandText(opts.title ?? item.name),
         icon: opts.icon ?? item.emoji ?? '',
         order: opts.order ?? slotOrder(bought, scope.docks - 1),
@@ -76,8 +75,9 @@ export function makeContext(engine, scope) {
         door: opts.door || null,
         pin: !!opts.pin,
         keep: !!opts.keep,
-        min: !!saved.min,
-        onMin(v) { bag()[key].min = v; },
+        min: typeof saved.min === 'boolean' ? saved.min : opts.min,
+        layout: saved,
+        onLayout(value) { bag()[key] = { ...bag()[key], ...value }; opts.onLayout?.(value); },
       });
       for (const host of [s.root, s.chip]) {
         const badge = host?.querySelector('.dk-i');
@@ -87,9 +87,8 @@ export function makeContext(engine, scope) {
       if (!saved.edge && !ctx.gentle) {
         ctx.anim(s.root, [{ transform: `translateX(${s.side === 'left' ? -40 : 40}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'ease-out' });
         if (s.chip) ctx.anim(s.chip, [{ transform: 'scale(.6)' }, { transform: 'scale(1.12)', offset: 0.6 }, { transform: 'none' }], { duration: 300, easing: 'ease-out' });
-        if (ui.dock.isRail()) s.root.scrollIntoView?.({ block: 'nearest' });
       }
-      bag()[key] = { edge: s.side, min: !!saved.min };
+      bag()[key] = { ...saved, ...s.layout() };
       s.root.dataset.fzOwner = item.id;
       if (s.chip) s.chip.dataset.fzOwner = item.id;
       incomeFeel(ctx, () => ui.dock.isRail() ? s.root : s.chip);

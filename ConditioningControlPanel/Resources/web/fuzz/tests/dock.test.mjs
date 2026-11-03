@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DOCK_MIN_W, dockIsRail, emptierEdge, railWidth, slotOrder } from '../ui/dock.js';
+import { DOCK_MIN_W, dockIsRail, emptierEdge, railWidth, slotOrder, clampWindow, createDock } from '../ui/dock.js';
 
 test('the rail width matches the sum in styles.css and leaves the stage its room', () => {
   assert.equal(railWidth(1099), 0);
@@ -33,4 +33,96 @@ test('no unlock draws straight into a rail any more', () => {
     const src = readFileSync(new URL(`../ui/unlocks/${f}`, import.meta.url), 'utf8');
     assert.ok(!/layer\('side'/.test(src), `${f} still reaches for a rail`);
   }
+});
+
+function harness(W = 1280, H = 800) {
+  class Element {
+    constructor(tag) {
+      this.tagName = tag.toUpperCase(); this.children = []; this.style = {}; this.listeners = {}; this.attributes = {};
+      this.classList = { add: (c) => this.classes.add(c), remove: (c) => this.classes.delete(c), contains: (c) => this.classes.has(c),
+        toggle: (c, on = !this.classes.has(c)) => { on ? this.classes.add(c) : this.classes.delete(c); return on; } };
+      this.classes = new Set();
+    }
+    set className(v) { this.classes = new Set(v.split(' ')); }
+    get childElementCount() { return this.children.length; }
+    append(...els) { els.forEach((e) => this.appendChild(e)); }
+    appendChild(el) { this.children.push(el); el.parent = this; }
+    remove() { this.parent.children = this.parent.children.filter((e) => e !== this); }
+    setAttribute(k, v) { this.attributes[k] = v; }
+    addEventListener(k, fn) { (this.listeners[k] ||= []).push(fn); }
+    closest() { return this.tagName === 'BUTTON' ? this : null; }
+    getBoundingClientRect() { return { height: this.classes.has('min') ? 34 : 150 }; }
+    fire(type, extra = {}) { for (const fn of this.listeners[type] || []) fn({ target: this, pointerId: 1, button: 0, clientX: 0, clientY: 0, preventDefault() {}, ...extra }); }
+  }
+  const frames = [], events = [], listeners = {}, pause = { hidden: true };
+  const win = { innerWidth: W, innerHeight: H, requestAnimationFrame: (fn) => frames.push(fn), addEventListener: (n, fn) => { listeners[n] = fn; }, CustomEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } } };
+  const doc = { defaultView: win, createElement: (t) => new Element(t), getElementById: () => pause, dispatchEvent: (e) => events.push(e) };
+  const strip = new Element('div'), rails = { left: new Element('div'), right: new Element('div') };
+  const dock = createDock({ doc, strip, rails });
+  return { dock, win, pause, events, flush: () => { while (frames.length) frames.shift()(); }, resize: () => listeners.resize() };
+}
+
+test('crowded windows overlap without folding, and a body press raises its saved z order', () => {
+  const h = harness(1280, 400), saved = [];
+  const windows = Array.from({ length: 12 }, (_, i) => h.dock.add({ title: `Window ${i}`, edge: 'left', onLayout: (v) => { saved[i] = v; } }));
+  h.flush();
+  assert.ok(windows.every((s) => !s.root.classList.contains('min') && !s.root.classList.contains('auto')));
+  assert.ok(windows.every((s) => s.y >= 44 && s.y <= 352));
+  const oldTop = windows.at(-1).z;
+  windows[0].root.fire('pointerdown', { target: windows[0].body });
+  assert.ok(saved[0].z > oldTop);
+  windows[0].head.fire('click');
+  assert.equal(windows[0].min, false, 'the title is a drag handle, not a fold switch');
+  windows[0].fold.fire('click');
+  assert.equal(saved[0].min, true);
+});
+
+test('title dragging persists on release and control buttons cannot start a drag', () => {
+  const h = harness(), saves = [];
+  const s = h.dock.add({ title: 'Toy', onLayout: (v) => saves.push(v) }); h.flush();
+  const old = s.layout();
+  s.head.fire('pointerdown', { target: s.fold });
+  s.head.fire('pointermove', { clientX: 200, clientY: 100 });
+  assert.equal(s.x, old.x);
+  s.head.fire('pointerdown', { clientX: 10, clientY: 20 });
+  s.head.fire('pointermove', { clientX: 410, clientY: 220 });
+  assert.equal(s.x, old.x + 400);
+  assert.equal(s.y, old.y + 200);
+  s.head.fire('pointerup');
+  assert.equal(saves.at(-1).x, s.x);
+  assert.ok(h.events.some((e) => e.type === 'fz-dock-move' && e.detail.root === s.root));
+  h.pause.hidden = false;
+  s.fold.fire('click');
+  assert.equal(s.min, false, 'pause blocks window controls');
+});
+
+test('saved positions and minimize preference survive reload and resize stays reachable', () => {
+  const h = harness(), saved = { x: 980, y: 610, z: 45, min: true };
+  const s = h.dock.add({ title: 'Saved', min: saved.min, layout: saved }); h.flush();
+  assert.equal(s.x, 980); assert.equal(s.y, 610); assert.equal(s.z, 45); assert.equal(s.min, true);
+  h.win.innerWidth = 390; h.win.innerHeight = 420; h.resize(); h.flush();
+  assert.ok(s.x >= 0 && s.x + 360 <= 390);
+  assert.ok(s.y >= 44 && s.y + 44 <= 420);
+  assert.deepEqual(clampWindow({ x: NaN, y: Infinity }, { w: 360, W: 390, H: 420 }), { x: 8, y: 48 });
+});
+
+test('phone chips open independent windows and explicit minimize returns to the chip', () => {
+  const h = harness(390, 800), a = h.dock.add({ title: 'A' }), b = h.dock.add({ title: 'B' }); h.flush();
+  assert.ok(a.min && b.min);
+  a.chip.fire('click'); b.chip.fire('click');
+  assert.ok(!a.min && !b.min, 'opening B never closes A');
+  a.fold.fire('click');
+  assert.ok(a.min && !b.min);
+  a.chip.fire('click');
+  assert.ok(a.z > b.z);
+});
+
+test('panel bar raises a covered window before a second press minimizes it', () => {
+  const h = harness(), a = h.dock.add({ title: 'A' }), b = h.dock.add({ title: 'B' }); h.flush();
+  a.chip.fire('click');
+  assert.ok(!a.min && !b.min && a.z > b.z);
+  a.chip.fire('click');
+  assert.ok(a.min && !b.min);
+  a.chip.fire('click');
+  assert.ok(!a.min && a.z > b.z);
 });

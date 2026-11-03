@@ -1,12 +1,10 @@
-/* ui/unlocks/extras/quiz.js - Pop-Up Question and the Button Trouble lane. One card at a time, always in the same spot: on
- * a wide page over the first slot of the left rail, on a phone along the bottom above the dock strip. No backdrop: the
+/* ui/unlocks/extras/quiz.js - Pop-Up Question and the Button Trouble lane. One card at a time inside a movable window. No backdrop: the
  * game keeps running behind it. Four answers, one of them what the game wants. That one pays a lot, any other a little,
  * and the card then shows which it was. Every card closes: it answers, or it gives up by itself after a while. A melted
  * answer pays nothing and costs nothing. tricks.js holds the 20 ways to be annoying. */
 
 import { QUESTIONS, TRICKS, quizPay } from '../../../data/content/questions.js';
 import { QUIZ_THEMES, lessonAnswer, takeThemedQuestion } from '../../../data/content/themed-questions.js';
-import { dockIsRail } from '../../dock.js';
 import { QUIZ_COPY as C } from './copy.js';
 import { FONT, cardUp, h, pick } from './kit.js';
 import { TRICK_FNS } from './tricks.js';
@@ -53,15 +51,14 @@ body.gentle .xq-wob span{animation:none;}
 
 const POP = 'assets/audio/pop/Pop.mp3';
 const FIRST_MS = 26000, EVERY_MS = 48000, EVERY_JITTER = 18000, GIVE_UP_MS = 30000;
-const MIN_SCALE = 0.68;
 
 function createQuiz(ctx) {
   ctx.css(CSS);
-  const host = ctx.el('div', 'position:absolute;inset:0;z-index:5;pointer-events:none;', null, 'over');
-  /* The card's fixed spot on a wide page. It also says when the next one is due, and a phone does not need that. */
-  const spot = ctx.dock({ edge: 'left', order: -1, chip: false, pin: true, title: C.title, icon: ctx.item.emoji });
+  /* The whole lesson lives in its window, so dragging, minimizing and stacking apply to its answers too. */
+  const spot = ctx.dock({ edge: 'left', order: -1, min: false, pin: true, title: C.title, icon: ctx.item.emoji });
   const idle = ctx.el('div', '', '', spot);
   idle.className = 'xq-idle';
+  const host = ctx.el('div', 'position:relative;margin-top:5px;', null, spot);
   let open = null, lastId = null, dueAt = 0;
   let lesson = lessonAnswer(ctx.store.get('lesson'), false).progress;
 
@@ -91,36 +88,7 @@ function createQuiz(ctx) {
     return q;
   }
 
-  /** How wide a card is: the slot on a wide page, nearly the whole page on a phone. */
-  const cardWidth = () => {
-    const { w } = ctx.bounds();
-    return dockIsRail(w) ? spot.parentElement.offsetWidth : Math.min(420, w - 16);
-  };
-
-  /** Always the same spot. Too tall for the room shrinks it a little, and tapping and the next buy go on. */
-  function place(card, cardH) {
-    const { w, h: H } = ctx.bounds();
-    card.style.scale = '';
-    if (dockIsRail(w)) {
-      const r = spot.parentElement.getBoundingClientRect();
-      const room = H - r.top - 8;
-      card.style.transformOrigin = '0 0';
-      if (cardH > room) card.style.scale = String(Math.max(MIN_SCALE, room / cardH));
-      card.style.left = `${r.left}px`;
-      card.style.top = `${r.top}px`;
-      return;
-    }
-    const strip = ctx.parts.shop.ownerDocument.getElementById('dock-strip')?.offsetHeight || 0;
-    const goal = ctx.parts.shop.querySelector('#goal')?.getBoundingClientRect();
-    const b = ctx.button.el.getBoundingClientRect();
-    const below = (goal?.height ? goal.bottom : b.bottom) + 6;
-    const bottom = strip + 6;
-    const room = H - bottom - below;
-    card.style.transformOrigin = '50% 100%';
-    if (cardH > room) card.style.scale = String(Math.max(MIN_SCALE, room / cardH));
-    card.style.left = `${(w - card.offsetWidth) / 2}px`;
-    card.style.top = `${H - bottom - cardH}px`;
-  }
+  const cardWidth = () => Math.max(160, host.clientWidth || spot.parentElement.offsetWidth - 14);
 
   function close(paid) {
     const o = open;
@@ -141,7 +109,7 @@ function createQuiz(ctx) {
     if (open) close(false);
     const q = chooseQuestion(trick);
     const W = cardWidth();
-    const card = h('div', `width:${W}px;left:-999px;top:0;`, null, host);
+    const card = h('div', `position:relative;width:${W}px;max-width:100%;`, null, host);
     card.className = W < 240 ? 'xq xq-compact' : 'xq';
     card.dataset.quizTheme = ctx.pick('f5') || '';
     card.dataset.quizQuestion = q.id;
@@ -242,15 +210,10 @@ function createQuiz(ctx) {
     const giveUpMs = (TRICK_FNS[trick]?.extraMs || 0) + GIVE_UP_MS;
     (TRICK_FNS[trick]?.draw || TRICK_FNS.none.draw)(t);
 
-    const cardH = card.offsetHeight;
-    place(card, cardH);
     t.anim(tb, [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: giveUpMs, easing: 'linear', fill: 'forwards' });
     ctx.anim(card, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, translate: '0 12px' }, { opacity: 1, translate: '0 0' }], { duration: ctx.gentle ? 1200 : 240, easing: 'ease-out' });
     ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.08 });
     t.after(giveUpMs, () => { ctx.toast(pick(ctx, C.giveUp)); close(false); });
-    /* Same spot after a resize. */
-    let seen = ctx.bounds();
-    t.every(700, () => { const n = ctx.bounds(); if (n !== seen) { seen = n; place(card, card.offsetHeight); } });
     return o;
   }
 
