@@ -33,6 +33,7 @@ const m = (s) => (s == null ? '  -  ' : (s / 60).toFixed(1).padStart(5));
 const browser = await firefox.launch({ headless: true, executablePath: FF, firefoxUserPrefs: { 'media.volume_scale': '0.0' } });
 const all = [];
 
+try {
 for (const profile of profiles) {
   for (const route of routes) {
     const t0 = Date.now();
@@ -54,11 +55,14 @@ for (const profile of profiles) {
     await page.evaluate(([lanes, taps, frame, collect, panelOff]) => window.__play.start({ picks: { f1: lanes[0], f2: lanes[1], f3: lanes[2], f4: lanes[3], f5: lanes[4] }, taps, frame, collect, panelOff }), [lanes, PROFILES[profile].taps, FRAME_MS, COLLECT, PANEL_OFF]);
     await page.evaluate(async () => {
       const { QUESTIONS } = await import('/fuzz/data/content/questions.js');
-      window.__yes = new Set(QUESTIONS.flatMap((q) => q.answers.filter((a) => a.tone === 'yes').map((a) => a.label)));
+      const { THEMED_QUESTIONS } = await import('/fuzz/data/content/themed-questions.js');
+      window.__yes = new Set([...QUESTIONS, ...Object.values(THEMED_QUESTIONS).flat()]
+        .flatMap((q) => q.answers.filter((a) => a.tone === 'yes').map((a) => a.label)));
     });
     let res = null;
     while (true) {
       res = await page.evaluate((s) => window.__play.run(s), 60);
+      if (Math.floor(res.t / 60) % 5 === 0) console.log(`  ${route} ${Math.round(res.t / 60)} min: ${JSON.stringify(await page.evaluate(() => { const r = window.__play.report(); return { hud: r.hud, blocked: r.hudBlocked }; }))}`);
       if (res.done || res.t >= MAX_MIN * 60) break;
     }
     const report = await page.evaluate(() => window.__play.report());
@@ -72,12 +76,13 @@ for (const profile of profiles) {
     console.log(`  ends   ${Object.entries(row.endings).map(([k, v]) => `${k} ${m(v)}`).join(' ')}`);
     console.log(`  money  ${top}`);
     console.log(`  side   lumps ${row.lumpShare}%, mods ${row.modShare}%, pressed ${row.pressed}, paid/asked ${(row.side.paid / Math.max(1, row.side.asked)).toFixed(2)}`);
+    console.log(`  HUD    ${Object.entries(row.hud || {}).map(([k, v]) => `${k} ${v}`).join(', ')}`);
     console.log(`  lumps  ${Object.entries(row.lumps).sort((a, b) => b[1].got - a[1].got).slice(0, 8).map(([k, l]) => `${k} ${l.n}x ${(l.secs / l.n).toFixed(1)}s late ${l.lateN ? (l.lateSecs / l.lateN).toFixed(1) : '-'}s`).join(', ')}`);
     if (row.errors.length) console.log(`  ERRORS ${row.errors.join(' | ')}`);
     if (OUT) writeFileSync(OUT, JSON.stringify(all, null, 1));
   }
 }
-await browser.close();
+} finally { await browser.close(); }
 
 const first = (r, ids) => { const v = ids.map((i) => r.at[i]).filter((x) => x != null); return v.length ? Math.min(...v) : null; };
 const THEME_FIRST = (id) => /^(tr|bi|dr|si|go|lo|ce|in)_/.test(id) && !id.endsWith('_head') && !id.endsWith('_pod');

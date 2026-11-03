@@ -55,6 +55,71 @@
     el.dispatchEvent(new MouseEvent('click', o));
   }
 
+  /* HUD controls persist after use. Work through their actual buttons repeatedly,
+   * including opening a folded dock; a synthetic pointer cannot capture a pointer
+   * that the browser never pressed, so use the supported keyboard click path. */
+  function hudPress(el, t) {
+    if (!el || el.disabled) return false;
+    const owner = el.closest('[data-arcade]')?.dataset.arcade;
+    const blocked = (reason) => { P.hudBlocked[owner] = { reason, at: Math.round(t), n: (P.hudBlocked[owner]?.n || 0) + 1 }; return false; };
+    const dock = el.closest('.dk');
+    if (dock?.classList.contains('auto') || dock?.classList.contains('min')) {
+      dock.querySelector('.dk-t')?.click();
+    }
+    el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || r.bottom <= 0 || r.top >= innerHeight) return blocked(`hidden: ${dock?.className}`);
+    const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
+    const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
+    const hit = document.elementFromPoint(x, y);
+    if (!hit || !el.contains(hit)) return blocked(`covered: ${hit?.id || hit?.className || hit?.tagName}`);
+    el.click();
+    P.pressed += 1;
+    P.hudBusyUntil = t + .45;
+    return true;
+  }
+
+  function playHud(t) {
+    if (t < P.nextHud) return;
+    P.nextHud = t + .5;
+    const dispenser = document.querySelector('[data-arcade=dispenser]');
+    const phase = dispenser?.dataset.phase;
+    if (phase === 'dissolve' && P.lastDispenserPhase !== 'dissolve') P.hud.dispenserMisses++;
+    if (phase === 'catch' && P.lastDispenserPhase !== 'catch') P.catchAt = t + .45;
+    P.lastDispenserPhase = phase;
+    if (phase === 'catch' && !P.skipCatch && t >= P.catchAt && hudPress(dispenser.querySelector('.prize-bubble'), t)) {
+      P.hud.dispenserCatches++; return;
+    }
+    const slots = document.querySelector('[data-arcade=mini_slots] .mini-slot-spin');
+    if (slots && !slots.disabled && hudPress(slots, t)) { P.hud.slotSpins++; return; }
+    const race = document.querySelector('[data-arcade=mini_race] .mini-race-collect');
+    if (race && !race.disabled && hudPress(race, t)) { P.hud.raceCollections++; return; }
+
+    const toy = document.querySelector('[data-arcade=toy_box]');
+    if (toy && t >= P.nextToy && !toy.querySelector('.tb-lid')) {
+      const selected = toy.querySelector('.tb-piece.selected:not(:disabled)');
+      if (selected) {
+        const id = selected.dataset.toyPiece;
+        const slot = [...toy.querySelectorAll('[data-toy-slot]')].find((e) => e.dataset.toySlot === id);
+        if (hudPress(slot, t)) {
+          P.hud.toyPieces++;
+          if (!toy.querySelector('.tb-piece:not(:disabled)')) {
+            P.hud.toyBoxes++; P.nextToy = Math.max(t, (P.toyStartedAt ?? t) + 30); P.toyStartedAt = null;
+          }
+          else P.nextHud = t + 1;
+          return;
+        }
+      } else {
+        const piece = toy.querySelector('.tb-piece:not(:disabled)');
+        if (hudPress(piece, t)) { P.toyStartedAt ??= t; P.nextHud = t + 1; return; }
+      }
+    }
+    if (phase === 'ready' && hudPress(dispenser.querySelector('.prize-crank'), t)) {
+      P.hud.dispenserCranks++;
+      P.skipCatch = P.hud.dispenserCranks % 5 === 0;
+    }
+  }
+
   let P = null;
   window.__play = {
     start({ picks, taps, frame, collect = 30, right = 0.6, panelOff = false }) {
@@ -63,6 +128,8 @@
         picks, taps, frame, collect, right, panelOff, nextCollect: collect, lastSrc: {}, lumps: {}, sideLog: [], nextSide: 0, t: 0, tapDebt: 0, lastBuy: 0, nextBuy: 0, nextScan: 0, nextCard: 0, cardSeen: 0, cardEl: null, cardPress: 0,
         seen: new WeakMap(), gaps: [], forks: {}, endings: {}, pressed: 0, resting: 0,
         buys: [], fpsBase: 0, fpsReal: 0, clickBase: 0, clickReal: 0, nextSample: 0,
+        nextHud: 0, nextToy: 0, toyStartedAt: null, hudBusyUntil: 0, catchAt: Infinity, lastDispenserPhase: null, skipCatch: false, hudBlocked: {},
+        hud: { toyPieces: 0, toyBoxes: 0, slotSpins: 0, raceCollections: 0, dispenserCranks: 0, dispenserCatches: 0, dispenserMisses: 0 },
         ends: f.items.filter((i) => i.kind === 'end' && i.group === 'run'),
       };
       for (const e of P.ends) P.endings[e.id] = null;
@@ -78,9 +145,15 @@
         const t = P.t;
         if (document.getElementById('pause') && !document.getElementById('pause').hidden) f.ui.resume();
 
+        /* The picture-source addendum makes the world inert. Make its ordinary
+         * no-files choice before attempting any controls behind it. */
+        const sourceCard = document.querySelector('.tc [data-pick="none"]');
+        if (sourceCard && sourceCard !== P.sourceCard) { P.sourceCard = sourceCard; P.sourceSeen = t; }
         /* A card blocks the page: read it for a moment, then answer. */
         const card = document.querySelector('#cards .backdrop .card');
-        if (card) {
+        if (sourceCard) {
+          if (t - P.sourceSeen > 2) { sourceCard.click(); P.pictureChoices = (P.pictureChoices || 0) + 1; }
+        } else if (card) {
           if (P.cardEl !== card) { P.cardEl = card; P.cardSeen = t; P.cardPress = 0; }
           if (t - P.cardSeen > 1.2 + P.cardPress * 0.8) {
             const b = [...card.querySelectorAll('button')].filter((x) => !x.disabled);
@@ -96,7 +169,7 @@
           P.tapDebt += P.taps * (dt / 1000);
           while (P.tapDebt >= 1) {
             P.tapDebt -= 1;
-            if (rest) continue;
+            if (rest || t < P.hudBusyUntil) continue;
             if (n % 20 === 0 || !rect) rect = btn.getBoundingClientRect();
             btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0, pointerId: 1 }));
           }
@@ -119,10 +192,15 @@
             if (b) { P.qAsked = (P.qAsked || 0) + 1; if (wanted.includes(b)) P.qRight = (P.qRight || 0) + 1; press(b); P.pressed += 1; P.qAt = t + 0.5; }
           }
 
+          playHud(t);
+
           /* Anything tappable that drifts by: press it after a human moment. */
           if (t >= P.nextScan) {
             P.nextScan = t + 0.5;
             for (const el of document.querySelectorAll(TAPPABLE)) {
+              // Guide and settings are navigation, not repeatable prize controls.
+              if (el.closest('.dk.door')) continue;
+              if (el.closest('[data-arcade]') || (el.matches('.dk-t') && el.closest('.dk')?.querySelector('[data-arcade]'))) continue;
               const first = P.seen.get(el);
               if (first === undefined) { P.seen.set(el, t); continue; }
               if (first < 0 || t - first < 0.9 || el.classList.contains('xq-a')) continue;
@@ -210,7 +288,7 @@
         longest: { gap: Math.round(longest.gap), at: longest.at, next: longest.next },
         over60: P.gaps.filter((g) => g.gap > 60).length,
         meanGap: Math.round((P.t / Math.max(1, P.gaps.length)) * 10) / 10,
-        forks: P.forks, endings: P.endings, pressed: P.pressed,
+        forks: P.forks, endings: P.endings, pressed: P.pressed, hud: { ...P.hud }, hudBlocked: { ...P.hudBlocked }, pictureChoices: P.pictureChoices || 0,
         pod: P.gaps.find((g) => g.next.endsWith('_pod'))?.at ?? null,
         at: Object.fromEntries(P.gaps.map((g) => [g.next, Math.round(g.at)])),
         qAsked: P.qAsked || 0, qRight: P.qRight || 0, lumps: P.lumps, sideLog: P.sideLog, side: { ...s.side }, panelDone: P.panelDone || null,
