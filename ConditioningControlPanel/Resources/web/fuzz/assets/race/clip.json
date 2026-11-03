@@ -1,0 +1,15 @@
+{
+  "title": "Racing Thoughts - Threshold",
+  "kind": "recorded-gameplay",
+  "captureDate": "2026-10-28",
+  "source": "glassroad-threshold-3min-share.mp4",
+  "sourceCapture": { "track": "threshold", "seed": 7, "camera": "chase", "renderer": "webgpu", "pilot": true },
+  "sourceStartSeconds": 25,
+  "durationSeconds": 28,
+  "width": 480,
+  "height": 270,
+  "fps": 24,
+  "audio": false,
+  "file": "threshold-loop.mp4",
+  "poster": "threshold-poster.jpg"
+}
