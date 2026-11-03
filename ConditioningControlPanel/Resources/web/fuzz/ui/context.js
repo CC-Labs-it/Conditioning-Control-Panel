@@ -13,6 +13,7 @@ import { allowedLink } from './links.js';
 import { paletteOf } from './palette.js';
 import { slotOrder } from './dock.js';
 import { incomeFeel } from './income-feel.js';
+import { iconFor } from './icons.js';
 
 /** A deep read-only view: unlocks read the state and change it only through the verbs. */
 const views = new WeakMap();
@@ -78,6 +79,10 @@ export function makeContext(engine, scope) {
         min: !!saved.min,
         onMin(v) { bag()[key].min = v; },
       });
+      for (const host of [s.root, s.chip]) {
+        const badge = host?.querySelector('.dk-i');
+        if (badge) badge.replaceChildren(iconFor(ui.doc, item));
+      }
       /* The first time only: it slides in from its own edge, and its chip gives a little bounce. */
       if (!saved.edge && !ctx.gentle) {
         ctx.anim(s.root, [{ transform: `translateX(${s.side === 'left' ? -40 : 40}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'ease-out' });
