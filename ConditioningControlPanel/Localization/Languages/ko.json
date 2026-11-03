@@ -4539,6 +4539,8 @@
   "btn_choose_color": "선택",
   "setting_filter_color": "필터 색상",
   "tooltip_pink_filter_color": "원하는 틴트 색을 고르거나, 기본 핑크로 되돌리세요.",
+  "setting_pink_filter_under_effects": "나선과 글자 아래로",
+  "tooltip_pink_filter_under_effects": "틴트를 나선, 서브리미널, 버블, 튀는 글자 아래에 깔아 원래 색을 지켜요. 끄면 틴트가 위를 덮어요.",
   "btn_report_bug": "버그 신고",
   "bug_report_title": "버그 신고하기",
   "bug_report_description_label": "무슨 일이 있었나요?",

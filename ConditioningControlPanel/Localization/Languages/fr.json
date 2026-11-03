@@ -4539,6 +4539,8 @@
   "btn_choose_color": "Choisir",
   "setting_filter_color": "Couleur du filtre",
   "tooltip_pink_filter_color": "Choisis une couleur de teinte personnalisée, ou reviens au rose par défaut.",
+  "setting_pink_filter_under_effects": "Sous les spirales et le texte",
+  "tooltip_pink_filter_under_effects": "Place la teinte sous les spirales, subliminaux, bulles et textes rebondissants, pour qu'ils gardent leur couleur. Désactivé : la teinte les recouvre.",
   "btn_report_bug": "Signaler un Bug",
   "bug_report_title": "Signaler un Bug",
   "bug_report_description_label": "Que s'est-il passé ?",

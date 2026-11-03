@@ -542,7 +542,9 @@ namespace ConditioningControlPanel.Services
                 if (!s.NeedsDraw || s.Covered) continue;   // nothing new, or nobody can see it
                 try
                 {
-                    var monitor = Matrix3x2.CreateScale(s.Width / c.RefW, s.Height / c.RefH);
+                    // Cover, never stretch (#1544): a portrait monitor crops the sides instead of squashing.
+                    var (k, ox, oy) = DynamicFrameBudget.CoverFit(s.Width, s.Height, c.RefW, c.RefH);
+                    var monitor = Matrix3x2.CreateScale(k) * Matrix3x2.CreateTranslation(ox, oy);
                     ctx.Target = s.Target;
                     ctx.BeginDraw();
                     ctx.Clear(new Color4(0f, 0f, 0f, 1f));

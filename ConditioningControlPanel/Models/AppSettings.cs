@@ -5372,6 +5372,15 @@ namespace ConditioningControlPanel.Models
             set { _pinkFilterColor = value ?? ""; OnPropertyChanged(); }
         }
 
+        // ccp-bugs #1546: draw the tint UNDER spirals, subliminals, bubbles and bouncing text so it
+        // stops washing them out. Off = today's order (tint over every session effect). Compositor only.
+        private bool _pinkFilterUnderEffects = false;
+        public bool PinkFilterUnderEffects
+        {
+            get => _pinkFilterUnderEffects;
+            set { _pinkFilterUnderEffects = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Attention Game

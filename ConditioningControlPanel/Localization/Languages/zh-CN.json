@@ -5296,6 +5296,8 @@
   "btn_choose_color": "选择",
   "setting_filter_color": "滤镜颜色",
   "tooltip_pink_filter_color": "挑选一个自定义染色，或恢复默认的粉色。",
+  "setting_pink_filter_under_effects": "置于螺旋和文字下方",
+  "tooltip_pink_filter_under_effects": "将染色置于螺旋、潜意识文字、泡泡和弹跳文字下方，保留它们的颜色。关闭时染色覆盖在上面。",
   "btn_suggestion": "建议新功能",
   "suggestion_title": "建议新功能",
   "suggestion_description_label": "你的想法是什么？",

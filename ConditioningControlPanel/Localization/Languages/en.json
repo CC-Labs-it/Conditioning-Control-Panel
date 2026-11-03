@@ -1659,6 +1659,8 @@
   "btn_choose_color": "Choose",
   "setting_filter_color": "Filter color",
   "tooltip_pink_filter_color": "Pick a custom tint color, or reset to the default pink.",
+  "setting_pink_filter_under_effects": "Under spirals and text",
+  "tooltip_pink_filter_under_effects": "Draw the tint under spirals, subliminals, bubbles and bouncing text, so they keep their full color. Off: the tint covers them.",
   "btn_export": "Export",
   "btn_export_session": "Export session",
   "btn_import": "Import",

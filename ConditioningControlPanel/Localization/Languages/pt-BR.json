@@ -4539,6 +4539,8 @@
   "btn_choose_color": "Escolher",
   "setting_filter_color": "Cor do filtro",
   "tooltip_pink_filter_color": "Escolha uma cor de tingimento personalizada, ou volte para o rosa padrão.",
+  "setting_pink_filter_under_effects": "Sob espirais e texto",
+  "tooltip_pink_filter_under_effects": "Coloca o tingimento sob espirais, subliminares, bolhas e texto saltitante, para que mantenham a cor. Desligado: o tingimento os cobre.",
   "btn_report_bug": "Reportar Bug",
   "bug_report_title": "Reportar um Bug",
   "bug_report_description_label": "O que aconteceu?",

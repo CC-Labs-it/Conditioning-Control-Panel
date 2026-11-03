@@ -4539,6 +4539,8 @@
   "btn_choose_color": "選択",
   "setting_filter_color": "フィルターの色",
   "tooltip_pink_filter_color": "好きな色合いを選ぶか、既定のピンクに戻します。",
+  "setting_pink_filter_under_effects": "スパイラルと文字の下に",
+  "tooltip_pink_filter_under_effects": "色合いをスパイラル、サブリミナル、バブル、跳ねる文字の下に描き、元の色を保ちます。オフ: 色合いが上に重なります。",
   "btn_report_bug": "バグを報告",
   "bug_report_title": "バグを報告",
   "bug_report_description_label": "何が起きましたか？",
