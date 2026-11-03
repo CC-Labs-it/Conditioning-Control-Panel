@@ -1,4 +1,5 @@
 import { dispenserState, dispenserStep, dispense, catchPrize, CATCH_MS, DROP_MS } from '../../../sim/arcade.js';
+import { sfx } from '../basics/fx.js';
 
 const CSS = `
 .prize-machine{position:relative;height:256px;overflow:hidden;color:var(--ink);font:600 12px/1.2 var(--font,system-ui);text-align:center;user-select:none}
@@ -66,7 +67,7 @@ export function mountDispenser(ctx) {
     const r = bubble.getBoundingClientRect(), rates = ctx.rates();
     const got = ctx.pay(Math.max(rates.fps * 12, rates.click * 24), 'dispenser', { x: r.left + r.width / 2, y: r.top });
     message = `+${ctx.fmt(got)} ${ctx.brand.currency}`;
-    ctx.audio.play('assets/audio/pop/Pop.mp3', { bus: 'sfx', gain: .13 });
+    sfx(ctx, 'pop/Pop.mp3', .13);
     draw();
   });
   ctx.frame(() => {

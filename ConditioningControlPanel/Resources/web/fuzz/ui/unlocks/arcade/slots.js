@@ -1,5 +1,6 @@
 import { slotState, slotStep, beginSpin, finishSpin, COIN_MS, SPIN_MS } from '../../../sim/arcade.js';
 import { iconMarkup } from '../../icon-art.js';
+import { sfx } from '../basics/fx.js';
 import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/loomSpiral.js';
 
 const CSS = `
@@ -83,7 +84,7 @@ export function mountSlots(ctx) {
         const got = ctx.pay(Math.max(rates.fps * (completed.big ? 90 : 45), rates.click * (completed.big ? 160 : 80)), 'mini_slots',
           { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
         s.result = `${completed.big ? 'Spiral sweep' : 'Lovely little win'} +${ctx.fmt(got)} ${ctx.brand.currency}`;
-        ctx.audio.play('assets/audio/sfx/chime1.mp3', { bus: 'sfx', gain: .22 });
+        sfx(ctx, 'sfx/chime1.mp3', .22);
         if (!ctx.gentle) ctx.anim(reels, [{ transform: 'scale(1)' }, { transform: 'scale(1.05)', offset: .3 }, { transform: 'scale(1)' }], { duration: 450 });
       } else s.result = 'No match. The next coin is on its way.';
     }

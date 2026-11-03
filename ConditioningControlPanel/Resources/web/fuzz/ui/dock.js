@@ -38,6 +38,7 @@ export function createDock({ doc, rails, strip, onStrip }) {
   const isRail = () => !narrow?.matches;
   const count = { left: 0, right: 0 };
   const slots = new Set();
+  const focused = { left: null, right: null };
   let open = null;   // the slot showing as a tray
   let touch = 0, fitQueued = false;
 
@@ -60,11 +61,13 @@ export function createDock({ doc, rails, strip, onStrip }) {
     if (floor) rail.style.maxHeight = `${Math.round(floor)}px`;
     if (rail.scrollHeight <= rail.clientHeight) return;
     for (const s of mine.sort((a, b) => a.touch - b.touch)) {
-      if (s.root.classList.contains('min')) continue;
+      if (s.root.classList.contains('min') || focused[side] === s) continue;
       s.root.classList.add('auto');
       if (rail.scrollHeight <= rail.clientHeight) return;
     }
-    if (floor) rail.style.maxHeight = `${rail.scrollHeight}px`;
+    /* A title press wins over fitting above a picture. Keep that toy open and let
+     * the rail scroll if its headers and body need more than the viewport. */
+    if (floor) rail.style.maxHeight = `${Math.min(win.innerHeight, rail.scrollHeight)}px`;
   }
   function fit() {
     fitQueued = false;
@@ -144,7 +147,10 @@ export function createDock({ doc, rails, strip, onStrip }) {
         head.setAttribute('aria-expanded', String(!shut));
         onMin?.(shut);
       }
+      focused[side] = root.classList.contains('min') ? null : slot;
       fit();
+      head.setAttribute('aria-expanded', String(!root.matches('.min,.auto')));
+      if (focused[side] === slot) root.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     });
     queueFit();
     win.setTimeout?.(queueFit, 500);
@@ -174,6 +180,7 @@ export function createDock({ doc, rails, strip, onStrip }) {
 
     slot.remove = () => {
       if (open === slot) setOpen(null);
+      if (focused[side] === slot) focused[side] = null;
       count[side] = Math.max(0, count[side] - 1);
       slots.delete(slot);
       root.remove();
