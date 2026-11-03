@@ -10,6 +10,7 @@ import { whole, fmt } from '../sim/format.js';
 import { iconFor } from './icons.js';
 import { createTip } from './shop-tip.js';
 import { hueClass } from './palette.js';
+import { goalState } from './purchase-feel.js';
 
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 
@@ -20,7 +21,7 @@ const opensCard = (it) => it.kind === 'fork' || it.kind === 'end';
 
 const TILE_GAP = 6;   // TILE_MIN and the goal's width follow styles.css
 
-export function createShop({ doc, engine, onPress }) {
+export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   const box = doc.getElementById('shop'), goalEl = doc.getElementById('goal'), rowsEl = doc.getElementById('rows'), moreEl = doc.getElementById('more');
   const rows = new Map();
   let goalRow = null, size = 6;
@@ -81,10 +82,15 @@ export function createShop({ doc, engine, onPress }) {
     const fork = it.kind === 'fork';
     setText(r.costNum, fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p));
     if (isGoal) {
-      setText(r.tag, fork ? 'Your choice' : it.kind === 'end' ? 'The end' : 'Next');
+      setText(r.tag, fork ? 'Your choice' : it.kind === 'end' ? 'The end' : short ? 'Next' : 'Ready');
       const fill = `scaleY(${(short ? Math.min(1, run.fuzz / Math.max(1, p)) : 1).toFixed(3)})`;
       if (r.fill !== fill) { r.fill = fill; r.bar.style.transform = fill; }
       r.el.classList.toggle('ready', !short);
+      r.el.classList.toggle('near', short && run.fuzz / Math.max(1, p) >= .75);
+      const state = goalState(r.affordable, !short, r.announced);
+      r.affordable = state.affordable;
+      r.announced = state.announced;
+      if (state.announce) onReady(r.el);
     }
   }
 

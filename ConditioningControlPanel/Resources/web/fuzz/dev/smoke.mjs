@@ -121,20 +121,15 @@ const bits = await page.evaluate(async () => {
 if (bits.shop !== 'shop' || bits.wrap !== 'btn-wrap' || bits.counter !== 'counter' || bits.stage !== 'stage' || bits.ending !== 'l-ending') errors.push(`ctx.parts or the ending layer: ${JSON.stringify(bits)}`);
 if (bits.ratio > 0.85) errors.push(`ctx.speed(0.5) ran at ${bits.ratio}`);
 
-/* ---- the goal row's flash reads --ready ---- */
+/* ---- an affordable goal settles into a readable state, without a permanent flash ---- */
 await page.evaluate(() => { window.fuzz.add(1e4); window.fuzz.ui.draw(true); });
-const flash = await page.evaluate(() => {
-  document.documentElement.style.setProperty('--ready', 'rgb(1, 2, 3)');
+const ready = await page.evaluate(() => {
   const row = document.querySelector('#goal .row.ready');
-  const a = row?.getAnimations().find((x) => x.animationName === 'ready');
-  if (!a) return 'no animation';
-  a.pause(); a.currentTime = 800;
-  const c = getComputedStyle(row).backgroundColor;
-  a.play();
-  document.documentElement.style.removeProperty('--ready');
-  return c;
+  return { visible: !!row && row.getBoundingClientRect().width > 0,
+    repeating: !!row?.getAnimations().some((a) => a.effect?.getTiming().iterations === Infinity),
+    tag: row?.querySelector('.tag')?.textContent };
 });
-if (flash !== 'rgb(1, 2, 3)') errors.push(`the ready flash ignored --ready: ${flash}`);
+if (!ready.visible || ready.repeating || !['Ready', 'Your choice', 'The end'].includes(ready.tag)) errors.push(`goal affordance: ${JSON.stringify(ready)}`);
 
 /* ---- ctx.openLink: only a real press on a card button, only cclabs.app ---- */
 await page.evaluate(() => {

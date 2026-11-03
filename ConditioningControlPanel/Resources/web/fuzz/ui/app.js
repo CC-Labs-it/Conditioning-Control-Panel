@@ -13,6 +13,7 @@ import { createShop } from './shop.js';
 import { openFork } from './fork.js';
 import { pictureRow } from './picture-card.js';
 import { createDock } from './dock.js';
+import { createPurchaseFeel } from './purchase-feel.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -28,7 +29,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const cards = createCards(doc, el.cards);
   const motionQuery = win.matchMedia?.('(prefers-reduced-motion: reduce)');
   let gentleOn = !!extras.gentle, initGentle = !!init.gentle, initReduced = !!init.reduced;
-  let engine = null, shop = null;
+  let engine = null, shop = null, purchaseFeel = null;
   let particles = 0, dims = { w: win.innerWidth, h: win.innerHeight };
   let lockUntil = 0, swapUntil = 0, toastEl = null, tickerBusy = 0;
   let downTimer = 0;
@@ -37,7 +38,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
 
   const reduced = () => initReduced || !!motionQuery?.matches;
   const gentle = () => gentleOn || initGentle || reduced();
-  const applyGentle = () => doc.body.classList.toggle('gentle', gentle());
+  const applyGentle = () => { doc.body.classList.toggle('gentle', gentle()); if (gentle()) purchaseFeel?.clear(); };
 
   /* ---- layers ---- */
   function layer(name, side) {
@@ -222,19 +223,20 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
 
   /* ---- shop presses ---- */
-  function press(id) {
+  function press(id, row) {
     const it = BY_ID[id];
     if (engine.paused) return;
     if (engine.run.fuzz < engine.price(id)) { shop.denied(id); return; }
     if (it.kind === 'fork') {
-      forkCard = openFork(doc, cards, id, (lane) => engine.choose(id, lane));
+      forkCard = openFork(doc, cards, id, (lane) => { purchaseFeel?.prepare(it, row); engine.choose(id, lane); });
       return;
     }
     if (it.kind === 'end' && id !== 'onemore') {
       cards.open({ title: it.name, body: `${it.what} ${it.line}`, front: true, buttons: [{ label: 'Yes', onPress: () => engine.buy(id) }, { label: 'Not yet' }] });
       return;
     }
-    engine.buy(id);
+    purchaseFeel?.prepare(it, row);
+    if (!engine.buy(id).ok) purchaseFeel?.clear();
   }
 
   /* ---- pause card ---- */
@@ -296,6 +298,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
 
   /* ---- ending ---- */
   function endingFade() {
+    purchaseFeel?.clear();
     return new Promise((res) => {
       const f = doc.createElement('div');
       f.className = 'endfade';
@@ -365,6 +368,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     setWakeGate(fn) { wakeGate = fn; },
     bought(item) {
       ui.drawPhrase();
+      purchaseFeel?.bought(item);
       if (item.kind === 'fork') return;
       if (item.line) toast(brandText(item.line));
       bumpCounter();
@@ -376,7 +380,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
 
     attach(eng, hooks) {
       engine = eng;
-      shop = createShop({ doc, engine, onPress: press });
+      purchaseFeel = createPurchaseFeel({ doc, engine, gentle, reduced });
+      shop = createShop({ doc, engine, onPress: press, onReady: (row) => purchaseFeel.ready(row) });
       ui.credits = (id) => credits(id, { hooks });
       el.cur.textContent = BRAND.currencyPlural;
       wireButton();
