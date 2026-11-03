@@ -681,6 +681,7 @@
   "chaster_raffle_ticket_on": "抽選券の番号は{0}に決まります",
   "chaster_raffle_rule": "1回でも足せばその日はカウント。このPCではなくChasterの記録で数えます。",
   "chaster_raffle_rules": "ルール",
+  "chaster_raffle_net_note": "この合計は差し引き後です。今月だれかが引いた時間はここから減ります。",
   "chaster_raffle_off": "抽選はまだ始まっていません。",
   "chaster_raffle_post_days": "自分の日数をDiscordに投稿",
   "chaster_raffle_post_days_tip": "1日1回の投稿：名前、昨日足した時間、今月の合計、日数。オフなら一切表示されません。",

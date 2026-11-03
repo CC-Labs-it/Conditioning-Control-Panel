@@ -681,6 +681,7 @@
   "chaster_raffle_ticket_on": "Numéro de ticket le {0}",
   "chaster_raffle_rule": "Le moindre ajout fait compter la journée. Lu sur Chaster, pas sur ce PC.",
   "chaster_raffle_rules": "Règlement",
+  "chaster_raffle_net_note": "Ce total est net : le temps retiré ce mois-ci, par qui que ce soit, en est déduit.",
   "chaster_raffle_off": "La tombola n'est pas encore ouverte.",
   "chaster_raffle_post_days": "Publier mes jours sur Discord",
   "chaster_raffle_post_days_tip": "Un message par jour : ton nom, le temps ajouté la veille, le total du mois et tes jours. Désactivé, tu n'apparais jamais.",

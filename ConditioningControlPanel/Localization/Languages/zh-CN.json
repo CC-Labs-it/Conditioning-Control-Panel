@@ -686,6 +686,7 @@
   "chaster_raffle_ticket_on": "{0} 发放奖券号码",
   "chaster_raffle_rule": "当天只要有加时就算一天。以 Chaster 的记录为准，不看这台电脑。",
   "chaster_raffle_rules": "规则",
+  "chaster_raffle_net_note": "这是净值：本月任何人减掉的时间都会从中扣除。",
   "chaster_raffle_off": "抽奖还没开始。",
   "chaster_raffle_post_days": "在 Discord 公布我的天数",
   "chaster_raffle_post_days_tip": "每天一条：你的名字、昨天加的时间、本月总计和你的天数。关闭则你永远不会出现。",

@@ -681,6 +681,7 @@
   "chaster_raffle_ticket_on": "응모권 번호는 {0}에 나와요",
   "chaster_raffle_rule": "한 번이라도 더하면 그날이 인정돼요. 이 PC가 아니라 Chaster 기록으로 확인해요.",
   "chaster_raffle_rules": "규칙",
+  "chaster_raffle_net_note": "이 합계는 순수치예요. 이번 달 누가 뺀 시간이든 여기서 빠져요.",
   "chaster_raffle_off": "추첨은 아직 열리지 않았어요.",
   "chaster_raffle_post_days": "Discord에 내 기록 올리기",
   "chaster_raffle_post_days_tip": "하루 한 번 올라가요: 이름, 어제 더한 시간, 이달 합계, 인정된 날 수. 끄면 절대 나오지 않아요.",
