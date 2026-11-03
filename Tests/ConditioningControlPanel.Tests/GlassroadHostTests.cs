@@ -4,6 +4,7 @@ using System.Linq;
 using ConditioningControlPanel.Services.Glassroad;
 using ConditioningControlPanel.Services.PrizeCounter;
 using ConditioningControlPanel.Services.Safety;
+using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json.Linq;
 using Xunit;
 using static ConditioningControlPanel.Services.Safety.PanicPolicy;
@@ -401,6 +402,58 @@ public class GlassroadHostTests
         Assert.Contains("case \"race-result\":", host);
         Assert.Contains("SparklesGameEnd.Claim(GlassroadRules.SparklesGame", host);
     }
+
+    // ---- ccp-bugs #1543: a busy page (Boudoir's course build) is waited for, a crash still closes ----
+
+    [Fact]
+    public void Unresponsive_DoesNotClose_EveryCrashKindStillDoes()
+    {
+        Assert.False(GlassroadRules.ClosesOnProcessFailure(CoreWebView2ProcessFailedKind.RenderProcessUnresponsive));
+        foreach (var kind in Enum.GetValues<CoreWebView2ProcessFailedKind>()
+                     .Where(k => k != CoreWebView2ProcessFailedKind.RenderProcessUnresponsive))
+            Assert.True(GlassroadRules.ClosesOnProcessFailure(kind), kind.ToString());
+    }
+
+    [Fact]
+    public void Busy_IsAnUnresponsiveReport_OrARecentLoadingFrame()
+    {
+        Assert.True(GlassroadRules.IsBusy(true, null));
+        Assert.True(GlassroadRules.IsBusy(false, Sec(10)));
+        Assert.False(GlassroadRules.IsBusy(false, null));
+        Assert.False(GlassroadRules.IsBusy(false, GlassroadRules.LoadingWindow));
+    }
+
+    [Fact]
+    public void Watch_BeforeReady_WaitsLongerWhileBusy()
+    {
+        Assert.Equal(WatchVerdict.Wait, GlassroadRules.Watch(false, Sec(40), Sec(40), false, busy: false));
+        Assert.Equal(WatchVerdict.Close, GlassroadRules.Watch(false, Sec(46), Sec(46), false, busy: false));
+        Assert.Equal(WatchVerdict.Wait, GlassroadRules.Watch(false, Sec(60), Sec(60), false, busy: true));
+        Assert.Equal(WatchVerdict.Close, GlassroadRules.Watch(false, Sec(91), Sec(91), false, busy: true));
+    }
+
+    [Fact]
+    public void Watch_AfterReady_PingsThenClosesUnlessBusy()
+    {
+        Assert.Equal(WatchVerdict.Wait, GlassroadRules.Watch(true, Sec(1), Sec(19), false, busy: false));
+        Assert.Equal(WatchVerdict.Ping, GlassroadRules.Watch(true, Sec(25), Sec(25), false, busy: false));
+        Assert.Equal(WatchVerdict.Close, GlassroadRules.Watch(true, Sec(30), Sec(30), true, busy: false));
+        // The #1543 case: a ready page switching to Boudoir holds its thread; it is waited for, not killed.
+        Assert.Equal(WatchVerdict.Wait, GlassroadRules.Watch(true, Sec(60), Sec(60), true, busy: true));
+        // A page that never comes back still closes.
+        Assert.Equal(WatchVerdict.Close, GlassroadRules.Watch(true, Sec(95), Sec(95), true, busy: true));
+    }
+
+    [Fact]
+    public void Host_RoutesProcessFailureAndWatchdogThroughTheRules()
+    {
+        var host = Read("Services", "Glassroad", "GlassroadHostService.cs");
+        Assert.Contains("GlassroadRules.ClosesOnProcessFailure(kind)", host);
+        Assert.Contains("GlassroadRules.Watch(", host);
+        Assert.Contains("case \"loading\":", host);
+    }
+
+    private static TimeSpan Sec(double s) => TimeSpan.FromSeconds(s);
 
     private static string Read(params string[] parts)
         => File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", Path.Combine(parts)));
