@@ -2,8 +2,8 @@ SECOND LAP: 7.2.2
 
 FIXES
 - Racing Thoughts: Boudoir no longer gets stuck at "Preparing track". the course builds about six times faster, and a slow PC gets time to finish loading instead of the window closing on it.
-- the launcher redraws any tile that stays invisible after it resizes or after you come back from a game.
-- Dynamic wallpaper keeps pictures in shape on vertical monitors: it fills the screen and trims the sides instead of squashing them.
+- the launcher no longer goes blank on setups with several monitors. it grows inside the monitor it is on and redraws itself after a game, and if it still shows nothing it switches to a safer way of drawing for that run.
+- Dynamic wallpaper makes one collage per monitor, at each screen's own size: no more stretched or squashed pictures on a second, vertical or wider monitor. thanks to McKenzi for the report.
 - Circe's Tab: the raffle card says its total is net. time anyone takes off during the month comes out of it.
 - strict lock cards say what really happens: Escape is the default panic key, and panic always ends a card. want Escape to do nothing on a card? bind panic to another key in Settings.
 
