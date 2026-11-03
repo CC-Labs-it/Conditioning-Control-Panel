@@ -8,14 +8,15 @@ export const RACE_POSTER = 'assets/race/threshold-poster.jpg';
 
 export function mountRace(ctx) {
   ctx.css(`
-    [data-arcade=mini_race]{width:100%;max-width:300px;display:grid;gap:6px;padding:6px;color:var(--ink);font:13px Arial,sans-serif}
+    [data-arcade=mini_race]{width:100%;max-width:300px;margin:auto;display:grid;gap:3px;color:var(--ink);font:13px Arial,sans-serif}
     .mini-race-film{position:relative;aspect-ratio:16/9;width:100%;overflow:hidden;border:2px solid var(--niche);background:#15151d}
     .mini-race-film video,.mini-race-film img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
     .mini-race-collect{min-height:44px;width:100%;padding:6px 10px;border:2px solid var(--line);background:var(--niche-soft);color:var(--ink);font:700 13px Arial,sans-serif;touch-action:manipulation;cursor:pointer}
     .mini-race-collect:disabled{cursor:default;opacity:.7}
     .mini-race-collect:not(:disabled){border-color:var(--niche-text);box-shadow:inset 0 -3px 0 var(--niche)}
     .mini-race-caption{font-size:11px;color:var(--ink-soft);text-align:center}
-    .mini-race-receipt{min-height:16px;text-align:center;font-variant-numeric:tabular-nums;font-weight:700}
+    .mini-race-receipt{text-align:center;font-variant-numeric:tabular-nums;font-weight:700}
+    .mini-race-receipt:empty{display:none}
   `);
   const dock = ctx.dock({ title: 'Racing Thoughts' });
   const root = ctx.el('div', '', null, dock);

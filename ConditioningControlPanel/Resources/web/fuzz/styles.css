@@ -130,15 +130,28 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 #l-side { position: absolute; inset: 0; z-index: 62; pointer-events: none; }
 #l-over { z-index: 63; }
 .rail { display: contents; }
-.dk { position: absolute; display: flex; flex-direction: column; pointer-events: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font-size: 14px; box-shadow: 2px 2px 0 rgba(0, 0, 0, .25); }
+.dk { position: absolute; display: flex; flex-direction: column; min-height: 32px; pointer-events: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font-size: 14px; box-shadow: 2px 2px 0 rgba(0, 0, 0, .25); }
 .dk-t { flex: none; display: flex; align-items: center; gap: 5px; width: 100%; min-height: 32px; padding: 1px 4px 1px 6px; background: color-mix(in srgb, var(--niche) 12%, var(--panel)); color: var(--ink-soft); border: 0; font: 13px/1.2 var(--font); text-align: left; cursor: grab; touch-action: none; user-select: none; }
+.dk.min .dk-t, .dk.door .dk-t { padding-right: 38px; }
+.dk.open:not(.door) .dk-t { position: absolute; z-index: 2; top: 2px; left: 3px; width: 26px; min-height: 0; height: 22px; padding: 0; justify-content: center; border: 1px solid var(--line); }
+.dk.open:not(.door) .dk-t::before { content: ''; width: 10px; height: 7px; border-top: 2px solid currentColor; border-bottom: 2px solid currentColor; }
+.dk.open:not(.door) .dk-t .dk-i, .dk.open:not(.door) .dk-t .dk-n { display: none; }
 .dk.dragging .dk-t { cursor: grabbing; }
 .dk-t:hover { color: var(--ink); }
 .dk-i { flex: none; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", var(--font); }
 .dk-n { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.dk-f { flex: none; width: 30px; height: 28px; padding: 0; background: var(--panel); color: var(--ink); border: 1px solid var(--line); font: 20px/1 Arial, sans-serif; cursor: pointer; touch-action: manipulation; }
-.dk-b { min-width: 0; min-height: 0; padding: 0 6px 6px; overflow: auto; overscroll-behavior: contain; }
+.dk-f { position: absolute; z-index: 3; right: 3px; top: 2px; width: 26px; height: 22px; padding: 0; background: var(--panel); color: var(--ink); border: 1px solid var(--line); font: 18px/1 Arial, sans-serif; cursor: pointer; touch-action: manipulation; }
+.dk-b { min-width: 0; min-height: 0; padding: 3px 5px 8px; overflow: auto; overscroll-behavior: contain; }
+.dk.sized .dk-b { flex: 1 1 auto; }
 .dk.min .dk-b, .dk.door .dk-b { display: none; }
+.dk-resize { position: absolute; z-index: 4; padding: 0; background: transparent; border: 0; color: var(--ink-soft); touch-action: none; }
+.dk-resize-right { right: -4px; top: 28px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.dk-resize-bottom { bottom: -4px; left: 8px; right: 14px; height: 8px; cursor: ns-resize; }
+.dk-resize-corner { right: -3px; bottom: -3px; width: 22px; height: 22px; cursor: nwse-resize; }
+.dk-resize-corner::before { content: ''; position: absolute; right: 5px; bottom: 5px; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; }
+.dk-resize:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; background: var(--panel); }
+.dk.min .dk-resize, .dk.door .dk-resize { display: none; }
+.dk.resizing { user-select: none; }
 .dk.door .dk-n { padding: 4px 0; background: transparent; color: var(--ink); border: 0; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
 #dock-strip { position: relative; z-index: 64; flex: none; display: flex; align-items: center; gap: 4px; width: calc(100vw - 16px); height: var(--dock-h); padding: 3px 0; overflow: auto hidden; scrollbar-width: none; touch-action: pan-x; }
 #dock-strip::-webkit-scrollbar { display: none; }
@@ -150,9 +163,13 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 }
 @media (max-width: 1099.98px) {
   :root { --dock-h: 46px; }
+  .dk { min-height: 44px; }
   .dk.min, .dk.nochip { display: none; }
   .dk-t { min-height: 44px; }
-  .dk-f { width: 40px; height: 40px; }
+  .dk.open:not(.door) .dk-t, .dk-f { width: 34px; height: 30px; }
+  .dk-resize-corner { width: 32px; height: 32px; }
+  .dk-resize-right { width: 12px; right: -5px; }
+  .dk-resize-bottom { height: 12px; bottom: -5px; }
 }
 
 /* ---- toast ---- */

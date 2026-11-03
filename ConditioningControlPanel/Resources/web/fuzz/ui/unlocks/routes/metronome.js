@@ -2,12 +2,12 @@ import { btnCentre, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
 
 const CSS = `
-.tc-metronome{width:100%;max-width:250px;margin:auto;color:var(--ink);text-align:center;user-select:none;--mt-case:color-mix(in srgb,var(--niche) 28%,#c78769)}
+.tc-metronome{width:100%;max-width:220px;margin:auto;color:var(--ink);text-align:center;user-select:none;--mt-case:color-mix(in srgb,var(--niche) 28%,#c78769)}
 .tc-metronome svg{display:block;width:100%;height:auto;overflow:visible}
 .tc-metronome .mt-case{fill:var(--mt-case)}
 .tc-metronome .mt-lamp{fill:#f5e9cf;transition:fill 300ms ease}
 .tc-metronome[data-beat=left] .mt-lamp-left,.tc-metronome[data-beat=right] .mt-lamp-right{fill:#f5c34e}
-.tc-metronome p{margin:0 0 5px;font:600 12px/1.3 var(--font,Arial,sans-serif);color:var(--ink-soft)}
+.tc-metronome p{margin:0;font:600 11px/1.2 var(--font,Arial,sans-serif);color:var(--ink-soft)}
 `;
 
 /** One tick per second, with the original tap window and streak payout. */

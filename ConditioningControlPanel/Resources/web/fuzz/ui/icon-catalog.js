@@ -1,6 +1,7 @@
 /* Every sold object has an intentional illustration. A suffix adds a small
  * physical badge to a shared object; missing rows fail the coverage test. */
 const families = {
+  mixer: 'audio_mixer',
   button: 'start rounded bigbtn:plus tinybtn:minus gold:star go_hold:hand go_worn:crack',
   paddle: 'stray',
   chart: 'fpsv depth:star bi_iq:down bi_nums:question z_pct:percent z_seen:eye',

@@ -2,17 +2,17 @@ import { dispenserState, dispenserStep, dispense, catchPrize, CATCH_MS, DROP_MS 
 import { sfx } from '../basics/fx.js';
 
 const CSS = `
-.prize-machine{position:relative;height:256px;overflow:hidden;color:var(--ink);font:600 12px/1.2 var(--font,system-ui);text-align:center;user-select:none}
-.prize-globe{position:absolute;top:4px;left:calc(50% - 65px);width:130px;height:105px;border:3px solid #352835;border-radius:65px 65px 30px 30px;background:#b5e5e4;box-shadow:inset 7px 7px 0 #ffffff6b;overflow:hidden}
+.prize-machine{position:relative;height:222px;overflow:hidden;color:var(--ink);font:600 12px/1.2 var(--font,system-ui);text-align:center;user-select:none}
+.prize-globe{position:absolute;top:0;left:calc(50% - 65px);width:130px;height:99px;border:3px solid #352835;border-radius:65px 65px 30px 30px;background:#b5e5e4;box-shadow:inset 7px 7px 0 #ffffff6b;overflow:hidden}
 .prize-marble{position:absolute;width:29px;height:29px;border:2px solid #352835;border-radius:50%;background:var(--niche);box-shadow:inset 5px 4px 0 #ffffff50}
-.prize-base{position:absolute;top:91px;left:calc(50% - 72px);width:144px;height:67px;background:var(--niche);border:3px solid #352835;border-radius:12px 12px 25px 25px;box-sizing:border-box}
-.prize-crank{position:absolute;top:102px;left:calc(50% - 23px);width:46px;height:46px;border:3px solid #352835;border-radius:50%;background:#ffe1a2;color:#352835;cursor:pointer;font-size:28px;line-height:1;padding:0}
+.prize-base{position:absolute;top:85px;left:calc(50% - 72px);width:144px;height:58px;background:var(--niche);border:3px solid #352835;border-radius:12px 12px 25px 25px;box-sizing:border-box}
+.prize-crank{position:absolute;top:92px;left:calc(50% - 23px);width:46px;height:46px;border:3px solid #352835;border-radius:50%;background:#ffe1a2;color:#352835;cursor:pointer;font-size:28px;line-height:1;padding:0}
 .prize-crank:disabled{cursor:default}.prize-crank::before{content:'';display:block;width:34px;height:9px;margin:auto;border:2px solid #352835;border-radius:8px;background:#fff1cc;transform:rotate(-30deg)}
-.prize-chute{position:absolute;left:calc(50% - 18px);top:149px;width:36px;height:17px;background:#352835;border-radius:0 0 12px 12px}
-.prize-pad{position:absolute;top:211px;left:calc(50% - 68px);width:136px;height:16px;border:2px solid #352835;border-radius:50%;background:#deb88b}
-.prize-bubble{position:absolute;top:169px;left:calc(50% - 25px);width:50px;height:50px;border:2px solid #352835;border-radius:50%;background:radial-gradient(circle at 30% 25%,#fff 0 7%,#fff7 9%,#b4e3edab 35%,#ad83cebb);box-shadow:inset -4px -5px 0 #a279bb70;cursor:pointer;color:#352835;font-size:25px;padding:0;touch-action:manipulation}
-.prize-bubble[hidden]{display:none}.prize-bubble::before{content:'✦';display:block}.prize-note{position:absolute;bottom:0;left:4px;right:4px;min-height:25px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
-.prize-catch{position:absolute;top:228px;height:3px;left:calc(50% - 52px);width:104px;background:var(--niche);transform-origin:left;border-radius:3px}
+.prize-chute{position:absolute;left:calc(50% - 18px);top:139px;width:36px;height:14px;background:#352835;border-radius:0 0 12px 12px}
+.prize-pad{position:absolute;top:185px;left:calc(50% - 64px);width:128px;height:12px;border:2px solid #352835;border-radius:50%;background:#deb88b}
+.prize-bubble{position:absolute;top:149px;left:calc(50% - 23px);width:46px;height:46px;border:2px solid #352835;border-radius:50%;background:radial-gradient(circle at 30% 25%,#fff 0 7%,#fff7 9%,#b4e3edab 35%,#ad83cebb);box-shadow:inset -4px -5px 0 #a279bb70;cursor:pointer;color:#352835;font-size:25px;padding:0;touch-action:manipulation}
+.prize-bubble[hidden]{display:none}.prize-bubble::before{content:'✦';display:block}.prize-note{position:absolute;bottom:0;left:4px;right:4px;min-height:18px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.prize-catch{position:absolute;top:200px;height:3px;left:calc(50% - 52px);width:104px;background:var(--niche);transform-origin:left;border-radius:3px}
 `;
 
 export function mountDispenser(ctx) {

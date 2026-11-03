@@ -10,5 +10,5 @@ export function moan(ctx) {
   if (i === last) i = (i + 1) % CLIPS.length;
   last = i;
   busyUntil = now + CLIPS[i][1];
-  ctx.audio.play(`assets/audio/moans/${CLIPS[i][0]}.mp3`, { bus: 'voice', gain: 0.4, fadeInMs: 400, fadeOutMs: 180 });
+  ctx.audio.play(`assets/audio/moans/${CLIPS[i][0]}.mp3`, { bus: 'voice', source: 'moans', sourceLabel: 'Lucky moans', gain: 0.4, fadeInMs: 400, fadeOutMs: 180 });
 }

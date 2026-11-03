@@ -14,10 +14,12 @@ import { openFork } from './fork.js';
 import { pictureRow } from './picture-card.js';
 import { createDock } from './dock.js';
 import { createPurchaseFeel } from './purchase-feel.js';
+import { windowPreferences } from './preferences.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
   const win = doc.defaultView;
+  const layouts = windowPreferences(extras);
   const el = {
     world: $('world'), page: $('page'), stage: $('stage'), counter: $('counter'), count: $('count'), cur: $('cur'), btn: $('btn'),
     wrap: $('btn-wrap'), lock: $('btn-lock'), pause: $('pause'), wake: $('wake'), resume: $('resume'), mute: $('mute'), gentle: $('gentle'),
@@ -193,6 +195,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   function wirePresses() {
     const note = (ev) => {
       if (!ev.isTrusted) return;
+      if (engine && !engine.paused && !engine.suspended) audio.arm();
       if (ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
       pressTarget = ev.target;
       win.setTimeout(() => { pressTarget = null; }, 0);
@@ -366,6 +369,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     },
     showCount(n) { el.count.textContent = whole(n); shown = -1; },
     setWakeGate(fn) { wakeGate = fn; },
+    getWindowLayout: layouts.get,
+    saveWindowLayout(key, value) { layouts.set(key, value); engine?.save(); },
     bought(item) {
       ui.drawPhrase();
       purchaseFeel?.bought(item);

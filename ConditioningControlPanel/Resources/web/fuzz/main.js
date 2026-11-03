@@ -19,12 +19,13 @@ import { bindPalette } from './ui/palette.js';
 import { REGISTRY } from './ui/unlocks/index.js';
 import { openIntro } from './ui/intro.js';
 import { openPictureCard, pictureCardDue, PICTURE_ROUTES } from './ui/picture-card.js';
+import { readPreviewPreferences, writePreviewPreferences, PREVIEW_PREFS_KEY } from './ui/preferences.js';
 
 const qs = new URLSearchParams(location.search);
 const toyPreview = qs.get('preview') === 'toys';
 const paceArg = Number(qs.get('pace')) || 0;
 const buyArg = toyPreview
-  ? ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_frame', 'quiz', 'toy_box', 'mini_breakout', 'mini_race', 'mini_slots', 'dispenser_faster']
+  ? ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_frame', 'audio_mixer', 'quiz', 'toy_box', 'mini_breakout', 'mini_race', 'mini_slots', 'dispenser_faster']
   : (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const moodArg = qs.get('mood');
 const fresh = qs.has('fresh') || buyArg.length > 0;
@@ -37,6 +38,8 @@ function memoryStorage() {
 }
 let storage;
 try { storage = fresh ? memoryStorage() : window.localStorage; } catch { storage = memoryStorage(); }
+let preferenceStorage;
+try { preferenceStorage = window.localStorage; } catch { preferenceStorage = memoryStorage(); }
 
 bridge.boot({ onInit: start });
 
@@ -44,7 +47,7 @@ function start(init) {
   document.title = BRAND.game;
   const saved = load(storage);
   const life = saved?.life || createLife();
-  const extras = saved?.extras || {};
+  const extras = toyPreview ? readPreviewPreferences(preferenceStorage) : saved?.extras || {};
   /* New run reloads the page: that is not a visit, so it does not ask again. One shot, set only by newRun below. */
   const newRunReload = !!extras.again && life.contract;
   delete extras.again;
@@ -66,6 +69,7 @@ function start(init) {
     if (leaving || !accepted) return;
     if (engine && !pictureDoor) extras.pictures = engine.pictures.source;
     store(storage, run, life, extras);
+    if (toyPreview) writePreviewPreferences(preferenceStorage, extras);
   };
 
   engine = createEngine({
@@ -73,6 +77,8 @@ function start(init) {
     host: { send: bridge.send, isHosted: bridge.isHosted },
     env: { caps: init.caps || {}, mod: init.mod || 'default', hosted: bridge.isHosted, pictureSource: pictureDoor || savedPictures },
   });
+  audio.mixer?.restore(extras.audioMix);
+  audio.mixer?.subscribe(() => { extras.audioMix = audio.mixer.snapshot(); persist(); });
 
   /* ---- the pictures card ---- */
   let pictureCard = null;
@@ -106,7 +112,7 @@ function start(init) {
       pictureCard.close();
       return true;
     },
-    forget() { leaving = true; forget(storage); location.reload(); },
+    forget() { leaving = true; forget(storage); if (toyPreview) preferenceStorage.removeItem(PREVIEW_PREFS_KEY); location.reload(); },
     exportSave: () => serialize(run, life, extras),
     importSave(text) {
       if (!parse(text)) return false;

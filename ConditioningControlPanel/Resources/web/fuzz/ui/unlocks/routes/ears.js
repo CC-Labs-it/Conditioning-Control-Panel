@@ -153,7 +153,7 @@ export default {
       ctx.vars(DARK);
       ctx.vars({ '--page': '#232a38', '--panel': '#2d3546', '--panel-short': '#262d3c', '--fill': '#3f4a60', '--line': '#6f7c96', '--btn': '#3a4358' });
       darkCss(ctx);
-      ctx.audio.loop(LOOP('rain'), { bus: 'ambient', gain: 1, fadeMs: 3000 });
+      ctx.audio.loop(LOOP('rain'), { bus: 'ambient', gain: 0.5, fadeMs: 3000 });
       const c = ctx.el('canvas', 'position:absolute;inset:0;width:100%;height:100%;z-index:1;', null, 'back');
       const g = c.getContext('2d');
       let drops = [], spent = 0, seen = null;

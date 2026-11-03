@@ -422,7 +422,7 @@ test('a single fork handler and a plain row pass through untouched', () => {
 });
 
 test('the registry merges independent group files, no id claimed twice, every id real', () => {
-  assert.deepEqual(Object.keys(GROUPS).sort(), ['arcade', 'basics', 'edges', 'extras', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
+  assert.deepEqual(Object.keys(GROUPS).sort(), ['arcade', 'audioMixer', 'basics', 'edges', 'extras', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
   const seen = new Set();
   for (const [name, group] of Object.entries(GROUPS)) {
     for (const [id, entry] of Object.entries(group)) {

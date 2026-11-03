@@ -31,11 +31,18 @@ function readOnly(o) {
 }
 
 const brandObj = Object.freeze({ ...BRAND, text: brandText, money });
+const AUDIO_SOURCES = {
+  sound: ['clicks', 'Button clicks'], wallpop: ['bounce', 'Bouncing buttons'],
+  a_hum: ['hum', 'Low hum'], a_phones: ['hum', 'Low hum'], a_bin: ['binaural', 'Binaural hum'],
+  a_tick: ['metronome', 'Metronome'], a_whisp: ['whispers', 'Whispers'],
+};
 
 export function makeContext(engine, scope) {
   const { ui, audio, host } = engine;
   const item = scope.item;
   const after = item.group === 'after';
+  const [source, sourceLabel] = AUDIO_SOURCES[item.id] || [item.id, brandText(item.name)];
+  const soundOptions = opts => ({ source, sourceLabel, ...opts });
   const bag = () => { const owner = after ? engine.life : engine.run; return (owner.store[item.id] ||= {}); };
 
   const addEl = (el) => {
@@ -63,7 +70,8 @@ export function makeContext(engine, scope) {
     dock(opts = {}) {
       scope.docks = (scope.docks || 0) + 1;
       const key = `_dock${scope.docks}`;
-      const saved = bag()[key] || {};
+      const layoutKey = `${item.id}:${key}`;
+      const saved = ui.getWindowLayout?.(layoutKey, bag()[key]) || bag()[key] || {};
       const bought = engine.run.order.indexOf(item.id);
       const s = ui.dock.add({
         edge: saved.edge || opts.edge,
@@ -75,9 +83,10 @@ export function makeContext(engine, scope) {
         door: opts.door || null,
         pin: !!opts.pin,
         keep: !!opts.keep,
+        width: opts.width,
         min: typeof saved.min === 'boolean' ? saved.min : opts.min,
         layout: saved,
-        onLayout(value) { bag()[key] = { ...bag()[key], ...value }; opts.onLayout?.(value); },
+        onLayout(value) { bag()[key] = { ...bag()[key], ...value }; ui.saveWindowLayout?.(layoutKey, value); opts.onLayout?.(value); },
       });
       for (const host of [s.root, s.chip]) {
         const badge = host?.querySelector('.dk-i');
@@ -195,7 +204,8 @@ export function makeContext(engine, scope) {
     },
 
     audio: {
-      play: (path, opts) => audio?.play(path, opts),
+      mixer: audio?.mixer,
+      play: (path, opts) => audio?.play(path, soundOptions(opts)),
       /* Silence everything for a moment, capped. Wall clock on purpose: it must always end, also across a pause. */
       muteFor(ms) {
         audio?.setBlank?.(true);
@@ -203,12 +213,12 @@ export function makeContext(engine, scope) {
         engine.blankTimer = setTimeout(() => audio?.setBlank?.(false), Math.min(Math.max(0, ms), 15000));
       },
       loop(path, opts) {
-        const l = audio?.loop(path, opts) || { stop() {} };
+        const l = audio?.loop(path, soundOptions(opts)) || { stop() {} };
         scope.loops.add(l);
         return { stop(ms) { scope.loops.delete(l); l.stop(ms); } };
       },
       stream(url, opts) {
-        const s = !scope.dead && audio?.stream?.(url, opts);
+        const s = !scope.dead && audio?.stream?.(url, soundOptions(opts));
         if (!s) return { el: null, play() {}, pause() {}, setGain() {}, stop() {}, playing: false };
         const h = {
           el: s.el, play: s.play, pause: s.pause, setGain: s.setGain,
@@ -222,7 +232,7 @@ export function makeContext(engine, scope) {
     voice(slug, opts) {
       const hostUrl = engine.env.caps?.words?.urls?.[slug];
       const url = hostUrl || (engine.env.caps?.words?.bank === 'host' ? null : clipUrl(slug));
-      if (url) audio?.play(url, { bus: 'voice', ...opts });
+      if (url) audio?.play(url, soundOptions({ bus: 'voice', ...opts }));
     },
 
     pictures: engine.pictures,

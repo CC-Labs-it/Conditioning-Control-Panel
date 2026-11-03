@@ -24,7 +24,8 @@ const CSS = `
 .xq-a.ok,.xq-bub.ok{background:#1f9d55;color:#fff;border:2px solid #14663a;opacity:1 !important;}
 .xq-a.bad,.xq-bub.bad{background:#a3232b;color:#fff;border:2px solid #6b1219;opacity:1 !important;}
 .xq-done button,.xq-done .xq-stick{pointer-events:none;}
-.xq-idle{font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+.xq-idle{min-height:22px;padding:0 28px;display:grid;place-items:center;font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+@media(max-width:1099px){.xq-idle{min-height:30px;padding:0 38px;}}
 .xq-note{position:absolute;font:600 12px ${FONT};color:#555;text-align:center;pointer-events:none;}
 .xq-bar{position:absolute;height:6px;background:#eee;border:1px solid #999;box-sizing:border-box;overflow:hidden;pointer-events:none;}
 .xq-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--niche),var(--niche-2));transform-origin:0 50%;transform:scaleX(0);}
@@ -109,7 +110,8 @@ function createQuiz(ctx) {
     if (open) close(false);
     const q = chooseQuestion(trick);
     const W = cardWidth();
-    const card = h('div', `position:relative;width:${W}px;max-width:100%;`, null, host);
+    // Keep an active trick intact during resizing; the window scrolls until the next question fits its new width.
+    const card = h('div', `position:relative;width:${W}px;`, null, host);
     card.className = W < 240 ? 'xq xq-compact' : 'xq';
     card.dataset.quizTheme = ctx.pick('f5') || '';
     card.dataset.quizQuestion = q.id;

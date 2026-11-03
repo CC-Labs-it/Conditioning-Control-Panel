@@ -29,6 +29,7 @@ const TRUNK_ORDER = ['start', 'stray', 'fpsv', 'f1', 'softw', 'ticker', 'f5', 'f
 const DROPPED = new Set(['heart']);   // owner, 2026-11-02: no heartbeat
 /* Rows that came after the design source. A row with `any` needs at least one of those as well as all of `req`. */
 const EXTRA_ROWS = [
+  { id: 'audio_mixer', emoji: '', name: 'Audio Mixer', what: 'A separate volume slider and mute button for each sound. Your mix is remembered.', line: 'A little less of that one.', cost: 300, lane: 'side', req: ['sound', 'f1'], pay: '-' },
   { id: 'sp_colors', emoji: '🎨', name: 'Spiral Colours', what: 'The spiral slowly drifts through your colours.', line: 'It will not sit still.', cost: 7000, lane: 'look', req: [], any: ['e_spiral', 'a_spiral'], pay: '-' },
   { id: 'sp_shapes', emoji: '🧿', name: 'Spiral Shapes', what: 'The spiral keeps melting into new shapes.', line: 'Follow it anyway.', cost: 20000, lane: 'look', req: ['sp_colors'], pay: '-' },
   { id: 'asmr', emoji: '🎧', name: 'ASMR', what: 'A player for soft ASMR sits at the edge of the screen. Off air for now.', line: 'Closer than you think.', cost: 5000, lane: 'side', req: ['f5'], pay: 'f', fps: 20 },
