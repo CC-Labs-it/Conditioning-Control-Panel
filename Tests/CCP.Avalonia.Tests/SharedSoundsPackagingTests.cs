@@ -36,12 +36,15 @@ public sealed class SharedSoundsPackagingTests
         string[] packed = { "flashes_audio", "companion_audio/mods/builtin-bambisleep",
                             "companion_audio/mods/builtin-locked", "companion_audio/mods/builtin-sissyhypno" };
         string[] packExt = { ".mp3", ".wav", ".ogg", ".m4a" };
+        // The temporary in-box Circe override (WPF $(CirceNeutralInBoxOverride), mirrored) is the one exception.
+        var inBox = CirceList(WpfCsproj()).Select(p => Path.GetFileName(p)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var shipped = packed
             .Select(d => Path.Combine(new[] { sounds }.Concat(d.Split('/')).ToArray()))
             .Where(Directory.Exists)
             .SelectMany(d => Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories))
             .Where(f => packExt.Contains(Path.GetExtension(f).ToLowerInvariant())
                         || (f.Contains("builtin-sissyhypno") && Path.GetExtension(f).ToLowerInvariant() == ".png"))
+            .Where(f => !(f.Contains("builtin-locked") && inBox.Contains(Path.GetFileName(f))))
             .ToArray();
         Assert.True(shipped.Length == 0, "content-pack files shipped in-box: " + string.Join(", ", shipped));
 
@@ -50,4 +53,42 @@ public sealed class SharedSoundsPackagingTests
             Assert.True(File.Exists(Path.Combine(new[] { sounds, "companion_audio", "mods" }
                 .Concat(manifest.Split('/')).ToArray())), $"mod manifest missing: {manifest}");
     }
+
+    /// <summary>The WPF csproj owns $(CirceNeutralInBoxOverride) (build-content-packs.ps1 reads it there);
+    /// the Avalonia head keeps a copy so a Linux Circe never plays the stale pack clips. Same list, and
+    /// every file on it lands in the output.</summary>
+    [Fact]
+    public void CirceInBoxOverrideMatchesWpfAndShips()
+    {
+        var wpf = CirceList(WpfCsproj());
+        var port = CirceList(Path.Combine(RepoRoot(), "CCP.Avalonia", "CCP.Avalonia.csproj"));
+        Assert.NotEmpty(wpf);
+        Assert.Equal(wpf, port);
+        const string assets = @"..\Assets\";
+        foreach (var rel in wpf)
+        {
+            Assert.StartsWith(assets, rel);
+            var path = Path.Combine(new[] { AppContext.BaseDirectory, "Resources" }
+                .Concat(rel.Substring(assets.Length).Split('\\')).ToArray());
+            Assert.True(File.Exists(path), $"in-box Circe clip missing: {path}");
+        }
+    }
+
+    private static string WpfCsproj() =>
+        Path.Combine(RepoRoot(), "ConditioningControlPanel", "ConditioningControlPanel.csproj");
+
+    private static string[] CirceList(string csproj)
+    {
+        var text = File.ReadAllText(csproj);
+        const string open = "<CirceNeutralInBoxOverride>", close = "</CirceNeutralInBoxOverride>";
+        var start = text.IndexOf(open, StringComparison.Ordinal);
+        if (start < 0) return Array.Empty<string>();
+        start += open.Length;
+        var end = text.IndexOf(close, start, StringComparison.Ordinal);
+        return text.Substring(start, end - start)
+            .Split(';').Select(s => s.Trim()).Where(s => s.Length > 0).ToArray();
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }
