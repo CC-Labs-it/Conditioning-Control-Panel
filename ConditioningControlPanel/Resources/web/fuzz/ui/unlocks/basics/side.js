@@ -4,6 +4,7 @@
 import { APP_ONLY, BOXES, FAKE_CHAT, FAKE_INBOX, GOLDEN, LEVELS, SCREEN_TIME, WHEEL } from '../../../data/content/index.js';
 import { baseCss, burst, btnCenter, chip, docOf, fresh, pop, sfx, squish } from './fx.js';
 import { XP_PER_SECOND, XP_PER_TAP, bankOf, collect, xpNeed } from '../../../sim/levels.js';
+import { createCollectionFeel } from './collect-feel.js';
 
 const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length)];
 
@@ -125,6 +126,8 @@ export default {
       const fill = ctx.el('i', 'display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .25s linear;', null, track);
       const b = ctx.el('button', 'min-height:30px;padding:1px 8px;font-size:12px;background:var(--btn);color:var(--btn-ink,inherit);border:1px solid var(--niche);touch-action:manipulation;visibility:hidden;white-space:nowrap;', LEVELS.collect, row);
       b.type = 'button';
+      b.dataset.collectLevels = '';
+      const feeling = createCollectionFeel(ctx);
       const draw = () => {
         const now = bankOf(lvl, xp);
         label.textContent = LEVELS.label.replace('{n}', String(now.lvl));
@@ -141,20 +144,15 @@ export default {
         if (rose) squish(ctx, b, 1.2);
       };
       const press = () => {
+        if (ctx.paused) return;
         const got = collect(lvl, xp);
         if (!got.levels) return;
         const r = b.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top;
-        const k = got.levels, size = Math.min(1, (k - 1) / 5);   // one level is a small party, six or more the biggest
-        ctx.pay(worth(ctx, got.seconds), 'levels', { x: r.left, y: r.top });
+        /* Consume the bank before notifying listeners. Even a re-entrant press cannot pay it twice. */
         lvl = got.lvl; xp = got.xp;
         ctx.store.set('lvl', lvl); ctx.store.set('xp', xp);
-        burst(ctx, x, y, { color: 'var(--niche)', n: 14 + Math.round(26 * size), reach: 80 + 110 * size });
-        if (k > 1) {
-          burst(ctx, x, y, { color: 'var(--niche-2)', n: 8 + Math.round(18 * size), reach: 50 + 150 * size, size: 5 });
-          pop(ctx, x, y - 26, LEVELS.label.replace('{n}', String(lvl)), { color: 'var(--niche)', size: 20 + Math.round(18 * size), ms: 1100 });
-          squish(ctx, ctx.parts.counter, 0.5 + size * 0.5);
-        }
-        sfx(ctx, k >= 3 ? 'sfx/pb_fanfare.mp3' : 'sfx/lvup.mp3', 0.6);
+        const amount = ctx.pay(worth(ctx, got.seconds), 'levels');
+        feeling.show({ levels: got.levels, amount, x, y });
         ctx.say(pick(ctx, LEVELS.up));
         draw();
       };

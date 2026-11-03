@@ -7,18 +7,63 @@ import { LAZY_CAPTIONS } from '../../../data/content/blind.js';
 import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/loomSpiral.js';
 import { COMBO_COPY as C } from './copy.js';
 import { FONT, captions, cardUp, dockTop, h, pick, picker, roomy, slot } from './kit.js';
+import { sfx } from '../basics/fx.js';
+
+const discoveries = new WeakMap();
+
+/** An ingredient must actually be on screen. Hidden trays and off-screen route widgets do not qualify. */
+function ingredient(ctx, id) {
+  const doc = ctx.button.el.ownerDocument, { w, h } = ctx.bounds();
+  for (const e of doc.querySelectorAll(`[data-fz-owner="${id}"]`)) {
+    const r = e.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8 || r.right <= 0 || r.bottom <= 0 || r.left >= w || r.top >= h) continue;
+    const style = doc.defaultView.getComputedStyle(e);
+    if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
+    return { x: Math.max(8, Math.min(w - 8, r.left + r.width / 2)), y: Math.max(8, Math.min(h - 8, r.top + r.height / 2)) };
+  }
+  return null;
+}
 
 /** The secret stamp: two ingredients slide together into the name. Once per run. */
 function found(ctx) {
-  if (ctx.store.get('found')) return;
+  if (ctx.restored || ctx.store.get('found')) return;
   ctx.store.set('found', 1);
+  const doc = ctx.button.el.ownerDocument;
+  discoveries.get(doc)?.();
+  const nodes = [], anims = [];
+  let cancelTimer = () => {}, cancelFrame = () => {};
+  const stop = () => {
+    cancelTimer(); cancelFrame();
+    for (const a of anims) a.cancel();
+    for (const node of nodes) node.remove();
+    if (discoveries.get(doc) === stop) discoveries.delete(doc);
+  };
+  discoveries.set(doc, stop);
+  ctx.cleanup(stop);
   const { w, h: H } = ctx.bounds();
   const el = ctx.el('div', `position:absolute;left:50%;top:${Math.round(H * 0.3)}px;translate:-50% 0;z-index:8;padding:8px 18px;background:var(--toast-bg);color:var(--toast-ink);border:2px solid var(--btn-edge);border-radius:20px;font:700 18px ${FONT};white-space:nowrap;max-width:${w - 24}px;`, ctx.brand.text(ctx.item.name), 'over');
-  ctx.audio.play('assets/audio/sfx/reveal_chime.mp3', { bus: 'sfx', gain: 0.7 });
-  const frames = ctx.gentle
-    ? [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }]
+  el.dataset.comboDiscovery = '';
+  nodes.push(el);
+  sfx(ctx, 'sfx/reveal_chime.mp3', 0.5);
+  const calm = ctx.gentle || ctx.reduced;
+  const frames = calm
+    ? [{ opacity: 0 }, { opacity: 1, offset: 0.4 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }]
     : [{ opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1.1, offset: 0.14 }, { opacity: 1, scale: 1, offset: 0.24 }, { opacity: 1, scale: 1, offset: 0.8 }, { opacity: 0, scale: 1.05 }];
-  ctx.anim(el, frames, { duration: 2000, fill: 'forwards' }).onfinish = () => el.remove();
+  const duration = calm ? 2800 : 2000;
+  const points = !calm && ctx.item.req.length >= 2 ? ctx.item.req.slice(0, 2).map((id) => ingredient(ctx, id)) : [];
+  const joined = points.length === 2 && points.every(Boolean);
+  if (joined) {
+    const r = el.getBoundingClientRect(), tx = r.left + r.width / 2, ty = r.top + r.height / 2;
+    points.forEach((p, i) => {
+      const dot = ctx.el('i', `position:absolute;left:0;top:0;width:9px;height:9px;border-radius:50%;background:var(${i ? '--niche-2' : '--niche'});border:1px solid var(--ink);pointer-events:none;`, null, 'over');
+      dot.dataset.comboIngredient = '';
+      nodes.push(dot);
+      anims.push(ctx.anim(dot, [{ transform: `translate(${p.x}px,${p.y}px) scale(.5)`, opacity: 0 }, { opacity: 1, offset: .2 }, { transform: `translate(${tx}px,${ty}px) scale(1.4)`, opacity: 0 }], { duration: 460, easing: 'cubic-bezier(.5,0,.6,1)' }));
+    });
+  }
+  anims.push(ctx.anim(el, frames, { duration, delay: joined ? 300 : 0, fill: 'both' }));
+  cancelTimer = ctx.after(duration + (joined ? 300 : 0), stop);
+  if (!calm) cancelFrame = ctx.frame(() => { if (ctx.gentle || ctx.reduced) stop(); });
 }
 
 const combo = (mount) => ({ mount(ctx) { found(ctx); return mount(ctx) || {}; } });
