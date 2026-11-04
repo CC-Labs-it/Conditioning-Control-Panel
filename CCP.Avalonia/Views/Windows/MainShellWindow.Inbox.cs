@@ -93,7 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var body = global::ConditioningControlPanel.Localization.Loc.Get("conv_cap_body");
                 StartupLadder.Inbox.File(new Services.Startup.InboxItem
                 {
-                    Key = "conv:" + key, Glyph = "💬", Title = title, Summary = body,
+                    Key = "conv:" + key, Glyph = global::ConditioningControlPanel.Avalonia.Controls.IconMap.ChatGlyph, Title = title, Summary = body,
                     Open = () => Dialogs.InboxNoticeCard.Present(this, title, body,
                         global::ConditioningControlPanel.Localization.Loc.Get(tier == 2 ? "conv_get_prime" : "conv_get_basic"),
                         () => Dialogs.VaultGateDialog.Launch(ConversionRules.PlanUrl(tier))),

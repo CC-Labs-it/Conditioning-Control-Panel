@@ -176,10 +176,10 @@ public sealed class PresetsFocalFxTests
             view.IsVisible = false; Settle();
             Write("sync_c", 1);
             view.IsVisible = true; Settle();
+            Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
-            Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
         }

@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// </summary>
     public static class IconMap
     {
+        public const string ChatGlyph = "💬";
         private const IconVariant R = IconVariant.Regular, F = IconVariant.Filled;
         private static readonly Dictionary<string, IconEntry> ByGlyph = new();
         private static readonly Dictionary<char, IconKind> ByMdl2 = new();
@@ -107,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.HatGraduation, R, null, "🎓");
 
             // D4 feature brands, objects, nature, people (🎀 ☠ 💀 are per-site calls: unmapped)
-            M(IconKind.Flash, R, null, "⚡"); M(IconKind.BubbleMultiple, R, null, "🫧"); M(IconKind.Chat, R, null, "💬");
+            M(IconKind.Flash, R, null, "⚡"); M(IconKind.BubbleMultiple, R, null, "🫧"); M(IconKind.Chat, R, null, ChatGlyph);
             M(IconKind.Comment, R, null, "💭"); M(IconKind.BrainCircuit, R, null, "🧠"); M(IconKind.Drop, R, null, "💧");
             M(IconKind.EmojiMeh, R, null, "🫠", "😵"); M(IconKind.Water, R, null, "🌊"); M(IconKind.Eye, R, null, "👁", "👀", "😉");
             M(IconKind.EyeOff, R, null, "🙈", "😎"); M(IconKind.EmojiSurprise, R, null, "😮"); M(IconKind.Target, R, null, "🎯");
