@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
-using ConditioningControlPanel;
 using ConditioningControlPanel.Services.Chaos;
 using System.Threading.Tasks;
 using Avalonia;
@@ -64,18 +63,21 @@ public class ChaosOverlayArtTests
             if (Application.Current is null)
                 AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            var root = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos");
+            var dir = Path.Combine(Path.GetTempPath(), "ccp-chaos-art-" + Guid.NewGuid().ToString("N"));
+            var root = Path.Combine(dir, "assets", "Chaos");
             var id = "test_" + Guid.NewGuid().ToString("N");
             var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==");
             var paths = new[] { Path.Combine(root, "recap.png"), Path.Combine(root, "boons", id + ".png"), Path.Combine(root, "portraits", id + ".png") };
-            var oldRecap = File.Exists(paths[0]) ? File.ReadAllBytes(paths[0]) : null;
-            foreach (var path in paths) { Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllBytes(path, png); }
-            var window = ChaosOverlayWindow.ForRun();
+            ChaosOverlayWindow? window = null;
             try
             {
+                foreach (var path in paths) { Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllBytes(path, png); }
+                window = ChaosOverlayWindow.ForRun(new[] { dir });
                 var state = new ChaosRunState(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
                 window.ShowResults(state, 0, 1, 0, 0, 0);
-                Assert.NotNull(window.FindControl<Image>("ResultsHero")!.Source);
+                var recap = ChaosOverlayWindow.ChaosArt.ResolvePath("recap.png", dir);
+                Assert.NotNull(recap);
+                Assert.Same(recap, window.FindControl<Image>("ResultsHero")!.Source);
                 var boon = new ChaosBoon(id, "test", "test", ChaosRarity.Common, false, 0, _ => { });
                 window.ShowBoonDraft(1, new List<ChaosBoon> { boon }, _ => { });
                 Assert.Contains(window.FindControl<StackPanel>("BoonCardHost")!.GetLogicalDescendants().OfType<Border>(), b => b.Background is ImageBrush);
@@ -85,9 +87,25 @@ public class ChaosOverlayArtTests
             }
             finally
             {
-                window.Close();
-                foreach (var path in paths) File.Delete(path);
-                if (oldRecap != null) File.WriteAllBytes(paths[0], oldRecap);
+                try { window?.Close(); }
+                finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Shipped_art_resolves_from_build_output()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            foreach (var relative in new[] { "recap.png", "boons/aftermath.png", "portraits/madam.png" })
+            {
+                Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", relative)), relative);
+                Assert.NotNull(ChaosOverlayWindow.ChaosArt.ResolvePath(relative, AppContext.BaseDirectory));
             }
             return Task.CompletedTask;
         });

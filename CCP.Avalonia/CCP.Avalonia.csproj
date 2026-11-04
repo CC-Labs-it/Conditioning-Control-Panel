@@ -90,6 +90,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- WPF ChaosArt loads these from disk (ConditioningControlPanel.csproj:217).
+         Ship the overlay's promoted art at the same paths, including in single-file publishes. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\recap.png" Link="assets\Chaos\recap.png"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png"
+             Link="assets\Chaos\boons\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\portraits\*.png"
+             Link="assets\Chaos\portraits\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <!-- The shared sounds at the same logical path as the WPF head (Resources\sounds), minus the
          content-pack audio in ..\ContentPackSounds.props, which both heads import. WPF's temporary
          $(CirceNeutralInBoxOverride) (builtin-locked clips re-added in-box until the rebuilt

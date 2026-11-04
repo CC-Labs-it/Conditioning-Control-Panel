@@ -160,10 +160,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF's <c>new ChaosOverlayWindow()</c>: every panel collapsed, the run host
         /// drives it (ChaosModeService.StartRun -> ShowCountdown).</summary>
-        internal static ChaosOverlayWindow ForRun() => new(renderSample: false);
+        internal static ChaosOverlayWindow ForRun(string[]? artRoots = null) => new(renderSample: false, artRoots);
 
-        private ChaosOverlayWindow(bool renderSample)
+        private readonly string[]? _artRoots;
+
+        private ChaosOverlayWindow(bool renderSample, string[]? artRoots = null)
         {
+            _artRoots = artRoots;
             AvaloniaXamlLoader.Load(this);
 
             _backdrop = Part<Rectangle>("Backdrop");
@@ -537,7 +540,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // boon's art. Real art at assets/Chaos/boons/{id}.png is used when present; until then a
             // placeholder (dark fill + the boon's glyph) stands in.
             var artBorderBrush = new SolidColorBrush(accent);
-            var artFill = ChaosArt.Resolve("boons", boon.Id);
+            var artFill = ChaosArt.Resolve("boons", boon.Id, _artRoots);
             var art = new Border
             {
                 Width = 190,
@@ -768,7 +771,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _resultsPanel.IsVisible = true;
             BringToFront();
 
-            _resultsHero.Source = ChaosArt.ResolveRecap();   // null = the gradient wash shows instead
+            _resultsHero.Source = ChaosArt.ResolveRecap(_artRoots);   // null = the gradient wash shows instead
 
             // PB / delta-vs-best (best already updated by AwardRunRewards; compare run score to the prior best).
             double score = s.Score;
@@ -1140,7 +1143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _storyBg.IsVisible = backdrop != null;
 
             // full-bleed hero + its entrance side
-            var portrait = ChaosArt.Resolve("portraits", convo.PortraitId);
+            var portrait = ChaosArt.Resolve("portraits", convo.PortraitId, _artRoots);
             _storyPortrait.Source = portrait;
             _storyPortrait.IsVisible = portrait != null;
             _storyPortrait.HorizontalAlignment = convo.PortraitOnLeft ? HorizontalAlignment.Left : HorizontalAlignment.Right;
@@ -1545,11 +1548,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Bitmap> Cache = new();
 
-            public static Bitmap? Resolve(string folder, string id) => ResolvePath(IOPath.Combine(folder, id + ".png"));
-            public static Bitmap? ResolveRecap() => ResolvePath("recap.png");
+            public static Bitmap? Resolve(string folder, string id, string[]? roots) => ResolveFromRoots(IOPath.Combine(folder, id + ".png"), roots);
+            public static Bitmap? ResolveRecap(string[]? roots) => ResolveFromRoots("recap.png", roots);
 
-            private static Bitmap? ResolvePath(string relative) => ResolvePath(relative,
-                IOPath.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory);
+            private static Bitmap? ResolveFromRoots(string relative, string[]? roots) => ResolvePath(relative,
+                roots ?? new[] { IOPath.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory });
 
             internal static Bitmap? ResolvePath(string relative, params string[] roots)
             {
