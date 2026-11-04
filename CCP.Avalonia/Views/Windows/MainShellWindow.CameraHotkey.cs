@@ -60,14 +60,6 @@ public partial class MainShellWindow
             Command = new NavSectionCommand(ToggleCameraFromHotkey) };
         KeyBindings.Insert(0, _cameraKeyBinding);
         if (_cameraClosed || !CameraPlatformSupported || !binding.Item3) return;
-        // Camera registers first in WPF. Release our Quick Recal registration on a rebind
-        // to its chord, then let Quick Recal retry after the camera attempt.
-        if (HotkeyNames.Matches(Key.G, key) && mods == 3 && _quickRecalRegistration != null)
-        {
-            _quickRecalRegistration.Dispose();
-            _quickRecalRegistration = null;
-            _quickRecalBinding = null;
-        }
         try
         {
             _cameraRegistration = RegisterCamera(this, key, mods, () => Dispatcher.UIThread.Post(() =>

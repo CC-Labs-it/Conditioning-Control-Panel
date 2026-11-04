@@ -278,6 +278,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AddHandler(KeyDownEvent, (_, e) =>
             {
                 if (e.Key != global::Avalonia.Input.Key.K || e.KeyModifiers != global::Avalonia.Input.KeyModifiers.Control) return;
+                // WPF MainWindow.xaml.cs:250 gives the camera binding first choice.
+                if (_cameraKeyBinding != null && _cameraBinding is { Key: "K", Mods: 2 }) return;
                 e.Handled = true;
                 if (SettingsPaletteWindow.FirstChordPress()) SettingsPaletteWindow.Toggle(this);
             }, RoutingStrategies.Tunnel, handledEventsToo: true);

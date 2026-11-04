@@ -19,6 +19,16 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CameraHotkeyTests
 {
+    // Match the suite's headless font mapping on Linux, including PremiumSpark's display face.
+    private static global::Avalonia.Media.FontManagerOptions HeadlessFonts()
+    {
+        var fonts = ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+        var mappings = new Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+        mappings["Segoe UI"] = mappings["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+        fonts.FontFamilyMappings = mappings;
+        return fonts;
+    }
+
     private sealed class Registration : IDisposable
     {
         internal bool Disposed;
@@ -29,7 +39,7 @@ public sealed class CameraHotkeyTests
     public void Registration_Rebinds_AndCleansUp() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current == null)
-            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(HeadlessFonts()).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = CoreSettings.Current;
         var prompt = settings.CompanionPrompt;
@@ -83,7 +93,7 @@ public sealed class CameraHotkeyTests
     public void CameraWinsCollision_WhenQuickRecalRegistrationFails() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current == null)
-            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(HeadlessFonts()).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var p = s.CompanionPrompt;
@@ -115,10 +125,10 @@ public sealed class CameraHotkeyTests
     });
 
     [Fact]
-    public void RebindingToRecal_ReleasesItsRegistrationForCamera() => AvaloniaTestDispatcher.Run(() =>
+    public void RebindingToRecal_KeepsItsRegistrationAndCameraFails() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current == null)
-            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(HeadlessFonts()).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var p = s.CompanionPrompt;
@@ -138,8 +148,9 @@ public sealed class CameraHotkeyTests
             Assert.True(shell.QuickRecalHotkeyArmed);
             p.CameraShortcutKey = "G";
             shell.ApplyCameraHotkey();
-            Assert.True(quick.Disposed);
-            Assert.True(shell.CameraHotkeyArmed);
+            Assert.False(quick.Disposed);
+            Assert.True(shell.QuickRecalHotkeyArmed);
+            Assert.False(shell.CameraHotkeyArmed);
         }
         finally
         {
@@ -153,7 +164,7 @@ public sealed class CameraHotkeyTests
     public Task CallbackAndFallback_ToggleTrackerAndAnnounce() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
-            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(HeadlessFonts()).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var p = s.CompanionPrompt;
@@ -206,6 +217,30 @@ public sealed class CameraHotkeyTests
             Assert.True(tracker.IsRunning);
             shell.KeyPress(Key.F5, RawInputModifiers.Shift, PhysicalKey.F5, "");
             await AwaitCount(6);
+            Assert.False(tracker.IsRunning);
+
+            // Ctrl+K belongs to the camera before the palette, both without a global
+            // registration and when the OS rejects that registration.
+            p.CameraShortcutKey = "K";
+            p.CameraShortcutModifiers = "Control";
+            p.CameraShortcutGlobal = false;
+            shell.ApplyCameraHotkey();
+            shell.KeyPress(Key.K, RawInputModifiers.Control, PhysicalKey.K, "k");
+            await AwaitCount(7);
+            Assert.True(tracker.IsRunning);
+            Assert.False(SettingsPaletteWindow.IsOpen);
+            shell.KeyPress(Key.K, RawInputModifiers.Control, PhysicalKey.K, "k");
+            await AwaitCount(8);
+            Assert.False(tracker.IsRunning);
+            p.CameraShortcutGlobal = true;
+            shell.ApplyCameraHotkey();
+            Assert.False(shell.CameraHotkeyArmed);
+            shell.KeyPress(Key.K, RawInputModifiers.Control, PhysicalKey.K, "k");
+            await AwaitCount(9);
+            Assert.True(tracker.IsRunning);
+            Assert.False(SettingsPaletteWindow.IsOpen);
+            shell.KeyPress(Key.K, RawInputModifiers.Control, PhysicalKey.K, "k");
+            await AwaitCount(10);
             Assert.False(tracker.IsRunning);
         }
         finally

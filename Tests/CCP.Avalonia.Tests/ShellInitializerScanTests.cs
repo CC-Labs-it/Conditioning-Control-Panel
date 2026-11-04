@@ -41,6 +41,17 @@ public sealed class ShellInitializerScanTests
     /// <summary>A method definition whatever it returns (void, Task, Task&lt;T&gt;, bool), async or not.</summary>
     private static string Definition(string name) => $@"\b(?:void|bool|Task(?:<[^>()]+>)?)\s+{name}\s*\(";
 
+    [Fact]
+    public void CameraStartupSubscriptionPrecedesQuickRecal()
+    {
+        var app = Code(File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "App.axaml.cs")));
+        var camera = Regex.Match(app, @"\bshell\.Opened\s*\+=\s*\(\s*_\s*,\s*_\s*\)\s*=>\s*shell\.StartCameraHotkey\(\s*\)");
+        var recal = Regex.Match(app, @"\bshell\.Opened\s*\+=\s*\(\s*_\s*,\s*_\s*\)\s*=>\s*shell\.StartQuickRecalHotkey\(\s*\)");
+        Assert.True(camera.Success);
+        Assert.True(recal.Success);
+        Assert.True(camera.Index < recal.Index);
+    }
+
     /// <summary>Source with comments and string literals ($"", @"", plain, chars) blanked: a logged name is not a call.</summary>
     private static string Code(string src) =>
         Regex.Replace(src, @"//[^\n]*|/\*.*?\*/|'(?:[^'\\]|\\.)'|[$@]{0,2}""(?:[^""\\]|\\.)*""", " ", RegexOptions.Singleline);
