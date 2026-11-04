@@ -354,7 +354,9 @@ internal sealed class KeywordAudioRuntime
                     trackClip(length.Task);
                     _stop = CoreAudio.PlayStoppable(path,
                         KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
-                        onStarted: duration => length.TrySetResult(duration),
+                        // LibVLC can start with an unknown length. Keep the batch ducked
+                        // until this clip finishes instead of treating zero as its duration.
+                        onStarted: duration => { if (duration > TimeSpan.Zero) length.TrySetResult(duration); },
                         onFinished: () => { length.TrySetResult(TimeSpan.Zero); if (last) Dispatcher.UIThread.Post(async () =>
                         {
                             try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _playGeneration) StopClip(); }

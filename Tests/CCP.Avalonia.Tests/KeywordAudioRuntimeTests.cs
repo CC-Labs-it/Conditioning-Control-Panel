@@ -138,6 +138,50 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:1379-1388: clip duration plus 500 ms
+    public Task UnknownDurationKeepsBatchDuckedUntilClipFinishesAndTailEnds() => RunAsync(async (engine, s, _) =>
+    {
+        var saved = (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider);
+        var calls = new List<string>();
+        Action? finished = null;
+        var delayStarted = new TaskCompletionSource();
+        var delayGate = new TaskCompletionSource();
+        var released = new TaskCompletionSource();
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => calls.Add("duck");
+            CoreAudio.DuckGenerationProvider = () => 73;
+            CoreAudio.UnduckProvider = gen => { calls.Add($"unduck:{gen}"); released.TrySetResult(); };
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, done) =>
+            {
+                finished = done;
+                started!(TimeSpan.Zero);
+                return () => { };
+            };
+            engine.Delay = (ms, _) => { Assert.Equal(500, ms); delayStarted.TrySetResult(); return delayGate.Task; };
+            ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
+            Type(engine, "sit");
+            Assert.Equal(new[] { "duck" }, calls);
+            await Task.WhenAny(delayStarted.Task, Task.Delay(250));
+            Assert.False(delayStarted.Task.IsCompleted); // a zero start is not the end of the clip
+            Assert.Equal(new[] { "duck" }, calls);
+            finished!();
+            await delayStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(new[] { "duck" }, calls);
+            delayGate.SetResult();
+            await released.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(new[] { "duck", "unduck:73" }, calls);
+            engine.StopAudio(); Assert.Equal(2, calls.Count);
+        }
+        finally
+        {
+            delayGate.TrySetResult();
+            engine.StopAudio();
+            (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider) = saved;
+        }
+    });
+
     [Fact] // Independent batch references must each be released on panic or stop.
     public void OverlappingBatchDucksReleaseOnceEachOnStop() => Run((engine, s, _) =>
     {
