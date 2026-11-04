@@ -51,11 +51,36 @@ public sealed partial class FirstShowStageTests
             var first = Display(new PixelRect(0, 0, 1920, 1080), 1);
             var second = Display(new PixelRect(-1920, -200, 1920, 1200), 1.5);
             stage.GuideScreenOverride = () => shell.Position.X < 0 ? second : first;
+            stage.GuideScreenFromPointOverride = _ => shell.Position.X < 0 ? second : first;
             double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
             stage.Start(); t += S.Length + .1; stage.Frame();
             Click(stage, 0); Click(stage, 0);
             await Until(() => { t += .05; stage.Frame(); return stage.HighlightTarget != null; });
             Assert.Equal(first.Bounds.Position, stage.Position);
+            // The shell's chosen screen is to the right, but its help target is across the boundary.
+            var target = stage.GuideTarget!;
+            var targetCenter = target.PointToScreen(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2));
+            int boundary = targetCenter.X + 40;
+            var shellScreen = Display(new PixelRect(boundary, -200, 2500, 1400), 1);
+            var targetScreen = Display(new PixelRect(-1920, -200, boundary + 1920, 1400), 1);
+            Assert.True(shell.Position.X + shell.Bounds.Width / 2 > boundary);
+            stage.GuideScreenOverride = () => shellScreen;
+            stage.GuideScreenFromPointOverride = point => point.X < boundary ? targetScreen : shellScreen;
+            t += .05; stage.Frame(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(targetScreen.Bounds.Position, stage.Position);
+            Assert.NotNull(stage.HighlightTarget);
+            Assert.InRange(stage.GuideBodyCenter.X, targetScreen.Bounds.X, targetScreen.Bounds.Right);
+            t += 1; stage.Frame(); Dispatcher.UIThread.RunJobs();
+            Assert.True(stage.GuideSpeechWindow.IsVisible);
+            Assert.InRange(stage.GuideSpeechWindow.Position.X, targetScreen.Bounds.X, targetScreen.Bounds.Right);
+            stage.GuideScreenFromPointOverride = _ => shell.Position.X < 0 ? second : first;
+            stage.GuideScreenOverride = () => shell.Position.X < 0 ? second : first;
+            // The headless backend keeps PointToScreen at the original origin after a window move.
+            stage.GuidePointToScreenOverride = (control, point) =>
+            {
+                var pixel = control.PointToScreen(point);
+                return new PixelPoint(pixel.X - 1900, pixel.Y - 200);
+            };
             shell.Position = new PixelPoint(-1800, -100);
             Dispatcher.UIThread.RunJobs();
             t += .05; stage.Frame(); Dispatcher.UIThread.RunJobs();
@@ -71,6 +96,7 @@ public sealed partial class FirstShowStageTests
             Assert.InRange(stage.GuideSpeechWindow.Position.Y, -200, 1000);
             Click(stage, stage.ChoiceButtons.Count - 1);
             Assert.Equal(3, stage.ChoiceButtons.Count);
+            stage.GuidePointToScreenOverride = null;
             shell.Position = new PixelPoint(100, 100);
             t += .05; stage.Frame();
             Assert.Equal(first.Bounds.Position, stage.Position);

@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// "Show me around" walks the real app through Core <see cref="S.WelcomeSteps"/>, ringing each named control with
 /// <see cref="FirstShowHighlight"/> while EMI stands beside it (<see cref="FirstShowLayout.GuideBody"/>). Head
 /// difference: WPF stretched the stage over the virtual desktop; an Avalonia window across monitors of different
-/// scale does not lay out, so the stage moves to the monitor the app window is on.</summary>
+/// scale does not lay out, so the stage follows the target monitor, or the app monitor when there is no target.</summary>
 internal sealed partial class FirstShowStageWindow
 {
     private readonly FirstShowHighlight _highlight = new();
@@ -25,7 +25,19 @@ internal sealed partial class FirstShowStageWindow
     private int _guideIndex = -1;
     private double _hoverTime, _targetWait, _highlightWait;
     internal Func<Screen?>? GuideScreenOverride;
-    private Screen? GuideScreen() => GuideScreenOverride != null ? GuideScreenOverride() : _main == null ? null : Screens?.ScreenFromWindow(_main);
+    internal Func<PixelPoint, Screen?>? GuideScreenFromPointOverride;
+    internal Func<Control, Point, PixelPoint>? GuidePointToScreenOverride;
+    private PixelPoint GuidePointToScreen(Control target, Point point) => GuidePointToScreenOverride != null ? GuidePointToScreenOverride(target, point) : target.PointToScreen(point);
+    private Screen? GuideScreen()
+    {
+        if (_guideTarget is { IsEffectivelyVisible: true } target && target.Bounds.Width > 0 && target.Bounds.Height > 0)
+        {
+            var center = GuidePointToScreen(target, new Point(target.Bounds.Width / 2, target.Bounds.Height / 2));
+            var targetScreen = GuideScreenFromPointOverride != null ? GuideScreenFromPointOverride(center) : Screens?.ScreenFromPoint(center);
+            if (targetScreen != null) return targetScreen;
+        }
+        return GuideScreenOverride != null ? GuideScreenOverride() : _main == null ? null : Screens?.ScreenFromWindow(_main);
+    }
     private Control? _guideTarget;
     private FeatureCard? _previewCard;
     private string? _targetName;
@@ -113,7 +125,6 @@ internal sealed partial class FirstShowStageWindow
     private void GuideFrame(double dt)
     {
         if (_main == null || !_main.IsVisible || _main.WindowState == WindowState.Minimized) { _highlight.IsVisible = false; return; }
-        bool changedScreen = FollowGuideScreen();
         if (_guideTarget == null && _targetName != null)
         {
             var all = _main.GetVisualDescendants().OfType<Control>().Where(x => x.IsEffectivelyVisible).ToArray();
@@ -133,14 +144,15 @@ internal sealed partial class FirstShowStageWindow
                 if (_guideIndex == 0) AddButton(Text("next"), NextGuideStep);
             }
         }
+        bool changedScreen = FollowGuideScreen();
         var safe = SafeBounds();
         _highlight.IsVisible = true; _highlight.Target = null;
         _highlight.Width = Width; _highlight.Height = Height;
         _highlight.Viewport = new Rect(safe.Left, safe.Top, safe.Width, safe.Height);
         if (_guideTarget is { IsEffectivelyVisible: true } target && target.Bounds.Width > 0)
         {
-            var a = target.PointToScreen(new Point(0, 0));
-            var b = target.PointToScreen(new Point(target.Bounds.Width, target.Bounds.Height));
+            var a = GuidePointToScreen(target, new Point(0, 0));
+            var b = GuidePointToScreen(target, new Point(target.Bounds.Width, target.Bounds.Height));
             var rect = new Rect(new Point((a.X - Position.X) / _scale, (a.Y - Position.Y) / _scale),
                 new Point((b.X - Position.X) / _scale, (b.Y - Position.Y) / _scale)).Intersect(_highlight.Viewport);
             if (rect.Width > 0 && rect.Height > 0) _highlight.Target = rect;
