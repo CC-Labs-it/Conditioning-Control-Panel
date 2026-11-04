@@ -933,6 +933,28 @@ public sealed partial class GameWindowTests
     /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
     /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
     [Fact]
+    public void Dtrh_FullscreenSetRestoresFrameAndReplies() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.Position = new PixelPoint(120, 80);
+        w.Width = 800;
+        w.Height = 600;
+        var position = w.Position;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.Equal(WindowState.FullScreen, w.WindowState);
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+        Assert.Equal(WindowState.Normal, w.WindowState);
+        Assert.Equal(position, w.Position);
+        Assert.Equal(800, w.Width);
+        Assert.Equal(600, w.Height);
+        Assert.False((bool)Assert.Single(sent)["on"]!);
+    });
+
+    [Fact]
     public void Dtrh_BasicDoor_BootRunLifecycle_AndCloseBanks()
     {
         RunDtrh(lab: false, (_, _, _, denied) =>

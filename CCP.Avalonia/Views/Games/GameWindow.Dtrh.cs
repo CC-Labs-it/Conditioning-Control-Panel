@@ -11,7 +11,7 @@
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
 // loom-*, favorites + asset-stats, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
-// fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
+// fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray, and SeasonRecap TrackFeature.
 using System;
@@ -47,6 +47,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
         private JObject? _dtrhLastProgress;
+        private global::Avalonia.PixelPoint _dtrhWindowPosition;
+        private double _dtrhWindowWidth, _dtrhWindowHeight;
+        private global::Avalonia.Controls.WindowState _dtrhWindowState;
+        private bool _dtrhFullscreen;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
 
         internal bool DtrhRunActive => _dtrhRunActive;
@@ -70,6 +74,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();
+                    return true;
+                case "fullscreen-set":
+                    SetDtrhFullscreen((bool?)o["on"] ?? false);
+                    Post(new { type = "fullscreen", on = _dtrhFullscreen });
                     return true;
                 case "funnel":
                     FunnelPageMessage.Handle(o, !_dtrhRunActive && !_dtrhExiting && !_closing);
@@ -99,6 +107,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 default:
                     return false;
             }
+        }
+
+        // WPF DtrhHostService.ApplyHostFullscreen and ChaosWebViewHost.ApplyWindowMode.
+        private void SetDtrhFullscreen(bool on)
+        {
+            if (_dtrhFullscreen == on) return;
+            if (on)
+            {
+                _dtrhWindowState = WindowState;
+                _dtrhWindowPosition = Position;
+                _dtrhWindowWidth = Width;
+                _dtrhWindowHeight = Height;
+                _dtrhFullscreen = true;
+                WindowState = global::Avalonia.Controls.WindowState.FullScreen;
+            }
+            else
+            {
+                _dtrhFullscreen = false;
+                WindowState = global::Avalonia.Controls.WindowState.Normal;
+                Width = _dtrhWindowWidth;
+                Height = _dtrhWindowHeight;
+                Position = _dtrhWindowPosition;
+                if (_dtrhWindowState == global::Avalonia.Controls.WindowState.Maximized)
+                    WindowState = _dtrhWindowState;
+            }
+            Activate();
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>
