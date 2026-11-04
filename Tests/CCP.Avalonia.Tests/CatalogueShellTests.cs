@@ -166,6 +166,42 @@ public sealed class CatalogueShellTests
     }
 
     [Fact]
+    public async Task UnsupportedFullscreenRequestDoesNotNavigateOrChangeSite()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var settings = CoreSettings.Current;
+            var offline = settings.OfflineMode;
+            settings.OfflineMode = false;
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                var tab = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+                var web = tab.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("BrowserWebHost")!;
+                var bambi = tab.FindControl<RadioButton>("RbBambiCloud")!;
+                var hypno = tab.FindControl<RadioButton>("RbHypnoTube")!;
+                var source = web.Source;
+                var requests = web.NavigationRequests;
+                var bambiBefore = bambi.IsChecked;
+                var hypnoBefore = hypno.IsChecked;
+                Assert.False(shell.NavigateToUrlInBrowser("https://hypnotube.com/video/example", true, false));
+                Assert.Equal(requests, web.NavigationRequests);
+                Assert.Equal(source, web.Source);
+                Assert.Equal(bambiBefore, bambi.IsChecked);
+                Assert.Equal(hypnoBefore, hypno.IsChecked);
+            }
+            finally
+            {
+                shell.Close();
+                settings.OfflineMode = offline;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task MinePollMarksThePresetApprovedToastsOnceAndPaintsItsPill()
     {
         await AvaloniaTestDispatcher.RunAsync(async () =>
