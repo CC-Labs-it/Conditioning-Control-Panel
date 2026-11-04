@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Services
     {
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
-        public bool Clickable, Popping, Lucky;
+        public bool Clickable, Popping, Lucky, AmbientTrigger;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
@@ -353,7 +353,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (HoldChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
