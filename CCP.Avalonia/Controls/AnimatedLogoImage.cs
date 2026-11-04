@@ -48,6 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>The built-in logo animates; a mod's own logo art does not (WPF IsAnimatedArtwork).</summary>
         public bool IsAnimatedArtwork { get; private set; }
 
+        internal event Action? ArtworkChanged;
+
         /// <summary>True while the beat actually ticks (not parked, not stopped). Test seam.</summary>
         internal bool IsAnimating => _loop?.IsTicking == true;
 
@@ -66,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             try { _source = modOverride ?? new Bitmap(AssetLoader.Open(new Uri(ArtworkUri))); }
             catch (Exception ex) { _source = null; Log.Debug("logo artwork: {E}", ex.Message); }
             Refresh();
+            ArtworkChanged?.Invoke();
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
