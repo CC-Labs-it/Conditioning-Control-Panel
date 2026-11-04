@@ -37,6 +37,7 @@ public class TestIsolationTests
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
+    [InlineData(typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed), nameof(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon))]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
@@ -59,7 +60,11 @@ public class TestIsolationTests
         var provider = CoreSettings.ServiceProvider;
         var chat = CoreSettings.Current.AiChatEnabled;
 
+        var originalPatreon = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon;
         var snapshot = ProcessStateSnapshot.Take();
+        using var replacementPatreon = new ConditioningControlPanel.Services.ProviderSubscription("patreon");
+        typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed).GetProperty(nameof(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, replacementPatreon);
+        Assert.Same(replacementPatreon, ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon);
         CoreAccount.UnifiedUserId = "leaked-user";
         CoreSettings.Current.AiChatEnabled = !chat;
         CoreSettings.ServiceProvider = () => null;
@@ -69,6 +74,7 @@ public class TestIsolationTests
         leaked.Save();   // armed, as a test that ends inside the debounce leaves it
         snapshot.Restore();
 
+        Assert.Same(originalPatreon, ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon);
         Assert.Equal(user, CoreAccount.UnifiedUserId);
         Assert.Same(provider, CoreSettings.ServiceProvider);
         Assert.Equal(chat, CoreSettings.Current.AiChatEnabled);

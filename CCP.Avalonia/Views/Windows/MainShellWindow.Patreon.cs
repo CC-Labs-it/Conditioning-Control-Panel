@@ -310,14 +310,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _pendingRiseTier = 0;
             try
             {
-                var s = CoreSettings.Current;
+                var s = CoreSettings.Current; const string premiumGlyph = "💖";
                 var tier = Platform.AccountSeed.EffectivePaidTier();
                 var verdict = TierOnNotice.Decide(s.LastKnownEffectiveTier, tier, Platform.AccountSeed.EntitlementServerAnswered);
                 if (verdict.Record != s.LastKnownEffectiveTier) { s.LastKnownEffectiveTier = verdict.Record; CoreSettings.Save(); }
                 if (tier == 0 || ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
                 if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise))
                 {
-                    if (verdict.Owed) { var title = Loc.Get(TierOnNotice.TitleKey(tier)); var body = Loc.Get("tier_on_body"); Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = "tier-on:" + tier, Glyph = "💖", Title = title, Summary = body, Open = () => new PassiveNotice(title, body).Show(this) }); }
+                    if (verdict.Owed) { var title = Loc.Get(TierOnNotice.TitleKey(tier)); var body = Loc.Get("tier_on_body"); Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = "tier-on:" + tier, Glyph = premiumGlyph, Title = title, Summary = body, Open = () => new PassiveNotice(title, body).Show(this) }); }
                     return;
                 }
                 var key = TierCelebration.KeyFor(tier)!;
@@ -331,7 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
                     Key = "intro:" + key,
-                    Glyph = "💖",
+                    Glyph = premiumGlyph,
                     Title = Loc.Get(tier >= 2 ? "premium_celebration_inbox_t2" : "premium_celebration_inbox_t1"),
                     Summary = Loc.Get("premium_celebration_inbox_summary"),
                     Open = () => FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key),

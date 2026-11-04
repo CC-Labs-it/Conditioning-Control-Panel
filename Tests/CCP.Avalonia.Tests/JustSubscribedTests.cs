@@ -44,8 +44,7 @@ public sealed class JustSubscribedTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
-        var settings = new SettingsService();
-        var s = settings.Current;
+        var settings = new SettingsService(); var s = settings.Current;
         s.Welcomed = s.HasAcceptedAgeVerification = true;
         s.WhatMovedCardShown = 1;
         foreach (var key in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(key)) s.SeenFeatureIntros.Add(key);
@@ -57,15 +56,13 @@ public sealed class JustSubscribedTests
         s.InviteGrantUntil = null; s.OfflineMode = false;
         CoreSettings.ServiceProvider = () => settings;
         var secrets = new Dictionary<string, string?>();
-        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
-        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         AccountSeed.Seed(p => new ProviderSubscription(p, () => s));
         var oldFactory = AccountSeed.NewV2;
         var shell = new MainShellWindow { Width = 1400, Height = 900 };
         try
         {
-            shell.Show();
-            shell.ShowTab("premium");
+            shell.Show(); shell.ShowTab("premium");
             Dispatcher.UIThread.RunJobs();
             var view = shell.Named<ExclusivesTabView>("ExclusivesTab")!;
             var row = view.FindControl<Control>("JustSubscribedRow")!;
@@ -85,8 +82,7 @@ public sealed class JustSubscribedTests
             var wire = new ProfileWire(); bool sparkBurst = false; AccountSeed.Patreon!.TierChanged += (_, _) => sparkBurst = shell.Named<global::ConditioningControlPanel.Avalonia.Controls.PremiumSpark>("HeaderPremiumSpark")!.Field.Alive.Any(m => m.Kind == global::ConditioningControlPanel.Controls.Header.MoteKind.Burst);
             AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(1, wire.Reads);
-            Assert.False(button.IsEnabled);
+            Assert.Equal(1, wire.Reads); Assert.False(button.IsEnabled);
             Assert.Equal(Loc.Get("plans_just_subscribed_checking"), text.Text);
             s.PerformanceMode = false; s.AutoPerformanceMode = false; s.GentleVisuals = false; s.MotionLevel = MotionLevel.Full;
             shell.Activate();
@@ -155,14 +151,12 @@ public sealed class JustSubscribedTests
     [Fact]
     public Task ProfileReadPreservesGraceAndReportsFailuresAndNewAccess() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var settings = new SettingsService();
-        var s = settings.Current;
+        var settings = new SettingsService(); var s = settings.Current;
         s.PatreonTier = 0; s.PatreonPremiumValidUntil = null; s.PatreonLabValidUntil = null;
         s.InviteGrantUntil = null; s.OfflineMode = false;
         CoreSettings.ServiceProvider = () => settings;
         var secrets = new Dictionary<string, string?>();
-        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
-        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         AccountSeed.Seed(p => new ProviderSubscription(p, () => s));
         var oldFactory = AccountSeed.NewV2;
         try
@@ -179,15 +173,13 @@ public sealed class JustSubscribedTests
             Assert.True(CoreEntitlement.HasPremium);
             Assert.Equal(1, notices);
             Assert.True(s.PatreonPremiumValidUntil > DateTime.UtcNow.AddDays(13));
-            wire = new ProfileWire();
-            AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            wire = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
             wire.Answer("{\"user\":{\"effective_tier\":0}}");
             Assert.Equal(JustSubscribedOutcome.NotYet, await AccountSeed.CheckSubscriptionNowAsync());
             Assert.True(CoreEntitlement.HasPremium);
             Assert.Equal(1, s.PatreonTier);
             Assert.Equal(0, s.ServerTierSeen);
-            wire = new ProfileWire();
-            AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            wire = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
             wire.Answer("{}", HttpStatusCode.ServiceUnavailable);
             Assert.Equal(JustSubscribedOutcome.Unreachable, await AccountSeed.CheckSubscriptionNowAsync());
             s.OfflineMode = true;
@@ -198,14 +190,12 @@ public sealed class JustSubscribedTests
     [Fact]
     public Task LateProfileCannotGrantTheNextAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var settings = new SettingsService();
-        var s = settings.Current;
+        var settings = new SettingsService(); var s = settings.Current;
         s.PatreonTier = 0; s.PatreonPremiumValidUntil = null; s.PatreonLabValidUntil = null;
         s.InviteGrantUntil = null; s.OfflineMode = false;
         CoreSettings.ServiceProvider = () => settings;
         var secrets = new Dictionary<string, string?>();
-        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
-        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         AccountSeed.Seed(p => new ProviderSubscription(p, () => s));
         var oldFactory = AccountSeed.NewV2;
         try
@@ -227,16 +217,14 @@ public sealed class JustSubscribedTests
     [Fact]
     public Task PatreonValidationIsForcedAndInviteWeekIsNotPaid() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var settings = new SettingsService();
-        var s = settings.Current;
+        var settings = new SettingsService(); var s = settings.Current;
         s.PatreonTier = 0; s.PatreonPremiumValidUntil = null; s.PatreonLabValidUntil = null;
         s.InviteGrantUntil = null; s.OfflineMode = false;
         CoreSettings.ServiceProvider = () => settings;
         var token = JsonConvert.SerializeObject(new PatreonTokenData
         { AccessToken = "test", RefreshToken = "test", ExpiresAt = DateTime.UtcNow.AddDays(1) });
         var secrets = new Dictionary<string, string?> { ["patreon_auth"] = token };
-        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
-        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         var handler = new ValidationWire();
         AccountSeed.Seed(p => new ProviderSubscription(p, () => s, p == "patreon" ? handler : null));
         var oldFactory = AccountSeed.NewV2;
@@ -269,8 +257,7 @@ public sealed class JustSubscribedTests
         CoreSettings.ServiceProvider = () => settings;
         var secrets = new Dictionary<string, string?> { ["patreon_auth"] = JsonConvert.SerializeObject(new PatreonTokenData
             { AccessToken = "a", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(expired ? -1 : 1) }) };
-        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
-        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         var wire = new PendingValidation();
         AccountSeed.Seed(p => new ProviderSubscription(p, () => s, p == "patreon" ? wire : null));
         var old = AccountSeed.NewV2;
@@ -316,14 +303,12 @@ public sealed class JustSubscribedTests
     [Fact]
     public Task FreshPatreonConfirmationRestampsGraceAndAppliesExtras() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var settings = new SettingsService();
-        var s = settings.Current;
+        var settings = new SettingsService(); var s = settings.Current;
         s.PatreonTier = 0; s.PatreonPremiumValidUntil = null; s.PatreonLabValidUntil = null;
         s.InviteGrantUntil = null; s.OfflineMode = false;
         CoreSettings.ServiceProvider = () => settings;
         var secrets = new Dictionary<string, string?>();
-        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
-        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         AccountSeed.Seed(p => new ProviderSubscription(p, () => s));
         var oldFactory = AccountSeed.NewV2;
         try
