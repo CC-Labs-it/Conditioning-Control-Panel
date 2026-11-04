@@ -27,9 +27,11 @@ public sealed class PlayWallPartBTests
     {
         LabWebcamStatusTests.Setup();
         var oldLab = CoreEntitlement.HasLabProvider;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
         var oldFree = CoreEntitlement.IsFreeTodayProvider;
-        bool lab = false, free = false;
+        bool lab = false, premium = false, free = false;
         CoreEntitlement.HasLabProvider = () => lab;
+        CoreEntitlement.HasPremiumProvider = () => premium;
         CoreEntitlement.IsFreeTodayProvider = key => free && key == "dtrh";
         var play = new PlayTabView();
         var host = new Window { Content = play };
@@ -52,7 +54,7 @@ public sealed class PlayWallPartBTests
             foreach (var name in new[] { "Dtrh", "Arcademy" })
             {
                 var card = Assert.IsType<Border>(play.FindControl<Grid>("Slot" + name)!.Children[0]);
-                Assert.Equal(2, TierFxBorder.GetTier(card));
+                Assert.Equal(name == "Dtrh" ? 1 : 2, TierFxBorder.GetTier(card));
                 Assert.Equal(3, TierFxBorder.GetRimThickness(card));
             }
             var band = play.FindControl<Border>("PlayLockDtrh")!;
@@ -65,14 +67,20 @@ public sealed class PlayWallPartBTests
             play.RefreshPlayCards();
             Assert.False(band.IsVisible);
             Assert.True(badge.FreeToday);
-            lab = true;
+            free = false;
+            premium = true; // Tier 1 alone opens DtRH, without Lab or a free drop.
             play.RefreshPlayCards();
             Assert.False(band.IsVisible);
             Assert.False(badge.FreeToday);
+            free = true;
+            play.RefreshPlayCards();
+            Assert.False(badge.FreeToday); // an owner does not receive the free-today stamp
+            lab = true;
+            play.RefreshPlayCards();
             Assert.False(play.FindControl<Border>("PlayLockArcademy")!.IsVisible);
             Assert.False(play.FindControl<Border>("PlayLockRacingThoughts")!.IsVisible);
         }
-        finally { host.Close(); CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.IsFreeTodayProvider = oldFree; }
+        finally { host.Close(); CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.HasPremiumProvider = oldPremium; CoreEntitlement.IsFreeTodayProvider = oldFree; }
     });
 
     // WPF PlayTabView.Cards.cs:59-60, MainWindow.Exclusives.cs:217-222 and LauncherCatalogue.cs:240-249.
@@ -82,14 +90,16 @@ public sealed class PlayWallPartBTests
         LabWebcamStatusTests.Setup();
         var oldAccount = CoreAccount.IsLoggedInProvider;
         var oldLab = CoreEntitlement.HasLabProvider;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
         var oldFree = CoreEntitlement.IsFreeTodayProvider;
         var oldDenied = CoreEntitlement.ShowDeniedHandler;
         var oldServer = GameWindow.Server;
         var oldLaunch = PlayTabView.LaunchGame;
-        bool signedIn = false, lab = false;
+        bool signedIn = false, premium = false;
         int denied = 0;
         CoreAccount.IsLoggedInProvider = () => signedIn;
-        CoreEntitlement.HasLabProvider = () => lab;
+        CoreEntitlement.HasLabProvider = () => false;
+        CoreEntitlement.HasPremiumProvider = () => premium;
         CoreEntitlement.IsFreeTodayProvider = _ => false;
         CoreEntitlement.ShowDeniedHandler = _ => denied++;
         var root = Directory.CreateTempSubdirectory("play-dtrh-");
@@ -115,14 +125,14 @@ public sealed class PlayWallPartBTests
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, denied);
             Assert.Null(GameWindow.OpenForTests("dtrh"));
-            lab = true;
+            premium = true;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             var game = Assert.IsType<GameWindow>(GameWindow.OpenForTests("dtrh"));
             Assert.Equal("/dtrh/index.html", game.PageUrl!.AbsolutePath);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Same(game, GameWindow.OpenForTests("dtrh"));
-            lab = false;
+            premium = false;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, denied); // the door checks access even when the game is already open
             PanicSurfaces.All.Single(s => s.Id == "games").Stop(shell);
@@ -131,7 +141,7 @@ public sealed class PlayWallPartBTests
         finally
         {
             GameWindow.CloseAllForPanic(); shell.Close();
-            CoreAccount.IsLoggedInProvider = oldAccount; CoreEntitlement.HasLabProvider = oldLab;
+            CoreAccount.IsLoggedInProvider = oldAccount; CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.HasPremiumProvider = oldPremium;
             CoreEntitlement.IsFreeTodayProvider = oldFree; CoreEntitlement.ShowDeniedHandler = oldDenied;
             GameWindow.Server = oldServer; PlayTabView.LaunchGame = oldLaunch; root.Delete(true);
         }
