@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using Avalonia.Platform;
+using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
@@ -45,23 +46,52 @@ public sealed class OverlayBackendDispatchTests
     private static extern IntPtr CreateWindowExW(uint exStyle, string className, string windowName,
         uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
     [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+
+    // Walk towards the top of the desktop's Z order, tolerating unrelated windows between ours.
+    private static bool IsAbove(IntPtr above, IntPtr below)
+    {
+        for (var current = GetWindow(below, 3 /* GW_HWNDPREV */); current != IntPtr.Zero;
+             current = GetWindow(current, 3 /* GW_HWNDPREV */))
+            if (current == above) return true;
+        return false;
+    }
 
     [Fact]
     public void Win32RaisePreservesNativeExtendedStyles()
     {
         if (!OperatingSystem.IsWindows()) return;
-        const uint noActivate = 0x08000000;
-        var hwnd = CreateWindowExW(noActivate, "STATIC", "raise test", 0, 0, 0, 100, 100,
-            IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-        Assert.NotEqual(IntPtr.Zero, hwnd);
-        try
+        AvaloniaTestDispatcher.Run(() =>
         {
-            var before = Win32Overlay.GetWindowLong(hwnd, -20);
-            Assert.NotEqual(0u, before & noActivate);
-            Assert.True(Win32Overlay.Raise(hwnd));
-            Assert.Equal(before | Win32Overlay.WsExTopmost, Win32Overlay.GetWindowLong(hwnd, -20));
-        }
-        finally { DestroyWindow(hwnd); }
+            const uint noActivate = 0x08000000;
+            const uint popupVisible = 0x80000000 | 0x10000000; // WS_POPUP | WS_VISIBLE
+            // Match the visible, no-activate run chrome. Keep both windows off screen.
+            var hwnd = CreateWindowExW(noActivate, "STATIC", "raise test", popupVisible, -32000, -32000, 100, 100,
+                IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+            Assert.NotEqual(IntPtr.Zero, hwnd);
+            IntPtr other = IntPtr.Zero;
+            try
+            {
+                var before = Win32Overlay.GetWindowLong(hwnd, -20);
+                Assert.True(IsWindowVisible(hwnd));
+                Assert.NotEqual(0u, before & noActivate);
+                Assert.Equal(0u, before & Win32Overlay.WsExTopmost);
+                other = CreateWindowExW(noActivate | Win32Overlay.WsExTopmost, "STATIC", "raise rival",
+                    popupVisible, -32000, -32000, 100, 100, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                Assert.NotEqual(IntPtr.Zero, other);
+                Assert.True(IsWindowVisible(other));
+                Assert.True(IsAbove(other, hwnd));
+                Assert.True(Win32Overlay.Raise(hwnd));
+                Assert.Equal(before | Win32Overlay.WsExTopmost, Win32Overlay.GetWindowLong(hwnd, -20));
+                Assert.True(IsAbove(hwnd, other));
+            }
+            finally
+            {
+                if (other != IntPtr.Zero) DestroyWindow(other);
+                DestroyWindow(hwnd);
+            }
+        });
     }
 
     [Fact]
