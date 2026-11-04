@@ -73,6 +73,16 @@ public sealed class FirstRunGateDeadClickTests
     });
 
     [Fact]
+    public Task WhatsNewWaitsForAgeAcceptance() => Run(welcomed: true, accepted: false, async shell =>
+    {
+        var dialog = await Owned<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(shell);
+        Assert.False(ConditioningControlPanel.Avalonia.Platform.StartupLadder.World(System.DateTime.UtcNow).LadderBusy);
+        dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await WaitFor(() => CoreSettings.Current.HasAcceptedAgeVerification);
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.StartupLadder.World(System.DateTime.UtcNow).LadderBusy);
+    }, previousVersion: true);
+
+    [Fact]
     public Task DashboardAndLibraryClicksGoWhereWpfGoes() => Run(welcomed: true, accepted: true, shell =>
     {
         var dash = shell.GetLogicalDescendants().OfType<SettingsTabView>().First();
@@ -117,7 +127,7 @@ public sealed class FirstRunGateDeadClickTests
         Assert.True(condition(), "timed out");
     }
 
-    private static Task Run(bool welcomed, bool accepted, System.Func<MainShellWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task Run(bool welcomed, bool accepted, System.Func<MainShellWindow, Task> body, bool previousVersion = false) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -130,6 +140,12 @@ public sealed class FirstRunGateDeadClickTests
         {
             CoreSettings.Current.Welcomed = welcomed;
             CoreSettings.Current.HasAcceptedAgeVerification = accepted;
+            if (previousVersion)
+            {
+                ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+                CoreReleaseContent.AppVersionProvider = () => "new";
+                CoreSettings.Current.LastSeenVersion = "old";
+            }
             shell = new MainShellWindow();
             shell.Show();
             await body(shell);
@@ -141,6 +157,7 @@ public sealed class FirstRunGateDeadClickTests
             Dispatcher.UIThread.RunJobs();
             service.SaveImmediate();   // cancels the 500ms debounce so it cannot land in a later test's file
             CoreSettings.ServiceProvider = null;
+            if (previousVersion) ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
         }
     });
 }

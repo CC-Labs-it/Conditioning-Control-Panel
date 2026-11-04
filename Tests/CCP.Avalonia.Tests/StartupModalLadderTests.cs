@@ -31,6 +31,48 @@ public sealed class StartupModalLadderTests
         for (var i = 0; i < 5; i++) await Task.Yield();
     }
 
+    [Theory]
+    [InlineData("fresh")]
+    [InlineData("unchanged")]
+    [InlineData("priority")]
+    [InlineData("persist")]
+    public Task WhatsNewStartup(string scenario) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var settings = new ConditioningControlPanel.Models.AppSettings();
+            settings.LastSeenVersion = scenario == "fresh" ? "" : scenario == "unchanged" ? "2" : "1";
+            var saves = 0;
+            var order = new List<int>();
+            Func<Task> show = () => { Assert.True(MainShellWindow.IsStartupDialogShowing); order.Add(30); return Task.CompletedTask; };
+            MainShellWindow.OfferWhatsNewIfNeeded(settings, "2", () => saves++, show);
+            if (scenario == "fresh")
+            {
+                Assert.Equal("2", settings.LastSeenVersion);
+                Assert.Equal(1, saves);
+            }
+            if (scenario == "priority")
+            {
+                StartupLadder.EnqueueModal("earlier", 20, () => { order.Add(20); return Task.CompletedTask; });
+                StartupLadder.EnqueueModal("later", 40, () => { order.Add(40); return Task.CompletedTask; });
+            }
+            if (scenario == "persist") Assert.Equal("1", settings.LastSeenVersion);
+            await Step(); await Step(); await Step();
+            if (scenario == "fresh" || scenario == "unchanged") Assert.Empty(order);
+            if (scenario == "unchanged") Assert.Equal(0, saves);
+            if (scenario == "priority") Assert.Equal(new[] { 20, 30, 40 }, order);
+            if (scenario == "persist")
+            {
+                Assert.Equal(new[] { 30 }, order);
+                Assert.Equal("2", settings.LastSeenVersion);
+                Assert.Equal(1, saves);
+                Assert.False(MainShellWindow.IsStartupDialogShowing);
+            }
+        }
+        finally { MainShellWindow.IsStartupDialogShowing = false; StartupLadder.ResetForTests(); }
+    });
+
     [Fact]
     public Task OffersRunInPriorityOrder() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

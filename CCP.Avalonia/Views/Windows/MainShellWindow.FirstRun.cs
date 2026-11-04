@@ -25,12 +25,8 @@
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
-//   * The rest of the `else` branch (ShowWhatsNewIfNeeded / TryPresentSeasonRecap). Returning users
-//     get no mod popup: WPF removed it (MainWindow.xaml.cs:587-588). MainShellWindow.Marquee.cs documents
-//     why those two are still stubs: they need App.Achievements, App.Seasons and App.xaml.cs's startup-dialog queue. One
-//     consequence worth naming: LastSeenVersion is therefore only ever stamped by the first-run
-//     gate below, never on an upgrade launch. That is pre-existing and this file does not
-//     worsen it - the fix is ShowWhatsNewIfNeeded, not a second stamp here.
+//   * TryPresentSeasonRecap and EMI Desk remain unported.
+
 
 using System;
 using Avalonia.Threading;
@@ -56,17 +52,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
                 OfferWhatMovedIfNeeded(freshInstall: fresh);
                 if (fresh) Opened += OnFirstRunShellOpened;
-                // WPF's else branch (MainWindow.xaml.cs:602-612) no longer opens a mod picker:
-                // mods are offered by the first-run wizard and the Mod Manager only.
                 else if (CoreSettings.Service != null && CoreSettings.Current.Welcomed
                          && !CoreSettings.Current.HasAcceptedAgeVerification)
                     Opened += OnAgeGateShellOpened;
+                else OfferCurrentWhatsNew();
+
             }
             catch (Exception ex)
             {
                 // A first-run screen must never be the reason a fresh install fails to start.
                 Log.Warning(ex, "[FirstRun] Could not arm the first-run wizard");
             }
+        }
+
+        private void OfferCurrentWhatsNew()
+        {
+            if (CoreSettings.Service == null) return;
+            var version = CoreReleaseContent.AppVersion;
+            OfferWhatsNewIfNeeded(CoreSettings.Current, version, () => CoreSettings.Save(),
+                async () => await new Dialogs.WhatsNewDialog(
+                    $"What's New in v{version}", CoreReleaseContent.PatchNotes,
+                    () => CoreTutorial.Start("UpgradeTour"), "Show me around (60s)").ShowDialogSafe(this));
         }
 
         /// <summary>
@@ -88,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
                 CoreSettings.Save();
+                OfferCurrentWhatsNew();
             }, DispatcherPriority.Normal);
         }
 
