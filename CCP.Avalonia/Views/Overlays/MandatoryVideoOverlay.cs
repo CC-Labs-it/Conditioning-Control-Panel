@@ -290,6 +290,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // WPF: a floating window never takes focus from what is under it (panic and Esc reach
                 // it through the global hooks), and it moves with the mouse.
                 w.ShowActivated = false;
+                Platform.X11Overlay.SetOverrideRedirect(w, passive: true);
                 PlaceFloating(w, screen, _random);
                 _ = new FloatingVideoFrame(w);
             }

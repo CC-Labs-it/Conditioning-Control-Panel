@@ -20,31 +20,28 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class FloatingVideoFrameTests
 {
-    [Fact]
-    public Task Passive_drag_tracks_outside_and_releases_without_capture() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Fact] public Task Passive_drag_tracks_outside_and_releases_without_capture() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        var field = typeof(FloatingVideoFrame).GetField("_readPointer", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(field);
+        Assert.Equal(1, FloatingVideoFrame.PrimaryButton(false)); Assert.Equal(2, FloatingVideoFrame.PrimaryButton(true));
+        Assert.True(FloatingVideoFrame.NativePointer(new global::Avalonia.Platform.PlatformHandle(new System.IntPtr(1), "HWND")));
+        Assert.False(FloatingVideoFrame.NativePointer(new global::Avalonia.Platform.PlatformHandle(new System.IntPtr(1), "HEADLESS")));
+        var field = typeof(FloatingVideoFrame).GetField("_readPointer", BindingFlags.Instance | BindingFlags.NonPublic); Assert.NotNull(field);
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var w = new Window { Width = 300, Height = 180 };
+        var w = new Window { Width = 300, Height = 180 }; var savedLevel = CoreSettings.Current.MotionLevel;
         try
         {
-            w.Show(); w.Position = new PixelPoint(100, 100);
-            var frame = new FloatingVideoFrame(w);
-            var start = w.PointToScreen(new Point(20, 20)); var before = w.Position;
-            var sample = (start, true);
-            field!.SetValue(frame, (System.Func<(PixelPoint, bool)>)(() => sample));
-            w.MouseDown(new Point(20, 20), MouseButton.Left);
+            w.Show(); w.Position = new PixelPoint(100, 100); CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            var frame = new FloatingVideoFrame(w); var start = w.PointToScreen(new Point(20, 20)); var before = w.Position;
+            var sample = (start, true); field!.SetValue(frame, (System.Func<(PixelPoint, bool)>)(() => sample)); w.MouseDown(new Point(20, 20), MouseButton.Left);
             sample = (new PixelPoint(start.X + 400, start.Y), true); frame.Tick();
-            Assert.Equal(before.X + 400, w.Position.X);
-            sample = (sample.Item1, false); frame.Tick();
-            var motion = Assert.IsType<FloatingVideoMotion>(typeof(FloatingVideoFrame)
-                .GetField("_motion", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(frame));
+            Assert.Equal(before.X + 400, w.Position.X); sample = (new PixelPoint(start.X + 420, start.Y), false); frame.Tick();
+            Assert.Equal(before.X + 420, w.Position.X);
+            var motion = Assert.IsType<FloatingVideoMotion>(typeof(FloatingVideoFrame).GetField("_motion", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(frame));
             Assert.False(motion.Held);
         }
-        finally { w.Close(); }
+        finally { w.Close(); CoreSettings.Current.MotionLevel = savedLevel; }
         return Task.CompletedTask;
     });
     [Fact]
@@ -70,6 +67,7 @@ public sealed class FloatingVideoFrameTests
             Assert.Equal(before.X + (int)(40 * w.RenderScaling), w.Position.X);
             Assert.Equal(before.Y + (int)(20 * w.RenderScaling), w.Position.Y);
             w.MouseUp(new Point(20, 20), MouseButton.Left);
+            Assert.Equal(before.X, w.Position.X);
             frame.Tick();
             Assert.Equal(.2, frame.MotionSpeed);
             s.MandatoryVideoFloatingSpeedPercent = 60;

@@ -20,17 +20,21 @@ internal sealed class FloatingVideoFrame
     private readonly BeatLoop _beat;
     private readonly Func<double> _nowMs;
     private double _last;
-    private Func<(PixelPoint, bool)>? _readPointer = OperatingSystem.IsWindows() ? ReadPointer : null;
+    private Func<(PixelPoint, bool)>? _readPointer;
+    internal static bool NativePointer(global::Avalonia.Platform.IPlatformHandle? h) => Platform.X11Overlay.BackendOf(h) == Platform.OverlayBackend.Win32;
+    internal static int PrimaryButton(bool swapped) => swapped ? 2 : 1;
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
     private static (PixelPoint, bool) ReadPointer() => GetCursorPos(out var p)
-        ? (new PixelPoint(p.X, p.Y), GetAsyncKeyState(1) < 0) : (default, false);
+        ? (new PixelPoint(p.X, p.Y), GetAsyncKeyState(PrimaryButton(GetSystemMetrics(23) != 0)) < 0) : (default, false);
     internal double MotionSpeed { get => _motion.Speed; set => _motion.Speed = value; }
 
     internal FloatingVideoFrame(Window window, Func<double>? nowMs = null)
     {
         _window = window;
+        _readPointer = NativePointer(window.TryGetPlatformHandle()) ? ReadPointer : null;
         _nowMs = nowMs ?? (() => _clock.Elapsed.TotalMilliseconds);
         var b = window.Screens.ScreenFromWindow(window)?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
         _motion = new(window.Position.X, window.Position.Y, window.Width * window.RenderScaling,
@@ -42,11 +46,6 @@ internal sealed class FloatingVideoFrame
             return area is { } a ? (a.X, a.Y, a.Width, a.Height) : null;
         };
         _beat = new BeatLoop(window, _ => Tick());
-        window.Opened += (_, _) =>
-        {
-            if (OperatingSystem.IsWindows() && window.TryGetPlatformHandle() is { } h)
-                Platform.Win32Overlay.SetOverrideRedirect(window, h.Handle, passive: true);
-        };
         window.PointerPressed += Press;
         window.PointerMoved += Move;
         window.PointerReleased += Release;
@@ -115,7 +114,7 @@ internal sealed class FloatingVideoFrame
         if (_readPointer is not null || !_motion.Held || e.InitialPressMouseButton != MouseButton.Left) return;
         var p = Pointer(e);
         var now = _nowMs();
-        _motion.Move(p.X, p.Y, now);
+        _motion.Move(p.X, p.Y, now); _motion.Step(0.001);
         _motion.Release(now, AmbientFxCanvas.Env.Level);
         e.Pointer.Capture(null);
         Place();
@@ -129,7 +128,7 @@ internal sealed class FloatingVideoFrame
         {
             var (p, down) = read(); var time = _nowMs();
             _motion.Move(p.X, p.Y, time);
-            if (!down) { _motion.Release(time, AmbientFxCanvas.Env.Level); Place(); }
+            if (!down) { _motion.Step(0.001); _motion.Release(time, AmbientFxCanvas.Env.Level); Place(); }
         }
         if (!_motion.Active) { _beat.Stop(); return; }
         var now = _nowMs() / 1000.0;
