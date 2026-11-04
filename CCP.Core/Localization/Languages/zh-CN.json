@@ -1,6 +1,6 @@
 {
   "chaos_time_slow": "时间减速", "chaos_rabbit_extended": "🐇 在减速中抓住。+0.8秒", "chaos_rabbit_quick": "⚡ 快速抓住。时间减慢",
-  "chaos_rabbit_caught": "🐇 抓住白兔。时间减慢", "chaos_rabbit_pointer": "呼唤兔子需要访问桌面指针", "chaos_rabbit_whistle": "🐇 哨声等待中。下次点击将召唤它们",
+  "chaos_rabbit_caught": "🐇 抓住白兔。时间减慢", "chaos_rabbit_pointer": "呼唤兔子需要访问桌面指针", "chaos_rabbit_whistle": "🐇 哨声等待中。下次点击将召唤它们", "chaos_first_play_award": "+{0} ✦ 首次游玩",
   "chaos_rabbit_storm": "兔子风暴", "chaos_rabbit_summoned_storm": "🐇 {0}只来到指尖。兔穴正在清空", "chaos_rabbit_summoned": "🐇 {0}只回应了你的召唤",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",

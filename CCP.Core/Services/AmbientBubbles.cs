@@ -86,6 +86,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
         public bool IsSpanked { get; private set; }
+        public double SpankGrowth { get; private set; } = 1;
         private double _spankCooldownMs;
         // WPF BubbleService.cs:4722: redirect and grow only on the first smack.
         public void Spank(Random random, double growth)
@@ -95,7 +96,7 @@ namespace ConditioningControlPanel.Services
             double speed = Math.Min(Math.Max(Math.Sqrt(_vx * _vx + _vy * _vy), 0.01) * 1.18, (Spec?.DarterSpeed ?? 9) * 2.2);
             double angle = random.NextDouble() * Math.PI * 2;
             _vx = Math.Cos(angle) * speed; _vy = Math.Sin(angle) * speed; _escaping = false; _bounces = 0; _throbPunch = 0.35;
-            if (!IsSpanked) { double old = Size; Size *= Math.Max(1, growth); X -= (Size - old) / 2; Y -= (Size - old) / 2; IsSpanked = true; }
+            if (!IsSpanked) { SpankGrowth = Math.Max(1, growth); IsSpanked = true; }
         }
         // WPF BubbleService.cs:4704-4706: catching during the flare is not quick.
         public bool WasQuickCatch => Spec is { IsDarter: true } && _telegraphMs <= 0 && _darterActiveMs <= Spec.QuickWindowMs;
@@ -236,7 +237,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
-                if (Spec?.IsDarter == true) return Scale; // WPF :4255: no second wobble
+                if (Spec?.IsDarter == true) return Scale + (SpankGrowth - 1); // WPF :4255: no second wobble
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
             }

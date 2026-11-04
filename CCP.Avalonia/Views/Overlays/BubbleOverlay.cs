@@ -51,6 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image, DarterImage;
         internal static bool SkipPlatformChecksForTests;
+        internal static Func<bool> LiveApplication = () => Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
         private static Visual? _chaosHost;
         private static int _chaosTargetCount;
 
@@ -275,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static AmbientBubble? SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
             AmbientBubble b;
+            if (Targets.Count == 0 && _chaosHost != null && LiveApplication()) return null;
             if (Targets.Count == 0)
                 b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
             else
@@ -310,7 +312,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
             var power = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.SpankerPower;
-            if (b.Spec.IsDarter && (power.HasValue || b.Spec.IsSweeper)) { b.Spank(Field.Random, power ?? 1); RequestFrame(); return; }
+            if (b.Spec.IsDarter && (power.HasValue || b.Spec.IsSweeper)) { bool first = !b.IsSpanked; b.Spank(Field.Random, power ?? 1); if (first && b.IsSpanked) Services.Chaos.ChaosLessons.Tick("rabbit_caller"); RequestFrame(); return; }
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
@@ -364,7 +366,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (ally.IsSpanked && !ally.Popping)
                     foreach (var victim in Field.Bubbles.ToArray())
                         if (victim.Screen == ally.Screen && victim.Spec is { IsDarter: false, IsFreeze: false } && !victim.Popping
-                            && Math.Abs(victim.CenterX - ally.CenterX) * 2 < victim.Size + ally.Size && Math.Abs(victim.CenterY - ally.CenterY) * 2 < victim.Size + ally.Size)
+                            && Math.Abs(victim.CenterX - ally.CenterX) * 2 < victim.Size + ally.Size * ally.SpankGrowth && Math.Abs(victim.CenterY - ally.CenterY) * 2 < victim.Size + ally.Size * ally.SpankGrowth)
                         { if (victim.IsLiveThreat) { if (victim.Snap()) Field.ChaosDefused?.Invoke(victim); } else PopChaos(victim); }
         }
 

@@ -58,64 +58,41 @@ public sealed class BubbleOverlayTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var primary = MultiMonitorResultTests.MakeScreen(1, new PixelRect(0, 0, 1000, 800), new PixelRect(0, 0, 1000, 760), true);
         var second = MultiMonitorResultTests.MakeScreen(2, new PixelRect(1000, 0, 1600, 900), new PixelRect(1000, 0, 1600, 860), false);
-        var query = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
-        var settings = CoreSettings.Current;
-        var (target, dual, skip) = (settings.GlobalTargetMonitor, settings.DualMonitorEnabled, BubbleOverlay.SkipPlatformChecksForTests);
-        var host = new Window();
-        try
-        {
+        var query = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride; var settings = CoreSettings.Current;
+        var (target, dual, skip) = (settings.GlobalTargetMonitor, settings.DualMonitorEnabled, BubbleOverlay.SkipPlatformChecksForTests); var host = new Window();
+        try {
             host.Show(); settings.GlobalTargetMonitor = 1; settings.DualMonitorEnabled = false;
-            ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] { primary, second }; BubbleOverlay.SkipPlatformChecksForTests = true;
-            BubbleOverlay.BeginChaos(host, _ => { });
+            ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] { primary, second }; BubbleOverlay.SkipPlatformChecksForTests = true; BubbleOverlay.BeginChaos(host, _ => { });
             var b = BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 1800, atPxY: 400)); Assert.Equal(0, b.Screen);
             Assert.Equal(900, b.CenterX, 6); Assert.Equal(200, b.CenterY, 6);
             Assert.Equal(0, BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 1000, atPxY: 400)).Screen);
             var a = BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0)); Assert.Equal(1, a.Screen);
             var p = BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 400, atPxY: 300)); Assert.Equal(1, p.Screen); Assert.Equal(400, p.CenterX, 6);
             BubbleOverlay.EndChaos(); BubbleOverlay.BeginChaos(host, _ => { }); BubbleOverlay.SkipPlatformChecksForTests = false;
-            Assert.Null(BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 400, atPxY: 300)));
-        }
-        finally
-        {
+            Assert.Null(BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 400, atPxY: 300))); }
+        finally {
             BubbleOverlay.EndChaos(); host.Close(); ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = query;
-            (settings.GlobalTargetMonitor, settings.DualMonitorEnabled, BubbleOverlay.SkipPlatformChecksForTests) = (target, dual, skip);
-        }
-        return Task.CompletedTask;
-    });
-
-
+            (settings.GlobalTargetMonitor, settings.DualMonitorEnabled, BubbleOverlay.SkipPlatformChecksForTests) = (target, dual, skip); }
+        return Task.CompletedTask; });
     [Fact]
     public Task Darter_sprite_and_glow_are_visible_in_the_rendered_field() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var (oldImage, oldBubble) = (BubbleOverlay.DarterImage, BubbleOverlay.Image);
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting(); var (oldImage, oldBubble) = (BubbleOverlay.DarterImage, BubbleOverlay.Image);
         var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 400, 300), 1) { Width = 400, Height = 300 };
-        try
-        {
-            BubbleOverlay.LoadBubbleImage();
-            Assert.NotNull(BubbleOverlay.DarterImage);
-            var spec = ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0);
-            var b = new AmbientBubble { Screen = 0, X = 100, Y = 100, Size = 100, Spec = spec };
-            BubbleOverlay.Field.Bubbles.Add(b); w.Show(); w.Sync();
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            var withArt = w.CaptureRenderedFrame()!;
-            byte[] bytes = new byte[4];
+        try {
+            BubbleOverlay.LoadBubbleImage(); Assert.NotNull(BubbleOverlay.DarterImage); var spec = ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0);
+            var b = new AmbientBubble { Screen = 0, X = 100, Y = 100, Size = 100, Spec = spec }; BubbleOverlay.Field.Bubbles.Add(b); w.Show(); w.Sync();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); var withArt = w.CaptureRenderedFrame()!; byte[] bytes = new byte[4];
             using (var fb = withArt.Lock()) System.Runtime.InteropServices.Marshal.Copy(fb.Address + 150 * fb.RowBytes + 150 * 4, bytes, 0, 4);
-            Assert.True(bytes[0] != bytes[2] && bytes[3] > 0, $"sprite pixel: {string.Join(",", bytes)}");
-            var spritePixel = (byte[])bytes.Clone();
-            BubbleOverlay.DarterImage = null; w.Sync();
+            Assert.True(bytes[0] != bytes[2] && bytes[3] > 0, $"sprite pixel: {string.Join(",", bytes)}"); var spritePixel = (byte[])bytes.Clone(); BubbleOverlay.DarterImage = null; w.Sync();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            using (var fb = w.CaptureRenderedFrame()!.Lock()) System.Runtime.InteropServices.Marshal.Copy(fb.Address + 150 * fb.RowBytes + 150 * 4, bytes, 0, 4);
-            Assert.NotEqual(spritePixel, bytes);
+            using (var fb = w.CaptureRenderedFrame()!.Lock()) System.Runtime.InteropServices.Marshal.Copy(fb.Address + 150 * fb.RowBytes + 150 * 4, bytes, 0, 4); Assert.NotEqual(spritePixel, bytes);
             using (var fb = withArt.Lock()) System.Runtime.InteropServices.Marshal.Copy(fb.Address + 150 * fb.RowBytes + 203 * 4, bytes, 0, 4);
             Assert.True(bytes[3] > 0); // the shadow extends past the image rectangle
-        }
-        finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); BubbleOverlay.DarterImage = oldImage; BubbleOverlay.Image = oldBubble; }
-        return Task.CompletedTask;
-    });
-
+        } finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); BubbleOverlay.DarterImage = oldImage; BubbleOverlay.Image = oldBubble; }
+        return Task.CompletedTask; });
     [Fact]
     public async Task Press_on_a_bubble_pops_it_and_pays_the_bucket()
     {

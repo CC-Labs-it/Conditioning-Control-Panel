@@ -721,13 +721,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent(Loc.Get("chaos_rabbit_pointer"));
                 return;
             }
-            var r = ChaosToyRules.Use(_state, toy, running); if (r == ChaosToyRules.UseResult.Fired && toy.Id != "rabbit_caller") ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
+            var r = ChaosToyRules.Use(_state, toy, running); if (r == ChaosToyRules.UseResult.Fired && toy.Id != "rabbit_caller") AwardFirstPlay();
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
             if (r != ChaosToyRules.UseResult.Fired || toy.Id != "rabbit_caller") return;
             double power = _state.ToyPower.TryGetValue(toy.Id, out var p) ? p : 0;
             ArmRabbitCall(Math.Max(1, (int)power), _state.MaxedBoons.Contains(toy.Id));
             ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
-            _state.PushEvent(Loc.Get("chaos_rabbit_whistle")); ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
+            _state.PushEvent(Loc.Get("chaos_rabbit_whistle")); AwardFirstPlay();
+        }
+
+        private static void AwardFirstPlay()
+        {
+            if (_state == null || !ChaosFirstTimes.TryAward(ChaosFirstTimes.Play)) return;
+            var line = Loc.GetF("chaos_first_play_award", ChaosFirstTimes.Amounts[ChaosFirstTimes.Play]); _state.PushEvent(line);
+            PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY - 30, line, Color.FromRgb(0xC8, 0xA8, 0xFF));
         }
 
         internal static Func<double?, double?, AmbientBubble?> SpawnRabbit = SpawnDarter;
