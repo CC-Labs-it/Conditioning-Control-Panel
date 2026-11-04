@@ -50,6 +50,21 @@ public sealed partial class GameWindowTests
         bad.Web.OnNavigationCompleted(bad.PageUrl!, success: false);
         bad.Web.OnWebMessage("{\"type\":\"ready\"}");
         Assert.Empty(sent);
+        var retry = new WebViewNavigationStartingEventArgs { Request = bad.PageUrl };
+        bad.Web.OnNavigationStarted(null, retry);
+        Assert.False(retry.Cancel);
+        bad.Web.OnWebMessage("{\"type\":\"ready\"}");
+        bad.Web.OnNavigationCompleted(bad.PageUrl!);
+        Assert.Single(sent);
+        var reload = new WebViewNavigationStartingEventArgs { Request = bad.PageUrl };
+        bad.Web.OnNavigationStarted(null, reload);
+        Assert.False(reload.Cancel);
+        Assert.False(bad.IsReady);
+        bad.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Single(sent);
+        bad.Web.OnNavigationCompleted(bad.PageUrl!);
+        Assert.Equal(2, sent.Count);
+        sent.Clear();
         bad.Close();
         var other = GameWindow.Launch("breakoutdemo")!;
         other.Posted += sent.Add;
@@ -148,7 +163,12 @@ public sealed partial class GameWindowTests
             Assert.Equal(0, s.PatreonTier);
             AccountSeed.CheckoutLastCheckUtc = DateTime.MinValue;
             launcher.Show(); launcher.Activate(); Dispatcher.UIThread.RunJobs();
-            w.Activate(); Dispatcher.UIThread.RunJobs();
+            w.Activate(); Dispatcher.UIThread.RunJobs(); Thread.Sleep(150); Dispatcher.UIThread.RunJobs();
+            launcher.Activate(); Dispatcher.UIThread.RunJobs(); w.Activate(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(DateTime.MinValue, AccountSeed.CheckoutLastCheckUtc); // moving inside the app is not a return
+            Assert.Equal(0, s.PatreonTier);
+            w.Hide(); launcher.Hide(); Dispatcher.UIThread.RunJobs(); Thread.Sleep(150); Dispatcher.UIThread.RunJobs();
+            launcher.Show(); launcher.Activate(); Dispatcher.UIThread.RunJobs();
             Assert.True(SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return s.PatreonTier == 2; }, TimeSpan.FromSeconds(5)),
                 $"checkout activation was observed: {AccountSeed.CheckoutLastCheckUtc != DateTime.MinValue}");
             Assert.Equal(2, s.PatreonTier);

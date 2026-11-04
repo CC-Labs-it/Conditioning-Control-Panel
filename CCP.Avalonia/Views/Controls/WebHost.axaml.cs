@@ -73,6 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// hangs its status line and catalogue lookup on.
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
+        internal event Action? NavigationStarting;
 
         /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
         public event Action<Uri, bool>? NavigationFinished;
@@ -384,7 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
             // hostile page would use to slip past it.
             if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) return;
+            if (gate(target)) { NavigationStarting?.Invoke(); return; }
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
             Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);

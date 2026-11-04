@@ -112,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Content = Web;
             Web.WebMessage += OnPageMessage;
+            Web.NavigationStarting += () => { if (IsBreakout) { IsReady = false; _breakoutNavigationOkay = false; _earlyBreakoutReady = false; _earlyBreakoutGates.Clear(); } };
             Web.NavigationFinished += (url, success) =>
             {
                 if (!IsBreakout) return;
@@ -161,7 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void OnPageMessage(string json)
         {
             if (PageUrl == null) return;
-            if (Web.CurrentUrl == null)
+            if (Web.CurrentUrl == null || (IsBreakout && !_breakoutNavigationOkay))
             {
                 // Never queue a checkout. At most eight non-opening gate notices wait for the expected document.
                 try
