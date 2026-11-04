@@ -35,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>True while the fog/sheen/sparkle/breath loops run (tests read it).</summary>
         internal bool ProgramBannerFxRunning => _programBannerLoop != null;
+        internal Action<Action<TimeSpan>>? ProgramBannerRequestFrameForTests;
 
         /// <summary>Constructor hook.</summary>
         private void InitProgramTodayCard()
@@ -294,15 +295,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var run = ++_programBannerNudge;
             var top = TopLevel.GetTopLevel(this);
             if (!AmbientFxCanvas.Env.AllowTransitions || top == null) { slide.X = to; return; }
+            var requestFrame = ProgramBannerRequestFrameForTests ?? new Action<Action<TimeSpan>>(top.RequestAnimationFrame);
             var start = BeatLoop.Time.GetTimestamp();   // elapsed on the beat's clock: a test steps it (P08)
             void Frame(TimeSpan _)
             {
                 if (run != _programBannerNudge) return;
                 var p = Math.Min(1, BeatLoop.Time.GetElapsedTime(start).TotalMilliseconds / 260);
                 slide.X = from + (to - from) * (1 - (1 - p) * (1 - p));
-                if (p < 1) top.RequestAnimationFrame(Frame);
+                if (p < 1) requestFrame(Frame);
             }
-            top.RequestAnimationFrame(Frame);
+            requestFrame(Frame);
         }
     }
 }

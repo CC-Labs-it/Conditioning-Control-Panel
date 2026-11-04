@@ -24,6 +24,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services.Possession;
@@ -49,6 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Possession
             public TimeSpan? Start;
             public double Tx, Ty, Rot, Sx = 1, Sy = 1;   // snapshot when the return begins
             public bool Returning;
+            public double? ForcedHoldMs;
+            public double ReturnDurationMs = ReturnMs;
+            public TaskCompletionSource Done = new();
         }
 
         private readonly IFrameSource _frames;
@@ -129,7 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             {
                 g.Start ??= now;
                 double ms = (now - g.Start.Value).TotalMilliseconds;
-                double hold = g.Effect.HoldFor.TotalMilliseconds;
+                double hold = g.ForcedHoldMs ?? g.Effect.HoldFor.TotalMilliseconds;
                 if (ms < hold) { g.Effect.Frame(ms); continue; }
                 var l = g.Lease;
                 if (!g.Returning)
@@ -138,7 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                     g.Tx = l.Translate.X; g.Ty = l.Translate.Y; g.Rot = l.Rotate.Angle;
                     g.Sx = l.Scale.ScaleX; g.Sy = l.Scale.ScaleY;
                 }
-                double f = Math.Min(1, (ms - hold) / ReturnMs);
+                double f = Math.Min(1, (ms - hold) / g.ReturnDurationMs);
                 if (f >= 1) { Finish(g); continue; }
                 double k = 1 - HeadEffect.CubicInOut(f);
                 l.Translate.X = g.Tx * k; l.Translate.Y = g.Ty * k; l.Rotate.Angle = g.Rot * k;
@@ -153,6 +157,24 @@ namespace ConditioningControlPanel.Avalonia.Possession
             try { g.Lease.ReleaseImmediate(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} release failed", g.Effect.Id); }
             _cooldownUntil[g.Target.Key] = _time.GetTimestamp() + (long)(PossessionDeck.TargetCooldown.TotalSeconds * _time.TimestampFrequency);
+            g.Done.TrySetResult();
+        }
+
+        internal bool IsLive(HeadEffect effect) => _ghosts.Exists(g => ReferenceEquals(g.Effect, effect));
+
+        internal Task Return(HeadEffect effect, TimeSpan duration)
+        {
+            var ghost = _ghosts.Find(g => ReferenceEquals(g.Effect, effect));
+            if (ghost == null) return Task.CompletedTask;
+            if (duration <= TimeSpan.Zero) { Finish(ghost); if (_ghosts.Count == 0) Unsubscribe(); }
+            else
+            {
+                ghost.Start = null;
+                ghost.ForcedHoldMs = 0;
+                ghost.ReturnDurationMs = Math.Clamp(duration.TotalMilliseconds, effect is NudgeHeadEffect ? 220 : 250, effect is NudgeHeadEffect ? 600 : 700);
+                ghost.Returning = false;
+            }
+            return ghost.Done.Task;
         }
 
         private void Unsubscribe()

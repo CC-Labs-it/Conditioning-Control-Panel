@@ -66,8 +66,12 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
+        view.IsVisible = false; view.IsVisible = true;
+        var entrance = ((System.Threading.CancellationTokenSource)typeof(PresetsTabView).GetField("_entranceCancellation", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(view)!).Token;
+        Assert.False(entrance.IsCancellationRequested);
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(entrance.IsCancellationRequested); // Off must release the arrival animation before hover writes its value.
         var chip = view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(b => b.Tag is string);
         host.MouseMove(Center(host, chip)); Settle();
         var scale = Assert.IsType<TransformGroup>(chip.RenderTransform).Children.OfType<ScaleTransform>().Single();
