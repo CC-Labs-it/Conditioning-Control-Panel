@@ -127,8 +127,8 @@ public sealed class MasterSoundTests
         finally { settings.MasterVolume = before; }
     }
     [Theory]
-    [InlineData(false), InlineData(true)]
-    public void Native_sound_stays_muted_until_a_delayed_setup_lands(bool stopDuringSetup)
+    [InlineData(true, false, true), InlineData(true, true, false), InlineData(false, false, false)]
+    public void Native_sound_and_mindwipe_wait_for_delayed_setup(bool route, bool stopDuringSetup, bool checkLoop)
     {
         if (!OperatingSystem.IsLinux()) Assert.Skip("ALSA null output is Linux-only");
         LibVlcAudio audio;
@@ -145,7 +145,7 @@ public sealed class MasterSoundTests
         {
             audio.PlaySound(wav, 50, _ => { mutedAtStart = voice!.Player.Mute; started.Set(); }, null, ended =>
             {
-                voice = audio.NewVoice(wav, ended, route: true);
+                voice = audio.NewVoice(wav, ended, route: route);
                 // A busy pool: the setup work item cannot take the player until released.
                 holder = Task.Run(() => { lock (voice.Player) { held.Set(); release.Wait(); } });
                 held.Wait();
@@ -165,7 +165,33 @@ public sealed class MasterSoundTests
             release.Set();
             Assert.True(started.Wait(TimeSpan.FromSeconds(10)), "setup never started playback");
             Assert.False(mutedAtStart);
-
+            if (checkLoop)
+            {
+                var loopWav = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(wav)!, "loop.wav");
+                LayeredAudioLoopTests.WriteSilentWav(loopWav, ms: 3000);
+                using var loop = audio.PlayVoice(loopWav, 0.5, true, () => { });
+                Assert.NotNull(loop);
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                var gate = loop.GetType().GetField("_gate", flags)!.GetValue(loop)!;
+                var live = (System.Collections.Generic.List<LibVlcAudio.Voice>)loop.GetType().GetField("_live", flags)!.GetValue(loop)!;
+                long firstTime = -1;
+                LibVlcAudio.Voice? next = null;
+                Assert.True(SpinWait.SpinUntil(() =>
+                {
+                    lock (gate)
+                    {
+                        if (live.Count < 2 || live[1].Player.State != LibVLCSharp.Shared.VLCState.Paused) return false;
+                        firstTime = live[0].Player.Time;
+                        next = live[1];
+                        return firstTime >= 0;
+                    }
+                }, 6000), "next loop copy was not prepared");
+                Assert.InRange(firstTime, 0, 2000);
+                loop.Volume = 0.125;
+                Assert.False(SpinWait.SpinUntil(() => next!.Player.IsPlaying, 250), "next loop copy started too early");
+                Assert.True(SpinWait.SpinUntil(() => next!.Player.IsPlaying, 5000), "next loop copy did not start");
+                Assert.InRange(next!.Player.Volume, 49, 51);
+            }
         }
         finally { release.Set(); holder?.Wait(); audio.StopSound(); }
     }

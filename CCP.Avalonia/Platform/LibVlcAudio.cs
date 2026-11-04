@@ -268,7 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
-            if (route) media.AddOption(":start-paused");
+            media.AddOption(":start-paused");
             try { return new Voice(new MediaPlayer(media), media, onEnded, route); }
             catch { media.Dispose(); throw; }
         }
@@ -277,7 +277,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             internal MediaPlayer Player => player;
             private int _vol, _done;
-            private volatile bool _routePending = route;
+            private volatile bool _setupPending = true;
+            private bool _ready, _released;
+            internal bool Hold { get; set; }
+            internal void Release()
+            {
+                lock (player)
+                {
+                    _released = true;
+                    if (_ready && _done == 0) { Set(); player.Time = 0; player.SetPause(false); }
+                }
+            }
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
             public Action<long>? Started { get; set; }
             internal volatile bool Failed;
@@ -295,14 +305,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     {
                         lock (player)
                         {
-                            if (_done != 0 || !_routePending) return;
+                            if (_done != 0 || !_setupPending) return;
                             if (player.Volume >= 0)
                             {
-                                LibVlcAudio.ApplyPreferredDevice(player);
-                                _routePending = false;
+                                if (route) LibVlcAudio.ApplyPreferredDevice(player);
+                                _setupPending = false;
                                 Set();
-                                player.Time = 0;
-                                player.SetPause(false);
+                                _ready = true;
+                                if (!Hold || _released) { player.Time = 0; player.SetPause(false); }
                                 return;
                             }
                         }
@@ -313,15 +323,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 catch (Exception ex) { Log.Warning(ex, "[Audio] Sound output setup failed"); Failed = true; Dispose(); }
             });
             private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) Set(); });
-            // Muted from Play until gain (and a routed sound's device) lands: WPF configures both before Play.
-            private void Set() { player.Volume = _vol; if (!_routePending) player.Mute = false; }
+            // Muted and paused until gain (and a routed sound's device) lands.
+            private void Set() { player.Volume = _vol; if (!_setupPending) player.Mute = false; }
             public bool Play()
             {
                 var started = 0;
-                player.Paused += (_, _) => { if (route && _routePending) ApplyPreferredDevice(); };
+                player.Paused += (_, _) => { if (_setupPending) ApplyPreferredDevice(); };
                 player.Playing += (_, _) =>
                 {
-                    if (route && _routePending) return;
+                    if (_setupPending) return;
                     Apply();
                     if (Interlocked.Exchange(ref started, 1) == 0) Fire(() => Started?.Invoke(Math.Max(0, player.Length)));
                 };
@@ -354,24 +364,28 @@ namespace ConditioningControlPanel.Avalonia.Platform
             private readonly object _gate = new();
             private readonly List<Voice> _live = new();
             private Timer? _next;
-            private bool _done;
+            private Voice? _prepared;
+            private bool _done, _due;
+            private int _cycle;
             private double _vol;
 
             public double Volume { set { lock (_gate) { _vol = value; foreach (var v in _live) v.Volume = value; } } }
 
-            public bool Start()
+            public bool Start(bool prepared = false, int cycle = 0)
             {
                 Voice v;
                 lock (_gate)
                 {
-                    if (_done) return false;
+                    if (_done || (prepared && cycle != _cycle)) return false;
                     v = null!;
                     v = audio.NewVoice(path, () => Retire(v));
                     v.Volume = _vol;
+                    v.Hold = prepared && !_due;
+                    if (v.Hold) _prepared = v;
                     v.Started = Schedule;
                     _live.Add(v);
+                    return v.Play();
                 }
-                return v.Play();
             }
 
             /// <summary>WPF: interval = length - overlap, at least 100 ms. Unknown length: back to back.</summary>
@@ -382,7 +396,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     if (_done) return;
                     _next?.Dispose();
-                    _next = new Timer(_ => Start(), null, Math.Max(100, lengthMs - OverlapMs), Timeout.Infinite);
+                    var cycle = ++_cycle;
+                    _due = false;
+                    _next = new Timer(_ =>
+                    {
+                        Voice? v;
+                        lock (_gate) { if (_done || cycle != _cycle) return; _due = true; v = _prepared; _prepared = null; }
+                        v?.Release();
+                    }, null, Math.Max(100, lengthMs - OverlapMs), Timeout.Infinite);
+                    // Prepare off the LibVLC event thread while the current copy plays.
+                    ThreadPool.QueueUserWorkItem(_ => Start(prepared: true, cycle));
                 }
             }
 
@@ -393,7 +416,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     _live.Remove(v);
                     if (_done || _live.Count > 0) return;
-                    if (v.Failed) dead = _done = true; else restart = true;
+                    if (v.Failed) dead = _done = true; else { _cycle++; _next?.Dispose(); restart = true; }
                 }
                 if (dead) { Fire(onEnded); return; }
                 if (restart && !Start()) { lock (_gate) _done = true; Fire(onEnded); }
