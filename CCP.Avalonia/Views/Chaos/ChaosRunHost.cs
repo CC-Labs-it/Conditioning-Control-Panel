@@ -65,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosOverlayWindow? _overlay;
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
-        private static BeatLoop? _rabbitAimBeat;
+        private static DispatcherTimer? _rabbitAimTimer;
         private static int _rabbitCallPending;
         private static bool _rabbitCallMaxed, _rabbitAimPrevDown;
         private static double _rabbitStormRemainingSec, _rabbitStormAccumSec;
@@ -756,17 +756,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _rabbitAimPrevDown = true;
             if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.ArmCursorGlow();
             else ChaosCursorGlowOverlay.Arm();
-            _rabbitAimBeat?.Stop();
-            bool started = false; // BeatLoop.Start invokes its step synchronously before it subscribes.
-            _rabbitAimBeat = new BeatLoop(_overlay!, _ => { if (started) RabbitAimTick(); });
-            _rabbitAimBeat.Interval = TimeSpan.FromMilliseconds(16); // WPF ChaosModeService.cs:2862
-            _rabbitAimBeat.Start(); started = true;
+            _rabbitAimTimer?.Stop();
+            _rabbitAimTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
+            _rabbitAimTimer.Tick += (_, _) => RabbitAimTick(); _rabbitAimTimer.Start(); // WPF ChaosModeService.cs:2859-2864
         }
 
         private static void DisarmRabbitCall()
         {
             _rabbitCallPending = 0;
-            _rabbitAimBeat?.Stop(); _rabbitAimBeat = null;
+            _rabbitAimTimer?.Stop(); _rabbitAimTimer = null;
             ChaosSkiaFxOverlay.DisarmCursorGlow();
             ChaosCursorGlowOverlay.Disarm();
         }
