@@ -286,6 +286,27 @@ public sealed class BrowserMediaTakeoverTests
     });
 
     [Fact]
+    public void PanicStopsBrowserPlaybackAndTracking() => WithDesktopBrowser(host =>
+    {
+        var shell = MainShellWindow.Current!;
+        var tab = shell.Named<SettingsTabView>("SettingsTab")!;
+        var scripts = new List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        var oldHook = CoreEngine.StoppedHook;
+        CoreEngine.StoppedHook = shell.OnEngineStopped;
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.True(tab.BrowserMediaOwnsSlot);
+            PanicSurfaces.StopAll("test", shell);
+            Assert.Contains(SettingsTabView.BrowserMediaRecoveryScript, scripts);
+            Assert.False(tab.BrowserMediaPlaying);
+            Assert.False(tab.BrowserMediaOwnsSlot);
+        }
+        finally { CoreEngine.StoppedHook = oldHook; host.ScriptInvoker = null; }
+    });
+
+    [Fact]
     public void UnknownDurationRecoversClaimDespiteOngoingHeartbeats() => WithDesktopBrowser(host =>
     {
         var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;

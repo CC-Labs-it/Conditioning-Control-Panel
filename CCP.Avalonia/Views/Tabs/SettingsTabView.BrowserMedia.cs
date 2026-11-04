@@ -122,6 +122,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CancelBrowserMediaRecovery();
         }
 
+        // WPF MainWindow.xaml.cs:2045,2113 and BrowserMediaService.cs:400-415.
+        internal void StopBrowserMediaForPanic()
+        {
+            try { _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaRecoveryScript); }
+            finally { StopBrowserMediaTracking(); }
+        }
+
         private void StopBrowserMediaTracking()
         {
             BrowserMediaPlaying = false;
