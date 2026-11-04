@@ -50,6 +50,31 @@ public sealed class SeasonBookkeepingTests
     }
 
     [Fact]
+    public void SessionStartsSurviveFailedSnapshotAndRollIntoTheirOwnSeason()
+    {
+        var path = Path.Combine(CorePaths.UserData, "season-recaps", "1911-01.json");
+        Directory.CreateDirectory(path);
+        var s = new AppSettings { CurrentSeason = "1911-02", SeasonStatsSeason = "1911-01",
+            LastSeasonResetSeen = "1911-01", SeasonSessionsStarted = 2 };
+        try
+        {
+            SeasonBookkeeping.RecordSessionStart(s, DateTime.UtcNow);
+            Assert.Equal(2, s.SeasonSessionsStarted);
+            Assert.Equal(1, s.PendingSeasonSessions["1911-02"]);
+            s = Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(Newtonsoft.Json.JsonConvert.SerializeObject(s))!;
+            Directory.Delete(path);
+            SeasonBookkeeping.Update(s);
+            Assert.Equal(2, SeasonRecapStore.Load("1911-01")!.SessionCount);
+            Assert.Equal(1, s.SeasonSessionsStarted);
+            s.CurrentSeason = "1911-03";
+            SeasonBookkeeping.Update(s);
+            Assert.Equal(1, SeasonRecapStore.Load("1911-02")!.SessionCount);
+            Assert.Equal(0, s.SeasonSessionsStarted);
+        }
+        finally { if (Directory.Exists(path)) Directory.Delete(path); }
+    }
+
+    [Fact]
     public void ConcurrentSeasonAdoptionWaitsForTrackerGate()
     {
         var s = new AppSettings { CurrentSeason = "1908-01" };

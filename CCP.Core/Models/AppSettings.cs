@@ -8016,6 +8016,7 @@ namespace ConditioningControlPanel.Models
         public SeasonRecapSnapshot? PendingSeasonSnapshot { get; set; }
         public string? PendingSeasonTarget { get; set; }
         public Dictionary<string, double> PendingSeasonMinutes { get; set; } = new();
+        public Dictionary<string, int> PendingSeasonSessions { get; set; } = new();
         public int PendingSeasonPercentile { get; set; }
         public long PendingSeasonLifetimePointsSpent { get; set; }
 

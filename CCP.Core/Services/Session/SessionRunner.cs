@@ -130,6 +130,8 @@ namespace ConditioningControlPanel.Services
             // Ledger persisted before any override, so a crash mid-session keeps it (as WPF) without
             // leaking session values to disk. Immediate: a debounced save would serialise the overrides.
             try { s.RecordSessionStart(s.ActiveModId); } catch { }
+            try { SeasonBookkeeping.RecordSessionStart(s, DateTime.UtcNow); }
+            catch (Exception ex) { Log.Warning(ex, "[Session] Season start count failed"); }
             CoreSettings.SaveImmediate();
 
             // Main 8fe2a80a0: a Takeover pulse from the last 30 s hands its boosted values back first,
