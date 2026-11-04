@@ -257,12 +257,14 @@ namespace ConditioningControlPanel.Avalonia
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.ShowAskCard(card));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SaySurface = text =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, aiGenerated: false));
-            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () => Platform.StartupLadder.IsQuiet || Mantra.IsActive
-                || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
-                || CoreSession.IsSessionRunning
-                || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
-                || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
-                || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:696
+            // The startup and window probes touch Avalonia state. Chat replies can ask from a worker.
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () =>
+                Dispatcher.UIThread.Invoke(() => Platform.StartupLadder.IsQuiet || Mantra.IsActive
+                    || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
+                    || CoreSession.IsSessionRunning
+                    || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
+                    || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
+                    || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true); // WPF App.xaml.cs:786
             // WPF App.xaml.cs:715 routes this through CompanionLinkLauncher.Open (remote guard, embedded browser, https fallback).
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.OpenLink = url =>
                 _ = Views.Controls.Companion.CompanionLinkLauncher.OpenAsync(url);

@@ -314,6 +314,30 @@ public sealed class TubeChatParityTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task BusyProbeFromAWorkerReadsStartupStateOnTheUiThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var restore = SaveSeams();
+        var previous = CoreTutorial.IsActiveProvider;
+        bool? onUiThread = null;
+        try
+        {
+            CoreTutorial.IsActiveProvider = () => { onUiThread = Dispatcher.UIThread.CheckAccess(); return false; };
+            AvApp.SeedCompanionTubeSeams();
+            await Task.Run(() => CompanionAskService.BusyProvider!());
+            Assert.True(onUiThread);
+        }
+        finally
+        {
+            CoreTutorial.IsActiveProvider = previous;
+            restore();
+        }
+    });
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(40, -7.5)]

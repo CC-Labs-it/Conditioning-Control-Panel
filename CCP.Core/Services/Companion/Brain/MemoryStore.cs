@@ -544,17 +544,13 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             }
 
             var sb = new StringBuilder();
-            int spent = 0;
-
-            void Append(string line)
-            {
-                sb.AppendLine(line);
-                spent += ChatSession.ApproxTokens(line) + 1; // +1 for the newline
-            }
+            void Append(string line) => sb.AppendLine(line);
 
             bool TryAppend(string line)
             {
-                if (spent + ChatSession.ApproxTokens(line) + 1 > budget) return false;
+                // sb already includes the actual platform newline after each previous line.
+                // The trailing newline on this line is trimmed from the returned block.
+                if (((long)sb.Length + line.Length) / 4 > budget) return false;
                 Append(line);
                 return true;
             }
