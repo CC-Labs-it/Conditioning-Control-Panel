@@ -95,14 +95,21 @@ public sealed class ChaosVibeTrailOverlayTests
         {
             Setup();
             int opened = 0;
-            ChaosVibeTrailOverlay.BeforePrewarmForTests = w => w.Opened += (_, _) => opened++;
+            double? opacityWhenOpened = null;
+            ChaosVibeTrailOverlay.BeforePrewarmForTests = w => w.Opened += (_, _) =>
+            {
+                opened++;
+                opacityWhenOpened = w.Opacity;
+            };
             try
             {
                 ChaosVibeTrailOverlay.EnsureCreated();
                 var w = ChaosVibeTrailOverlay.Active;
                 Assert.NotNull(w);
                 Assert.Equal(1, opened);
-                Assert.False(w!.IsVisible);
+                Assert.Equal(0d, opacityWhenOpened.GetValueOrDefault(-1));
+                Assert.Equal(1d, w!.Opacity);
+                Assert.False(w.IsVisible);
                 Assert.False(w.IsFollowing);
                 ChaosVibeTrailOverlay.EnsureCreated();
                 Assert.Same(w, ChaosVibeTrailOverlay.Active);
