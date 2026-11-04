@@ -1263,7 +1263,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
             /// <summary>WPF PerformanceProfile.HeavyElementCount: live flash windows + ambient bubbles.</summary>
             public static int HeavyElementCount =>
-                Views.Overlays.FlashOverlay.Active.Count + Views.Overlays.BubbleOverlay.Field.Bubbles.Count;
+                Views.Overlays.FlashOverlay.OnScreen + Views.Overlays.BubbleOverlay.Field.Bubbles.Count;
 
             /// <summary>PerformanceProfile.MaxAmbientParticles, verbatim.</summary>
             public static int MaxAmbientParticles(PerformanceTier tier) => tier switch
