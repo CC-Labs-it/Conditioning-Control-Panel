@@ -81,7 +81,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnDashboardFxWindowProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
-            if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) ApplyDashboardFxLoops();
+            if (e.Property == WindowStateProperty) ApplyDashboardFxLoops();
+            else if (e.Property == IsVisibleProperty) ApplyLogoFx();
         }
 
         /// <summary>

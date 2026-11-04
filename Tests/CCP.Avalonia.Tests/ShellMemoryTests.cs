@@ -18,7 +18,7 @@ public sealed class ShellMemoryTests(ITestOutputHelper output)
     public Task ClosedShellsReleaseMemory() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         CoreSettings.Current.Welcomed = true;
@@ -51,7 +51,7 @@ public sealed class ShellMemoryTests(ITestOutputHelper output)
     {
         // Own platform setup (P45): as the first test of a shard it otherwise has no IWindowingPlatform.
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         // Ticking, and parked: a loop that starts on a hidden owner (a breath on a hidden tab).

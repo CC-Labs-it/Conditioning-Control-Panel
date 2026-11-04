@@ -30,6 +30,9 @@ public sealed class HomeLogoFxTests
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
+        CoreSettings.Current.Welcomed = true;
+        CoreSettings.Current.HasAcceptedAgeVerification = true;
+        CoreSettings.Current.AvatarEnabled = false;
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         CoreSettings.Current.PerformanceMode = false;
         var time = new SteppedTime();
@@ -53,6 +56,11 @@ public sealed class HomeLogoFxTests
             typeof(MainShellWindow).GetMethod("OnLogoSheenTick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, new object?[] { null, EventArgs.Empty });
             time.Advance(TimeSpan.FromSeconds(.55)); BeatLoop.StepAll();
             Assert.Equal(.26, band.Opacity, 3);
+            shell.Hide();
+            Assert.False(shell.LogoDrifting); Assert.False(shell.LogoSheenScheduled);
+            Assert.Equal(1, scale.ScaleX); Assert.Equal(0, band.Opacity);
+            shell.Show(); shell.Activate(); Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.LogoDrifting); Assert.True(shell.LogoSheenScheduled);
             face.IsVisible = false;
             Assert.False(shell.LogoDrifting); Assert.False(shell.LogoSheenScheduled);
             Assert.Equal(1, scale.ScaleX); Assert.Equal(0, band.Opacity);
