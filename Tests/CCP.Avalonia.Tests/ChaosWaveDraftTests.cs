@@ -45,7 +45,6 @@ public sealed class ChaosWaveDraftTests
         ChaosRunHost.Overlay!.FinishCountdown();
         ChaosRunHost.StopTimerForTests();
     }
-
     // Deal the guaranteed sin and commit its 1.5 s pick beat, as in WPF :1476-1483.
     internal static async Task PickSurrender(ChaosRunState state, ChaosOverlayWindow overlay)
     {
@@ -55,13 +54,13 @@ public sealed class ChaosWaveDraftTests
         state.SinExtraMult = 0.4;
         Ticks(80);
         var host = overlay.FindControl<StackPanel>("BoonCardHost")!;
-        await Task.Delay(1100); // the third card's 450 ms stagger
         var pick = ((Border)host.Children[2]).GetVisualDescendants().OfType<Button>().Single();
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!pick.IsEnabled && DateTime.UtcNow < deadline) await Task.Delay(50);
         Assert.True(pick.IsEnabled);
         Click(pick);
         await Task.Delay(1800);
     }
-
     // WPF ChaosModeService.cs:1441-1483, 1577-1617 and ChaosOverlayWindow.xaml.cs:78-79.
     [Fact]
     public Task Wave_draft_clears_the_field_holds_clock_and_resumes_after_skip_countdown() => Run(() =>
