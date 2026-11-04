@@ -373,12 +373,26 @@
         </Grid>
 
         <!-- ================= bottom row ================= -->
-        <!-- ponytail: the friends chip and the What's New link (WPF left side) are not here yet. -->
+        <!-- The friends chip and What's New link are not here yet. -->
         <Border Grid.Row="2" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0" Margin="28,0,28,0">
-            <CheckBox x:Name="SkipToPanel" HorizontalAlignment="Right" VerticalAlignment="Center"
+            <Grid ColumnDefinitions="*,Auto">
+                <Button x:Name="LobbyChip" HorizontalAlignment="Left" VerticalAlignment="Center"
+                        Background="#3357BFEA" BorderBrush="#6657BFEA" BorderThickness="1"
+                        CornerRadius="14" Padding="12,4" Click="LobbyChip_Click">
+                    <TextBlock x:Name="LobbyChipText" FontSize="13" FontWeight="SemiBold"/>
+                </Button>
+                <Popup x:Name="LobbyDrop" PlacementTarget="LobbyChip" Placement="Top"
+                       IsLightDismissEnabled="True" VerticalOffset="-8">
+                    <Border Width="380" Background="#F2160B22" BorderBrush="#40FFFFFF"
+                            BorderThickness="1" CornerRadius="16" Padding="12">
+                        <StackPanel x:Name="LobbyDropRows"/>
+                    </Border>
+                </Popup>
+                <CheckBox Grid.Column="1" x:Name="SkipToPanel" HorizontalAlignment="Right" VerticalAlignment="Center"
                       Click="SkipToPanel_Click">
                 <TextBlock Text="{loc:Str launcher_skip_to_panel}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
             </CheckBox>
+            </Grid>
         </Border>
 
         <!-- Lockdown veil (WPF LauncherWindow.xaml:597): the launcher waits, it never argues. Over every

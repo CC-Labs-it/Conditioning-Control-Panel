@@ -167,6 +167,20 @@ public sealed class LauncherWindowTests
         Assert.Equal("gradedintake", shell.CurrentTab);
     });
 
+    [Fact]
+    public void LobbyDropdownOpensTheLobbyPage() => Run(shell =>
+    {
+        Assert.True(LauncherWindow.BackToLauncher(shell));
+        var launcher = LauncherWindow.Instance!;
+        launcher.FindControl<Button>("LobbyChip")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        var rows = launcher.FindControl<StackPanel>("LobbyDropRows")!;
+        Assert.True(launcher.FindControl<Popup>("LobbyDrop")!.IsOpen);
+        ((Button)rows.Children[^1]).RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.True(shell.IsVisible);
+        Assert.Equal("availablesubjects", shell.CurrentTab);
+        Assert.False(launcher.IsVisible);
+    });
+
     /// <summary>WPF 7.1.5 Tiles.cs:220: a press and release anywhere on the card runs Play; a press
     /// that ends off the card does not.</summary>
     [Fact]
