@@ -34,7 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             if (TopLevel.GetTopLevel(this) is not Window { IsVisible: true } owner) return;
             var data = TriggerEditorData(CoreSettings.Current.CustomTriggers);
-            var dialog = new TextEditorDialog("Trigger Phrases", data);
+            var dialog = new TextEditorDialog(ConditioningControlPanel.Localization.Loc.Get("title_trigger_phrases"), data);
+            dialog.MarkSilentLines(Views.Overlays.SubliminalWhisperShow.HasRecordedVoice);
             if (await dialog.ShowDialogSafe<bool>(owner) && dialog.ResultData != null)
             {
                 ApplyTriggerEditorData(CoreSettings.Current, data, dialog.ResultData,
