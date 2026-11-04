@@ -69,7 +69,6 @@ public sealed class PackTempRetryTests
         }
         finally { Directory.Delete(root, true); }
     }
-
     private sealed class ClosingHost : IMandatoryVideoHost, IBubbleCountHost
     {
         public Action? Closed;
@@ -111,7 +110,6 @@ public sealed class PackTempRetryTests
         }
         finally { Directory.Delete(root, true); }
     }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

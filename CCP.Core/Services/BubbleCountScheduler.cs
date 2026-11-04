@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Services
         private bool _toldNoVideos, _heldFlashes;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount;
+        private string? _playingPath;
 
         public BubbleCountScheduler(IBubbleCountHost host, TimeProvider? time = null, Func<IReadOnlyList<string>>? library = null)
         {
@@ -126,7 +127,7 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             Dispose(ref _feedDefer);
             _feedDeadline = null;
-            PackVideos?.CleanupTemps();
+            PackVideos?.CleanupTemps(_playingPath);
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
@@ -143,7 +144,7 @@ namespace ConditioningControlPanel.Services
             Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
             _retryCount = 0;
             try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
-            PackVideos?.CleanupTemps();
+            _playingPath = null; PackVideos?.CleanupTemps();
             if (wasBusy) Log.Information("BubbleCountService: ForceCleanup called");
         }
 
@@ -260,9 +261,10 @@ namespace ConditioningControlPanel.Services
                 Idle();
                 return true;
             }
+            _playingPath = path;
             CoreProgression.TrackBubbleCountGameStarted();
             try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete); }
-            catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
+            catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); _playingPath = null; PackVideos?.CleanupTemps(); Idle(); _retryCount = 0; }
             return true;
         }
 
@@ -270,7 +272,7 @@ namespace ConditioningControlPanel.Services
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
-            PackVideos?.CleanupTemps();
+            _playingPath = null; PackVideos?.CleanupTemps();
             if (success)
             {
                 _retryCount = 0;
@@ -334,7 +336,7 @@ namespace ConditioningControlPanel.Services
         public void ReloadAssets()
         {
             _queue = new Queue<string>();
-            PackVideos?.CleanupTemps();
+            PackVideos?.CleanupTemps(_playingPath);
         }
 
         internal string? PickNext()
