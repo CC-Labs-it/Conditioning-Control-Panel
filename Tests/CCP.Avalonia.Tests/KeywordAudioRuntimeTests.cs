@@ -311,6 +311,37 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(new[] { "SIT", "SIT" }, shown);
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:1511-1517,1859-1865.
+    public void OverlappingAudioReplacesClipButBothResponsesFinish() => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        var completed = new List<Action>();
+        CoreAudio.PlayStoppableProvider = (path, volume, _, _, done) => { played.Add((path, volume)); completed.Add(done!); return () => played.Add(("stopped", 0)); };
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        s.AwarenessLoopProtectionEnabled = false;
+        var first = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)first.Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 5000;
+        first.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stand", CooldownSeconds = 0,
+            Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false },
+                new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } } });
+        var gap = new TaskCompletionSource();
+        var clock = engine.Now(); engine.Now = () => clock;
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Single(played);
+        clock = clock.AddSeconds(2);
+        Type(engine, "stand");
+        Assert.Equal(new[] { "STAND" }, shown);
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, played.Count(x => x.Path != "stopped"));
+        Assert.Equal(new[] { "STAND", "SIT" }, shown);
+        completed[1](); Dispatcher.UIThread.RunJobs();
+        Assert.NotEqual("stopped", played.Last().Path);
+    });
+
     [Theory] // WPF KeywordTriggerService.cs:1283-1293,1363-1366,1511-1517,1698-1713.
     [InlineData(0, false)] [InlineData(0, true)] [InlineData(1, false)]
     [InlineData(2, false)] [InlineData(2, true)] [InlineData(3, false)] [InlineData(3, true)]

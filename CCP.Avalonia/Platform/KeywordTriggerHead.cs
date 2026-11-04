@@ -148,6 +148,7 @@ internal sealed class KeywordAudioRuntime
     internal IReadOnlyList<string> GetRecentForegroundApps() => _seenApps.ToArray();
     private CancellationTokenSource? _audio;
     private Action? _stop;
+    private long _clipGeneration;
     private long? _duckGeneration;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
@@ -248,6 +249,13 @@ internal sealed class KeywordAudioRuntime
     internal void StopAudio()
     {
         _audio?.Cancel(); _audio?.Dispose(); _audio = null;
+        StopClip();
+    }
+
+    // WPF KeywordTriggerService.cs:1511-1517,1859-1865: replacing a clip does not cancel dispatch.
+    private void StopClip()
+    {
+        _clipGeneration++;
         var stop = _stop; _stop = null;
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
         if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
@@ -266,9 +274,8 @@ internal sealed class KeywordAudioRuntime
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
         if (!File.Exists(path)) return Task.FromResult(true);
-        StopAudio();
-        var cancellation = _audio = new CancellationTokenSource();
-        var token = cancellation.Token;
+        StopClip();
+        var token = (_audio ??= new CancellationTokenSource()).Token;
         if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
         {
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
@@ -288,12 +295,13 @@ internal sealed class KeywordAudioRuntime
                     // audio (WPF KeywordTriggerService.cs:1841-1846), so the following visual still fires.
                     if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return true; }
                     _stop?.Invoke();
+                    var generation = ++_clipGeneration;
                     var last = i == count - 1;
                     _stop = CoreAudio.PlayStoppable(path,
                         KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                         onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
                         {
-                            try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
+                            try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _clipGeneration) StopClip(); }
                             catch (OperationCanceledException) { }
                         }); });
                 }
