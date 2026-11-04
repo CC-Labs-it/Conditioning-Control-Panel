@@ -274,7 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         private static bool StartupModalOpen() =>
-            MainShellWindow.IsStartupDialogShowing || IsUpdateDialogActive ||
+            MainShellWindow.IsStartupDialogShowing || IsUpdateDialogActive || CoreTutorial.IsActive ||
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Windows
                 .Any(w => w is FirstRunWizard or MessageDialog && w.IsVisible) == true;
 
