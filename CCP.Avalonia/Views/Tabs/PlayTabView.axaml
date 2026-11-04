@@ -235,7 +235,7 @@
           <TextBlock Grid.Column="0" Text="{loc:Str rf_play_zone_games}" Theme="{StaticResource PlayZoneTag}"/>
           <Border Grid.Column="1" Theme="{StaticResource PlayZoneRule}"/>
         </Grid>
-        <UniformGrid Columns="2">
+        <UniformGrid Columns="3">
           <Grid x:Name="SlotBreakoutDemo">
             <Border Theme="{StaticResource PlayCard}">
               <Grid>
