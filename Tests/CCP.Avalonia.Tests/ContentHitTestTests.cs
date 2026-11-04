@@ -13,7 +13,9 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Models;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -31,7 +33,7 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var w = new MainShellWindow();
@@ -82,13 +84,50 @@ public sealed class ContentHitTestTests
         });
     }
 
+    [Fact]
+    public Task RenderBarrierFinishesTheEntranceBeforeSamplingPointerGeometry() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = s.MotionLevel;
+        s.MotionLevel = MotionLevel.Full;
+        var clock = new SteppedTime();
+        var w = new MainShellWindow { TabClock = clock };
+        try
+        {
+            w.Show(); Dispatcher.UIThread.RunJobs();
+            w.ShowTab("awareness");
+            var tab = w.Named<Control>("AwarenessTab")!;
+            tab.FindControl<Border>("AwarenessGate")!.IsVisible = false;
+            var button = tab.FindControl<Button>("BtnAwarenessTutorial")!;
+            RenderLiveTree(w);
+            Assert.Equal(1, tab.Opacity);
+            var centre = new Point(button.Bounds.Width / 2, button.Bounds.Height / 2);
+            var at = button.TranslatePoint(centre, w)!.Value;
+            clock.Advance(TimeSpan.FromMilliseconds(620)); w.TickTabTransition();
+            Assert.Equal(at, button.TranslatePoint(centre, w)!.Value);
+            var hit = w.InputHitTest(at) as Visual;
+            Assert.True(hit == button || hit != null && button.IsVisualAncestorOf(hit));
+            bool pressed = false;
+            button.AddHandler(InputElement.PointerPressedEvent, (_, e) => { pressed = true; e.Handled = true; }, RoutingStrategies.Tunnel);
+            w.MouseDown(at, MouseButton.Left); w.MouseUp(at, MouseButton.Left);
+            Assert.True(pressed);
+        }
+        finally { w.Close(); s.MotionLevel = saved; }
+        return Task.CompletedTask;
+    });
+
     /// <summary>Renders a frame holding the live tree. One forced tick is not that: while a batch is in
     /// flight MediaContext holds the next commit back, so the tick renders the OLDER batch and the layout
     /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
     /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
+    internal static void RenderLiveTree(Visual w)
     {
+        // Live transforms must stop moving before the rendered hit tree is committed.
+        if (w is MainShellWindow shell) shell.CompleteTabTransition();
         Dispatcher.UIThread.RunJobs();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();

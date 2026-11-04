@@ -289,10 +289,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 // WPF: a floating window never takes focus from what is under it (panic and Esc reach
                 // it through the global hooks), and it moves with the mouse.
-                // ponytail: WPF's first-cut drag; the frame's fling and bounce (row 18) replace it.
                 w.ShowActivated = false;
+                Platform.X11Overlay.SetOverrideRedirect(w, passive: true);
                 PlaceFloating(w, screen, _random);
-                w.PointerPressed += (_, e) => { if (e.GetCurrentPoint(w).Properties.IsLeftButtonPressed) w.BeginMoveDrag(e); };
+                _ = new FloatingVideoFrame(w);
             }
             else Place(w, screen);
             void OnKey(KeyEventArgs e)
