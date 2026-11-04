@@ -58,6 +58,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
+        // Decoder seam for deterministic tests; production always uses the live LibVLC player.
+        internal Func<bool>? PlayerAvailableOverride;
+        internal Action<bool>? SetPlayerPauseOverride;
+        private bool PlayerAvailable => PlayerAvailableOverride?.Invoke() ?? _player != null;
+        private void SetPlayerPause(bool paused)
+        {
+            if (SetPlayerPauseOverride is { } set) set(paused);
+            else _player?.SetPause(paused);
+        }
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
@@ -431,12 +440,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     ConditioningControlPanel.Services.Safety.PanicPolicy.OverrideEnabled(CoreSettings.Current))) return false;
             var now = Now;
             var since = _lastGraceUtc == default ? double.MaxValue : (now - _lastGraceUtc).TotalMilliseconds;
-            var d = MandatoryVideoScheduler.EvaluateGrace(Scheduler.IsPlaying && _player != null, _closing, _gracePaused, _graceConsumed, since);
+            var d = MandatoryVideoScheduler.EvaluateGrace(Scheduler.IsPlaying && PlayerAvailable, _closing, _gracePaused, _graceConsumed, since);
             if (d == GraceDecision.ConsumedDedup) return true;
             if (d != GraceDecision.Pause) return false;
             _gracePaused = true;
             _lastGraceUtc = _gracePausedAt = now;
-            _player?.SetPause(true);
+            SetPlayerPause(true);
             _sinceShow.Stop();
             _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
@@ -473,7 +482,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
-            _player?.SetPause(false);
+            SetPlayerPause(false);
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);
         }
 
