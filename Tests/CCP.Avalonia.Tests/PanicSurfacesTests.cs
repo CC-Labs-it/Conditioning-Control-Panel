@@ -270,6 +270,7 @@ public sealed class PanicSurfacesTests
         ["ScrolllerAwayHost"] = "no media, no visible window: OS lock / sleep hooks that only set ScrolllerPolicy.Away (WPF ScrolllerAwayWatcher)",
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
         ["InlineLoopVideo"] = "muted help poster detaches on card close; gaze panes detach and free players when the 'gaze-minigame' surface closes the game",
+        ["VideoThumbnail"] = "silent, windowless Library thumbnail work; WPF leaves shell thumbnail extraction running during panic (MainWindow.Assets.cs:798-806, MainWindow.xaml.cs:2017)",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
         ["SpiralOverlay"] = "spiral images and videos: the 'engine' surface (OnEngineStopped -> StopDesktopOverlays -> SpiralOverlay.CloseAll) releases the decoder; SpiralFinishTests asserts it",
         ["SpiralRailHost"] = "a rail chip, not a surface: no audio, window or device; it only draws the shared glyph (WPF parity)",
@@ -289,10 +290,21 @@ public sealed class PanicSurfacesTests
             if (f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                 || f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
                 || f.EndsWith("PanicSurfaces.cs")) continue;
-            var src = Code(File.ReadAllText(f));
+            var text = File.ReadAllText(f);
+            var src = Code(text);
             if (!Starts.IsMatch(src)) continue;
             // Every class the file declares, not only the first: the starter may be any of them.
             var types = Regex.Matches(src, @"\bclass (\w+)").Select(m => m.Groups[1].Value).ToList();
+            if (types.Contains("VideoThumbnail"))
+            {
+                Assert.Contains("media.AddOption(LibVlcSilence.NoAudioOption)", src);
+                Assert.Contains("frame.Task.WaitAsync", src);
+                Assert.Contains("await FreeOnUiAsync(sink.Free)", src);
+                Assert.Contains("process.Kill(", src);
+                Assert.Contains("\"-frames:v\", \"1\"", text);
+                Assert.Contains("\"-f\", \"image2pipe\"", text);
+                Assert.DoesNotMatch(@"\bnew\s+\w*Window\s*\(", src);
+            }
             starters.UnionWith(types);
             if (!types.Any(t => Allowed.ContainsKey(t) || Regex.IsMatch(registry, $@"\b{t}\b")))
                 missing.Add($"{Path.GetFileName(f)} ({string.Join("/", types)})");
