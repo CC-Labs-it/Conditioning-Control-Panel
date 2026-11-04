@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
 using FakeClock = CCP.Core.Tests.PopQuizSchedulerTests.FakeClock;
 
@@ -114,6 +115,49 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Empty(host.Shown);
         Assert.True(v.IsRunning);
         v.Stop();
+    });
+
+    [Fact]
+    public void Scrolller_clip_requires_a_cached_file_and_plays_that_file() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        const string url = "https://cdn.scrolller.com/video.mp4";
+        string? cached = null;
+        v.CachedScrolllerPath = _ => cached;
+        var enabled = ScrolllerPolicy.Enabled; var cap = ScrolllerPolicy.MaxClipShortSide;
+        try
+        {
+            ScrolllerPolicy.Apply(true, null);
+            Assert.False(v.Trigger(path: url));
+            Assert.Empty(host.Shown);
+            cached = "/cache/video.mp4";
+            Assert.True(v.Trigger(path: url));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(cached, Assert.Single(host.Shown).Path);
+            v.End();
+        }
+        finally { ScrolllerPolicy.Apply(enabled, cap); }
+    });
+
+    [Fact]
+    public void Scrolller_licence_is_rechecked_after_preroll() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+            { CachedScrolllerPath = _ => "/cache/video.mp4" };
+        var enabled = ScrolllerPolicy.Enabled; var cap = ScrolllerPolicy.MaxClipShortSide;
+        try
+        {
+            ScrolllerPolicy.Apply(true, null);
+            Assert.True(v.Trigger(path: "https://cdn.scrolller.com/video.mp4"));
+            ScrolllerPolicy.Apply(false, null);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Empty(host.Shown);
+            Assert.False(v.IsPlaying);
+            Assert.False(v.Trigger(path: "https://cdn.scrolller.com/video.mp4"));
+        }
+        finally { ScrolllerPolicy.Apply(enabled, cap); }
     });
 
     [Fact]

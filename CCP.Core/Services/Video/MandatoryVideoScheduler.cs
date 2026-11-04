@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Serilog;
+using ConditioningControlPanel.Services.Fyp.Online;
 
 namespace ConditioningControlPanel.Services
 {
@@ -313,6 +314,13 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        // WPF VideoService.cs:8197: never hand an uncached Scrolller URL to the player.
+        // Resolve again after pre-roll because the licence or cache can change in the meantime.
+        internal Func<string, string?> CachedScrolllerPath { get; set; } = ScrolllerDiskCache.TryGetPath;
+
+        private string? PlaybackPath(string path) => !ScrolllerPolicy.IsScrolllerUrl(path) ? path
+            : ScrolllerPolicy.Enabled ? CachedScrolllerPath(path) : null;
+
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
         /// pre-roll. False when nothing was started (no clip, or one is already playing).
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
@@ -327,6 +335,7 @@ namespace ConditioningControlPanel.Services
                 if (Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
                 return false;
             }
+            if (PlaybackPath(path) == null) return false;
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
@@ -340,9 +349,11 @@ namespace ConditioningControlPanel.Services
                 // WPF ShouldStartAfterPreroll: only the run that armed it, and only while still live.
                 if (!ReferenceEquals(mine, _preroll) || !_playing) return;
                 Dispose(ref _preroll);
+                var playbackPath = PlaybackPath(path);
+                if (playbackPath == null) { End(); return; }
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
-                try { _host.Show(path, strict); }
+                try { _host.Show(playbackPath, strict); }
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }
