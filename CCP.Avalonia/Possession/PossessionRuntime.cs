@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             public required HeadEffect Effect;
             public required PossessionLease Lease;
             public required PossessionHeadTarget Target;
+            public Action? OnEnded;
             public TimeSpan? Start;
             public double Tx, Ty, Rot, Sx = 1, Sy = 1;   // snapshot when the return begins
             public bool Returning;
@@ -86,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>WPF CanApply + Apply: refuses an off-limits, hidden, zero-size, wrong-role or already
         /// possessed control, and an effect instance that is already live.</summary>
-        public bool TryApply(HeadEffect effect, PossessionHeadTarget target)
+        public bool TryApply(HeadEffect effect, PossessionHeadTarget target, Action? onEnded = null)
         {
             var el = target.Element;
             if (PossessionTree.IsOffLimits(el)) return false;
@@ -103,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 Serilog.Log.Warning(ex, "Possession {Id} start failed", effect.Id);
                 return false;
             }
-            _ghosts.Add(new Ghost { Effect = effect, Lease = lease, Target = target });
+            _ghosts.Add(new Ghost { Effect = effect, Lease = lease, Target = target, OnEnded = onEnded });
             _lastKey = target.Key;
             if (!_subscribed) { _subscribed = true; _frames.Subscribe(_onFrame); }
             return true;
@@ -146,7 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                     catch (Exception ex)
                     {
                         Serilog.Log.Warning(ex, "Possession {Id} frame failed", g.Effect.Id);
-                        Finish(g);
+                        FinishAndNotify(g);
                     }
                     continue;
                 }
@@ -158,12 +159,19 @@ namespace ConditioningControlPanel.Avalonia.Possession
                     g.Sx = l.Scale.ScaleX; g.Sy = l.Scale.ScaleY;
                 }
                 double f = Math.Min(1, (ms - hold) / g.ReturnDurationMs);
-                if (f >= 1) { Finish(g); continue; }
+                if (f >= 1) { FinishAndNotify(g); continue; }
                 double k = 1 - HeadEffect.CubicInOut(f);
                 l.Translate.X = g.Tx * k; l.Translate.Y = g.Ty * k; l.Rotate.Angle = g.Rot * k;
                 l.Scale.ScaleX = 1 + (g.Sx - 1) * k; l.Scale.ScaleY = 1 + (g.Sy - 1) * k;
             }
             if (_ghosts.Count == 0) Unsubscribe();
+        }
+
+        private void FinishAndNotify(Ghost g)
+        {
+            try { g.OnEnded?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Possession cleanup notification failed"); }
+            if (_ghosts.Contains(g)) Finish(g);
         }
 
         private void Finish(Ghost g)

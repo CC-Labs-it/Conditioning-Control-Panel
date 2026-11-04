@@ -83,6 +83,146 @@ public sealed class PossessionRuntimeTests
         return Task.CompletedTask;
     });
 
+    private sealed class FaultOnceEffect(bool failAtStart) : HeadEffect
+    {
+        private bool _fault = true;
+        public override string Id => "fault-once";
+        public override PossessionRung MinRung => PossessionRung.Settle;
+        public override double Weight => 1;
+        public override TimeSpan HoldFor => TimeSpan.FromMinutes(1);
+        public override System.Collections.Generic.IReadOnlyList<PossessionRole> Roles => new[] { PossessionRole.Button };
+        protected override void Start()
+        {
+            if (_fault && failAtStart) { _fault = false; throw new InvalidOperationException(); }
+        }
+        internal override void Frame(double ms)
+        {
+            if (_fault && !failAtStart) { _fault = false; throw new InvalidOperationException(); }
+            Lease.Translate.X = 4;
+        }
+    }
+
+    private sealed class TestHost : IPossessionHost
+    {
+        public System.Collections.Generic.List<PossessionTarget> Items { get; } = new();
+        public System.Collections.Generic.IReadOnlyList<PossessionTarget> Targets => Items;
+        public bool IsUsable => true;
+    }
+
+    private sealed class ImmediateCharge(EmberHeadAttribution inner) : IPossessionAttribution
+    {
+        public Task ChargeAsync(object target, System.Threading.CancellationToken ct, int durationMs = 400) => Task.CompletedTask;
+        public IDisposable Possess(object target) => inner.Possess(target);
+        public bool AnyPossessed => inner.AnyPossessed;
+        public void EdgePulse(double strength) => inner.EdgePulse(strength);
+        public void ReleaseAll() => inner.ReleaseAll();
+    }
+
+    private sealed class DeferredCharge(EmberHeadAttribution inner) : IPossessionAttribution
+    {
+        public readonly System.Collections.Generic.List<TaskCompletionSource> Charges = new();
+        public Task ChargeAsync(object target, System.Threading.CancellationToken ct, int durationMs = 400)
+        {
+            var charge = new TaskCompletionSource(); Charges.Add(charge); return charge.Task;
+        }
+        public IDisposable Possess(object target) => inner.Possess(target);
+        public bool AnyPossessed => inner.AnyPossessed;
+        public void EdgePulse(double strength) => inner.EdgePulse(strength);
+        public void ReleaseAll() => inner.ReleaseAll();
+    }
+
+    [Fact]
+    public Task FailedBookingDoesNotUndoAnotherRun() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var first = Btn("BtnFirst"); var second = Btn("BtnSecond");
+        var window = Host(new StackPanel { Children = { first, second } });
+        var frames = new FakeFrames(); var layer = new Canvas();
+        var attribution = new DeferredCharge(new EmberHeadAttribution(layer, _ => new Rect(0, 0, 80, 30), frames, () => false));
+        var host = new TestHost();
+        var a = new PossessionTarget { Visual = first, Role = PossessionRole.Button, Key = "first" };
+        var b = new PossessionTarget { Visual = second, Role = PossessionRole.Button, Key = "second" };
+        host.Items.Add(a);
+        using var lockdown = new ConditioningControlPanel.Services.LockdownService();
+        var runtime = new PossessionRuntime(frames);
+        var effect = new DirectorHeadEffect(new NudgeHeadEffect(), runtime);
+        using var director = new PossessionDirector(lockdown, new[] { effect }, new PossessionDirectorHead { Attribution = _ => attribution });
+        try
+        {
+            director.AttachHost(host);
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var entry = ((System.Collections.IList)typeof(PossessionDirector).GetField("_hosts", flags)!.GetValue(director)!)[0]!;
+            var start = typeof(PossessionDirector).GetMethod("StartOneAsync", flags)!;
+            Task Start() => (Task)start.Invoke(director, new object[] { entry, PossessionRung.Settle, TimeSpan.FromMinutes(5), 0.1 })!;
+            var firstStart = Start();
+            host.Items.Clear(); host.Items.Add(b);
+            var secondStart = Start();
+            Assert.Equal(2, attribution.Charges.Count);
+            attribution.Charges[0].SetResult(); await firstStart;
+            Assert.True(a.IsLive); Assert.Single(layer.Children); Assert.True(PossessionLease.IsLeased(first));
+            attribution.Charges[1].SetResult(); await secondStart;
+            Assert.Equal(1, director.LiveEffectCount); Assert.True(a.IsLive); Assert.False(b.IsLive);
+            Assert.True(effect.IsLive); Assert.True(PossessionLease.IsLeased(first)); Assert.Single(layer.Children);
+            director.UndoAll();
+            Assert.Empty(layer.Children); Assert.False(PossessionLease.IsLeased(first));
+        }
+        finally { director.UndoAll(); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FailedRunReleasesDirectorGhostBeforeEffectIsReused(bool failAtStart) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var first = Btn("BtnFirst"); var second = Btn("BtnSecond");
+        var prior = new RotateTransform(12); first.RenderTransform = prior;
+        var window = Host(new StackPanel { Children = { first, second } });
+        var frames = new FakeFrames(); var layer = new Canvas();
+        var attribution = new ImmediateCharge(new EmberHeadAttribution(layer, _ => new Rect(0, 0, 80, 30), frames, () => false));
+        var host = new TestHost();
+        var a = new PossessionTarget { Visual = first, Role = PossessionRole.Button, Key = "first" };
+        var b = new PossessionTarget { Visual = second, Role = PossessionRole.Button, Key = "second" };
+        host.Items.Add(a);
+        using var lockdown = new ConditioningControlPanel.Services.LockdownService();
+        var runtime = new PossessionRuntime(frames);
+        var effect = new DirectorHeadEffect(new FaultOnceEffect(failAtStart), runtime);
+        using var director = new PossessionDirector(lockdown, new[] { effect }, new PossessionDirectorHead { Attribution = _ => attribution });
+        try
+        {
+            director.AttachHost(host);
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var entry = ((System.Collections.IList)typeof(PossessionDirector).GetField("_hosts", flags)!.GetValue(director)!)[0]!;
+            var start = typeof(PossessionDirector).GetMethod("StartOneAsync", flags)!;
+            async Task Start() => await (Task)start.Invoke(director, new object[] { entry, PossessionRung.Settle, TimeSpan.FromMinutes(5), 0.1 })!;
+            object? oldGhost = null;
+            director.EffectStarted += (_, _, _) => oldGhost ??= ((System.Collections.IList)typeof(PossessionDirector).GetField("_live", flags)!.GetValue(director)!)[0]!;
+            await Start();
+            Assert.NotNull(oldGhost);
+            if (!failAtStart)
+            {
+                Assert.Equal(1, director.LiveEffectCount); Assert.True(a.IsLive); Assert.Single(layer.Children);
+                frames.Frame(TimeSpan.Zero);
+            }
+            Assert.Equal(0, director.LiveEffectCount); Assert.False(a.IsLive); Assert.False(effect.IsLive);
+            Assert.Same(prior, first.RenderTransform); Assert.Empty(layer.Children); Assert.Equal(0, frames.Count);
+            host.Items.Clear(); host.Items.Add(b);
+            await Start();
+            Assert.Equal(1, director.LiveEffectCount); Assert.True(b.IsLive); Assert.Single(layer.Children);
+            // A delayed undo for the failed run must not touch the replacement.
+            var undo = typeof(PossessionDirector).GetMethod("UndoGhostAsync", flags)!;
+            await (Task)undo.Invoke(director, new object[] { oldGhost!, TimeSpan.Zero })!;
+            frames.Frame(TimeSpan.FromMilliseconds(10));
+            Assert.True(effect.IsLive); Assert.True(b.IsLive); Assert.Equal(1, director.LiveEffectCount);
+            Assert.Single(layer.Children); Assert.True(PossessionLease.IsLeased(second));
+            // A runtime frame may reach the end before the director's wall-clock hold callback.
+            frames.Frame(TimeSpan.FromMilliseconds(60610));
+            Assert.Equal(0, director.LiveEffectCount); Assert.False(effect.IsLive);
+            Assert.Empty(layer.Children); Assert.False(b.IsLive); Assert.False(PossessionLease.IsLeased(second));
+        }
+        finally { director.UndoAll(); window.Close(); }
+    });
+
     [Fact]
     public Task DeckPickedNudgeMovesItsTargetThenGivesItsOwnTransformBack() => AvaloniaTestDispatcher.RunAsync(() =>
     {
