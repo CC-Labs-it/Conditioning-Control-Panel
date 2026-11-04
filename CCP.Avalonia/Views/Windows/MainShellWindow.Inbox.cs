@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Specialized;
 using System.Linq;
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Services.Startup.Conversion;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -48,11 +50,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
+        // WPF MainWindow.Inbox.cs:397-456: wait until the conversation tab is gone, then file quietly.
+        private ITimer? _capWatch;
+
+        internal void OnCompanionCapHit()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(OnCompanionCapHit); return; }
+            try
+            {
+                if (CoreSettings.Service == null || CoreAccount.HasLabAccess) return;
+                const string key = ConversionRules.KeyCompanionCap;
+                var today = ConversionRules.DayStamp(StartupLadder.Time.GetLocalNow().DateTime);
+                if (!ConversionRules.Owed(CoreSettings.Current.InboxStamps, key, today)) return;
+                _capWatch ??= StartupLadder.Time.CreateTimer(_ =>
+                {
+                    if (Dispatcher.UIThread.CheckAccess()) TryFileCapRow();
+                    else Dispatcher.UIThread.Post(TryFileCapRow);
+                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+            }
+            catch (Exception ex) { Log.Debug("[Inbox] cap watch: {E}", ex.Message); }
+        }
+
+        private void TryFileCapRow()
+        {
+            try
+            {
+                if (_capWatch == null) return;
+                if (string.Equals(CurrentTab, "companion", StringComparison.OrdinalIgnoreCase)
+                    && IsVisible && WindowState != WindowState.Minimized) return;
+                _capWatch.Dispose();
+                _capWatch = null;
+                if (CoreSettings.Service == null) return;
+                var offer = ConversionRules.CapRowOffers(CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess ? 1 : 0);
+                if (offer is not int tier) return;
+                const string key = ConversionRules.KeyCompanionCap;
+                var today = ConversionRules.DayStamp(StartupLadder.Time.GetLocalNow().DateTime);
+                if (!ConversionRules.Stamp(CoreSettings.Current.InboxStamps, key, today)) return;
+                CoreSettings.Save();
+                var title = tier == 2
+                    ? global::ConditioningControlPanel.Localization.Loc.GetF("conv_cap_basic", ConversionRules.CompanionCapBasic, ConversionRules.CompanionCapPrime)
+                    : global::ConditioningControlPanel.Localization.Loc.GetF("conv_cap_free", ConversionRules.CompanionCapFree, ConversionRules.CompanionCapBasic, ConversionRules.CompanionCapPrime);
+                var body = global::ConditioningControlPanel.Localization.Loc.Get("conv_cap_body");
+                StartupLadder.Inbox.File(new Services.Startup.InboxItem
+                {
+                    Key = "conv:" + key, Glyph = global::ConditioningControlPanel.Avalonia.Controls.IconMap.ChatGlyph, Title = title, Summary = body,
+                    Open = () => Dialogs.InboxNoticeCard.Present(this, title, body,
+                        global::ConditioningControlPanel.Localization.Loc.Get(tier == 2 ? "conv_get_prime" : "conv_get_basic"),
+                        () => Dialogs.VaultGateDialog.Launch(ConversionRules.PlanUrl(tier))),
+                });
+            }
+            catch (Exception ex) { Log.Debug("[Inbox] cap row: {E}", ex.Message); }
+        }
+
         private void InitializeInboxBadge()
         {
             var inbox = StartupLadder.Inbox.Items;
             inbox.CollectionChanged += OnInboxCollectionChanged;
-            Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;
+            Closed += (_, _) => { inbox.CollectionChanged -= OnInboxCollectionChanged; _capWatch?.Dispose(); _capWatch = null; };
             RefreshInboxBadge();
         }
 
