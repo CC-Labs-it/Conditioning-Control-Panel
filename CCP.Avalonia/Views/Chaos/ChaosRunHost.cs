@@ -669,6 +669,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.6f);
                 ActivateFreeze();
                 if (_state.MaxedBoons.Contains(toy.Id)) BubbleOverlay.Field.DefuseAllLive();
+                _state.PushEvent(Loc.Get("chaos_freeze_trigger_feed"));
+                if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Play); // WPF :2780
                 return;
             }
             if (toy.Id != "e_stim") return;
@@ -690,7 +692,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _freezeRemainingSec = 3.5;
             BubbleOverlay.Field.FreezeChaos = true;
             EffectPayload.GlobalDurationMult = 2.5;
-            ChaosEffectBannerOverlay.Show("freeze", "Freeze", Color.FromRgb(0x96, 0xD2, 0xFF));
+            ChaosEffectBannerOverlay.Show("freeze", Loc.Get("chaos_freeze_banner"), Color.FromRgb(0x96, 0xD2, 0xFF));
             if (_state?.Config.ColorFlashesEnabled == true)
             {
                 _fx?.FreezeBurst(Color.FromRgb(0x96, 0xD2, 0xFF));

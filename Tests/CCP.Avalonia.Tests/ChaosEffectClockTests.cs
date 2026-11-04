@@ -20,6 +20,9 @@ public sealed class ChaosEffectClockTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var meta = ChaosMeta.State;
+        int sparks = meta.Sparks;
+        bool hadAward = meta.FirstTimesAwarded.Contains(ChaosFirstTimes.Play);
         bool checks = ChaosEffectBannerOverlay.SkipPlatformChecksForTests;
         ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
         try
@@ -67,6 +70,9 @@ public sealed class ChaosEffectClockTests
         {
             ChaosRunHost.ForceShutdown();
             ChaosEffectBannerOverlay.SkipPlatformChecksForTests = checks;
+            meta.Sparks = sparks;
+            if (hadAward) meta.FirstTimesAwarded.Add(ChaosFirstTimes.Play);
+            else meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
         }
         return Task.CompletedTask;
     });

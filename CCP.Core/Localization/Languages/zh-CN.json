@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "冻结",
+  "chaos_freeze_trigger_feed": "❄ 一切静止不动",
   "chaos_estim_banner": "电刺激",
   "chaos_estim_charged_conduct": "⚡ 已充能：接下来 {0} 个气泡会导电",
   "chaos_estim_charged_chain": "⚡ 已充能：接下来 {0} 个气泡会引发连锁反应",
