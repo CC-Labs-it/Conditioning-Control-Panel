@@ -11,6 +11,9 @@ import sys
 # Startup scope differs (WPF includes its full service init, Avalonia starts after SetupWithoutStarting),
 # so startup rows are reported but never gate.
 INFO = ('startup_ms', 'startup_since_process_ms')
+# Tab rows compare both heads at WPF's stop point (owner decision 2026-11-04): Avalonia's handoff_* against WPF's
+# median_ms/p95_ms. Avalonia's median_ms/p95_ms (frame drawn and presented) are printed as information.
+# A report written before handoff_* existed falls back to its drawn numbers, which is stricter.
 
 
 def number(value):
@@ -19,7 +22,7 @@ def number(value):
     return value
 
 
-def metrics(report, head):
+def metrics(report, head, drawn=None):
     if report['schema'] != 'ccp-perf-bench/1' or report['head'] != head or report['cycles'] != 20:
         raise ValueError(f"expected {head} ccp-perf-bench/1 with 20 cycles")
     result = {key: number(report[key]) for key in
@@ -35,14 +38,19 @@ def metrics(report, head):
         seen.add(key)
         for stat in ('median_ms', 'p95_ms'):
             result[f'{key} {stat}'] = number(tab[stat])
+            if drawn is not None:
+                drawn[f'{key} {stat}'] = result[f'{key} {stat}']
+                if 'handoff_' + stat in tab:
+                    result[f'{key} {stat}'] = number(tab['handoff_' + stat])
     return result
 
 
 def compare(avalonia, wpf):
     if not avalonia or not wpf:
         raise ValueError('both heads require reports; a missing baseline cannot pass')
-    groups = [[metrics(report, head) for report in reports]
-              for head, reports in (('avalonia', avalonia), ('wpf', wpf))]
+    drawn = [{} for _ in avalonia]
+    groups = [[metrics(report, 'avalonia', d) for report, d in zip(avalonia, drawn)],
+              [metrics(report, 'wpf') for report in wpf]]
     expected = set(groups[1][0])
     for group in groups:
         for run in group:
@@ -52,16 +60,18 @@ def compare(avalonia, wpf):
     for key in groups[1][0]:
         a, w = (statistics.median(run[key] for run in group) for group in groups)
         limit = w * 1.10 + (0 if key == 'working_set_mb' else 20)
-        rows.append((key, w, a, limit, key in INFO or a <= limit))
+        d = statistics.median(run[key] for run in drawn) if key in drawn[0] else None
+        rows.append((key, w, a, d, limit, key in INFO or a <= limit))
     return rows
 
 
 def markdown(rows):
-    lines = ['| metric | Windows WPF | Windows Avalonia | limit | verdict |',
-             '|---|---:|---:|---:|---|']
-    for key, w, a, limit, passed in rows:
+    lines = ['| metric | Windows WPF | Windows Avalonia (handoff) | Avalonia drawn (info) | limit | verdict |',
+             '|---|---:|---:|---:|---:|---|']
+    for key, w, a, d, limit, passed in rows:
         verdict = 'info' if key in INFO else 'pass' if passed else 'FAIL'
-        lines.append(f'| {key} | {w:.2f} | {a:.2f} | {limit:.2f} | {verdict} |')
+        info = '' if d is None else f'{d:.2f}'
+        lines.append(f'| {key} | {w:.2f} | {a:.2f} | {info} | {limit:.2f} | {verdict} |')
     return '\n'.join(lines)
 
 
@@ -87,7 +97,27 @@ def self_test():
                     tabs=[dict(tab='SettingsTab', median_ms=100, p95_ms=100),
                           dict(tab='PresetsTab', median_ms=100, p95_ms=100)])
     good = dict(copy.deepcopy(baseline), head='avalonia')
+    # Fallback: a report without handoff_* gates on its drawn numbers (same 50% checks below).
     assert all(row[-1] for row in compare([good], [baseline]))
+    # Handoff present: it gates, and a slow drawn frame is information only.
+    split = copy.deepcopy(good)
+    for tab in split['tabs']:
+        tab.update(handoff_median_ms=100, handoff_p95_ms=100, median_ms=500, p95_ms=500)
+    rows = compare([split], [baseline])
+    assert all(row[-1] for row in rows)
+    assert [r[3] for r in rows if r[0].endswith('_ms') and ' ' in r[0]] == [500] * 4
+    assert '| SettingsTab median_ms | 100.00 | 100.00 | 500.00 | 130.00 | pass |' in markdown(rows)
+    for stat in ('handoff_median_ms', 'handoff_p95_ms'):
+        bad = copy.deepcopy(split)
+        bad['tabs'][0][stat] = 150
+        assert not all(row[-1] for row in compare([bad], [baseline])), stat
+        bad['tabs'][0][stat] = -1
+        try:
+            compare([bad], [baseline])
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f'invalid {stat} passed')
     for key in ('startup_ms', 'startup_since_process_ms', 'working_set_mb', 'median_ms', 'p95_ms'):
         bad = copy.deepcopy(good)
         target = bad['tabs'][0] if key in ('median_ms', 'p95_ms') else bad
@@ -111,7 +141,7 @@ def self_test():
             pass
         else:
             raise AssertionError(f'{head}: missing tab passed')
-    print('self-test: PASS (50% regressions, startup informational, thresholds, medians, tab order and missing tabs)')
+    print('self-test: PASS (handoff gates, drawn info, fallback without handoff, 50% regressions, startup informational, thresholds, medians, tab order and missing tabs)')
 
 
 def main():
