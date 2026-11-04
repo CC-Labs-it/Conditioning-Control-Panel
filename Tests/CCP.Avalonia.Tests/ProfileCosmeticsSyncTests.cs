@@ -16,8 +16,8 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF PersistOwnCosmetics + BuildCosmeticsPayload on this head (audit #1914): every push after the load
 /// carries the sanitized settings loadout, so no cooldown, logout or restart can lose a save; an empty loadout goes
-/// only as the explicit unequip-everything clear (this head does not adopt the cloud loadout, so an empty push from a
-/// fresh install would wipe the account). Same class as the other sync tests (shared statics).</summary>
+/// only as the explicit unequip-everything clear (this head adopts the cloud loadout only from a sync answer, so an
+/// empty push from a fresh install would wipe the account). Same class as the other sync tests (shared statics).</summary>
 public sealed partial class AccountSeedTests
 {
     [Fact]

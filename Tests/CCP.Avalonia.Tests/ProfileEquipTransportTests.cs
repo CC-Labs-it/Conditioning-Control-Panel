@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -152,4 +153,37 @@ public sealed partial class AccountSeedTests
         Assert.Equal("avatar_bambi_2", s.ProfileCosmetics.AvatarId);
     }));
 
+    // WPF ProfileSyncService.cs:1949 + :2703: a fresh login fills the empty loadout from the sync answer first, so the
+    // equip adoption cannot leave a frame-or-avatar-only card whose next push blanks the account's banner and accent.
+    [Fact]
+    public void FreshLogin_SyncAnswerFillsLoadout_EquipAndNextSyncKeepIt() => WithFreshInstall(() => WithEquipWire(async equip =>
+    {
+        var s = CoreSettings.Current;
+        var banner = ConditioningControlPanel.Services.CosmeticsPool.Banners[0].Id;
+        var (wire, sync, _) = SignIn("acct a", L40Profile("acct a"));
+        wire.SyncReply = new JObject { ["success"] = true, ["cosmetics"] = new JObject
+            { ["banner_id"] = banner, ["accent"] = "#FF69B4", ["avatar_deco"] = "bambi_silk_bow" } }.ToString();
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Null(Assert.Single(wire.Syncs)["cosmetics"]);
+        Assert.Equal(banner, s.ProfileCosmetics.BannerId);
+
+        equip.Reply = _ => Task.FromResult(Response(AvatarReply));
+        await ProfileEquipSync.PullOnceAsync();
+        Assert.Equal("avatar_bambi_2", s.ProfileCosmetics.AvatarId);
+
+        sync.UtcNow = () => T0.AddMinutes(1);
+        Assert.True(await sync.PushAsync("level-up"));
+        var sent = wire.Syncs.ElementAt(1)["cosmetics"]!;
+        Assert.Equal(banner, (string?)sent["banner_id"]);
+        Assert.Equal("#FF69B4", (string?)sent["accent"]);
+        Assert.Equal("bambi_silk_bow", (string?)sent["avatar_deco"]);
+        Assert.Equal("avatar_bambi_2", (string?)sent["avatar_id"]);
+
+        // An unequip still owed to /v2/equip: the echo is what was just taken off, so it is not adopted.
+        s.ProfileCosmetics = new ProfileCosmetics();
+        s.ProfileEquipPushOwed = true;
+        sync.UtcNow = () => T0.AddMinutes(2);
+        Assert.True(await sync.PushAsync("level-up"));
+        Assert.True(s.ProfileCosmetics.IsEmpty);
+    }));
 }

@@ -18,7 +18,8 @@ public partial class MainShellWindow
         if (AccountSeed.Sync?.Loaded == true) OnProfileEquipLoaded();
     }
 
-    private void OnProfileEquipLoaded() => Dispatcher.UIThread.Post(() => _ = ProfileEquipSync.PullOnceAsync());
+    // The load's sync answer may have filled an empty loadout (SyncPush.AdoptCloudCosmetics): repaint, then pull.
+    private void OnProfileEquipLoaded() => Dispatcher.UIThread.Post(() => { OnProfileEquipAdopted(); _ = ProfileEquipSync.PullOnceAsync(); });
 
     private void OnProfileEquipAdopted()
     {
