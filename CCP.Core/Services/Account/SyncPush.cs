@@ -129,6 +129,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The head's account-scoped ownership feed, as WPF ProfileSyncService.PrizeFeed.</summary>
         public Action<string, PrizesBlock?>? PrizesReceived { get; set; }
         public bool Loaded { get; private set; }
+        public string? CosmeticsAccount { get; private set; }
+        public event Action? CosmeticsReady;
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public Descent.DescentService? DescentReader { get; set; }
@@ -158,6 +160,7 @@ namespace ConditioningControlPanel.Services
             StopHeartbeat();
             DescentReader?.Reset();
             Loaded = false;
+            CosmeticsAccount = null;
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
             LastSyncTime = null;
@@ -310,7 +313,12 @@ namespace ConditioningControlPanel.Services
                     var reply = JObject.Parse(json);
                     PrizesReceived?.Invoke(id, reply["prizes"]?.ToObject<PrizesBlock>());
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
-                    AdoptCloudCosmetics(s, reply["cosmetics"]);
+                    var cloud = reply["cosmetics"];
+                    if (_sanitizeCosmetics != null && reply.Value<bool?>("success") == true
+                        && (cloud is JObject || cloud?.Type == JTokenType.Null)) {
+                        AdoptCloudCosmetics(s, cloud);
+                        if (CosmeticsAccount != id) { CosmeticsAccount = id; CosmeticsReady?.Invoke(); }
+                    }
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
                     Descent.DescentMigrationAck.Apply(s, reply);

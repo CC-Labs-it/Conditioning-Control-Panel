@@ -1,4 +1,3 @@
-using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 
@@ -10,15 +9,16 @@ public partial class MainShellWindow
     {
         ProfileEquipSync.Adopted += OnProfileEquipAdopted;
         AccountSeed.ProfileLoaded += OnProfileEquipLoaded;
+        var sync = AccountSeed.Sync; if (sync != null) sync.CosmeticsReady += OnProfileEquipLoaded;
         Closed += (_, _) =>
         {
             ProfileEquipSync.Adopted -= OnProfileEquipAdopted;
             AccountSeed.ProfileLoaded -= OnProfileEquipLoaded;
+            if (sync != null) sync.CosmeticsReady -= OnProfileEquipLoaded;
         };
         if (AccountSeed.Sync?.Loaded == true) OnProfileEquipLoaded();
     }
 
-    // The load's sync answer may have filled an empty loadout (SyncPush.AdoptCloudCosmetics): repaint, then pull.
     private void OnProfileEquipLoaded() => Dispatcher.UIThread.Post(() => { OnProfileEquipAdopted(); _ = ProfileEquipSync.PullOnceAsync(); });
 
     private void OnProfileEquipAdopted()

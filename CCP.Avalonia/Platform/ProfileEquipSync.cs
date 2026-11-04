@@ -14,27 +14,7 @@ using Newtonsoft.Json;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>
-/// Frame and avatar sync (shared shop contract C5). A sync pushes the whole local loadout and the server
-/// replaces the whole object, so a pick made on the website or the phone would be wiped by the next desktop
-/// sync. These two slots therefore live in <c>/v2/equip</c> family <c>profile</c>, the way
-/// desk equip sync does the desk: write locally, PUT in the background, adopt a newer
-/// server copy once per account per launch.
-///
-/// <para><b>Two slots only.</b> Adoption never touches banner, accent, title, pins, decoration or charms.</para>
-///
-/// <para><b>A pending pick wins.</b> <c>updatedAt</c> is shared by every family, so another family's PUT makes
-/// the server's profile copy look newer than a pick that never got there. Before any PUT that copy only
-/// mirrors <c>user.cosmetics</c>, so it cannot prove a pick was made elsewhere either. So an owed push goes up
-/// instead of being judged (checked again at the moment of adoption), an existing pick goes up once before
-/// the first adoption, and a newer stamp only counts when the slots really differ.</para>
-///
-/// <para><b>The answer is the truth.</b> The server answers an id the account does not own with <c>ok:true</c>
-/// and the OLD value, so a PUT settles on the slots in its answer, never on what was sent.</para>
-///
-/// <para><b>Fail soft.</b> The family deploys separately: a refusal, an offline app or junk leaves the local
-/// pick as it is, and the push stays owed.</para>
-/// </summary>
+/// <summary>Sync the profile frame and avatar through /v2/equip.</summary>
 public static class ProfileEquipSync
 {
     public const string Family = "profile";
@@ -43,57 +23,49 @@ public static class ProfileEquipSync
     internal static HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
     private static string? _pulledFor;
     private static CancellationTokenSource _pending = new();
+    private static volatile bool _stopped;
     internal static Action<Action>? PostForTests;
+    internal static Func<string, bool>? ReadyForTests;
+    private static bool Ready(string account) => !_stopped && (ReadyForTests?.Invoke(account) ?? (AccountSeed.Sync?.CosmeticsAccount == account));
 
     // A panic cancels in-flight requests and queued settlements. A later explicit save may retry.
     internal static void StopForPanic()
     {
-        var old = Interlocked.Exchange(ref _pending, new CancellationTokenSource());
-        old.Cancel();
-        _pulledFor = null;
+        _stopped = true; var old = Interlocked.Exchange(ref _pending, new CancellationTokenSource());
+        old.Cancel(); _pulledFor = null;
     }
 
-    internal static void ResetForTests() { StopForPanic(); PostForTests = null; }
-
+    internal static void ResetForTests() { StopForPanic(); _stopped = false; PostForTests = null; ReadyForTests = null; }
 
     /// <summary>Raised on the UI thread when an adoption changed a slot: repaint the card.</summary>
     public static event Action? Adopted;
 
-    // ---------------------------------------------------------------- the app
-
-    /// <summary>
-    /// The Customize dialog's save, after settings hold the new
-    /// loadout. Sends only a real change of these two slots: a banner or pin save must not stamp the shared
-    /// updatedAt. UI thread.
-    /// </summary>
+    /// <summary>Send a real slot change after the settings save, on the UI thread.</summary>
     public static void Saved(ProfileSlots before, ProfileCosmetics chosen)
     {
         try
         {
             var now = ProfileSlots.Of(chosen);
             if (now == before) return;
-            var s = CoreSettings.Current;
+            var s = CoreSettings.Current; _stopped = false;
             if (s == null) return;
             if (!string.IsNullOrEmpty(s.UnifiedId)) s.ProfileEquipAccount = s.UnifiedId;
             var stamp = MarkOwed(s);
             CoreSettings.Save();
-            _ = PutAsync(now, stamp);
+            if (s.ProfileEquipAccount is { } account && Ready(account)) _ = PutAsync(now, stamp);
         }
         catch (Exception ex) { Log.Debug("ProfileEquipSync save failed: {E}", ex.Message); }
     }
 
-    /// <summary>
-    /// Once per account per launch, from the UI thread after the profile has landed: an owed push goes up,
-    /// otherwise read the server copy and settle it. A network failure leaves the next profile load free to try.
-    /// </summary>
+    /// <summary>Retry an owed push or pull once per account after the loadout arrives.</summary>
     public static async Task PullOnceAsync()
     {
         var id = BackRoomApi.AppIdentity();
         if (id == null) return;
         var account = id.Value.UnifiedId;
-        if (_pulledFor == account) return;
-        _pulledFor = account;
         var token = _pending.Token;
+        if (!Ready(account) || _pulledFor == account) return;
+        _pulledFor = account;
         try
         {
             var s = CoreSettings.Current;
@@ -127,18 +99,16 @@ public static class ProfileEquipSync
         try
         {
             var s = CoreSettings.Current;
-            if (s == null || BackRoomApi.AppIdentity()?.UnifiedId != account) return;
+            if (s == null || !Ready(account) || BackRoomApi.AppIdentity()?.UnifiedId != account) return;
             var step = Decide(s.ProfileEquipAccount, account, s.ProfileEquipPushOwed, OwnSlots(s), server, serverMs, s.ProfileEquipUpdatedMs);
             if (step == ProfileEquipStep.Push && !s.ProfileEquipPushOwed)
             {
-                // The first-run push. Nothing is marked until it lands, so a refusal (the family not deployed
-                // yet) is simply asked again next launch and never turns into a both-slots push.
+                // A refused first-run push leaves no pending clear.
                 _ = PutAsync(OwnSlots(s), s.ProfileEquipUpdatedMs, firstRun: true);
                 return;
             }
             if (s.ProfileEquipAccount != account)
             {
-                // A new account starts clean. Null before this = this client's first look at the signed-in account.
                 if (s.ProfileEquipAccount != null) { s.ProfileEquipUpdatedMs = 0; s.ProfileEquipPushOwed = false; }
                 s.ProfileEquipAccount = account;
             }
@@ -194,13 +164,11 @@ public static class ProfileEquipSync
                 {
                     var s = CoreSettings.Current;
                     // Unless the pick changed again while this PUT was out: that one still owes its own.
-                    if (token.IsCancellationRequested || s == null || s.UnifiedId != account || s.ProfileEquipUpdatedMs != stamp) return;
+                    if (token.IsCancellationRequested || s == null || !Ready(account) || s.UnifiedId != account || s.ProfileEquipUpdatedMs != stamp) return;
                     if (!firstRun && !s.ProfileEquipPushOwed) return;
                     s.ProfileEquipPushOwed = false;
                     s.ProfileEquipAccount = account;
-                    // The answer's slots, not the ones sent: an unowned id comes back as the old value, and a
-                    // first-run push comes back with the slot it left out. The server's clock from here on,
-                    // so a skewed local clock cannot hide a newer pick.
+                    // Settle on the server answer, including its clock.
                     Adopt(s, stored.Slots, stored.UpdatedMs);
                     CoreSettings.Save();
                 }

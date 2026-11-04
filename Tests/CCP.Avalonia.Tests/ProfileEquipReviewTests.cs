@@ -69,7 +69,7 @@ public sealed partial class AccountSeedTests
                 Assert.NotNull(frame.Source);
                 Assert.True(frame.IsVisible);
 
-                ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a();
+                ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a(); ProfileEquipSync.ReadyForTests = _ => true;
                 wire.Reply = _ => Task.FromResult(Response("""{"ok":true,"equip":{"profile":{"frame_id":null,"avatar_id":null},"updatedAt":1000}}"""));
                 await ProfileEquipSync.PullOnceAsync();
                 Assert.Null(s.ProfileCosmetics.FrameId);
@@ -80,7 +80,7 @@ public sealed partial class AccountSeedTests
                 Assert.False(frame.IsVisible);
 
                 PrizeOwnership.ApplySyncSnapshot(s.UnifiedId!, new PrizesBlock { Revision = 3, Grants = new() });
-                ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a();
+                ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a(); ProfileEquipSync.ReadyForTests = _ => true;
                 wire.Reply = _ => Task.FromResult(Response("""{"ok":true,"equip":{"profile":{"frame_id":"prime.frame.room-host","avatar_id":"profile.avatar.emi-pixel"},"updatedAt":1500}}"""));
                 await ProfileEquipSync.PullOnceAsync();
                 Assert.Null(avatar.AvatarBrush.Source);

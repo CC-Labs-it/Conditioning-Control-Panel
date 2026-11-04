@@ -44,6 +44,7 @@ public sealed partial class AccountSeedTests
             ProfileEquipSync.ResetForTests();
             ProfileEquipSync.PostForTests = a => a();
             ProfileEquipSync.Http = client;
+            ProfileEquipSync.ReadyForTests = _ => true;
             (s.ProfileCosmetics, s.ProfileEquipAccount, s.ProfileEquipUpdatedMs, s.ProfileEquipPushOwed) = (new ProfileCosmetics(), null, 0, false);
             (s.UnifiedId, s.AuthToken, s.OfflineMode) = ("acct a", "test-token", false);
             await body(wire);
@@ -100,7 +101,7 @@ public sealed partial class AccountSeedTests
         await ProfileEquipSync.PullOnceAsync();
         Assert.Equal(2, wire.Seen.Count); // once per account per launch
 
-        ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a();
+        ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a(); ProfileEquipSync.ReadyForTests = _ => true;
         s.ProfileCosmetics = new ProfileCosmetics(); s.ProfileEquipAccount = null;
         var hold = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         wire.Reply = _ => hold.Task;
@@ -110,7 +111,7 @@ public sealed partial class AccountSeedTests
         await pull;
         Assert.Null(s.ProfileCosmetics.AvatarId);
 
-        ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a();
+        ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a(); ProfileEquipSync.ReadyForTests = _ => true;
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         wire.Reply = async ct => { entered.SetResult(); await Task.Delay(Timeout.Infinite, ct); return Response(AvatarReply); };
         pull = ProfileEquipSync.PullOnceAsync();
@@ -118,6 +119,8 @@ public sealed partial class AccountSeedTests
         ProfileEquipSync.StopForPanic();
         await pull;
         Assert.Null(s.ProfileCosmetics.AvatarId);
+        var stoppedAt = wire.Seen.Count; await ProfileEquipSync.PullOnceAsync();
+        Assert.Equal(stoppedAt, wire.Seen.Count);
     }));
     [Fact]
     public void EquipFailureRetainsDebt_FirstRunPutPreservesEmptySlot() => WithFreshInstall(() => WithEquipWire(async wire =>
@@ -138,7 +141,7 @@ public sealed partial class AccountSeedTests
         Assert.False(s.ProfileEquipPushOwed); // a failed PUT can retry on the next profile load
         Assert.Equal("avatar_bambi_2", s.ProfileCosmetics.AvatarId);
 
-        ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a();
+        ProfileEquipSync.ResetForTests(); ProfileEquipSync.PostForTests = a => a(); ProfileEquipSync.ReadyForTests = _ => true;
         s.ProfileCosmetics.AvatarId = "avatar_bambi_1";
         s.ProfileEquipAccount = null; s.ProfileEquipPushOwed = false; s.ProfileEquipUpdatedMs = 0;
         wire.Seen.Clear();
@@ -153,36 +156,53 @@ public sealed partial class AccountSeedTests
         Assert.Equal("avatar_bambi_2", s.ProfileCosmetics.AvatarId);
     }));
 
-    // WPF ProfileSyncService.cs:1949 + :2703: a fresh login fills the empty loadout from the sync answer first, so the
-    // equip adoption cannot leave a frame-or-avatar-only card whose next push blanks the account's banner and accent.
-    [Fact]
-    public void FreshLogin_SyncAnswerFillsLoadout_EquipAndNextSyncKeepIt() => WithFreshInstall(() => WithEquipWire(async equip =>
+    // WPF ProfileSyncService.cs:1949 + :2703: fill the full loadout before equip.
+    [Theory]
+    [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)]
+    public void FreshLogin_SyncAnswerFillsLoadout_EquipAndNextSyncKeepIt(int scenario) => WithFreshInstall(() => WithEquipWire(async equip =>
     {
         var s = CoreSettings.Current;
-        var banner = ConditioningControlPanel.Services.CosmeticsPool.Banners[0].Id;
+        var banner = ConditioningControlPanel.Services.CosmeticsPool.Banners[0].Id; var pin = Achievement.All.Keys.First();
         var (wire, sync, _) = SignIn("acct a", L40Profile("acct a"));
-        wire.SyncReply = new JObject { ["success"] = true, ["cosmetics"] = new JObject
-            { ["banner_id"] = banner, ["accent"] = "#FF69B4", ["avatar_deco"] = "bambi_silk_bow" } }.ToString();
+        var answer = new JObject { ["success"] = true, ["cosmetics"] = new JObject
+            { ["banner_id"] = banner, ["accent"] = "#FF69B4", ["avatar_deco"] = "bambi_silk_bow", ["pinned_achievements"] = new JArray(pin) } }.ToString();
+        wire.SyncReply = scenario == 2 ? "{\"success\":true}" : scenario == 3 ? "{\"success\":true,\"cosmetics\":5}" : scenario == 4 ? answer.Replace("true", "false") : answer;
+        wire.SyncStatus = scenario == 1 ? HttpStatusCode.ServiceUnavailable : scenario == 5 ? (HttpStatusCode)429 : HttpStatusCode.OK;
+        ProfileEquipSync.ReadyForTests = null;
+        equip.Reply = _ => Task.FromResult(Response(AvatarReply));
+        Task? pulled = null;
+        sync.CosmeticsReady += () => pulled = ProfileEquipSync.PullOnceAsync();
         Assert.True(await AccountSeed.LoadProfileAsync());
         Assert.Null(Assert.Single(wire.Syncs)["cosmetics"]);
+        if (scenario != 0)
+        {
+            await ProfileEquipSync.PullOnceAsync();
+            Assert.Empty(equip.Seen);
+            Assert.True(s.ProfileCosmetics.IsEmpty);
+            Assert.Null(pulled);
+            wire.SyncStatus = HttpStatusCode.OK; wire.SyncReply = answer;
+            sync.UtcNow = () => T0.AddMinutes(1);
+            Assert.True(await sync.PushAsync("retry"));
+            Assert.Null(wire.Syncs.Last()["cosmetics"]);
+        }
         Assert.Equal(banner, s.ProfileCosmetics.BannerId);
-
-        equip.Reply = _ => Task.FromResult(Response(AvatarReply));
-        await ProfileEquipSync.PullOnceAsync();
+        Assert.NotNull(pulled);
+        await pulled!;
         Assert.Equal("avatar_bambi_2", s.ProfileCosmetics.AvatarId);
+        s.UnifiedId = "other"; await ProfileEquipSync.PullOnceAsync(); Assert.Single(equip.Seen); s.UnifiedId = "acct a";
 
-        sync.UtcNow = () => T0.AddMinutes(1);
+        sync.UtcNow = () => T0.AddMinutes(2);
         Assert.True(await sync.PushAsync("level-up"));
-        var sent = wire.Syncs.ElementAt(1)["cosmetics"]!;
+        var sent = wire.Syncs.Last()["cosmetics"]!;
         Assert.Equal(banner, (string?)sent["banner_id"]);
         Assert.Equal("#FF69B4", (string?)sent["accent"]);
-        Assert.Equal("bambi_silk_bow", (string?)sent["avatar_deco"]);
+        Assert.Equal("bambi_silk_bow", (string?)sent["avatar_deco"]); Assert.Equal(pin, (string?)sent["pinned_achievements"]![0]);
         Assert.Equal("avatar_bambi_2", (string?)sent["avatar_id"]);
 
         // An unequip still owed to /v2/equip: the echo is what was just taken off, so it is not adopted.
         s.ProfileCosmetics = new ProfileCosmetics();
         s.ProfileEquipPushOwed = true;
-        sync.UtcNow = () => T0.AddMinutes(2);
+        sync.UtcNow = () => T0.AddMinutes(3);
         Assert.True(await sync.PushAsync("level-up"));
         Assert.True(s.ProfileCosmetics.IsEmpty);
     }));
