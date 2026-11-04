@@ -195,8 +195,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_hoverScreen == screen) _hoverScreen = -1;
         }
 
-        internal static bool CursorOnLive => _chaosPopped != null && _hoverScreen >= 0
-            && Field.HitTest(_hoverScreen, _hoverX, _hoverY)?.IsLiveThreat == true;
+        // WPF BubbleService.IsCursorOverLiveChaosBubble: scan all armed lives, even behind a treat.
+        internal static bool CursorOnLive
+        {
+            get
+            {
+                if (_chaosPopped == null || _hoverScreen < 0) return false;
+                foreach (var b in Field.Bubbles)
+                    if (b.Screen == _hoverScreen && b.Spec is { IsLive: true } && !b.Popping
+                        && b.Contains(_hoverX, _hoverY)) return true;
+                return false;
+            }
+        }
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>

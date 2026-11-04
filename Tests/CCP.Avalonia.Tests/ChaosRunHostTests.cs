@@ -74,6 +74,37 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task Focus_cue_finds_a_live_bubble_under_an_overlapping_treat()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var bar = ChaosRunHost.Hud!.FindControl<StackPanel>("FocusStripBlock")!;
+                var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { IsLive = true, FuseMs = 5000, SizePx = 200 });
+                var treat = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { SizePx = 200 });
+                treat.Screen = live.Screen;
+                treat.X = live.X;
+                treat.Y = live.Y;
+                BubbleOverlay.SetHover(live.Screen, live.CenterX, live.CenterY);
+                Assert.Same(treat, BubbleOverlay.Field.HitTest(live.Screen, live.CenterX, live.CenterY));
+                ChaosRunHost.Tick();
+                Assert.NotNull(bar.Effect);
+                live.Popping = true;
+                ChaosRunHost.Tick();
+                Assert.Null(bar.Effect);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task A_run_counts_down_ticks_and_ends_on_the_recap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
