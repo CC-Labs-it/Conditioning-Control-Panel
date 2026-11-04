@@ -129,6 +129,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The head's account-scoped ownership feed, as WPF ProfileSyncService.PrizeFeed.</summary>
         public Action<string, PrizesBlock?>? PrizesReceived { get; set; }
         public bool Loaded { get; private set; }
+        public string? CosmeticsAccount { get; private set; }
+        public event Action? CosmeticsReady;
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public Descent.DescentService? DescentReader { get; set; }
@@ -158,6 +160,7 @@ namespace ConditioningControlPanel.Services
             StopHeartbeat();
             DescentReader?.Reset();
             Loaded = false;
+            CosmeticsAccount = null;
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
             LastSyncTime = null;
@@ -198,7 +201,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF BuildCosmeticsPayload: the sanitized settings loadout. An empty one goes only as the explicit
         /// clear - WPF also sends it after a load because it adopted the cloud loadout first (AdoptCloudCosmetics);
-        /// this head does not adopt, so an empty push would wipe the account's cosmetics from a fresh install.
+        /// this head adopts only from a sync answer, so an empty push before one would wipe a fresh install's account.
         /// Any failure leaves the key out ("no change" never destroys anything).</summary>
         private ProfileCosmetics? CosmeticsPayload(AppSettings s, bool clear)
         {
@@ -209,6 +212,21 @@ namespace ConditioningControlPanel.Services
                 return !clean.IsEmpty || clear ? clean : null;
             }
             catch (Exception ex) { Log.Debug("SyncPush cosmetics payload: {E}", ex.Message); return null; }
+        }
+
+        /// <summary>WPF ProfileSyncService.AdoptCloudCosmetics (ProfileSyncService.cs:2703, fed by the sync answer at :1949):
+        /// fill an EMPTY local loadout only, so a fresh install inherits the whole card before a frame or avatar equip
+        /// makes it non-empty and the next push would send blank banner, accent and pins over the account's.</summary>
+        private void AdoptCloudCosmetics(AppSettings s, JToken? cloud)
+        {
+            if (_sanitizeCosmetics == null || cloud is not JObject o || !s.ProfileCosmetics.IsEmpty) return;
+            // An unequip still on its way (sync clear or /v2/equip): the echo is what the player just took off.
+            if (_pendingCosmeticsClear || s.ProfileEquipPushOwed) return;
+            var clean = _sanitizeCosmetics(o.ToObject<ProfileCosmetics>());
+            if (clean.IsEmpty) return;
+            s.ProfileCosmetics = clean;
+            Log.Information("Adopted cloud profile cosmetics (banner {Banner}, accent {Accent}, {Pins} pinned) into an empty local loadout",
+                clean.BannerId ?? "none", clean.Accent ?? "none", clean.PinnedAchievements.Count);
         }
 
         /// <param name="waitForGate">Logout: wait (bounded) for an in-flight push instead of skipping.</param>
@@ -295,6 +313,12 @@ namespace ConditioningControlPanel.Services
                     var reply = JObject.Parse(json);
                     PrizesReceived?.Invoke(id, reply["prizes"]?.ToObject<PrizesBlock>());
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
+                    var cloud = reply["cosmetics"];
+                    if (_sanitizeCosmetics != null && reply.Value<bool?>("success") == true
+                        && (cloud is JObject || cloud?.Type == JTokenType.Null)) {
+                        AdoptCloudCosmetics(s, cloud);
+                        if (CosmeticsAccount != id) { CosmeticsAccount = id; CosmeticsReady?.Invoke(); }
+                    }
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
                     Descent.DescentMigrationAck.Apply(s, reply);

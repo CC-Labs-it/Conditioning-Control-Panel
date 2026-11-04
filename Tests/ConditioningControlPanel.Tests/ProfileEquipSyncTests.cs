@@ -5,8 +5,15 @@ using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Xunit;
 using Step = ConditioningControlPanel.Services.ProfileEquipStep;
+#if PROFILE_EQUIP_AVALONIA_TESTS
+using ProfileEquipSync = ConditioningControlPanel.Services.ProfileEquipRules;
+#endif
 
+#if PROFILE_EQUIP_AVALONIA_TESTS
+namespace CCP.Avalonia.Tests;
+#else
 namespace ConditioningControlPanel.Tests;
+#endif
 
 /// <summary>Frame and avatar through /v2/equip family profile (shared shop contract C5).</summary>
 public class ProfileEquipSyncTests
@@ -71,6 +78,10 @@ public class ProfileEquipSyncTests
         // The chess gap (72-PR-RESULTS): another family's PUT moves the shared updatedAt.
         Assert.Equal(Step.Push, Decide(A, owed: true, Lace, Host, serverMs: 999));
         Assert.Equal(Step.Push, Decide(null, owed: true, Lace, Host, serverMs: 999));
+        // A local pick stays ahead even if the saved clock is ahead of this PC.
+        var settings = new AppSettings { ProfileEquipUpdatedMs = long.MaxValue - 2 };
+        Assert.Equal(long.MaxValue - 1, ProfileEquipRules.MarkOwed(settings));
+        Assert.True(settings.ProfileEquipPushOwed);
     }
 
     [Fact]
@@ -154,6 +165,7 @@ public class ProfileEquipSyncTests
         Assert.Equal("profile.frame.gilt", current.FrameId);   // a copy, never the live object
     }
 
+#if !PROFILE_EQUIP_AVALONIA_TESTS
     [Fact]
     public void SanitizeOwnKeepsShopIds_OnTheTwoSlotProbe()
     {
@@ -195,4 +207,5 @@ public class ProfileEquipSyncTests
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Services"))) dir = dir.Parent;
         return dir?.FullName ?? throw new DirectoryNotFoundException("repo root");
     }
+#endif
 }
