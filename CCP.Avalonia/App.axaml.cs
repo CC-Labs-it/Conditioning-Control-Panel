@@ -973,7 +973,6 @@ namespace ConditioningControlPanel.Avalonia
                     shell.RefreshEntitlementVeils(persist: true);
                     shell.RefreshExclusivesTab();
                     shell.RefreshNavPremiumTags();
-                    shell.RefreshProfileBubble();   // WPF OnPatreonTierChanged
                 });
                 dailyFree.TodayChanged += RepaintVeils;
                 // WPF NavPremiumTags.cs:118 / Lab.cs:435: a spent or refunded pass moves the star and the vault.

@@ -134,6 +134,11 @@ public sealed class PremiumCelebrationTests
         AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level1);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("CD", initials.Text);
+
+        CoreAccount.DisplayNameProvider = () => "Eve Fox";
+        AccountSeed.SubscribeStar!.NotifyEntitlementRaised(PatreonTier.Level1);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("EF", initials.Text);
     });
 
     [Fact]
