@@ -45,7 +45,7 @@ public partial class PresetsTabView
             _fxWindow.PropertyChanged += OnFxWindowProperty;
         }
         CoreMods.ModChanged += OnFxModChanged;
-        Env.MotionGateChanged += RefreshCardSheen;
+        Env.MotionGateChanged += OnMotionGateChanged;
         RefreshCardSheen();
     }
 
@@ -60,12 +60,13 @@ public partial class PresetsTabView
         }
         _fxWindow = null;
         CoreMods.ModChanged -= OnFxModChanged;
-        Env.MotionGateChanged -= RefreshCardSheen;
+        Env.MotionGateChanged -= OnMotionGateChanged;
         CancelEntrances();
         DetachCardSheen();
         DetachRowSweep();
     }
 
+    private void OnMotionGateChanged() { if (!Env.AllowTransitions) CancelEntrances(); RefreshCardSheen(); }
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();
     private void OnFxClosed(object? sender, EventArgs e) => DetachFocalFx();
     private void OnFxWindowProperty(object? sender, AvaloniaPropertyChangedEventArgs e)

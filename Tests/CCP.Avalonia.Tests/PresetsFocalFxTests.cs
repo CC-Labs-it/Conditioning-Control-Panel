@@ -66,14 +66,18 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
+        view.IsVisible = false; Settle(); view.IsVisible = true; Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.NotEqual(0, slide.Y);
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Equal(0, slide.Y);
         var chip = view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(b => b.Tag is string);
         host.MouseMove(Center(host, chip)); Settle();
         var scale = Assert.IsType<TransformGroup>(chip.RenderTransform).Children.OfType<ScaleTransform>().Single();
         Assert.Equal(1.02, scale.ScaleX); Assert.Equal(1.02, scale.ScaleY);
         host.MouseMove(new Point(1, 1)); Settle(); Assert.Equal(1, scale.ScaleX);
-        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
         host.MouseMove(Center(host, row)); Settle();
         var group = Assert.IsType<TransformGroup>(row.RenderTransform);
         Assert.Equal(-2, group.Children.OfType<TranslateTransform>().Single().Y);
