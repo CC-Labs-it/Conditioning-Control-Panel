@@ -132,6 +132,28 @@ public sealed class RemoteFlashSourceTests
             finally { Directory.Delete(dir, recursive: true); }
         }, clipConsumer: false);
     }
+    [Fact]
+    public Task FailedClipDownloadKeepsAnOwnedPoster() => WithSource(async () =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-flash-fallback-").FullName;
+        try
+        {
+            var poster = Path.Combine(dir, "poster.jpg");
+            File.WriteAllBytes(poster, new byte[] { 4, 5, 6 });
+            RemoteFlashSource.Download = (url, _, _) => Task.FromResult<string?>(url == Clip.Url ? null : poster);
+            RemoteFlashSource.EnsurePrefetch();
+            await RemoteFlashSource.Prefetching;
+            var item = RemoteFlashSource.TryTake(new Random(1))!.Value;
+            Assert.Equal("", item.ClipPath);
+            Assert.Null(RemoteFlashSource.ClipPath(Clip.Url));
+            Assert.NotEqual(poster, item.PosterPath);
+            File.Delete(poster);
+            Assert.Equal(new byte[] { 4, 5, 6 }, File.ReadAllBytes(item.PosterPath));
+            RemoteFlashSource.CleanupCache();
+            Assert.False(File.Exists(item.PosterPath));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    });
     [Theory]
     [InlineData(0)] // poster failed
     [InlineData(1)] // poster threw cancellation

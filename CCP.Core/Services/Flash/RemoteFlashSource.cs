@@ -168,14 +168,16 @@ namespace ConditioningControlPanel.Services.Flash
                         if (path == null && consumeClips)
                         {
                             var cached = await Download(url, ClipMaxBytes, ct).ConfigureAwait(false);
-                            if (cached == null) continue;
-                            path = OwnClip(url, cached);
-                            ours = true;
+                            if (cached != null)
+                            {
+                                path = OwnClip(url, cached);
+                                ours = true;
+                            }
                         }
                         var poster = !consumeClips && held != null ? held
                             : await Download(entry.PosterUrl!, PosterMaxBytes, ct).ConfigureAwait(false);
                         if (poster == null) continue;
-                        if (!consumeClips)
+                        if (!consumeClips || path == null)
                         {
                             path ??= OwnClip(entry.PosterUrl!, poster);
                             poster = path;
