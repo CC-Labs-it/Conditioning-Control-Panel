@@ -71,6 +71,8 @@ public partial class MainShellWindow
                 () => Dispatcher.UIThread.Post(async () => await OpenQuickRecalFromHotkeyAsync()));
         }
         catch (Exception ex) { Log.Warning(ex, "Quick Recal hotkey registration failed"); }
+        // Another in-process binding may release this chord on its next watch tick.
+        if (_quickRecalRegistration == null) _quickRecalBinding = null;
     }
 
     internal void StopQuickRecalHotkey()
