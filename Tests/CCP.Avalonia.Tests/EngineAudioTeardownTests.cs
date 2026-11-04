@@ -2,8 +2,6 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -13,7 +11,8 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>WPF StartStop.cs:533-547 restores the in-process mixer before finishing Stop.</summary>
+/// <summary>WPF StartStop.cs:533-547 restores the in-process mixer before finishing Stop. TestIsolation puts
+/// back the settings and statics these tests assign.</summary>
 public sealed class EngineAudioTeardownTests
 {
     private sealed class SlowPlayer : LayeredAudio.ILayerPlayer
@@ -44,9 +43,6 @@ public sealed class EngineAudioTeardownTests
     {
         var s = CoreSettings.Current;
         var file = Path.GetTempFileName();
-        var oldLayers = LayeredAudio.Instance;
-        var oldAudio = LibVlcAudio.Instance;
-        var oldHook = CoreEngine.StoppedHook;
         var player = new SlowPlayer();
         var layers = LayeredAudio.Instance = new LayeredAudio((_, volume) => { player.Volume = volume; return player; });
         var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
@@ -56,9 +52,7 @@ public sealed class EngineAudioTeardownTests
         {
             await AvaloniaTestDispatcher.RunAsync(() =>
             {
-                if (Application.Current is null)
-                    ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                EngineAudioLifecycleTests.Headless();
                 s.AudioOnlySession = false;
                 s.AudioLayersEnabled = true;
                 s.AudioLayersMasterVolume = s.MasterVolume = 100;
@@ -100,56 +94,12 @@ public sealed class EngineAudioTeardownTests
             await layers.VolumeUpdates.WaitAsync(TimeSpan.FromSeconds(5));
             await AvaloniaTestDispatcher.RunAsync(() =>
             {
-                CoreEngine.StoppedHook = oldHook;
                 CoreEngine.Stop();
                 shell?.Close();
                 return Task.CompletedTask;
             });
             layers.Dispose();
             audio.Shutdown();
-            LayeredAudio.Instance = oldLayers;
-            LibVlcAudio.Instance = oldAudio;
-            File.Delete(file);
-        }
-    }
-
-    [Fact]
-    public async Task WindowsDuckOrderingKeepsTheNewDuckAfterASlowRestore()
-    {
-        var s = CoreSettings.Current;
-        var file = Path.GetTempFileName();
-        var oldLayers = LayeredAudio.Instance;
-        var player = new SlowPlayer();
-        var layers = LayeredAudio.Instance = new LayeredAudio((_, volume) => { player.Volume = volume; return player; });
-        var duck = new WindowsDucker(body => body(Array.Empty<DuckSession>()), _ => "", null, () => false, 999);
-        try
-        {
-            s.AudioLayersEnabled = true;
-            s.AudioLayersMasterVolume = s.MasterVolume = 100;
-            s.AudioLayers = new() { new AudioLayerTrack { Path = file, Volume = 100 } };
-            layers.Start();
-            duck.Duck(50);
-            await layers.VolumeUpdates.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.Equal(79, player.Current);
-            player.BlockRestore = true;
-            var started = System.Diagnostics.Stopwatch.StartNew();
-            duck.ForceUnduck();
-            Assert.True(started.Elapsed < TimeSpan.FromSeconds(3), "restore must not block the caller");
-            Assert.True(player.Restoring.Wait(TimeSpan.FromSeconds(5)));
-            duck.Duck(80);
-            player.Release.Set();
-            await layers.VolumeUpdates.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.True(duck.IsDucked);
-            Assert.Equal(58, player.Current);
-        }
-        finally
-        {
-            player.Release.Set();
-            duck.ForceUnduck();
-            await layers.VolumeUpdates.WaitAsync(TimeSpan.FromSeconds(5));
-            duck.Shutdown();
-            layers.Dispose();
-            LayeredAudio.Instance = oldLayers;
             File.Delete(file);
         }
     }

@@ -14,9 +14,18 @@ using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>WPF StartStop.cs:365-367, 533-547 and Presets.cs:1617-1625.</summary>
+/// <summary>WPF StartStop.cs:365-367, 533-547 and Presets.cs:1617-1625. TestIsolation puts back the
+/// settings and statics these tests assign.</summary>
 public sealed class EngineAudioLifecycleTests
 {
+    internal static AppSettings Headless()
+    {
+        if (Application.Current is null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        return CoreSettings.Current;
+    }
+
     private sealed class Player : LayeredAudio.ILayerPlayer
     {
         public int Volume { set { } }
@@ -32,14 +41,8 @@ public sealed class EngineAudioLifecycleTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            var s = CoreSettings.Current;
+            var s = Headless();
             var file = Path.GetTempFileName();
-            var oldLayers = LayeredAudio.Instance;
-            var oldAudio = LibVlcAudio.Instance;
-            var oldHook = CoreEngine.StoppedHook;
             var opened = new List<Player>();
             var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
             var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
@@ -68,13 +71,10 @@ public sealed class EngineAudioLifecycleTests
             }
             finally
             {
-                CoreEngine.StoppedHook = oldHook;
                 CoreEngine.Stop();
                 shell?.Close();
                 layers.Dispose();
                 audio.Shutdown();
-                LayeredAudio.Instance = oldLayers;
-                LibVlcAudio.Instance = oldAudio;
                 File.Delete(file);
             }
             return Task.CompletedTask;
@@ -88,14 +88,8 @@ public sealed class EngineAudioLifecycleTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            var s = CoreSettings.Current;
+            var s = Headless();
             var file = Path.GetTempFileName();
-            var oldLayers = LayeredAudio.Instance;
-            var oldHook = CoreEngine.StoppedHook;
-            var oldRunner = AvApp.Sessions;
             var opened = new List<Player>();
             var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
             var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
@@ -123,13 +117,9 @@ public sealed class EngineAudioLifecycleTests
             finally
             {
                 runner.Stop();
-                CoreEngine.StoppedHook = oldHook;
                 CoreEngine.Stop();
                 shell?.Close();
                 layers.Dispose();
-                LayeredAudio.Instance = oldLayers;
-                AvApp.Sessions = oldRunner;
-                CoreSession.IsSessionRunningProvider = null;
                 File.Delete(file);
             }
             return Task.CompletedTask;
@@ -144,14 +134,8 @@ public sealed class EngineAudioLifecycleTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            var s = CoreSettings.Current;
+            var s = Headless();
             var file = Path.GetTempFileName();
-            var oldLayers = LayeredAudio.Instance;
-            var oldAudio = LibVlcAudio.Instance;
-            var oldHook = CoreEngine.StoppedHook;
             var player = new Player();
             var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => player);
             var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
@@ -179,17 +163,13 @@ public sealed class EngineAudioLifecycleTests
             }
             finally
             {
-                CoreEngine.StoppedHook = oldHook;
                 CoreEngine.Stop();
                 shell?.Close();
                 layers.Dispose();
                 audio.Shutdown();
-                LayeredAudio.Instance = oldLayers;
-                LibVlcAudio.Instance = oldAudio;
                 File.Delete(file);
             }
             return Task.CompletedTask;
         });
     }
-
 }

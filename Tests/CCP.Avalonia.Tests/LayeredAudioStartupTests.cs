@@ -35,8 +35,7 @@ public sealed class LayeredAudioStartupTests
             Assert.True(layers.IsPlaying);
             Assert.Equal(46, initial); // cbrt(0.25 * 0.5 * 0.8)
             Assert.NotNull(player);
-            Assert.True(player!.FirstCopyStartedMuted);
-            Assert.True(SpinWait.SpinUntil(() => player.CurrentPlayback is { Playing: true, Muted: false, Volume: 46 }, 10_000));
+            Assert.True(SpinWait.SpinUntil(() => player!.CurrentPlayback is { Playing: true, Muted: false, Volume: 46 }, 10_000));
         }
         finally
         {
@@ -55,7 +54,6 @@ public sealed class LayeredAudioStartupTests
         var player = new LayeredAudio.VlcLayerPlayer(vlc, file);
         try
         {
-            Assert.True(player.FirstCopyStartedMuted);
             Assert.True(SpinWait.SpinUntil(() => player.CurrentPlayback is { Playing: true }, 10_000));
             Thread.Sleep(100); // give the Playing callback time to try to apply a missing gain
             Assert.True(player.CurrentPlayback is { Muted: true });

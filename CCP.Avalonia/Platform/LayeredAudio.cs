@@ -175,7 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 public readonly MediaPlayer Player = player;
                 public readonly Media Media = media;
                 public bool Playing, Disposed;
-                public int VolumeWorker;   // 1 while a retry loop owns this copy's gain
+                public GainWorker Gain = null!;
             }
 
             private readonly LibVLC _vlc;
@@ -193,17 +193,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             public Task Closing => _closed.Task;
             /// <summary>Copies started so far, and how many of them started with nothing else sounding (a gap).</summary>
             internal int Copies, GapStarts;
-            internal bool FirstCopyStartedMuted;
             internal (bool Playing, bool Muted, int Volume)? CurrentPlayback
             {
-                get
-                {
-                    lock (_gate)
-                    {
-                        if (_newest is not { } copy) return null;
-                        lock (copy) return copy.Disposed ? null : (copy.Playing, copy.Player.Mute, copy.Player.Volume);
-                    }
-                }
+                get { lock (_gate) { if (_newest is not { } c) return null; lock (c) return c.Disposed ? null : (c.Playing, c.Player.Mute, c.Player.Volume); } }
             }
             /// <summary>The next pass is armed on the clock (it starts before this one ends, not at EOF).</summary>
             internal bool Armed { get { lock (_gate) return _timerFor != null && _timerFor == _newest; } }
@@ -236,7 +228,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     c.Player.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => Retire(c, failed: false));
                     c.Player.EncounteredError += (_, _) => ThreadPool.QueueUserWorkItem(_ => Retire(c, failed: true));
                     c.Player.Mute = true;   // every pass stays muted until its configured gain sticks
-                    if (Copies == 0) FirstCopyStartedMuted = c.Player.Mute;
+                    c.Gain = new GainWorker(() => _disposed || c.Disposed ? null : _volume, v =>
+                    {
+                        lock (c)
+                        {
+                            if (c.Disposed) return true;
+                            try { c.Player.Volume = v; return c.Player.Volume == v; }
+                            catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); return false; }
+                        }
+                    }, () => { lock (c) if (!c.Disposed) c.Player.Mute = false; });
                     if (Copies > 0 && _live.Count == 0) GapStarts++;
                     Copies++;
                     _live.Add(c);
@@ -257,7 +257,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (c) { if (c.Disposed) return; LibVlcAudio.ApplyPreferredDevice(c.Player); }
                 bool configured;
                 lock (_gate) configured = !_disposed && _volumeConfigured;
-                if (configured) ApplyVolume(c);
+                if (configured) c.Gain.Kick();
             }
 
             /// <summary>Start the next pass <see cref="OverlapMs"/> before this one ends, measured from its
@@ -318,40 +318,35 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         _volumeConfigured = true;
                         playing = _live.Where(c => c.Playing).ToArray();
                     }
-                    foreach (var c in playing) ApplyVolume(c);
+                    foreach (var c in playing) c.Gain.Kick();
                 }
             }
 
-            // Retry until the output accepts the newest target or playback stops: one worker per
-            // copy, on the thread pool, so a caller (the mantra window's ramp) never waits on the output.
-            private void ApplyVolume(Copy c)
+            /// <summary>Per pass: pulse drops a volume set too soon after the stream opens, so retry the newest
+            /// target off the caller (the mantra ramp is on the UI thread), bounded at 20 x 25 ms, then unmute
+            /// anyway. It only ever unmutes: a set that reads back late never silences an audible pass.</summary>
+            internal sealed class GainWorker(Func<int?> target, Func<int, bool> trySet, Action unmute)
             {
-                if (Interlocked.Exchange(ref c.VolumeWorker, 1) == 0) RetryVolume(() => TryApplyVolume(c));
-            }
+                private int _busy;
 
-            private bool TryApplyVolume(Copy c)
-            {
-                int v;
-                lock (c)
+                public void Kick()
                 {
-                    if (_disposed || c.Disposed) { Volatile.Write(ref c.VolumeWorker, 0); return true; }
-                    v = _volume;
-                    try
-                    {
-                        c.Player.Volume = v;
-                        var stuck = c.Player.Volume == v;
-                        c.Player.Mute = !stuck;
-                        if (!stuck) return false;
-                    }
-                    catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
+                    if (Interlocked.Exchange(ref _busy, 1) == 0) ThreadPool.QueueUserWorkItem(_ => Run());
                 }
-                Volatile.Write(ref c.VolumeWorker, 0);
-                // A target set while we held the worker skipped starting one; take it on unless another did.
-                return _volume == v || Interlocked.Exchange(ref c.VolumeWorker, 1) != 0;
-            }
 
-            internal static void RetryVolume(Func<bool> attempt) =>
-                ThreadPool.QueueUserWorkItem(_ => { while (!attempt()) Thread.Sleep(25); });
+                private void Run()
+                {
+                    while (true)
+                    {
+                        int? v = null;
+                        for (var i = 0; i < 20 && (v = target()) is { } want && !trySet(want); i++) Thread.Sleep(25);
+                        if (v != null) unmute();
+                        Volatile.Write(ref _busy, 0);
+                        // A target set while we held _busy skipped its own Kick: take it on unless another did.
+                        if (v == null || target() == v || Interlocked.Exchange(ref _busy, 1) != 0) return;
+                    }
+                }
+            }
 
             public void Dispose()
             {

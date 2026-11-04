@@ -32,33 +32,31 @@ public sealed class LayeredAudioTests
     }
 
     [Fact]
-    public void UnresponsiveOutputRetriesOffTheCallerUntilItRecovers()
+    public void UnresponsiveOutputRetriesOffTheCallerThenUnmutesOnce()
     {
         var caller = Environment.CurrentManagedThreadId;
-        int attempts = 0, thread = caller;
-        var recovered = false;
-        using var done = new ManualResetEventSlim();
-        var clock = Stopwatch.StartNew();
-        LayeredAudio.VlcLayerPlayer.RetryVolume(() =>
+        int attempts = 0, thread = caller, unmutes = 0;
+        var gain = new LayeredAudio.VlcLayerPlayer.GainWorker(() => 40, _ =>
         {
             Volatile.Write(ref thread, Environment.CurrentManagedThreadId);
             Interlocked.Increment(ref attempts);
-            if (!Volatile.Read(ref recovered)) return false;
-            done.Set();
-            return true;
-        });
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), "the caller (mantra ramp, UI thread) never waits on the output");
-        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref attempts) >= 22, 5000), "retries past the old 20-attempt window");
+            return false;                                        // the output never reports the gain
+        }, () => Interlocked.Increment(ref unmutes));
+        var clock = Stopwatch.StartNew();
+        gain.Kick();
+        gain.Kick();                                             // a second set joins the running worker
+        Assert.True(clock.Elapsed < TimeSpan.FromMilliseconds(200), "the caller (mantra ramp, UI thread) never waits on the output");
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref unmutes) > 0, 5000), "bounded: unmuted after 20 tries");
+        Thread.Sleep(200);
+        Assert.Equal(20, Volatile.Read(ref attempts));
+        Assert.Equal(1, Volatile.Read(ref unmutes));
         Assert.NotEqual(caller, Volatile.Read(ref thread));
-        Volatile.Write(ref recovered, true);
-        Assert.True(done.Wait(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]
     public void BlockedLayerWriteDoesNotHoldBackAnotherLayersDuck()
     {
-        var s = CoreSettings.Current;
-        var saved = (s.AudioLayers, s.AudioLayersEnabled, s.AudioLayersMasterVolume, s.MasterVolume);
+        var s = CoreSettings.Current;                            // TestIsolation puts it back
         var file = Path.GetTempFileName();
         var players = new List<GatedPlayer>();
         try
@@ -85,7 +83,6 @@ public sealed class LayeredAudioTests
         finally
         {
             foreach (var p in players) p.Gate.Set();
-            (s.AudioLayers, s.AudioLayersEnabled, s.AudioLayersMasterVolume, s.MasterVolume) = saved;
             File.Delete(file);
         }
     }
