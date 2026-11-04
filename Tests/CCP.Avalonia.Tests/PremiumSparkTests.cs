@@ -113,20 +113,25 @@ public sealed class PremiumSparkTests
         {
             Platform();
             var s = CoreSettings.Current;
-            s.UnifiedId = "spark-rise-test";
-            CoreSecrets.RetrieveProvider = _ => "test";
-            s.PatreonTier = 0;
-            s.MotionLevel = MotionLevel.Full;
-            s.PerformanceMode = false;
-            CoreAccount.HasPremiumAccessProvider = () => s.PatreonTier > 0;
-            CoreAccount.HasLabAccessProvider = () => s.PatreonTier >= 2;
-            var spark = new PremiumSpark();
-            var w = new Window { Content = spark };
+            var old = (s.UnifiedId, s.PatreonTier, s.PatreonPremiumValidUntil,
+                s.PatreonLabValidUntil, s.ServerTierSeen, s.MotionLevel, s.PerformanceMode);
+            var (getSecret, premium, lab) = (CoreSecrets.RetrieveProvider,
+                CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider);
+            Window? w = null;
             var rises = 0;
             void Raised(int tier) => rises++;
-            AccountSeed.TierRaised += Raised;
             try
             {
+                s.UnifiedId = "spark-rise-test";
+                CoreSecrets.RetrieveProvider = _ => "test";
+                s.PatreonTier = 0;
+                s.MotionLevel = MotionLevel.Full;
+                s.PerformanceMode = false;
+                CoreAccount.HasPremiumAccessProvider = () => s.PatreonTier > 0;
+                CoreAccount.HasLabAccessProvider = () => s.PatreonTier >= 2;
+                var spark = new PremiumSpark();
+                w = new Window { Content = spark };
+                AccountSeed.TierRaised += Raised;
                 w.Show();
                 AccountSeed.ApplyTierReading(1, "test");
                 Dispatcher.UIThread.RunJobs();
@@ -143,7 +148,18 @@ public sealed class PremiumSparkTests
                 Assert.Equal(2, rises);
                 Assert.DoesNotContain(spark.Field.Alive, m => m.Kind == MoteKind.Burst);
             }
-            finally { AccountSeed.TierRaised -= Raised; w.Close(); }
+            finally
+            {
+                AccountSeed.TierRaised -= Raised;
+                try { w?.Close(); }
+                finally
+                {
+                    (s.UnifiedId, s.PatreonTier, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil,
+                        s.ServerTierSeen, s.MotionLevel, s.PerformanceMode) = old;
+                    (CoreSecrets.RetrieveProvider, CoreAccount.HasPremiumAccessProvider,
+                        CoreAccount.HasLabAccessProvider) = (getSecret, premium, lab);
+                }
+            }
             return Task.CompletedTask;
         });
     }

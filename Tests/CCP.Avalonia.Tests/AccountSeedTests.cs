@@ -51,21 +51,28 @@ public sealed partial class AccountSeedTests : IDisposable
     public void OnlyServerRisesRaiseTheSignal()
     {
         var s = CoreSettings.Current;
-        s.UnifiedId = "rise-signal-test";
-        s.AuthToken = "test";
-        s.PatreonTier = 0;
+        var old = (s.UnifiedId, s.AuthToken, s.PatreonTier, s.PatreonPremiumValidUntil,
+            s.PatreonLabValidUntil, s.ServerTierSeen);
         var rises = new List<int>();
         void Raised(int tier) => rises.Add(tier);
-        AccountSeed.TierRaised += Raised;
         try
         {
+            s.UnifiedId = "rise-signal-test";
+            s.AuthToken = "test";
+            s.PatreonTier = 0;
+            AccountSeed.TierRaised += Raised;
             AccountSeed.ApplyTierReading(1, "test");
             AccountSeed.ApplyTierReading(1, "test");
             AccountSeed.ApplyTierReading(0, "test");
             AccountSeed.ApplyTierReading(2, "test");
             Assert.Equal(new[] { 1, 2 }, rises);
         }
-        finally { AccountSeed.TierRaised -= Raised; }
+        finally
+        {
+            AccountSeed.TierRaised -= Raised;
+            (s.UnifiedId, s.AuthToken, s.PatreonTier, s.PatreonPremiumValidUntil,
+                s.PatreonLabValidUntil, s.ServerTierSeen) = old;
+        }
     }
 
     private static ProviderSubscription Make(string prefix) => new(prefix, () => new AppSettings());
