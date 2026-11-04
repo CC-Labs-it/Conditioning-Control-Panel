@@ -35,6 +35,26 @@ public sealed class PossessionShellTests
     }
     private static Button Button(string name) => new() { Name = name, Width = 100, Height = 30, Content = "Start" };
     [Fact]
+    public Task HostAttachesWhenServiceArrivesBeforeOpeningAndOnlyOnce() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = LockdownService.Current;
+        LockdownService.Current = null;
+        var shell = new MainShellWindow();
+        using var lockdown = new LockdownService();
+        try
+        {
+            Assert.Null(shell.PossessionDirector);
+            LockdownService.Current = lockdown;
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            var director = Assert.IsType<PossessionDirector>(shell.PossessionDirector);
+            typeof(MainShellWindow).GetMethod("InitializePossessionHost", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(shell, null);
+            Assert.Same(director, shell.PossessionDirector);
+        }
+        finally { shell.Close(); LockdownService.Current = previous; }
+        return Task.CompletedTask;
+    });
+    [Fact]
     public Task WalkPrunesSafetyAndHiddenSubtreesAndKeepsInnermostCardsAndStableVictims() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
