@@ -161,7 +161,11 @@ shared.bridge.on('gentle', m => { shared.hostGentle = m; });
 // ones. The desktop host pushes `owned { grants }` after a buy; the profile pull answers the same list everywhere.
 shared.owned = createOwned();
 const adoptOwned = list => { if (shared.owned.adopt(list)) shared.garage?.refreshLocks?.(); };
-shared.bridge.on('owned', m => adoptOwned(m?.grants));
+let ownedAccountFrameSeen = false;
+shared.bridge.on('owned', m => {
+  if (Object.prototype.hasOwnProperty.call(m || {}, 'accountId')) ownedAccountFrameSeen = true;
+  if (shared.owned.receive(m)) shared.garage?.refreshLocks?.();
+});
 // SPARKLES BY PLACE (B1 W7): the desktop host's receipt for a finished race, bottom left of the results card
 // (styles.css moves it off the card); a new run takes it away. The website never sends one.
 // A receipt that lands once the next run is under way is dropped rather than covering the race; the
@@ -351,8 +355,10 @@ async function boot(course, options, lifetime, isCurrent) {
   const init = await bridge.init;
   if (!lifetime.alive) return;
   loaded('host');
-  shared.owned.setAccount(init.identity?.unifiedId);
-  if (Array.isArray(init.identity?.grants)) shared.owned.adopt(init.identity.grants);
+  if (!ownedAccountFrameSeen) {
+    shared.owned.setAccount(init.identity?.unifiedId);
+    if (Array.isArray(init.identity?.grants)) shared.owned.adopt(init.identity.grants);
+  }
   let CHARTS = courseSongs(TRACK_ID, location.search,
     songCharts({ search: location.search, devHost: isPreviewSongHost(location, init.caps.platform), songs: init.caps.songs }));
   const soloCharts = () => selectedSongCharts(shared.coursePicks[TRACK_ID]?.songId, shared.songRows, CHARTS);

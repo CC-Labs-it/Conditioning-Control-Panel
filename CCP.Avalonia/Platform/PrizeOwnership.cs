@@ -31,9 +31,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: the owned-check every caller uses.</summary>
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
+        internal static event Action? Changed;
+        internal static long IdentityVersion => System.Threading.Interlocked.Read(ref _identityVersion);
+        private static long _identityVersion;
+        internal static Action? BeforeSnapshotLock;
+
+        static PrizeOwnership() => CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
+
         private static readonly object Gate = new();
         private static string? _heldAccount;
-        private static long _revision;
+        private static long _revision, _heldVersion;
         private static HashSet<string> _grants = new(StringComparer.Ordinal);
 
         /// <summary>WPF OwnershipService.IsGranted over the snapshots counter replies carry (row
@@ -44,22 +51,68 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (Gate) return current != null && current == _heldAccount && _grants.Contains(id);
         }
 
-        /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
-        /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
-        internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
+        /// <summary>WPF OwnershipService.Grants: current account server grants, without debug overrides.</summary>
+        internal static string[]? Grants()
         {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            if (string.IsNullOrEmpty(accountId) || grants is null || current != accountId) return;
+            lock (Gate) return _heldAccount != null && _heldAccount == CoreAccount.UnifiedUserId && _heldVersion == IdentityVersion
+                ? _grants.ToArray() : null; // unknown is not an authoritative empty snapshot
+        }
+
+        internal static (string? Account, string[]? Grants, long Version) Frame()
+        {
             lock (Gate)
             {
-                if (_heldAccount == accountId && revision < _revision) return;
-                (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                var version = IdentityVersion;
+                var account = CoreAccount.UnifiedUserId;
+                return (account, _heldAccount != null && _heldAccount == account && _heldVersion == version ? _grants.ToArray() : null, version);
             }
         }
 
+        // WPF ProfileSyncService.cs:660,697 clears ownership on logout and account change.
+        private static void OnIdentityChanged(object? sender, EventArgs e)
+        {
+            System.Threading.Interlocked.Increment(ref _identityVersion);
+            lock (Gate)
+                if (_heldAccount != CoreAccount.UnifiedUserId || _heldVersion != IdentityVersion)
+                    (_heldAccount, _revision, _heldVersion, _grants) = (null, 0, 0, new(StringComparer.Ordinal));
+            NotifyChanged(); // the page may have remembered grants even without a host snapshot
+        }
+
+        private static void NotifyChanged()
+        {
+            try { Changed?.Invoke(); } catch (Exception ex) { Serilog.Log.Debug("[Prizes] change handler failed: {Error}", ex.Message); }
+        }
+
+        /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
+        /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
+        internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
+            => ApplySnapshot(accountId, revision, grants, IdentityVersion);
+
+        internal static Action<string, long, string[]> CaptureSnapshot()
+        {
+            var version = IdentityVersion;
+            return (account, revision, grants) => ApplySnapshot(account, revision, grants, version);
+        }
+
+        private static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants, long version)
+        {
+            if (string.IsNullOrEmpty(accountId) || grants is null) return;
+            BeforeSnapshotLock?.Invoke(); // tests hold a delayed reply here
+            bool changed;
+            lock (Gate)
+            {
+                if (version != IdentityVersion || CoreAccount.UnifiedUserId != accountId || FriendsHead.Identity()?.UnifiedId != accountId) return;
+                bool sameAccount = _heldAccount == accountId && _heldVersion == IdentityVersion;
+                if (sameAccount && revision < _revision) return;
+                var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                changed = !sameAccount || !_grants.SetEquals(next);
+                (_heldAccount, _revision, _heldVersion, _grants) = (accountId, revision, IdentityVersion, next);
+            }
+            if (changed) NotifyChanged();
+        }
+
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
-        internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
+        internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _heldVersion, _grants) = (null, 0, 0, new(StringComparer.Ordinal)); }
 
         /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
         internal static bool FlashV2Owned() =>

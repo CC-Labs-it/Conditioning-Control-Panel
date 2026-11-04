@@ -95,6 +95,7 @@ public sealed class BackRoomApi : IBackRoomRelay
     private readonly Func<(string UnifiedId, string Token)?> _identity;
     private readonly Action<int>? _adoptSp;
     private readonly Action<string, long, string[]> _applyPrizes;
+    private readonly Func<Action<string, long, string[]>>? _capturePrizes;
 
     /// <param name="http">Null = the shared client. Tests pass one over a fake handler.</param>
     /// <param name="identity">Null result = no account (or offline): every request refuses <c>offline</c>.</param>
@@ -103,13 +104,14 @@ public sealed class BackRoomApi : IBackRoomRelay
     /// Null = <see cref="DefaultApplyPrizes"/>.</param>
     /// <param name="baseUrl">Null = <see cref="BaseUrl"/>. The Avalonia head passes its sandbox-checked proxy.</param>
     public BackRoomApi(HttpClient? http, Func<(string UnifiedId, string Token)?> identity, Action<int>? adoptSp,
-        Action<string, long, string[]>? applyPrizes = null, string? baseUrl = null)
+        Action<string, long, string[]>? applyPrizes = null, string? baseUrl = null, Func<Action<string, long, string[]>>? capturePrizes = null)
     {
         _http = http ?? SharedHttp;
         _identity = identity;
         _adoptSp = adoptSp;
         _applyPrizes = applyPrizes ?? ((account, revision, grants) => DefaultApplyPrizes?.Invoke(account, revision, grants));
         _baseUrl = baseUrl ?? BaseUrl;
+        _capturePrizes = capturePrizes;
     }
 
     private readonly string _baseUrl;
@@ -146,6 +148,7 @@ public sealed class BackRoomApi : IBackRoomRelay
     public async Task<BackRoomStationResult> RelayAsync(string station, string op, string? idem, JObject? body, CancellationToken ct = default)
     {
         if (!TryResolve(station, op, out var method, out var path)) return BackRoomStationResult.Refuse("bad_op");
+        var applyPrizes = _capturePrizes?.Invoke() ?? _applyPrizes;
         var id = _identity();
         if (id == null) return BackRoomStationResult.Refuse("offline");
 
@@ -161,7 +164,7 @@ public sealed class BackRoomApi : IBackRoomRelay
                 var text = await res.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
                 if (_identity()?.UnifiedId != id.Value.UnifiedId) return BackRoomStationResult.Refuse("closed");
                 MergedReply?.Invoke((int)res.StatusCode, text);   // contract D
-                return Read(station, op, id.Value.UnifiedId, (int)res.StatusCode, res.IsSuccessStatusCode, text);
+                return Read(station, op, id.Value.UnifiedId, (int)res.StatusCode, res.IsSuccessStatusCode, text, applyPrizes);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -217,7 +220,7 @@ public sealed class BackRoomApi : IBackRoomRelay
     /// RETRYABLE set, so the slot's optional bonus-chase route burned four retries and ~3.5s and then
     /// refused the whole sit-down: the cabinet showed "closed for a moment" and no press did anything.
     /// </summary>
-    private BackRoomStationResult Read(string station, string op, string sentFor, int status, bool success, string text)
+    private BackRoomStationResult Read(string station, string op, string sentFor, int status, bool success, string text, Action<string, long, string[]> applyPrizes)
     {
         JObject? o = null;
         try { o = JsonConvert.DeserializeObject(text) as JObject; } catch { }
@@ -232,18 +235,18 @@ public sealed class BackRoomApi : IBackRoomRelay
         bool ok = success && o.Value<bool?>("ok") == true;
         var reason = o.Value<string?>("reason");
         if (!ok && string.IsNullOrEmpty(reason)) reason = "offline";
-        if (station == "counter" && success && (ok || reason == "owned")) ApplyPrizes(sentFor, o["prizes"]);
+        if (station == "counter" && success && (ok || reason == "owned")) ApplyPrizes(sentFor, o["prizes"], applyPrizes);
         return new BackRoomStationResult(ok, status, ok ? null : reason, o);
     }
 
     /// <summary>10.17.E feed 2. A block without an integer revision and a grants array is ignored;
     /// OwnershipService drops another account's snapshot and any lower revision.</summary>
-    private void ApplyPrizes(string sentFor, JToken? prizes)
+    private static void ApplyPrizes(string sentFor, JToken? prizes, Action<string, long, string[]> applyPrizes)
     {
         if (prizes is not JObject p || p["revision"] is not JValue { Type: JTokenType.Integer } rev
             || p["grants"] is not JArray list) return;
         var grants = list.Where(g => g.Type == JTokenType.String).Select(g => (string)g!).ToArray();
-        try { _applyPrizes(sentFor, rev.Value<long>(), grants); }
+        try { applyPrizes(sentFor, rev.Value<long>(), grants); }
         catch (Exception ex) { Log.Debug("BackRoom apply prizes failed: {E}", ex.Message); }
     }
 }

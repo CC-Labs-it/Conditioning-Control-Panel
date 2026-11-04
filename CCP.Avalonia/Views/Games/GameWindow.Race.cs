@@ -8,8 +8,7 @@
 // ponytail: still missing on this head, each its own unit (parity row game-race): BambiCloud levels
 // (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), the track player and
 // its decoder seed (own tracks + charting are GameWindow.RaceTracks.cs), sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
-// loom-list, report-bug, fullscreen-set, the mandatory-video pause, the grants watcher (PrizeOwnership has
-// no change event: nothing grants mid-run here), the meta frame, bubble credit and SeasonRecap TrackFeature.
+// loom-list, report-bug, fullscreen-set, the mandatory-video pause, the 2D grants watcher (not subscribed here), the meta frame, bubble credit and SeasonRecap TrackFeature.
 using System;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;

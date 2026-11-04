@@ -31,9 +31,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// desktop: a signed-out player gets <c>identity: null</c> and the lobby asks them to sign in. <c>songs</c>
         /// stays empty: the private race song never ships in the app.</summary>
         public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-            bool gentleOn, double gentleFadeSeconds, double gentleSpeed)
+            bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null)
         {
             bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
+            JObject? identity = signedIn ? new JObject
+            {
+                ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
+                ["displayName"] = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName,
+            } : null;
+            if (identity != null && grants != null) identity["grants"] = KartGrants(grants);
             return new JObject
             {
                 ["type"] = "init",
@@ -46,15 +52,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
                     ["friendInvite"] = true, // WPF GlassroadRules.cs:42-43
                 },
-                ["identity"] = signedIn
-                    ? new JObject
-                    {
-                        ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
-                        ["displayName"] = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName,
-                    }
-                    : JValue.CreateNull(),
+                ["identity"] = (JToken?)identity ?? JValue.CreateNull(),
             };
         }
+
+        // WPF GlassroadRules.cs:54-69: only kart grants leave the host, sorted and capped.
+        public static JArray KartGrants(IEnumerable<string>? grants)
+        {
+            var list = new SortedSet<string>(StringComparer.Ordinal);
+            if (grants != null)
+                foreach (var g in grants)
+                    if (g is { Length: <= 64 } && g.StartsWith("cos.kart.", StringComparison.Ordinal)) list.Add(g);
+            var rows = new JArray();
+            foreach (var g in list) { if (rows.Count >= 64) break; rows.Add(g); }
+            return rows;
+        }
+
+        public static JObject OwnedFrame(IEnumerable<string>? grants) =>
+            new() { ["type"] = "owned", ["grants"] = KartGrants(grants) };
 
         // WPF GlassroadRules.cs:71-95: only online, named friends, and the fixed invite result copy.
         public static JArray FriendRows(IEnumerable<Friend>? friends)
