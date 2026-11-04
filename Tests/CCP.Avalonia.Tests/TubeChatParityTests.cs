@@ -248,6 +248,38 @@ public sealed class TubeChatParityTests
             CompanionAskService.SessionOptions = () => new[] { new AskOption("s-one", "Session one", () => true) };
             Assert.True(ConversationDelivery.AskCardsShown!(ask));
 
+            var ladder = ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time;
+            var relay = ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay;
+            try
+            {
+                ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+                ConditioningControlPanel.Avalonia.Platform.StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
+                Assert.False(ConversationDelivery.AskCardsShown!(ask));
+                ((ConditioningControlPanel.Avalonia.Platform.StartupLadder.TestClock)ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time).Advance(TimeSpan.FromMinutes(1));
+                Assert.True(ConversationDelivery.AskCardsShown!(ask));
+
+                AvApp.Mantra.StartSession(1);
+                Assert.False(ConversationDelivery.AskCardsShown!(ask));
+                AvApp.Mantra.EndSession();
+                Assert.True(ConversationDelivery.AskCardsShown!(ask));
+
+                ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = new(() =>
+                    new ConditioningControlPanel.Services.RemoteRelay(() => null, () => null, "1.0", (_, _) => null, _ => { }));
+                var client = ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay.Value;
+                var state = typeof(ConditioningControlPanel.Services.RemoteRelay).GetProperty("ControllerConnected")!;
+                state.SetValue(client, true);
+                Assert.False(ConversationDelivery.AskCardsShown!(ask));
+                state.SetValue(client, false);
+                Assert.True(ConversationDelivery.AskCardsShown!(ask));
+            }
+            finally
+            {
+                AvApp.Mantra.EndSession();
+                ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+                ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time = ladder;
+                ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = relay;
+            }
+
             LockCardWindow.ShowOnAllMonitors("good girl", 1, strictMode: false);
             Assert.False(ConversationDelivery.AskCardsShown!(ask));   // busy: a lock card is up
             LockCardWindow.ForceCloseAll();
@@ -280,6 +312,30 @@ public sealed class TubeChatParityTests
             Directory.Delete(dir, true);
         }
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BusyProbeFromAWorkerReadsStartupStateOnTheUiThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var restore = SaveSeams();
+        var previous = CoreTutorial.IsActiveProvider;
+        bool? onUiThread = null;
+        try
+        {
+            CoreTutorial.IsActiveProvider = () => { onUiThread = Dispatcher.UIThread.CheckAccess(); return false; };
+            AvApp.SeedCompanionTubeSeams();
+            await Task.Run(() => CompanionAskService.BusyProvider!());
+            Assert.True(onUiThread);
+        }
+        finally
+        {
+            CoreTutorial.IsActiveProvider = previous;
+            restore();
+        }
     });
 
     [Theory]
