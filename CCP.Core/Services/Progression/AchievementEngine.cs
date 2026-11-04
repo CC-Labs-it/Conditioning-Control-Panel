@@ -30,6 +30,19 @@ internal sealed class AchievementEngine
     /// <summary>Set by any mutation; cleared by a save; re-armed by a failed write.</summary>
     public bool IsDirty { get => _isDirty; set => _isDirty = value; }
 
+    public void TrackSkillPointsSpent(int amount)
+    {
+        if (amount > 0) ReconcileLifetimePointsSpent(Progress.LifetimeSkillPointsSpent + amount);
+    }
+
+    public void ReconcileLifetimePointsSpent(long total)
+    {
+        if (total <= Progress.LifetimeSkillPointsSpent) return;
+        Progress.LifetimeSkillPointsSpent = total;
+        IsDirty = true;
+        if (total >= 100) TryUnlock("window_shopping");
+    }
+
     /// <summary>
     /// When true, TryUnlock still records achievements but does not raise <see cref="Unlocked"/>.
     /// Used during post-login sync to silently restore cloud achievements.
