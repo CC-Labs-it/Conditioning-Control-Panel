@@ -10,6 +10,7 @@
 // "Enhance if possible" remains disabled without BrowserEnhanceBridge.
 
 using System;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Data;
 using ConditioningControlPanel.Avalonia.Localization;
@@ -26,6 +27,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SettingsTabView
     {
         private bool _browserCardSyncing;
+        private int _browserSiteSyncRevision;
+        private TaskCompletionSource<bool>? _browserSiteSync;
+        private bool _syncModWants;
+        private bool _syncNavigate;
+        private string? _syncPageUrl;
+
+        private void CancelBrowserSiteSync()
+        {
+            _browserSiteSyncRevision++;
+            _browserSiteSync?.TrySetResult(false);
+            _browserSiteSync = null;
+        }
+
+        internal bool DeferBrowserReload()
+        {
+            if (_browserSiteSync is not { } pending) return false;
+            _ = ReloadAfterSync();
+            return true;
+            async Task ReloadAfterSync()
+            {
+                if (await pending.Task)
+                {
+                    var revision = _browserSiteSyncRevision;
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (revision == _browserSiteSyncRevision || _browserSiteSync != null)
+                            Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+                    });
+                }
+            }
+        }
+
+        private void CompleteBrowserSiteSync(string? current, bool modWants, bool navigateIfChanged)
+        {
+            var pending = _browserSiteSync;
+            _browserSiteSync = null;
+            if (!(modWants && current != null &&
+                (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase) ||
+                 current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase))))
+            {
+                var defaultUrl = App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/";
+                var target = modWants && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                    ? RbBambiCloud : RbHypnoTube;
+                bool moved = target.IsChecked != true;
+                target.IsChecked = true;
+                if (moved && navigateIfChanged && BrowserWebHost.Source != null && !CoreSettings.Current.OfflineMode)
+                    Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
+            }
+            pending?.TrySetResult(true);
+        }
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
@@ -33,7 +84,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
-            BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
+            BrowserWebHost.BrowserNavigationStarting += CancelBrowserSiteSync;
+            BrowserWebHost.BrowserNativeNavigationStarting += url =>
+            {
+                if (_browserSiteSync == null) { _browserSiteSyncRevision++; return; }
+                _browserSiteSyncRevision++;
+                CompleteBrowserSiteSync(_syncPageUrl, _syncModWants, _syncNavigate);
+            };
+            BrowserWebHost.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == WebHost.SourceProperty) { CancelBrowserSiteSync(); SyncBrowserPrompt(); }
+            };
+            RbBambiCloud.Click += (_, _) => CancelBrowserSiteSync();
+            RbHypnoTube.Click += (_, _) => CancelBrowserSiteSync();
             AttachedToVisualTree += (_, _) =>
             {
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
@@ -44,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             DetachedFromVisualTree += (_, _) =>
             {
+                CancelBrowserSiteSync();
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
@@ -67,7 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             finally { _browserCardSyncing = false; }
             SyncBrowserMuteIcon();
             RefreshBrowserWebcamButton();
-            ApplyBambiCloudVisibility(navigateIfHidden: false);
+            SyncSiteRadiosToActiveMod(navigateIfChanged: false);
             SyncBrowserPrompt();
         }
 
@@ -151,21 +215,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_browserCardSyncing) return;
             CoreSettings.Current.ForceShowBambiCloud = ChkForceShowBambiCloud.IsChecked == true;
             CoreSettings.Save();
-            ApplyBambiCloudVisibility(navigateIfHidden: true);
+            SyncSiteRadiosToActiveMod(navigateIfChanged: true);
         }
 
-        /// <summary>The radio shows when the mod wants it OR the user forces it. Hidden while selected, the dot moves to
-        /// HypnoTube and, on a user change, the page follows (WPF SyncSiteRadiosToActiveMod(navigateIfChanged: true)).</summary>
-        private void ApplyBambiCloudVisibility(bool navigateIfHidden)
+        // WPF MainWindow.Browser.cs:518-580 and MainWindow.xaml.cs:2708-2721.
+        private async void SyncSiteRadiosToActiveMod(bool navigateIfChanged)
         {
-            bool modWants = true;
-            try { modWants = App.Mods?.ShowBambiCloudOption() ?? true; }
-            catch (Exception ex) { Log.Debug("ShowBambiCloudOption: {E}", ex.Message); }
-            bool show = modWants || CoreSettings.Current.ForceShowBambiCloud;
-            RbBambiCloud.IsVisible = show;
-            if (show || RbBambiCloud.IsChecked != true) return;
-            RbHypnoTube.IsChecked = true;
-            if (navigateIfHidden) Shell?.BrowserSiteToggle_Click(RbHypnoTube, new RoutedEventArgs());
+            var revision = ++_browserSiteSyncRevision;
+            _browserSiteSync ??= new TaskCompletionSource<bool>();
+            try
+            {
+                bool modWants = App.Mods?.ShowBambiCloudOption() ?? true;
+                _syncModWants = modWants;
+                _syncNavigate = navigateIfChanged;
+                RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
+                _syncPageUrl = BrowserWebHost.LatestNavigationUrl?.AbsoluteUri;
+                var current = modWants && BrowserWebHost.Source != null
+                    ? await BrowserWebHost.ReadDocumentUrlAsync() : null;
+                void ApplySelection()
+                {
+                    if (revision != _browserSiteSyncRevision) return;
+                    CompleteBrowserSiteSync(current, modWants, navigateIfChanged);
+                }
+                if (Dispatcher.UIThread.CheckAccess()) ApplySelection();
+                else await Dispatcher.UIThread.InvokeAsync(ApplySelection);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("SyncSiteRadiosToActiveMod: {E}", ex.Message);
+                if (revision == _browserSiteSyncRevision) CancelBrowserSiteSync();
+            }
         }
 
         // ------------------------------------------------------------------ the load prompt

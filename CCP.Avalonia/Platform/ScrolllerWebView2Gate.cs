@@ -17,6 +17,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// </summary>
 internal static class ScrolllerWebView2Gate
 {
+    internal static string? CurrentDocumentUrl(IntPtr core) => core == IntPtr.Zero ? null
+        : CoreWebView2.CreateFromComICoreWebView2(core).Source;
+
     /// <summary>Hooks one raw ICoreWebView2. False when there is none (the caller retries until the core exists).</summary>
     public static bool Attach(IntPtr coreWebView2)
     {

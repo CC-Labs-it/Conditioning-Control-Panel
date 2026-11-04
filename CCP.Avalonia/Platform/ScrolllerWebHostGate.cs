@@ -1,5 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -82,6 +84,33 @@ internal static class ScrolllerWebHostGate
             Log.Warning("ScrolllerWebHostGate: attach failed: {E}", ex.Message);
             ready(false);
         }
+    }
+
+    // WPF BrowserService.cs:1307-1309 reads CoreWebView2.Source on the UI thread.
+    internal static Task<string?> ReadDocumentUrlAsync(IPlatformHandle? handle)
+    {
+        try
+        {
+            return handle switch
+            {
+                IWindowsWebView2PlatformHandle w when OperatingSystem.IsWindows() => Task.FromResult(ReadWebView2Url(w.CoreWebView2)),
+                IGtkWebViewPlatformHandle g when OperatingSystem.IsLinux() => ScrolllerWebKitFilter.ReadDocumentUrlAsync(g.WebKitWebView),
+                _ => Task.FromResult<string?>(null)
+            };
+        }
+        catch (Exception ex) { Log.Debug("Browser document URL unavailable: {E}", ex.Message); return Task.FromResult<string?>(null); }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static string? ReadWebView2Url(IntPtr core) =>
+        ReadAndReleaseWebView2Url(core, ScrolllerWebView2Gate.CurrentDocumentUrl);
+
+    // CoreWebView2 on the platform handle returns an owned COM reference.
+    internal static string? ReadAndReleaseWebView2Url(IntPtr core, Func<IntPtr, string?> read)
+    {
+        if (core == IntPtr.Zero) return null;
+        try { return read(core); }
+        finally { Marshal.Release(core); }
     }
 
     private static void AttachWindows(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, int left)

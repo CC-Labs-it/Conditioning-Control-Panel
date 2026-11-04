@@ -61,10 +61,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
         /// in-page links and script hops included, unlike <see cref="Source"/>, which is only
-        /// what a caller last asked for. Null until a navigation completes. WPF's
-        /// <c>BrowserService.GetCurrentUrl</c>.
+        /// what a caller last asked for. Null until a navigation completes. For WPF's
+        /// <c>BrowserService.GetCurrentUrl</c>, use <see cref="ReadDocumentUrlAsync"/>.
         /// </summary>
         public Uri? CurrentUrl { get; private set; }
+        internal Uri? LatestNavigationUrl { get; private set; }
+
+        // WPF BrowserService.cs:1307-1309 reads the native document, including in-flight navigation.
+        internal Func<Task<string?>>? DocumentUrlReader { get; set; }
+        internal Task<string?> ReadDocumentUrlAsync()
+        {
+            try { return DocumentUrlReader?.Invoke() ?? Platform.ScrolllerWebHostGate.ReadDocumentUrlAsync(_web?.TryGetPlatformHandle()); }
+            catch (Exception ex) { Log.Debug("WebHost: document URL unavailable: {E}", ex.Message); return Task.FromResult<string?>(null); }
+        }
+
+        internal event Action? BrowserNavigationStarting;
+        internal event Action<Uri?>? BrowserNativeNavigationStarting;
+        internal void OnBrowserNativeNavigationStarting(Uri? url)
+        {
+            LatestNavigationUrl = url;
+            BrowserNativeNavigationStarting?.Invoke(url);
+        }
 
         /// <summary>
         /// Raised on the UI thread with <see cref="CurrentUrl"/> after every top-level navigation
@@ -86,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (url is null) return;
             CurrentUrl = url;
+            LatestNavigationUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
             NavigationFinished?.Invoke(url, success);
@@ -369,28 +387,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
-            if (RefusesScrolller(target)) { e.Cancel = true; return; }
-            // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
-            if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
-            // No Scrolller gate on this engine (yet, or at all): nothing but this head's own pages loads.
-            if (!ScrolllerGateAllows(_scrolllerGate, target))
+            try
             {
+                if (RefusesScrolller(target)) { e.Cancel = true; return; }
+                // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
+                if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
+                // No Scrolller gate on this engine (yet, or at all): nothing but this head's own pages loads.
+                if (!ScrolllerGateAllows(_scrolllerGate, target))
+                {
+                    e.Cancel = true;
+                    Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
+                    return;
+                }
+                if (target?.Scheme != "about") _loadedOnThisEngine = true;
+                // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
+                if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
+                var gate = AllowNavigation;
+                if (gate is null) return;
+                // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
+                // hostile page would use to slip past it.
+                if (target is null) { e.Cancel = true; return; }
+                if (gate(target)) return;
                 e.Cancel = true;
-                Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
-                return;
+                // Host + path only: a signed media URL's query string must not reach the log.
+                Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
             }
-            if (target?.Scheme != "about") _loadedOnThisEngine = true;
-            // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
-            if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
-            var gate = AllowNavigation;
-            if (gate is null) return;
-            // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
-            // hostile page would use to slip past it.
-            if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) return;
-            e.Cancel = true;
-            // Host + path only: a signed media URL's query string must not reach the log.
-            Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
+            finally { if (!e.Cancel) OnBrowserNativeNavigationStarting(target); }
         }
 
         /// <summary>
@@ -400,6 +422,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public void Navigate(Uri url)
         {
+            // Invalidate pending site sync before every request, including an equal Source.
+            BrowserNavigationStarting?.Invoke();
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
