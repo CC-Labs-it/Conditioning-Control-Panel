@@ -13,6 +13,8 @@ internal static class LeashSound
 
     internal static void Tick(DateTime now) => Play(LeashCue.Tick, now, "chaos/countdown_tick.mp3", 0.10f, "leash-tick");
 
+    internal static void Snap() => Play(LeashCue.Snap, DateTime.UtcNow, "chaos/collar_save.mp3", 0.28f, "leash-snap");
+
     internal static void Release(bool ok) => Play(ok ? LeashCue.Cut : LeashCue.Denied, DateTime.UtcNow,
         ok ? "chaos/snap.mp3" : "chaos/ui_denied.mp3", ok ? 0.22f : 0.16f, ok ? "leash-cut" : "leash-denied");
 
