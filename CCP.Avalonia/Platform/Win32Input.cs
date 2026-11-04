@@ -1,4 +1,6 @@
 using System;
+using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -27,6 +29,21 @@ internal static class PanicListeners
 /// </summary>
 internal static class Win32Input
 {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PointerPoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out PointerPoint point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+
+    // GetCursorPos uses physical desktop pixels with the per-monitor-aware app manifest.
+    internal static (PixelPoint At, bool Pressed, bool Escape)? ReadPointer()
+    {
+        if (!OperatingSystem.IsWindows() || !GetCursorPos(out var point)) return null;
+        return PointerSample(point.X, point.Y, GetAsyncKeyState(1), GetAsyncKeyState(2), GetAsyncKeyState(0x1b));
+    }
+
+    internal static (PixelPoint At, bool Pressed, bool Escape) PointerSample(int x, int y, short left, short right, short escape) =>
+        (new PixelPoint(x, y), left < 0 || right < 0, escape < 0);
+
     private static bool _escDown, _pauseDown, _wired;
 
     /// <summary>MainShellWindow.StartPanicKey on Windows (the desktop path only, never tests or renders).
