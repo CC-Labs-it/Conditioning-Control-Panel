@@ -28,8 +28,10 @@ internal sealed class DirectorHeadEffect(HeadEffect effect, PossessionRuntime ru
         await ctx.Attribution.ChargeAsync(c, ct);
         ct.ThrowIfCancellationRequested();
         runtime.Photosafe = ctx.Photosafe;
-        if (runtime.TryApply(effect, new PossessionHeadTarget(c, target.Role, target.Key)))
+        if (runtime.TryApply(effect, new PossessionHeadTarget(c, target.Role, target.Key), () => ctx.EffectFinished?.Invoke(true)))
             _attribution = ctx.Attribution.Possess(c);
+        else
+            ctx.EffectFinished?.Invoke(false);
     }
     public async Task UndoAsync(TimeSpan duration)
     {

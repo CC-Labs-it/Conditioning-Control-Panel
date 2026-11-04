@@ -347,7 +347,7 @@ public sealed class PossessionDirector : IDisposable
                         && Warden?.IsAvailable == true
                         && _rng.Next(4) == 0;
 
-            var ctx = BuildContext(host, rung, remaining, frac, () => effect!);
+            var ctx = BuildContext(host, rung, remaining, frac, () => effect!, acquired => { if (ghost != null) EndGhost(ghost, acquired); });
             if (knock)
             {
                 // A knock wants the card to FALL; use the catalog's fall effect when it exists so the
@@ -622,7 +622,9 @@ public sealed class PossessionDirector : IDisposable
                 if (_cooldowns.TryGetValue(target.Key, out var until) && until > now) return;
             }
 
-            var ctx = BuildContext(host, rung, _lockdown.Remaining, _lockdown.ElapsedFraction, () => effect);
+            LiveGhost? ghost = null;
+            var ctx = BuildContext(host, rung, _lockdown.Remaining, _lockdown.ElapsedFraction, () => effect,
+                acquired => { if (ghost != null) EndGhost(ghost, acquired); });
             if (!effect.CanApply(ctx, target)) return;
 
             _lastReactiveAt = now;
@@ -634,7 +636,7 @@ public sealed class PossessionDirector : IDisposable
             }
 
             var cts = new CancellationTokenSource();
-            var ghost = new LiveGhost(effect, target, host, cts);
+            ghost = new LiveGhost(effect, target, host, cts);
             _live.Add(ghost);
 
             Log.Information("Possession reactive: {Effect} on {Target} at rung {Rung}",
@@ -857,12 +859,13 @@ public sealed class PossessionDirector : IDisposable
         await UndoGhostAsync(ghost, TimeSpan.FromMilliseconds(600)).ConfigureAwait(true);
     }
 
-    private PossessionContext BuildContext(HostEntry host, PossessionRung rung, TimeSpan remaining, double frac, Func<IPossessionEffect> effect)
+    private PossessionContext BuildContext(HostEntry host, PossessionRung rung, TimeSpan remaining, double frac, Func<IPossessionEffect> effect, Action<bool>? effectEnded = null)
     {
         return new PossessionContext
         {
             Host = host.Host,
             Attribution = host.Attribution,
+            EffectFinished = effectEnded,
             Rung = rung,
             Intensity = _intensity,
             Photosafe = _photosafe,
@@ -908,6 +911,12 @@ public sealed class PossessionDirector : IDisposable
     // ---------------------------------------------------------------------------------------------
     //  Undo
     // ---------------------------------------------------------------------------------------------
+
+    private void EndGhost(LiveGhost ghost, bool acquired)
+    {
+        if (acquired) UndoGhostSync(ghost);
+        else if (Release(ghost)) ghost.Dispose();
+    }
 
     private async Task UndoGhostAsync(LiveGhost ghost, TimeSpan duration)
     {

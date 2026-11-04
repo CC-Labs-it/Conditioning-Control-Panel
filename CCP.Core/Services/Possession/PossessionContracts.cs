@@ -106,6 +106,8 @@ public sealed class PossessionContext
     /// <summary>Ask the warden to name what just happened: (effectId, target DisplayName). The director
     /// routes it to barks (PossessionEffect trigger) - effects never talk to BarkService directly.</summary>
     public required Action<string, string?> Name { get; init; }
+    /// <summary>End this run on the UI thread. Pass true only if it acquired effect resources.</summary>
+    public Action<bool>? EffectFinished { get; init; }
 }
 
 /// <summary>One haunt. Stateless until Apply; Undo MUST be safe to call when Apply never ran, was
