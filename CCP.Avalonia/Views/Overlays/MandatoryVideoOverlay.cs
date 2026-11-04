@@ -31,8 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// (VideoBlurredBackgroundEnabled), with the attention targets on top. One decoder on the shared
     /// LibVLC feeds every screen (WPF ran one muted decoder per secondary), with audio at
     /// master x video volume; other apps are ducked while it plays (AudioDuckingEnabled).
-    /// The Esc grace pause (WPF #735) draws its Paused/Resume card inside each video window, not as a
-    /// separate topmost window; the clip guards (Core <see cref="MandatoryVideoScheduler.Guard"/>) run
+    /// The Esc grace pause (WPF #735) uses a separate card window for floating clips and a card inside
+    /// each full-screen window; the clip guards (Core <see cref="MandatoryVideoScheduler.Guard"/>) run
     /// on a 1 s UI timer: a dead (8 s) or lost (5 s without frames) output replays the clip once, as
     /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.html). Ambient bubbles
     /// are paused by the Core scheduler.
@@ -87,8 +87,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private DateTime Now => Time.GetUtcNow().UtcDateTime;
         private DispatcherTimer? _graceTimer, _guard;
         private readonly Stopwatch _sinceShow = new();
-        private readonly Stopwatch _floatingPlaying = new();
-        private bool _floatingRevealed;
+        private readonly Stopwatch _floatingPlaying = new(), _floatingReady = new();
+        private bool _floatingRevealed, _readyArmed;
+        internal static Func<Window, bool, bool> FloatingClickThrough = X11Overlay.SetClickThrough;
         private int _paintedFrames;
         private long _firstPaintMedia, _firstPlayedMs;
 
@@ -156,6 +157,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Floating = Floats(strict);
             _floatingRevealed = !Floating;
             _floatingPlaying.Reset();
+            _floatingReady.Reset();
+            _readyArmed = false;
             _paintedFrames = 0;
             _firstPaintMedia = _firstPlayedMs = -1;
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
@@ -234,9 +237,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
+            // Opening means the initialized player has begun opening media, even if no stream plays.
+            _player.Opening += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) MarkFloatingReady(); });
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() =>
             {
                 if (_player != live) return;
+                MarkFloatingReady();   // fallback if this input did not report opening
                 LibVlcAudio.ApplyPreferredDevice(live);
                 if (_firstPlayedMs < 0) _firstPlayedMs = Interlocked.Read(ref _watchedMs);
                 if (!_floatingPlaying.IsRunning && !_gracePaused) _floatingPlaying.Start();
@@ -371,6 +377,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
             w.Show();
+            if (floating && !FloatingClickThrough(w, true)) w.Hide();
             if (!floating)
             {
                 w.WindowState = WindowState.FullScreen;
@@ -481,6 +488,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _lastGraceUtc = _gracePausedAt = now;
             _player?.SetPause(true);
             _floatingPlaying.Stop();
+            _floatingReady.Stop();
             _sinceShow.Stop();
             _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; if (Floating) ShowGraceHost(x); }
@@ -515,6 +523,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceTimer = null;
             foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; CloseGraceHost(x); }
             if (_firstPlayedMs >= 0) _floatingPlaying.Start();
+            if (_readyArmed) _floatingReady.Start();
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
@@ -549,6 +558,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Scheduler.End();
         }
 
+        internal void MarkFloatingReady()
+        {
+            if (_readyArmed) return;
+            _readyArmed = true;
+            if (!_gracePaused) _floatingReady.Start();
+        }
+
         private bool CheckFloatingReveal(bool painted)
         {
             if (!Floating || _floatingRevealed) return true;
@@ -557,7 +573,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_floatingPlaying.IsRunning && _firstPlayedMs < 0) _firstPlayedMs = at;
             var verdict = FloatingRevealGate.Decide(painted,
                 _floatingPlaying.IsRunning ? _floatingPlaying.ElapsedMilliseconds : null,
-                _firstPlayedMs < 0 || FirstFrameMs < 0 ? 0 : at - _firstPlayedMs, ReadyAgeOverrideMs ?? _sinceShow.ElapsedMilliseconds);
+                _firstPlayedMs < 0 || FirstFrameMs < 0 ? 0 : at - _firstPlayedMs,
+                _readyArmed ? ReadyAgeOverrideMs ?? _floatingReady.ElapsedMilliseconds : null);
             if (verdict == FloatingRevealGate.Verdict.Skip) { Scheduler.End(); return false; }
             if (verdict != FloatingRevealGate.Verdict.Reveal) return true;
             RevealFloating();
@@ -575,6 +592,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var x in _surfaces)
             {
+                if (_floatingRevealed)
+                {
+                    FloatingClickThrough(x.Window, false);
+                    if (!x.Window.IsVisible) x.Window.Show();
+                }
                 x.Window.Opacity = _floatingRevealed ? 1 : 0.001;
                 x.Window.IsHitTestVisible = _floatingRevealed;
             }

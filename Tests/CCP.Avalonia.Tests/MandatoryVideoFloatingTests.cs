@@ -101,6 +101,9 @@ public sealed class MandatoryVideoFloatingTests
             s.PanicOverridesAll, s.MasterVolume, s.VideoVolume);
         var o = MandatoryVideoOverlay.Instance;
         var previous = (o.Scheduler, o.Time);
+        var native = MandatoryVideoOverlay.FloatingClickThrough;
+        var clickThrough = false;
+        MandatoryVideoOverlay.FloatingClickThrough = (_, on) => { clickThrough = on; return true; };
         var graceStamp = typeof(MandatoryVideoOverlay).GetField("_lastGraceUtc",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
         var previousStamp = graceStamp.GetValue(o);
@@ -120,11 +123,13 @@ public sealed class MandatoryVideoFloatingTests
                 Assert.Contains(WindowTransparencyLevel.Transparent, w.TransparencyLevelHint);
                 Assert.InRange(w.Opacity, double.Epsilon, 0.001);
                 Assert.False(w.IsHitTestVisible);
+                Assert.True(clickThrough);
                 Assert.Equal(0, o.PlayerVolume);
                 typeof(MandatoryVideoOverlay).GetMethod("CheckFloatingReveal",
                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(o, new object[] { true });
                 Assert.Equal(1, w.Opacity);
                 Assert.True(w.IsHitTestVisible);
+                Assert.False(clickThrough);
                 Assert.False(o.AttentionArmed, "a floating video has no attention checks");
                 Assert.True(w.Topmost && w.IsVisible);
                 Assert.NotEqual(WindowState.FullScreen, w.WindowState);
@@ -148,6 +153,7 @@ public sealed class MandatoryVideoFloatingTests
                 Assert.Equal(-1, o.FirstFrameMs);
                 Assert.InRange(paused.Window.Opacity, double.Epsilon, 0.001);
                 Assert.False(paused.Window.IsHitTestVisible);
+                o.MarkFloatingReady();
                 o.ReadyAgeOverrideMs = 0;
                 Assert.True(o.TryGracePause(fromPanicKey: true));
                 Assert.True(o.GracePaused && paused.Grace.IsVisible);
@@ -178,6 +184,14 @@ public sealed class MandatoryVideoFloatingTests
                 var stalled = Assert.Single(o.Surfaces);
                 Assert.True(stalled.Window.Height < 200, "the small floating window cannot hold the card");
                 Assert.Null(o.ReadyAgeOverrideMs); // a fresh clip gets a fresh budget
+                // A delayed media initialization does not consume the ready budget.
+                Thread.Sleep((int)FloatingRevealGate.ReadyBudgetMs + 100);
+                o.GuardTick();
+                Assert.True(graceScheduler.IsPlaying && stalled.Window.IsVisible);
+                o.MarkFloatingReady();
+                o.ReadyAgeOverrideMs = 0;
+                o.GuardTick();
+                Assert.True(graceScheduler.IsPlaying);
                 o.ReadyAgeOverrideMs = FloatingRevealGate.ReadyBudgetMs;
                 Assert.True(o.TryGracePause(fromPanicKey: true));
                 card = AssertCentredCard(stalled);
@@ -208,6 +222,16 @@ public sealed class MandatoryVideoFloatingTests
                 Assert.False(card.IsVisible || panicked.Window.IsVisible);
                 (o.Scheduler, o.Time) = previous;
 
+                // A platform without native click-through keeps the window hidden until admission.
+                MandatoryVideoOverlay.FloatingClickThrough = (_, on) => !on;
+                o.Show(clip, strict: false);
+                w = Assert.Single(o.Windows);
+                Assert.False(w.IsVisible);
+                typeof(MandatoryVideoOverlay).GetMethod("CheckFloatingReveal",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(o, new object[] { true });
+                Assert.True(w.IsVisible && w.IsHitTestVisible);
+                o.CloseAll();
+
                 // Strict always covers the screen, and keeps its attention checks.
                 o.Show(clip, strict: true);
                 w = Assert.Single(o.Windows);
@@ -225,6 +249,7 @@ public sealed class MandatoryVideoFloatingTests
             finally
             {
                 graceScheduler.ForceCleanup();
+                MandatoryVideoOverlay.FloatingClickThrough = native;
                 (o.Scheduler, o.Time) = previous;
                 graceStamp.SetValue(o, previousStamp);
                 o.CloseAll();
