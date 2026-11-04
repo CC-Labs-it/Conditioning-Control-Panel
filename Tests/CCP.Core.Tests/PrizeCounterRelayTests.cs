@@ -6,7 +6,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.BackRoom;
-using CCP.Core.Services.PrizeCounter;
+using ConditioningControlPanel.Services.PrizeCounter;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -223,6 +223,24 @@ public class PrizeCounterRelayTests
         var reply = await relay.RelayAsync("shop-state", null, null);
         Assert.Equal("offline", reply.Value<string>("reason"));
         Assert.Single(h.Seen);
+    }
+
+    [Fact]
+    public async Task AMergedReplyGoesToTheRecoveryHook_AndThePageGetsARefusal()
+    {
+        const string merged = "{\"ok\":false,\"error\":\"merged\",\"canonical_unified_id\":\"uid-2\"}";
+        var (relay, h, sp, _) = Make();
+        var seen = new List<(int, string)>();
+        relay.MergedReply = (status, body) => { seen.Add((status, body)); return true; };
+        h.Answer = _ => Json(409, merged);
+        var reply = await relay.RelayAsync("shop-state", null, null);
+        Assert.Equal((409, merged), Assert.Single(seen));
+        Assert.False(reply.Value<bool>("ok"));
+        Assert.Empty(sp);
+
+        relay.MergedReply = (_, _) => throw new InvalidOperationException("hook broke");
+        h.Answer = _ => Json(200, "{\"ok\":true,\"sp\":4}");
+        Assert.True((await relay.RelayAsync("shop-state", null, null)).Value<bool>("ok"));
     }
 
     [Fact]
