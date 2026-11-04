@@ -38,7 +38,7 @@ internal static class EscapeClaim
     private static readonly HashSet<Type> MarkedTypes = new();
     private static long _takenAtTicks;          // 0 = none; UTC ticks
     private static volatile bool _keyboardInSurface;
-    private static bool _tracking;
+    private static bool _tracking, _timestampTracking;
 
     /// <summary>Marks an element whose own Escape handler drops or closes it.</summary>
     internal static void Mark(Control surface) => surface.SetValue(DropsOnEscapeProperty, true);
@@ -60,14 +60,12 @@ internal static class EscapeClaim
         return false;
     }
 
-    /// <summary>Starts the focus snapshot (UI thread, once, desktop path only).</summary>
-    internal static void StartTracking()
+    /// <summary>Starts the focus snapshot; trackX11 lets tests exercise the X11 observer on any OS.</summary>
+    internal static void StartTracking(bool trackX11 = false)
     {
-        if (_tracking) return;
-        _tracking = true;
         // X11 raw and focused key events carry the same server timestamp. Observe the focused
         // event before its window closes so only that physical press is owned by the surface.
-        if (OperatingSystem.IsLinux())
+        if ((OperatingSystem.IsLinux() || trackX11) && !_timestampTracking)
         {
             try
             {
@@ -77,10 +75,11 @@ internal static class EscapeClaim
                 var inputType = assembly.GetType("Avalonia.Input.IInputManager")!;
                 var input = locator.GetType().GetMethod("GetService", new[] { typeof(Type) })!.Invoke(locator, new object[] { inputType })!;
                 var events = (IObservable<RawInputEventArgs>)inputType.GetProperty("PreProcess")!.GetValue(input)!;
-                events.Subscribe(new AnonymousObserver<RawInputEventArgs>(RecordSurfaceKey));
+                events.Subscribe(new AnonymousObserver<RawInputEventArgs>(RecordSurfaceKey)); _timestampTracking = true;
             }
             catch (Exception ex) { Log.Warning(ex, "Escape surface timestamp tracking unavailable"); }
         }
+        if (_tracking) return; _tracking = true;
         // e.Source, not the sender: the class handler runs once per element on the route, and an
         // ancestor above the surface would overwrite the answer.
         InputElement.GotFocusEvent.AddClassHandler<InputElement>((_, e) => _keyboardInSurface = InASurface(e.Source),

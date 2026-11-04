@@ -51,8 +51,7 @@ public sealed class X11VideoEscapeTests
     [InlineData(false)]
     public void Held_escape_checks_surface_and_lost_release(bool surfaceFirst)
     {
-        using var hooks = new EscapeHooks();
-        var s = CoreSettings.Current;
+        using var hooks = new EscapeHooks(); var s = CoreSettings.Current;
         (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape");
         bool surface = surfaceFirst, down = true, video = true; int calls = 0, step = 0;
         using var checkedKey = new System.Threading.ManualResetEventSlim(); using var delivered = new System.Threading.ManualResetEventSlim();
@@ -77,8 +76,7 @@ public sealed class X11VideoEscapeTests
     [Fact]
     public void Raw_escape_retains_ownership_until_release()
     {
-        using var hooks = new EscapeHooks();
-        var s = CoreSettings.Current;
+        using var hooks = new EscapeHooks(); var s = CoreSettings.Current;
         (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape"); X11PanicKey.BindKeycodeForTest(9);
         bool video = true, leashTaskActive = true; int deliveries = 0, panic = 0;
         Win32Input.EscapeState = () => (video, false, false);
@@ -117,8 +115,7 @@ public sealed class X11VideoEscapeTests
     [Fact]
     public void Listener_snapshots_palette_ownership_and_rechecks_video_on_delivery()
     {
-        using var hooks = new EscapeHooks();
-        var s = CoreSettings.Current;
+        using var hooks = new EscapeHooks(); var s = CoreSettings.Current;
         (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape");
         X11PanicKey.BindKeycodeForTest(9);
         bool video = true, palette = true, card = false;
@@ -159,8 +156,7 @@ public sealed class X11VideoEscapeTests
         using var hooks = new EscapeHooks();
         X11PanicKey.BindKeycodeForTest(9);
         Win32Input.EscapeState = () => throw new InvalidOperationException("snapshot failed");
-        bool sent = false;
-        int panic = 0;
+        bool sent = false; int panic = 0;
         X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => panic++,
             () => sent ? null : (sent = true, 9, 9));
         Assert.Equal(1, panic);
@@ -169,11 +165,9 @@ public sealed class X11VideoEscapeTests
     [Fact]
     public void Listener_does_not_deliver_a_queued_escape_after_video_cleanup()
     {
-        using var hooks = new EscapeHooks();
-        var settings = CoreSettings.Current;
+        using var hooks = new EscapeHooks(); var settings = CoreSettings.Current;
         (settings.PanicKeyEnabled, settings.PanicKey) = (true, "F12");
-        bool video = true;
-        int attempts = 0;
+        bool video = true; int attempts = 0;
         Action? pending = null;
         Win32Input.EscapeState = () => (video, false, false);
         Win32Input.PostEscape = action => pending = action;
@@ -197,13 +191,11 @@ public sealed class X11VideoEscapeTests
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        EscapeClaim.StartTracking();
-        using var hooks = new EscapeHooks();
-        var s = CoreSettings.Current;
+        EscapeClaim.StartTracking(); EscapeClaim.StartTracking(trackX11: true);
+        using var hooks = new EscapeHooks(); var s = CoreSettings.Current;
         (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape");
         X11PanicKey.BindKeycodeForTest(9);
-        bool open = !uiFirst;
-        int video = 0, leash = 0, step = 0;
+        bool open = !uiFirst; int video = 0, leash = 0, step = 0;
         ulong stamp = 0, first = palette ? (uiFirst ? 1001UL : 3001UL) : (uiFirst ? 2001UL : 4001UL);
         Window surface = palette ? new ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow()
             : new ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow();
