@@ -97,15 +97,18 @@ public sealed class LeashOfferCard : Border
         _readTimer.Start();
     }
 
-    // Count only while the explanation fits inside every clipping viewport.
+    // Count while some of the explanation is visible through all clipping viewports.
     private bool IntroOnScreen()
     {
         if (!_intro.IsEffectivelyVisible || _intro.Bounds.Width <= 0 || _intro.Bounds.Height <= 0) return false;
+        var left = 0d; var top = 0d; var right = _intro.Bounds.Width; var bottom = _intro.Bounds.Height;
         foreach (var ancestor in _intro.GetVisualAncestors())
         {
             if (!ancestor.ClipToBounds && ancestor is not Window) continue;
-            if (_intro.TranslatePoint(default, ancestor) is not { } p || p.X < -0.5 || p.Y < -0.5 ||
-                p.X + _intro.Bounds.Width > ancestor.Bounds.Width + 0.5 || p.Y + _intro.Bounds.Height > ancestor.Bounds.Height + 0.5) return false;
+            if (ancestor.TranslatePoint(default, _intro) is not { } p) return false;
+            left = Math.Max(left, p.X); top = Math.Max(top, p.Y);
+            right = Math.Min(right, p.X + ancestor.Bounds.Width); bottom = Math.Min(bottom, p.Y + ancestor.Bounds.Height);
+            if (right <= left || bottom <= top) return false;
         }
         return true;
     }

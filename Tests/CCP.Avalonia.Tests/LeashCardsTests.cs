@@ -145,14 +145,12 @@ public sealed class LeashCardsTests
         var window = new Window { Width = 440, Height = 500, Content = scroll };
         using var cleanup = new WindowCleanup(window);
         Click(card, "leash-offer-look"); window.UpdateLayout();
-        scroll.Height = 180; window.UpdateLayout();
-        for (int i = 0; i < 25; i++) card.AdvanceReadClock();
-        Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        scroll.Height = 450; window.UpdateLayout();
         scroll.Offset = new Vector(0, 600); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
         for (int i = 0; i < 25; i++) card.AdvanceReadClock();
         Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        scroll.Offset = default; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        scroll.Height = 180; scroll.Offset = default; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        var intro = Find<StackPanel>(card, "leash-ask-intro");
+        Assert.True(intro.Bounds.Height > scroll.Bounds.Height);
         for (int i = 0; i < 25; i++) card.AdvanceReadClock();
         Assert.True(Find<Button>(card, "leash-ask-yes").IsEnabled);
     });
