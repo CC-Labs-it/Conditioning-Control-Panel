@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services
@@ -58,6 +60,7 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
+        public bool IsAmbientTrigger => Spec?.Payload?.Ambient == true;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
 
@@ -317,6 +320,21 @@ namespace ConditioningControlPanel.Services
                 if (b.Snap()) ChaosDefused?.Invoke(b);
         }
 
+        /// <summary>WPF BubbleService.RollTriggerSpec: select from the persisted pool. Only Gif Rain
+        /// is wired here; unsupported selections remain plain bubbles until their payloads are ported.</summary>
+        public EffectBubbleSpec? RollGifRain(AppSettings s)
+        {
+            if (!s.BubbleTriggersEnabled || s.BubbleTriggerVariants == null) return null;
+            var ids = s.BubbleTriggerVariants.Where(id => id != MagnetBubble.VariantId).ToArray();
+            if (ids.Length == 0 || Random.Next(100) >= Math.Clamp(s.BubbleTriggerChance, 0, 100)) return null;
+            if (ids[Random.Next(ids.Length)] != "htlink") return null;
+            if (Bubbles.Count(b => b.Spec != null) >= 4) return null;
+            var variant = ChaosBubbleVariants.All.First(v => v.Id == "htlink");
+            var spec = ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true);
+            spec.Payload!.DurationMult = 2.5;
+            return spec;
+        }
+
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
 
         /// <summary>WPF AwardAmbientPop's pure half: roll lucky (5% for 20x with the lucky_bubbles
@@ -353,7 +371,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (HoldChaos && b.Spec != null && !b.IsAmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }

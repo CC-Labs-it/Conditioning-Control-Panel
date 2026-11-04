@@ -88,6 +88,38 @@ public sealed class BubbleOverlayTests
         });
     }
 
+    [Fact]
+    public async Task Ambient_gif_rain_pop_pays_and_fires_once()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var s = CoreSettings.Current;
+            var oldDay = s.AmbientBubbleXpDayKey;
+            var oldPaid = s.AmbientBubbleXpPaidToday;
+            var oldFirer = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+            var calls = 0;
+            var payload = new ConditioningControlPanel.Services.Chaos.GifCascadePayload { Ambient = true };
+            var b = new AmbientBubble { Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { Payload = payload } };
+            try
+            {
+                s.AmbientBubbleXpDayKey = "";
+                ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = p => { if (p == payload) calls++; };
+                BubbleOverlay.Pop(b);
+                BubbleOverlay.Pop(b);
+                Assert.Equal(1, calls);
+                Assert.True(b.Popping);
+                Assert.Equal(5, AmbientBubbleXp.PaidToday(s));
+            }
+            finally
+            {
+                ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = oldFirer;
+                s.AmbientBubbleXpDayKey = oldDay;
+                s.AmbientBubbleXpPaidToday = oldPaid;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>Windows input region: the window takes clicks only while the cursor is inside a
     /// live bubble rect (Win32Overlay.SetInputRects toggles WS_EX_TRANSPARENT on this answer).</summary>
     [Fact]
