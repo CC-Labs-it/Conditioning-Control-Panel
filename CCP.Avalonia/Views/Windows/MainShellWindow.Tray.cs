@@ -125,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public void ShowFromTray()
         {
             if (_windowClosed) return;
+            Platform.OsNotifications.DismissWindowsBalloon();
             RestoreLauncherPanelOpacity();
             Show();
             WindowState = WindowState.Normal;

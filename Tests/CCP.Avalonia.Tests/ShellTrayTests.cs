@@ -113,7 +113,16 @@ public sealed class ShellTrayTests
             shell.Close();
             Assert.False(shell.IsVisible);
             Assert.Equal(1, count);
+            var field = typeof(global::ConditioningControlPanel.Avalonia.Platform.OsNotifications)
+                .GetField("_windows", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var cleared = 0;
+            using var balloon = new global::ConditioningControlPanel.Avalonia.Platform.WindowsNotifications(
+                (IntPtr)42, 7, (_, _) => true, () => cleared++);
+            Assert.True(balloon.Show("Title", "Body"));
+            field.SetValue(null, balloon);
             shell.ShowFromTray();
+            Assert.Equal(1, cleared);
+            Assert.Null(field.GetValue(null));
             shell.Close();
             Assert.False(shell.IsVisible);
             Assert.Equal(1, count);
@@ -121,6 +130,7 @@ public sealed class ShellTrayTests
         finally
         {
             global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = previous;
+            global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.DismissWindowsBalloon();
             shell.MarkExitRequestedForTest();
             shell.Close();
             shell.Tray?.Dispose();

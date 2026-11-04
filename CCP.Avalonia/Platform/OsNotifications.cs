@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// org.freedesktop.Notifications Notify / ActionInvoked / NotificationClosed, raw over
 /// Tmds.DBus.Protocol like <see cref="PortalPanicShortcut"/>. No server (or not Linux): the in-app
 /// toast when the window is visible, otherwise dropped and logged once.
-/// Windows uses a temporary native tray icon for balloons.
+/// Windows uses the existing native tray icon for balloons.
 /// </summary>
 internal static class OsNotifications
 {
@@ -64,12 +64,9 @@ internal static class OsNotifications
             {
                 try
                 {
-                    var handle = window?.TryGetPlatformHandle();
-                    if (handle?.HandleDescriptor == "HWND" && handle.Handle != IntPtr.Zero)
-                    {
-                        _windows ??= WindowsNotifications.Create(handle.Handle);
-                        if (_windows.Show(title, body)) id = 1;
-                    }
+                    var tray = (window as Views.Windows.MainShellWindow)?.Tray;
+                    _windows ??= WindowsNotifications.Create(tray);
+                    if (_windows?.Show(title, body) == true) id = 1;
                 }
                 catch (Exception ex) { Log.Debug("OS notification failed: {Error}", ex.Message); }
             }
@@ -87,7 +84,15 @@ internal static class OsNotifications
         });
     }
 
-    internal static void Shutdown() { _windows?.Dispose(); _windows = null; }
+    internal static void DismissWindowsBalloon()
+    {
+        var windows = _windows;
+        _windows = null;
+        try { windows?.Dispose(); }
+        catch (Exception ex) { Log.Debug("OS notification cleanup failed: {Error}", ex.Message); }
+    }
+
+    internal static void Shutdown() => DismissWindowsBalloon();
 
     // One cached task: concurrent first calls share one connection; a failed connect is retried next time.
     private static Task<DBusConnection> BusAsync()
