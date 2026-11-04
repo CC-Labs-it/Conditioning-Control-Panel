@@ -215,6 +215,7 @@ public sealed class BrowserInitialHomeTests
         var before = knownBefore ? "https://bambicloud.com/video" : "https://example.com/old";
         host.OnNavigationCompleted(new Uri("https://example.com/previous"));
         Assert.True(shell.NavigateToUrlInBrowser(before)); // the known page may still be loading
+        host.OnBrowserNativeNavigationStarting(new Uri(before)); // simulate the accepted native load in the sandbox
         var pending = new TaskCompletionSource<string?>();
         host.DocumentUrlReader = () => pending.Task;
         page.SyncBrowserCard();
@@ -229,6 +230,31 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(!knownBefore, page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked == true);
         shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
         Assert.Equal(knownBefore ? "https://bambicloud.com/" : "https://hypnotube.com/", host.Source!.AbsoluteUri);
+    });
+
+    [Fact]
+    public Task RefusedRequestDoesNotReplacePageDuringPendingSync() => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        host.OnNavigationCompleted(new Uri("https://bambicloud.com/video"));
+        host.Navigate(new Uri("https://bambicloud.com/video"));
+        page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+        host.GateScrolller = true;
+        var policy = ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Enabled;
+        var cap = ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.MaxClipShortSide;
+        try { ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(false, cap); host.Navigate(new Uri("https://scrolller.com/r/x")); }
+        finally { ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(policy, cap); }
+        Assert.True(host.RefusedNavigations > 0);
+        var pending = new TaskCompletionSource<string?>();
+        host.DocumentUrlReader = () => pending.Task;
+        page.SyncBrowserCard();
+        host.NewScrolllerEngine()(true);
+        var navigation = new WebViewNavigationStartingEventArgs { Request = new Uri("http://127.0.0.1/new") };
+        host.OnNavigationStarted(null, navigation);
+        Assert.False(navigation.Cancel);
+        pending.SetResult("http://127.0.0.1/new");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked);
     });
 
     [Fact]

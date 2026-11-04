@@ -424,13 +424,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             // Invalidate pending site sync before every request, including an equal Source.
             BrowserNavigationStarting?.Invoke();
-            LatestNavigationUrl = url;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
             if (RefusesScrolller(url)) { RefusedNavigations++; return; }
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
+            LatestNavigationUrl = url;
             if (_web is null) return;
             if (_scrolllerGate is null) return;   // held: the gate's report loads Source
             try { _web.Navigate(url); }
