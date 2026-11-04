@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
             var enable = this.FindControl<CheckBox>("ChkEnable")!;
             var intensity = this.FindControl<Slider>("SliderIntensity")!;
+            var blur = this.FindControl<Slider>("SliderBlurStrength")!;
             var refresh = this.FindControl<CheckBox>("ChkHighRefresh")!;
             var volume = this.FindControl<Slider>("SliderVolume")!;
             var more = this.FindControl<MoreFold>("FoldMore")!;
@@ -29,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                 _loading = true;
                 enable.IsChecked = CoreSettings.Current.BrainDrainEnabled;
                 intensity.Value = CoreSettings.Current.BrainDrainIntensity;
+                blur.Value = CoreSettings.Current.BrainDrainBlurStrength;
                 volume.Value = CoreSettings.Current.BrainDrainVolume;
                 if (CoreSettings.Current.BrainDrainVolume != 100) more.IsOpen = true;
                 refresh.IsChecked = CoreSettings.Current.BrainDrainHighRefresh;
@@ -49,6 +51,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                 CoreSettings.Current.BrainDrainIntensity = (int)intensity.Value;
                 if (CoreEngine.IsRunning) CoreEngine.SetBrainDrainIntensity?.Invoke(CoreSettings.Current.BrainDrainIntensity); // WPF BrainDrainFeatureControl.xaml.cs:254-258
                 CoreSettings.Save();
+            };
+            blur.PropertyChanged += (_, e) =>
+            {
+                if (_loading || e.Property != Slider.ValueProperty) return;
+                CoreSettings.Current.BrainDrainBlurStrength = (int)blur.Value;
+                CoreSettings.Save(); // WPF BrainDrainFeatureControl.xaml.cs:291-301
             };
             volume.PropertyChanged += (_, e) =>
             {
