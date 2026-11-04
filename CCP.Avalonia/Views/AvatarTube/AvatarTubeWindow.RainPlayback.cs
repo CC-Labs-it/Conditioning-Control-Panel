@@ -39,8 +39,6 @@ public partial class AvatarTubeWindow
     }
     private void RainSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AppSettings.AvatarMuted) && IsMuted)
-            RunOnAvatar(MuteRainSpeech);
         if (e.PropertyName is nameof(AppSettings.AvatarGeneration) or nameof(AppSettings.RainPackHash))
             RunOnAvatar(() => { if (!_avatarSetsClosed) _ = RefreshRainPlayback(); });
     }

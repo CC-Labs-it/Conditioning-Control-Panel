@@ -1291,7 +1291,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     double probed = RainProbedSeconds(phraseAudioPath);
                     int leadIn = StartRainSpeech(id, mood, text, phraseAudioPath, probed > 0 ? probed : RainEstimatedSeconds(text));
                     Action? playLineAudio = null;
-                    if (!IsMuted)
                     {
                         int rainVersion = _rainSpeechVersion;
                         playLineAudio = () => PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, duration => RunOnAvatar(() =>
@@ -1308,7 +1307,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _currentSpeechLength = text.Length;
                     void Speak()
                     {
-                        playLineAudio?.Invoke();
+                        if (IsMuted) { if (playLineAudio != null) spoken(); }
+                        else playLineAudio?.Invoke();
                         SyncAskButtonsFor(text);
                         _txtSpeech.Text = text;
                         _speechBubble.MaxWidth = 380;

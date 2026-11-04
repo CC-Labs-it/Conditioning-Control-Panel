@@ -82,7 +82,6 @@ public sealed class RainSpeechTests
         }
     }
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(body);
-
     [Fact]
     public Task VoiceDurationSchedulesTalkWindowsAndLongestStemReaction() => Run(async () =>
     {
@@ -99,7 +98,6 @@ public sealed class RainSpeechTests
         f.Advance(2000); await f.Clip(first == "talk_a" ? "talk_b" : "talk_a");
         f.Advance(2500); await f.Clip("joy"); // longest stem wins over mood, 500 ms before voice ends
     });
-
     [Fact]
     public Task QueuedLineKeepsStemAndMoodAndNonverbalUsesExpression() => Run(async () =>
     {
@@ -125,7 +123,6 @@ public sealed class RainSpeechTests
         f.Advance(2499); Assert.Equal("idle", f.Tube.RainClip);
         f.Advance(1); await f.Clip("affection"); // short line skips talk and holds the prior clip
     });
-
     [Fact]
     public Task PanicMuteCloseAndClickCancelPendingSpeechAndStaleAudioCallbacks() => Run(async () =>
     {
@@ -141,7 +138,7 @@ public sealed class RainSpeechTests
         f.Advance(10000); await f.Clip("idle");
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
         f.Advance(1000); await f.Talk();
-        var pending = f.Timers.Last(); f.Settings.Current.AvatarMuted = true; started!(TimeSpan.FromSeconds(8)); Assert.Equal(2, stops); Assert.False(pending.Cancelled);
+        var pending = f.Timers.Last(); f.Tube.OnMenuMute(); started!(TimeSpan.FromSeconds(8)); Assert.Equal(1, stops); Assert.False(pending.Cancelled);
         f.Advance(650); await f.Clip("joy");
         f.Settings.Current.AvatarMuted = false;
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
@@ -150,7 +147,6 @@ public sealed class RainSpeechTests
         var closePending = f.Timers.Last(); f.Tube.Close(); closePending.Fire(); started!(TimeSpan.FromSeconds(8));
         Assert.Null(f.Tube.RainFolder); Assert.Null(f.Tube.RainActivePlayer);
     });
-
     [Fact]
     public Task ClickHoldCoalescesAndPanicAndCloseCancelIt() => Run(async () =>
     {
@@ -171,7 +167,6 @@ public sealed class RainSpeechTests
         f.Tube.QueueRainClick("giggle"); var close = f.Timers.Last();
         f.Tube.Close(); Assert.True(close.Cancelled); close.Fire(); Assert.Null(f.Tube.RainFolder);
     });
-
     [Fact]
     public Task RetriesContinuePastThreeAndResetAndCancelOnStop() => Run(async () =>
     {
@@ -215,7 +210,16 @@ public sealed class RainSpeechTests
         f.Advance(1);
         Assert.Equal(1, plays()); Assert.True(bubble.IsVisible); Assert.True(((DispatcherTimer)HideTimer(f.Tube)!).IsEnabled);
     });
-
+    [Fact]
+    public Task PresetLeadInUsesMuteAtSpeechTime() => Run(async () =>
+    {
+        using var f = new Fixture(); await f.Start(); var (plays, audio, bubble) = Voice(f);
+        f.Settings.Current.AvatarMuted = true; f.Tube.Giggle("*giggles*", audio);
+        f.Settings.Current.AvatarMuted = false; f.Advance(250);
+        Assert.Equal(1, plays()); Assert.True(bubble.IsVisible);
+        f.Tube.PanicSilence(); typeof(AvatarTubeWindow).GetField("_lastSpeechEndTime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(f.Tube, DateTime.MinValue); f.Tube.Giggle("*giggles*", audio); f.Settings.Current.AvatarMuted = true; f.Advance(3000);
+        Assert.Equal(1, plays()); Assert.True(bubble.IsVisible);
+    });
     [Fact]
     public Task UntextedShortClipIsClassifiedByItsLengthBeforeItPlays() => Run(async () =>
     {
@@ -225,7 +229,6 @@ public sealed class RainSpeechTests
         f.Advance(249); Assert.Equal(0, plays());
         f.Advance(1); Assert.Equal(1, plays()); Assert.True(bubble.IsVisible);
     });
-
     [Fact]
     public Task ThinkingReplacesPendingVoiceAndRainSequence() => Run(async () =>
     {
@@ -235,7 +238,6 @@ public sealed class RainSpeechTests
         foreach (var t in old) t.Fire(); Assert.True(bubble.IsVisible); Assert.NotEqual("*giggles*", f.Tube.FindControl<TextBlock>("TxtSpeech")!.Text);
         Assert.Contains(f.Timers, t => !t.Cancelled); CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => throw new InvalidOperationException(); f.Tube.GigglePriority("voiced", phraseAudioPath: audio); f.Tube.StartThinkingAnimation(); Assert.NotNull(f.Tube.ThinkingFrame);
     });
-
     [Fact]
     public Task PanicDuringPresetLeadInDropsVoiceAndBubble() => Run(async () =>
     {
