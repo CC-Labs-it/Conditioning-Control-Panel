@@ -116,8 +116,8 @@ public sealed class KeywordAudioRuntimeTests
             };
             engine.Delay = (ms, _) =>
             {
-                if (ms == 500) return Task.CompletedTask; // stale clip cleanup
-                Assert.Equal(2500, ms); delayStarted.TrySetResult(); return delayGate.Task;
+                if (ms == 500 || ms == 1000) return Task.CompletedTask; // tail or shorter clip
+                Assert.Equal(2000, ms); delayStarted.TrySetResult(); return delayGate.Task;
             };
             var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
             first.DuckSystemAudio = firstDuck;
@@ -178,6 +178,55 @@ public sealed class KeywordAudioRuntimeTests
         {
             delayGate.TrySetResult();
             engine.StopAudio();
+            (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider) = saved;
+        }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1383-1387
+    public Task MixedDurationsWaitConcurrentlyBeforeTail() => RunAsync(async (engine, s, _) =>
+    {
+        var saved = (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider);
+        var knownStarted = new TaskCompletionSource();
+        var knownGate = new TaskCompletionSource();
+        var tailStarted = new TaskCompletionSource();
+        var tailGate = new TaskCompletionSource();
+        var released = new TaskCompletionSource();
+        Action? unknownFinished = null;
+        var clips = 0;
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => { };
+            CoreAudio.DuckGenerationProvider = () => 1;
+            CoreAudio.UnduckProvider = _ => released.TrySetResult();
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, finish) =>
+            {
+                if (++clips == 1) started!(TimeSpan.FromSeconds(60));
+                else { started!(TimeSpan.Zero); unknownFinished = finish; }
+                return () => { };
+            };
+            engine.Delay = (ms, _) =>
+            {
+                if (ms == 60000) { knownStarted.TrySetResult(); return knownGate.Task; }
+                if (ms == 500) { tailStarted.TrySetResult(); return tailGate.Task; }
+                throw new InvalidOperationException($"Unexpected delay: {ms}");
+            };
+            var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+            first.DuckSystemAudio = true;
+            s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = first.FilePath });
+            Type(engine, "sit");
+            await knownStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            unknownFinished!();
+            Assert.False(tailStarted.Task.IsCompleted);
+            knownGate.SetResult();
+            await tailStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.False(released.Task.IsCompleted);
+            tailGate.SetResult();
+            await released.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            knownGate.TrySetResult(); tailGate.TrySetResult(); engine.StopAudio();
             (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider) = saved;
         }
     });

@@ -278,9 +278,14 @@ internal sealed class KeywordAudioRuntime
     {
         try
         {
-            var lengths = await Task.WhenAll(durations).WaitAsync(token);
-            var longest = lengths.Length == 0 ? 0 : lengths.Max(d => d.TotalMilliseconds);
-            await Delay((int)Math.Clamp(longest, 0, int.MaxValue - 500) + 500, token);
+            async Task WaitForClip(Task<TimeSpan> duration)
+            {
+                var length = await duration.WaitAsync(token);
+                if (length > TimeSpan.Zero)
+                    await Delay((int)Math.Clamp(length.TotalMilliseconds, 0, int.MaxValue - 500), token);
+            }
+            await Task.WhenAll(durations.Select(WaitForClip));
+            await Delay(500, token);
         }
         catch (OperationCanceledException) { }
         finally { release(); }
