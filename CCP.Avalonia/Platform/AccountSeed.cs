@@ -17,6 +17,7 @@ internal static class AccountSeed
     internal static ProviderSubscription? Patreon { get; private set; }
     internal static ProviderSubscription? SubscribeStar { get; private set; }
     internal static DiscordAccount? Discord { get; private set; }
+    internal static Func<MainShellWindow?> RecoveryShell = () => MainShellWindow.Current;
 
     /// <summary>True when the last <see cref="Seed"/> granted the local sandbox whitelist (see
     /// <see cref="SandboxWhitelistRequested"/>). Always false in a Release build.</summary>
@@ -83,7 +84,7 @@ internal static class AccountSeed
         MergedAccountRecovery.ReloadProfile = async () => { await LoadProfileAsync(); };
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
-            MainShellWindow.Current?.UpdateQuickLoginUI(accountChanged: true);
+            RecoveryShell()?.UpdateQuickLoginUI(accountChanged: true);
             if (!reauthed)
                 StartupLadder.PresentOrInbox(new InboxItem
                 {
@@ -91,7 +92,7 @@ internal static class AccountSeed
                     Glyph = "🔗",
                     Title = Loc.Get("account_merged_signin_title"),
                     Summary = Loc.Get("account_merged_signin_summary"),
-                    Open = () => { if (MainShellWindow.Current is { } shell) _ = shell.OpenUnifiedLoginDialog(); },
+                    Open = () => { if (RecoveryShell() is { } shell) _ = shell.OpenLoginAfterMergedSwap(); },
                 });
         });
         // WPF ProfileSyncService.HandleUnauthorizedAsync (StartHeartbeat on success) / TryProviderRevalidateAsync.

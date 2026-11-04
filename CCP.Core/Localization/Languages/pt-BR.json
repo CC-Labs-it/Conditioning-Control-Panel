@@ -8202,5 +8202,8 @@
   "shop_item_bubbles_v2_name": "Bolhas v2",
   "shop_item_rt_bundle_1_name": "Pacote Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pacote Racing Thoughts 2",
-  "shop_item_rt_bundle_3_name": "Pacote Racing Thoughts 3"
+  "shop_item_rt_bundle_3_name": "Pacote Racing Thoughts 3",
+  "account_merged_signin_title": "Suas contas foram unificadas",
+  "account_merged_signin_summary": "Entre novamente para continuar.",
+  "account_merged_signin_body": "Suas duas contas foram unificadas. Entre novamente para continuar.\n\nSeu progresso local será mantido."
 }

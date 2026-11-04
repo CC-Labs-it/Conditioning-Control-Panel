@@ -62,6 +62,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        /// <summary>WPF MainWindow.Login.cs:67: explain the merge before asking for sign-in.</summary>
+        internal async Task OpenLoginAfterMergedSwap()
+        {
+            if (await MessageDialog.ConfirmAsync(this, Loc.Get("account_merged_signin_title"),
+                    Loc.Get("account_merged_signin_body")))
+                await OpenUnifiedLoginDialog();
+        }
+
         private static bool _notRememberedShown;
 
         /// <summary>WPF OpenUnifiedLoginDialog, up to the sync it starts (units 6-7). Then, once per run,
