@@ -101,6 +101,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
+            // WPF :1776: the legacy feed hand-off consumes the key; override still stops all surfaces.
+            if (rung == PanicPolicy.Rung.RunLadder && !Chaos.ChaosRunHost.IsDescending
+                && Games.GameWindow.CloseForYouForPanicKey())
+            {
+                StopCameraForPanic();
+                return;
+            }
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal
             // stop tail with the exit ladder NOT armed (and no grace pause), in BOTH modes: override
             // (MainWindow.xaml.cs:1627) and ladder (:1720 RunPanicStopTail(advanceExitLadder: false)).
