@@ -13,9 +13,7 @@
 // every member that needed one of those is still a note, not a half-port.
 //
 // TWO DELIBERATE DEVIATIONS, both because WebHost is narrower than CoreWebView2:
-//   1. autoPlayFullscreen is ACCEPTED AND IGNORED by NavigateToUrlInBrowser, and logged. The WPF
-//      path injects JS from a NavigationCompleted hook; returning false for that flag alone would
-//      break the plain-navigation half of the same call for every caller.
+//   1. autoPlayFullscreen is refused until the takeover lifecycle is implemented.
 //   2. (Resolved) the offline-block toast now shows through App.Notifications, as WPF
 //      NotifyBrowserBlockedOffline does (MainWindow.Browser.cs:489-494).
 //
@@ -170,13 +168,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
-        /// <param name="autoPlayFullscreen">ACCEPTED AND IGNORED - see deviation 2 in the header.
-        /// WebHost has no script channel, so the video takeover cannot be requested. The plain
-        /// navigation still happens, which is what every caller needs first.</param>
+        /// <param name="autoPlayFullscreen">Refused until takeover playback and cleanup are supported.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
             if (BrowserBlockedOffline(userInitiated)) return false;
+            // Do not report success or navigate without takeover playback and cleanup. WPF's
+            // caller releases its claim on failure (AutonomyService.cs:1306).
+            if (autoPlayFullscreen)
+            {
+                Log.Warning("Auto-play/fullscreen is not supported; navigation skipped");
+                return false;
+            }
 
             // WPF's FocusBrowserSurface, minus the pop-out branch: there is no browser pop-out
             // window on this head, so the embedded surface is always the one to bring forward.
@@ -192,9 +195,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var hypno = BrowserPage?.FindControl<RadioButton>("RbHypnoTube");
             if (bambi != null) bambi.IsChecked = lower.Contains("bambicloud.com");
             if (hypno != null) hypno.IsChecked = lower.Contains("hypnotube.com");
-
-            if (autoPlayFullscreen)
-                Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
 
             return NavigateBrowser(url);
         }
