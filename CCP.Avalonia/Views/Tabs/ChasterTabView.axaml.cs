@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _subscribed = c;
                 c.LinkChanged += OnLinkChanged;
                 c.LockChanged += OnLockChanged;
+                c.RaffleChanged += OnRaffleChanged;
                 c.Booked += OnBooked;
                 _tick.Start();
                 SlowTick.Start();
@@ -97,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 s.LinkChanged -= OnLinkChanged;
                 s.LockChanged -= OnLockChanged;
+                s.RaffleChanged -= OnRaffleChanged;
                 s.Booked -= OnBooked;
                 _subscribed = null;
                 _tick.Stop();
@@ -106,6 +108,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // All three arrive on whatever thread found out.
         private void OnLinkChanged() => Dispatcher.UIThread.Post(OnTabShown);
+        private void OnRaffleChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_raffleCard != null && PageRaffleCard == null) { _raffleCard = null; PaintLadder(); }
+            RefreshCalendarRaffle();
+        });
         private void OnLockChanged() => Dispatcher.UIThread.Post(RepaintForLock);
 
         // WPF :173: stamps repaint when the lock changes, not on the 30 s tick (P07).

@@ -297,6 +297,45 @@ public sealed class ChasterBillTests
         await Task.CompletedTask;
     }));
 
+    [Fact]
+    public Task CalendarRaffleMarksFollowCardInPlace() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView();
+        var today = DateTime.UtcNow.Date;
+        var start = today.AddDays(-1);
+        tab.BuildCalendar((start, today.AddDays(1)), today);
+        var grid = tab.FindControl<UniformGrid>("Calendar")!;
+        var first = (Border)grid.Children[0];
+        var current = (Border)grid.Children[1];
+        var key = tab.FindControl<DockPanel>("CalendarRaffleKey")!;
+        RaffleCard Card(DateTime date) => new(date.ToString("yyyy-MM"), DateTime.DaysInMonth(date.Year, date.Month), date.Day,
+            new[] { date.Day }, 0, 1, 1, false, false, null);
+        bool Dot(Border cell) => ((Panel)cell.Child!).Children.OfType<global::Avalonia.Controls.Shapes.Ellipse>()
+            .Any(e => Equals(e.Tag, ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView.RaffleDotTag));
+        Assert.False(key.IsVisible);
+        tab.ShowRaffleCard(Card(start));
+        Assert.Same(first, grid.Children[0]);
+        Assert.True(Dot(first));
+        Assert.False(Dot(current));
+        Assert.True(key.IsVisible);
+        Assert.Equal(Loc.GetF("chaster_cal_served_raffle", 1), ToolTip.GetTip(first));
+        tab.ShowRaffleCard(Card(today));
+        Assert.False(Dot(first));
+        Assert.True(Dot(current));
+        Assert.Equal(Loc.GetF("chaster_cal_served", 1), ToolTip.GetTip(first));
+        Assert.Contains(Loc.Get("chaster_cal_raffle_key"), (string)ToolTip.GetTip(current)!);
+        tab.ShowRaffleCard(null);
+        Assert.False(Dot(current));
+        Assert.False(key.IsVisible);
+        tab.BuildCalendar(null, today);
+        Assert.False(key.IsVisible);
+        return Task.CompletedTask;
+    });
+
     /// <summary>The calendar sheet (WPF BuildCalendar/Cell): one square per Core LockCalendar day, a
     /// served day crossed, tonight ringed, the rest padlocked, and gone with no lock.</summary>
     [Fact]
