@@ -49,6 +49,7 @@ public sealed class ContentHitTestTests
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
+                w.CompleteTabTransition(); // Settle moving hit geometry before sampling the rendered frame.
                 RenderLiveTree(w);
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())

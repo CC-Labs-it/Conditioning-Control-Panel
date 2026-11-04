@@ -75,8 +75,7 @@ public sealed class BarkEngineTests : IDisposable
     [Fact]
     public void DecisionLogsHaveWpfMetadataAndLengthButNeverText()
     {
-        var old = Serilog.Log.Logger;
-        var sink = new DecisionSink();
+        var old = Serilog.Log.Logger; var sink = new DecisionSink();
         using var logger = new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger();
         Serilog.Log.Logger = logger;
         try {
