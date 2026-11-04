@@ -403,7 +403,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _useBrowser = false;
                 }
                 // WPF :308-319 skips a poisoned native start, including browser fallback.
-                if (_isPrimary && NativeUnavailable)
+                if (_isPrimary && NativeBlocked)
                 {
                     ForceCloseAll();
                     _onSkipped();
@@ -549,11 +549,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // indefinitely on native Stop. Keep the complete graph alive if it does not settle.
         private static readonly List<object> _quarantinedNative = new();
         internal static volatile bool NativeUnavailable;
+        internal static Func<long> NativeClock = () => Environment.TickCount64;
+        private sealed class NativeHold { public long From; }
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, NativeHold> _nativeHolds = new();
+        // WPF VideoService.cs:170,1320-1344 and VideoCooldownRules.cs:16: four seconds
+        // bounded Stop, four seconds straggler grace, then a 750ms settle and 60s hold.
+        internal static bool NativeBlocked
+        {
+            get
+            {
+                lock (_quarantinedNative)
+                {
+                    if (!NativeUnavailable) return false;
+                    if (_quarantinedNative.Count == 0) return true;
+                    var now = NativeClock();
+                    return _quarantinedNative.Any(r => !_nativeHolds.TryGetValue(r, out var hold) ||
+                        (now >= hold.From && now - hold.From < 60000));
+                }
+            }
+        }
 
         internal static bool StopNative(Action stop, Action dispose, Action freeSink, object resources, int budgetMs,
             Action<Action>? post = null, Action? settled = null)
         {
             post ??= action => Dispatcher.UIThread.Post(action);
+            var started = NativeClock();
             var pending = Task.Run(stop);
             var needsDispose = true;
             var sinkFailed = false;
@@ -572,12 +592,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch { /* Keep failed native resources rooted. */ }
 
-            // WPF VideoService.cs:1320-1344 gives a slow Stop background grace before
-            // quarantine. Keep this game's isolated engine rooted and starts blocked until
-            // teardown settles, even if that takes longer than the WPF grace.
+            // Root the graph immediately. A fresh isolated engine may start during grace and
+            // after cooldown, while the original graph stays rooted until cleanup succeeds.
             lock (_quarantinedNative)
             {
                 _quarantinedNative.Add(resources);
+                _nativeHolds.Add(resources, new NativeHold { From = sinkFailed || pending.IsFaulted ? NativeClock() : started + 8750 });
                 NativeUnavailable = true;
             }
             if (!sinkFailed) _ = FinishNativeAsync();
@@ -598,14 +618,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                             {
                                 var index = _quarantinedNative.FindIndex(item => ReferenceEquals(item, resources));
                                 if (index >= 0) _quarantinedNative.RemoveAt(index);
+                                _nativeHolds.Remove(resources);
                                 NativeUnavailable = _quarantinedNative.Count != 0;
                             }
                             settled?.Invoke();
                         }
-                        catch (Exception ex) { Serilog.Log.Warning(ex, "Bubble count sink cleanup failed"); }
+                        catch (Exception ex) { lock (_quarantinedNative) _nativeHolds.GetValue(resources, _ => new NativeHold()).From = NativeClock(); Serilog.Log.Warning(ex, "Bubble count sink cleanup failed"); }
                     });
                 }
-                catch (Exception ex) { Serilog.Log.Warning(ex, "Bubble count native teardown failed; player quarantined"); }
+                catch (Exception ex) { lock (_quarantinedNative) _nativeHolds.GetValue(resources, _ => new NativeHold()).From = NativeClock(); Serilog.Log.Warning(ex, "Bubble count native teardown failed; player quarantined"); }
             }
         }
 
