@@ -269,6 +269,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(interval) };
             _countdownTimer.Tick += (_, _) =>
             {
+                if (_countdownFinished) return;
                 i++;
                 if (i < steps.Length) ShowCountdownStep(steps[i]);
                 else FinishCountdown();
@@ -433,7 +434,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else ChaosSfx.PlayBoonReveal(dc.Boon.Rarity == ChaosRarity.Rare);
         }
 
-        internal void CancelDraft() { _onBoonPick = null; if (_draftPanel.IsVisible) HideDraft(); }
+        internal void CancelDraft()
+        {
+            _onBoonPick = null;
+            if (_draftPanel.IsVisible) HideDraft();
+            _countdownComplete = null;
+            FinishCountdown();
+        }
 
         private void HideDraft()
         {

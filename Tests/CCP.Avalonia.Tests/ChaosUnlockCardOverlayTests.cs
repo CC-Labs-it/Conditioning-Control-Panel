@@ -382,6 +382,46 @@ public sealed class ChaosUnlockCardOverlayTests
         finally { foreach (var timer in timers.Concat(names.Select(Field).OfType<DispatcherTimer>())) timer.Stop(); }
     });
 
+    [Fact]
+    public async Task Fixture_restores_bark_and_announcer_after_exception()
+    {
+        var bark = CoreBark.ChaosDraftAutopick;
+        var announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+        Action sentinel = () => { };
+        try
+        {
+            CoreBark.ChaosDraftAutopick = sentinel;
+            CoreSettings.Current.ChaosAnnouncerEnabled = false;
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Run(_ =>
+            {
+                CoreBark.ChaosDraftAutopick = () => { };
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                throw new InvalidOperationException();
+            }));
+            Assert.Same(sentinel, CoreBark.ChaosDraftAutopick);
+            Assert.False(CoreSettings.Current.ChaosAnnouncerEnabled);
+        }
+        finally { CoreBark.ChaosDraftAutopick = bark; CoreSettings.Current.ChaosAnnouncerEnabled = announcer; }
+    }
+
+    [Fact]
+    public async Task Stop_during_ready_go_cancels_timer_and_callback() => await Run(_ =>
+    {
+        Begin();
+        var state = ChaosRunHost.State!;
+        state.ElapsedSec = 20;
+        ChaosRunHost.Tick();
+        var window = ChaosRunHost.Overlay!;
+        Choose(window, null);
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var timer = (DispatcherTimer)typeof(ChaosOverlayWindow).GetField("_countdownTimer", flags)!.GetValue(window)!;
+        ChaosRunHost.RequestStop();
+        Assert.False(timer.IsEnabled);
+        Assert.Null(typeof(ChaosOverlayWindow).GetField("_countdownComplete", flags)!.GetValue(window));
+        ((EventHandler)typeof(DispatcherTimer).GetField("Tick", flags)!.GetValue(timer)!)(timer, EventArgs.Empty);
+        Assert.True(window.FindControl<Border>("ResultsPanel")!.IsVisible);
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -467,11 +507,15 @@ public sealed class ChaosUnlockCardOverlayTests
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = (0, false);
             ChaosAnnouncerOverlay.Clock = clock;
             var pulse = ChaosRunHost.PulseFx;
+            var bark = CoreBark.ChaosDraftAutopick;
+            var announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
             var (audio, modAudio) = (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider);
             try { body(clock); }
             finally { ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System;
                 ChaosRunHost.PulseFx = pulse; (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider) = (audio, modAudio);
                 ChaosAnnouncerOverlay.Clock = announcerTime;
+                CoreBark.ChaosDraftAutopick = bark;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
                 (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = progression; }
             return Task.CompletedTask;
         });
