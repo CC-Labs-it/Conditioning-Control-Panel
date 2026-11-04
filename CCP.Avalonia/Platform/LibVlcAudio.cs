@@ -366,19 +366,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
             private Timer? _next;
             private Voice? _prepared;
             private bool _done, _due;
-            private int _cycle;
+            private int _cycle, _built = -1;   // _built: the cycle whose next copy exists
             private double _vol;
 
             public double Volume { set { lock (_gate) { _vol = value; foreach (var v in _live) v.Volume = value; } } }
 
             public bool Start(bool prepared = false, int cycle = 0)
             {
-                Voice v;
+                Voice v = null!;
                 lock (_gate)
                 {
-                    if (_done || (prepared && cycle != _cycle)) return false;
-                    v = null!;
-                    v = audio.NewVoice(path, () => Retire(v));
+                    if (_done || (prepared && (cycle != _cycle || cycle == _built))) return false;
+                    // WPF MindWipeService.cs:476: a build failure is logged, never thrown off a pool thread.
+                    try { v = audio.NewVoice(path, () => Retire(v)); }
+                    catch (Exception ex) { Log.Warning(ex, "[Audio] mindwipe loop copy failed"); return false; }
+                    if (prepared) _built = cycle;
                     v.Volume = _vol;
                     v.Hold = prepared && !_due;
                     if (v.Hold) _prepared = v;
@@ -402,7 +404,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     {
                         Voice? v;
                         lock (_gate) { if (_done || cycle != _cycle) return; _due = true; v = _prepared; _prepared = null; }
-                        v?.Release();
+                        // Nothing parked (its build failed): build and play now, as WPF's self-repair (MindWipeService.cs:428).
+                        if (v is null) Start(prepared: true, cycle); else v.Release();
                     }, null, Math.Max(100, lengthMs - OverlapMs), Timeout.Infinite);
                     // Prepare off the LibVLC event thread while the current copy plays.
                     ThreadPool.QueueUserWorkItem(_ => Start(prepared: true, cycle));
@@ -415,6 +418,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate)
                 {
                     _live.Remove(v);
+                    if (v == _prepared) { _prepared = null; _built = -1; }   // a failed parked copy is rebuilt at the overlap
                     if (_done || _live.Count > 0) return;
                     if (v.Failed) dead = _done = true; else { _cycle++; _next?.Dispose(); restart = true; }
                 }
@@ -424,9 +428,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
             public void Dispose()
             {
-                Voice[] live;
-                lock (_gate) { _done = true; _next?.Dispose(); _next = null; live = _live.ToArray(); _live.Clear(); }
-                foreach (var v in live) v.Dispose();
+                // Voices are marked done inside the gate, so a timer that already took the parked copy cannot start it.
+                lock (_gate) { _done = true; _next?.Dispose(); _next = null; foreach (var v in _live) v.Dispose(); _live.Clear(); }
                 Fire(onEnded);
             }
         }

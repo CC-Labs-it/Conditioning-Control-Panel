@@ -25,8 +25,7 @@ public sealed class MasterSoundTests
         public bool Play() { if (failure == "play") throw new InvalidOperationException(); Playing = true; ApplyPreferredDevice(); _started?.Invoke(2000); return true; }
         public void Dispose() { Disposed = true; ended(); }
     }
-    [Theory]
-    [InlineData(false), InlineData(true)]
+    [Theory, InlineData(false), InlineData(true)]
     public async Task Stop_and_replacement_wait_for_start_publication(bool replace)
     {
         var audio = new LibVlcAudio(_ => "");
@@ -50,8 +49,7 @@ public sealed class MasterSoundTests
         }
         finally { release.Set(); await start; if (other != null) await other; audio.StopSound(); if (first?.Disposed == false) first.Dispose(); if (second?.Disposed == false) second.Dispose(); }
     }
-    [Theory]
-    [InlineData("panic"), InlineData("pause"), InlineData("shutdown")]
+    [Theory, InlineData("panic"), InlineData("pause"), InlineData("shutdown")]
     public void Stop_routes_release_sound_with_engine_off(string route)
     {
         var previous = (CoreSession.IsEngineRunningProvider, CoreAudio.StopSoundProvider);
@@ -103,8 +101,7 @@ public sealed class MasterSoundTests
         }
         finally { if (voice?.Disposed == false) stop?.Invoke(); (settings.MasterVolume, settings.AudioOutputDeviceId) = before; }
     }
-    [Theory]
-    [InlineData("setup"), InlineData("play")]
+    [Theory, InlineData("setup"), InlineData("play")]
     public void Setup_failure_disposes_voice_and_detaches_volume_watch(string failure)
     {
         var settings = CoreSettings.Current;
@@ -126,14 +123,13 @@ public sealed class MasterSoundTests
         }
         finally { settings.MasterVolume = before; }
     }
-    [Theory]
-    [InlineData(true, false, true), InlineData(true, true, false), InlineData(false, false, false)]
+    [Theory, InlineData(true, false, true), InlineData(true, true, false), InlineData(false, false, false)]
     public void Native_sound_and_mindwipe_wait_for_delayed_setup(bool route, bool stopDuringSetup, bool checkLoop)
     {
         if (!OperatingSystem.IsLinux()) Assert.Skip("ALSA null output is Linux-only");
         LibVlcAudio audio;
-        // ALSA's null PCM: a real output with soft mute that discards every sample, so nothing reaches the desktop.
-        try { audio = new LibVlcAudio("--aout=alsa", "--alsa-audio-device=null"); }
+        // ALSA's null PCM: a real output with soft mute that discards every sample, so nothing reaches the desktop; no read-ahead, or the unpaced sink ends a clip a second early.
+        try { audio = new LibVlcAudio("--aout=alsa", "--alsa-audio-device=null", "--file-caching=0"); }
         catch (Exception e) when (Environment.GetEnvironmentVariable("CI") != "true") { Assert.Skip("libvlc not installed: " + e.Message); return; }
         var wav = System.IO.Path.Combine(System.IO.Directory.CreateTempSubdirectory("ccp-sound-").FullName, "a.wav");
         LayeredAudioLoopTests.WriteSilentWav(wav, ms: 250);
@@ -191,6 +187,11 @@ public sealed class MasterSoundTests
                 Assert.False(SpinWait.SpinUntil(() => next!.Player.IsPlaying, 250), "next loop copy started too early");
                 Assert.True(SpinWait.SpinUntil(() => next!.Player.IsPlaying, 5000), "next loop copy did not start");
                 Assert.InRange(next!.Player.Volume, 49, 51);
+                LibVlcAudio.Voice[] old = []; LibVlcAudio.Voice? parked = null, fresh = null; var overlapped = false;
+                Assert.True(SpinWait.SpinUntil(() => { lock (gate) { old = live.ToArray(); return (parked = (LibVlcAudio.Voice?)loop.GetType().GetField("_prepared", flags)!.GetValue(loop)) != null; } }, 6000), "no copy parked");
+                parked!.Failed = true; parked.Dispose();   // what EncounteredError does to a parked copy
+                Assert.True(SpinWait.SpinUntil(() => { lock (gate) { fresh = live.FirstOrDefault(v => !old.Contains(v)); overlapped = live.Contains(next); return fresh != null; } }, 6000) && overlapped, "failed parked copy was not replaced at the overlap");
+                Assert.True(SpinWait.SpinUntil(() => fresh!.Player.IsPlaying, 5000), "replacement never played");
             }
         }
         finally { release.Set(); holder?.Wait(); audio.StopSound(); }

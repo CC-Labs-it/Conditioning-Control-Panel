@@ -104,8 +104,7 @@ public sealed class MindWipeTests
             return Task.CompletedTask;
         }).GetAwaiter().GetResult();
 
-    [Theory]
-    [InlineData(false), InlineData(true)]
+    [Theory, InlineData(false), InlineData(true)]
     public void Master_muted_during_factory_is_reapplied_on_publication(bool loop) => Run((player, voices, clock) =>
     {
         if (loop) player.StartLoop(0.5); else player.TriggerOnce();

@@ -117,8 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        private double CurrentGain => ConditioningControlPanel.Services.Audio.MasterVolumeBinding.MindWipeGain(
-            CoreSettings.Current.MasterVolume, _volume);
+        private double CurrentGain => ConditioningControlPanel.Services.Audio.MasterVolumeBinding.MindWipeGain(CoreSettings.Current.MasterVolume, _volume);
 
         private void ApplyGain()
         {
