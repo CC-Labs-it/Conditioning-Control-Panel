@@ -20,6 +20,7 @@
 
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
@@ -182,15 +183,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var res = global::Avalonia.Application.Current?.Resources;
             if (res == null) return;
+            // A resource indexer write broadcasts to every DynamicResource in the shell.
+            // Publish the complete palette once, rather than walking that tree eight times
+            // and exposing intermediate color/brush pairs on the navigation hot path.
+            var values = new Dictionary<object, object?>();
             Set("SectionInk", NavStripRules.Ink(section));
             Set("SectionTint", NavStripRules.Tint(section));
             Set("SectionRule", NavStripRules.Rule(section));
             Set("SectionOutline", NavStripRules.Outline(section));
+            if (res is ResourceDictionary dictionary) dictionary.SetItems(values);
+            else foreach (var pair in values) res[pair.Key] = pair.Value;
 
             void Set(string key, global::Avalonia.Media.Color c)
             {
-                res[key] = c;
-                res[key + "Brush"] = new global::Avalonia.Media.SolidColorBrush(c);
+                values[key] = c;
+                values[key + "Brush"] = new global::Avalonia.Media.SolidColorBrush(c);
             }
         }
 
