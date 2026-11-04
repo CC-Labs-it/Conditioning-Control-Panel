@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
-    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// the lucky toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// GIF animation (first frame only), remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private const int StaggerMs = 300;
 
         internal static readonly List<(FlashOverlayWindow Window, PixelRect Rect)> Active = new();
-        private static readonly Random Rng = new();
+        internal static Random Rng = new();
         // #627: one shuffled walk of the folder (WPF FlashService DiskBag), so every image comes up
         // before any repeats. Not thread-safe: LoadPictures draws under the bag's own lock.
         internal static readonly ShuffleBag<string> DiskBag = new(p => p, Rng);
@@ -153,6 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
+            if (multiplier > 1 && glow.HasGlow) w.StartLuckyPulse(glow);
             Paid(path, s, hydraGeneration, multiplier);
             return true;
         }
