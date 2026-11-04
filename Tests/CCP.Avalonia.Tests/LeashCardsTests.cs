@@ -195,6 +195,158 @@ public sealed class LeashCardsTests
         finally { card.SnapWindow?.Close(); host.Close(); }
     });
 
+    [Theory]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off, 0)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, 11)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, 22)]
+    public void SnapMotionShowsChainImpactAndSparksOrStaysStill(ConditioningControlPanel.Models.MotionLevel motion, int count) => Run(() =>
+    {
+        var card = new LeashSnapCard(new("me", "Holder", null), Person, motion);
+        try
+        {
+            var chain = Find<Canvas>(card, "leash-chain");
+            var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(chain.RenderTransform);
+            var title = Find<TextBlock>(card, "leash-snap-title");
+            var sparks = Find<Canvas>(card, "leash-snap-sparks");
+            var face = Find<Grid>(card, "leash-snap-avatar:friend");
+            var impact = Assert.IsType<global::Avalonia.Media.ScaleTransform>(face.RenderTransform);
+            Assert.Equal(18, chain.Children.Count);
+            card.Play();
+            Assert.Equal(motion == ConditioningControlPanel.Models.MotionLevel.Off ? 1 : 0, scale.ScaleX);
+            Assert.Equal(motion == ConditioningControlPanel.Models.MotionLevel.Off ? 1 : 0, title.Opacity);
+            card.Advance(170);
+            if (motion != ConditioningControlPanel.Models.MotionLevel.Off)
+                Assert.True(Math.Abs(scale.ScaleX) > .001 && Math.Abs(scale.ScaleX - 1) > .001);
+            card.Advance(340);
+            Assert.Equal(1, scale.ScaleX, 5);
+            Assert.Equal(1, title.Opacity);
+            Assert.Equal(count, sparks.Children.Count);
+            Assert.Equal(1 + .18 * (count / 22.0), impact.ScaleX, 5);
+            card.Advance(1200);
+            Assert.Empty(sparks.Children);
+            Assert.Equal(1, impact.ScaleX, 5);
+        }
+        finally { card.Stop(); System.Threading.Thread.Sleep(200); }
+    });
+
+    [Fact]
+    public void SnapImpactSettlesAfterLanding() => Run(() =>
+    {
+        var card = new LeashSnapCard(new("me", "Holder", null), Person, ConditioningControlPanel.Models.MotionLevel.Full);
+        var face = Find<Grid>(card, "leash-snap-avatar:friend");
+        var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(face.RenderTransform);
+        card.Advance(340);
+        Assert.Equal(1.18, scale.ScaleX, 5);
+        card.Advance(680);
+        Assert.Equal(1, scale.ScaleX, 5);
+    });
+
+    [Fact]
+    public void SnapSparksAppearAndExpire() => Run(() =>
+    {
+        var card = new LeashSnapCard(new("me", "Holder", null), Person, ConditioningControlPanel.Models.MotionLevel.Full);
+        var sparks = Find<Canvas>(card, "leash-snap-sparks");
+        card.Advance(340);
+        Assert.Equal(22, sparks.Children.Count);
+        card.Advance(1200);
+        Assert.Empty(sparks.Children);
+    });
+
+    [Fact]
+    public void SnapTagSwingRespectsPerformanceMode() => Run(() =>
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var (mode, auto, motion, gentle) = (settings.PerformanceMode, settings.AutoPerformanceMode, settings.MotionLevel, settings.GentleVisuals);
+        var (probe, stamp) = (UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp);
+        var cachedField = typeof(UiMotionPreference).GetField("_cached", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var cached = cachedField.GetValue(null);
+        try
+        {
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = false; settings.AutoPerformanceMode = false;
+            settings.PerformanceMode = true;
+            var still = new LeashSnapCard(new("me", "Holder", null), Person, settings.MotionLevel);
+            still.Advance(400);
+            Assert.Equal(0, Assert.IsType<global::Avalonia.Media.RotateTransform>(Find<Viewbox>(still, "leash-tag").RenderTransform).Angle);
+            settings.PerformanceMode = false;
+            var moving = new LeashSnapCard(new("me", "Holder", null), Person, settings.MotionLevel);
+            moving.Advance(400);
+            Assert.NotEqual(0, Assert.IsType<global::Avalonia.Media.RotateTransform>(Find<Viewbox>(moving, "leash-tag").RenderTransform).Angle);
+        }
+        finally
+        {
+            (settings.PerformanceMode, settings.AutoPerformanceMode, settings.MotionLevel, settings.GentleVisuals) = (mode, auto, motion, gentle);
+            cachedField.SetValue(null, cached);
+            (UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp) = (probe, stamp);
+        }
+    });
+
+    [Fact]
+    public void SnapPhotoUsesProxyAndKeepsInitialsOnFailure() => Run(() =>
+    {
+        var old = LeashSnapCard.FetchPhoto;
+        string? requested = null;
+        var root = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(TestFile())!, "../.."));
+        var image = System.IO.File.ReadAllBytes(System.IO.Path.Combine(root, "packaging/linux/share/icons/hicolor/128x128/apps/io.github.CodeBambi.ConditioningControlPanel.png"));
+        try
+        {
+            LeashSnapCard.FetchPhoto = url => { requested = url; return Task.FromResult(image); };
+            var card = new LeashSnapCard(new("me", "Holder", null), Person with { AvatarUrl = "/avatar.png" }, ConditioningControlPanel.Models.MotionLevel.Off);
+            var host = Find<Grid>(card, "leash-snap-avatar:friend");
+            Assert.Equal("https://codebambi-proxy.vercel.app/avatar.png", requested);
+            var disc = Assert.IsType<Border>(host.Children[0]);
+            Assert.IsType<global::Avalonia.Media.ImageBrush>(disc.Background);
+            Assert.Null(disc.Child);
+            LeashSnapCard.FetchPhoto = _ => Task.FromException<byte[]>(new Exception());
+            var fallbackCard = new LeashSnapCard(new("me", "Holder", null), Person with { AvatarUrl = "https://example.test/avatar" }, ConditioningControlPanel.Models.MotionLevel.Off);
+            var fallback = Find<Grid>(fallbackCard, "leash-snap-avatar:friend");
+            Assert.IsType<TextBlock>(((Border)fallback.Children[0]).Child);
+        }
+        finally { LeashSnapCard.FetchPhoto = old; }
+    });
+    private static string TestFile([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+
+    [Fact]
+    public void ReplayingAnotherHolderClosesTheFirstSnap() => Run(() =>
+    {
+        var first = new LeashHolderCard(Held(), () => null);
+        var second = new LeashHolderCard(Held() with { Who = Person with { Id = "second", Name = "Second" } }, () => null);
+        var host = new Window { Content = new StackPanel { Children = { first, second } } };
+        try
+        {
+            host.Show();
+            ((MenuItem)Find<Button>(first, "leash-holder-more").ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var old = Assert.IsType<Window>(first.SnapWindow);
+            ((MenuItem)Find<Button>(second, "leash-holder-more").ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var current = Assert.IsType<Window>(second.SnapWindow);
+            Assert.NotSame(old, current);
+            Assert.False(old.IsVisible);
+            Assert.Same(current, first.SnapWindow);
+            Assert.Equal(Loc.GetF("leash_snap_leashed", "Second"), Find<TextBlock>(current, "leash-snap-leashed").Text);
+        }
+        finally { second.SnapWindow?.Close(); host.Close(); }
+    });
+
+    [Fact]
+    public void ReleaseHelpClosesWhenItsTimerExpires() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(), () => null);
+        var host = new Window { Content = card };
+        try
+        {
+            host.Show();
+            Click(card, "leash-holder-more");
+            var release = (MenuItem)Find<Button>(card, "leash-holder-more").ContextMenu!.Items[1]!;
+            card.ReleaseHelpTimer!.Interval = TimeSpan.FromMilliseconds(20);
+            ToolTip.SetIsOpen(release, true);
+            Assert.True(ToolTip.GetIsOpen(release));
+            System.Threading.Thread.Sleep(80);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ToolTip.GetIsOpen(release));
+        }
+        finally { host.Close(); }
+    });
+
     [Fact]
     public void PreviewIsReadOnlyAndHasNoInventedWeek() => Run(() =>
     {

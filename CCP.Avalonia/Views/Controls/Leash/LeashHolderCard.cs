@@ -1,5 +1,5 @@
 // WPF LeashHolderCard.cs:83, 339, 423, 432, 542-769: holder report, sheets and sends.
-// Flat cards reuse FriendsDrawer chrome. Offer, full snap visuals, explainers and FX remain gaps.
+// Flat cards reuse FriendsDrawer chrome. Offer and other leash explainers and FX remain gaps.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -82,7 +82,8 @@ public sealed class LeashHolderCard : Border
     private static readonly LeashTugThrottle TugThrottle = new();
     private string? _sheet, _result;
     private bool _resultGood;
-    internal Window? SnapWindow { get; private set; }
+    private static Window? _snapWindow;
+    internal Window? SnapWindow => _snapWindow;
     internal DispatcherTimer? ReleaseHelpTimer { get; private set; }
     internal LeashHolderCard() : this(new HeldLeash(new("friend", "Friend", null), true, LeashIntensity.Standard,
         DateTimeOffset.UtcNow, 1, null, new DayReport("20261023", 30, 2, 3, 4, false, null, null, false, DateTimeOffset.UtcNow),
@@ -277,34 +278,24 @@ public sealed class LeashHolderCard : Border
     private void ShowSnap(LeashPerson friend)
     {
         var name = string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim();
-        var content = new StackPanel { Spacing = 10 };
-        var people = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        people.Children.Add(F.Avatar(name, 68, null));
-        var chain = LeashCardUi.Text("⟷", ink: F.Gold);
-        chain.HorizontalAlignment = HorizontalAlignment.Center;
-        chain.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(chain, 1);
-        people.Children.Add(chain);
-        var right = F.Avatar(friend.Name, 68, null);
-        Grid.SetColumn(right, 2);
-        people.Children.Add(right);
-        content.Children.Add(people);
-        content.Children.Add(LeashCardUi.Text(Loc.Get("leash_snap_title"), "leash-snap-title", F.Gold));
-        content.Children.Add(LeashCardUi.Text(Loc.GetF("leash_snap_holder", name), "leash-snap-holder"));
-        content.Children.Add(LeashCardUi.Text(Loc.GetF("leash_snap_leashed", friend.Name), "leash-snap-leashed"));
-        var window = new Window { Title = Loc.Get("leash_snap_title"), Tag = "leash-snap", Width = 380,
-            SizeToContent = SizeToContent.Height, WindowDecorations = WindowDecorations.None, ShowInTaskbar = false, CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = F.Foot, Content = new Border { Padding = new Thickness(18), Child = content } };
-        var ok = LeashCardUi.Action(Loc.Get("leash_snap_ok"), "leash-snap-ok", () => { window.Close(); return Task.CompletedTask; });
-        content.Children.Add(ok);
+        _snapWindow?.Close();
+        var card = new LeashSnapCard(new LeashPerson("me", name, null), friend, AmbientFxCanvas.Env.Level);
+        var window = new Window { Title = Loc.Get("leash_snap_title"), Tag = "leash-snap-window",
+            SizeToContent = SizeToContent.WidthAndHeight, WindowDecorations = WindowDecorations.None, ShowInTaskbar = false,
+            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Brushes.Transparent, Content = card };
+        card.Closed += window.Close;
         window.KeyDown += (_, e) => { if (e.Key == global::Avalonia.Input.Key.Escape) { window.Close(); e.Handled = true; } };
-        SnapWindow?.Close();
-        SnapWindow = window;
-        window.Closed += (_, _) => { if (SnapWindow == window) SnapWindow = null; };
-        if (TopLevel.GetTopLevel(this) is Window owner) window.Show(owner);
-        else { window.WindowStartupLocation = WindowStartupLocation.CenterScreen; window.Show(); }
-        LeashSound.Snap();
+        _snapWindow = window;
+        window.Closed += (_, _) => { if (_snapWindow == window) _snapWindow = null; };
+        try
+        {
+            if (TopLevel.GetTopLevel(this) is Window owner) window.Show(owner);
+            else { window.WindowStartupLocation = WindowStartupLocation.CenterScreen; window.Show(); }
+            Dispatcher.UIThread.Post(() => { if (_snapWindow == window && window.IsVisible) card.Play(); });
+        }
+        catch (Exception ex) { _snapWindow = null; Serilog.Log.Debug("[Leash] snap failed: {E}", ex.Message); }
     }
+
     private async Task Release(LeashPerson who)
     {
         var ok = false;
