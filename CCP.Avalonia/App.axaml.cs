@@ -983,7 +983,7 @@ namespace ConditioningControlPanel.Avalonia
                     shell.RefreshNavPremiumTags();
                     shell.RefreshProfileBubble();   // WPF OnPatreonTierChanged
                 });
-                dailyFree.TodayChanged += RepaintVeils;
+                shell.InitializeDailyFreeRefresh(dailyFree);
                 // WPF NavPremiumTags.cs:118 / Lab.cs:435: a spent or refunded pass moves the star and the vault.
                 // Not RepaintVeils: that persists the lapse pass, and sign-in/out raises this at startup.
                 IntakePass.PassStateChanged += (_, _) => Dispatcher.UIThread.Post(() =>

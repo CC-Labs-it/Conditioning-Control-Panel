@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             RefreshDashboardToggleHint();
             RefreshMysteryTile();
+            _ = App.DailyFree?.RefreshAsync(); // WPF Presets.cs:1168: service owns the throttle.
             var dash = SettingsPage;
             var s = CoreSettings.Current;
             if (dash?.FavoritesList == null || dash.RecentList == null || s == null) return;
