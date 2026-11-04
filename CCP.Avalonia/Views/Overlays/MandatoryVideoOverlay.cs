@@ -51,7 +51,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
-        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
+        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons)
+        {
+            internal Window? AttentionWindow { get; set; }
+        }
 
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
@@ -120,11 +123,68 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<Action, TimeSpan> ScheduleGameRestack = (action, delay) => DispatcherTimer.RunOnce(action, delay);
         internal static void RestackOnVideoStart()
         {
-            ChaosRunHost.RaiseGameLayerAboveVideo();
-            ScheduleGameRestack(ChaosRunHost.RaiseGameLayerAboveVideo, TimeSpan.FromMilliseconds(60));
+            Instance.RestackGameAndTargets();
+            ScheduleGameRestack(Instance.RestackGameAndTargets, TimeSpan.FromMilliseconds(60));
         }
         internal static void RestackOnVideoClick() =>
-            ScheduleGameRestack(ChaosRunHost.RaiseGameLayerAboveVideo, TimeSpan.FromMilliseconds(50));
+            ScheduleGameRestack(Instance.RestackGameAndTargets, TimeSpan.FromMilliseconds(50));
+
+        // The target canvas must be a separate window to sit above the gameplay band.
+        // The native region keeps empty portions click-through; refuse the separate window if unsupported.
+        internal static Func<Window, PixelRect, bool> PrepareAttentionWindow = (w, bounds) =>
+            X11Overlay.IsCompositing && X11Overlay.SetOverrideRedirect(w, bounds, passive: true)
+            && X11Overlay.SetWindowInputRegion(w, Array.Empty<PixelRect>());
+        internal static Func<Window, PixelRect[], bool> SetAttentionRegion = X11Overlay.SetWindowInputRegion;
+        internal static Action<Window> RaiseAttentionWindow = w => X11Overlay.RaiseWithoutActivation(w);
+
+        private void RestackGameAndTargets()
+        {
+            ChaosRunHost.RaiseGameLayerAboveVideo();
+            foreach (var x in _surfaces)
+                if (x.AttentionWindow is { IsVisible: true } w && x.Layer.Children.Count > 0)
+                    try { RaiseAttentionWindow(w); } catch (Exception ex) { Log.Debug("Attention raise: {E}", ex.Message); }
+        }
+
+        private void EnsureAttentionWindow(Surface x)
+        {
+            if (x.AttentionWindow != null) return;
+            var scale = x.Window.RenderScaling;
+            var bounds = new PixelRect(x.Window.Position.X, x.Window.Position.Y,
+                Math.Max(1, (int)Math.Ceiling(x.Window.Bounds.Width * scale)),
+                Math.Max(1, (int)Math.Ceiling(x.Window.Bounds.Height * scale)));
+            var w = new Window { WindowDecorations = WindowDecorations.None, ShowInTaskbar = false,
+                ShowActivated = false, Topmost = true, CanResize = false,
+                TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent }, Background = Brushes.Transparent };
+            if (!PrepareAttentionWindow(w, bounds)) { w.Close(); return; }
+            w.Position = bounds.Position; w.Width = bounds.Width / scale; w.Height = bounds.Height / scale;
+            ((Panel)x.Window.Content!).Children.Remove(x.Layer);
+            w.Content = x.Layer;
+            x.AttentionWindow = w;
+            w.Show();
+        }
+
+        private void SyncAttentionRegion(Surface x)
+        {
+            if (x.AttentionWindow is not { } w) return;
+            // The grace card lives in the video window, below this surface.
+            x.Layer.IsVisible = !_gracePaused;
+            var scale = w.RenderScaling;
+            var rects = _gracePaused ? Array.Empty<PixelRect>() : x.Layer.Children.OfType<Border>()
+                .Select(t =>
+                {
+                    var left = Canvas.GetLeft(t) * scale; var top = Canvas.GetTop(t) * scale;
+                    var x0 = (int)Math.Floor(left); var y0 = (int)Math.Floor(top);
+                    return new PixelRect(x0, y0, (int)Math.Ceiling(left + t.Width * scale) - x0,
+                        (int)Math.Ceiling(top + t.Height * scale) - y0);
+                }).ToArray();
+            if (SetAttentionRegion(w, rects)) return;
+            // If the backend refuses the region, do not leave a screen-sized input blocker.
+            w.Content = null;
+            x.Layer.IsVisible = true;
+            ((Panel)x.Window.Content!).Children.Insert(3, x.Layer);
+            x.AttentionWindow = null;
+            w.Close();
+        }
 
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
@@ -454,7 +514,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player?.SetPause(true);
             _sinceShow.Stop();
             _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
-            foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
+            foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; SyncAttentionRegion(x); }
             SetCountdown(MandatoryVideoScheduler.GraceWindowSeconds);
             _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _graceTimer.Tick += (_, _) => GraceTick();
@@ -484,7 +544,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceConsumed = true;   // spent whether it ended by hand or by timeout
             _graceTimer?.Stop();
             _graceTimer = null;
-            foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; }
+            foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; SyncAttentionRegion(x); }
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
@@ -633,6 +693,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (elapsed >= t.Due) { t.Remove(); _targets.Remove(t); continue; }
                 t.Move(dt);
             }
+            foreach (var x in _surfaces) SyncAttentionRegion(x);
             ReleaseToyBatches();
         }
 
@@ -670,11 +731,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             foreach (var x in _surfaces)
             {
+                EnsureAttentionWindow(x);
                 var t = new Target(x.Layer, text, Math.Max(40, s.AttentionSize), elapsed + s.AttentionLifespan, _random);
                 t.OnHit = () => Hit(t);   // gaze and pointer share the one batch catch
+                t.OnRemoved = () => SyncAttentionRegion(x);
                 t.Root.PointerPressed += (_, e) => { e.Handled = true; t.Hit(); };
                 batch.Add(t);
                 _targets.Add(t);
+                SyncAttentionRegion(x);
+                if (x.AttentionWindow is { } w) RaiseAttentionWindow(w);
             }
             var binding = AttentionToyButtonBinding.Arm(CoreHaptics.Service,
                 () => batch.Any(t => _targets.Contains(t)),
@@ -697,6 +762,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             public readonly double Due;
             private readonly Canvas _layer;
             internal Action? OnHit;
+            internal Action? OnRemoved;
             private bool _hit;
             internal void Hit() { if (_hit || !_layer.Children.Contains(Root)) return; _hit = true; OnHit?.Invoke(); }
             internal Rect GazeBounds
@@ -777,7 +843,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             private void Place() { Canvas.SetLeft(Root, _x); Canvas.SetTop(Root, _y); }
 
-            public void Remove() => _layer.Children.Remove(Root);
+            public void Remove() { _layer.Children.Remove(Root); OnRemoved?.Invoke(); }
 
             /// <summary>WPF: the caught target fades out over 300 ms.</summary>
             public void FadeOut()
@@ -917,7 +983,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
-                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; x.Window.Close(); }
+                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; x.AttentionWindow?.Close(); x.Window.Close(); }
                 _surfaces.Clear();
                 _sink?.Free();
                 _sink = null;
