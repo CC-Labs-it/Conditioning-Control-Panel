@@ -103,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> Waveform decoding and WebcamTracking remain WPF-side.
+    ///   <item><b>Services.</b> Compressed waveform decoding and WebcamTracking remain WPF-side.
     ///         Local audio transport uses DeeperLocalAudio; editor jumps are wired below.
     ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
@@ -662,6 +662,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // ====================================================================================
 
         // WPF EnhancementPlayerWindow.xaml.cs:616-662, 836-859, 2621: replace, play and cancel on close.
+        internal static Func<string, Task<AudioWaveformResult>> LoadWaveform = DeeperWaveformDecoder.LoadAsync;
+
         private async void LoadAudio(string path)
         {
             if (_closing) return;
@@ -699,12 +701,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _txtPlayPauseGlyph.Kind = IconKind.Pause;
                 _txtStatus.Text = Loc.Get("deeper_player_status_playing");
                 UpdateStatusPill();
+                _ = LoadWaveformForAudioAsync(path, load);
             }
             catch (Exception ex)
             {
                 if (_closing || load != _audioLoad) return;
                 AudioFailed();
                 Log.Warning(ex, "Deeper player audio load failed");
+            }
+        }
+
+        private async Task LoadWaveformForAudioAsync(string path, int load)
+        {
+            try
+            {
+                var result = await LoadWaveform(path);
+                if (_closing || load != _audioLoad) return;
+                _peaks = result.Peaks;
+                RenderWaveform();
+            }
+            catch (Exception ex)
+            {
+                if (!_closing && load == _audioLoad)
+                    Log.Debug(ex, "EnhancementPlayer: waveform decode failed");
             }
         }
 
