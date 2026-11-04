@@ -248,7 +248,7 @@ public sealed class ChaosRunHostTests
                 var cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
                 Assert.Equal(allow, cards.Cast<object>().Any(c => ((ChaosBoon)c.GetType().GetField("Boon")!.GetValue(c)!).Id == "double_or_nothing"));
                 Assert.False(meta.SeenFirstSin);
-                if (allow) Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("chaos_first_sin_demo"), ChaosAnnouncerOverlay.Active!.Current!.Text);
+                if (allow) { Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("chaos_first_sin_demo"), ChaosAnnouncerOverlay.Active!.Current!.Text); Assert.Equal(3000, ChaosAnnouncerOverlay.Active.Current.HoldMs); }
                 bool shielded = false, downside = false;
                 var sin = new ChaosBoon("double_or_nothing", "test", "", ChaosRarity.Rare, true, 0, _ => downside = true) { ApplyShielded = _ => shielded = true };
                 ChaosRunHost.ChooseBoon(pick ? sin : null);
