@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     /// <summary>
     /// E-Stim's lightning: jagged tether bolts arcing bubble-to-bubble for a quarter second, on one
-    /// click-through primary-screen window (WPF ChaosEStimOverlay). Created on the first strike, hidden
+    /// click-through primary-screen window (WPF ChaosEStimOverlay). Precreated for an equipped run, hidden
     /// between strikes, closed only by <see cref="CloseActive"/> (run end, panic). Refuses where there is
     /// no compositor: without per-pixel alpha the "window" would be an opaque screen-sized block.
     /// </summary>
@@ -44,6 +44,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>Charges spent (or cancelled): drop the cursor halo.</summary>
         public static void Disarm() => ChaosEStimGlow.Disarm();
+
+        /// <summary>WPF ChaosEStimOverlay.cs:45-64: realize both windows before play, then hide them.</summary>
+        public static void EnsureCreated() => OnUi(() =>
+        {
+            ChaosEStimGlow.EnsureCreated();
+            try
+            {
+                if (_active != null || Refused || !CanShow()) return;
+                var w = new ChaosEStimOverlay(sample: false);
+                if (!w.Prepare()) { Refused = true; w.Close(); return; }
+                _active = w;
+                w.Show();
+                w.Hide();
+            }
+            catch (Exception ex) { Log.Debug("ChaosEStim.EnsureCreated: {E}", ex.Message); }
+        });
 
         /// <summary>The platform refused a click-through window this run: stop rebuilding one per strike.</summary>
         internal static bool Refused;
