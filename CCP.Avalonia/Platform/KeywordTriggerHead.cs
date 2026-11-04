@@ -124,7 +124,7 @@ internal sealed class KeywordAudioRuntime
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
-    internal void Start() { IsActive = true; _input.Clear(); _ocr.Reset(); }
+    internal void Start() { if (IsActive) return; IsActive = true; _input.Clear(); _ocr.Reset(); }   // WPF KeywordTriggerService.cs:178
     internal void Stop() { IsActive = false; _input.Clear(); _ocr.Reset(); StopAudio(); }
 
     private bool Accept(string? process, bool own)

@@ -84,7 +84,8 @@ public sealed class KeywordOcrMatcherTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope, s.OcrConfirmationScans, s.OcrHighlightAll, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
-        var runtime = new KeywordAudioRuntime { Now = () => Time, QuestCredit = () => { } };
+        var now = Time;
+        var runtime = new KeywordAudioRuntime { Now = () => now, QuestCredit = () => { } };
         try
         {
             s.KeywordTriggers = Settings().KeywordTriggers; s.KeywordTriggersEnabled = true; s.OcrConfirmationScans = 2; s.OcrHighlightAll = true;
@@ -99,6 +100,11 @@ public sealed class KeywordOcrMatcherTests
             Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
             Assert.Single(runtime.CheckOcrWords(new[] { Hit() }, "other"));
             Assert.Equal("OCR", Assert.Single(runtime.GetRecentFires()).Source);
+            // Re-enabling while active (Sync -> Start) keeps the guard, like WPF KeywordTriggerService.cs:178.
+            now = Time.AddHours(1); runtime.Start();
+            Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
+            Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
+            Assert.Single(runtime.GetRecentFires());
         }
         finally
         {
