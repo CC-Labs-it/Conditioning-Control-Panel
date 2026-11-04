@@ -13,7 +13,6 @@ using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Localization;
 using Xunit;
 namespace CCP.Avalonia.Tests;
-
 public sealed class ChaosWaveDraftTests
 {
     private static void Setup()
@@ -48,8 +47,7 @@ public sealed class ChaosWaveDraftTests
         var host = overlay.FindControl<StackPanel>("BoonCardHost")!;
         var pick = ((Border)host.Children[2]).GetVisualDescendants().OfType<Button>().Single(); var deadline = DateTime.UtcNow.AddSeconds(10);
         while (!pick.IsEnabled && DateTime.UtcNow < deadline) await Task.Delay(50);
-        Assert.True(pick.IsEnabled);
-        Click(pick);
+        Assert.True(pick.IsEnabled); Click(pick);
         deadline = DateTime.UtcNow.AddSeconds(10); while (state.WaveIndex == 1 && DateTime.UtcNow < deadline) await Task.Delay(50);
     }
     // WPF ChaosModeService.cs:1441-1483, 1577-1617 and ChaosOverlayWindow.xaml.cs:78-79.
@@ -67,12 +65,10 @@ public sealed class ChaosWaveDraftTests
             Ticks(80);
             Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible); Assert.Equal(1, state.WaveIndex); Assert.Equal(0, BubbleOverlay.ChaosCount); Assert.False(ChaosWaveTimerWindow.Active!.Pill.IsVisible);
             double elapsed = state.ElapsedSec;
-            Ticks(12);
-            ChaosRunHost.SpawnTick();
+            Ticks(12); ChaosRunHost.SpawnTick();
             ChaosRunHost.ToggleManualPause();
             Assert.Equal(elapsed, state.ElapsedSec); Assert.Equal(0, BubbleOverlay.ChaosCount);
             Assert.False(ChaosRunHost.IsManuallyPaused);
-
             int shields = state.Shields;
             var skip = overlay.FindControl<Button>("BtnSkipBoon")!;
             Assert.True(skip.IsVisible);
@@ -80,10 +76,8 @@ public sealed class ChaosWaveDraftTests
             Assert.Equal(shields + 1, state.Shields);
             Assert.Equal(2, state.WaveIndex);
             Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
-            Ticks(4);
-            Assert.Equal(elapsed, state.ElapsedSec);
-            overlay.FinishCountdown();
-            Ticks(4);
+            Ticks(4); Assert.Equal(elapsed, state.ElapsedSec);
+            overlay.FinishCountdown(); Ticks(4);
             Assert.Equal(elapsed + 1, state.ElapsedSec, 3);
             Assert.True(ChaosWaveTimerWindow.Active!.Pill.IsVisible);
         }
@@ -120,25 +114,21 @@ public sealed class ChaosWaveDraftTests
     public Task Reroll_and_card_pick_use_the_run_state_and_resume_after_the_pick_beat() => Run(async () =>
     {
         Start();
-        var state = ChaosRunHost.State!;
-        var overlay = ChaosRunHost.Overlay!;
+        var state = ChaosRunHost.State!; var overlay = ChaosRunHost.Overlay!;
         state.RerollsLeft = 1;
         Ticks(80);
         var host = overlay.FindControl<StackPanel>("BoonCardHost")!;
         Assert.Equal(3, host.Children.Count); Assert.True(ChaosMeta.State.DiscoveredCodexIds.Count(id => id.StartsWith("boon:")) >= 3);
         var reroll = overlay.FindControl<Button>("BtnReroll")!;
         Assert.True(reroll.IsVisible);
-        Click(reroll);
-        Assert.Equal(0, state.RerollsLeft); Assert.False(reroll.IsVisible); Assert.Equal(3, host.Children.Count);
-        var card = (Border)host.Children[0];
-        var pick = card.GetVisualDescendants().OfType<Button>().Single();
+        Click(reroll); Assert.Equal(0, state.RerollsLeft); Assert.False(reroll.IsVisible); Assert.Equal(3, host.Children.Count);
+        var card = (Border)host.Children[0]; var pick = card.GetVisualDescendants().OfType<Button>().Single();
         Assert.True(pick.IsEnabled);
         Click(pick);
         Assert.Empty(state.ActiveBoons);
         var deadline = DateTime.UtcNow.AddSeconds(10); while (state.WaveIndex == 1 && DateTime.UtcNow < deadline) await Task.Delay(50);
         Assert.Single(state.ActiveBoons); Assert.Single(state.RunPickTiles); Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper)); Assert.Equal(2, state.WaveIndex);
-        var elapsed = state.ElapsedSec;
-        Ticks(4);
+        var elapsed = state.ElapsedSec; Ticks(4);
         Assert.Equal(elapsed, state.ElapsedSec);
         overlay.FinishCountdown();
         Ticks(4);
@@ -217,7 +207,6 @@ public sealed class ChaosWaveDraftTests
         Ticks(84);
         Assert.Equal(2, ChaosRunHost.State!.WaveIndex); Assert.False(ChaosRunHost.Overlay!.FindControl<Border>("DraftPanel")!.IsVisible);
         ChaosRunHost.ForceShutdown();
-
         Start();
         var overlay = ChaosRunHost.Overlay!;
         Ticks(80);
@@ -228,7 +217,6 @@ public sealed class ChaosWaveDraftTests
         overlay.FinishCountdown();
         Assert.False(ChaosRunHost.IsDescending); Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible); Assert.True(overlay.FindControl<global::Avalonia.Controls.Shapes.Rectangle>("Backdrop")!.IsVisible);
         ChaosRunHost.ForceShutdown();
-
         Start();
         overlay = ChaosRunHost.Overlay!;
         Ticks(80);

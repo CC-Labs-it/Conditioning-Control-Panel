@@ -169,7 +169,7 @@ namespace ConditioningControlPanel.Services
             b._wobbleOffset = r.NextDouble() * 100;
             b.Angle = r.Next(360);
             bool rain = spec.Motion == Chaos.ChaosMotion.RainDown;
-            b._top = rain ? (areaY + areaH) / scaling : areaY / scaling - b.Size - 50;
+            b._top = rain ? (areaY + areaH) / scaling + 50 : areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = rain ? areaY / scaling - b.Size : (areaY + areaH) / scaling;
             return b;
