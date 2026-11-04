@@ -117,11 +117,24 @@ public class InstallerHandoffContractTests
         Assert.Contains("Name: \"fileassoc\"", wpf);
         Assert.Contains("Tasks: fileassoc", wpf);
         Assert.Contains("if not WizardIsTaskSelected('fileassoc') then", wpf);
-        Assert.DoesNotContain("Name: \"fileassoc\"", ava);
-        Assert.DoesNotContain("Tasks: fileassoc", ava);
-        Assert.DoesNotContain("WizardIsTaskSelected('fileassoc')", ava);
+        Assert.Contains("Name: \"fileassoc\"", ava);
+        Assert.Contains("Tasks: fileassoc", ava);
+        Assert.Contains("if not WizardIsTaskSelected('fileassoc') then", ava);
         Assert.DoesNotContain("Type: files; Name: \"{app}\\WebView2Loader.dll\"", wpf);
         Assert.Matches(@"Type: files;\s+Name: ""\{app\}\\WebView2Loader.dll""", ava);
+    }
+
+    [Fact]
+    public void ExplorerAssociationsMatchWpfRegistryContract()
+    {
+        var wpf = Read("installer.iss");
+        var ava = Read("installer-avalonia.iss");
+        static string AssociationRows(string source) => string.Join("\n", source.Replace("\r\n", "\n")
+            .Split('\n').Where(line => line.StartsWith("Root: HKCU;") && line.Contains("Tasks: fileassoc")));
+        Assert.Equal(34, AssociationRows(wpf).Split('\n').Length);
+        Assert.Equal(AssociationRows(wpf), AssociationRows(ava));
+        Assert.Contains("Flags: unchecked", ava.Split('\n').Single(line => line.StartsWith("Name: \"fileassoc\"")));
+        Assert.Contains("if not WizardIsTaskSelected('fileassoc') then\n      CleanupFileAssociations();", ava.Replace("\r\n", "\n"));
     }
 
     // WPF csproj:146,945-953 ships LibVLC 3.0.21 under {app}\libvlc; Avalonia
@@ -255,16 +268,16 @@ public class InstallerHandoffContractTests
     {
         var languages = new[]
         {
-            ("en", "english", "Default.isl", "INSTALL_AVALONIA.txt"),
+            ("en", "english", @"Default.isl,installer-notices\en.isl", "INSTALL_AVALONIA.txt"),
             ("zh-CN", "chinesesimplified", @"Default.isl,installer-notices\zh-CN.isl", "installer-notices/zh-CN.txt"),
-            ("ja", "japanese", @"Languages\Japanese.isl", "installer-notices/ja.txt"),
+            ("ja", "japanese", @"Languages\Japanese.isl,installer-notices\ja.isl", "installer-notices/ja.txt"),
             ("ko", "korean", @"Default.isl,installer-notices\ko.isl", "installer-notices/ko.txt"),
-            ("es", "spanish", @"Languages\Spanish.isl", "installer-notices/es.txt"),
-            ("pt-BR", "brazilianportuguese", @"Languages\BrazilianPortuguese.isl", "installer-notices/pt-BR.txt"),
-            ("fr", "french", @"Languages\French.isl", "installer-notices/fr.txt"),
-            ("it", "italian", @"Languages\Italian.isl", "installer-notices/it.txt"),
-            ("de", "german", @"Languages\German.isl", "installer-notices/de.txt"),
-            ("ru", "russian", @"Languages\Russian.isl", "installer-notices/ru.txt"),
+            ("es", "spanish", @"Languages\Spanish.isl,installer-notices\es.isl", "installer-notices/es.txt"),
+            ("pt-BR", "brazilianportuguese", @"Languages\BrazilianPortuguese.isl,installer-notices\pt-BR.isl", "installer-notices/pt-BR.txt"),
+            ("fr", "french", @"Languages\French.isl,installer-notices\fr.isl", "installer-notices/fr.txt"),
+            ("it", "italian", @"Languages\Italian.isl,installer-notices\it.isl", "installer-notices/it.txt"),
+            ("de", "german", @"Languages\German.isl,installer-notices\de.isl", "installer-notices/de.txt"),
+            ("ru", "russian", @"Languages\Russian.isl,installer-notices\ru.isl", "installer-notices/ru.txt"),
         };
         Assert.Equal(LocalizationManager.AvailableLanguages.Select(x => x.Code).OrderBy(x => x), languages.Select(x => x.Item1).OrderBy(x => x));
         var section = Read("installer-avalonia.iss").Split("[Languages]")[1].Split("[Tasks]")[0];
@@ -295,7 +308,18 @@ public class InstallerHandoffContractTests
             Assert.DoesNotContain("—", translation);
             Assert.DoesNotContain("–", translation);
             if (code == "en") english = translation; else Assert.NotEqual(english, translation);
+            // The fileassoc task text (WPF installer.iss:113) comes from each language's overlay.
+            Assert.True(File.ReadAllBytes(RepoPath($"installer-notices/{code}.isl")).AsSpan().StartsWith(utf8Bom));
+            var custom = Read($"installer-notices/{code}.isl").Replace("\r\n", "\n").Split("[CustomMessages]\n")[1];
+            foreach (var (message, key) in new[] { ("FileAssocTask", "installer_fileassoc_task"), ("FileAssocGroup", "installer_fileassoc_group") })
+            {
+                var text = json.RootElement.GetProperty(key).GetString()!;
+                Assert.Contains($"{message}={text}\n", custom);
+                Assert.True(text.IndexOfAny(new[] { '!', '\u2014', '\u2013' }) < 0, key);
+                if (code == "en") Assert.Contains(text, Read("installer.iss"));
+            }
         }
+        Assert.Contains("Name: \"fileassoc\"; Description: \"{cm:FileAssocTask}\"; GroupDescription: \"{cm:FileAssocGroup}\"", Read("installer-avalonia.iss"));
     }
 
     [Fact]

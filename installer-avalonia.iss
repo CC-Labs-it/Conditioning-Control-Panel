@@ -110,23 +110,22 @@ ShowLanguageDialog=auto
 InfoBeforeFile=INSTALL_AVALONIA.txt
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "INSTALL_AVALONIA.txt"
+Name: "english"; MessagesFile: "compiler:Default.isl,installer-notices\en.isl"; InfoBeforeFile: "INSTALL_AVALONIA.txt"
 Name: "chinesesimplified"; MessagesFile: "compiler:Default.isl,installer-notices\zh-CN.isl"; InfoBeforeFile: "installer-notices\zh-CN.txt"
-Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"; InfoBeforeFile: "installer-notices\ja.txt"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl,installer-notices\ja.isl"; InfoBeforeFile: "installer-notices\ja.txt"
 Name: "korean"; MessagesFile: "compiler:Default.isl,installer-notices\ko.isl"; InfoBeforeFile: "installer-notices\ko.txt"
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; InfoBeforeFile: "installer-notices\es.txt"
-Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"; InfoBeforeFile: "installer-notices\pt-BR.txt"
-Name: "french"; MessagesFile: "compiler:Languages\French.isl"; InfoBeforeFile: "installer-notices\fr.txt"
-Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"; InfoBeforeFile: "installer-notices\it.txt"
-Name: "german"; MessagesFile: "compiler:Languages\German.isl"; InfoBeforeFile: "installer-notices\de.txt"
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoBeforeFile: "installer-notices\ru.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl,installer-notices\es.isl"; InfoBeforeFile: "installer-notices\es.txt"
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl,installer-notices\pt-BR.isl"; InfoBeforeFile: "installer-notices\pt-BR.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl,installer-notices\fr.isl"; InfoBeforeFile: "installer-notices\fr.txt"
+Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl,installer-notices\it.isl"; InfoBeforeFile: "installer-notices\it.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl,installer-notices\de.isl"; InfoBeforeFile: "installer-notices\de.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl,installer-notices\ru.isl"; InfoBeforeFile: "installer-notices\ru.txt"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
-; 7.2: the "Open with CCP" task (fileassoc, --play / --edit) is retired. The Avalonia head has no
-; --play / --edit entry point yet (parse + second-instance handoff + both windows), so the entries
-; would open a bare app. CurStepChanged removes any left by an earlier install.
+; FileAssocTask / FileAssocGroup: installer-notices\<code>.isl (WPF installer.iss:113 text, translated).
+Name: "fileassoc"; Description: "{cm:FileAssocTask}"; GroupDescription: "{cm:FileAssocGroup}"; Flags: unchecked
 
 [Files]
 ; Microsoft Visual C++ 2015-2022 x64 runtime bootstrapper. OpenCvSharpExtern.dll
@@ -242,6 +241,58 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Root: HKCU; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
 ; Assets path will be written by [Code] section during install
+
+; --- "Open with CCP" file association (per-user, no admin required) ---
+; Two ProgIDs so the Open With list shows two entries with the app icon:
+;   "CCP Player" (--play)  →  EnhancementPlayerWindow
+;   "CCP Editor" (--edit)  →  DeeperEditorWindow with blank enhancement
+; Note: this only adds CCP to the Open With list. It does NOT change which
+; app is the default for .mp4/.mp3/etc. Users promote to default manually.
+
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1"; ValueType: string; ValueName: ""; ValueData: "Conditioning Control Panel - Player"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "CCP Player"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "CCP Player"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --play ""%1"""; Tasks: fileassoc
+
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1"; ValueType: string; ValueName: ""; ValueData: "Conditioning Control Panel - Editor"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "CCP Editor"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "CCP Editor"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --edit ""%1"""; Tasks: fileassoc
+
+; --- Add CCP to OpenWith for each supported media extension ---
+; uninsdeletevalue (NOT uninsdeletekey) — we only own our two values, must not
+; nuke the whole OpenWithProgids subkey on uninstall (other apps live there too).
+
+; Video
+Root: HKCU; Subkey: "Software\Classes\.mp4\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mp4\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.webm\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.webm\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mkv\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mkv\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mov\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mov\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.avi\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.avi\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.m4v\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.m4v\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+
+; Audio
+Root: HKCU; Subkey: "Software\Classes\.mp3\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mp3\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.m4a\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.m4a\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.aac\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.aac\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.flac\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.flac\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.ogg\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.ogg\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+
 
 [Run]
 ; Install the VC++ runtime first (only if missing) so the webcam native library
@@ -567,7 +618,7 @@ begin
   RegDeleteKeyIncludingSubkeys(HKCU, 'Software\ConditioningControlPanel');
 end;
 
-// Remove the retired file-association registry entries (every install since 7.2)
+// Remove file associations when the task is not selected
 procedure CleanupFileAssociations();
 var
   Exts: array of String;
@@ -698,9 +749,8 @@ begin
         ForceDirectories(SelectedAssetsPath + '\videos');
     end;
 
-    // The "Open with CCP" task is retired (7.2): remove the entries an earlier install wrote, so
-    // Explorer stops offering a --play / --edit this exe does not understand.
-    CleanupFileAssociations();
+    if not WizardIsTaskSelected('fileassoc') then
+      CleanupFileAssociations();
 
     // Offer to clean up old Velopack installation
     if HasOldVelopackInstall then
