@@ -47,6 +47,27 @@ public sealed partial class AccountSeedTests : IDisposable
         AuthRecovery.Recovered = null;
     }
 
+    [Fact]
+    public void OnlyServerRisesRaiseTheSignal()
+    {
+        var s = CoreSettings.Current;
+        s.UnifiedId = "rise-signal-test";
+        s.AuthToken = "test";
+        s.PatreonTier = 0;
+        var rises = new List<int>();
+        void Raised(int tier) => rises.Add(tier);
+        AccountSeed.TierRaised += Raised;
+        try
+        {
+            AccountSeed.ApplyTierReading(1, "test");
+            AccountSeed.ApplyTierReading(1, "test");
+            AccountSeed.ApplyTierReading(0, "test");
+            AccountSeed.ApplyTierReading(2, "test");
+            Assert.Equal(new[] { 1, 2 }, rises);
+        }
+        finally { AccountSeed.TierRaised -= Raised; }
+    }
+
     private static ProviderSubscription Make(string prefix) => new(prefix, () => new AppSettings());
 
     private static void AssertNothing()
