@@ -184,7 +184,10 @@ internal static class AccountSeed
                 && ReferenceEquals(CoreSettings.Current, s) && !s.OfflineMode && CoreAccount.IsLoggedIn
                 && string.Equals(s.UnifiedId, id, StringComparison.Ordinal)
                 && (s.PlayerLevel > 1 || ProfileAdopt.TotalXp(s) >= ProfileAdopt.MeaningfulProgressXp))
+            {
                 sync.NoteProfileLoadFailure();
+                return false;
+            }
         }
         return true;
     }

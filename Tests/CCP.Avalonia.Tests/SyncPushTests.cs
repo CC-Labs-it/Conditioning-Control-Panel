@@ -170,7 +170,7 @@ public sealed partial class AccountSeedTests
     {
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
         wire.SyncStatus = (HttpStatusCode)429;
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.False(await AccountSeed.LoadProfileAsync());
         Assert.Single(wire.Syncs);
 
         wire.SyncStatus = HttpStatusCode.OK;
@@ -295,7 +295,7 @@ public sealed partial class AccountSeedTests
         wire.SyncStatus = (HttpStatusCode)429;
         var counts = new List<int>();
         sync.SyncHealthChanged += (_, count) => counts.Add(count);
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.False(await AccountSeed.LoadProfileAsync());
         Assert.Equal(40, CoreSettings.Current.PlayerLevel);
         Assert.Single(wire.Syncs);
         Assert.Equal(0, sync.ConsecutiveSyncFailures);
@@ -373,7 +373,7 @@ public sealed partial class AccountSeedTests
         // leaves the door open for every trigger; 30 s first, reopened at once by a new token.
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
         wire.SyncStatus = HttpStatusCode.InternalServerError;
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.False(await AccountSeed.LoadProfileAsync());
         Assert.Single(wire.Syncs);
         wire.SyncStatus = HttpStatusCode.OK;
         sync.UtcNow = () => T0.AddSeconds(10);
@@ -405,7 +405,7 @@ public sealed partial class AccountSeedTests
     {
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
         wire.SyncStatus = HttpStatusCode.Conflict;
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.False(await AccountSeed.LoadProfileAsync());
         sync.UtcNow = () => T0.AddSeconds(10);
         Assert.False(await sync.PushAsync("level-up"));
         Assert.Single(wire.Syncs);
