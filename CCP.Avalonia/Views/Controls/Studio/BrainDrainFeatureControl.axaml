@@ -180,7 +180,7 @@
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
 
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
+                            <Border x:Name="CaptureDivider" Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Show in screenshots (AllowOverlayCapture). Privacy stays the
                                  default; this is the opt-out, and another live-editable knob. -->

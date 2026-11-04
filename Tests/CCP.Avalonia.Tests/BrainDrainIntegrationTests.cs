@@ -166,6 +166,7 @@ public sealed class BrainDrainIntegrationTests
     {
         var card = new BrainDrainFeatureControl(); owner.Content = card;
         Assert.Equal(OperatingSystem.IsWindows(), card.FindControl<Grid>("CaptureRow")!.IsVisible);
+        Assert.Equal(OperatingSystem.IsWindows(), card.FindControl<Border>("CaptureDivider")!.IsVisible);
         return Task.CompletedTask;
     });
     [Fact]

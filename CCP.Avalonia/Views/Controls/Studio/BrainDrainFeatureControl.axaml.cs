@@ -36,6 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             // WPF .xaml.cs:106,213-217,346-355: capture visibility is a live comfort setting.
             // X11 has no capture-exclusion equivalent (Win32Overlay.cs:50-54).
             this.FindControl<Grid>("CaptureRow")!.IsVisible = System.OperatingSystem.IsWindows();
+            this.FindControl<Border>("CaptureDivider")!.IsVisible = System.OperatingSystem.IsWindows();
             var capture = this.FindControl<CheckBox>("ChkAllowCapture")!;
             capture.IsCheckedChanged += (_, _) =>
             {
