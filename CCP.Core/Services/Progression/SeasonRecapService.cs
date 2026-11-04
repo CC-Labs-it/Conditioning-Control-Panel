@@ -7,6 +7,27 @@ namespace ConditioningControlPanel.Services;
 /// <summary>Captures the completed local bucket before advancing to a confirmed server season.</summary>
 public static class SeasonRecapService
 {
+    /// <summary>WPF MainWindow.Marquee:270: silent monthly bookkeeping for a confirmed server key.</summary>
+    public static bool UpdateBookkeeping(AppSettings s, Func<SeasonRecapSnapshot, bool>? save = null)
+    {
+        var month = s.CurrentSeason;
+        if (string.IsNullOrWhiteSpace(month) || !ProfileAdopt.LooksLikeMonthKey(month)) return false;
+        if (string.CompareOrdinal(month, s.LastSeasonResetSeen ?? "") > 0)
+        {
+            if (string.IsNullOrEmpty(s.SeasonStatsSeason)) s.SeasonStatsSeason = month;
+            else
+            {
+                CaptureAndRollover(s, month, save);
+                // A failed snapshot save must leave the rollover eligible for retry.
+                if (string.CompareOrdinal(s.SeasonStatsSeason, month) < 0) return false;
+            }
+            s.LastSeasonResetSeen = month;
+        }
+        else if (!s.SeasonResetPending) return false;
+        s.SeasonResetPending = false;
+        return true;
+    }
+
     public static SeasonRecapSnapshot? CaptureAndRollover(AppSettings s, string? serverSeason,
         Func<SeasonRecapSnapshot, bool>? save = null)
     {

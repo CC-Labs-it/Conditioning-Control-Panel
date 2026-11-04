@@ -25,9 +25,8 @@
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
-//   * The rest of the `else` branch (ShowWhatsNewIfNeeded / TryPresentSeasonRecap). Returning users
-//     get no mod popup: WPF removed it (MainWindow.xaml.cs:587-588). MainShellWindow.Marquee.cs documents
-//     why those two are still stubs: they need App.Achievements, App.Seasons and App.xaml.cs's startup-dialog queue. One
+//   * ShowWhatsNewIfNeeded. Returning users get no mod popup: WPF removed it
+//     (MainWindow.xaml.cs:587-588). Silent season bookkeeping runs below. One
 //     consequence worth naming: LastSeenVersion is therefore only ever stamped by the first-run
 //     gate below, never on an upgrade launch. That is pre-existing and this file does not
 //     worsen it - the fix is ShowWhatsNewIfNeeded, not a second stamp here.
@@ -52,6 +51,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                // WPF MainWindow.xaml.cs:596: silent season bookkeeping at startup.
+                if (CoreSettings.Service != null && Services.SeasonRecapService.UpdateBookkeeping(CoreSettings.Current))
+                    CoreSettings.Save();
                 bool fresh = FirstRunWizard.ShouldRunAndClaim();
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
                 OfferWhatMovedIfNeeded(freshInstall: fresh);

@@ -20,6 +20,38 @@ namespace CCP.Avalonia.Tests;
 public sealed class FirstRunGateDeadClickTests
 {
     [Fact]
+    public Task StartupRunsSilentSeasonBookkeeping() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        MainShellWindow? shell = null;
+        try
+        {
+            service.Current.Welcomed = true;
+            service.Current.HasAcceptedAgeVerification = true;
+            service.Current.CurrentSeason = "2026-08";
+            service.Current.LastSeasonResetSeen = "2026-07";
+            service.Current.SeasonStatsSeason = "";
+            shell = new MainShellWindow();
+            Assert.Equal("2026-08", service.Current.SeasonStatsSeason);
+            Assert.Equal("2026-08", service.Current.LastSeasonResetSeen);
+            Assert.Empty(shell.OwnedWindows);
+        }
+        finally
+        {
+            shell?.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ClosingTheGateUnticked_HandsBackAndExits() => Run(welcomed: false, accepted: false, async shell =>
     {
         var wizard = await Owned<FirstRunWizard>(shell);

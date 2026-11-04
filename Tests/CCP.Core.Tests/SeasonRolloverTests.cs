@@ -5,6 +5,35 @@ using Xunit;
 
 public class SeasonRolloverTests
 {
+    [Fact]
+    public void BookkeepingRequiresConfirmedSeasonAndClearsPendingOnlyWhenConfirmed()
+    {
+        var s = new AppSettings { CurrentSeason = "bad", SeasonResetPending = true };
+        Assert.False(SeasonRecapService.UpdateBookkeeping(s));
+        Assert.True(s.SeasonResetPending);
+        s.CurrentSeason = "2026-08";
+        s.LastSeasonResetSeen = "2026-08";
+        Assert.True(SeasonRecapService.UpdateBookkeeping(s));
+        Assert.False(s.SeasonResetPending);
+        Assert.False(SeasonRecapService.UpdateBookkeeping(s));
+    }
+
+    [Fact]
+    public void BookkeepingInitializesAndRollsOnlyAfterSnapshotSave()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-07" };
+        Assert.True(SeasonRecapService.UpdateBookkeeping(s));
+        Assert.Equal("2026-07", s.SeasonStatsSeason);
+        s.CurrentSeason = "2026-08";
+        s.SeasonSessionsStarted = 3;
+        Assert.False(SeasonRecapService.UpdateBookkeeping(s, _ => false));
+        Assert.Equal("2026-07", s.LastSeasonResetSeen);
+        Assert.True(SeasonRecapService.UpdateBookkeeping(s, snap => snap.SessionCount == 3));
+        Assert.Equal("2026-08", s.SeasonStatsSeason);
+        Assert.Equal("2026-08", s.LastSeasonResetSeen);
+        Assert.Equal(0, s.SeasonSessionsStarted);
+    }
+
     [Theory]
     [InlineData(null)] [InlineData("bad")] [InlineData("2026-06")] [InlineData("2026-07")]
     public void RequiresConfirmedForwardKey(string? key)
