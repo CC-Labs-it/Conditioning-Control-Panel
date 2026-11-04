@@ -24,6 +24,40 @@ namespace CCP.Avalonia.Tests;
 public sealed class MandatoryVideoOverlayTests
 {
     [Fact]
+    public void ScrolllerClipRetainsItsSubredditLink()
+    {
+        const string url = "https://scrolller.com/video.mp4";
+        ConditioningControlPanel.Services.Fyp.Online.ScrolllerItemIndex.Remember(url, new("clip", "testsub"));
+        Assert.Equal("https://scrolller.com/r/testsub", MandatoryVideoOverlay.CreditLinkFor(url));
+    }
+
+    [Fact]
+    public Task CreditLinkIsBlockedByStrictAndCancelledByStop() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var overlay = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), true)!;
+        var old = MandatoryVideoOverlay.CreditOpener; var opened = 0;
+        MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; };
+        try
+        {
+            Assert.False(MandatoryVideoOverlay.CreditAllowed(true));
+            overlay.QueueCredit("https://scrolller.com/r/testsub");
+            overlay.CloseAll(); overlay.OpenCredit();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, opened);
+            overlay.QueueCredit("https://scrolller.com/r/testsub"); overlay.OpenCredit(); overlay.CloseAll();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, opened);
+            overlay.QueueCredit("https://scrolller.com/r/testsub"); overlay.OpenCredit();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, opened);
+        }
+        finally { overlay.CloseAll(); MandatoryVideoOverlay.CreditOpener = old; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public void NoVideosDialogBlamesTheLengthFilterWhenItEmptiedTheLibrary()
     {
         // WPF #1352 (854ac954a): files exist, the length filter kept none -> name the filter, not "add files".
