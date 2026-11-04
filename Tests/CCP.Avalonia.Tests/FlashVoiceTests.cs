@@ -6,9 +6,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class FlashVoiceTests
 {
     private sealed class Clock : TimeProvider
@@ -150,13 +148,15 @@ public sealed class FlashVoiceTests
             var pending = FlashOverlay.StartVoice(s, path, FlashOverlay.Generation);
             Assert.False(pending.IsCompleted);
             Assert.True(FlashOverlay.IsWhisperPlaying);
-            fakeClock.Now += TimeSpan.FromSeconds(2);
-            report!(TimeSpan.FromSeconds(8));
+            await Task.Delay(3200, TestContext.Current.CancellationToken);
+            Assert.False(pending.IsCompleted);
+            fakeClock.Now += TimeSpan.FromSeconds(4);
+            report!(TimeSpan.FromSeconds(20));
             var remaining = await pending;
-            Assert.Equal(TimeSpan.FromSeconds(6), remaining);
-            Assert.Equal(TimeSpan.FromSeconds(7), FlashOverlay.Lifetime(s, false, (int)remaining!.Value.TotalMilliseconds));
-            Assert.Equal(TimeSpan.FromSeconds(7.5), wait);
-            fakeClock.Now += TimeSpan.FromSeconds(6.2);
+            Assert.Equal(TimeSpan.FromSeconds(16), remaining);
+            Assert.Equal(TimeSpan.FromSeconds(17), FlashOverlay.Lifetime(s, false, (int)remaining!.Value.TotalMilliseconds));
+            Assert.Equal(TimeSpan.FromSeconds(17.5), wait);
+            fakeClock.Now += TimeSpan.FromSeconds(16.2);
             Assert.True(FlashOverlay.IsWhisperPlaying);
             fakeClock.Now += TimeSpan.FromMilliseconds(51);
             Assert.False(FlashOverlay.IsWhisperPlaying);
@@ -186,6 +186,8 @@ public sealed class FlashVoiceTests
             Assert.True(FlashOverlay.IsWhisperPlaying);
             Assert.Equal(path, shown);
             Assert.Equal(TimeSpan.FromSeconds(6), FlashOverlay.Lifetime(s, false, (int)duration!.Value.TotalMilliseconds));
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, finished) => { started!(TimeSpan.Zero); finished!(); return () => { }; };
+            Assert.Equal(TimeSpan.FromSeconds(5), await FlashOverlay.StartVoice(s, path, FlashOverlay.Generation));
         }
         finally
         {
@@ -223,5 +225,4 @@ public sealed class FlashVoiceTests
             File.Delete(path);
         }
     }
-
 }

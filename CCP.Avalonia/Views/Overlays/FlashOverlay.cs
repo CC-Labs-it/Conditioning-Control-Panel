@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Func<TimeSpan, Task> UnduckDelay = Task.Delay;
         internal static Action<string> ShowVoice = path => Views.AvatarTube.AvatarTubeWindow.Live?.ShowFlashVoice(path);
         internal static TimeProvider VoiceClock = TimeProvider.System;
+        internal static TimeSpan VoiceMetadataTimeout = TimeSpan.FromMinutes(5);
         internal static long WhisperBusyUntil;
         private static int _voiceAwaitingLength;
         internal static bool IsWhisperPlaying => Volatile.Read(ref _voiceAwaitingLength) > 0 ||
@@ -184,7 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var master = s.MasterVolume / 100f;
             var gain = CompanionVoiceGain.ApplyLevel(Math.Max(0.05f, (float)Math.Pow(master, 1.5)) * CompanionVoiceGain.BarkTrim, s.CompanionVoiceLevel);
             // Zero voice level still plays silently and keeps its audio-linked length, as WPF.
-            _stopSound = CoreAudio.PlayStoppable(path, Math.Max(gain, 0.000001f), "flash-voice",
+            var stop = _stopSound = CoreAudio.PlayStoppable(path, Math.Max(gain, 0.000001f), "flash-voice",
                 length => { began.TrySetResult(true); if (length > TimeSpan.Zero) lengthKnown.TrySetResult(length); },
                 () => { began.TrySetResult(false); lengthKnown.TrySetResult(null); });
             bool playing;
@@ -193,8 +194,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (ReferenceEquals(_voiceStart, began)) _voiceStart = null;
             if (generation != _generation || _closed) { if (ReferenceEquals(_voiceLength, lengthKnown)) _voiceLength = null; return null; }
 
-            // WPF PlaySound returns 5 seconds even on failure, then still marks the whisper,
-            // shows the filename, ducks and pays sound XP (FlashService.cs:1537-1557, 4719-4726).
+            // WPF failure still marks the whisper, shows the filename, ducks and pays XP (FlashService.cs:1537-1557, 4719-4726).
             var beganAt = VoiceClock.GetUtcNow();
             Interlocked.Increment(ref _voiceAwaitingLength);
             _soundPlayingForCurrentFlash = true;
@@ -203,9 +203,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var ducked = s.AudioDuckingEnabled;
             if (ducked) { CoreAudio.Duck(s.DuckingLevel); duckGeneration = CoreAudio.DuckGeneration; }
             onReady?.Invoke(); TimeSpan? duration = null;
-            try { if (playing) duration = await lengthKnown.Task.WaitAsync(TimeSpan.FromSeconds(3)); } catch (TimeoutException) { }
+            try { if (playing) duration = await lengthKnown.Task.WaitAsync(VoiceMetadataTimeout); } catch (TimeoutException) { stop(); }
             if (ReferenceEquals(_voiceLength, lengthKnown)) _voiceLength = null;
-            duration ??= TimeSpan.FromSeconds(5); onLength?.Invoke(duration.Value);
+            duration ??= playing && VoiceClock.GetUtcNow() - beganAt > TimeSpan.FromSeconds(5) ? VoiceClock.GetUtcNow() - beganAt : TimeSpan.FromSeconds(5); onLength?.Invoke(duration.Value);
             var remaining = duration.Value - (VoiceClock.GetUtcNow() - beganAt);
             if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
             var until = (VoiceClock.GetUtcNow() + remaining + TimeSpan.FromMilliseconds(250)).UtcTicks;
@@ -214,8 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             while (until > previous && Interlocked.CompareExchange(ref WhisperBusyUntil, until, previous) != previous);
             Interlocked.Decrement(ref _voiceAwaitingLength);
             if (ducked) _ = ReleaseVoiceDuck(remaining + TimeSpan.FromMilliseconds(1500), duckGeneration);
-            // Return the remaining sound time for callers; ShowBurst already displayed the
-            // pictures and corrected their individual lifetimes from the full sound length.
+            // ShowBurst corrects each picture from the full length; return the remaining sound time.
             return generation == _generation && !_closed ? (playing ? remaining : duration.Value) : null;
         }
 
