@@ -254,6 +254,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
 
+        internal static bool IsGameOpen() { lock (Open) return Open.Any(w => w.Spec.Id != FypId && w.Spec.Id != "loom"); }
+
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
 
         /// <summary>The open game window that is the active window, if any (friends landing anchor).</summary>

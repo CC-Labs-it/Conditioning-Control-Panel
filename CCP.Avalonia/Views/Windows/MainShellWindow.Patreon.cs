@@ -322,7 +322,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var key = TierCelebration.KeyFor(tier)!;
                 if (onRise && IsVisible && WindowState != global::Avalonia.Controls.WindowState.Minimized
                     && !CoreSession.IsSessionRunning && !CoreTutorial.IsActive && !Platform.AppUpdater.IsUpdateDialogActive
-                    && !IsStartupDialogShowing && !Games.GameWindow.IsAnyOpen())
+                    && !IsStartupDialogShowing && !Platform.StartupLadder.World(System.DateTime.UtcNow).GameHostUp)
                 {
                     FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key);
                     return;

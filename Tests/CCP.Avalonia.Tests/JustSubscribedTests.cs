@@ -20,9 +20,7 @@ using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class JustSubscribedTests
 {
     private sealed class ProfileWire : HttpMessageHandler
@@ -39,9 +37,7 @@ public sealed class JustSubscribedTests
         public void Answer(string json, HttpStatusCode status = HttpStatusCode.OK) =>
             Reply.SetResult(new HttpResponseMessage(status) { Content = new StringContent(json) });
     }
-
-    [Fact]
-    public Task BothVaultsCheckAndReportTheRealProfileRead() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory, InlineData(false), InlineData(true)] public Task BothVaultsCheckAndReportTheRealProfileRead(bool intakeOpen) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -85,7 +81,6 @@ public sealed class JustSubscribedTests
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(Loc.Get("plans_just_subscribed_signin"), text.Text);
             Assert.True(button.IsEnabled);
-
             s.UnifiedId = "test-user"; s.AuthToken = "test-token";
             var wire = new ProfileWire(); bool sparkBurst = false; AccountSeed.Patreon!.TierChanged += (_, _) => sparkBurst = shell.Named<global::ConditioningControlPanel.Avalonia.Controls.PremiumSpark>("HeaderPremiumSpark")!.Field.Alive.Any(m => m.Kind == global::ConditioningControlPanel.Controls.Header.MoteKind.Burst);
             AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
@@ -111,17 +106,15 @@ public sealed class JustSubscribedTests
             shell.ShowTab("settings");
             shell.ShowTab("premium");
             Assert.False(row.IsVisible);
-
             foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
             StartupLadder.ResetForTests(); s.SeenFeatureIntros.Remove(TierCelebration.KeyT2); s.SeenFeatureIntros.Remove(TierCelebration.LegacyKey); s.PatreonTier = 0; s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
-            var game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow(); game.Show();
+            Window game = intakeOpen ? new IntakeHostWindow() : new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow(); game.Show();
             wire = new ProfileWire(); var gameCheck = AccountSeed.CheckSubscriptionNowAsync(); wire.Answer("{\"user\":{\"effective_tier\":2}}"); await gameCheck; await Until(() => StartupLadder.Inbox.Items.Any(item => item.Key == "intro:" + TierCelebration.KeyT2));
             Assert.Contains(StartupLadder.Inbox.Items, item => item.Key == "intro:" + TierCelebration.KeyT2);
             Assert.DoesNotContain(TierCelebration.KeyT2, s.SeenFeatureIntros);
             s.SeenFeatureIntros.Add(TierCelebration.KeyT2); s.LastKnownEffectiveTier = 0;
             shell.MaybeShowPremiumCelebration(); Assert.Equal(2, s.LastKnownEffectiveTier);
             var notice = Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2"); game.Close(); StartupLadder.Inbox.Open(notice); var dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(), d => d.Title == Loc.Get("tier_on_prime")); dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.False(dialog.IsVisible);
-
             // The Settings page refreshes the inline row even while another section is selected.
             shell.OpenAppSettingsSection("general");
             shell.ShowTab("settings");
@@ -145,7 +138,16 @@ public sealed class JustSubscribedTests
             CoreSettings.ServiceProvider = null;
         }
     });
-
+    [Theory, InlineData("intake", true), InlineData("fyp", false), InlineData("loom", false)]
+    public Task GameParkingDistinguishesIntakeFromFeedAndLoom(string id, bool parked) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        StartupLadder.ResetForTests();
+        Window host = id == "intake" ? new IntakeHostWindow() : new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Games[id]);
+        try { host.Show(); Assert.Equal(parked, StartupLadder.World(DateTime.UtcNow).GameHostUp); }
+        finally { host.Close(); StartupLadder.ResetForTests(); }
+        return Task.CompletedTask;
+    });
     [Fact]
     public Task ProfileReadPreservesGraceAndReportsFailuresAndNewAccess() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -173,7 +175,6 @@ public sealed class JustSubscribedTests
             Assert.True(CoreEntitlement.HasPremium);
             Assert.Equal(1, notices);
             Assert.True(s.PatreonPremiumValidUntil > DateTime.UtcNow.AddDays(13));
-
             wire = new ProfileWire();
             AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
             wire.Answer("{\"user\":{\"effective_tier\":0}}");
@@ -181,7 +182,6 @@ public sealed class JustSubscribedTests
             Assert.True(CoreEntitlement.HasPremium);
             Assert.Equal(1, s.PatreonTier);
             Assert.Equal(0, s.ServerTierSeen);
-
             wire = new ProfileWire();
             AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
             wire.Answer("{}", HttpStatusCode.ServiceUnavailable);
@@ -191,7 +191,6 @@ public sealed class JustSubscribedTests
         }
         finally { AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
     });
-
     [Fact]
     public Task LateProfileCannotGrantTheNextAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -221,7 +220,6 @@ public sealed class JustSubscribedTests
         }
         finally { AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
     });
-
     [Fact]
     public Task PatreonValidationIsForcedAndInviteWeekIsNotPaid() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -254,7 +252,6 @@ public sealed class JustSubscribedTests
         }
         finally { AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
     });
-
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(true, false, false)]
@@ -294,7 +291,6 @@ public sealed class JustSubscribedTests
         }
         finally { AccountSeed.NewV2 = old; CoreSettings.ServiceProvider = null; }
     });
-
     private sealed class PendingValidation : HttpMessageHandler
     {
         internal readonly TaskCompletionSource<HttpResponseMessage> Reply = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -302,7 +298,6 @@ public sealed class JustSubscribedTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         { Reads++; return Reply.Task; }
     }
-
     private sealed class ValidationWire : HttpMessageHandler
     {
         public int Reads;
@@ -314,7 +309,6 @@ public sealed class JustSubscribedTests
                 { Content = new StringContent("{\"is_active\":true,\"tier\":1,\"auth_token\":\"repaired\"}") });
         }
     }
-
     [Fact]
     public Task FreshPatreonConfirmationRestampsGraceAndAppliesExtras() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -345,7 +339,6 @@ public sealed class JustSubscribedTests
         }
         finally { AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
     });
-
     private static async Task Until(Func<bool> done)
     {
         for (int i = 0; i < 100 && !done(); i++) await Task.Delay(10);

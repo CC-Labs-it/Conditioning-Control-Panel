@@ -58,7 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
-            GameHostUp = Views.Games.GameWindow.IsAnyOpen(),
+            GameHostUp = Views.Games.GameWindow.IsGameOpen() || Views.Windows.IntakeHostWindow.IsAnyOpen(),
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
             NowUtc = nowUtc,
         };
