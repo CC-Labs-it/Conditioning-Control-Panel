@@ -155,15 +155,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool VoiceStarting => Volatile.Read(ref _voiceStarting) != null;
         internal static Func<Task> VoiceLead = () => Task.Delay(1000);
         internal static TimeProvider VoiceClock = TimeProvider.System;
-        internal static Func<string, Task<double?>> VoiceDuration = async path =>
-        {
-            var ready = new TaskCompletionSource<double?>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var stop = CoreAudio.PlayStoppable(path, 0, "flash-voice",
-                t => { if (t > TimeSpan.Zero) ready.TrySetResult(t.TotalSeconds); },
-                () => { ready.TrySetResult(null); done.TrySetResult(); });
-            try { return await ready.Task; } finally { stop(); await done.Task; }
-        };
         internal static Action<int, Action> AfterVoice = (ms, action) => _ = Task.Delay(ms).ContinueWith(_ => action());
 
         internal static string? NextVoice(AppSettings s)
@@ -190,7 +181,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             path ??= NextVoice(s);
             if (!s.FlashAudioEnabled || s.MasterVolume <= 0 || s.AvatarMuted || s.CompanionVoiceLinesMuted
                 || string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
-            var probed = await VoiceDuration(path);
             if ((generation.HasValue && generation.Value != Volatile.Read(ref _generation)) || !s.FlashAudioEnabled
                 || s.MasterVolume <= 0 || s.AvatarMuted || s.CompanionVoiceLinesMuted) return null;
             var gain = CompanionVoiceGain.ApplyLevel(Math.Max(0.05f, (float)Math.Pow(s.MasterVolume / 100f, 1.5))
@@ -201,21 +191,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
             Interlocked.Exchange(ref _voiceStarting, pending);
             void ClearPending() => Interlocked.CompareExchange(ref _voiceStarting, null, pending);
+            var sync = new object();
+            double? latest = null;
+            bool didStart = false, ended = false;
+            long duckGeneration = -1;
+            int duckVersion = 0, cancelled = 0;
+            void ScheduleUnduck(double seconds)
+            {
+                var version = ++duckVersion;
+                AfterVoice((int)(seconds * 1000) + 1500, () => { lock (sync) if (version == duckVersion) CoreAudio.Unduck(duckGeneration); });
+            }
             var stop = CoreAudio.PlayStoppable(path, gain, "flash-voice", reported =>
             {
-                var stamp = VoiceClock.GetTimestamp();
-                var first = Interlocked.CompareExchange(ref startedAt, stamp, -1);
-                var actual = reported.TotalSeconds > 0 ? reported.TotalSeconds : probed.GetValueOrDefault();
-                if (actual <= 0 || (generation.HasValue && generation.Value != Volatile.Read(ref _generation))) return;
-                var elapsed = first < 0 ? 0 : Math.Max(0, VoiceClock.GetElapsedTime(first, stamp).TotalSeconds);
-                var remaining = Math.Max(0.001, actual - elapsed);
-                if (started.TrySetResult(remaining))
+                lock (sync)
                 {
-                    Platform.BarkHead.Engine?.MarkWhisperAudio(remaining);
-                    ClearPending();
+                    if (ended || Volatile.Read(ref cancelled) != 0 || (generation.HasValue && generation.Value != Volatile.Read(ref _generation))) return;
+                    didStart = true;
+                    var stamp = VoiceClock.GetTimestamp();
+                    var first = Interlocked.CompareExchange(ref startedAt, stamp, -1);
+                    var elapsed = first < 0 ? 0 : Math.Max(0, VoiceClock.GetElapsedTime(first, stamp).TotalSeconds);
+                    if (reported > TimeSpan.Zero) latest = Math.Max(0.001, reported.TotalSeconds - elapsed);
+                    var firstReport = started.TrySetResult(latest);
+                    if (latest.HasValue) ClearPending();
+                    if (!firstReport && latest.HasValue && duckGeneration >= 0) ScheduleUnduck(latest.Value);
+                    if (latest.HasValue) Platform.BarkHead.Engine?.MarkWhisperAudio(latest.Value);
                 }
-            }, () => { if (started.TrySetResult(null)) ClearPending(); });
-            var cancelled = 0;
+            }, () =>
+            {
+                lock (sync)
+                {
+                    ended = true;
+                    started.TrySetResult(null); ClearPending();
+                    if (duckGeneration >= 0) ScheduleUnduck(0);
+                }
+            });
             Action cancel = () =>
             {
                 if (Interlocked.Exchange(ref cancelled, 1) != 0) return;
@@ -224,20 +233,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _stopFlashVoice = cancel;
             if (generation.HasValue && generation.Value != Volatile.Read(ref _generation)) cancel();
             var length = await started.Task;
-            if (length == null || (generation.HasValue && generation.Value != Volatile.Read(ref _generation)))
+            if (generation.HasValue && generation.Value != Volatile.Read(ref _generation))
             {
                 if (ReferenceEquals(Interlocked.CompareExchange(ref _stopFlashVoice, null, cancel), cancel)) cancel();
                 return null;
             }
-            var seconds = length.Value;
-            if (s.AudioDuckingEnabled)
+            lock (sync)
             {
-                CoreAudio.Duck(s.DuckingLevel);
-                var duckGeneration = CoreAudio.DuckGeneration;
-                AfterVoice((int)(seconds * 1000) + 1500, () => CoreAudio.Unduck(duckGeneration));
+                if (didStart && !ended && Volatile.Read(ref cancelled) == 0 && (!generation.HasValue || generation.Value == Volatile.Read(ref _generation)) && s.AudioDuckingEnabled)
+                {
+                    CoreAudio.Duck(s.DuckingLevel);
+                    duckGeneration = CoreAudio.DuckGeneration;
+                    if (latest.HasValue) ScheduleUnduck(latest.Value);
+                }
             }
-            Views.AvatarTube.AvatarTubeWindow.Live?.ShowFlashVoice(Path.GetFileNameWithoutExtension(path));
-            return seconds;
+            if (didStart) Views.AvatarTube.AvatarTubeWindow.Live?.ShowFlashVoice(Path.GetFileNameWithoutExtension(path));
+            return length;
         }
 
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations

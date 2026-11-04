@@ -17,7 +17,6 @@ using CCP.Avalonia.Testing;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
-
 public class FlashVoiceTests
 {
     private sealed class VoiceClock : TimeProvider
@@ -26,7 +25,6 @@ public class FlashVoiceTests
         public override long GetTimestamp() => Ticks;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
     }
-
     [Fact]
     public void Audio_length_controls_the_burst_lifetime_and_stay_still_wins()
     {
@@ -35,7 +33,6 @@ public class FlashVoiceTests
         Assert.Equal(TimeSpan.FromSeconds(3), FlashOverlay.VoiceLifetime(s, false, 2000, null));
         Assert.Equal(TimeSpan.FromMinutes(10), FlashOverlay.VoiceLifetime(s, true, 2000, 3));
     }
-
     [Fact]
     public Task Flash_text_shows_silently_without_interrupting_a_bubble() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -90,14 +87,11 @@ public class FlashVoiceTests
             Directory.Delete(root, true);
         }
     }
-
     [Fact]
     public async Task Voice_obeys_mutes_and_ducks_for_clip_length_with_guarded_release()
     {
         var file = Path.GetTempFileName();
         var oldAfter = FlashOverlay.AfterVoice;
-        var oldDuration = FlashOverlay.VoiceDuration;
-        FlashOverlay.VoiceDuration = _ => Task.FromResult<double?>(null);
         var oldPlay = CoreAudio.PlayStoppableProvider;
         var oldDuck = CoreAudio.DuckProvider;
         var oldUnduck = CoreAudio.UnduckProvider;
@@ -146,7 +140,6 @@ public class FlashVoiceTests
         finally
         {
             FlashOverlay.AfterVoice = oldAfter;
-            FlashOverlay.VoiceDuration = oldDuration;
             CoreAudio.PlayStoppableProvider = oldPlay;
             CoreAudio.DuckProvider = oldDuck;
             CoreAudio.UnduckProvider = oldUnduck;
@@ -154,7 +147,6 @@ public class FlashVoiceTests
             File.Delete(file);
         }
     }
-
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -164,8 +156,8 @@ public class FlashVoiceTests
         var file = Path.GetTempFileName();
         var running = typeof(CoreEngine).GetField("_running", BindingFlags.NonPublic | BindingFlags.Static)!;
         var oldRunning = running.GetValue(null);
-        var (oldStop, oldPost, oldLead, oldDuration, oldPlay) = (CoreFlash.StopProvider, CoreDispatch.PostProvider,
-            FlashOverlay.VoiceLead, FlashOverlay.VoiceDuration, CoreAudio.PlayStoppableProvider);
+        var (oldStop, oldPost, oldLead, oldPlay) = (CoreFlash.StopProvider, CoreDispatch.PostProvider,
+            FlashOverlay.VoiceLead, CoreAudio.PlayStoppableProvider);
         var lead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
@@ -174,7 +166,6 @@ public class FlashVoiceTests
             CoreDispatch.PostProvider = action => action();
             FlashOverlay.SeedCore(() => null, () => { });
             FlashOverlay.VoiceLead = () => lead.Task;
-            FlashOverlay.VoiceDuration = _ => Task.FromResult<double?>(2);
             CoreAudio.PlayStoppableProvider = (_, _, _, start, _) => { plays++; start!(TimeSpan.FromSeconds(2)); return () => stops++; };
             var s = new AppSettings { FlashAudioEnabled = true, MasterVolume = 100 };
             if (phase == 0)
@@ -214,70 +205,77 @@ public class FlashVoiceTests
         {
             FlashOverlay.CloseAll(false);
             running.SetValue(null, oldRunning);
-            (CoreFlash.StopProvider, CoreDispatch.PostProvider, FlashOverlay.VoiceLead, FlashOverlay.VoiceDuration, CoreAudio.PlayStoppableProvider) =
-                (oldStop, oldPost, oldLead, oldDuration, oldPlay);
+            (CoreFlash.StopProvider, CoreDispatch.PostProvider, FlashOverlay.VoiceLead, CoreAudio.PlayStoppableProvider) =
+                (oldStop, oldPost, oldLead, oldPlay);
             File.Delete(file);
         }
     }
-
     [Fact]
-    public async Task Zero_reported_length_uses_the_probe_and_late_start_is_not_cancelled()
+    public async Task Playback_starts_without_probe_and_zero_length_does_not_block_presentation_or_stop()
     {
         var file = Path.GetTempFileName();
-        var (oldDuration, oldPlay, oldAfter, oldEngine, oldDuck, oldClock) = (FlashOverlay.VoiceDuration, CoreAudio.PlayStoppableProvider,
-            FlashOverlay.AfterVoice, BarkHead.Engine, CoreAudio.DuckProvider, FlashOverlay.VoiceClock);
-        var s = CoreSettings.Current;
-        var (avatar, suppression) = (s.AvatarEnabled, s.BarkChatSuppressionMs);
+        var oldPlay = CoreAudio.PlayStoppableProvider;
+        var oldAfter = FlashOverlay.AfterVoice;
+        var oldDuck = CoreAudio.DuckProvider;
+        var oldClock = FlashOverlay.VoiceClock; var oldEngine = BarkHead.Engine;
+        var settings = CoreSettings.Current; var oldSettings = (settings.AvatarEnabled, settings.BarkChatSuppressionMs);
         try
         {
-            s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0;
-            Action<TimeSpan>? probeStart = null; Action? probeEnd = null;
-            CoreAudio.PlayStoppableProvider = (_, gain, tag, start, end) =>
-            { Assert.Equal(0, gain); Assert.Equal("flash-voice", tag); probeStart = start; probeEnd = end; return () => probeEnd!(); };
-            var probe = oldDuration(file);
-            probeStart!(TimeSpan.Zero); Assert.False(probe.IsCompleted);
-            probeStart(TimeSpan.FromSeconds(6)); Assert.Equal(6, await probe);
-            var rule = new BarkRule { Id = Guid.NewGuid().ToString(), Trigger = "AttentionCheckFail",
-                VariantPool = new() { new BarkVariant("eyes") } };
+            settings.AvatarEnabled = true; settings.BarkChatSuppressionMs = 0;
+            var rule = new BarkRule { Id = Guid.NewGuid().ToString(), Trigger = "AttentionCheckFail", VariantPool = new() { new BarkVariant("eyes") } };
             var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => { } };
             BarkHead.Seed(engine); BarkHead.Engine = engine; engine.Start();
-            Action<TimeSpan>? start = null;
-            int stops = 0, unduckMs = 0;
-            FlashOverlay.VoiceDuration = _ => Task.FromResult<double?>(7.5);
-            var clock = new VoiceClock();
-            FlashOverlay.VoiceClock = clock;
-            FlashOverlay.AfterVoice = (ms, _) => unduckMs = ms;
-            CoreAudio.DuckProvider = _ => { };
-            CoreAudio.PlayStoppableProvider = (_, _, _, callback, _) => { start = callback; return () => stops++; };
-            var settings = new AppSettings { FlashAudioEnabled = true, MasterVolume = 100, AudioDuckingEnabled = true };
-            var play = FlashOverlay.PlayFlashVoice(settings, file, FlashOverlay.Generation);
-            Assert.False(engine.Raise("AttentionCheckFail")); // held while startup has no duration
-            await Task.Delay(1200);
-            Assert.False(play.IsCompleted); Assert.Equal(0, stops);
-            start!(TimeSpan.Zero);
-            Assert.Equal(7.5, await play);
-            Assert.Equal(9000, unduckMs);
-            Assert.False(engine.Raise("AttentionCheckFail")); // held after the bubble could have gone
-            FlashOverlay.CloseAll(false);
-            FlashOverlay.VoiceDuration = _ => Task.FromResult<double?>(null);
-            play = FlashOverlay.PlayFlashVoice(settings, file, FlashOverlay.Generation);
-            start!(TimeSpan.Zero);
-            Assert.False(play.IsCompleted);
+            var clock = new VoiceClock(); FlashOverlay.VoiceClock = clock;
+            Action<TimeSpan>? report = null;
+            int plays = 0, stops = 0, ducks = 0, delay = 0;
+            CoreAudio.PlayStoppableProvider = (_, gain, _, start, _) => { Assert.True(gain > 0); plays++; report = start; return () => stops++; };
+            CoreAudio.DuckProvider = _ => ducks++;
+            FlashOverlay.AfterVoice = (ms, _) => delay = ms;
+            var s = new AppSettings { FlashAudioEnabled = true, MasterVolume = 100, AudioDuckingEnabled = true };
+            var play = FlashOverlay.PlayFlashVoice(s, file, FlashOverlay.Generation);
+            Assert.Equal(1, plays); Assert.False(engine.Raise("AttentionCheckFail"));
+            report!(TimeSpan.Zero);
+            Assert.Null(await play.WaitAsync(TimeSpan.FromSeconds(2)));
+            Assert.Equal(1, ducks); Assert.True(FlashOverlay.VoiceStarting); Assert.False(engine.Raise("AttentionCheckFail"));
             clock.Ticks += TimeSpan.FromSeconds(2).Ticks;
-            start!(TimeSpan.FromSeconds(6)); // a later LengthChanged supplies the duration
-            Assert.Equal(4, await play); // the first two seconds already played
-            Assert.Equal(5500, unduckMs);
+            report(TimeSpan.FromSeconds(6));
+            Assert.Equal(5500, delay); Assert.False(FlashOverlay.VoiceStarting); Assert.False(engine.Raise("AttentionCheckFail"));
+            FlashOverlay.CloseAll(false);
+            Assert.Equal(1, stops);
         }
         finally
         {
             FlashOverlay.CloseAll(false);
-            (FlashOverlay.VoiceDuration, CoreAudio.PlayStoppableProvider, FlashOverlay.AfterVoice, BarkHead.Engine, CoreAudio.DuckProvider, FlashOverlay.VoiceClock) =
-                (oldDuration, oldPlay, oldAfter, oldEngine, oldDuck, oldClock);
-            (s.AvatarEnabled, s.BarkChatSuppressionMs) = (avatar, suppression);
+            (CoreAudio.PlayStoppableProvider, FlashOverlay.AfterVoice, CoreAudio.DuckProvider, FlashOverlay.VoiceClock, BarkHead.Engine) = (oldPlay, oldAfter, oldDuck, oldClock, oldEngine);
+            (settings.AvatarEnabled, settings.BarkChatSuppressionMs) = oldSettings;
             File.Delete(file);
         }
     }
-
+    [Fact]
+    public async Task Unknown_playback_length_does_not_delay_start()
+    {
+        var file = Path.GetTempFileName(); var old = CoreAudio.PlayStoppableProvider;
+        try
+        {
+            CoreAudio.PlayStoppableProvider = (_, gain, _, start, finish) => { if (gain == 0) finish!(); else start!(TimeSpan.Zero); return () => finish!(); };
+            var play = FlashOverlay.PlayFlashVoice(new AppSettings { FlashAudioEnabled = true, MasterVolume = 100 }, file, FlashOverlay.Generation);
+            Assert.Same(play, await Task.WhenAny(play, Task.Delay(2000)));
+        }
+        finally { FlashOverlay.CloseAll(false); CoreAudio.PlayStoppableProvider = old; File.Delete(file); }
+    }
+    [Fact]
+    public async Task Stop_cancels_voice_even_before_a_start_callback()
+    {
+        var file = Path.GetTempFileName(); var old = CoreAudio.PlayStoppableProvider; int stops = 0;
+        try
+        {
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, finish) => () => { stops++; finish!(); };
+            var play = FlashOverlay.PlayFlashVoice(new AppSettings { FlashAudioEnabled = true, MasterVolume = 100 }, file, FlashOverlay.Generation);
+            FlashOverlay.CloseAll(false); Assert.Equal(1, stops);
+            Assert.Same(play, await Task.WhenAny(play, Task.Delay(2000)));
+        }
+        finally { FlashOverlay.CloseAll(false); CoreAudio.PlayStoppableProvider = old; File.Delete(file); }
+    }
     [Fact]
     public async Task Zero_gain_flash_reaches_the_real_backend_and_retains_its_duration()
     {
@@ -301,8 +299,6 @@ public class FlashVoiceTests
         try
         {
             CoreAudio.PlayStoppableProvider = audio.PlayOneShot;
-            var parsed = await FlashOverlay.VoiceDuration(path).WaitAsync(TimeSpan.FromSeconds(8));
-            Assert.InRange(parsed!.Value, 2.9, 3.1);
             var stop = audio.PlayOneShot(path, 0f, "flash-voice", t => { if (t > TimeSpan.Zero) started.TrySetResult(t); }, () => ended.TrySetResult());
             try
             {
@@ -314,15 +310,12 @@ public class FlashVoiceTests
         }
         finally { CoreAudio.PlayStoppableProvider = oldProvider; Directory.Delete(dir, true); }
     }
-
     [Fact]
     public async Task Cancelled_burst_stops_a_late_start_without_ducking()
     {
         var file = Path.GetTempFileName();
         var oldPlay = CoreAudio.PlayStoppableProvider;
         var oldDuck = CoreAudio.DuckProvider;
-        var oldDuration = FlashOverlay.VoiceDuration;
-        FlashOverlay.VoiceDuration = _ => Task.FromResult<double?>(null);
         try
         {
             Action<TimeSpan>? start = null;
@@ -337,6 +330,6 @@ public class FlashVoiceTests
             Assert.Equal(1, stops);
             Assert.Equal(0, ducks);
         }
-        finally { CoreAudio.PlayStoppableProvider = oldPlay; CoreAudio.DuckProvider = oldDuck; FlashOverlay.VoiceDuration = oldDuration; File.Delete(file); }
+        finally { CoreAudio.PlayStoppableProvider = oldPlay; CoreAudio.DuckProvider = oldDuck; File.Delete(file); }
     }
 }
