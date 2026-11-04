@@ -422,6 +422,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash .github/scripts/core-guards.sh
+      - run: bash .github/scripts/test-fetch-vosk-model.sh
       # The port docs parse: every ledger table row on one line, main-sync meta totals match, the dashboard builds
       # (shallow checkout, so its over-time chart has one point here; that is fine for a build check).
       - run: |
