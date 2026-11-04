@@ -313,4 +313,23 @@ public sealed class RainApplyTests : IDisposable
         Assert.Equal("idle", clips[0]);
         Assert.All(clips, c => Assert.Contains(c, webps));
     }
+
+    [Fact]
+    public void The_ready_frame_bakes_a_look_that_owes_one_and_nothing_else()
+    {
+        var init = new JObject { ["type"] = "init" };
+        var dress = RainLookCodec.Normalize("{\"rev\":1,\"items\":{\"dress\":\"rose-flare\"},\"colors\":{}}");
+        var apply = Controller(RoseFlare);
+        RainWardrobeHostService.Route(Msg(new { type = "rain-ready" }), apply, m => _posted.Add(Msg(m)), () => init, () => { }, () => dress);
+        // rain-baking = the dressing room's "1 of n" meter (fix wave F1c): a host-side re-bake counts too.
+        Assert.Equal(new[] { "init", "rain-bake", "rain-baking" }, _posted.Select(p => (string?)p["type"]));
+        Assert.Equal(RainLookHash.Compute(dress), (string?)_posted[1]["lookHash"]);
+        Assert.True(apply.IsBaking);
+        apply.Abort();
+
+        _posted.Clear();
+        RainWardrobeHostService.Route(Msg(new { type = "rain-ready" }), Controller(RoseFlare), m => _posted.Add(Msg(m)), () => init, () => { }, () => null);
+        Assert.Equal(new[] { "init" }, _posted.Select(p => (string?)p["type"]));
+        Assert.Equal(0, _commits);
+    }
 }

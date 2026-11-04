@@ -243,6 +243,23 @@ public sealed class RainLookSyncTests
         Assert.Empty(signedOut.Http.Seen);
     }
 
+    // ------------------------------------------------------------------ re-bake on adopt
+
+    [Fact]
+    public void An_adopted_look_without_a_pack_here_plays_the_embedded_clips_and_owes_a_bake()
+    {
+        var hash = RainLookHash.Compute(Dress);
+        Assert.Equal("", RainLookSync.PackFor(Dress, _ => false));
+        Assert.Equal(hash, RainLookSync.PackFor(Dress, h => h == hash));
+        Assert.Equal("", RainLookSync.PackFor("", _ => true));
+
+        Assert.True(RainLookSync.RebakeOwed(Dress, "", _ => false));
+        Assert.True(RainLookSync.RebakeOwed(Dress, RainLookHash.Compute(Hair), _ => true));   // a stale pack from a restore
+        Assert.True(RainLookSync.RebakeOwed(Dress, hash, _ => false));                         // the pack went missing
+        Assert.False(RainLookSync.RebakeOwed(Dress, hash, h => h == hash));
+        Assert.False(RainLookSync.RebakeOwed("", "", _ => false));                              // the default look needs no pack
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -262,35 +279,12 @@ public sealed class RainLookSyncTests
     public void Adoption_clamp_preserves_owned_items_and_removes_unowned_and_unknown_items()
     {
         var manifest = RainItemManifest.Parse("{\"rev\":1,\"items\":[{\"slot\":\"dress\",\"pageId\":\"rose-flare\",\"access\":\"shop\",\"grant\":\"cos.rain.dress.rose-flare\"}]}");
-        var progress = new Progress();
+        var progress = new Lvl();
         var owned = new RainItemAccess(manifest, new RainGrantSet(new[] { "cos.rain.dress.rose-flare" }), progress);
         var empty = new RainItemAccess(manifest, new RainGrantSet(null), progress);
         Assert.Equal(N(Dress), RainLookClamp.Clamp(Dress, owned));
         Assert.Equal("", RainLookClamp.Clamp(Dress, empty));
         Assert.Equal("", RainLookClamp.Clamp(Hair, owned));
-    }
-
-    private sealed class Progress : IRainProgressSource
-    {
-        public int Level => 1;
-        public IReadOnlyCollection<string> UnlockedAchievements => Array.Empty<string>();
-    }
-
-    // ------------------------------------------------------------------ re-bake on adopt
-
-    [Fact]
-    public void An_adopted_look_without_a_pack_here_plays_the_embedded_clips_and_owes_a_bake()
-    {
-        var hash = RainLookHash.Compute(Dress);
-        Assert.Equal("", RainLookSync.PackFor(Dress, _ => false));
-        Assert.Equal(hash, RainLookSync.PackFor(Dress, h => h == hash));
-        Assert.Equal("", RainLookSync.PackFor("", _ => true));
-
-        Assert.True(RainLookSync.RebakeOwed(Dress, "", _ => false));
-        Assert.True(RainLookSync.RebakeOwed(Dress, RainLookHash.Compute(Hair), _ => true));   // a stale pack from a restore
-        Assert.True(RainLookSync.RebakeOwed(Dress, hash, _ => false));                         // the pack went missing
-        Assert.False(RainLookSync.RebakeOwed(Dress, hash, h => h == hash));
-        Assert.False(RainLookSync.RebakeOwed("", "", _ => false));                              // the default look needs no pack
     }
 
     [Fact]
@@ -307,4 +301,9 @@ public sealed class RainLookSyncTests
         Assert.Equal(at, restored.RainLookAgreedUtc);
     }
 
+    private sealed class Lvl : IRainProgressSource
+    {
+        public int Level { get; init; } = 1;
+        public IReadOnlyCollection<string> UnlockedAchievements { get; init; } = Array.Empty<string>();
+    }
 }
