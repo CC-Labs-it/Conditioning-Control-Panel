@@ -8708,5 +8708,7 @@
   "online_official_nice": "Bello",
   "online_official_stamped_line": "I media online arrivano da Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\".",
   "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati.",
+  "installer_fileassoc_task": "Aggiungi 'Apri con CCP' al menu contestuale dei file multimediali (.mp4, .mp3, ecc.)",
+  "installer_fileassoc_group": "Associazioni file:",
   "installer_avalonia_upgrade_notice": "Aggiornamento ad Avalonia\n\nPassando da WPF, gli accessi nel browser integrato vengono reimpostati. Accedi di nuovo ai siti aperti in CCP.\n\nIl nuovo profilo browser_data_avalonia si trova nella cartella dei dati utente di CCP. Il vecchio profilo browser_data viene conservato.\n\nQuesta modifica non cancella i token dell’account CCP, le impostazioni o i progressi."
 }

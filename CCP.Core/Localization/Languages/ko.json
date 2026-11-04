@@ -7960,5 +7960,7 @@
   "online_official_nice": "좋아요",
   "online_official_stamped_line": "온라인 미디어는 Scrolller에서 가져옵니다. 모든 이미지와 클립에 작은 \"via Scrolller\" 표시가 있습니다.",
   "online_cache_day_line": "온라인 미디어는 이 컴퓨터의 작은 캐시에 하루 동안만 보관되며 업로드되지 않습니다.",
+  "installer_fileassoc_task": "미디어 파일(.mp4, .mp3 등)의 오른쪽 클릭 메뉴에 'CCP로 열기' 추가",
+  "installer_fileassoc_group": "파일 연결:",
   "installer_avalonia_upgrade_notice": "Avalonia 업그레이드\n\nWPF에서 업그레이드하면 내장 브라우저의 로그인 상태가 초기화됩니다. CCP에서 여는 웹사이트에 다시 로그인하세요.\n\n새 브라우저 프로필 browser_data_avalonia는 CCP 사용자 데이터 폴더에 있습니다. 기존 browser_data 프로필은 유지됩니다.\n\n이 변경으로 CCP 계정 토큰, 설정 또는 진행 상황은 지워지지 않습니다."
 }

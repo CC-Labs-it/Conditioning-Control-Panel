@@ -7960,5 +7960,7 @@
   "online_official_nice": "了解",
   "online_official_stamped_line": "オンラインメディアはScrolllerから届きます。各画像とクリップに小さな「via Scrolller」の表示があります。",
   "online_cache_day_line": "オンラインメディアはこのパソコンの小さなキャッシュに1日だけ保存され、アップロードされることはありません。",
+  "installer_fileassoc_task": "メディアファイル (.mp4、.mp3 など) の右クリックメニューに「CCP で開く」を追加",
+  "installer_fileassoc_group": "ファイルの関連付け:",
   "installer_avalonia_upgrade_notice": "Avalonia へのアップグレード\n\nWPF からアップグレードすると、内蔵ブラウザーのログイン状態がリセットされます。CCP 内で開くサイトに再度ログインしてください。\n\n新しいブラウザープロファイル browser_data_avalonia は CCP のユーザーデータフォルダーにあります。古い browser_data プロファイルは保持されます。\n\nこの変更によって CCP のアカウントトークン、設定、進行状況が消去されることはありません。"
 }
