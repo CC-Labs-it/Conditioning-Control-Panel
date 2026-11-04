@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -42,6 +43,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static List<Bitmap> _frames = new();
         private static int _index;
         private static DispatcherTimer? _gifTimer;
+
+        internal static void RaiseActive(Action<Window> raise)
+        {
+            foreach (var w in Windows) if (w.IsVisible) raise(w);
+        }
 
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
         internal static bool IsShowing => Windows.Count > 0;

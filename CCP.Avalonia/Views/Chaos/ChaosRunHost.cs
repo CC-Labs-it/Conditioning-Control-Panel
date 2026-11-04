@@ -393,6 +393,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             foreach (var toy in _toyButtons) Raise(toy);
             RaiseBubbles();
             ChaosGifCascadeOverlay.RaiseActive();
+            ChaosFlashOverlay.RaiseActive(RaiseChromeWindow);
+            FlashOverlay.RaiseAll(RaiseChromeWindow);
         }
 
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>

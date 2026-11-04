@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
@@ -23,6 +24,45 @@ public sealed class OverlayBackendDispatchTests
 
     [Fact]
     public void NoHandle_IsNoBackend() => Assert.Equal(OverlayBackend.None, X11Overlay.BackendOf(null));
+
+    [Fact]
+    public void Win32RaiseRequestsTopmostWithoutMovingSizingOrActivating()
+    {
+        var handle = new IntPtr(42);
+        bool called = false;
+        Assert.True(Win32Overlay.Raise(handle, (hwnd, after, x, y, width, height, flags) =>
+        {
+            called = true;
+            Assert.Equal(handle, hwnd);
+            Assert.Equal(new IntPtr(-1), after);
+            Assert.Equal((0, 0, 0, 0, 0x13u), (x, y, width, height, flags));
+            return true;
+        }));
+        Assert.True(called);
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateWindowExW(uint exStyle, string className, string windowName,
+        uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
+    [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr hwnd);
+
+    [Fact]
+    public void Win32RaisePreservesNativeExtendedStyles()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const uint noActivate = 0x08000000;
+        var hwnd = CreateWindowExW(noActivate, "STATIC", "raise test", 0, 0, 0, 100, 100,
+            IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        Assert.NotEqual(IntPtr.Zero, hwnd);
+        try
+        {
+            var before = Win32Overlay.GetWindowLong(hwnd, -20);
+            Assert.NotEqual(0u, before & noActivate);
+            Assert.True(Win32Overlay.Raise(hwnd));
+            Assert.Equal(before | Win32Overlay.WsExTopmost, Win32Overlay.GetWindowLong(hwnd, -20));
+        }
+        finally { DestroyWindow(hwnd); }
+    }
 
     [Fact]
     public void Win32Style_AddsOverlayBits_AndTogglesTransparentWithNoActivate()
