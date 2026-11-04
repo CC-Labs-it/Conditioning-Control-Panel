@@ -2,8 +2,7 @@
 // "ink slip" card and its "?" button). Catalog and words are Core (LeashHelpCatalog).
 // Flat on this head (P82): the WPF DropShadowEffect is a BoxShadow on the card. The popup sits on the
 // window's overlay layer where the platform allows it and is never Topmost (WPF DropTopmost).
-// ponytail: LeashHelpButton.Badged (row icon as its own "?") and AsToolTip (Let go row) land with the
-// holder card unit (sync7-leash-c, rows 179/180), which is also the first host of these slips here.
+// The holder release menu hosts the let-go slip as a tooltip; Badged remains for row icons.
 using System;
 using System.Globalization;
 using Avalonia;

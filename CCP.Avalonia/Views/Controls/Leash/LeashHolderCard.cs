@@ -12,6 +12,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Controls.Leash;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
@@ -48,6 +50,8 @@ public sealed class LeashHolderCard : Border
         AttachedToVisualTree += (_, _) => { if (_result != null) ArmExpiry(); };
         Render();
     }
+    internal Action<LeashCue> PlayCue { get; set; } = LeashSound.Play;
+    internal Action<string, NotificationType> Notify { get; set; } = (text, type) => App.Notifications.Show(text, type);
     internal TimeProvider Clock { get; init; } = TimeProvider.System;
     internal string? OpenSheet => _sheet;
     internal string? ResultText => _result?.Text;
@@ -68,7 +72,18 @@ public sealed class LeashHolderCard : Border
         Grid.SetColumn(who, 1); head.Children.Add(who);
         var more = Button("…", "leash-holder-more", F.Text);
         var menu = new ContextMenu();
-        var release = new MenuItem { Header = Loc.GetF("leash_menu_release", _held.Who.Name), Tag = "leash-menu-release" };
+        var releaseHead = new StackPanel { Orientation = Orientation.Horizontal };
+        releaseHead.Children.Add(Text(Loc.GetF("leash_menu_release", _held.Who.Name), 13, F.Text));
+        releaseHead.Children.Add(new Border { Width = 14, Height = 14, CornerRadius = new CornerRadius(7),
+            BorderBrush = F.Lilac, BorderThickness = new Thickness(1), Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center, Tag = "leash-slip-help:" + LeashHelpCatalog.LetGoId,
+            Child = new TextBlock { Text = "?", FontSize = 9, FontWeight = FontWeight.Bold, Foreground = F.Lilac,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
+        var release = new MenuItem { Header = releaseHead, Tag = "leash-menu-release" };
+        ToolTip.SetTip(release, new ToolTip { Content = new LeashHelpSlip(LeashHelpCatalog.Get(LeashHelpCatalog.LetGoId)!, _held.Who.Name),
+            Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0, 0, 8, 10) });
+        ToolTip.SetPlacement(release, PlacementMode.Right);
+        ToolTip.SetShowDelay(release, 250);
         release.Click += (_, _) => ConfirmRelease();
         menu.Items.Add(release);
         more.ContextMenu = menu;
@@ -121,6 +136,9 @@ public sealed class LeashHolderCard : Border
     {
         bool ok = false;
         try { if (_service() is { } s) ok = await s.ReleaseAsync(_held.Who.Id); } catch { }
+        try { PlayCue(ok ? LeashCue.Cut : LeashCue.Denied); } catch { }
+        try { Notify(Loc.GetF(ok ? "leash_release_done" : "leash_release_failed", _held.Who.Name),
+            ok ? NotificationType.Info : NotificationType.Warning); } catch { }
         if (!ok)
         {
             _result = (Loc.GetF("leash_release_failed", _held.Who.Name), false);

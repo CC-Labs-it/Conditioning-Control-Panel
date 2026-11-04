@@ -14,6 +14,10 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Controls.Leash;
@@ -107,6 +111,77 @@ public sealed class LeashHolderTests
         Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
         card.Render();
         Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
+    });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReleaseReportsOutcomeEvenWhenTheCardIsRemoved(bool success) => Run((page, svc, held) =>
+    {
+        var card = Assert.Single(page.HolderCards.Values);
+        var cues = new List<LeashCue>();
+        var notices = new List<(string, NotificationType)>();
+        card.PlayCue = cues.Add;
+        card.Notify = (text, type) => notices.Add((text, type));
+        svc.ReleaseResult = success;
+        Assert.Equal(success, card.ReleaseAsync().GetAwaiter().GetResult());
+        if (success) Assert.Empty(page.HolderCards);
+        Assert.Equal(success ? LeashCue.Cut : LeashCue.Denied, Assert.Single(cues));
+        Assert.Equal((Loc.GetF(success ? "leash_release_done" : "leash_release_failed", held.Who.Name),
+            success ? NotificationType.Info : NotificationType.Warning), Assert.Single(notices));
+    });
+
+    [Fact]
+    public void ReleaseMenuOpensTheLetGoSlip() => Run((page, svc, held) =>
+    {
+        var card = Assert.Single(page.HolderCards.Values);
+        var more = Tagged<Button>(card, "leash-holder-more");
+        LeashGateCardTests.Click(more);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(more.ContextMenu!.IsOpen);
+        var release = Assert.IsType<MenuItem>(Assert.Single(more.ContextMenu.Items));
+        var head = Assert.IsType<StackPanel>(release.Header);
+        Assert.Contains(head.Children, c => c.Tag as string == "leash-slip-help:" + LeashHelpCatalog.LetGoId);
+        var tip = Assert.IsType<ToolTip>(ToolTip.GetTip(release));
+        ToolTip.SetIsOpen(release, true);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(ToolTip.GetIsOpen(release));
+        var slip = Assert.IsType<LeashHelpSlip>(tip.Content);
+        Assert.Equal(LeashHelpCatalog.LetGoId, slip.Entry.Id);
+        Assert.Equal(Loc.Get("leash_slip_letgo_cap"), slip.CaptionText);
+        Assert.Contains(slip.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("leash_slip_letgo_lim"));
+        Assert.Empty(svc.Calls);
+        ToolTip.SetIsOpen(release, false);
+        more.ContextMenu.Close();
+    });
+
+    [Fact]
+    public void ReleaseSoundsUseWpfAssetsAndVolumes() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = CoreSettings.Current;
+        var volume = settings.MasterVolume;
+        var output = CoreAudio.IsOutputSuppressedProvider;
+        var play = CoreAudio.PlayOneShotProvider;
+        var mod = CoreModArt.AudioOverridePathProvider;
+        var played = new List<(string, float, string)>();
+        try
+        {
+            settings.MasterVolume = 100;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreModArt.AudioOverridePathProvider = _ => null;
+            CoreAudio.PlayOneShotProvider = (path, v, tag, _, _) => played.Add((System.IO.Path.GetFileName(path), v, tag));
+            var now = DateTime.UtcNow;
+            var rules = new LeashSfxRules();
+            LeashSound.Play(LeashCue.Denied, now, rules);
+            LeashSound.Play(LeashCue.Cut, now.AddSeconds(4), rules);
+            Assert.Equal(new[] { ("ui_denied.mp3", 0.16f, "leash-denied"), ("snap.mp3", 0.22f, "leash-cut") }, played);
+        }
+        finally
+        {
+            settings.MasterVolume = volume;
+            CoreAudio.IsOutputSuppressedProvider = output;
+            CoreAudio.PlayOneShotProvider = play;
+            CoreModArt.AudioOverridePathProvider = mod;
+        }
     });
     [Fact]
     public void HoldingAloneReachesTheCardAndPollsKeepItsOpenSheet() => Run((page, svc, held) =>
