@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     public partial class WorkshopTriggersCell : UserControl
     {
         private bool _loading;
+        private bool _attached;
         private TriggerSettings? _observed;
 
         public event EventHandler? PhrasePresetSelectionChanged;
@@ -63,19 +64,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            _attached = true;
             if (CoreSettings.Service is { } service) service.CurrentReplaced += OnCurrentReplaced;
             ObserveSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            _attached = false;
             if (CoreSettings.Service is { } service) service.CurrentReplaced -= OnCurrentReplaced;
             if (_observed != null) _observed.PropertyChanged -= OnSettingsChanged;
             _observed = null;
             base.OnDetachedFromVisualTree(e);
         }
 
-        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(ObserveSettings);
+        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_attached) ObserveSettings();
+        });
 
         private void ObserveSettings()
         {
