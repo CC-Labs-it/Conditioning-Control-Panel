@@ -7959,5 +7959,15 @@
   "online_official_plan_prime": "O Prime recebe a maior cota diária. O que você já viu repete de graça.",
   "online_official_nice": "Legal",
   "online_official_stamped_line": "A mídia online vem do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\".",
-  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada."
+  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada.",
+  "chaos_expiry_label": "DESVANECIDA",
+  "chaos_expiry_halved": "💨 {0} sumiu… sequência reduzida a x{1}",
+  "chaos_expiry_gone": "💨 {0} sumiu",
+  "chaos_expiry_name_lucky": "bolha da sorte",
+  "chaos_expiry_name_flash": "flash",
+  "chaos_expiry_name_subliminal": "subliminar",
+  "chaos_expiry_name_pink": "filtro rosa",
+  "chaos_expiry_name_spiral": "espiral",
+  "chaos_expiry_name_braindrain": "brain drain",
+  "chaos_expiry_name_gif": "cascata de GIFs"
 }

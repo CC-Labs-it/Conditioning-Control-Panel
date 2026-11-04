@@ -8712,5 +8712,15 @@
   "online_official_plan_prime": "Prime gets the biggest daily share. Anything you've already seen replays free.",
   "online_official_nice": "Nice",
   "online_official_stamped_line": "Online media comes from Scrolller. Each picture and clip carries a small \"via Scrolller\" mark.",
-  "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded."
+  "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded.",
+  "chaos_expiry_label": "FADED",
+  "chaos_expiry_halved": "💨 {0} faded… streak halved to x{1}",
+  "chaos_expiry_gone": "💨 {0} faded away",
+  "chaos_expiry_name_lucky": "lucky bubble",
+  "chaos_expiry_name_flash": "flash",
+  "chaos_expiry_name_subliminal": "subliminal",
+  "chaos_expiry_name_pink": "pink_filter",
+  "chaos_expiry_name_spiral": "spiral",
+  "chaos_expiry_name_braindrain": "braindrain",
+  "chaos_expiry_name_gif": "gif cascade"
 }

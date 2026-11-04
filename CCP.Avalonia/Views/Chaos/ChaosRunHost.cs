@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
@@ -38,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
-    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
+    /// motion but FloatUp, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// ripple-denial pop text. First taste and snap now bank and toast; play/draft firsts remain missing. Also missing: the boon draft
@@ -166,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = 0;
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTreatExpired);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
@@ -244,6 +246,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
             ShowPopScore(pts);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+        }
+
+        /// <summary>WPF BubbleService.Dissolve :4864 and ChaosModeService.OnTreatExpired :1898.</summary>
+        internal static void OnTreatExpired(AmbientBubble b)
+        {
+            if (_state == null || b.Spec == null || _manualPaused || _lessonCardPaused) return;
+            Label(b, Loc.Get("chaos_expiry_label"), Color.FromRgb(0xB8, 0xB8, 0xD0));
+            string name = b.Spec.IsGolden ? Loc.Get("chaos_expiry_name_lucky") : b.Spec.Payload.DisplayName switch
+            {
+                "flash" => Loc.Get("chaos_expiry_name_flash"),
+                "subliminal" => Loc.Get("chaos_expiry_name_subliminal"),
+                "pink_filter" => Loc.Get("chaos_expiry_name_pink"),
+                "spiral" => Loc.Get("chaos_expiry_name_spiral"),
+                "braindrain" => Loc.Get("chaos_expiry_name_braindrain"),
+                "gif cascade" => Loc.Get("chaos_expiry_name_gif"),
+                _ => b.Spec.Payload.DisplayName
+            };
+            if (_state.Combo > 1)
+            {
+                _state.Combo /= 2;
+                _state.PushEvent(IconLabel.ForKey("chaos_expiry_halved", name, _state.Combo).Source);
+            }
+            else
+            {
+                _state.Combo = 0;
+                _state.PushEvent(IconLabel.ForKey("chaos_expiry_gone", name).Source);
+            }
+            Pulse(Color.FromRgb(150, 150, 175), 0.10);
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
