@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 // keep the production surface internal while granting those dedicated processes test access.
 [assembly: InternalsVisibleTo("CCP.Avalonia.Consent.Tests")]
 [assembly: InternalsVisibleTo("CCP.Avalonia.GeneralSettings.Tests")]
+[assembly: InternalsVisibleTo("CCP.Avalonia.Language.Tests")]
 [assembly: InternalsVisibleTo("CCP.Avalonia.Report.Tests")]
 [assembly: InternalsVisibleTo("CCP.Avalonia.Snapshot.Tests")]
 [assembly: InternalsVisibleTo("CCP.Avalonia.Tests")]

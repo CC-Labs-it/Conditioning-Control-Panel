@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -156,9 +157,60 @@ internal static class AccountSeed
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
 
+    // WPF EntitlementTierSync.cs:223-237,272-297: throttle focus reads and keep only one in flight.
+    internal static Func<DateTime> FocusClock = () => DateTime.UtcNow;
+    internal static DateTime LastFocusCheckUtc = DateTime.MinValue;
+    private static int _focusInFlight;
+
+    internal static void OnAppFocused()
+    {
+        var s = CoreSettings.Current;
+        var (account, token) = (s.UnifiedId, s.AuthToken);
+        if (s.OfflineMode || string.IsNullOrEmpty(account) || string.IsNullOrEmpty(token)) return;
+        var now = FocusClock();
+        if (now - LastFocusCheckUtc < TimeSpan.FromSeconds(20)) return;
+        LastFocusCheckUtc = now;
+        if (Interlocked.Exchange(ref _focusInFlight, 1) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var node = await NewV2().GetUserProfileNodeAsync(account);
+                if (EntitlementTierRule.ParseTier(node?["effective_tier"]) is int tier)
+                    OfferHeartbeatTier(tier, account, token, "focus");
+            }
+            catch (Exception ex) { Log.Debug(ex, "Focus tier refresh failed"); }
+            finally { Interlocked.Exchange(ref _focusInFlight, 0); }
+        });
+    }
+
+    // WPF EntitlementTierSync.cs:33,61-66: valid authenticated readings only, scoped to this session.
+    private static volatile string? _tierAnsweredAccount, _tierAnsweredToken;
+    internal static bool ServerTierAnsweredThisRun => !CoreSettings.Current.OfflineMode
+        && !string.IsNullOrEmpty(_tierAnsweredToken) && _tierAnsweredAccount == CoreSettings.Current.UnifiedId
+        && _tierAnsweredToken == CoreSettings.Current.AuthToken;
+
+    internal static bool NoteTierReading(int tier, string account, string? token)
+    {
+        var s = CoreSettings.Current;
+        if (s.OfflineMode || tier < 0 || tier > EntitlementTierRule.MaxTier || string.IsNullOrEmpty(account)
+            || string.IsNullOrEmpty(token) || account != s.UnifiedId || token != s.AuthToken) return false;
+        (_tierAnsweredAccount, _tierAnsweredToken) = (account, token);
+        return true;
+    }
+
+    // WPF EntitlementTierSync.cs:43-53,60-94: apply a live rise on the UI thread.
+    internal static void OfferHeartbeatTier(int tier, string account, string? token, string source = "heartbeat") =>
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            try { if (NoteTierReading(tier, account, token)) ApplyTierReading(tier, source); }
+            catch (Exception ex) { Log.Warning(ex, "Heartbeat tier apply failed"); }
+        });
+
     /// <summary>A confirmed reading ended a grace window: the same repaint as a tier change, with no
     /// celebration, which is why it is not TierChanged (WPF EntitlementTierSync.GraceClosed).</summary>
     internal static event Action? GraceClosed;
+    internal static event Action<int>? TierRaised;
 
     private static readonly EntitlementReadings Readings = new();
 
@@ -203,6 +255,11 @@ internal static class AccountSeed
             if (!reading.Rose && after <= before) return;
             var tier = reading.Rose ? serverTier!.Value : after;
             Log.Information("[Entitlement] {Source}: access now tier {Tier}", source, tier);
+            if (reading.Rose)
+            {
+                try { TierRaised?.Invoke(tier); }
+                catch (Exception ex) { Log.Warning(ex, "[Entitlement] TierRaised handler failed"); }
+            }
             Patreon?.NotifyEntitlementRaised(tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
         }
         catch (Exception ex) { Log.Warning(ex, "[Entitlement] apply failed ({Source})", source); }
@@ -212,6 +269,7 @@ internal static class AccountSeed
     {
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
+        var token = s.AuthToken;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
@@ -220,7 +278,8 @@ internal static class AccountSeed
             return false;
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
-        ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
+        if (EntitlementTierRule.ParseTier(user.EffectiveTierRaw) is int tier && NoteTierReading(tier, id, token))
+            ApplyTierReading(tier, "profile");
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);

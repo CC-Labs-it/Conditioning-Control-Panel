@@ -349,12 +349,20 @@ namespace ConditioningControlPanel.Services
             Interlocked.Exchange(ref _heartbeat, null)?.Dispose();
         }
 
+        /// <summary>Optional head callback for valid heartbeat tiers (WPF ProfileSyncService.cs:744).</summary>
+        public Action<int, string, string?>? TierReceived { get; set; }
+
         /// <summary>WPF's four fields (Core <see cref="SyncBody.Heartbeat"/>); is_active true, as WPF with no idle tracker.</summary>
         public Task<bool> HeartbeatAsync()
         {
             var s = CoreSettings.Current;
             if (!SignedIn(s)) return Task.FromResult(false);
-            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession(), HeartbeatBody);
+            var (id, token) = (s.UnifiedId!, s.AuthToken);
+            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(id, true, _inSession(), body =>
+            {
+                HeartbeatBody?.Invoke(body);
+                if (EntitlementTierRule.ParseHeartbeatTier(body) is int tier) TierReceived?.Invoke(tier, id, token);
+            });
         }
     }
 }

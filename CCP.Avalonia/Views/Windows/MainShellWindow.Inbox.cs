@@ -87,6 +87,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return flat.Length <= max ? flat : flat.Substring(0, max - 1).TrimEnd() + "…";
         }
 
+        /// <summary>WPF MainWindow.Patreon.cs TierOnNoticePass: a repeat rise after the one-time celebration.</summary>
+        internal void TierOnNoticePass(bool mayShow)
+        {
+            try
+            {
+                var settings = CoreSettings.Current;
+                // WPF EntitlementTierSync.EffectiveTierNow: an invite week is not a plan.
+                var current = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess
+                    && !global::ConditioningControlPanel.Services.ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, settings) ? 1 : 0;
+                var verdict = Services.TierOnNotice.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: Platform.AccountSeed.ServerTierAnsweredThisRun);
+                if (verdict.Record != settings.LastKnownEffectiveTier) { settings.LastKnownEffectiveTier = verdict.Record; CoreSettings.Save(); }
+                if (!verdict.Owed || !mayShow
+                    || Services.TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
+                var title = global::ConditioningControlPanel.Localization.Loc.Get(Services.TierOnNotice.TitleKey(current));
+                var body = global::ConditioningControlPanel.Localization.Loc.Get("tier_on_body");
+                StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "tier-on:" + current,
+                    Glyph = "💖",
+                    Title = title,
+                    Summary = body,
+                    Open = () => InboxNoticeCard.Present(this, title, body, null, null),
+                });
+            }
+            catch (Exception ex) { Log.Debug(ex, "Tier-on notice failed"); }
+        }
+
         private void CloseInboxPopup()
         {
             try

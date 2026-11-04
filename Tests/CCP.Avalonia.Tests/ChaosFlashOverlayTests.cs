@@ -78,8 +78,10 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
-    public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation()
+    public async Task DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation()
     {
+        // Bitmap needs the render platform; do not rely on an earlier test having set it up (P02).
+        await AvaloniaTestDispatcher.RunAsync(() => { Setup(); return Task.CompletedTask; });
         var gif = WriteGif(out var dir);
         try
         {

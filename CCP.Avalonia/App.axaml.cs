@@ -671,10 +671,7 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown, DescentReader = Descent };
-                    // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
-                    sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
-                        Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
+                        { Countdown = DescentCountdown, DescentReader = Descent, TierReceived = (tier, account, token) => Platform.AccountSeed.OfferHeartbeatTier(tier, account, token) };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>

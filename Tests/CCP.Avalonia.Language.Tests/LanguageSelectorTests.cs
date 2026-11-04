@@ -15,6 +15,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
+using ConditioningControlPanel.Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -469,6 +470,7 @@ public sealed class LanguageSelectorTests
         settings.Current.Language = "ja";
         settings.Current.SessionRackSourceFilter = "all";
         settings.Current.Welcomed = true;
+        settings.Current.LastKnownEffectiveTier = 0; // Returning profile: this baseline is already recorded.
         // The Dashboard's launch cards spend their seen-flag (a real save) when they open, like WPF;
         // spent here so the no-startup-save assertion keeps measuring startup itself.
         settings.Current.SeenFeatureIntros.AddRange(new[] { "daily-free", "one-account" });
@@ -534,6 +536,7 @@ public sealed class LanguageSelectorTests
         };
 
         AppBuilder.Configure<CatalogueTestApp>(() => new CatalogueTestApp(customFolder, builtInFolder))
+            .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithLifetime(lifetime);

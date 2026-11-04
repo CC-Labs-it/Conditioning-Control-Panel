@@ -271,7 +271,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializePremiumCelebration()
         {
             Opened += (_, _) => MaybeShowPremiumCelebration();
+            Activated += (_, _) => { Platform.AccountSeed.OnAppFocused(); TierOnNoticePass(mayShow: true); };
             System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(MaybeShowPremiumCelebration);
+            void OnTierRaised(int raisedTier) => _pendingRiseTier = raisedTier;
+            Platform.AccountSeed.TierRaised += OnTierRaised;
             var patreon = Platform.AccountSeed.Patreon;
             var substar = Platform.AccountSeed.SubscribeStar;
             if (patreon != null) patreon.TierChanged += tier;
@@ -280,22 +283,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (patreon != null) patreon.TierChanged -= tier;
                 if (substar != null) substar.TierChanged -= tier;
+                Platform.AccountSeed.TierRaised -= OnTierRaised;
             };
         }
 
         /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1118): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
-        /// is spent at open time. ponytail: no live-rise path (EntitlementTierSync.TierRaised, the immediate card and the
-        /// profile-bubble fanfare) on this head yet, so every grant takes the presenter route.</summary>
+        /// is spent at open time. The immediate live-rise card and profile-bubble fanfare are still missing.</summary>
+        private int _pendingRiseTier;
+
         internal void MaybeShowPremiumCelebration()
         {
+            var onRise = _pendingRiseTier > 0;
+            _pendingRiseTier = 0; // WPF consumes the live rise on this pass, even if it cannot show.
             try
             {
-                if (!CoreAccount.HasPremiumAccess) return;
+                if (!CoreAccount.HasPremiumAccess) { TierOnNoticePass(mayShow: false); return; }
                 var s = CoreSettings.Current;
-                if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
+                if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) { TierOnNoticePass(mayShow: false); return; }
                 var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false)) return;
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise)) { TierOnNoticePass(mayShow: true); return; }
+                TierOnNoticePass(mayShow: false);
                 var key = TierCelebration.KeyFor(tier)!;
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
