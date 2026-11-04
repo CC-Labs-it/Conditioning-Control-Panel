@@ -181,7 +181,14 @@ internal sealed class KeywordAudioRuntime
         // WPF :1698-1701 checks the legacy path as stored, without the action path resolver.
         // A held or missing legacy clip still ducks and releases after 500 ms (:1692-1695,1742-1745).
         var running = CoreSession.IsEngineRunning || CoreSession.IsSessionRunning;
-        if (audio != null && running && (!legacy || File.Exists(audio.FilePath))) Play(audio, resolveRelative: !legacy);
+        if (audio != null && running && (!legacy || File.Exists(audio.FilePath)) && Play(audio, resolveRelative: !legacy)) { }
+        else if (!legacy && running && s.AudioDuckingEnabled && audio?.DuckSystemAudio == true &&
+            fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().Count(a => a.Enabled) == 1)
+        {
+            // WPF KeywordTriggerService.cs:1351-1359,1378-1387 ducks even when no clip exists.
+            CoreAudio.Duck(s.DuckingLevel);
+            _ = ReleaseLegacyDuck(CoreAudio.DuckGeneration);
+        }
         else if (legacy && fired[0].DuckAudio)
         {
             // The pending release survives a clip stop. Keep each generation local.
@@ -215,9 +222,9 @@ internal sealed class KeywordAudioRuntime
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio, bool resolveRelative)
+    private bool Play(PlayAudioAction audio, bool resolveRelative)
     {
-        if (string.IsNullOrEmpty(audio.FilePath)) return;
+        if (string.IsNullOrEmpty(audio.FilePath)) return false;
         var path = audio.FilePath;
         if (resolveRelative && !Path.IsPathRooted(path))
         {
@@ -225,7 +232,7 @@ internal sealed class KeywordAudioRuntime
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path)) return false;
         StopAudio();
         var cancellation = _audio = new CancellationTokenSource();
         var token = cancellation.Token;
@@ -235,6 +242,7 @@ internal sealed class KeywordAudioRuntime
             _duckGeneration = CoreAudio.DuckGeneration;
         }
         _ = Repeat();
+        return true;
         async Task Repeat()
         {
             try

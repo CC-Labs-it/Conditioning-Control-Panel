@@ -89,6 +89,47 @@ public sealed class KeywordAudioRuntimeTests
         finally { PanicAftermath.EndQuiet(); }
     }
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public Task MissingActionClipDucksOnlyWhenRunningAndEnabled(bool running, bool enabled) => RunAsync(async (engine, s, played) =>
+    {
+        var action = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        action.FilePath = "missing-keyword-clip";
+        action.DuckSystemAudio = true;
+        var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled);
+        var release = new TaskCompletionSource();
+        var unducked = new TaskCompletionSource<long>();
+        var delays = new List<int>();
+        var ducks = 0;
+        try
+        {
+            CoreSession.IsEngineRunningProvider = () => running;
+            s.AudioDuckingEnabled = enabled;
+            CoreAudio.DuckProvider = _ => ducks++;
+            CoreAudio.DuckGenerationProvider = () => 42;
+            CoreAudio.UnduckProvider = generation => unducked.TrySetResult(generation);
+            engine.Delay = (ms, token) => { delays.Add(ms); return release.Task; };
+            Type(engine, "sit");
+            Assert.Empty(played);
+            Assert.Equal(running && enabled ? 1 : 0, ducks);
+            Assert.Equal(running && enabled ? new[] { 500 } : Array.Empty<int>(), delays);
+            if (running && enabled)
+            {
+                release.SetResult();
+                Assert.Equal(42, await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            }
+        }
+        finally
+        {
+            release.TrySetResult();
+            if (delays.Count > 0 && !unducked.Task.IsCompleted)
+                try { await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)); } catch (TimeoutException) { }
+            (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled) = old;
+        }
+    });
+
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
     {
