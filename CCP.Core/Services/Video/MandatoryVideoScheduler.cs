@@ -101,6 +101,18 @@ namespace ConditioningControlPanel.Services
             _library = library ?? LocalLibrary;
         }
 
+        /// <summary>Whether the enabled local or pack library can supply a scheduled clip.</summary>
+        public bool HasPlayableContent()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                return KeepByLength(_library(), s.VideoMinDurationSeconds, s.VideoMaxDurationSeconds, DurationOf).Count > 0
+                    || PackVideos?.HasEntries == true;
+            }
+            catch { return false; }
+        }
+
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;

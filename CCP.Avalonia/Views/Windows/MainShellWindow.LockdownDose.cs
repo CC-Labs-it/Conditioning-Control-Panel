@@ -23,10 +23,9 @@ public partial class MainShellWindow
     private readonly HashSet<string> _doseFlipped = new(StringComparer.OrdinalIgnoreCase);
     private static readonly string[] DoseStarter = { "flash", "subliminal", "spiral", "pinkfilter", "bouncingtext", "bubbles" };
     private static readonly string[] DoseWall = { "flash", "subliminal", "spiral", "pinkfilter", "bouncingtext", "bubbles", "video", "mindwipe", "lockcard", "bubblecount", "braindrain" };
-    private static readonly string[] DoseVideoExtensions = { ".mp4", ".mov", ".avi", ".wmv", ".mkv", ".webm" };
     private static string DoseRecoveryPath => Path.Combine(CorePaths.UserData, "lockdown-dose.json");
     // Headless tests can exercise a desktop-capable backend without opening real overlays.
-    internal bool? DoseOverlaySupportForTests;
+    internal bool? DoseOverlaySupportForTests, DoseVideoReadyForTests;
 
     private void InitializeLockdownDoseEngine()
     {
@@ -39,6 +38,11 @@ public partial class MainShellWindow
         void Activate() => OnUi(() =>
         {
             if (!ld.IsActive || !CoreSettings.Current.LockdownDoseKeeperEnabled) return;
+            if (File.Exists(DoseRecoveryPath))
+            {
+                RecoverLockdownDose();
+                if (File.Exists(DoseRecoveryPath)) return;
+            }
             _doseEngineArmed = true;
             _doseEngineWasRunning = CoreEngine.IsRunning;
             _doseEngineRequested = false;
@@ -174,7 +178,7 @@ public partial class MainShellWindow
 
     private bool DoseFeatureAvailable(string key)
     {
-        if (key == "video") return CoreEngine.Video != null && DoseVideoAvailable();
+        if (key == "video") return (DoseVideoReadyForTests ?? (LibVlcAudio.Shared != null)) && CoreEngine.Video?.HasPlayableContent() == true;
         if (DoseOverlaySupportForTests is bool supported) return supported;
         return key switch
         {
@@ -182,17 +186,6 @@ public partial class MainShellWindow
             "pinkfilter" => PinkFilterOverlay.CanShowTint(this),
             _ => X11Overlay.BackendOf(TryGetPlatformHandle()) != OverlayBackend.None && X11Overlay.IsAvailable,
         };
-    }
-
-    private static bool DoseVideoAvailable()
-    {
-        try
-        {
-            var dir = Path.Combine(CorePaths.EffectiveAssets, "videos");
-            return Directory.Exists(dir) && Directory.EnumerateFiles(dir, "*.*", SearchOption.AllDirectories)
-                .Any(f => DoseVideoExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()));
-        }
-        catch { return false; } // Unknown assets cannot guarantee a runnable feature.
     }
 
     private void WriteDoseRecovery()
@@ -216,7 +209,7 @@ public partial class MainShellWindow
     // WPF DoseKeeper:545-575, called after settings load and before the engine can start.
     internal static void RecoverLockdownDose()
     {
-        var delete = true;
+        var delete = false;
         try
         {
             if (!File.Exists(DoseRecoveryPath)) return;

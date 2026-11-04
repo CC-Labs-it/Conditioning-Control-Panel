@@ -39,6 +39,8 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Decrypts on record (tests, diagnostics).</summary>
         public int TempCount { get { lock (_lock) return _temps.Count; } }
+        /// <summary>Whether the active, enabled pack pool has entries, without drawing or decrypting.</summary>
+        public bool HasEntries { get { lock (_lock) return Entries().Count > 0; } }
 
         /// <summary>
         /// WPF GetNextImages (FlashService.cs:3555-3563), GetNextVideo (VideoService.cs:8017-8026) and

@@ -29,7 +29,7 @@ public class LockdownDoseEngineTests
                 .SetupWithoutStarting();
     }
 
-    private static MainShellWindow NewDoseShell() => new() { DoseOverlaySupportForTests = true };
+    private static MainShellWindow NewDoseShell() => new() { DoseOverlaySupportForTests = true, DoseVideoReadyForTests = true };
 
     [Fact]
     public async Task ActivationStartsAnEnabledDoseAndGivesTheEngineBack()
@@ -379,9 +379,11 @@ public class LockdownDoseEngineTests
     }
 
     [Theory]
-    [InlineData("clip.mp4", true)]
-    [InlineData("clip.ccpenh.json", false)]
-    public async Task PreviousVideoIsPickedOnlyWhenPlayableAssetsExist(string filename, bool playable)
+    [InlineData("clip.mp4", true, false)]
+    [InlineData("clip.m4v", true, false)]
+    [InlineData("clip.mp4", false, true)]
+    [InlineData("clip.ccpenh.json", false, false)]
+    public async Task PreviousVideoIsPickedOnlyWhenPlayableAssetsExist(string filename, bool playable, bool excluded)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -391,6 +393,7 @@ public class LockdownDoseEngineTests
             var dir = System.IO.Path.Combine(CorePaths.UserData, "dose-assets-" + Guid.NewGuid());
             System.IO.Directory.CreateDirectory(System.IO.Path.Combine(dir, "videos", "category"));
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "videos", "category", filename), "");
+            if (excluded) s.DisabledAssetPaths.Add("videos/category/" + filename);
             var previous = CorePaths.EffectiveAssetsProvider;
             var previousVideo = CoreEngine.Video;
             CorePaths.EffectiveAssetsProvider = () => dir;
@@ -458,12 +461,12 @@ public class LockdownDoseEngineTests
             EmptyDose(s); s.SpiralEnabled = s.PinkFilterEnabled = s.LockdownDoseKeeperEnabled = true;
             var dir = System.IO.Path.Combine(CorePaths.UserData, "dose-wayland-" + Guid.NewGuid());
             System.IO.Directory.CreateDirectory(System.IO.Path.Combine(dir, "videos"));
-            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "videos", "clip.mp4"), "");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "videos", "clip.m4v"), "");
             var previousAssets = CorePaths.EffectiveAssetsProvider;
             var previousVideo = CoreEngine.Video;
             CorePaths.EffectiveAssetsProvider = () => dir; CoreEngine.Video = null;
             var ld = LockdownService.Current = new LockdownService();
-            var shell = new MainShellWindow(); shell.Show(); // the headless backend, like native Wayland, has no overlay backend
+            var shell = new MainShellWindow { DoseVideoReadyForTests = false }; shell.Show(); // native Wayland has no overlay backend
             try
             {
                 ld.Activate(TimeSpan.FromMinutes(20));
@@ -472,12 +475,33 @@ public class LockdownDoseEngineTests
                 Assert.False(s.MandatoryVideosEnabled || s.FlashEnabled || s.SubliminalEnabled || s.BubblesEnabled || s.BouncingTextEnabled);
                 Assert.True(s.SpiralEnabled && s.PinkFilterEnabled); // pre-existing but not runnable
                 CoreEngine.Video = MandatoryVideoOverlay.Instance.Scheduler;
+                shell.EnforceLockdownDoseEngine(true); Assert.False(CoreEngine.IsRunning); // host unavailable
+                shell.DoseVideoReadyForTests = true;
+                s.DisabledAssetPaths.Add("videos/clip.m4v");
+                shell.EnforceLockdownDoseEngine(true); Assert.False(CoreEngine.IsRunning); // excluded
+                s.DisabledAssetPaths.Remove("videos/clip.m4v");
                 shell.EnforceLockdownDoseEngine(true);
                 Assert.True(s.MandatoryVideosEnabled);
                 Assert.True(CoreEngine.IsRunning);
                 ld.Deactivate();
                 Assert.False(s.MandatoryVideosEnabled);
                 Assert.True(s.SpiralEnabled && s.PinkFilterEnabled);
+                s.MandatoryVideosEnabled = true; ld.Activate(TimeSpan.FromMinutes(20));
+                shell.EnforceLockdownDoseEngine(true); Assert.True(CoreEngine.IsRunning); // video-only census
+                ld.Deactivate();
+                System.IO.File.Delete(System.IO.Path.Combine(dir, "videos", "clip.m4v"));
+                var packDir = System.IO.Path.Combine(dir, ".packs", "test", "content");
+                System.IO.Directory.CreateDirectory(packDir);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, ".packs", "test", ".manifest.enc"), "");
+                System.IO.File.WriteAllText(System.IO.Path.Combine(packDir, "v.enc"), "");
+                var store = new ContentPackStore(() => dir, () => s, () => { },
+                    loadManifest: _ => "{\"PackId\":\"p1\",\"Files\":[{\"OriginalName\":\"v.mp4\",\"ObfuscatedName\":\"v.enc\",\"FileType\":\"video\"}]}",
+                    decryptFile: _ => new byte[] { 1 });
+                CoreEngine.Video = new MandatoryVideoScheduler(null!, library: () => Array.Empty<string>())
+                    { PackVideos = new PackMediaPool(ContentPackStore.VideoType, store: () => store) };
+                ld.Activate(TimeSpan.FromMinutes(20)); shell.EnforceLockdownDoseEngine(true);
+                Assert.True(CoreEngine.IsRunning); Assert.True(s.MandatoryVideosEnabled); // pack-only video
+                ld.Deactivate();
             }
             finally
             {
@@ -503,6 +527,9 @@ public class LockdownDoseEngineTests
         Assert.False(s.SpiralEnabled);
         Assert.False(System.IO.File.Exists(dosePath));
         Assert.False(System.IO.File.Exists(System.IO.Path.Combine(CorePaths.UserData, RemoteHoldings.FileName)));
+        System.IO.File.WriteAllText(dosePath, "{"); MainShellWindow.RecoverLockdownDose();
+        Assert.True(System.IO.File.Exists(dosePath)); // unreadable debt remains for retry
+        System.IO.File.Delete(dosePath);
     }
 
     [Theory]
@@ -534,10 +561,13 @@ public class LockdownDoseEngineTests
                 Assert.Equal(failSave, System.IO.File.Exists(path));
                 if (failSave)
                 {
-                    settings.UnsealAfterFailedReset();
-                    MainShellWindow.RecoverLockdownDose();
+                    ld.Activate(TimeSpan.FromMinutes(20));
+                    Assert.True(System.IO.File.Exists(path)); // a second activation cannot discard the debt
+                    settings.UnsealAfterFailedReset(); CoreSettings.ServiceProvider = () => restarted;
+                    MainShellWindow.RecoverLockdownDose(); // restart while the second lockdown is active
                     Assert.False(System.IO.File.Exists(path));
                     Assert.Equal(0, StarterCount(new SettingsService().Current));
+                    ld.Deactivate();
                 }
             }
             finally

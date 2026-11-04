@@ -91,12 +91,14 @@ public sealed class PackMediaPoolTests : IDisposable
         var bubble = new BubbleCountScheduler(null!, null, () => Array.Empty<string>())
             { PackVideos = new PackMediaPool(ContentPackStore.VideoType, new Random(1), () => store) };
 
+        Assert.True(video.HasPlayableContent());
         Assert.Equal("p1/v.mp4", Plain(video.PickNext()!));
         Assert.Equal("p1/v.mp4", Plain(bubble.PickNext()!));
         video.PackVideos.CleanupTemps();
         bubble.PackVideos.CleanupTemps();
 
         store.DeactivatePack("p1");
+        Assert.False(video.HasPlayableContent());
         Assert.Null(video.PickNext());
         Assert.Null(bubble.PickNext());
     }
