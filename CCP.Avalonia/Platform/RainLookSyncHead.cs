@@ -16,7 +16,7 @@ internal static class RainLookSyncHead
     private static string? _pulledFor, _deferredFor;
     private static readonly object Gate = new();
     private static CancellationTokenSource _run = new();
-    internal static RainLookSync Client = new(null, new RainLookSync.Hooks
+    internal static readonly RainLookSync.Hooks AppHooks = new()
     {
         Identity = BackRoomApi.AppIdentity,
         Local = () => (CoreSettings.Current.RainLook, CoreSettings.Current.RainLookPushOwed,
@@ -53,7 +53,8 @@ internal static class RainLookSyncHead
             CoreSettings.Save();
         },
         Log = line => Serilog.Log.Information("RainLookSync: {Line}", line),
-    });
+    };
+    internal static RainLookSync Client = new(null, AppHooks);
 
     private sealed class Grants : IRainGrantSource
     {
