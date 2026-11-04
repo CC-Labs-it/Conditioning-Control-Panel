@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         private readonly TranslateTransform _ctaTravel = new();
         private Helpers.BeatLoop? _ctaMotion;
         private bool _ctaPressed;
+        private IPointer? _ctaPointer;
         private readonly Border _ctaFace = new() { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1) };
         private readonly TextBlock _ctaText = new() { FontWeight = FontWeight.Bold, FontSize = 14, Margin = new Thickness(18, 7, 18, 8), HorizontalAlignment = HorizontalAlignment.Center };
         private readonly Border _badge = new() { Padding = new Thickness(9, 3, 9, 4), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, IsVisible = false };
@@ -142,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         {
             _ctaMotion?.Stop();
             _ctaPressed = false;
+            _ctaPointer = null;
             _ctaTravel.Y = 0;
             _visibilityWatch?.Dispose();
             _visibilityWatch = null;
@@ -406,12 +408,14 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 Template = Bare(), Content = _ctaFace, Cursor = new Cursor(StandardCursorType.Hand),
                 HorizontalAlignment = HorizontalAlignment.Left, Focusable = true, Margin = new Thickness(0, 12, 0, 0),
             };
+            void Release(IPointer pointer) { if (_ctaPointer == pointer) { _ctaPointer = null; UpdateCtaPress(false); } }
             button.AddHandler(PointerPressedEvent, (_, e) =>
             {
-                if (e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) UpdateCtaPress(true);
+                if (_ctaPointer == null && e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) { _ctaPointer = e.Pointer; UpdateCtaPress(true); }
             }, RoutingStrategies.Tunnel);
-            button.AddHandler(PointerReleasedEvent, (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) UpdateCtaPress(false); }, RoutingStrategies.Tunnel);
-            void ReleaseOutside(PointerEventArgs e) { if (_ctaPressed && !new Rect(button.Bounds.Size).Contains(e.GetPosition(button))) UpdateCtaPress(false); }
+            button.AddHandler(PointerReleasedEvent, (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) Release(e.Pointer); }, RoutingStrategies.Tunnel);
+            button.AddHandler(PointerCaptureLostEvent, (_, e) => Release(e.Pointer), RoutingStrategies.Direct, handledEventsToo: true);
+            void ReleaseOutside(PointerEventArgs e) { if (_ctaPressed && !new Rect(button.Bounds.Size).Contains(e.GetPosition(button))) Release(e.Pointer); }
             button.PointerExited += (_, e) => ReleaseOutside(e);
             button.AddHandler(PointerMovedEvent, (_, e) => ReleaseOutside(e), RoutingStrategies.Tunnel, handledEventsToo: true);
             button.Click += (_, _) => { if (_card != null && !_folding) Press(); };

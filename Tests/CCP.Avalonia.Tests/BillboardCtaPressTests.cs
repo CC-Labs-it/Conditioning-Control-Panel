@@ -89,6 +89,17 @@ public class BillboardCtaPressTests
                     PointerPointProperties.None, KeyModifiers.None, MouseButton.Left));
                 Assert.Equal(0, Y(), 5);
             }
+            using (var contact = new Pointer(Pointer.GetNextFreeId(), PointerType.Touch, true))
+            using (var other = new Pointer(Pointer.GetNextFreeId(), PointerType.Touch, false))
+            {
+                host.Cta.RaiseEvent(new PointerPressedEventArgs(host.Cta, contact, window, point, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+                contact.Capture(host.Cta);
+                host.Cta.RaiseEvent(new PointerCaptureLostEventArgs(host.Cta, other));
+                Assert.Equal(DepthLaw.PressTravelPx, Y(), 5);
+                contact.Capture(null); // Touch cancellation ends capture without a release event.
+                Assert.Equal(0, Y(), 5);
+            }
             host.Cta.Focus();
             window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
             Assert.True(host.Cta.IsPressed);
