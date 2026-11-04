@@ -168,6 +168,7 @@ internal sealed class KeywordAudioRuntime
         LastDispatch = DispatchAsync(fired);
     }
     internal event Action<KeywordTrigger>? TriggerFired;
+    internal KeywordAvatarActions AvatarActions { get; } = new();
     internal Action QuestCredit = () => App.Quests?.TrackKeywordTrigger();
     internal Action<string, double> Haptic = (keyword, intensity) => _ = CoreHaptics.Service?.TriggerKeywordPatternAsync(keyword, intensity);
     internal Action<double> AddXp = amount => CoreProgression.AddXP(amount, "KeywordTrigger");
@@ -233,6 +234,7 @@ internal sealed class KeywordAudioRuntime
                     case PlayAudioAction audio:
                         if (!await PlayAsync(audio)) return;
                         break;
+                    case AvatarCommentAction comment: AvatarActions.Dispatch(comment, first.Keyword); break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
                     case AddXpAction xp when xp.Amount > 0:
                         AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));

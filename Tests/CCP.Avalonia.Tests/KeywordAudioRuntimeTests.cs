@@ -155,6 +155,120 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Single(played);
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:393-428,1548-1592
+    public Task DemoDeliversCannedLineToTubeAndTypedTriggerDeliversAi() => RunAsync(async (engine, s, _) =>
+    {
+        var tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
+        var oldMuted = s.AvatarMuted;
+        var oldPhrases = s.CustomCompanionPhrases;
+        try
+        {
+            s.AvatarMuted = false;
+            s.CustomCompanionPhrases = [new CustomCompanionPhrase { Category = "PuppyPraise", Text = "good pup" }];
+            tube.Show();
+            engine.QuestCredit = () => { };
+            engine.AvatarActions.AiAvailable = () => false;
+            engine.AvatarActions.AvatarState = () => (true, tube.IsSpeaking || !tube.SpokenAudioDone.IsCompleted);
+            var delivered = new List<(string, bool)>();
+            engine.AvatarActions.ShowLine = (text, ai) => { delivered.Add((text, ai)); tube.GigglePriority(text, false, ai); };
+            engine.Stop();
+            engine.FireDemo("sit", "Tutorial");
+            await engine.AvatarActions.LastComment;
+            Assert.Equal(("good pup", false), Assert.Single(delivered));
+            Assert.Equal("good pup", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+            tube.EndSpeechBubble();
+            engine.Start();
+            engine.AvatarActions.AiAvailable = () => true;
+            engine.AvatarActions.AiComment = (word, prompt) => Task.FromResult<string?>($"ai:{word}:{prompt}");
+            s.KeywordTriggers[0].Actions = [new AvatarCommentAction { PromptTemplate = "prompt" }];
+            Type(engine, "sit");
+            await engine.AvatarActions.LastComment;
+            Assert.Equal(("ai:sit:prompt", true), delivered.Last());
+            Assert.Equal("ai:sit:prompt", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+        }
+        finally { tube.Close(); s.AvatarMuted = oldMuted; s.CustomCompanionPhrases = oldPhrases; }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1582-1592
+    public Task AiReplyPreservesTextAndBadge() => RunAsync(async (engine, s, _) =>
+    {
+        var lines = new List<(string, bool)>();
+        engine.QuestCredit = () => { };
+        engine.AvatarActions.AiAvailable = () => true;
+        engine.AvatarActions.AiComment = (_, _) => Task.FromResult<string?>("AI line");
+        engine.AvatarActions.PickPhrase = _ => "fallback";
+        engine.AvatarActions.AvatarState = () => (true, false);
+        engine.AvatarActions.ShowLine = (line, ai) => lines.Add((line, ai));
+        s.KeywordTriggers[0].Actions = [new AvatarCommentAction()];
+        Type(engine, "sit"); await engine.AvatarActions.LastComment;
+        Assert.Equal(("AI line", true), Assert.Single(lines));
+    });
+
+    [Fact] // Pending retries also respect this head's post-panic quiet.
+    public Task PendingAvatarLineDropsWhenPanicStarts() => RunAsync(async (engine, s, _) =>
+    {
+        var lines = new List<string>(); var waits = 0;
+        engine.QuestCredit = () => { };
+        engine.AvatarActions.AiAvailable = () => false;
+        engine.AvatarActions.PickPhrase = _ => "panic-line";
+        engine.AvatarActions.AvatarState = () => (true, waits == 0);
+        engine.AvatarActions.ShowLine = (line, _) => lines.Add(line);
+        engine.AvatarActions.Delay = _ => { waits++; ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet(); return Task.CompletedTask; };
+        s.KeywordTriggers[0].Actions = [new AvatarCommentAction()];
+        try
+        {
+            Type(engine, "sit"); await engine.AvatarActions.LastComment;
+            Assert.Equal(1, waits); Assert.Empty(lines);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1552-1560,1582-1592
+    public Task EmptyAiAndRequiredOfflineUseCannedFallback() => RunAsync(async (engine, s, _) =>
+    {
+        var lines = new List<(string, bool)>();
+        var calls = 0;
+        engine.QuestCredit = () => { };
+        engine.AvatarActions.AvatarState = () => (true, false);
+        engine.AvatarActions.ShowLine = (text, ai) => lines.Add((text, ai));
+        engine.AvatarActions.PickPhrase = category => "canned:" + category;
+        engine.AvatarActions.AiAvailable = () => false;
+        engine.AvatarActions.AiComment = (_, _) => { calls++; return Task.FromResult<string?>(null); };
+        s.KeywordTriggers[0].Actions = [new AvatarCommentAction { RequireAiAvailable = true, FallbackPhraseCategory = "pool" }];
+        Type(engine, "sit"); await engine.AvatarActions.LastComment;
+        Assert.Equal(("canned:pool", false), Assert.Single(lines)); Assert.Equal(0, calls);
+        engine.Now = () => new DateTime(2026, 10, 14, 13, 0, 0);
+        engine.AvatarActions.AiAvailable = () => true;
+        Type(engine, "sit"); await engine.AvatarActions.LastComment;
+        Assert.Equal(2, lines.Count); Assert.Equal(("canned:pool", false), lines[1]); Assert.Equal(1, calls);
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1634-1651
+    public Task BusyAvatarRetriesAndEventuallyDropsWithoutInterruptingOtherActions() => RunAsync(async (engine, s, _) =>
+    {
+        var delays = 0; var states = 0; var lines = new List<string>(); var haptics = 0;
+        engine.QuestCredit = () => { };
+        engine.AvatarActions.AiAvailable = () => false;
+        engine.AvatarActions.PickPhrase = _ => "line";
+        engine.AvatarActions.AvatarState = () => (true, ++states <= 2);
+        engine.AvatarActions.ShowLine = (text, _) => lines.Add(text);
+        engine.AvatarActions.Delay = ms => { Assert.Equal(750, ms); delays++; return Task.CompletedTask; };
+        engine.Haptic = (_, _) => haptics++;
+        s.KeywordTriggers[0].Actions = [new AvatarCommentAction(), new HapticAction()];
+        Type(engine, "sit"); Assert.Equal(1, haptics);
+        await engine.AvatarActions.LastComment;
+        Assert.Equal(2, delays); Assert.Equal(3, states); Assert.Equal("line", Assert.Single(lines));
+        delays = 0; states = 0; lines.Clear();
+        engine.AvatarActions.AvatarState = () => { states++; return (true, true); };
+        engine.Now = () => new DateTime(2026, 10, 14, 13, 0, 0);
+        Type(engine, "sit"); await engine.AvatarActions.LastComment;
+        Assert.Equal(17, states); Assert.Equal(16, delays); Assert.Empty(lines);
+        engine.AvatarActions.AvatarState = () => (false, false);
+        delays = 0; engine.Now = () => new DateTime(2026, 10, 14, 14, 0, 0);
+        Type(engine, "sit"); await engine.AvatarActions.LastComment;
+        Assert.Equal(0, delays); Assert.Empty(lines);
+    });
+
     [Fact]
     public void StopCancelsPendingAudioRepeats() => Run((engine, s, played) =>
     {
