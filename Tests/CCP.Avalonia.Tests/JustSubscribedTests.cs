@@ -114,7 +114,11 @@ public sealed class JustSubscribedTests
             Assert.DoesNotContain(TierCelebration.KeyT2, s.SeenFeatureIntros);
             s.SeenFeatureIntros.Add(TierCelebration.KeyT2); s.LastKnownEffectiveTier = 0;
             shell.MaybeShowPremiumCelebration(); Assert.Equal(2, s.LastKnownEffectiveTier);
-            var notice = Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2"); game.Close(); StartupLadder.Inbox.Open(notice); var dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(), d => d.Title == Loc.Get("tier_on_prime")); dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.False(dialog.IsVisible);
+            var notice = Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2"); game.Close(); StartupLadder.Inbox.Open(notice); var dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(), d => d.Title == Loc.Get("tier_on_prime")); var clock = (StartupLadder.TestClock)StartupLadder.Time; clock.Advance(TimeSpan.FromSeconds(4)); bool nextOpened = false;
+            StartupLadder.PresentOrInbox(new ConditioningControlPanel.Services.Startup.InboxItem { Key = "after-notice", Open = () => nextOpened = true });
+            clock.Advance(TimeSpan.FromSeconds(4)); Assert.False(nextOpened);
+            dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.False(dialog.IsVisible);
+            clock.Advance(TimeSpan.FromSeconds(1)); Assert.True(nextOpened);
             // The Settings page refreshes the inline row even while another section is selected.
             shell.OpenAppSettingsSection("general");
             shell.ShowTab("settings");

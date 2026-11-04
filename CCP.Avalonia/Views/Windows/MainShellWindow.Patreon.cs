@@ -300,6 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             FlashProfileBubbleGlow(color);
         }
 
+        private sealed class PassiveNotice(string title, string body) : Dialogs.MessageDialog(title, body, false), Services.Startup.IPassiveStartupSurface { }
         /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1118): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
         /// is spent at open time. WPF's live rise arms the immediate card and profile fanfare.</summary>
@@ -316,7 +317,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (tier == 0 || ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
                 if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise))
                 {
-                    if (verdict.Owed) { var title = Loc.Get(TierOnNotice.TitleKey(tier)); var body = Loc.Get("tier_on_body"); Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = "tier-on:" + tier, Glyph = "💖", Title = title, Summary = body, Open = () => new Dialogs.MessageDialog(title, body, showCancel: false).Show(this) }); }
+                    if (verdict.Owed) { var title = Loc.Get(TierOnNotice.TitleKey(tier)); var body = Loc.Get("tier_on_body"); Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = "tier-on:" + tier, Glyph = "💖", Title = title, Summary = body, Open = () => new PassiveNotice(title, body).Show(this) }); }
                     return;
                 }
                 var key = TierCelebration.KeyFor(tier)!;
