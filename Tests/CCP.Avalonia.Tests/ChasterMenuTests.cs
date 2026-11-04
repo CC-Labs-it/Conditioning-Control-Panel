@@ -239,6 +239,32 @@ public sealed class ChasterMenuTests
     }
 
     [Fact]
+    public Task RowClicksPopOnAndOffAndRespectMotionOff() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
+    {
+        var settings = CoreSettings.Current;
+        settings.MotionLevel = MotionLevel.Full;
+        settings.GentleVisuals = false;
+        var row = tab.PriceRows["session"];
+        var day = settings.ChasterDayLimit;
+        var backlog = settings.ChasterBacklogLimit;
+        var count = tab.RowPopCount;
+        Click(w, row);
+        Assert.Contains("session", settings.ChasterPrices!);
+        Assert.IsType<ScaleTransform>(row.RenderTransform);
+        Assert.Equal(++count, tab.RowPopCount);
+        Click(w, row);
+        Assert.DoesNotContain("session", settings.ChasterPrices!);
+        Assert.Equal(++count, tab.RowPopCount);
+        settings.MotionLevel = MotionLevel.Off;
+        Click(w, row);
+        Assert.Contains("session", settings.ChasterPrices!);
+        Assert.Equal(count, tab.RowPopCount);
+        Assert.Equal(day, settings.ChasterDayLimit);
+        Assert.Equal(backlog, settings.ChasterBacklogLimit);
+        await Task.CompletedTask;
+    }));
+
+    [Fact]
     public Task TheMenuIsTwoBoardsOfRowsThatWriteThePricesAndTheRedFlashLineFollowsNatasha() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
     {
         Assert.True(tab.FindControl<StackPanel>("MenuPanel")!.IsVisible);
