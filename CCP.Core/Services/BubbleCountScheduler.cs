@@ -126,6 +126,7 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             Dispose(ref _feedDefer);
             _feedDeadline = null;
+            PackVideos?.CleanupTemps();
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
@@ -142,6 +143,7 @@ namespace ConditioningControlPanel.Services
             Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
             _retryCount = 0;
             try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
+            PackVideos?.CleanupTemps();
             if (wasBusy) Log.Information("BubbleCountService: ForceCleanup called");
         }
 
@@ -268,6 +270,7 @@ namespace ConditioningControlPanel.Services
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
+            PackVideos?.CleanupTemps();
             if (success)
             {
                 _retryCount = 0;
@@ -328,7 +331,11 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF BubbleCountService.ReloadAssets: drop the dealt queue so the next game re-reads
         /// the enabled library (#130).</summary>
-        public void ReloadAssets() => _queue = new Queue<string>();
+        public void ReloadAssets()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.CleanupTemps();
+        }
 
         internal string? PickNext()
         {

@@ -274,6 +274,7 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;   // WPF CancelPendingRetry: a verdict message must not replay after a stop
             Dispose(ref _scheduler);
             ForceCleanup();
+            PackVideos?.CleanupTemps();
             Log.Debug("VideoService stopped");
         }
 
@@ -430,6 +431,7 @@ namespace ConditioningControlPanel.Services
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
+            PackVideos?.CleanupTemps();
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
@@ -440,7 +442,11 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF VideoService.ReloadAssets: drop the dealt queue so the next pick re-reads the
         /// enabled library (an untick or preset switch takes effect on the very next video, #130).</summary>
-        public void ReloadAssets() => _queue = new Queue<string>();
+        public void ReloadAssets()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.CleanupTemps();
+        }
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>
         internal string? PickNext()

@@ -489,12 +489,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             : Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d && d.Windows.Any(w => w.IsActive);
 
         /// <summary>WPF InvalidateAssetPoolsAfterSelectionChange (MainWindow.Assets.cs:1318, #130). Flash
-        /// lists the disk per burst here (FlashOverlay.LoadPictures), so it has no cache to drop; the
-        /// mandatory-video and bubble-count schedulers deal from a queue refilled only when empty, so
+        /// lists the disk per burst here (FlashOverlay.LoadPictures), so it has no list cache to drop;
+        /// all three pools release decrypts, and the video schedulers deal from queues refilled only when empty, so
         /// it is dropped or an unticked clip keeps playing. DisabledAssetPaths is mutated in place, so
         /// nothing autosaves: the explicit (debounced) save keeps the toggle across a restart.</summary>
         private static void InvalidateAssetPoolsAfterSelectionChange()
         {
+            Overlays.FlashOverlay.ReloadAssets();
             Overlays.MandatoryVideoOverlay.Instance.Scheduler.ReloadAssets();
             Windows.BubbleCountHost.Instance.Scheduler.ReloadAssets();
             CoreSettings.Save();

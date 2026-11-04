@@ -83,6 +83,7 @@ public sealed class ContentPacksWireTests : IDisposable
         Assert.Contains("ContentPackStore.Current?.CleanupTempFiles()", app);
         Assert.Matches(@"ContentPackStore\.SweepStaleTemps\(Path\.Combine\(CorePaths\.EffectiveAssets,\s*\),\s*sandboxed \? null : Path\.GetTempPath\(\)\)", app);
         Assert.Contains("ContentPackStore.Current?.Rescan()", Code("CCP.Avalonia", "Views", "Windows", "MainShellWindow.Settings.cs"));
+        Assert.Contains("Overlays.FlashOverlay.ReloadAssets()", Code("CCP.Avalonia", "Views", "Windows", "MainShellWindow.Settings.cs"));
         var pool = @"PackVideos\s*=\s*new ConditioningControlPanel\.Services\.PackMediaPool\(ConditioningControlPanel\.Services\.ContentPackStore\.VideoType\)";
         Assert.Matches(pool, Code("CCP.Avalonia", "Views", "Overlays", "MandatoryVideoOverlay.cs"));
         Assert.Matches(pool, Code("CCP.Avalonia", "Views", "Windows", "BubbleCountHost.cs"));
@@ -102,6 +103,26 @@ public sealed class ContentPacksWireTests : IDisposable
         var disk = Path.Combine(_root, "d.png");
         Assert.Equal(disk, FlashOverlay.NextFlashPath(new[] { disk }));
         Assert.True(store.IsPackInstalled("p1"));   // a deactivated pack stays installed
+    }
+
+    [Fact]
+    public void Flash_reload_and_close_cleanup_decrypts_and_retry_refusals()
+    {
+        ContentPackStore.Current = StoreWithPack(("a.png", "image"));
+        var live = FlashOverlay.NextFlashPath(Array.Empty<string>())!;
+        var refused = FlashOverlay.NextFlashPath(Array.Empty<string>())!;
+        File.Delete(refused);
+        Directory.CreateDirectory(refused);
+        typeof(ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView)
+            .GetMethod("InvalidateAssetPoolsAfterSelectionChange", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(null, null);
+        Assert.False(File.Exists(live));
+        Assert.Equal(1, FlashOverlay.PackImages.TempCount);
+        Directory.Delete(refused);
+        File.WriteAllText(refused, "released");
+        FlashOverlay.CloseAll(final: false);
+        Assert.False(File.Exists(refused));
+        Assert.Equal(0, FlashOverlay.PackImages.TempCount);
     }
 
     [Fact]
