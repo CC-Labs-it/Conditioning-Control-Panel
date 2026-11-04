@@ -1421,7 +1421,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void SetWindowMute(bool muted)
         {
             _windowMuted = muted;
-            if (muted) MuteRainSpeech();
             UpdateQuickMenuState();
         }
 

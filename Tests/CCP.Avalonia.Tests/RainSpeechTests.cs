@@ -133,7 +133,7 @@ public sealed class RainSpeechTests
         f.Settings.Current.AvatarMuted = true; f.Tube.GigglePriority("a spoken line", phraseAudioPath: audio);
         f.Advance(1000); await f.Talk(); Assert.Null(started);
         f.Settings.Current.AvatarMuted = false; f.Tube.PanicSilence(); f.Advance(10000); await f.Clip("idle");
-        f.Tube.GigglePriority("a spoken line", phraseAudioPath: audio); f.Tube.ShowListeningBubble("listening"); Assert.Equal(0, stops); f.Tube.HideListeningBubble();
+        f.Tube.GigglePriority("a spoken line", phraseAudioPath: audio); f.Tube.SetWindowMute(true); f.Tube.SetWindowMute(false); Assert.Equal(0, stops); f.Tube.ShowListeningBubble("listening"); Assert.Equal(0, stops); f.Tube.HideListeningBubble();
         var stale = f.Timers.Last(); f.Tube.PanicSilence(); Assert.True(stale.Cancelled); stale.Fire(); started!(TimeSpan.FromSeconds(8));
         f.Advance(10000); await f.Clip("idle");
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
@@ -215,7 +215,7 @@ public sealed class RainSpeechTests
     {
         using var f = new Fixture(); await f.Start(); var (plays, audio, bubble) = Voice(f);
         f.Settings.Current.AvatarMuted = true; f.Tube.Giggle("*giggles*", audio);
-        f.Settings.Current.AvatarMuted = false; f.Advance(250);
+        f.Settings.Current.AvatarMuted = false; f.Tube.SetWindowMute(true); f.Tube.SetWindowMute(false); f.Advance(250);
         Assert.Equal(1, plays()); Assert.True(bubble.IsVisible);
         f.Tube.PanicSilence(); typeof(AvatarTubeWindow).GetField("_lastSpeechEndTime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(f.Tube, DateTime.MinValue); f.Tube.Giggle("*giggles*", audio); f.Settings.Current.AvatarMuted = true; f.Advance(3000);
         Assert.Equal(1, plays()); Assert.True(bubble.IsVisible);

@@ -188,12 +188,6 @@ public partial class AvatarTubeWindow
         _rainTalkActive = false; _rainSpeechOwned = false;
     }
 
-    private void MuteRainSpeech()
-    {
-        try { _stopSpoken(); } catch { }
-        _stopSpoken = static () => { };
-    }
-
     private void StopRainSpeech()
     {
         bool owned = _rainSpeechOwned;
