@@ -95,7 +95,8 @@ public sealed class LocalProvidersTests
         p.OpenAiCompatibleApiKey = "STORED-DPAPI-BLOB";
         var dir = Directory.CreateTempSubdirectory("ccp-local-").FullName;
         var strategy = new AiServiceStrategy();
-        var brain = new CompanionBrain(strategy, memory: new MemoryStore(Path.Combine(dir, "memory.json")),
+        var memory = new MemoryStore(Path.Combine(dir, "memory.json"));
+        var brain = new CompanionBrain(strategy, memory: memory,
             store: new CompanionSessionStore(Path.Combine(dir, "session.json"), Path.Combine(dir, "legacy.json")));
         try
         {
@@ -130,6 +131,8 @@ public sealed class LocalProvidersTests
             OpenAiCompatibleService.ApiKeyUnprotect = null;
             listener.Stop();
             brain.Dispose();
+            // Injected memory is caller-owned. Drain its save timer before removing the directory.
+            memory.Dispose();
             strategy.Dispose();
             CoreSettings.ServiceProvider = null;
             Directory.Delete(dir, true);
@@ -240,6 +243,7 @@ public sealed class LocalProvidersTests
             Dispatcher.UIThread.RunJobs();
             listener.Stop();
             AvApp.Brain?.Dispose();
+            memory.Dispose();
             AvApp.Ai?.Dispose();
             (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
             service.SaveImmediate();
