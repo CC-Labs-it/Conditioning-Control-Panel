@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Runtime.InteropServices;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
 
@@ -27,6 +28,46 @@ public sealed class BrainDrainCapturePumpTests
             Assert.Equal(16, frame.Height);
             Assert.Equal(16 * 16 * 4, frame.Pixels.Length);
             for (var i = 3; i < frame.Pixels.Length; i += 4) Assert.Equal(255, frame.Pixels[i]);
+        }
+        finally { pump.Shutdown(); }
+    }
+
+    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+    [DllImport("gdi32.dll")] private static extern uint GetPixel(IntPtr dc, int x, int y);
+
+    [Fact]
+    public void WindowsCaptureMatchesAStableDesktopPatch()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(), "Requires an interactive Windows desktop");
+        var dc = GetDC(IntPtr.Zero);
+        Assert.NotEqual(IntPtr.Zero, dc);
+        int px = 0, py = 0; uint color = 0; bool found = false;
+        try
+        {
+            for (int y = 0; y < 128 && !found; y += 4)
+                for (int x = 0; x < 128 && !found; x += 4)
+                {
+                    var candidate = GetPixel(dc, x, y);
+                    if (candidate == 0xffffffff || (candidate & 0xffffff) < 0x303030) continue;
+                    bool uniform = true;
+                    for (int dy = 0; dy < 4 && uniform; dy++)
+                        for (int dx = 0; dx < 4; dx++)
+                            if (GetPixel(dc, x + dx, y + dy) != candidate) { uniform = false; break; }
+                    if (uniform) { px = x; py = y; color = candidate; found = true; }
+                }
+        }
+        finally { ReleaseDC(IntPtr.Zero, dc); }
+        Assert.SkipWhen(!found, "No stable coloured desktop patch to sample");
+        var pump = new BrainDrainCapturePump(new global::Avalonia.PixelRect(px, py, 4, 4), TimeSpan.FromMilliseconds(33));
+        try
+        {
+            BrainDrainCapturePump.Frame? frame = null;
+            Assert.True(SpinWait.SpinUntil(() => (frame = pump.Take()) != null, TimeSpan.FromSeconds(10)));
+            var pixels = frame!.Pixels;
+            Assert.InRange(Math.Abs(pixels[0] - (int)((color >> 16) & 255)), 0, 16);
+            Assert.InRange(Math.Abs(pixels[1] - (int)((color >> 8) & 255)), 0, 16);
+            Assert.InRange(Math.Abs(pixels[2] - (int)(color & 255)), 0, 16);
         }
         finally { pump.Shutdown(); }
     }
