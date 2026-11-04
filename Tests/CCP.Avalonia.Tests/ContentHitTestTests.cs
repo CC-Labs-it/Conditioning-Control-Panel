@@ -49,8 +49,7 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
-                w.CompleteTabTransition();
-                Assert.Null(w.EnteringTab);
+                w.CompleteTabTransition(); Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -59,6 +58,7 @@ public sealed class ContentHitTestTests
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
+                    RenderedInput.Render(w);
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
                     RenderLiveTree(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
