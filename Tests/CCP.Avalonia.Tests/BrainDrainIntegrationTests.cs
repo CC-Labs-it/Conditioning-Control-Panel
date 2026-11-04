@@ -189,6 +189,34 @@ public sealed class BrainDrainIntegrationTests
         Assert.Equal(7, Assert.IsType<BlurEffect>(image.Effect).Radius, 5);
     });
 
+    [Fact]
+    public Task CapturedBlurUsesEachMonitorScaleAndTracksDpiChanges() => Run(owner =>
+    {
+        var screens = new[] {
+            (new PixelRect(0, 0, 800, 600), 1.0, true),
+            (new PixelRect(800, 0, 800, 600), 1.5, false),
+            (new PixelRect(1600, 0, 800, 600), 2.0, false),
+            (new PixelRect(2400, 0, 800, 600), 0.0, false) };
+        BrainDrainOverlay.Screens = _ => screens;
+        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(() => null, TimeSpan.FromSeconds(1));
+        BrainDrainOverlay.Start(owner);
+        Assert.Equal(4, BrainDrainOverlay.Active.Count);
+        double Radius(int index) => Assert.IsType<BlurEffect>(Assert.IsType<Image>(BrainDrainOverlay.Active[index].Content).Effect).Radius;
+        Assert.Equal(14, Radius(0), 5);
+        Assert.Equal(14 / 1.5, Radius(1), 5);
+        Assert.Equal(7, Radius(2), 5);
+        Assert.Equal(14, Radius(3), 5); // Invalid scaling uses the same 1x fallback as host sizing.
+        CoreSettings.Current.BrainDrainBlurStrength = 50;
+        Assert.Equal(7 / 1.5, Radius(1), 5);
+        var old = BrainDrainOverlay.Active[1];
+        screens[1] = (screens[1].Item1, 1.25, false);
+        BrainDrainOverlay.Reconcile();
+        Assert.False(old.IsVisible);
+        Assert.NotSame(old, BrainDrainOverlay.Active[1]);
+        Assert.Equal(7 / 1.25, Radius(1), 5);
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("stop")]
     [InlineData("panic")]

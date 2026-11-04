@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal static class BrainDrainOverlay
 {
     private static readonly List<Window> Hosts = new();
-    private static readonly Dictionary<Window, (BrainDrainCapturePump Pump, Image Image, WriteableBitmap? Bitmap)> Frames = new();
+    private static readonly Dictionary<Window, (BrainDrainCapturePump Pump, Image Image, WriteableBitmap? Bitmap, double Scale)> Frames = new();
     private static readonly DispatcherTimer FrameTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     internal static Func<PixelRect, BrainDrainCapturePump?> CreatePump = bounds => OperatingSystem.IsWindows()
         ? new BrainDrainCapturePump(bounds, TimeSpan.FromMilliseconds(33)) : null;
@@ -110,7 +110,7 @@ internal static class BrainDrainOverlay
                     if (pump != null)
                     {
                         var image = new Image { Stretch = Stretch.Fill, IsHitTestVisible = false };
-                        w.Content = image; Frames.Add(w, (pump, image, null)); FrameTimer.Start();
+                        w.Content = image; Frames.Add(w, (pump, image, null, scale)); FrameTimer.Start();
                     }
                 }
                 catch { w.Close(); CloseHosts(); _refused = true; return; }
@@ -118,9 +118,9 @@ internal static class BrainDrainOverlay
         }
         // WPF OverlayService.cs:2814-2823,3786: creation, live change and replacement.
         foreach (var w in Hosts) Capture(w, affinity);
-        // WPF BrainDrainLayer.cs:240-264: 0.14 radius per intensity point in screen pixels.
+        // WPF BrainDrainLayer.cs:240-256: convert the physical-pixel radius to each host's DIPs.
         foreach (var entry in Frames.Values)
-            entry.Image.Effect = new BlurEffect { Radius = Math.Clamp(s.BrainDrainBlurStrength, 1, 100) * 0.14 };
+            entry.Image.Effect = new BlurEffect { Radius = Math.Clamp(s.BrainDrainBlurStrength, 1, 100) * 0.14 / entry.Scale };
         // WPF Compositor/BrainDrainLayer.cs:296-301, rounded alpha at 1..100 strength.
         foreach (var w in Hosts) Alpha(w, Math.Round((.10 + .75 * Math.Pow((Math.Clamp(s.BrainDrainBlurStrength, 1, 100) - 1) / 99.0, .66)) * 255) / 255);
         // Forced off transition raises the blur again. Ordinary ticks only repair an actual drift.
@@ -152,7 +152,7 @@ internal static class BrainDrainOverlay
             using (var buffer = bitmap.Lock())
                 for (int y = 0; y < frame.Height; y++)
                     Marshal.Copy(frame.Pixels, y * frame.Width * 4, buffer.Address + y * buffer.RowBytes, frame.Width * 4);
-            Frames[w] = (state.Pump, state.Image, bitmap);
+            Frames[w] = (state.Pump, state.Image, bitmap, state.Scale);
         }
     }
     private static void CloseHosts()
