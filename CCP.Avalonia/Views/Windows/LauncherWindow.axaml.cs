@@ -151,6 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The launcher goes with its panel: hidden, it would keep a trayless process alive UI-less.</summary>
         private LauncherWindow Link(MainShellWindow panel)
         {
+            // Also on a reused link: X-to-tray may have happened since the last handoff.
+            panel.ClearTrayHide();
             if (!ReferenceEquals(_panel, panel)) { _panel = panel; panel.Closed += (_, _) => Close(); }
             return this;
         }
@@ -167,6 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                panel.ClearTrayHide();
                 panel.Hide();
                 panel.HideAvatarTube();
                 if (!(Boot.Surface == BootSurface.Game && Boot.GameId is { } id && LaunchGame(panel, id)))
@@ -264,10 +267,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     try { Services.LockdownService.Current?.NotifyEscapeAttempt(Services.Possession.EscapeKinds.Close); } catch { }
                     break;
                 case LauncherCloseOutcome.Hide:
-                    // WPF hides behind the panel's tray icon. With no tray host (a bare Linux
-                    // desktop) a hidden launcher over a hidden panel has no way back: minimize.
-                    if (panel is { IsVisible: false } && !panel.TrayHostPresent()) WindowState = WindowState.Minimized;
-                    else Hide();
+                    // WPF LauncherHost.cs:410-424 hides behind the panel's tray icon. Without a
+                    // usable tray (no host or denied registration), keep the launcher on the taskbar.
+                    if (panel is { IsVisible: false } && !panel.CanHideToTray) WindowState = WindowState.Minimized;
+                    else
+                    {
+                        // A later registration denial must bring this launcher back (no icon left).
+                        if (panel is { IsVisible: false }) panel.MarkLauncherHiddenToTray();
+                        Hide();
+                    }
                     break;
                 case LauncherCloseOutcome.Exit:
                     panel!.RequestExit();

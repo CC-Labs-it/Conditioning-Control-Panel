@@ -25,7 +25,7 @@ public sealed class ShellTrayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -100,7 +100,7 @@ public sealed class ShellTrayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -133,6 +133,272 @@ public sealed class ShellTrayTests
             Assert.True(closed);
             shell.ShowFromTray();                  // WPF _windowClosed: a late Show is a no-op, not a throw
             shell.Tray!.Dispose();
+            return Task.CompletedTask;
+        });
+    }
+
+    // Synthetic origin frame, not a captured Flatpak refusal. SetRemoteStackTrace survives the
+    // dispatcher rethrow, exercising the same Exception.StackTrace contract as an async tray failure.
+    private static Tmds.DBus.Protocol.DBusErrorReplyException TrayFailure(
+        string name = "org.freedesktop.DBus.Error.AccessDenied", string message = "org.freedesktop.DBus.Error.AccessDenied")
+    {
+        var error = new Tmds.DBus.Protocol.DBusErrorReplyException(name, message);
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo.SetRemoteStackTrace(error,
+            "   at Avalonia.X11.DBusTrayIconImpl.CreateTrayIcon()\n");
+        return error;
+    }
+
+    [Fact]
+    public void OnlyDeniedTrayOriginsMatchTheFilter()
+    {
+        var denied = TrayFailure(); // Generic proxy body, no bus name.
+        Assert.True(MainShellWindow.IsDeniedBusName(denied));
+        Assert.True(MainShellWindow.IsDeniedBusName(new InvalidOperationException("wrapped", denied)));
+        Assert.False(MainShellWindow.IsDeniedBusName(null));
+        Assert.False(MainShellWindow.IsDeniedBusName(new InvalidOperationException("DBusTrayIconImpl")));
+        Assert.False(MainShellWindow.IsDeniedBusName(TrayFailure("org.freedesktop.DBus.Error.Failed")));
+        Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
+            "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4")));
+    }
+
+    [Fact]
+    public async Task DeniedTrayBusNameDoesNotEndTheApp()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.CreateTray();
+                var denied = TrayFailure();
+                Dispatcher.UIThread.Post(() => throw denied);
+                Dispatcher.UIThread.RunJobs();
+                Dispatcher.UIThread.Post(() => throw new InvalidOperationException("wrapped", denied));
+                Dispatcher.UIThread.RunJobs();
+                var other = new Tmds.DBus.Protocol.DBusErrorReplyException(
+                    "org.freedesktop.DBus.Error.AccessDenied", "Unrelated service refused access");
+                Dispatcher.UIThread.Post(() => throw other);
+                Assert.Same(other, Assert.Throws<Tmds.DBus.Protocol.DBusErrorReplyException>(() => Dispatcher.UIThread.RunJobs()));
+                Dispatcher.UIThread.Post(() => throw new InvalidOperationException("other"));
+                Assert.Throws<InvalidOperationException>(() => Dispatcher.UIThread.RunJobs());
+                Assert.False(MainShellWindow.IsDeniedBusName(null));
+                Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
+                    "org.freedesktop.DBus.Error.Failed", "org.kde.StatusNotifierItem-2-4")));
+            }
+            finally
+            {
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF TrayIconService.ShowWindow and MainWindow.WindowChrome.OnClosing: keep the panel reachable.
+    [Theory]
+    [InlineData(0)] // Denial before the pending startup hide.
+    [InlineData(1)] // X-to-tray hide.
+    [InlineData(2)] // Completed startup hide.
+    public async Task DeniedTrayWithWatcherKeepsTheShellReachable(int hidePath)
+    {
+        var alreadyHidden = hidePath != 0;
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.CreateTray();
+                shell.TrayHostPresent = () => true;
+                Assert.True(shell.CanHideToTray);
+                if (alreadyHidden)
+                {
+                    if (hidePath == 2) shell.StartMinimizedToTray();
+                    shell.Show();
+                    if (hidePath == 1) shell.Close(); // Real X-to-tray path records the hide reason.
+                    Assert.False(shell.IsVisible);
+                }
+                else shell.StartMinimizedToTray(); // Denial races the pending Opened callback.
+                Dispatcher.UIThread.Post(() => throw TrayFailure());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.CanHideToTray); // Watcher presence alone cannot make an icon usable.
+                if (!alreadyHidden)
+                {
+                    Assert.False(shell.IsVisible); // Denial must not open a shell before startup does.
+                    shell.Show();
+                }
+                Assert.True(shell.IsVisible);
+                var closed = false;
+                shell.Closed += (_, _) => closed = true;
+                shell.Close();
+                Assert.True(closed); // X exits rather than hiding behind the refused registration.
+            }
+            finally
+            {
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task DeniedTrayDoesNotRaisePanelOverLauncherBoot()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            var boot = LauncherWindow.Boot;
+            var session = CoreSession.IsSessionRunningProvider;
+            try
+            {
+                shell.CreateTray();
+                shell.TrayHostPresent = () => true;
+                shell.Show();
+                shell.Close();
+                Assert.False(shell.IsVisible);
+                shell.ShowFromTray(); // Clear an earlier tray hide before launcher routing takes over.
+                Assert.True(shell.IsVisible);
+                LauncherWindow.Boot = global::ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst;
+                LauncherWindow.RouteBoot(shell);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.IsVisible);
+                Assert.True(LauncherWindow.Instance!.IsVisible);
+                Dispatcher.UIThread.Post(() => throw TrayFailure());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.CanHideToTray); // Denial was handled, rather than missed.
+                Assert.False(shell.IsVisible);
+                Assert.True(LauncherWindow.Instance.IsVisible);
+                CoreSession.IsSessionRunningProvider = () => true;
+                LauncherWindow.Instance.RequestClose();
+                Assert.True(LauncherWindow.Instance.IsVisible); // The sole surface remains on the taskbar.
+                Assert.Equal(WindowState.Minimized, LauncherWindow.Instance.WindowState);
+                Assert.False(shell.IsVisible);
+            }
+            finally
+            {
+                CoreSession.IsSessionRunningProvider = session;
+                LauncherWindow.Instance?.Close();
+                LauncherWindow.Boot = boot;
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task DeniedTrayAfterLauncherClosedToTrayBringsLauncherBack()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            var boot = LauncherWindow.Boot;
+            var session = CoreSession.IsSessionRunningProvider;
+            try
+            {
+                shell.CreateTray();
+                shell.TrayHostPresent = () => true;
+                shell.Show();
+                LauncherWindow.Boot = global::ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst;
+                LauncherWindow.RouteBoot(shell);
+                Dispatcher.UIThread.RunJobs();
+                CoreSession.IsSessionRunningProvider = () => true;
+                LauncherWindow.Instance!.RequestClose();
+                Assert.False(LauncherWindow.Instance.IsVisible); // Behind the usable tray icon, as WPF.
+                Assert.False(shell.IsVisible);
+                Dispatcher.UIThread.Post(() => throw TrayFailure());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.CanHideToTray);
+                Assert.True(LauncherWindow.Instance!.IsVisible); // The icon is gone: the launcher comes back.
+                Assert.NotEqual(WindowState.Minimized, LauncherWindow.Instance.WindowState);
+                Assert.False(shell.IsVisible);
+            }
+            finally
+            {
+                CoreSession.IsSessionRunningProvider = session;
+                LauncherWindow.Instance?.Close();
+                LauncherWindow.Boot = boot;
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task DeniedTrayAfterTrayBackToLauncherKeepsPanelHidden()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var settingsProvider = CoreSettings.ServiceProvider;
+            var settings = new global::ConditioningControlPanel.Services.SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            MainShellWindow? shell = null;
+            var boot = LauncherWindow.Boot;
+            try
+            {
+                CoreSettings.Current.Welcomed = true;
+                CoreSettings.Current.HasAcceptedAgeVerification = true;
+                // Routing is synchronous with motion off; launcher fade tests cover the animation.
+                CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
+                shell = new MainShellWindow();
+                LauncherWindow.Boot = global::ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst;
+                shell.CreateTray();
+                shell.TrayHostPresent = () => true;
+                shell.Show();
+                LauncherWindow.RouteBoot(shell);
+                LauncherWindow.OpenPanel(shell); // Establish the existing launcher/panel link.
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(shell.IsVisible);
+                Assert.False(LauncherWindow.Instance!.IsVisible);
+                shell.Close(); // X-to-tray, with no ShowFromTray before the menu handoff.
+                Assert.False(shell.IsVisible);
+                var back = Assert.IsType<NativeMenuItem>(shell.Tray!.Menu!.Items[1]);
+                Assert.True(back.IsVisible);
+                Assert.True(back.IsEnabled);
+                back.Command!.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(LauncherWindow.Instance.IsVisible);
+                Assert.False(shell.IsVisible);
+                Dispatcher.UIThread.Post(() => throw TrayFailure());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.CanHideToTray);
+                Assert.False(shell.IsVisible);
+                Assert.True(LauncherWindow.Instance.IsVisible);
+            }
+            finally
+            {
+                LauncherWindow.Instance?.Close();
+                LauncherWindow.Boot = boot;
+                shell?.Tray?.Dispose();
+                shell?.MarkExitRequestedForTest();
+                shell?.Close();
+                CoreSettings.ServiceProvider = settingsProvider;
+            }
             return Task.CompletedTask;
         });
     }

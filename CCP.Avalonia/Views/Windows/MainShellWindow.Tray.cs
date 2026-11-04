@@ -40,8 +40,72 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF TrayIconService._hasShownFirstMinimizeNotification.
         private bool _shownFirstMinimizeNotification;
 
+        // WPF TrayIconService.cs:145-148 keeps tray initialization failure from ending the app.
+        // Avalonia requests SNI names asynchronously; Flatpak can refuse one after watcher restarts.
+        // Proxy error text is not an API. Scope AccessDenied to the tray implementation's stack.
+        internal static bool IsDeniedBusName(Exception? error)
+        {
+            for (; error is not null; error = error.InnerException)
+                if (error is DBusErrorReplyException { ErrorName: "org.freedesktop.DBus.Error.AccessDenied" }
+                    && error.StackTrace?.Contains("DBusTrayIconImpl", StringComparison.Ordinal) == true) return true;
+            return false;
+        }
+
+        private bool _trayRegistrationDenied;
+        private bool _hiddenToTray;
+        // The launcher closed behind this panel's tray icon (WPF LauncherHost.cs:410-424).
+        private bool _launcherHiddenToTray;
+        // WPF LauncherHost.cs:304-328 and App.xaml.cs:4286: routing owns the hidden panel now.
+        internal void ClearTrayHide() => _hiddenToTray = _launcherHiddenToTray = false;
+        internal void MarkLauncherHiddenToTray() => _launcherHiddenToTray = true;
+
+        internal bool CanHideToTray => Tray is not null && !_trayRegistrationDenied && TrayHostPresent();
+
+        private void DetachTrayHandlers(object? sender, EventArgs e)
+        {
+            global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException -= SwallowDeniedBusName;
+        }
+
+        // WPF MainWindow.xaml.cs:3779-3784 hides only through the tray. Recheck at Opened:
+        // registration can be denied after startup schedules this callback.
+        internal void StartMinimizedToTray()
+        {
+            void ToTray(object? sender, EventArgs e)
+            {
+                Opened -= ToTray;
+                if (CanHideToTray)
+                {
+                    _hiddenToTray = true;
+                    Hide();
+                }
+            }
+            Opened += ToTray;
+        }
+
+        private void SwallowDeniedBusName(object? sender, global::Avalonia.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            if (!IsDeniedBusName(e.Exception)) return;
+            Serilog.Log.Warning("Tray: D-Bus name refused, tray icon unavailable: {E}", e.Exception.Message);
+            e.Handled = true;
+            _trayRegistrationDenied = true;
+            // WPF TrayIconService.cs:195-218 restores access through ShowWindow. With no icon,
+            // restore only a tray hide. Launcher/game routing has its own way back to the panel
+            // (WPF LauncherHost.cs:304-328, App.xaml.cs:4286). Do not activate over that surface.
+            if (IsVisible || _windowClosed || _exitRequested) return;
+            // A launcher closed to the tray comes back as it left; under Lockdown the panel is the
+            // surface (BackToLauncher refuses there too).
+            if (_launcherHiddenToTray && !LockdownActive) LauncherWindow.OpenFor(this);
+            else if (_hiddenToTray || _launcherHiddenToTray) ShowFromTray();
+        }
+
         internal TrayIcon CreateTray()
         {
+            // Idempotent across tray recreation. Do not swallow unrelated D-Bus access failures.
+            global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException -= SwallowDeniedBusName;
+            global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException += SwallowDeniedBusName;
+            Closed -= DetachTrayHandlers;
+            Closed += DetachTrayHandlers;
+            Tray?.Dispose();
             Tray = new TrayIcon
             {
                 ToolTipText = "Conditioning Control Panel",
@@ -49,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Menu = BuildTrayMenu(),
                 IsVisible = true,
             };
+            _trayRegistrationDenied = false; // Explicit recreation is the recovery attempt.
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
             AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
@@ -125,6 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public void ShowFromTray()
         {
             if (_windowClosed) return;
+            _hiddenToTray = _launcherHiddenToTray = false;
             RestoreLauncherPanelOpacity();
             Show();
             WindowState = WindowState.Normal;
@@ -164,13 +230,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF WindowChrome.cs:140: closing (real exit OR minimize-to-tray) always ends a Chaos run.
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { }
-            if (Tray is not null && !_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing
-                && TrayHostPresent())
+            if (!_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing && CanHideToTray)
             {
                 e.Cancel = true;
                 // WPF WindowChrome.cs:345: quizzes are unowned topmost windows that would stay on screen.
                 PopQuizWindow.ForceCloseAll();
                 QuizWindow.CloseAll();
+                _hiddenToTray = true;
                 Hide();
                 HideAvatarTube();
                 // ponytail: WPF fires App.EmiDesk "minimizedToTray" here (WindowChrome.cs:362); this head has no EmiDesk Fire moment bus yet.

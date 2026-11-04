@@ -373,6 +373,7 @@ public sealed class LauncherWindowTests
         var oldSession = CoreSession.IsSessionRunningProvider;
         try
         {
+            shell.CreateTray(); // A watcher alone does not provide a usable icon.
             CoreSettings.Current.FlashEnabled = true;
             shell.StartEngine();
             LauncherWindow.BackToLauncher(shell);
@@ -399,6 +400,7 @@ public sealed class LauncherWindowTests
         {
             CoreSession.IsSessionRunningProvider = oldSession;
             CoreEngine.Stop();
+            shell.Tray?.Dispose();
         }
     });
 
