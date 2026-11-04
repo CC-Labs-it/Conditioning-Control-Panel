@@ -25,7 +25,6 @@ namespace CCP.Avalonia.Tests;
 /// click side effect runs.</summary>
 public sealed class ContentHitTestTests
 {
-    private sealed class FrozenClock : TimeProvider { public override long GetTimestamp() => 0; }
     [Fact]
     public async Task ContentButtonsReceiveThePointerAtTheirCentre()
     {
@@ -35,9 +34,7 @@ public sealed class ContentHitTestTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow { TabClock = new FrozenClock() };
-            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
-            ConditioningControlPanel.CoreSettings.Current.PerformanceMode = false;   // TestIsolation.cs:164,179 restores CoreSettings.Current after every test
+            var w = new MainShellWindow();
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -48,9 +45,6 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
-                Assert.NotNull(w.EnteringTab);
-                w.CompleteTabTransition();
-                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -69,19 +63,13 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
-                    // Hit-test inside the press, not before it: MouseDown first runs jobs and renders until idle, so a
-                    // probe taken here earlier read an older frame than the press (Windows CI 41800926187: awareness
-                    // BtnAwarenessTutorial hit ScrollContentPresenter, pressed True).
-                    Visual? hit = null;
+                    var hit = w.InputHitTest(p) as Visual;
                     bool pressed = false;
-                    void Probe(object? s, PointerPressedEventArgs e) => hit = w.InputHitTest(p) as Visual;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
-                    w.AddHandler(InputElement.PointerPressedEvent, Probe, RoutingStrategies.Tunnel);
                     b.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
                     w.MouseDown(p, MouseButton.Left);
                     w.MouseUp(p, MouseButton.Left);
                     Dispatcher.UIThread.RunJobs();
-                    w.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Probe);
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
                         misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");

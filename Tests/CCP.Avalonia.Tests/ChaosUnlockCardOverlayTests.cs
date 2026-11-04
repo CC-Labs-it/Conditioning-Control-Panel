@@ -212,10 +212,7 @@ public sealed class ChaosUnlockCardOverlayTests
         ChaosRunHost.Tick();
         Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, state.ElapsedSec);
         Assert.Equal((3, true, false, 6), (state.WaveIndex, state.WelcomeShowerEnabled, ChaosUnlockCardOverlay.IsShowing, BubbleOverlay.ChaosCount));
-        Assert.All(BubbleOverlay.Field.Bubbles, b => Assert.Equal(ChaosMotion.RainDown, b.Spec!.Motion));
-        double y = BubbleOverlay.Field.Bubbles[0].Y;
-        BubbleOverlay.Field.Step();
-        Assert.True(BubbleOverlay.Field.Bubbles[0].Y > y);
+        Assert.All(BubbleOverlay.Field.Bubbles, b => Assert.Equal(ChaosMotion.RainDown, b.Spec!.Motion)); // motion: Core ChaosLiveBubbleTests
         Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
         Assert.Single(cues, c => c.StartsWith("chime", StringComparison.Ordinal)); // WPF :1658
     });
@@ -253,12 +250,10 @@ public sealed class ChaosUnlockCardOverlayTests
         ChaosRunHost.PulseFx = (c, strength) => pulses.Add((c.ToUInt32(), strength));
         ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(p));
         ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
-        ChaosMeta.State.RunsCompleted = debut ? 2 : 0;
-        ChaosMeta.State.SeenSkipDebut = false;
+        (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = (debut ? 2 : 0, false);
         Begin();
         var state = ChaosRunHost.State!;
-        state.ElapsedSec = 20;
-        state.RerollsLeft = 1;
+        (state.ElapsedSec, state.RerollsLeft) = (20, 1);
         ChaosMeta.State.LessonsComplete.Add("silk_touch"); ChaosMeta.State.LessonsComplete.Remove("draft4");
         ChaosMeta.State.LessonProgress["draft4"] = ChaosLessons.ById("draft4")!.Target - 1;
         ChaosRunHost.Tick();
@@ -271,11 +266,9 @@ public sealed class ChaosUnlockCardOverlayTests
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
         var boon = curse ? ChaosBoonPool.Draft(true, 3, guaranteeCurse: true).First(b => b.IsCurse)
             : ChaosBoonPool.All.Single(b => b.Id == (pick == 2 ? "extra_shield" : "golden_touch"));
-        int shields = state.Shields;
-        double mult = state.BoonMult;
+        var (shields, mult) = (state.Shields, state.BoonMult);
         state.SinExtraMult = 0.2; if (curse) state.MaxedBoons.Add("surrender");
-        ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Whisper);
-        ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Yes);
+        ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Whisper); ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Yes);
         CoreModArt.AudioOverridePathProvider = p => debut && p == "chaos/sin_accept.mp3"
             ? System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "chime3.mp3") : null;
         Choose(overlay, boon);
@@ -309,10 +302,8 @@ public sealed class ChaosUnlockCardOverlayTests
     {
         // WPF ChaosModeService.cs:1467,1548,1562,1581,1672; ChaosFxWindow.cs:151.
         Assert.Null(ChaosRunHost.PulseFx);
-        var accept = ChaosFxWindow.Accept;
-        var time = ChaosFxWindow.Clock;
-        ChaosFxWindow.Accept = _ => true; // headless has no native click-through surface
-        ChaosFxWindow.Clock = clock;
+        var (accept, time) = (ChaosFxWindow.Accept, ChaosFxWindow.Clock);
+        (ChaosFxWindow.Accept, ChaosFxWindow.Clock) = (_ => true, clock); // headless has no native click-through surface
         try
         {
             Begin(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, ColorFlashesEnabled = flashes });
@@ -350,9 +341,7 @@ public sealed class ChaosUnlockCardOverlayTests
         Begin();
         var state = ChaosRunHost.State!;
         Assert.False(RevealService.IsUnlocked(RevealIds.DraftSkip));
-        state.Config.DraftAutoResumeSec = 1;
-        state.Config.AllowCurses = false;
-        state.ElapsedSec = 20;
+        (state.Config.DraftAutoResumeSec, state.Config.AllowCurses, state.ElapsedSec) = (1, false, 20);
         var audio = new System.Collections.Generic.List<string>(); int barks = 0;
         CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => audio.Add(path);
         CoreBark.ChaosDraftAutopick = () => barks++;
@@ -387,8 +376,7 @@ public sealed class ChaosUnlockCardOverlayTests
     public async Task Stop_during_ready_go_cancels_timer_and_callback() => await Run(_ =>
     {
         Begin();
-        var state = ChaosRunHost.State!;
-        state.ElapsedSec = 20;
+        ChaosRunHost.State!.ElapsedSec = 20;
         ChaosRunHost.Tick();
         var window = ChaosRunHost.Overlay!;
         Choose(window, null);
@@ -416,20 +404,14 @@ public sealed class ChaosUnlockCardOverlayTests
             Setup();
             var clock = new SteppedClock();
             ChaosUnlockCardOverlay.Clock = clock;
-            var announcerTime = ChaosAnnouncerOverlay.Clock;
+            var (announcerTime, pulse, bark, announcer) = (ChaosAnnouncerOverlay.Clock, ChaosRunHost.PulseFx, CoreBark.ChaosDraftAutopick, CoreSettings.Current.ChaosAnnouncerEnabled);
             var progression = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut);
-            (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = (0, false);
-            ChaosAnnouncerOverlay.Clock = clock;
-            var pulse = ChaosRunHost.PulseFx;
-            var bark = CoreBark.ChaosDraftAutopick;
-            var announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut, ChaosAnnouncerOverlay.Clock) = (0, false, clock);
             var (audio, modAudio) = (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider);
             try { body(clock); }
             finally { ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System;
                 ChaosRunHost.PulseFx = pulse; (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider) = (audio, modAudio);
-                ChaosAnnouncerOverlay.Clock = announcerTime;
-                CoreBark.ChaosDraftAutopick = bark;
-                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+                (ChaosAnnouncerOverlay.Clock, CoreBark.ChaosDraftAutopick, CoreSettings.Current.ChaosAnnouncerEnabled) = (announcerTime, bark, announcer);
                 (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = progression; }
             return Task.CompletedTask;
         });
