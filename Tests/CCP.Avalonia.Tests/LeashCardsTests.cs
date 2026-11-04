@@ -94,6 +94,7 @@ public sealed class LeashCardsTests
         var host = new StackPanel();
         var path = System.IO.Path.GetTempFileName();
         var sounds = new List<string>();
+        var oldRules = LeashSound.Rules;
         try
         {
             notifications.AttachHost(host);
@@ -101,7 +102,10 @@ public sealed class LeashCardsTests
             ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider = () => false;
             ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = _ => path;
             ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => sounds.Add(tag);
-            System.Threading.Thread.Sleep(200);
+            LeashSound.Rules = new LeashSfxRules();
+            LeashSound.Release(true); // A preceding successful release must not suppress this test.
+            LeashSound.ResetRules();
+            sounds.Clear();
             var svc = new Service { ReleaseOk = ok };
             var card = new LeashHolderCard(Held(), () => svc);
             var release = (MenuItem)Find<Button>(card, "leash-holder-more").ContextMenu!.Items[1]!;
@@ -113,6 +117,7 @@ public sealed class LeashCardsTests
         }
         finally
         {
+            LeashSound.Rules = oldRules;
             hostField.SetValue(notifications, oldHost);
             settings.MasterVolume = volume;
             ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio;
@@ -130,6 +135,7 @@ public sealed class LeashCardsTests
         var volume = settings.MasterVolume;
         var path = System.IO.Path.GetTempFileName();
         string? cue = null;
+        var oldRules = LeashSound.Rules;
         try
         {
             settings.MasterVolume = 100;
@@ -137,19 +143,19 @@ public sealed class LeashCardsTests
             ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = name => { cue = name; return path; };
             var sounds = new List<string>();
             ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, gain, tag, _, _) => { Assert.Equal(0.28f, gain); sounds.Add(tag); };
-            System.Threading.Thread.Sleep(200);
+            LeashSound.ResetRules();
             LeashSound.Snap();
             Assert.Equal("chaos/collar_save.mp3", cue);
             Assert.Equal(new[] { "leash-snap" }, sounds);
         }
         finally
         {
+            LeashSound.Rules = oldRules;
             settings.MasterVolume = volume;
             ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio;
             ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider = suppressed;
             ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = art;
             System.IO.File.Delete(path);
-            System.Threading.Thread.Sleep(200); // Let the shared sound gap expire before the next test.
         }
     });
 
@@ -188,6 +194,10 @@ public sealed class LeashCardsTests
             Assert.True(menu.IsOpen);
             ((MenuItem)menu.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             var snap = Assert.IsType<Window>(card.SnapWindow);
+            Assert.Contains(WindowTransparencyLevel.Transparent, snap.TransparencyLevelHint);
+            var margin = Assert.IsType<Border>(snap.Content);
+            Assert.Equal(new Thickness(40), margin.Margin);
+            Assert.IsType<LeashSnapCard>(margin.Child);
             Assert.Equal(Loc.GetF("leash_snap_leashed", "Updated friend"), Find<TextBlock>(snap, "leash-snap-leashed").Text);
             Click(snap, "leash-snap-ok");
             Assert.Null(card.SnapWindow);
@@ -345,6 +355,21 @@ public sealed class LeashCardsTests
             Assert.False(ToolTip.GetIsOpen(release));
         }
         finally { host.Close(); }
+    });
+
+    [Fact]
+    public void SnapWindowLeavesRoomForSparks() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(), () => null);
+        var host = new Window { Content = card };
+        try
+        {
+            host.Show();
+            ((MenuItem)Find<Button>(card, "leash-holder-more").ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var margin = Assert.IsType<Border>(Assert.IsType<Window>(card.SnapWindow).Content);
+            Assert.Equal(new Thickness(40), margin.Margin);
+        }
+        finally { card.SnapWindow?.Close(); host.Close(); }
     });
 
     [Fact]

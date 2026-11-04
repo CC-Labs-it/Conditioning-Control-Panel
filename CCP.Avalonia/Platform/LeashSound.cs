@@ -9,7 +9,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 internal static class LeashSound
 {
-    private static readonly LeashSfxRules Rules = new();
+    internal static LeashSfxRules Rules { get; set; } = new();
+    internal static void ResetRules() => Rules = new();
 
     internal static void Tick(DateTime now) => Play(LeashCue.Tick, now, "chaos/countdown_tick.mp3", 0.10f, "leash-tick");
 

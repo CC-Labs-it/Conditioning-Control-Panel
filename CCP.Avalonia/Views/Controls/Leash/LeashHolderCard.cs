@@ -282,7 +282,9 @@ public sealed class LeashHolderCard : Border
         var card = new LeashSnapCard(new LeashPerson("me", name, null), friend, AmbientFxCanvas.Env.Level);
         var window = new Window { Title = Loc.Get("leash_snap_title"), Tag = "leash-snap-window",
             SizeToContent = SizeToContent.WidthAndHeight, WindowDecorations = WindowDecorations.None, ShowInTaskbar = false,
-            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Brushes.Transparent, Content = card };
+            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Brushes.Transparent,
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+            Content = new Border { Margin = new Thickness(40), Child = card } };
         card.Closed += window.Close;
         window.KeyDown += (_, e) => { if (e.Key == global::Avalonia.Input.Key.Escape) { window.Close(); e.Handled = true; } };
         _snapWindow = window;
