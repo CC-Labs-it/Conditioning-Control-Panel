@@ -126,6 +126,43 @@ public sealed class SectionPaintShellTests
     }
 
     [Fact]
+    public async Task HomeDepthFollowsSectionAndRepaintsOnReturnWithMotionOff()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            MainShellWindow? w = null;
+            try
+            {
+                w = new MainShellWindow();
+                w.Show();
+                var home = w.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+                foreach (var tab in new[] { "settings", "play", "settings" })
+                {
+                    w.ShowTab(tab);
+                    Dispatcher.UIThread.RunJobs();
+                    var hue = NavStripRules.Accent(NavSections.SectionForTab(tab));
+                    var ink = Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32()));
+                    var band = Assert.IsType<LinearGradientBrush>(home.Resources["HomeDepthDropBand"]);
+                    var disc = Assert.IsType<RadialGradientBrush>(home.Resources["HomeDepthDropDisc"]);
+                    Assert.Equal(ink, band.GradientStops[0].Color);
+                    Assert.Equal(Color.FromArgb(0, ink.R, ink.G, ink.B), band.GradientStops[1].Color);
+                    Assert.Equal(ink, disc.GradientStops[0].Color);
+                    Assert.Equal(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), DepthLaw.ShadowAlpha * 0.58)), disc.GradientStops[1].Color);
+                    Assert.Equal(Color.FromArgb(0, ink.R, ink.G, ink.B), disc.GradientStops[2].Color);
+                    Assert.Same(band, home.FindControl<Border>("AccountStripDrop")!.Background);
+                }
+            }
+            finally { w?.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public void HomeInkIsTheAuthoredInkAndActiveTextReadsOnEveryHue()
     {
         // Colors.xaml authors Home's ink (the TestIsolation hook drops overrides back to it).
