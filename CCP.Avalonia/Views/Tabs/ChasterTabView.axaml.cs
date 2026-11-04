@@ -406,10 +406,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ---- link ----
 
-        private void ShowLinking(bool linking)
+        internal void ShowLinking(bool linking)
         {
             BtnLink.IsVisible = !linking;
             LinkingRow.IsVisible = linking;
+            SetLinkComet(linking);
         }
 
         private async void BtnLink_Click(object? sender, RoutedEventArgs e)
