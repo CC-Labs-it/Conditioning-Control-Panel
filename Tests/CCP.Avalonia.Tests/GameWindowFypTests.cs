@@ -303,18 +303,13 @@ public sealed class GameWindowFypTests
     public void EyeControl_ConsentCameraGesturesGazeCalibrationAndCleanup() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
-        var settings = CoreSettings.Current;
-        settings.WebcamConsentGiven = false;
-        settings.FypEyeControl = false;
-        settings.FypEyeGaze = true;
-        var tracker = WebcamTracker.Instance;
-        var oldCalibration = tracker.Calibration;
-        tracker.Calibration = null;
-        var w = GameWindow.Launch(GameWindow.FypId)!;
+        var settings = CoreSettings.Current; settings.WebcamConsentGiven = false;
+        settings.FypEyeControl = false; settings.FypEyeGaze = true;
+        var tracker = WebcamTracker.Instance; var oldCalibration = tracker.Calibration;
+        tracker.Calibration = null; var w = GameWindow.Launch(GameWindow.FypId)!;
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
-        int prompts = 0, starts = 0, stops = 0, calibrations = 0;
-        bool running = false;
+        int prompts = 0, starts = 0, stops = 0, calibrations = 0; bool running = false;
         w.FypConsentOverride = () => { prompts++; return Task.FromResult(true); };
         w.FypCameraRunningOverride = () => running;
         w.FypStartCameraOverride = () => { starts++; running = true; return Task.FromResult(true); };
@@ -322,48 +317,29 @@ public sealed class GameWindowFypTests
         w.FypCalibrationOverride = () => { calibrations++; tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { DeviceName = "test", X = 100, Y = 200, DpiScale = 2 } }; return Task.CompletedTask; };
         try
         {
-            w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
-            Wait(w.FypEyeTask!);
-            Assert.Equal(1, prompts);
-            Assert.Equal(1, starts);
-            Assert.Equal("starting", (string?)sent[0]["reason"]);
-            Assert.True((bool)sent.Last()["running"]!);
-            Assert.False((bool)sent.Last()["calibrated"]!);
-            sent.Clear();
-            tracker.RaiseBlinkForTest();
-            tracker.RaiseEyesClosedLongForTest();
+            w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}"); Wait(w.FypEyeTask!);
+            Assert.Equal(1, prompts); Assert.Equal(1, starts);
+            Assert.Equal("starting", (string?)sent[0]["reason"]); Assert.True((bool)sent.Last()["running"]!);
+            Assert.False((bool)sent.Last()["calibrated"]!); sent.Clear();
+            tracker.RaiseBlinkForTest(); tracker.RaiseEyesClosedLongForTest();
             tracker.RaiseGazeForTest(new Point(10, 10)); // no calibration yet
             Assert.Equal(new[] { "blink", "eyesClosed" }, sent.Select(x => (string?)x["type"]));
-            sent.Clear();
-            w.HandleMessage("{\"type\":\"calibrate\"}");
-            Wait(w.FypCalibrationTask!);
-            Assert.Equal(1, calibrations);
-            Assert.True((bool)sent.Last()["calibrated"]!);
-            sent.Clear();
+            sent.Clear(); w.HandleMessage("{\"type\":\"calibrate\"}");
+            Wait(w.FypCalibrationTask!); Assert.Equal(1, calibrations);
+            Assert.True((bool)sent.Last()["calibrated"]!); sent.Clear();
             var origin = w.Web.PointToScreen(new Point(0, 0));
             tracker.RaiseGazeForTest(new Point((origin.X + 10 - 100) / 2.0, (origin.Y + 10 - 200) / 2.0));
-            tracker.RaiseGazeForTest(new Point((origin.X + 20 - 100) / 2.0, (origin.Y + 20 - 200) / 2.0));
-            var gaze = Assert.Single(sent);
-            Assert.Equal("gaze", (string?)gaze["type"]);
-            Assert.True((bool)gaze["inside"]!);
-            Assert.Equal(10 / w.RenderScaling / w.Web.Bounds.Width, (double)gaze["x"]!, 5);
-            sent.Clear();
-            System.Threading.Thread.Sleep(120);
-            tracker.RaiseGazeForTest(new Point((origin.X - 200) / 2.0, (origin.Y - 300) / 2.0));
-            Assert.False((bool)sent.Single()["inside"]!);
-            Assert.Equal(0, (double)sent.Single()["x"]!);
-            sent.Clear();
-            w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeGaze\",\"value\":false}");
-            sent.Clear();
-            System.Threading.Thread.Sleep(120);
-            tracker.RaiseGazeForTest(new Point(10, 10));
-            Assert.Empty(sent);
-            GameWindow.CloseAllForPanic();
-            Wait(GameWindow.FypCameraStopTask);
-            Assert.Equal(1, stops);
-            sent.Clear();
-            tracker.RaiseBlinkForTest();
-            tracker.RaiseEyesClosedLongForTest();
+            tracker.RaiseGazeForTest(new Point((origin.X + 20 - 100) / 2.0, (origin.Y + 20 - 200) / 2.0)); var gaze = Assert.Single(sent);
+            Assert.Equal("gaze", (string?)gaze["type"]); Assert.True((bool)gaze["inside"]!);
+            Assert.Equal(10 / w.RenderScaling / w.Web.Bounds.Width, (double)gaze["x"]!, 5); sent.Clear();
+            System.Threading.Thread.Sleep(120); tracker.RaiseGazeForTest(new Point((origin.X - 200) / 2.0, (origin.Y - 300) / 2.0));
+            Assert.False((bool)sent.Single()["inside"]!); Assert.Equal(0, (double)sent.Single()["x"]!);
+            sent.Clear(); w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeGaze\",\"value\":false}");
+            sent.Clear(); System.Threading.Thread.Sleep(120);
+            tracker.RaiseGazeForTest(new Point(10, 10)); Assert.Empty(sent);
+            GameWindow.CloseAllForPanic(); Wait(GameWindow.FypCameraStopTask);
+            Assert.Equal(1, stops); sent.Clear();
+            tracker.RaiseBlinkForTest(); tracker.RaiseEyesClosedLongForTest();
             Assert.Empty(sent);
         }
         finally { tracker.Calibration = oldCalibration; }
@@ -373,122 +349,86 @@ public sealed class GameWindowFypTests
     public void EyeControl_PreservesExistingCamera_AndReleasesLateStartAfterClose() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
-        var s = CoreSettings.Current;
-        s.WebcamConsentGiven = true;
-        s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
-        s.FypEyeControl = true;
-        var w = GameWindow.Launch(GameWindow.FypId)!;
-        bool running = true;
+        var s = CoreSettings.Current; s.WebcamConsentGiven = true;
+        s.WebcamConsentVersion = WebcamConsent.ConsentVersion; s.FypEyeControl = true;
+        var w = GameWindow.Launch(GameWindow.FypId)!; bool running = true;
         int starts = 0, stops = 0;
         w.FypCameraRunningOverride = () => running;
         w.FypStartCameraOverride = () => { starts++; return Task.FromResult(true); };
         w.FypStopCameraOverride = () => { stops++; running = false; };
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
-        w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.True((bool)sent.Single()["settings"]!["eyeControl"]!);
-        Wait(w.FypEyeTask!);
-        Assert.Equal(0, starts);
+        w.HandleMessage("{\"type\":\"ready\"}"); Assert.True((bool)sent.Single()["settings"]!["eyeControl"]!);
+        Wait(w.FypEyeTask!); Assert.Equal(0, starts);
         w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":false}");
         Assert.Equal(0, stops); // the tracker was already running
-        running = false;
-        var pending = new TaskCompletionSource<bool>();
+        running = false; var pending = new TaskCompletionSource<bool>();
         w.FypStartCameraOverride = () => { starts++; return pending.Task; };
-        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal(1, starts);
-        GameWindow.CloseAllForPanic();
-        running = true;
-        pending.SetResult(true);
-        Wait(w.FypEyeTask!);
-        Wait(GameWindow.FypCameraStopTask);
-        Assert.Equal(1, stops);
-        Assert.False(running);
+        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}"); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, starts); GameWindow.CloseAllForPanic();
+        running = true; pending.SetResult(true);
+        Wait(w.FypEyeTask!); Wait(GameWindow.FypCameraStopTask);
+        Assert.Equal(1, stops); Assert.False(running);
     });
 
     [Fact]
     public void EyeControl_ClosingConsentBeforeFinishingDoesNotStartCamera() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
-        var s = CoreSettings.Current;
-        s.WebcamConsentGiven = false;
-        s.FypEyeControl = false;
-        var w = GameWindow.Launch(GameWindow.FypId)!;
+        var s = CoreSettings.Current; s.WebcamConsentGiven = false;
+        s.FypEyeControl = false; var w = GameWindow.Launch(GameWindow.FypId)!;
         int starts = 0;
         w.FypCameraRunningOverride = () => false;
         w.FypStartCameraOverride = () => { starts++; return Task.FromResult(true); };
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
-        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
-        Dispatcher.UIThread.RunJobs();
+        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}"); Dispatcher.UIThread.RunJobs();
         var dialog = Assert.Single(w.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.WebcamConsentDialog>());
-        var next = dialog.FindControl<Button>("BtnNext")!;
-        next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var next = dialog.FindControl<Button>("BtnNext")!; next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         foreach (var name in new[] { "ChkConsent1", "ChkConsent2", "ChkConsent3" })
             dialog.FindControl<CheckBox>(name)!.IsChecked = true;
         dialog.FindControl<TextBox>("TxtConfirm")!.Text = "ENABLE";
-        dialog.FindControl<Button>("BtnEnable")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.True(dialog.ConsentGiven);
+        dialog.FindControl<Button>("BtnEnable")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.True(dialog.ConsentGiven);
         dialog.Close(); // window close before choosing a calibration option is not a successful dialog
-        Wait(w.FypEyeTask!);
-        Assert.Equal(0, starts);
-        Assert.False(s.FypEyeControl);
-        Assert.Equal("consent", (string?)sent.Last()["reason"]);
+        Wait(w.FypEyeTask!); Assert.Equal(0, starts);
+        Assert.False(s.FypEyeControl); Assert.Equal("consent", (string?)sent.Last()["reason"]);
     });
 
     [Fact]
     public void EyeControl_ToggleOffDuringConsentNeverStartsCamera() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
-        var s = CoreSettings.Current;
-        s.WebcamConsentGiven = false;
-        s.FypEyeControl = false;
-        var w = GameWindow.Launch(GameWindow.FypId)!;
-        var consent = new TaskCompletionSource<bool>();
-        int starts = 0;
+        var s = CoreSettings.Current; s.WebcamConsentGiven = false;
+        s.FypEyeControl = false; var w = GameWindow.Launch(GameWindow.FypId)!;
+        var consent = new TaskCompletionSource<bool>(); int starts = 0;
         w.FypConsentOverride = () => consent.Task;
         w.FypStartCameraOverride = () => { starts++; return Task.FromResult(true); };
         w.FypCameraRunningOverride = () => false;
-        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
-        Dispatcher.UIThread.RunJobs();
-        var task = w.FypEyeTask!;
-        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":false}");
-        consent.SetResult(true);
-        Wait(task);
-        Assert.Equal(0, starts);
-        Assert.False(s.FypEyeControl);
+        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}"); Dispatcher.UIThread.RunJobs();
+        var task = w.FypEyeTask!; w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":false}");
+        consent.SetResult(true); Wait(task);
+        Assert.Equal(0, starts); Assert.False(s.FypEyeControl);
     });
 
     [Fact]
     public void EyeControl_OffThenOnWhileStarting_RetriesAfterReleasingFirstStart() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
-        var s = CoreSettings.Current;
-        s.WebcamConsentGiven = true;
-        s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
-        s.FypEyeControl = false;
-        var w = GameWindow.Launch(GameWindow.FypId)!;
-        bool running = false;
-        int starts = 0, stops = 0;
-        var pending = new TaskCompletionSource<bool>();
+        var s = CoreSettings.Current; s.WebcamConsentGiven = true;
+        s.WebcamConsentVersion = WebcamConsent.ConsentVersion; s.FypEyeControl = false;
+        var w = GameWindow.Launch(GameWindow.FypId)!; bool running = false;
+        int starts = 0, stops = 0; var pending = new TaskCompletionSource<bool>();
         w.FypCameraRunningOverride = () => running;
         w.FypStartCameraOverride = () => ++starts == 1 ? pending.Task : Task.FromResult(running = true);
         w.FypStopCameraOverride = () => { stops++; running = false; };
-        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
-        Dispatcher.UIThread.RunJobs();
-        var first = w.FypEyeTask!;
-        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":false}");
-        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
-        running = true;
-        pending.SetResult(true);
-        Wait(first);
-        Wait(w.FypEyeTask!);
-        Assert.Equal(2, starts);
-        Assert.Equal(1, stops);
-        Assert.True(running);
-        GameWindow.CloseAllForPanic();
-        Wait(GameWindow.FypCameraStopTask);
+        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}"); Dispatcher.UIThread.RunJobs();
+        var first = w.FypEyeTask!; w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":false}");
+        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}"); running = true;
+        pending.SetResult(true); Wait(first);
+        Wait(w.FypEyeTask!); Assert.Equal(2, starts);
+        Assert.Equal(1, stops); Assert.True(running);
+        GameWindow.CloseAllForPanic(); Wait(GameWindow.FypCameraStopTask);
         Assert.Equal(2, stops);
     });
 
@@ -496,12 +436,9 @@ public sealed class GameWindowFypTests
     public void EyeControl_CameraFailureResetsToggle_AndCalibrationRequiresRunningCamera() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
-        var s = CoreSettings.Current;
-        s.WebcamConsentGiven = true;
-        s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
-        s.FypEyeControl = false;
-        var w = GameWindow.Launch(GameWindow.FypId)!;
-        var sent = new List<JObject>();
+        var s = CoreSettings.Current; s.WebcamConsentGiven = true;
+        s.WebcamConsentVersion = WebcamConsent.ConsentVersion; s.FypEyeControl = false;
+        var w = GameWindow.Launch(GameWindow.FypId)!; var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.FypCameraRunningOverride = () => false;
         w.FypStartCameraOverride = () => Task.FromResult(false);

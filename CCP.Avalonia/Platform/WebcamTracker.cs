@@ -191,9 +191,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         private Run? _run;
-        private Thread? _wedged;
-        /// <summary>A loop a timed-out Stop abandoned still holds the camera; Start refuses until it exits.</summary>
-        internal bool IsClosing => _wedged is { IsAlive: true };
+        private volatile Run? _closing;
+        /// <summary>A stopping loop holds the camera until it releases its resources.</summary>
+        internal bool IsClosing => _closing != null;
         private readonly BlinkDetector _blink = new();
         private readonly MouthOpenDetector _mouth = new();
         private readonly GazeEngine _gaze = new();
@@ -298,7 +298,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate)
                 {
                     stale = gen != _gen;
-                    if (!stale) { _run = run; owned?.Invoke(run); }
+                    if (!stale) { _run = run; owned?.Invoke(run); run.Thread.Start(); }
                 }
                 if (stale)
                 {
@@ -308,8 +308,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     return false;
                 }
                 Progress(0.92, "Starting capture…");
-                SetTrackingState(WebcamTrackingState.Tracking);
-                run.Thread.Start();
+                PublishIfCurrent(run, WebcamTrackingState.Tracking);
                 Progress(1.0, "Ready");
                 Log.Information("[Webcam] tracking started");
                 return true;
@@ -342,29 +341,35 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreSettings.Save();
         }
 
+        internal Func<Action, Task> QueueOwnedStop = action => Task.Run(action);
         internal Task StopOwnedAsync(object? owner)
         {
             Run? run;
-            lock (_gate) { if (owner == null || !ReferenceEquals(_run, owner)) return Task.CompletedTask; _gen++; run = Interlocked.Exchange(ref _run, null); }
-            return Task.Run(() => StopRun(run));
+            lock (_gate) { if (owner == null || !ReferenceEquals(_run, owner)) return Task.CompletedTask; _gen++; run = DetachRun(); }
+            return QueueOwnedStop(() => StopRun(run));
         }
 
         public void Stop()
         {
             Run? run;
-            lock (_gate) { _gen++; run = Interlocked.Exchange(ref _run, null); }
+            lock (_gate) { _gen++; run = DetachRun(); }
             StopRun(run);
+        }
+        // Called under _gate: signal and reserve the device before making the run unavailable.
+        private Run? DetachRun()
+        {
+            var run = _run;
+            if (run != null) { run.Stop = true; _closing = run; _run = null; }
+            SetTrackingState(WebcamTrackingState.Stopped);
+            return run;
         }
         private void StopRun(Run? run)
         {
-            SetTrackingState(WebcamTrackingState.Stopped);
             if (run == null) return;
-            run.Stop = true;
             // WPF Stop: bounded join; a wedged driver must not hang the caller forever. The loop
             // releases its own camera whenever it does exit; until then Start refuses.
             if (!run.Thread!.Join(TimeSpan.FromSeconds(5)))
             {
-                _wedged = run.Thread;
                 Log.Warning("[Webcam] capture thread did not exit in 5s; abandoned, it closes the camera when it exits");
             }
             Log.Information("[Webcam] tracking stopped");
@@ -397,8 +402,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 run.Release();
+                bool ended;
+                lock (_gate) { if (_closing == run) _closing = null; ended = Interlocked.CompareExchange(ref _run, null, run) == run; }
                 // Ended on its own (read failures, revoke): no longer running.
-                if (Interlocked.CompareExchange(ref _run, null, run) == run)
+                if (ended)
                 {
                     SetTrackingState(LastError == null ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
                     Dispatcher.UIThread.Post(() => StateChanged?.Invoke());

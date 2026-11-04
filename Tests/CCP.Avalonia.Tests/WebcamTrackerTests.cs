@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
@@ -231,4 +232,41 @@ public sealed class WebcamTrackerTests
             Assert.True(WebcamTracker.Instance.Start(), WebcamTracker.Instance.LastError);
         });
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OwnedStop_SignalsBeforeWorkerAndBlocksReplacementUntilRelease(bool checkSignal)
+    {
+        var src = new FakeSource { Wedge = true }; var next = new FakeSource();
+        WithConsent(true, () =>
+        {
+            var tracker = WebcamTracker.Instance; object? owner = null;
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var oldQueue = tracker.QueueOwnedStop;
+            try
+            {
+                WebcamTracker.SourceFactory = () => src;
+                Assert.True(tracker.StartAsync(value => owner = value).GetAwaiter().GetResult());
+                Assert.True(src.Blocked.Wait(TimeSpan.FromSeconds(20)));
+                tracker.QueueOwnedStop = action => gate.Task.ContinueWith(_ => action());
+                var stop = tracker.StopOwnedAsync(owner);
+                var stopField = owner!.GetType().GetField("Stop")!;
+                if (checkSignal) Assert.True((bool)stopField.GetValue(owner)!);
+                else
+                {
+                    Assert.True(tracker.IsClosing);
+                    WebcamTracker.SourceFactory = () => next;
+                    Assert.False(tracker.Start());
+                    Assert.Equal(0, next.Opens);
+                }
+                gate.SetResult(); src.Released.Set();
+                Assert.True(stop.Wait(TimeSpan.FromSeconds(20)));
+                WaitFor(() => !tracker.IsClosing);
+                Assert.True(src.Disposed);
+                Assert.True(tracker.Start(), tracker.LastError);
+            }
+            finally { gate.TrySetResult(); src.Released.Set(); tracker.QueueOwnedStop = oldQueue; }
+        });
+    }
+
 }
