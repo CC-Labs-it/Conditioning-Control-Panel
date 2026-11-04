@@ -31,8 +31,7 @@ public sealed class FlashAnimationTests
     });
     private static void WithGif(int count, Action<string> body)
     {
-        var root = Directory.CreateTempSubdirectory("ccp-flash-").FullName;
-        var path = Path.Combine(Directory.CreateDirectory(Path.Combine(root, "images")).FullName, "flash.gif");
+        var root = Directory.CreateTempSubdirectory("ccp-flash-").FullName; var path = Path.Combine(Directory.CreateDirectory(Path.Combine(root, "images")).FullName, "flash.gif");
         File.WriteAllBytes(path, Gif(count));
         try { body(path); }
         finally { Directory.Delete(root, recursive: true); }
@@ -43,8 +42,7 @@ public sealed class FlashAnimationTests
         var (frames, delay) = FlashOverlay.DecodePicture(path, 16);
         try
         {
-            Assert.Equal(8, frames.Count);
-            Assert.Equal(100, delay.TotalMilliseconds);
+            Assert.Equal(8, frames.Count); Assert.Equal(100, delay.TotalMilliseconds);
             for (int f = 2; f < frames.Count; f++)
             {
                 Assert.Equal(new SKColor(255, 215, 0), Pixel(frames[f], SquareX(f), 6));
@@ -65,8 +63,7 @@ public sealed class FlashAnimationTests
             try
             {
                 var (shared, _) = FlashOverlay.DecodePicture(path, 16); try { Assert.Same(frames, shared); } finally { FlashOverlay.DisposeFrames(shared); }
-                Assert.Equal(2, frames.Count);
-                Assert.Equal(100, delay.TotalMilliseconds);
+                Assert.Equal(2, frames.Count); Assert.Equal(100, delay.TotalMilliseconds);
                 Assert.Equal(new SKColor(255, 0, 0), Pixel(frames[0], 1, 1));
                 Assert.Equal(new SKColor(0, 0, 255), Pixel(frames[1], 1, 1));
             }
@@ -118,16 +115,13 @@ public sealed class FlashAnimationTests
             FlashOverlay.Present = (_, _, _) => true;
             CorePaths.EffectiveAssetsProvider = () => Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
             ConditioningControlPanel.Services.ContentPackStore.Current = null;
-            var screen = new Window().Screens.All[0];
-            var picked = FlashOverlay.LoadPictures(1, new[] { screen }, new[] { 0 }, s, new(), null, FlashOverlay.DecodeMax(s, PerformanceTier.Quality));
+            var screen = new Window().Screens.All[0]; var picked = FlashOverlay.LoadPictures(1, new[] { screen }, new[] { 0 }, s, new(), null, FlashOverlay.DecodeMax(s, PerformanceTier.Quality));
             var (chosenFrames, delay, rect, chosenPath, chosenScreen) = Assert.Single(picked);
-            frames = chosenFrames;
-            Assert.Equal(path, chosenPath);
+            frames = chosenFrames; Assert.Equal(path, chosenPath);
             Assert.Equal(8, frames.Count);
             Assert.True(FlashOverlay.Show(frames[0], rect, chosenPath, chosenScreen,
                 1, TimeSpan.Zero, TimeSpan.FromSeconds(5), false, false, 0, frames: frames, frameDelay: delay));
-            transferred = true;
-            var window = FlashOverlay.Active[^1].Window;
+            transferred = true; var window = FlashOverlay.Active[^1].Window;
             Assert.True(FlashOverlay.AnimationRunning);
             clock.Advance(TimeSpan.FromMilliseconds(99)); FlashOverlay.AnimationTick();
             Assert.Equal(0, window.FrameIndex);
@@ -321,20 +315,15 @@ public sealed class FlashAnimationTests
     }
     private const int Size = 16;
     private static byte[] Gif(int count) => Gif(Enumerable.Range(0, count).Select(i => i == 0 ? 1 : 3).ToArray());
-
     // ---- a tiny GIF89a writer ----
-
     private static readonly byte[] Palette = { 40, 10, 60, 255, 105, 180, 255, 215, 0, 0, 0, 0 };
     private const int SquareY = 6;
-
     // Frame 0 is the whole background (index 0); frame f >= 1 is a 2x2 gold square (index 2).
     private static int SquareX(int frame) => 2 * (frame - 1) % (Size - 2);
-
     private static byte[] Gif(int[] disposals, int width = Size, int height = Size)
     {
         var ms = new MemoryStream();
         void U16(int v) { ms.WriteByte((byte)v); ms.WriteByte((byte)(v >> 8)); }
-
         ms.Write(Encoding.ASCII.GetBytes("GIF89a"));
         U16(width); U16(height);
         ms.WriteByte(0xF1); // global colour table of 4 entries
@@ -344,7 +333,6 @@ public sealed class FlashAnimationTests
         ms.Write(new byte[] { 0x21, 0xFF, 0x0B });
         ms.Write(Encoding.ASCII.GetBytes("NETSCAPE2.0"));
         ms.Write(new byte[] { 0x03, 0x01, 0x00, 0x00, 0x00 });
-
         for (int f = 0; f < disposals.Length; f++)
         {
             int x = f == 0 ? 0 : SquareX(f), y = f == 0 ? 0 : SquareY;
@@ -366,7 +354,6 @@ public sealed class FlashAnimationTests
         ms.WriteByte(0x3B);
         return ms.ToArray();
     }
-
     // Uncompressed LZW: a clear code before every two pixels keeps the table from growing, so
     // every code stays 3 bits wide (clear = 4, end = 5).
     private static byte[] Lzw(byte[] indices)
@@ -389,5 +376,4 @@ public sealed class FlashAnimationTests
         if (bits > 0) output.Add((byte)acc);
         return output.ToArray();
     }
-
 }

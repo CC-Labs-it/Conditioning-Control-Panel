@@ -21,6 +21,11 @@ public class FlashGifSharedRulesTests
         Assert.NotNull(root);
         Assert.Contains(call, File.ReadAllText(Path.Combine(root!.FullName, path)));
     }
+    [Theory]
+    [InlineData(double.NaN, 100)]
+    [InlineData(0.1, 400)]
+    public void Speed_handles_invalid_and_below_minimum_multipliers(double multiplier, double expectedMs) =>
+        Assert.Equal(TimeSpan.FromMilliseconds(expectedMs), FlashGifRules.ScaleFrameDelay(TimeSpan.FromMilliseconds(100), multiplier));
     [Fact]
     public void Decode_cap_obeys_wpf_tier_scaling_and_bounds()
     {
