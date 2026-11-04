@@ -152,6 +152,8 @@ public sealed class PanicSurfacesTests
         ("first-show", "ai-followups", "the welcome show ends first"),
         // WPF :1543 CancelPendingAi() is the first stop in HandlePanicKeyPress, long before the tail's StopEngine (:1827).
         ("ai-followups", "engine", "AI cancel early"),
+        // WPF MainWindow.xaml.cs:1704,1838,2127: browser teardown precedes the engine stop tail.
+        ("browser-media", "engine", "browser pauses before engine cleanup"),
         // WPF :1714-1721 game surfaces + Lab minigames close BEFORE RunPanicStopTail (:1722); the engine stop never reaches them.
         ("blink-trainer", "engine", "Lab minigames before the engine"),
         ("gaze-minigame", "engine", "Lab minigames before the engine"),
@@ -214,9 +216,9 @@ public sealed class PanicSurfacesTests
     {
         "ai-followups>engine",
         "blink-trainer>engine",
+        "browser-media>engine",
         "chaos>engine",
         "corner-gif>tube-speech",
-        "engine>browser-media",
         "engine>corner-gif",
         "engine>lock-cards",
         "engine>pink-rush",
