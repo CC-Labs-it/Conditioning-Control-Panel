@@ -211,21 +211,32 @@ namespace ConditioningControlPanel.Avalonia
                 return VideoCheck.Run(args[vc + 1], vc + 2 < args.Length ? args[vc + 2] : null);
             }
 
-            // WPF's single-instance gate: a second launch hands its surface (or none) to the running app
-            // and exits; the primary routes it (WPF RouteSurfaceHandoff / LauncherHost.OnBareRelaunch).
+            // Queue acknowledgements during startup, then deliver on the shell's UI thread.
+            var handoffs = new Platform.FileOpenRequest();
+            var filePayload = Platform.FileOpenRequest.Encode(args);
             using var instance = Platform.SingleInstance.Claim(Platform.SingleInstance.SandboxSuffix(), payload =>
-                global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    var w = (global::Avalonia.Application.Current?.ApplicationLifetime as
-                        global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                    if (w is Views.Windows.MainShellWindow shell) Views.Windows.LauncherWindow.RouteHandoff(shell, payload);
-                    else w?.Activate();
-                }).GetTask(), Services.Launcher.LauncherHandoff.Encode(args));
+            {
+                // Validate file requests when received, including when the file was removed after launch.
+                if (!Platform.FileOpenRequest.Decode(payload, out var action, out _) || action != null)
+                    return handoffs.Enqueue(payload);
+                return System.Threading.Tasks.Task.CompletedTask;
+            }, filePayload ?? Services.Launcher.LauncherHandoff.Encode(args));
             if (instance is null)
             {
                 Serilog.Log.Information("Another instance is running; asked it to show its window");
                 return 0;
             }
+
+            if (filePayload != null) _ = handoffs.Enqueue(filePayload);
+            App.HandoffsReady = shell => handoffs.Ready(payload =>
+                global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (Platform.FileOpenRequest.Decode(payload, out var action, out var path))
+                    {
+                        if (action != null && path != null) shell.OpenMediaRequest(action, path);
+                    }
+                    else Views.Windows.LauncherWindow.RouteHandoff(shell, payload);
+                }).GetTask());
 
             var app = BuildAvaloniaApp();
 #if DEBUG

@@ -105,6 +105,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return player;
         }
 
+        // WPF MainWindow.DeeperTab.cs:602-608,649-675, used by file-open handoffs.
+        internal void OpenMediaRequest(string action, string path)
+        {
+            try
+            {
+                ShowFromTray();
+                if (action == "play") ShowOrActivateDeeperPlayer().OpenLocalMediaFile(path);
+                else if (action == "edit")
+                {
+                    var type = DeeperPreview.IsLocalVideoFile(path) ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio;
+                    var enhancement = new Services.Deeper.EnhancementLibrary().CreateBlank(type, path);
+                    OpenDeeperEditor(enhancement, null);
+                }
+            }
+            catch (Exception ex) { Log.Error(ex, "Failed to open media request"); }
+        }
+
         /// <summary>WPF BtnDeeperOpenPlayer_Click (MainWindow.DeeperTab.cs:202).</summary>
         internal void BtnDeeperOpenPlayer_Click()
         {

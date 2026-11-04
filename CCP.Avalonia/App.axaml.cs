@@ -416,6 +416,8 @@ namespace ConditioningControlPanel.Avalonia
                 LocalizationManager.Instance.SetLanguage("en");
         }
 
+        internal static Action<Views.Windows.MainShellWindow>? HandoffsReady;
+
         /// <summary>Set by Program.Main: a real launch shows the splash. Every other desktop setup
         /// (tests, PanicCheck, VideoCheck) starts synchronously without one, as before.</summary>
         internal static bool SplashOnStartup;
@@ -1043,6 +1045,12 @@ namespace ConditioningControlPanel.Avalonia
                     }
                     shell.Opened += Route;
                 }
+                shell.Opened += (_, _) =>
+                {
+                    var ready = HandoffsReady;
+                    HandoffsReady = null;
+                    ready?.Invoke(shell);
+                };
                 // Tray: restore, wake, Stop everything (the no-hotkey panic control) and the real Exit.
                 try
                 {
