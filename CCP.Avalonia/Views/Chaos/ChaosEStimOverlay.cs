@@ -1,9 +1,7 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosEStimOverlay.cs (ChaosEStimOverlay + ChaosEStimGlow).
 // The maths (bolt path, strike timeline, halo follow and pulse) is Core's ChaosEStimMath; this file only draws.
 //
-// ponytail: nothing calls Strike/Arm yet. WPF fires them from BubbleService (charged pops, :440/:478/:1726)
-// and ChaosModeService's e_stim toy (:2770/:2800); neither the bubble field nor the toys exist on this head
-// (ChaosRunHost header). The e-stim DEVICE output is untouched here.
+// Charged player pops and the e_stim toy call this overlay. The e-stim DEVICE output is untouched.
 
 using System;
 using System.Collections.Generic;
