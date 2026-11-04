@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id, bool launcherRace = false)
+        internal static GameWindow? Launch(string id, bool launcherRace = false, string? joinRoomId = null)
         {
             // LauncherCatalogue.cs:231-238 and GlassroadHostService.cs:55-82: the current
             // launcher race is Glassroad, with the Lab gate checked even for an existing window.
@@ -80,10 +80,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
+            bool join = id == GlassroadId && Services.Lobby.RaceJoinLink.IsRoomId(joinRoomId);
+            if (live != null)
+            {
+                if (join) { if (live.IsReady) live.Post(new { type = "join-room", roomId = joinRoomId }); else live._grJoins.Enqueue(joinRoomId!); }
+                live.Activate(); return live;
+            }
             try { if (!launcherRace && spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
-            var window = new GameWindow(spec);
+            var window = new GameWindow(join ? spec with { Query = "join=" + joinRoomId } : spec);
             window.Load(Server());
             window.Show();
             return window;

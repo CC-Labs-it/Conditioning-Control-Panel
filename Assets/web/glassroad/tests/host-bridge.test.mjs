@@ -110,3 +110,14 @@ test('the phone app\'s own loopback server is a host, so the lobby songs are not
   for(const platform of ['web','desktop',undefined]) assert.equal(isPreviewSongHost(new URL('http://127.0.0.1:8790'),platform),true,String(platform));
   assert.equal(isPreviewSongHost(new URL('https://app.cclabs.app'),'web'),false);
 });
+
+test('WebKit string carrier completes the page bridge handshake', async () => {
+  const { win, timers } = fakeWin(false), sent = [];
+  win.invokeCSharpAction = json => sent.push(JSON.parse(json));
+  const b = createBridge({ win });
+  assert.equal(b.hosted, true); b.ready(); timers[0]();
+  win.__ccpRnPush(JSON.stringify({ type: 'init', caps: { platform: 'desktop', friendInvite: true } }));
+  win.__ccpRnPush(JSON.stringify({ type: 'ping', t: 9 }));
+  assert.deepEqual(sent.map(m => m.type), ['ready', 'heartbeat', 'pong']);
+  assert.equal((await b.init).caps.friendInvite, true);
+});

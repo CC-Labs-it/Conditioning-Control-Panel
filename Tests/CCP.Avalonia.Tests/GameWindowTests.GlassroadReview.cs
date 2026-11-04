@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 using Newtonsoft.Json.Linq;
@@ -18,6 +19,8 @@ public sealed partial class GameWindowTests
     private sealed class RaceFriends : IFriendsService
     {
         public readonly List<(string, string)> Invites = new();
+        public readonly List<ReceiptReport> Receipts = new();
+        public void ReportReceipt(ReceiptReport report) => Receipts.Add(report);
         public SendOutcome Outcome = new(SendResult.Sent, null);
         public TaskCompletionSource<SendOutcome>? Pending;
         public bool Available => true;
@@ -170,5 +173,44 @@ public sealed partial class GameWindowTests
             (s.UnifiedId, s.AuthToken, s.SkillPoints, s.OfflineMode) = (oldId, oldToken, oldSp, oldOffline);
             Environment.SetEnvironmentVariable(V2PurchaseHead.EnvVar, oldUrl);
         }
+    });
+
+    // WPF FriendsLanding.cs:523-537,565-569 and GlassroadHostService.cs:76-97.
+    [Fact]
+    public void RaceInvite_GatesAndJoinsNewAndExistingWindow() => RunGlassroad(null, (_, _, _) =>
+    {
+        var oldService = FriendsLanding.Service;
+        var fake = new RaceFriends();
+        bool lab = false;
+        CoreEntitlement.HasLabProvider = () => lab;
+        CoreEntitlement.ShowDeniedHandler = _ => { };
+        FriendsLanding.Service = () => fake;
+        FriendsSeen.Shared.Clear();
+        InboxItem Invite(string id, string? room) => new(id, SendKind.Invite, "u1", "Mia", null, null,
+            InviteDestination.Race, null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5)) { Room = room };
+        try
+        {
+            var denied = Invite("0000000000000011", "abc123def456");
+            Assert.True(FriendsLanding.CanJoin(denied));
+            Assert.Contains(Loc.Get("friends_land_dest_race"), FriendsLanding.KnockLine(denied));
+            FriendsLanding.OnKnockDone(denied, KnockOutcome.Go);
+            Assert.Contains(fake.Receipts, r => r.State == ReceiptState.Declined);
+            Assert.False(GameWindow.IsAnyOpen());
+            lab = true;
+            FriendsLanding.OnKnockDone(Invite("0000000000000012", "abc123def456"), KnockOutcome.Go);
+            var game = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.True(game.PageUrl!.Query.Contains("&join=abc123def456", StringComparison.Ordinal));
+            Assert.Contains(fake.Receipts, r => r.State == ReceiptState.Joined);
+            var sent = new List<JObject>();
+            game.Posted += json => sent.Add(JObject.Parse(json));
+            FriendsLanding.OnKnockDone(Invite("0000000000000013", "abc123def457"), KnockOutcome.Go);
+            Assert.DoesNotContain(sent, x => (string?)x["type"] == "join-room");
+            game.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Equal("abc123def457", (string?)sent.Single(x => (string?)x["type"] == "join-room")["roomId"]);
+            FriendsLanding.OnKnockDone(Invite("0000000000000014", "abc123def458"), KnockOutcome.Go);
+            Assert.Equal("abc123def458", (string?)sent.Last()["roomId"]);
+            Assert.Same(game, Assert.Single(GameWindow.OpenWindowsForTests()));
+        }
+        finally { FriendsLanding.Service = oldService; FriendsSeen.Shared.Clear(); }
     });
 }

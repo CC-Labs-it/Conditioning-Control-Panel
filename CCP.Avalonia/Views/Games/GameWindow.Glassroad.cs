@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;
+        private readonly System.Collections.Generic.Queue<string> _grJoins = new();
         private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
         private DispatcherTimer? _grWatch;
 
@@ -129,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
                         PostGlassroadInit();
+                        while (_grJoins.Count > 0) Post(new { type = "join-room", roomId = _grJoins.Dequeue() });
                         try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
                         return true;
                     case "heartbeat":

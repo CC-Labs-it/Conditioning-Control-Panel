@@ -1,3 +1,4 @@
+import { carrier } from '../../shared/carrier.js';
 /* host/bridge.js - the page side of host protocol v2 (plan 3.4).
  *
  * Hosted (WebView2, window.chrome.webview): the host queues everything until the page
@@ -110,7 +111,7 @@ export function mergeInit(base, m = {}) {
 }
 
 export function createBridge({ win = globalThis.window } = {}) {
-  const webview = win?.chrome?.webview || null;
+  const webview = carrier(win);
   const handlers = new Map();   // type -> Set(fn)
   const early = [];             // messages that came before any handler of their type
   const base = defaultInit({
