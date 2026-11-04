@@ -387,6 +387,18 @@ public sealed partial class AccountSeedTests
         finally { ProgressionBank.LevelUp -= hook; System.IO.Directory.Delete(dir, recursive: true); }
         return Task.CompletedTask;
     });
+    [Fact] public void PrizesPrecedeProfileAndCannotBlockMigration() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        wire.SyncReply = """{"prizes":{"revision":3,"grants":["fx.bubble.rain"]},"user":{"level":"bad"}}""";
+        Assert.True(await AccountSeed.LoadProfileAsync()); Assert.True(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        var sink = ProviderSubscription.PrizesSink;
+        try {
+            ProviderSubscription.PrizesSink = (_, _, _, _) => throw new InvalidOperationException();
+            wire.SyncReply = """{"prizes":{"revision":4,"grants":[]},"descent_migration":{"completed":true}}"""; sync.UtcNow = () => T0.AddMinutes(5);
+            Assert.True(await sync.PushAsync("test")); Assert.True(CoreSettings.Current.DescentMigrationCompleted);
+        } finally { ProviderSubscription.PrizesSink = sink; }
+    });
     // WPF ProfileSyncService.cs:570,670,1874: sync adopts grants, logout drops them.
     [Fact]
     public void ReturningOwnerGetsPrizesFromSync() => WithFreshInstall(async () =>
