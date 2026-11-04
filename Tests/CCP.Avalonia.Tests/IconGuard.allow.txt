@@ -44,6 +44,7 @@ Views/Chaos/ChaosRunHost.cs :: ☠ RELAPSE — one more loop :: WPF ChaosModeSer
 Views/Chaos/ChaosRunHost.cs :: ⏳ ten seconds. make them count. :: WPF ChaosModeService.cs:1073 run event-feed sentence (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: Loc.GetF("chaos_estim_arc_remaining" :: localized E-Stim event-feed sentence, WPF ChaosModeService.cs:2792 (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: Loc.Get("chaos_estim_spent" :: localized E-Stim event-feed sentence, WPF ChaosModeService.cs:2798 (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: Loc.Get("chaos_freeze_trigger_feed" :: localized Freeze Trigger event-feed sentence, WPF ChaosModeService.cs:2719 (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🔮 prism! 10x :: run event-feed sentence, WPF ChaosModeService.cs:1837 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🪨 heavy drop! x3 :: run event-feed sentence, WPF ChaosModeService.cs:1870 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ✋ no focus — it triggers :: run event-feed sentence, WPF ChaosModeService.cs:1958 verbatim (content (c).3)

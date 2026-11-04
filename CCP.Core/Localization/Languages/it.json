@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "Congelamento",
+  "chaos_freeze_trigger_feed": "❄ tutto resta immobile",
   "chaos_estim_banner": "Elettrostimolazione",
   "chaos_estim_charged_conduct": "⚡ carico: le tue prossime {0} bolle conducono",
   "chaos_estim_charged_chain": "⚡ carico: le tue prossime {0} bolle avviano una reazione a catena",

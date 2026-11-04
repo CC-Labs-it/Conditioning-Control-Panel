@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "Congelación",
+  "chaos_freeze_trigger_feed": "❄ todo queda inmóvil",
   "chaos_estim_banner": "Electroestimulación",
   "chaos_estim_charged_conduct": "⚡ cargado: tus próximas {0} burbujas conducen",
   "chaos_estim_charged_chain": "⚡ cargado: tus próximas {0} burbujas inician una reacción en cadena",
