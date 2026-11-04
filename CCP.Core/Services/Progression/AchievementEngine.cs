@@ -148,6 +148,20 @@ internal sealed class AchievementEngine
         TrackBubbleCountGameResult(correct);
     }
 
+    /// <summary>WPF AchievementService.TrackPanicPressed.</summary>
+    public void TrackPanicPressed()
+    {
+        Progress.LastPanicPressTime = DateTime.Now;
+        _isDirty = true;
+    }
+
+    /// <summary>WPF AchievementService.CheckRelapse: restart within ten seconds.</summary>
+    public void CheckRelapse(DateTime? now = null)
+    {
+        if (Progress.LastPanicPressTime is { } last && ((now ?? DateTime.Now) - last).TotalSeconds <= 10)
+            TryUnlock("relapse");
+    }
+
     /// <summary>WPF AchievementService.TrackVideoWatched: minutes to the total, screen_time at 10 h.
     /// Returns the minutes so the caller can credit quests (WPF App.Quests.TrackVideoMinutes).</summary>
     public double TrackVideoWatched(double seconds)

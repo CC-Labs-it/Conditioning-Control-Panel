@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         CoreEngine.Start();
                         if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
                     }
+                    App.Achievements?.CheckRelapse();
                     runner.Start(session);
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()

@@ -122,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopAll(string reason, MainShellWindow? shell = null)
         {
             Serilog.Log.Information("Panic: stopping every surface ({Reason})", reason);
+            App.Achievements?.TrackPanicPressed();
             shell ??= MainShellWindow.Current;
             foreach (var s in All)
             {
