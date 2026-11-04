@@ -245,7 +245,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _firstDefused = true;
                 var enabled = _state.Config.EnabledVariants;
                 if (enabled != null) foreach (var id in new[] { "pink", "spiral" }) if (!enabled.Contains(id)) enabled.Add(id);
-                ChaosAnnouncerOverlay.Announce("pink and spiral drift in. hold them down too.", ChaosAnnounceKind.Item);
+                ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_teach_variants"), ChaosAnnounceKind.Item);
             }
             Label(b, "SNAP", SnapColor);   // WPF CompleteDefuse :4577 / Pop :4684
             double fuseSecLeft = b.DefuseJudgeFuseSec;
@@ -438,27 +438,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // WPF ChaosHappyPath.cs:116-221: the classroom interrupts the regular run clock.
         private static void TickFirstRun(ChaosRunState s)
         {
-            if (!_firstThreat && s.RunProgress >= 0.30)
-            {
+            if (!_firstThreat && s.RunProgress >= 0.30) {
                 _firstThreat = true;
-                if (!ChaosMeta.State.SeenDefuseTutorial)
-                {
-                    ChaosMeta.State.SeenDefuseTutorial = true;
-                    ChaosMeta.Save();
-                    ChaosAnnouncerOverlay.Announce("press and HOLD a live one to snap it", ChaosAnnounceKind.Willpower);
-                    s.PushEvent("hold to snap. let go and it triggers.");
+                if (!ChaosMeta.State.SeenDefuseTutorial) {
+                    ChaosMeta.State.SeenDefuseTutorial = true; ChaosMeta.Save();
+                    ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_teach_hold"), ChaosAnnounceKind.Willpower);
+                    s.PushEvent(Loc.Get("chaos_teach_event"));
                 }
                 var pink = ChaosBubbleVariants.All.First(v => v.Id == "pink");
                 var spec = ChaosBubbleVariants.Build(pink, s.RunIntensity, s.FuseTimeMult * 3, null, s.Config.EffectIntensity, s.BubbleScale);
-                ChaosMeta.MarkDiscovered("bubble:pink");
-                BubbleOverlay.SpawnChaos(spec);
+                ChaosMeta.MarkDiscovered("bubble:pink"); BubbleOverlay.SpawnChaos(spec);
             }
-            if (!_firstDraft && s.RunProgress >= 0.55 && (_firstDefused || s.RunProgress >= 0.70) && _overlay != null)
-            {
+            if (!_firstDraft && s.RunProgress >= 0.55 && (_firstDefused || s.RunProgress >= 0.70) && _overlay != null) {
                 var pool = new[] { "extra_shield", "defuse_chain", "golden_touch", "welcome_shower", "heavy_drop" };
                 var options = ChaosBoonPool.All.Where(b => pool.Contains(b.Id) && !b.IsCurse).OrderBy(_ => Rng.Next()).Take(3).ToList();
-                if (options.Count > 0)
-                {
+                if (options.Count > 0) {
                     _firstDraft = _draftPaused = true;
                     _spawnTimer?.Stop();
                     BubbleOverlay.Field.Bubbles.RemoveAll(b => b.Spec != null);
@@ -467,7 +461,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _overlay.ShowBoonDraft(s.WaveIndex, options, boon =>
                     {
                         if (!_spawning || !ReferenceEquals(s, _state)) return;
-                        if (boon != null) s.ApplyBoon(boon);
+                        if (boon != null) {
+                            ChaosFirstTimes.TryAward(ChaosFirstTimes.Whisper);
+                            ChaosLessons.Tick("draft4");
+                            if (boon.IsCurse) ChaosLessons.Tick("surrender");
+                            s.ApplyBoon(boon);
+                        }
                         else s.Shields += 1;
                         _overlay?.ShowReadyGo(() =>
                         {
@@ -479,12 +478,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     }, s.Config.DraftAutoResumeSec);
                 }
             }
-            if (!_firstRabbit && s.RunProgress >= 0.88)
-            {
+            if (!_firstRabbit && s.RunProgress >= 0.88) {
                 _firstRabbit = true;
-                ChaosAnnouncerOverlay.Announce("a white rabbit. catch it.", ChaosAnnounceKind.Item);
-                ChaosMeta.MarkDiscovered("bubble:darter");
-                BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(s.RunIntensity, spotlight: false));
+                ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_teach_rabbit"), ChaosAnnounceKind.Item);
+                ChaosMeta.MarkDiscovered("bubble:darter"); BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(s.RunIntensity, spotlight: false));
             }
         }
 
@@ -733,7 +730,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// The remaining toys still need their effects.</summary>
         private static void UseToy(ChaosToyState toy)
         {
-            if (_state == null) return;
+            if (_state == null || _draftPaused) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
             if (r != ChaosToyRules.UseResult.Fired) return;

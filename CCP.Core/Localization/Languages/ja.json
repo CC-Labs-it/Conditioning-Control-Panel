@@ -1,4 +1,5 @@
 {
+  "chaos_teach_hold": "生きたバブルを長押しして解除", "chaos_teach_event": "長押しで解除。離すと発動します。", "chaos_teach_variants": "ピンクとスパイラルも現れます。同じように長押し。", "chaos_teach_rabbit": "白いウサギ。捕まえよう。",
   "chaos_freeze_banner": "凍結",
   "chaos_freeze_trigger": "❄ すべてが静止する",
   "chaos_snap_live": "✋ 弾けた。生きたバブルはすべて解放",

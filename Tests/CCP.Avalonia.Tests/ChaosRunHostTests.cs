@@ -48,39 +48,32 @@ public sealed class ChaosRunHostTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup(); FreshMeta();
-            try
-            {
-                ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
-                var overlay = ChaosRunHost.Overlay!;
-                overlay.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
-                var state = ChaosRunHost.State!;
-                Ticks(216); // 30%: lone live threat
-                Assert.Contains(BubbleOverlay.Field.Bubbles, b => b.Spec?.VariantId == "pink");
-                Assert.True(ChaosMeta.State.SeenDefuseTutorial);
-                Ticks(288); // 70%: draft even if the threat was not defused
-                Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
-                var cards = overlay.FindControl<StackPanel>("BoonCardHost")!;
+            var language = LocalizationManager.Instance.CurrentLanguage;
+            try {
+            foreach (var lang in "en,de,es,fr,it,ja,ko,pt-BR,ru,zh-CN".Split(',')) { LocalizationManager.Instance.SetLanguage(lang); foreach (var key in new[] { "chaos_teach_hold", "chaos_teach_event", "chaos_teach_variants", "chaos_teach_rabbit" }) { var english = LocalizationManager.Instance.GetEnglish(key); Assert.NotNull(english); Assert.NotEqual(key, Loc.Get(key)); if (lang != "en") Assert.NotEqual(english, Loc.Get(key)); } }
+            LocalizationManager.Instance.SetLanguage(language);
+                ChaosMeta.State.ToyPockets = 1; ChaosMeta.State.ActiveLifetimeBoons.Add("freeze_trigger");
+                ChaosMeta.State.LifetimeBoonLevels["freeze_trigger"] = 1; ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                var overlay = ChaosRunHost.Overlay!; overlay.FinishCountdown();
+                ChaosRunHost.StopTimerForTests(); var state = ChaosRunHost.State!;
+                Ticks(216); Assert.Contains(BubbleOverlay.Field.Bubbles, b => b.Spec?.VariantId == "pink");
+                Assert.True(ChaosMeta.State.SeenDefuseTutorial); Ticks(288); // 70% fallback
+                Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible); var cards = overlay.FindControl<StackPanel>("BoonCardHost")!;
                 Assert.Equal(3, cards.Children.Count);
-                var elapsed = state.ElapsedSec;
-                Ticks(8);
-                Assert.Equal(elapsed, state.ElapsedSec);
-                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-                var offered = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", flags)!.GetValue(overlay)!;
-                var card = offered[0]!;
-                var boon = (ChaosBoon)card.GetType().GetField("Boon")!.GetValue(card)!;
+                var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy; int charges = toy.ChargesLeft;
+                ChaosRunHost.UseToyById("freeze_trigger"); Assert.Equal(charges, toy.ChargesLeft);
+                var elapsed = state.ElapsedSec; Ticks(8); Assert.Equal(elapsed, state.ElapsedSec);
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic; var offered = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", flags)!.GetValue(overlay)!;
+                var card = offered[0]!; var boon = (ChaosBoon)card.GetType().GetField("Boon")!.GetValue(card)!;
                 typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", flags)!.Invoke(overlay, new object?[] { boon });
-                overlay.FinishCountdown();
-                Ticks(130); // 88%: the rabbit arrives
+                ChaosRunHost.UseToyById("freeze_trigger"); Assert.Equal(charges, toy.ChargesLeft);
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper)); Assert.Equal(1, ChaosLessons.Progress("draft4"));
+                overlay.FinishCountdown(); Ticks(130); // 88%: the rabbit arrives
                 Assert.Contains(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
-                Ticks(86);
-                Assert.False(ChaosRunHost.IsDescending);
-                Assert.Equal(1, ChaosMeta.State.RunsCompleted);
-                Assert.Contains(state.RunPickTiles, tile => tile != null);
-            }
-            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
-            return Task.CompletedTask;
-        });
+                Ticks(86); Assert.False(ChaosRunHost.IsDescending); Assert.Equal(1, ChaosMeta.State.RunsCompleted); ChaosMeta.Init(); Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
+                Assert.Equal(1, ChaosLessons.Progress("draft4")); Assert.NotEmpty(state.RunPickTiles);
+            } finally { LocalizationManager.Instance.SetLanguage(language); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask; });
     }
 
     [Fact]

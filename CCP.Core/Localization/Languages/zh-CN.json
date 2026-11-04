@@ -1,4 +1,5 @@
 {
+  "chaos_teach_hold": "按住活跃气泡以解除它", "chaos_teach_event": "按住解除。松开会触发它。", "chaos_teach_variants": "粉色和螺旋气泡也来了。也要按住它们。", "chaos_teach_rabbit": "一只白兔。抓住它。",
   "chaos_freeze_banner": "冻结",
   "chaos_freeze_trigger": "❄ 一切静止",
   "chaos_snap_live": "✋ 已弹开。所有活跃气泡都已释放",
