@@ -40,8 +40,10 @@ public sealed class SparkleWalletTests
         BeatLoop.StepAll();
     }
 
-    [Fact]
-    public void ShellWalletFollowsTheBalanceAndCuesOnlyAwards() => AvaloniaTestDispatcher.Run(() =>
+    [Theory]
+    [InlineData(SparklePointSource.LevelUp)]
+    [InlineData(SparklePointSource.Place)]
+    public void ShellWalletFollowsTheBalanceAndCuesOnlyAwards(SparklePointSource source) => AvaloniaTestDispatcher.Run(() =>
     {
         Platform();
         var s = CoreSettings.Current;
@@ -66,7 +68,7 @@ public sealed class SparkleWalletTests
 
             // A settled local credit: refresh + "+N" badge, which accumulates and clears after 1.6 s.
             s.SkillPoints = 1201;
-            SparklePointRewards.PublishCredit(1200, 1201, SparklePointSource.LevelUp);
+            SparklePointRewards.PublishCredit(1200, 1201, source);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1201, wallet.Balance);
             Assert.True(wallet.RewardShowing);
