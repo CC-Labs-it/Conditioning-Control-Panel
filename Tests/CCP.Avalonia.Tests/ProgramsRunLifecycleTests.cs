@@ -55,6 +55,8 @@ public sealed class ProgramsRunLifecycleTests
             runner.SessionLog.LogReady += shell.OnSessionLogReady;   // as App startup wires both
             CoreEngine.StoppedHook = shell.OnEngineStopped;
             shell.Show();
+            var toastHost = new StackPanel();
+            AvApp.Notifications.AttachHost(toastHost);
             shell.ShowTab("programs");
             Dispatcher.UIThread.RunJobs();
             var tab = shell.Named<ProgramsTabView>("ProgramsTab")!;
@@ -81,6 +83,7 @@ public sealed class ProgramsRunLifecycleTests
             await shell.StartProgramSessionAsync();
             Dispatcher.UIThread.RunJobs();
             Assert.True(runner.IsRunning && svc.IsProgramSession(runner.CurrentSession));
+            Assert.Contains(Loc.GetF("programs_toast_session_started", svc.ActiveProgram!.Title, svc.ActiveEnrollment!.CurrentDay), toastHost.Children.Select(ToastMessage));
             Assert.Equal(Loc.Get("programs_session_in_progress"), F<TextBlock>("TxtStartTodaySession").Text);
             Assert.False(F<Button>("BtnStartTodaySession").IsEnabled);
             Assert.True(F<Grid>("TodaySessionProgressRow").IsEffectivelyVisible);
@@ -107,8 +110,15 @@ public sealed class ProgramsRunLifecycleTests
             Assert.DoesNotContain(Loc.GetF("programs_session_progress_paused", ""), F<TextBlock>("TxtTodaySessionProgress").Text);
 
             // Panic ends it, uncredited, with no "ended early" recap on top; the row repaints.
+            var beforeEnd = toastHost.Children.Count;
             PanicSurfaces.StopAll("test", shell);
+            Assert.Equal(beforeEnd, toastHost.Children.Count);
             Dispatcher.UIThread.RunJobs();
+            var early = toastHost.Children.Last();
+            Assert.Equal(Loc.GetF("programs_toast_session_ended_early", svc.ActiveProgram!.Title), ToastMessage(early));
+            shell.ShowTab("settings");
+            ToastButton(early).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("programs", shell.CurrentTab);
             Assert.False(runner.IsRunning);
             Assert.False(svc.TodayRecord!.SessionCompleted);
             Assert.Empty(shell.OwnedWindows.OfType<SessionCompleteWindow>());
@@ -122,6 +132,7 @@ public sealed class ProgramsRunLifecycleTests
             runner.Stop(completed: true);
             Dispatcher.UIThread.RunJobs();
             Assert.True(svc.TodayRecord!.SessionCompleted);
+            Assert.Equal(Loc.GetF("programs_toast_session_completed", svc.ActiveProgram!.Title), ToastMessage(toastHost.Children.Last()));
             Assert.Equal(Loc.Get("programs_session_done"), F<TextBlock>("TxtStartTodaySession").Text);
             Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());   // a real end still recaps
             CloseOwned(shell);
@@ -149,6 +160,63 @@ public sealed class ProgramsRunLifecycleTests
             Directory.Delete(dir, true);
         }
     });
+
+    [Fact]
+    public Task BoundaryCompletionAndForeignSessionAnnouncements() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var dir = Directory.CreateTempSubdirectory("ccp-program-toast-").FullName;
+        var (oldPrograms, oldSessions, oldTask) = (AvApp.Programs, AvApp.Sessions, CoreProgram.TaskAvailableProvider);
+        var now = new DateTime(2026, 3, 12, 3, 55, 0, DateTimeKind.Local);
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreProgram.TaskAvailableProvider = ProgramCapabilities.IsAvailable;
+            var svc = AvApp.Programs = new ProgramService(Path.Combine(dir, "programs.json"), readOnly: false, now: () => now);
+            var enrollment = svc.Enroll(svc.GetProgram("first_week")!, dayBoundaryHour: 4)!;
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            shell = new MainShellWindow();
+            CoreEngine.StoppedHook = shell.OnEngineStopped;
+            shell.Show();
+            var host = new StackPanel();
+            AvApp.Notifications.AttachHost(host);
+            await shell.StartProgramSessionAsync();
+            Assert.True(runner.IsRunning);
+            now = now.AddMinutes(10);
+            svc.EvaluateRollover();
+            runner.Stop(completed: true);
+            Assert.Single(host.Children);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(enrollment.Records[1].SessionCompleted);
+            Assert.Equal(Loc.GetF("programs_toast_session_completed", svc.ActiveProgram!.Title), ToastMessage(host.Children.Last()));
+            var count = host.Children.Count;
+            shell.StartSession(new ConditioningControlPanel.Models.Session { Name = "Foreign", DurationMinutes = 1 });
+            Assert.True(runner.IsRunning);
+            runner.Stop();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(count, host.Children.Count);
+        }
+        finally
+        {
+            CoreEngine.StoppedHook = null;
+            AvApp.Sessions?.Stop();
+            if (shell != null) { CloseOwned(shell); shell.Close(); }
+            Dispatcher.UIThread.RunJobs();
+            AvApp.Programs?.Dispose();
+            (AvApp.Programs, AvApp.Sessions, CoreProgram.TaskAvailableProvider) = (oldPrograms, oldSessions, oldTask);
+            CoreSession.IsSessionRunningProvider = null;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    private static string ToastMessage(Control toast) =>
+        ((TextBlock)((Grid)((Border)toast).Child!).Children[0]).Text!;
+
+    private static Button ToastButton(Control toast) =>
+        ((Grid)((Border)toast).Child!).Children.OfType<StackPanel>().Single().Children.OfType<Button>().Single(b => b.Name == "ToastAction");
 
     private static async Task<T> Owned<T>(Window owner) where T : Window
     {
