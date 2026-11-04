@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             await AccountSeed.Logout();
             UpdateQuickLoginUI(accountChanged: true);
+            ClearProfileViewer();
             if (SecretStore.ClearFailed)
                 await MessageDialog.ShowAsync(this, Loc.Get("title_error"), Loc.Get("logout_not_complete_body"));
         }

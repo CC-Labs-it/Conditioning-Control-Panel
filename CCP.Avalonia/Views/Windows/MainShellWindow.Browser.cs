@@ -215,6 +215,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var page = ProfilePage;
                 if (page == null) return;
+                page.InvalidateProfileRequests();
 
                 var wrapper = page.FindControl<Grid>("ProfileCardWrapper");
                 if (wrapper != null) wrapper.IsVisible = false;

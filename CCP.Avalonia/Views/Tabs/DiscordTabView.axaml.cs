@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private Task<LeaderboardPage<LeaderboardRow>?>? _boardFetch;
         private DateTime _boardAt;
         private int _cardRequest;   // newest request wins; an older one finishing late draws nothing
+        internal void InvalidateProfileRequests() => _cardRequest++;
         private bool _meFirstDone;
 
         /// <summary>WPF MainWindow.ProfileCard.cs:61: the first show opens on your own card, never over one already up.</summary>
@@ -223,8 +224,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshProfileViewerAsync: GET /user/lookup, drawn only while the same user is still on screen.</summary>
         private async Task RefreshProfileViewerAsync(string name)
         {
+            var req = _cardRequest;
             var lookup = await LeaderboardTabView.NewClient().LookupUserAsync(name);
-            if (lookup == null || TxtProfileViewerName.Text != name) return;
+            if (req != _cardRequest || lookup == null || TxtProfileViewerName.Text != name) return;
             SetOnline(lookup.IsOnline, lookup.IsOnline ? "Online" : "Offline");
             if (string.Equals(name, CoreSettings.Current.UserDisplayName, StringComparison.OrdinalIgnoreCase))
             {
@@ -329,7 +331,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF forwards to MainWindow.Browser.cs:ClearProfileViewer; a search still in flight is dropped.</summary>
         private void BtnClearProfile_Click(object? sender, RoutedEventArgs e)
         {
-            _cardRequest++;
             Host?.BtnClearProfile_Click(sender, e);
         }
 
