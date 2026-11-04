@@ -20,7 +20,7 @@ public sealed class AwarenessTubeReactionTests
     public Task AWindowChangeSpeaksOnceThenTheCooldownHolds() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -48,6 +48,7 @@ public sealed class AwarenessTubeReactionTests
                 ActivityCategory.Gaming, ActivityCategory.Unknown, "Steam", "Steam"));
             Dispatcher.UIThread.RunJobs();
             Assert.True(bubble.IsVisible);
+            while (tube.TypewriterFrame is { } frame) frame();
             Assert.False(string.IsNullOrWhiteSpace(text.Text));
 
             bubble.IsVisible = false;
