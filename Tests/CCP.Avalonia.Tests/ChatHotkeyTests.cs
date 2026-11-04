@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
@@ -33,6 +34,7 @@ public sealed class ChatHotkeyTests
         Init();
         var s = CoreSettings.Current.CompanionPrompt;
         var old = (s.ChatShortcutKey, s.ChatShortcutModifiers, s.ChatShortcutGlobal);
+        var avatarEnabled = CoreSettings.Current.AvatarEnabled;
         var shell = new MainShellWindow();
         var first = new Registration();
         var second = new Registration();
@@ -46,8 +48,10 @@ public sealed class ChatHotkeyTests
                 if (attempts == 1) { Assert.Equal(Key.T, key); Assert.Equal(KeyModifiers.Control, mods); return first; }
                 Assert.Equal(Key.B, key); Assert.Equal(KeyModifiers.Alt | KeyModifiers.Meta, mods); return second;
             };
-            shell.StartChatHotkey();
-            shell.StartChatHotkey();
+            CoreSettings.Current.AvatarEnabled = false;
+            shell.Show();  // the same Opened event wired by the shell constructor
+            shell.Hide();
+            shell.Show();  // tray reopen must not register a second time
             Assert.Equal(1, attempts);
             Assert.True(shell.ChatHotkeyArmed);
             (s.ChatShortcutKey, s.ChatShortcutModifiers) = ("B", "Alt,Windows");
@@ -72,6 +76,7 @@ public sealed class ChatHotkeyTests
             shell.StopChatHotkey();
             shell.Close();
             (s.ChatShortcutKey, s.ChatShortcutModifiers, s.ChatShortcutGlobal) = old;
+            CoreSettings.Current.AvatarEnabled = avatarEnabled;
         }
     });
 
@@ -90,6 +95,12 @@ public sealed class ChatHotkeyTests
             shell.Show();
             tube.Show();
             var input = tube.FindControl<Border>("InputPanel")!;
+            var text = tube.FindControl<TextBox>("TxtUserInput")!;
+            text.Text = "hello";
+            int foregroundCalls = 0;
+            tube.FocusChatWindow = window => { Assert.Same(tube, window); Assert.True(input.IsVisible); foregroundCalls++; };
+            var topmost = new System.Collections.Generic.List<bool>();
+            shell.PropertyChanged += (_, e) => { if (e.Property == Window.TopmostProperty) topmost.Add(shell.Topmost); };
             input.IsVisible = false;
             shell.WindowState = WindowState.Minimized;
             shell.Hide();
@@ -98,7 +109,53 @@ public sealed class ChatHotkeyTests
             Assert.Equal(WindowState.Normal, shell.WindowState);
             Assert.True(tube.IsVisible);
             Assert.True(input.IsVisible);
+            Assert.Equal(new[] { true, false }, topmost);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, foregroundCalls);
+            Assert.Equal(0, text.SelectionStart);
+            Assert.Equal(text.Text!.Length, text.SelectionEnd);
         }
         finally { shell.Close(); settings.AvatarEnabled = old; }
     });
+    [Fact]
+    public void ChatInputRaisesWindowBeforeFocusingAndSelectingText() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            var text = tube.FindControl<TextBox>("TxtUserInput")!;
+            text.Text = "hello";
+            int calls = 0;
+            tube.FocusChatWindow = window => { Assert.Same(tube, window); calls++; window.Activate(); };
+            tube.OpenChatInput();
+            Assert.Equal(0, calls); // queued until the panel is laid out
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, calls);
+            Assert.True(text.IsFocused);
+            Assert.Equal(0, text.SelectionStart);
+            Assert.Equal(5, text.SelectionEnd);
+        }
+        finally { tube.Close(); }
+    });
+
+    [Fact]
+    public void HotkeyPreservesMaximizedState() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        var settings = CoreSettings.Current;
+        bool old = settings.AvatarEnabled;
+        var shell = new MainShellWindow();
+        try
+        {
+            settings.AvatarEnabled = false;
+            shell.Show();
+            shell.WindowState = WindowState.Maximized;
+            shell.BringToForegroundAndOpenChat();
+            Assert.Equal(WindowState.Maximized, shell.WindowState);
+        }
+        finally { shell.Close(); settings.AvatarEnabled = old; }
+    });
+
 }

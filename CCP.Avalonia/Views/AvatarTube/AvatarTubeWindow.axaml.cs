@@ -1506,12 +1506,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>Opens the chat input panel and puts the caret in it.</summary>
+        internal Action<Window> FocusChatWindow = Platform.Win32Windows.FocusChatWindow;
+
         public void OpenChatInput() => RunOnAvatar(() =>
         {
             _inputPanel.IsVisible = true;
-            // Input priority, not inline: the panel has just become visible and is not laid out yet,
-            // so focusing it in the same beat silently does nothing.
-            Dispatcher.UIThread.Post(() => _txtUserInput.Focus(), DispatcherPriority.Input);
+            // WPF waits until input has drained and the panel has been laid out.
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    FocusChatWindow(this);
+                    _txtUserInput.Focus();
+                    _txtUserInput.SelectAll();
+                }
+                catch (Exception ex) { Log.Debug(ex, "AvatarTube: focus chat input failed"); }
+            }, DispatcherPriority.ContextIdle);
         });
 
         /// <summary>

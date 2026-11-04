@@ -1,6 +1,8 @@
 using System;
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using ConditioningControlPanel.Input;
 using Serilog;
@@ -31,7 +33,10 @@ internal sealed class Win32ChatHotkey : IDisposable
 
     internal static IDisposable? Register(Window owner, Key key, KeyModifiers mods, Action pressed)
     {
-        if (!OperatingSystem.IsWindows() || owner.TryGetPlatformHandle()?.Handle is not { } hwnd || hwnd == IntPtr.Zero) return null;
+        var handle = owner.TryGetPlatformHandle();
+        if (!OperatingSystem.IsWindows() || Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime
+            || handle?.HandleDescriptor != "HWND" || handle.Handle == IntPtr.Zero) return null;
+        var hwnd = handle.Handle;
         int vk = VirtualKeys.Of(key.ToString());
         uint flags = 0x4000 | ((mods & KeyModifiers.Alt) != 0 ? 1u : 0u)
             | ((mods & KeyModifiers.Control) != 0 ? 2u : 0u)

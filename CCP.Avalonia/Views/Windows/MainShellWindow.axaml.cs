@@ -88,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public MainShellWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            Opened += (_, _) => StartChatHotkey();
             InitializeLanguageSelector();
             InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
 

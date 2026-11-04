@@ -48,7 +48,17 @@ public partial class MainShellWindow
     internal void BringToForegroundAndOpenChat()
     {
         if (_chatHotkeyClosed) return;
-        ShowFromTray();
-        _avatarTubeWindow?.OpenChatInput();
+        try
+        {
+            RestoreLauncherPanelOpacity();
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Show();
+            Activate();
+            Topmost = true;
+            Topmost = false;
+            ShowAvatarTube();
+            _avatarTubeWindow?.OpenChatInput();
+        }
+        catch (Exception ex) { Log.Warning(ex, "BringToForegroundAndOpenChat failed"); }
     }
 }
