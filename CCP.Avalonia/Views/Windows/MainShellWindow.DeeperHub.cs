@@ -119,7 +119,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     OpenDeeperEditor(enhancement, null);
                 }
             }
-            catch (Exception ex) { Log.Error(ex, "Failed to open media request"); }
+            catch (Exception ex) { ShowMediaOpenError(ex); }
+        }
+
+        internal void ShowMediaOpenError(Exception ex)
+        {
+            Log.Error(ex, "Failed to open media request");
+            _ = MessageDialog.ShowAsync(this, Loc.Get("title_error"), ex.Message);
         }
 
         /// <summary>WPF BtnDeeperOpenPlayer_Click (MainWindow.DeeperTab.cs:202).</summary>
