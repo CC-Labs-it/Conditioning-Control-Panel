@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
-    /// ponytail: DispatchIdle, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
+    /// ponytail: the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
     /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
@@ -39,6 +39,8 @@ namespace ConditioningControlPanel.Services.Bark
         private readonly Func<BarkRuleSet> _loadRules;
         private readonly Random _rng;
         private BarkRuleSet _rules = BarkRuleSet.Empty;
+        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
+        private string? _lastIdleRuleId;
         private readonly Dictionary<string, DateTime> _lastFiredUtc = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _firedOnceSession = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, HashSet<string>> _usedVariantKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -102,6 +104,9 @@ namespace ConditioningControlPanel.Services.Bark
             lock (_gate)
             {
                 _rules = fresh;
+                _usedIdleRules.Clear();
+                foreach (var id in s.BarkIdleRotation) _usedIdleRules.Add(id);
+                _lastIdleRuleId = null;
                 _usedVariantKeys.Clear();
                 foreach (var kv in s.BarkVariantRotation)
                     _usedVariantKeys[kv.Key] = new HashSet<string>(kv.Value ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
@@ -157,6 +162,52 @@ namespace ConditioningControlPanel.Services.Bark
                 return SpeakLine(winner, pool[idx], ctx);
             }
             catch (Exception ex) { Log.Warning(ex, "BarkEngine: Raise('{Trigger}') failed", trigger); return false; }
+        }
+
+        /// <summary>WPF DispatchIdle and pool-wide rule rotation (BarkService.cs:1178).</summary>
+        public bool DispatchIdle()
+        {
+            try
+            {
+                if (CoreSettings.Current.MasterVolume == 0 || Safe(IsSpeaking)) return false;
+                var ctx = new BarkContext("Idle");
+                BarkRule winner;
+                List<BarkVariant> pool;
+                int idx;
+                lock (_gate)
+                {
+                    var eligible = _rules.ForTrigger("Idle").Where(r => ConditionsPass(r, ctx)).ToList();
+                    if (eligible.Count == 0) return false;
+                    var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                    if (unused.Count == 0)
+                    {
+                        _usedIdleRules.Clear();
+                        if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
+                        PersistIdleRotation();
+                        unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                        if (unused.Count == 0) unused = eligible;
+                    }
+                    var gated = unused.Where(r => r.Conditions is { Count: > 0 }).ToList();
+                    var candidates = gated.Count > 0 && _rng.NextDouble() < 0.35 ? gated : unused;
+                    winner = candidates[_rng.Next(candidates.Count)];
+                    pool = ResolvePool(winner);
+                    var decision = EvaluateGate(winner, pool, guaranteed: false);
+                    if (!decision.Fire || Speak == null) return false;
+                    idx = decision.Index;
+                    CommitFire(winner, idx, pool);
+                    _usedIdleRules.Add(winner.Id);
+                    _lastIdleRuleId = winner.Id;
+                    PersistIdleRotation();
+                }
+                return SpeakLine(winner, pool[idx], ctx);
+            }
+            catch (Exception ex) { Log.Warning(ex, "BarkEngine: DispatchIdle failed"); return false; }
+        }
+
+        private void PersistIdleRotation()
+        {
+            CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
+            CoreSettings.Save(suppressCloudBackup: true);
         }
 
         public bool ConditionsPass(BarkRule rule, BarkContext ctx) =>
