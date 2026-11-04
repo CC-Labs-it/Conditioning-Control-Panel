@@ -87,6 +87,43 @@ public sealed class SubjectsFxTests
     });
 
     [Fact]
+    public Task FirstLiveFillStaggersAllLobbyColumns() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var clock = new Clock();
+        SetClock(clock);
+        Window? window = null;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            var view = new AvailableSubjectsTabView();
+            window = new Window { Width = 1300, Height = 700, Content = view };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var row = new LobbyRow { Game = LobbyGame.Remote, Key = "one", HostName = "Host" };
+            view.PaintSnapshot(new LobbySnapshot(new[] { row }, new[] { row }, new[] { row }, true),
+                LobbyGates.From(true, false, false));
+            Dispatcher.UIThread.RunJobs();
+            var lists = new[] { "AvailableSubjectsList", "LobbyPlayingList", "LobbyFriendsList" }
+                .Select(name => view.FindControl<ItemsControl>(name)!).ToArray();
+            Assert.All(lists, list => Assert.Equal(0, list.ContainerFromIndex(0)!.Opacity));
+            Step(view, clock, 600);
+            Assert.All(lists, list => Assert.Equal(1, list.ContainerFromIndex(0)!.Opacity));
+        }
+        finally
+        {
+            window?.Close();
+            SetClock(TimeProvider.System);
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = previous;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ReducedStillEntersAndOffNeverStartsAnEntrance() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

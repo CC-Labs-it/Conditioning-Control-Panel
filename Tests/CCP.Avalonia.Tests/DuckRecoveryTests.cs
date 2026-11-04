@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
@@ -127,16 +129,46 @@ public sealed class DuckRecoveryTests : IDisposable
     }
 
     [Fact]
-    public void LaunchRecoveryRunsBeforeANewDuckJournals()
+    public async Task LaunchRecoveryRunsBeforeANewDuckJournals()
     {
-        DuckRecovery.SavePulse(Journal, new Dictionary<int, DuckRecovery.PulseStream> { [7] = new(4242, "spotify", new[] { "60000", "60000" }) });
+        var pid = Environment.ProcessId == 4242 ? 4243 : 4242;
+        DuckRecovery.SavePulse(Journal, new Dictionary<int, DuckRecovery.PulseStream> { [7] = new(pid, "spotify", new[] { "60000", "60000" }) });
         var sets = new List<string>();
-        var audio = new LibVlcAudio(args => args.StartsWith("-f json") ? "[" + Stream(7, 4242, "spotify", 12000) + "]" : Record(sets, args), Journal);
+        var audio = new LibVlcAudio(args => args.StartsWith("-f json") ? "[" + Stream(7, pid, "spotify", 12000) + "]" : Record(sets, args), Journal);
         audio.RecoverDucks();
         audio.Duck(50);
-        audio.Drain();
+        await audio.DrainAsync().WaitAsync(TimeSpan.FromSeconds(30));
         Assert.Equal("set-sink-input-volume 7 60000 60000", sets[0]);
         Assert.Equal(new[] { "12000", "12000" }, DuckRecovery.LoadPulse(Journal)[7].Volumes);
+    }
+
+    [Fact]
+    public async Task DrainAsyncWaitsForTheRecoveryQueue()
+    {
+        var pid = Environment.ProcessId == 4242 ? 4243 : 4242;
+        DuckRecovery.SavePulse(Journal, new Dictionary<int, DuckRecovery.PulseStream> { [7] = new(pid, "spotify", new[] { "60000", "60000" }) });
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        var sets = new List<string>();
+        var audio = new LibVlcAudio(args =>
+        {
+            if (!args.StartsWith("-f json")) return Record(sets, args);
+            entered.TrySetResult();
+            if (!release.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("Recovery was not released");
+            return "[" + Stream(7, pid, "spotify") + "]";
+        }, Journal);
+        try
+        {
+            audio.RecoverDucks();
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            var drained = audio.DrainAsync();
+            await Task.Run(audio.Drain).WaitAsync(TimeSpan.FromSeconds(30)); // shutdown wait expires while recovery is held
+            Assert.False(drained.IsCompleted);
+            release.Set();
+            await drained.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal(new[] { "set-sink-input-volume 7 60000 60000" }, sets);
+        }
+        finally { release.Set(); }
     }
 
     [Fact]

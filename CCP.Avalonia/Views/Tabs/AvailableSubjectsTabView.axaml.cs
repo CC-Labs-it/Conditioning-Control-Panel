@@ -79,6 +79,7 @@ public partial class AvailableSubjectsTabView : UserControl
         AvailableSubjectsList.ItemsSource = snapshot.Open.Select(r => new LobbyCardView(r, gates)).ToList();
         LobbyPlayingList.ItemsSource = snapshot.Playing.Select(r => new LobbyCardView(r, gates)).ToList();
         LobbyFriendsList.ItemsSource = snapshot.Friends.Select(r => new LobbyCardView(r, gates)).ToList();
+        LobbyFirstFill(snapshot.Open.Count + snapshot.Playing.Count + snapshot.Friends.Count);
         LobbyOpenCount.Text = snapshot.Open.Count.ToString(CultureInfo.InvariantCulture);
         LobbyPlayingCount.Text = snapshot.Playing.Count.ToString(CultureInfo.InvariantCulture);
         LobbyFriendsCount.Text = snapshot.Friends.Count.ToString(CultureInfo.InvariantCulture);

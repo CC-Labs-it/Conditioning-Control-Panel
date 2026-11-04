@@ -18,6 +18,7 @@ public partial class AvailableSubjectsTabView
     // The shared window beat, not a private 16 ms timer (AmbientBeatLoopsTests ratchet); stopped when done.
     private BeatLoop? _subjectsFxBeat;
     private int _arrival;
+    private bool _lobbyHasFilled;
     internal bool SubjectsFxRunning => _subjectsFxBeat?.IsRunning == true;
 
     private sealed record Entrance(Control Container, TranslateTransform Slide, long Start, int Delay);
@@ -57,11 +58,33 @@ public partial class AvailableSubjectsTabView
             }, DispatcherPriority.Normal);
             return;
         }
-        // Hidden tabs have never measured their ItemsPresenter; realize from the window root.
+        FinishCurrentEntrances();
+        StaggerList(list);
+        if (_entrances.Count > 0) StartSubjectsFxClock();
+    }
+
+    // WPF MainWindow.Lobby.cs:146-156,166-184: the first live fill staggers each column.
+    private void LobbyFirstFill(int count)
+    {
+        if (count == 0 || _lobbyHasFilled) return;
+        _lobbyHasFilled = true;
+        if (!IsEffectivelyVisible) return;
+        int arrival = _arrival;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (arrival != _arrival || !IsEffectivelyVisible || !Env.AllowTransitions) return;
+            FinishCurrentEntrances();
+            StaggerList(AvailableSubjectsList);
+            StaggerList(LobbyPlayingList);
+            StaggerList(LobbyFriendsList);
+            if (_entrances.Count > 0) StartSubjectsFxClock();
+        }, DispatcherPriority.Normal);
+    }
+
+    private void StaggerList(ItemsControl list)
+    {
         TopLevel.GetTopLevel(this)?.UpdateLayout();
         list.UpdateLayout();
-        // Animate the container, never the bound inner row card (its own opacity stays authored).
-        _entrances.Clear();
         long start = FxTime.GetTimestamp();
         int slot = 0;
         for (int i = 0; i < list.ItemCount; i++)
@@ -76,7 +99,6 @@ public partial class AvailableSubjectsTabView
             slide.Y = 10;
             _entrances.Add(new Entrance(card, slide, start, 40 * Math.Min(slot++, 6)));
         }
-        if (_entrances.Count > 0) StartSubjectsFxClock();
     }
 
     private void StartSubjectsFxClock()
@@ -104,6 +126,11 @@ public partial class AvailableSubjectsTabView
     {
         ++_arrival; // invalidate pending first-bind retries when leaving before their dispatch
         _subjectsFxBeat?.Stop();
+        FinishCurrentEntrances();
+    }
+
+    private void FinishCurrentEntrances()
+    {
         foreach (var e in _entrances) { e.Container.Opacity = 1; e.Slide.Y = 0; }
         _entrances.Clear();
     }
