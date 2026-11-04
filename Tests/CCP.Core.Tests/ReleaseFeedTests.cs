@@ -163,7 +163,8 @@ public sealed class ReleaseFeedTests
         {
             ReleaseFeed.SetPendingUpdateAttempt(d, "6.11.4");
             Assert.False(ReleaseFeed.ConsumePendingUpdateOutcome(d, "6.11.3", consume: false)!.Succeeded);
-            Assert.True(ReleaseFeed.GetSkippedUpdateVersion(d) == "6.11.4" && File.Exists(ReleaseFeed.AttemptFilePath(d)));
+            Assert.True(ReleaseFeed.GetSkippedUpdateVersion(d) == "6.11.4" && File.Exists(ReleaseFeed.AttemptFilePath(d))); ReleaseFeed.ClearSkippedUpdateVersion(d); // failed feed check
+            Assert.False(ReleaseFeed.ConsumePendingUpdateOutcome(d, "6.11.3", consume: false)!.Succeeded); Assert.Equal("6.11.4", ReleaseFeed.GetSkippedUpdateVersion(d)); // restart
             ReleaseFeed.SetSkippedUpdateVersion(d, "6.11.9");   // manual Later, then exit before the report
             var o = ReleaseFeed.ConsumePendingUpdateOutcome(d, "6.11.3");   // no result: unknown exit
             Assert.NotNull(o);

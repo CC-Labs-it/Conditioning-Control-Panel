@@ -364,8 +364,7 @@ namespace ConditioningControlPanel.Services
                 Log.Error("Update to {Version} did not install (installer exit={Code}, still running {Current})",
                     version, exitCode, currentVersion);
 
-                // Stop the silent retry loop once: a kept attempt re-read must not undo a newer manual Later.
-                if (lines.Length < 2) SetSkippedUpdateVersion(userData, version);
+                if (lines.Length < 2 || GetSkippedUpdateVersion(userData) is null) SetSkippedUpdateVersion(userData, version);
                 if (!consume && lines.Length < 2) { File.AppendAllText(attemptFile, "\nskipped"); File.SetLastWriteTime(attemptFile, DateTime.Now - age); }
 
                 if (age.TotalDays > AttemptMarkerReportWindowDays)
