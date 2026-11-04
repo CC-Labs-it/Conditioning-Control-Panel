@@ -381,7 +381,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
-            // WPF ChaosWebViewHost.cs:1652-1659: do not load a page without host fullscreen control.
+            // Hold early navigation while the engine and confinement are being prepared.
             if (ConfinePageFullscreen && _scrolllerGate is null && target is not { IsAbsoluteUri: true, Scheme: "about" }) { e.Cancel = true; return; }
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
@@ -452,6 +452,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private bool _loadedOnThisEngine;
         private Task<bool>? _carrierInstall;
         internal Func<string, Task<bool>>? NativeCarrierInvoker { get; set; }
+        internal bool? CarrierWindowsOverride { get; set; }
 
         /// <summary>A new engine behind this view, or the old one gone (UI thread). Avalonia.Controls.WebView destroys
         /// the native control on every detach (nothing here calls BeginReparenting), so a view that is unloaded and
@@ -479,7 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (InjectCarrier)
             {
                 _carrierInstall ??= InstallCarrierAsync();
-                if (!await _carrierInstall && ConfinePageFullscreen) return;
+                if (!await _carrierInstall && ConfinePageFullscreen && !(CarrierWindowsOverride ?? OperatingSystem.IsWindows())) return;
             }
             else if (ConfinePageFullscreen) return;
             if (engine != _scrolllerEngine || report != _gateReport) return;

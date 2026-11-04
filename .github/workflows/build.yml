@@ -170,8 +170,7 @@ jobs:
             trap "kill $wm 2>/dev/null || true" EXIT
             dotnet test Tests/CCP.Avalonia.NativeTests/CCP.Avalonia.NativeTests.csproj -c Release
           '
-        env:
-          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
+        env: { WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1", CCP_NATIVE_TESTS: "1" }
       - name: perf-bench (report-only)
         continue-on-error: true
         run: |
@@ -269,8 +268,10 @@ jobs:
         run: dotnet test Tests/CCP.Avalonia.Migration.Tests/CCP.Avalonia.Migration.Tests.csproj -c Release
       # The same native Escape test uses WebView2 and a real Windows key here.
       - name: Test WebView2 document-start Escape
+        env: { CCP_NATIVE_TESTS: "1" }
         run: dotnet test Tests/CCP.Avalonia.NativeTests/CCP.Avalonia.NativeTests.csproj -c Release --filter FullyQualifiedName~PageFocusedEscapeExitsHostFullscreen
       - name: Prove WebView2 test detects a missing listener
+        env: { CCP_NATIVE_TESTS: "1" }
         shell: pwsh
         run: |
           $path = 'CCP.Avalonia/Platform/WebViewCarrier.cs'

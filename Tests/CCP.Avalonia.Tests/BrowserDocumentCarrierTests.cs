@@ -73,7 +73,7 @@ public sealed class BrowserDocumentCarrierTests
         var e = new WebViewNavigationStartingEventArgs { Request = new Uri("http://127.0.0.1/") };
         host.OnNavigationStarted(null, e);
         Assert.True(e.Cancel);
-        var withoutCarrier = new WebHost { ConfinePageFullscreen = true };
+        var withoutCarrier = new WebHost { ConfinePageFullscreen = true, CarrierWindowsOverride = false };
         withoutCarrier.NewScrolllerEngine()(true);
         Assert.Null(withoutCarrier.ScrolllerGate);
         return Task.CompletedTask;
@@ -83,7 +83,7 @@ public sealed class BrowserDocumentCarrierTests
     public Task FullscreenHostHoldsNavigationUntilNativeInstallSucceeds() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         ChatThresholdLinksTests.Setup();
-        var host = new WebHost { InjectCarrier = true, ConfinePageFullscreen = true };
+        var host = new WebHost { InjectCarrier = true, ConfinePageFullscreen = true, CarrierWindowsOverride = false };
         bool Cancelled()
         {
             var e = new WebViewNavigationStartingEventArgs { Request = new Uri("http://127.0.0.1/") };
@@ -94,6 +94,8 @@ public sealed class BrowserDocumentCarrierTests
         host.NewScrolllerEngine()(true);
         Assert.Null(host.ScrolllerGate);
         Assert.True(Cancelled());
+        host.CarrierWindowsOverride = true; host.NewScrolllerEngine()(true);
+        Assert.True(host.ScrolllerGate); host.CarrierWindowsOverride = false;
         host.NativeCarrierInvoker = _ => Task.FromResult(true);
         host.NewScrolllerEngine()(true);
         Assert.True(host.ScrolllerGate);

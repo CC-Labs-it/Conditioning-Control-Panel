@@ -35,6 +35,8 @@ internal static class NativeProfile
 // Run in its own process with a real X11 display and WebKitGTK, not Avalonia.Headless.
 public sealed class JustDropNativeTests
 {
+    public static bool NativeTestsEnabled => Environment.GetEnvironmentVariable("CCP_NATIVE_TESTS") == "1";
+
     private const string Page = """
         <!doctype html><html><body><button id="order" autofocus>Open order</button>
         <script>
@@ -100,7 +102,7 @@ public sealed class JustDropNativeTests
     private static string WebHostReason() => ConditioningControlPanel.Avalonia.Views.Controls.WebHost.UnavailableReason ?? "No native engine";
     private static TaskCompletionSource<string> NewMessage() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    [Fact]
+    [Fact(SkipUnless = nameof(NativeTestsEnabled), Skip = "Set CCP_NATIVE_TESTS=1 to run desktop input tests")]
     public Task OrderFullscreenStaysInsideTheWebView() => Run(async (w, next) =>
     {
         var xid = await ObserveUnhandledFullscreen(w);
@@ -122,7 +124,7 @@ public sealed class JustDropNativeTests
         Assert.Equal(0, Volatile.Read(ref _unhandledFullscreen));
     });
 
-    [Fact]
+    [Fact(SkipUnless = nameof(NativeTestsEnabled), Skip = "Set CCP_NATIVE_TESTS=1 to run desktop input tests")]
     public Task PageFocusedEscapeExitsHostFullscreen() => Run(async (w, next) =>
     {
         w.WindowState = WindowState.FullScreen;
