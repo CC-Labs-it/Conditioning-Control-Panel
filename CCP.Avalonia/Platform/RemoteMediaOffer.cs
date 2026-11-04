@@ -35,8 +35,8 @@ internal static class RemoteMediaOffer
         {
             Key = "intro:remote-media",
             Glyph = "🌐",
-            Title = "Media without the download",
-            Summary = "Your folders are empty - she can stream from the online pool instead.",
+            TitleKey = "remote_inbox_title",
+            SummaryKey = "remote_inbox_summary",
             Open = () =>
             {
                 if (Interlocked.CompareExchange(ref _claimed, 1, 0) != 0) return;

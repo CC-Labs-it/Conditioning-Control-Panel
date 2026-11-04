@@ -14,6 +14,12 @@ internal sealed class RemoteVideoPool
     private readonly object _gate = new();
     private readonly Queue<string> _queue = new();
     private int _fetching;
+    internal Func<Task>? FetchForTests;
+    internal Func<string, Task<string?>>? DownloadForTests;
+    internal Func<string, bool>? CanFetchForTests;
+    internal Task? PendingForTests;
+    internal void SeedForTests(params string[] urls) { lock (_gate) foreach (var url in urls) _queue.Enqueue(url); }
+    internal int CountForTests { get { lock (_gate) return _queue.Count; } }
     private static bool Enabled => CoreSettings.Current.MediaSource != "local" && CoreSettings.Current.HasRemoteMediaConsent;
 
     internal string? Take()
@@ -38,7 +44,7 @@ internal sealed class RemoteVideoPool
     internal void Prefetch()
     {
         if (!Enabled || Interlocked.CompareExchange(ref _fetching, 1, 0) != 0) return;
-        _ = Task.Run(async () =>
+        PendingForTests = Task.Run(async () =>
         {
             try
             {
@@ -46,6 +52,7 @@ internal sealed class RemoteVideoPool
                 lock (_gate) count = _queue.Count;
                 if (count < 4)
                 {
+                    if (FetchForTests != null) { await FetchForTests(); return; }
                     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                     var coordinator = FypOnlineCoordinator.For("videos", () => FypOnlineCoordinator.ResolveChannels(
                         CoreSettings.Current.FypOnlineNiches, CoreSettings.Current.FypOnlineCustomSubs), FeedMediaKind.Video);
@@ -67,8 +74,14 @@ internal sealed class RemoteVideoPool
                 {
                     if (!Enabled || !ScrolllerPolicy.Enabled || ready >= 3) break;
                     if (ScrolllerDiskCache.Contains(url)) { ready++; continue; }
-                    if (!ScrolllerPolicyService.MayFetchFresh(url)) continue;
-                    if (await ScrolllerDiskCache.GetOrFetchAsync(url, ScrolllerItemIndex.MetaFor(url), CancellationToken.None).ConfigureAwait(false) != null) ready++;
+                    if (!(CanFetchForTests?.Invoke(url) ?? ScrolllerPolicyService.MayFetchFresh(url))) continue;
+                    if (await (DownloadForTests?.Invoke(url) ?? ScrolllerDiskCache.GetOrFetchAsync(url, ScrolllerItemIndex.MetaFor(url), CancellationToken.None)).ConfigureAwait(false) != null) ready++;
+                    else lock (_gate)
+                    {
+                        var kept = _queue.Where(u => !string.Equals(u, url, StringComparison.Ordinal)).ToArray();
+                        _queue.Clear();
+                        foreach (var item in kept) _queue.Enqueue(item);
+                    }
                 }
             }
             catch (Exception ex) { Log.Warning(ex, "VideoService: remote prefetch failed"); }

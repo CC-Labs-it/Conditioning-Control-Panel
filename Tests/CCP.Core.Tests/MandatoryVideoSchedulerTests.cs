@@ -140,6 +140,34 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     [Fact]
+    public async System.Threading.Tasks.Task FailedRemoteDownloadsDoNotBlockTheNextBatch()
+    {
+        var s = CoreSettings.Current; var source = s.MediaSource; var consent = s.RemoteMediaConsented;
+        var away = ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Away;
+        var enabled = ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Enabled;
+        var cap = ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.MaxClipShortSide;
+        try
+        {
+            s.MediaSource = "online"; s.RemoteMediaConsented = true;
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Away = false;
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(true, cap);
+            var attempts = 0;
+            var pool = new RemoteVideoPool { CanFetchForTests = _ => true, DownloadForTests = _ => { attempts++; return System.Threading.Tasks.Task.FromResult<string?>(null); } };
+            pool.SeedForTests("https://scrolller.com/1.mp4", "https://scrolller.com/2.mp4", "https://scrolller.com/3.mp4", "https://scrolller.com/4.mp4");
+            pool.Prefetch(); await pool.PendingForTests!;
+            Assert.Equal(4, attempts);
+            Assert.Equal(0, pool.CountForTests);
+            var batches = 0; pool.FetchForTests = () => { batches++; pool.SeedForTests("https://example.com/ready.mp4"); return System.Threading.Tasks.Task.CompletedTask; };
+            pool.Prefetch(); await pool.PendingForTests!;
+            Assert.Equal(1, batches);
+            pool.FetchForTests = () => System.Threading.Tasks.Task.CompletedTask;
+            Assert.Equal("https://example.com/ready.mp4", pool.Take());
+            await pool.PendingForTests!;
+        }
+        finally { s.MediaSource = source; s.RemoteMediaConsented = consent; ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Away = away; ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(enabled, cap); }
+    }
+
+    [Fact]
     public void Attention_rules_match_WPF()
     {
         var r = new Random(1);

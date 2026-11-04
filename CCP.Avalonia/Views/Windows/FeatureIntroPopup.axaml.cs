@@ -10,6 +10,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -258,6 +259,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void ApplyContent(FeatureIntroContent content)
         {
+            if (content.Key == "remotemedia") content = new FeatureIntroContent
+            {
+                Key = content.Key, Glyph = content.Glyph, Accent = content.Accent,
+                RailTitle = Loc.Get("remote_intro_title"), Title = Loc.Get("remote_intro_title"),
+                Tagline = Loc.Get("remote_intro_tagline"), Bullets = Loc.Get("remote_intro_bullets").Split('|'),
+                Footer = Loc.Get("remote_intro_footer"), DismissLabel = Loc.Get("btn_got_it")
+            };
             var cardBorder = this.FindControl<Border>("CardBorder")!;
             var txtTitle = this.FindControl<TextBlock>("TxtTitle")!;
             var txtRailTitle = this.FindControl<TextBlock>("TxtRailTitle")!;
@@ -557,23 +565,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // free-tier first launch - a card that hinted at a paywall here would sell against
             // the one thing this feature exists to solve. (The For You *feed* stays premium; see
             // the gating note in MainWindow.Assets.cs.)
-            ["remotemedia"] = new FeatureIntroContent
-            {
-                Key = "remotemedia",
-                Glyph = "🌐",
-                RailTitle = "Remote Media",
-                Title = "Remote Media",
-                Tagline = "Use online media when your folders are empty.",
-                Accent = "#5EC8F2",
-                Bullets = new[]
-                {
-                    "Use images and clips from the online media pool.",
-                    "Choose the niches and add subreddits by name.",
-                    "Clips may be cached on this device for playback.",
-                    "Change the source at the top of the Assets tab."
-                },
-                Footer = "Free for everyone. Online media may contain adult content."
-            },
+            ["remotemedia"] = new FeatureIntroContent { Key = "remotemedia", Glyph = "🌐", Accent = "#5EC8F2" },
 
             // ------------------------------------------------------------------------------
             // v6.8.0 door tour. The restructure moved surfaces users already knew, so these five

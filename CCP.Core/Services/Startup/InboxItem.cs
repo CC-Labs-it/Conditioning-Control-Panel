@@ -30,10 +30,13 @@ namespace ConditioningControlPanel.Services.Startup
         public string Key { get; init; } = "";
 
         /// <summary>Row heading. One short line - this is a list, not a card.</summary>
-        public string Title { get; init; } = "";
+        private string _title = "", _summary = "";
+        public string? TitleKey { get; init; }
+        public string? SummaryKey { get; init; }
+        public string Title { get => TitleKey == null ? _title : Localization.Loc.Get(TitleKey); init => _title = value; }
 
         /// <summary>One line of context under the title. May be empty.</summary>
-        public string Summary { get; init; } = "";
+        public string Summary { get => SummaryKey == null ? _summary : Localization.Loc.Get(SummaryKey); init => _summary = value; }
 
         /// <summary>A single emoji or character for the row's left edge.</summary>
         public string Glyph { get; init; } = "";

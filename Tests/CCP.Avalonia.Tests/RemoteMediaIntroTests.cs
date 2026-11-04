@@ -26,7 +26,7 @@ public sealed class RemoteMediaIntroTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public Task EmptyVideoGuidanceOffersOnlineMediaAfterClose(bool quiet) => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task EmptyVideoGuidanceOffersOnlineMediaAfterClose(bool quiet) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -58,6 +58,8 @@ public sealed class RemoteMediaIntroTests
             Assert.Empty(opened.OfType<FeatureIntroPopup>());
             message.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            for (var i = 0; i < 100 && !(quiet ? StartupLadder.Inbox.Contains("intro:remote-media") : opened.OfType<FeatureIntroPopup>().Any()); i++)
+                await Task.Delay(10);
             if (quiet)
             {
                 Assert.True(StartupLadder.Inbox.Contains("intro:remote-media"));
@@ -79,7 +81,6 @@ public sealed class RemoteMediaIntroTests
             FeatureIntroPopup.ResetForTests();
             Dispatcher.UIThread.RunJobs();
         }
-        return Task.CompletedTask;
     });
     [Fact]
     public Task LengthFilterDoesNotOfferAnotherSource() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -155,6 +156,26 @@ public sealed class RemoteMediaIntroTests
             StartupLadder.ResetForTests(); RemoteMediaOffer.ResetForTests(); FeatureIntroPopup.ResetForTests();
             Dispatcher.UIThread.RunJobs();
         }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task OfferUsesCurrentLanguage() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance; var old = loc.CurrentLanguage;
+        var settings = CoreSettings.Current; var source = settings.MediaSource;
+        try
+        {
+            StartupLadder.ResetForTests(); RemoteMediaOffer.ResetForTests();
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10)); settings.MediaSource = "local";
+            loc.SetLanguage("es"); RemoteMediaOffer.Offer(null);
+            var item = Assert.Single(StartupLadder.Inbox.Items);
+            loc.SetLanguage("fr");
+            Assert.Equal("Des médias sans téléchargement", item.Title);
+        }
+        finally { loc.SetLanguage(old); settings.MediaSource = source; StartupLadder.ResetForTests(); RemoteMediaOffer.ResetForTests(); }
         return Task.CompletedTask;
     });
 
