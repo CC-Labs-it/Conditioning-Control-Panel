@@ -63,13 +63,19 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
-                    var hit = w.InputHitTest(p) as Visual;
+                    // Hit-test inside the press, not before it: MouseDown first runs jobs and renders until idle, so a
+                    // probe taken here earlier read an older frame than the press (Windows CI 41800926187: awareness
+                    // BtnAwarenessTutorial hit ScrollContentPresenter, pressed True).
+                    Visual? hit = null;
                     bool pressed = false;
+                    void Probe(object? s, PointerPressedEventArgs e) => hit = w.InputHitTest(p) as Visual;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
+                    w.AddHandler(InputElement.PointerPressedEvent, Probe, RoutingStrategies.Tunnel);
                     b.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
                     w.MouseDown(p, MouseButton.Left);
                     w.MouseUp(p, MouseButton.Left);
                     Dispatcher.UIThread.RunJobs();
+                    w.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Probe);
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
                         misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
