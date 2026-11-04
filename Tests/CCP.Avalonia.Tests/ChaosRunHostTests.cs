@@ -64,7 +64,8 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(0, toy.CooldownRemainingSec); Assert.Equal(sparks, ChaosMeta.State.Sparks); Assert.Null(ChaosCursorGlowOverlay.Active); available = true;
                 ChaosRunHost.UseToyById("rabbit_caller"); Assert.Equal(20, toy.CooldownRemainingSec); Assert.Equal(sparks + 15, ChaosMeta.State.Sparks);
                 Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_rabbit_whistle"), state.RecentEvents); Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);
-                int spawned = 0; ChaosRunHost.SpawnRabbit = (x, y) => ++spawned == 1 ? oldSpawn(x, y) : null; down = false; ChaosRunHost.RabbitAimTick(); down = true; ChaosRunHost.RabbitAimTick();
+                var aimBeat = Assert.Single(ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running.Where(b => ReferenceEquals(b.Owner, ChaosRunHost.Overlay))); Assert.True(aimBeat.OnFrameBeat);
+                int spawned = 0; ChaosRunHost.SpawnRabbit = (x, y) => ++spawned == 1 ? oldSpawn(x, y) : null; down = false; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll(); down = true; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll(); Assert.False(aimBeat.IsRunning);
                 Assert.Equal(0, toy.CooldownRemainingSec); Assert.Empty(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDarter == true)); ChaosRunHost.SpawnRabbit = oldSpawn; ChaosRunHost.UseToyById("rabbit_caller");
                 ChaosRunHost.RabbitAimTick(); // arming click is swallowed
                 Assert.Empty(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDarter == true)); down = false; ChaosRunHost.RabbitAimTick(); ChaosRunHost.ToggleManualPause();
@@ -83,7 +84,8 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(11, BubbleOverlay.ChaosCount); Assert.False(toy.IsEffectActive); toy.CooldownRemainingSec = 0; ChaosRunHost.UseToyById("rabbit_caller");
                 Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible); available = false; ChaosRunHost.RabbitAimTick(); Assert.Equal(0, toy.CooldownRemainingSec);
                 Assert.False(ChaosCursorGlowOverlay.Active!.HaloVisible); available = true; ChaosRunHost.UseToyById("rabbit_caller"); Assert.Equal(sparks + 15, ChaosMeta.State.Sparks);
-                Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible); ChaosRunHost.ForceShutdown();
+                Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible); var shutdownBeat = Assert.Single(ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running.Where(b => ReferenceEquals(b.Owner, ChaosRunHost.Overlay)));
+                ChaosRunHost.ForceShutdown(); Assert.False(shutdownBeat.IsRunning);
                 Assert.Empty(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDarter == true)); ChaosRunHost.RabbitAimTick(); Assert.Null(ChaosCursorGlowOverlay.Active); }
             finally {
                 ChaosRunHost.ForceShutdown(); ChaosRunHost.SpawnRabbit = oldSpawn; ChaosRunHost.ReadRabbitPointer = oldRead; ChaosCursorGlowOverlay.MakeClickThrough = oldMake;

@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -63,7 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosHudWindow? _hud;
         private static ChaosOverlayWindow? _overlay;
         private static ChaosBoonBarOverlay? _boonBar;
-        private static DispatcherTimer? _runTimer, _spawnTimer, _rabbitAimTimer;
+        private static DispatcherTimer? _runTimer, _spawnTimer;
+        private static BeatLoop? _rabbitAimBeat;
         private static int _rabbitCallPending;
         private static bool _rabbitCallMaxed, _rabbitAimPrevDown;
         private static double _rabbitStormRemainingSec, _rabbitStormAccumSec;
@@ -727,7 +729,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double power = _state.ToyPower.TryGetValue(toy.Id, out var p) ? p : 0;
             ArmRabbitCall(Math.Max(1, (int)power), _state.MaxedBoons.Contains(toy.Id));
             ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
-            _state.PushEvent(Loc.Get("chaos_rabbit_whistle")); AwardFirstPlay();
+            _state.PushEvent(global::ConditioningControlPanel.Avalonia.Controls.IconLabel.ForKey("chaos_rabbit_whistle").Source); AwardFirstPlay();
         }
 
         private static void AwardFirstPlay()
@@ -754,17 +756,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _rabbitAimPrevDown = true;
             if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.ArmCursorGlow();
             else ChaosCursorGlowOverlay.Arm();
-            if (_rabbitAimTimer == null)
-            {
-                _rabbitAimTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => RabbitAimTick());
-            }
-            _rabbitAimTimer.Start();
+            _rabbitAimBeat?.Stop();
+            bool started = false; // BeatLoop.Start invokes its step synchronously before it subscribes.
+            _rabbitAimBeat = new BeatLoop(_overlay!, _ => { if (started) RabbitAimTick(); });
+            _rabbitAimBeat.Start(); started = true;
         }
 
         private static void DisarmRabbitCall()
         {
             _rabbitCallPending = 0;
-            _rabbitAimTimer?.Stop();
+            _rabbitAimBeat?.Stop(); _rabbitAimBeat = null;
             ChaosSkiaFxOverlay.DisarmCursorGlow();
             ChaosCursorGlowOverlay.Disarm();
         }
