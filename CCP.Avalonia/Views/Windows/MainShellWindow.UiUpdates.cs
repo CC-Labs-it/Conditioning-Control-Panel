@@ -88,6 +88,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // ---- header stat pills (WPF MainWindow.UiUpdates.cs:530-641 UpdateStatPills, :717 timer) ----
         private global::Avalonia.Threading.DispatcherTimer? _statPillTimer;
         private static int _lbOnline, _lbPercentile, _lbEntries;
+        private static (long points, int percentile) SeasonSnapshotInputs() =>
+            (App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0, _lbPercentile);
 
         /// <summary>The last leaderboard page the pills read (WPF App.Leaderboard OnlineUsers/YourRank/
         /// YourTotal/Entries, LeaderboardService.cs:106-108). LeaderboardTabView calls it when a page lands
@@ -160,7 +162,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 UpdateStatPills();
-                ConditioningTime.Tick(CoreSettings.Current);
+                var (points, percentile) = SeasonSnapshotInputs();
+                ConditioningTime.Tick(CoreSettings.Current, points, percentile);
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Error tracking conditioning time"); }
         }
@@ -174,7 +177,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _conditioningTimeTimer = null;
             try
             {
-                ConditioningTime.Stop(CoreSettings.Current);
+                var (points, percentile) = SeasonSnapshotInputs();
+                ConditioningTime.Stop(CoreSettings.Current, points, percentile);
                 UpdateStatPills();
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Error finalizing conditioning time"); }

@@ -7522,7 +7522,11 @@ namespace ConditioningControlPanel.Models
         public string? CurrentSeason
         {
             get => _currentSeason;
-            set { _currentSeason = value; OnPropertyChanged(); }
+            set
+            {
+                lock (Services.SeasonBookkeeping.Gate) _currentSeason = value;
+                OnPropertyChanged();
+            }
         }
 
         private int _highestLevelEver = 0;
@@ -8007,6 +8011,13 @@ namespace ConditioningControlPanel.Models
         // level/XP reset, so the all-time figures they sit beside (TotalConditioningMinutes,
         // TotalSessionsStarted) are unaffected. First season after deploy will undercount
         // because tracking starts at install — by design.
+
+        // Avalonia retains an unsaved ended snapshot and separately buckets later minutes until retry.
+        public SeasonRecapSnapshot? PendingSeasonSnapshot { get; set; }
+        public string? PendingSeasonTarget { get; set; }
+        public Dictionary<string, double> PendingSeasonMinutes { get; set; } = new();
+        public int PendingSeasonPercentile { get; set; }
+        public long PendingSeasonLifetimePointsSpent { get; set; }
 
         private string? _seasonStatsSeason = null;
         /// <summary>

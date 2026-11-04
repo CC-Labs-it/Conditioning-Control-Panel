@@ -90,6 +90,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AvaloniaXamlLoader.Load(this);
             InitializeLanguageSelector();
             InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
+            // WPF startup and ProfileSyncService's season nudge (MainWindow.Marquee.cs:271,
+            // ProfileSyncService.cs:978): handle the cached key and every adopted server key.
+            var seasonService = CoreSettings.Service;
+            var seasonSettings = CoreSettings.Current;
+            void UpdateSeason()
+            {
+                try
+                {
+                    var (points, percentile) = SeasonSnapshotInputs();
+                    ConditioningControlPanel.Services.SeasonBookkeeping.Update(seasonSettings, points, percentile);
+                }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to update monthly bookkeeping"); }
+            }
+            System.ComponentModel.PropertyChangedEventHandler seasonChanged = (_, e) =>
+            {
+                if (e.PropertyName == nameof(ConditioningControlPanel.Models.AppSettings.CurrentSeason)) UpdateSeason();
+            };
+            void RebindSeason()
+            {
+                seasonSettings.PropertyChanged -= seasonChanged;
+                seasonSettings = seasonService?.Current ?? CoreSettings.Current;
+                seasonSettings.PropertyChanged += seasonChanged;
+                UpdateSeason();
+            }
+            seasonSettings.PropertyChanged += seasonChanged;
+            if (seasonService != null) seasonService.CurrentReplaced += RebindSeason;
+            Closed += (_, _) =>
+            {
+                seasonSettings.PropertyChanged -= seasonChanged;
+                if (seasonService != null) seasonService.CurrentReplaced -= RebindSeason;
+            };
+            UpdateSeason();
 
             // WPF put these on the Window element itself; Avalonia routes them as attached events.
             HookResizeEdges();
