@@ -222,7 +222,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 TxtWeeklyQuestDesc.Text = Loc.Get("quest_weekly_done_desc");
                 TxtWeeklyProgress.Text = TxtWeeklyXP.Text = "";
                 WeeklyXpIcon.IsVisible = false;
-                TxtWeeklyStreakBonus.IsVisible = TxtWeeklyRerollBonus.IsVisible = false;
+                // Empties the icons too, not just hides them (#22339, see DailyQuestCard.SetBonus).
+                TxtWeeklyStreakBonus.IsVisible = DailyQuestCard.SetBonus(TxtWeeklyStreakBonus, 0, 0);
+                TxtWeeklyRerollBonus.IsVisible = DailyQuestCard.SetBonus(TxtWeeklyRerollBonus, 0, 0);
                 WeeklyCompletedOverlay.IsVisible = true;
                 BtnRerollWeekly.IsEnabled = false;
                 rerollText.Kind = null;
