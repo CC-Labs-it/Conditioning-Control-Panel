@@ -1,5 +1,5 @@
 // WPF LeashHolderCard.cs:83, 339, 423, 432, 542-769: holder report, sheets and sends.
-// Flat cards reuse FriendsDrawer chrome. Offer, snap, explainers and FX remain gaps.
+// Flat cards reuse FriendsDrawer chrome. Offer and other leash explainers and FX remain gaps.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -82,6 +82,9 @@ public sealed class LeashHolderCard : Border
     private static readonly LeashTugThrottle TugThrottle = new();
     private string? _sheet, _result;
     private bool _resultGood;
+    private static Window? _snapWindow;
+    internal Window? SnapWindow => _snapWindow;
+    internal DispatcherTimer? ReleaseHelpTimer { get; private set; }
     internal LeashHolderCard() : this(new HeldLeash(new("friend", "Friend", null), true, LeashIntensity.Standard,
         DateTimeOffset.UtcNow, 1, null, new DayReport("20261023", 30, 2, 3, 4, false, null, null, false, DateTimeOffset.UtcNow),
         Array.Empty<WeekDay>(), Array.Empty<Punishment>(), null, 0), () => null) { }
@@ -100,7 +103,54 @@ public sealed class LeashHolderCard : Border
         _body.Children.Clear();
         var h = _held;
         var dnd = R.DndOn(h.DndUntil, DateTimeOffset.UtcNow);
-        _body.Children.Add(LeashCardUi.Text(h.Who.Name, ink: F.Gold));
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Tag = "leash-holder-header" };
+        header.Children.Add(LeashCardUi.Text(h.Who.Name, ink: F.Gold));
+        if (!_readOnly)
+        {
+            // WPF LeashHolderCard.cs:264-318: holder menu and Let go help.
+            var replay = new MenuItem { Header = Loc.Get("leash_menu_replay"), Tag = "leash-menu-replay" };
+            replay.Click += (_, _) => ShowSnap(_held.Who);
+            var release = new MenuItem { Tag = "leash-release" };
+            var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            heading.Children.Add(LeashCardUi.Text(Loc.GetF("leash_menu_release", h.Who.Name)));
+            heading.Children.Add(new Border
+            {
+                Width = 14, Height = 14, CornerRadius = new CornerRadius(7), BorderBrush = F.Lilac, BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center, Tag = "leash-slip-help:" + LeashHelpCatalog.LetGoId,
+                Child = new TextBlock { Text = "?", FontSize = 9, FontWeight = FontWeight.Bold, Foreground = F.Lilac, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            });
+            release.Header = heading;
+            // WPF LeashHelpSlip.cs:561-571 AsToolTip: the paper card with no tooltip chrome, to the right.
+            ToolTip.SetTip(release, new ToolTip
+            {
+                Content = new LeashHelpSlip(LeashHelpCatalog.Get(LeashHelpCatalog.LetGoId)!, h.Who.Name),
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0, 0, 8, 10),
+            });
+            ToolTip.SetPlacement(release, PlacementMode.Right);
+            ToolTip.SetShowDelay(release, 250);
+            ToolTip.SetBetweenShowDelay(release, -1);
+            var tipTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+            ReleaseHelpTimer = tipTimer;
+            tipTimer.Tick += (_, _) => { tipTimer.Stop(); ToolTip.SetIsOpen(release, false); };
+            release.PropertyChanged += (_, e) =>
+            {
+                if (e.Property != ToolTip.IsOpenProperty) return;
+                if (ToolTip.GetIsOpen(release)) tipTimer.Start(); else tipTimer.Stop();
+            };
+            release.DetachedFromVisualTree += (_, _) => tipTimer.Stop();
+            release.Click += (_, _) => LeashCutConfirmWindow.Confirm(
+                Loc.GetF("leash_release_confirm_title", h.Who.Name), Loc.GetF("leash_release_confirm_body", h.Who.Name),
+                Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-release-confirm", () => _ = Release(h.Who));
+            var menu = new ContextMenu { Placement = PlacementMode.Bottom }; // WPF LeashHolderCard.cs:277
+            menu.Items.Add(replay);
+            menu.Items.Add(release);
+            var more = LeashCardUi.Action("…", "leash-holder-more", () => Task.CompletedTask);
+            more.ContextMenu = menu;
+            more.Click += (_, _) => menu.Open(more);
+            Grid.SetColumn(more, 1);
+            header.Children.Add(more);
+        }
+        _body.Children.Add(header);
         _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_holder_day", h.Day)));
         _body.Children.Add(LeashCardUi.Text(Loc.Get(dnd ? "leash_state_quiet" : h.Online ? "leash_state_online" : "leash_state_offline"), "leash-holder-state"));
         var r = h.Report;
@@ -173,13 +223,6 @@ public sealed class LeashHolderCard : Border
             }
             _body.Children.Add(panel);
         }
-        // WPF LeashHolderCard.cs:310: letting go asks first; it ends the leash for both and sets a 24 h cooldown.
-        _body.Children.Add(LeashCardUi.Action(Loc.GetF("leash_menu_release", h.Who.Name), "leash-release", () =>
-        {
-            LeashCutConfirmWindow.Confirm(Loc.GetF("leash_release_confirm_title", h.Who.Name), Loc.GetF("leash_release_confirm_body", h.Who.Name),
-                Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-release-confirm", () => _ = Release(h.Who));
-            return Task.CompletedTask;
-        }, IconKind.Link));
         if (LeashSentList.For(_service(), h.Who.Id) is { } receipts) _body.Children.Add(receipts);
         if (_result != null) _body.Children.Add(LeashCardUi.Text(_result, "leash-holder-result", _resultGood ? F.Mint : F.Gold));
     }
@@ -242,11 +285,36 @@ public sealed class LeashHolderCard : Border
         panel.Children.Add(go);
         return panel;
     }
+    // WPF LeashDrawerSection.cs:139 and LeashSurfaces.cs:222: replay the holder and leashed recap.
+    private void ShowSnap(LeashPerson friend)
+    {
+        var name = string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim();
+        _snapWindow?.Close();
+        var card = new LeashSnapCard(new LeashPerson("me", name, null), friend, AmbientFxCanvas.Env.Level);
+        var window = new Window { Title = Loc.Get("leash_snap_title"), Tag = "leash-snap-window",
+            SizeToContent = SizeToContent.WidthAndHeight, WindowDecorations = WindowDecorations.None, ShowInTaskbar = false,
+            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Brushes.Transparent,
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+            Content = new Border { Margin = new Thickness(40), Child = card } };
+        card.Closed += window.Close;
+        window.KeyDown += (_, e) => { if (e.Key == global::Avalonia.Input.Key.Escape) { window.Close(); e.Handled = true; } };
+        _snapWindow = window;
+        window.Closed += (_, _) => { if (_snapWindow == window) _snapWindow = null; };
+        try
+        {
+            if (TopLevel.GetTopLevel(this) is Window owner) window.Show(owner);
+            else { window.WindowStartupLocation = WindowStartupLocation.CenterScreen; window.Show(); }
+            Dispatcher.UIThread.Post(() => { if (_snapWindow == window && window.IsVisible) card.Play(); });
+        }
+        catch (Exception ex) { _snapWindow = null; Serilog.Log.Debug("[Leash] snap failed: {E}", ex.Message); }
+    }
+
     private async Task Release(LeashPerson who)
     {
         var ok = false;
         try { ok = _service() is { } s && await s.ReleaseAsync(who.Id); }
         catch (Exception ex) { Serilog.Log.Debug("[Leash] release failed: {E}", ex.Message); }
+        LeashSound.Release(ok);
         App.Notifications?.Show(Loc.GetF(ok ? "leash_release_done" : "leash_release_failed", who.Name),
             ok ? Helpers.NotificationType.Info : Helpers.NotificationType.Warning);
     }
