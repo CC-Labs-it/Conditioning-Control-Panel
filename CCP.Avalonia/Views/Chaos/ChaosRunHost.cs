@@ -433,7 +433,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _draftPaused = true;
             _spawnTimer?.Stop();
             ChaosWaveTimerWindow.Clear();
-            BubbleOverlay.Field.Bubbles.RemoveAll(b => b.Spec != null);
+            BubbleOverlay.ClearField();
             // WPF ChaosModeService.cs:1465-1467; Pulse retains the colour-flash gate (:1672).
             ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
             Pulse(Color.FromRgb(150, 200, 255), 0.30);

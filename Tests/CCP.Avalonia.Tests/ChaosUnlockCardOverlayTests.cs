@@ -178,7 +178,8 @@ public sealed class ChaosUnlockCardOverlayTests
         ChaosMeta.State.LessonsComplete.Remove("silk_touch");
         ChaosMeta.State.LessonProgress["silk_touch"] = ChaosLessons.ById("silk_touch")!.Target - 1;
         state.ElapsedSec = 40; // entering the final loop
-        ChaosRunHost.Tick();
+        var ambient = new AmbientBubble(); BubbleOverlay.Field.Bubbles.Add(ambient);
+        try { ChaosRunHost.Tick(); Assert.DoesNotContain(ambient, BubbleOverlay.Field.Bubbles); } finally { BubbleOverlay.Field.Bubbles.Remove(ambient); }
         Assert.True(overlay.FindControl<global::Avalonia.Controls.Border>("DraftPanel")!.IsVisible);
         Assert.Equal(flashes, pulses.Contains((0xFF96C8FFu, 0.30)));
         Assert.Contains(mod ? "chime3" : "lvup", cues); // dedicated and fallback candidates both honor mods

@@ -240,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        internal static void ClearField() { Field.Bubbles.Clear(); foreach (var w in Windows) w.Sync(); } // WPF PopAllBubbles
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
