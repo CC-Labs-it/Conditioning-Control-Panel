@@ -131,18 +131,16 @@ public sealed class KeywordAudioRuntimeTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void LostAccessOrMasterGateClearsPartialInput(bool loseAccess) => Run((engine, s, played) =>
+    public void LostAccessOrMasterGatePreservesPartialInput(bool loseAccess) => Run((engine, s, played) =>
     {
         engine.Character('s');
         if (loseAccess) CoreEntitlement.HasPremiumProvider = () => false;
         else s.KeywordTriggersEnabled = false;
-        engine.Character('i');
+        engine.Character('x'); // a rejected key must not enter the retained buffer
         CoreEntitlement.HasPremiumProvider = () => true;
         s.KeywordTriggersEnabled = true;
         Type(engine, "it");
-        Assert.Empty(played);
-        engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
-        Type(engine, "sit"); Assert.Single(played);
+        Assert.Single(played);
     });
 
     [Fact]

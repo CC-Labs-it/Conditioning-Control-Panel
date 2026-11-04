@@ -131,8 +131,7 @@ internal sealed class KeywordAudioRuntime
     {
         var s = CoreSettings.Current;
         if (!IsActive || !s.KeywordTriggersEnabled ||
-            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness")))
-        { _input.Clear(); return false; }
+            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
