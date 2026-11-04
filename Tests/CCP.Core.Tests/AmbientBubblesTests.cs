@@ -2,6 +2,7 @@ using System;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -11,6 +12,17 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class AmbientBubblesTests
 {
+    [Fact]
+    public void Rain_exits_fifty_dips_below_the_screen()
+    {
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 100, 1920, 1080, 2,
+            new EffectBubbleSpec { SizePx = 100, Motion = ChaosMotion.RainDown });
+        b.Y = 590;
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+        b.Y = 641;
+        Assert.Equal(AmbientBubble.Result.Missed, b.Step());
+    }
+
     [Fact]
     public void Bucket_pays_up_to_300_a_day_then_the_remainder_then_nothing()
     {

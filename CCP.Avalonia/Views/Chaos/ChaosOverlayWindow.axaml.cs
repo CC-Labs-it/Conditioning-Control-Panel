@@ -759,6 +759,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public void ShowResults(ChaosRunState s, double baseXp, double skillMult, double finalXp, long previousBest, int sparksEarned,
                                 ChaosRank? rankUp = null)
         {
+            CancelTransient();
             SetClickThrough(false);
             _countdownBox.IsVisible = false;
             _draftPanel.IsVisible = false;
@@ -1097,10 +1098,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             });
         }
 
+        // Stop pending draft/countdown callbacks when a run ends or the window closes.
+        private void CancelTransient()
+        {
+            _onBoonPick = null;
+            HideDraft();
+            _countdownFinished = true;
+            _countdownComplete = null;
+            _countdownTimer?.Stop();
+            _countdownTimer = null;
+            RemoveCountdownSkipHooks();
+        }
+
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
             _closed = true;
+            CancelTransient();
             // The three forever tweens (the boon pulse, the two ken-burns drifts) would otherwise
             // keep the 16ms pump awake on a dead window for the process's life.
             _tweens.Clear();
@@ -1511,6 +1525,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 rare ? new[] { "chaos/dling.mp3", "chime1.mp3" }
                      : new[] { "chaos/thud.mp3", "bubbles/Pop2.mp3" },
                 rare ? 0.6f : 0.65f);
+
+            public static void PlayWaveClear() => PlayFirstAvailable(new[] { "chaos/wave_clear.mp3", "lvup.mp3" }, 0.8f);
 
             public static void PlayBoonPicked() => PlayFirstAvailable(new[] { "chaos/boon_pick.mp3", "chime2.mp3" }, 0.7f);
 

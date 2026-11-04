@@ -240,6 +240,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF PopAllBubbles (ChaosModeService.cs:1464): clear without firing payloads.</summary>
+        internal static void ClearForChaosDraft()
+        {
+            Field.Held = false;
+            Field.Bubbles.Clear();
+            foreach (var w in Windows) w.Sync();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
@@ -253,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {

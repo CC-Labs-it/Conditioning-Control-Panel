@@ -1,4 +1,7 @@
 {
+  "chaos_draft_rerolled": "再び運命を試した", "chaos_draft_sin_embraced": "罪を受け入れた (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "ろうそくが痛みを取り除いた (不利な効果なし)", "chaos_draft_sin_resistance": "受け入れた。そのお返し (+1 抵抗力)",
+  "chaos_draft_resisted": "抵抗した → +1 抵抗力", "chaos_draft_resistance_announce": "+1 抵抗力",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

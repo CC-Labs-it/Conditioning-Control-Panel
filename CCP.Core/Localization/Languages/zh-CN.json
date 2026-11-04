@@ -1,4 +1,7 @@
 {
+  "chaos_draft_rerolled": "再次挑战命运", "chaos_draft_sin_embraced": "接受罪孽 (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "烛火带走了刺痛 (没有负面效果)", "chaos_draft_sin_resistance": "你答应了。她给了你回报 (+1 抵抗力)",
+  "chaos_draft_resisted": "抵抗 → +1 抵抗力", "chaos_draft_resistance_announce": "+1 抵抗力",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

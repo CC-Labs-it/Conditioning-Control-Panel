@@ -1,4 +1,7 @@
 {
+  "chaos_draft_rerolled": "다시 운명에 도전했어", "chaos_draft_sin_embraced": "죄를 받아들였어 (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "촛불이 아픔을 덜어줬어 (불이익 없음)", "chaos_draft_sin_resistance": "받아들였어. 그 보답이야 (+1 저항력)",
+  "chaos_draft_resisted": "저항했어 → +1 저항력", "chaos_draft_resistance_announce": "+1 저항력",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",
