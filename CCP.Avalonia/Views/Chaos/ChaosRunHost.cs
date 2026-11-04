@@ -88,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         internal static ChaosRunState? State => _state;
         internal static ChaosOverlayWindow? Overlay => _overlay;
+        internal static bool DraftPaused => _draftPaused;
         internal static ChaosHudWindow? Hud => _hud;
         internal static ChaosBoonBarOverlay? BoonBar => _boonBar;
         internal static ChaosFxWindow? Fx => _fx;
@@ -101,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
+            ChaosSkiaFxOverlay.ResetForRun();
             var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {
