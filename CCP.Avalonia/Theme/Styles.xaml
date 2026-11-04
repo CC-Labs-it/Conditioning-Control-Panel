@@ -780,6 +780,12 @@
     <Setter Property="ItemContainerTheme" Value="{StaticResource DarkComboBoxItem}"/>
   </ControlTheme>
 
+  <!-- Inputs.xaml:42. Reuse the Fluent parts and the shared dark popup chrome. -->
+  <ControlTheme x:Key="InputComboTheme" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBoxStyle}">
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="Padding" Value="10,0"/>
+  </ControlTheme>
+
   <!-- MainWindow.xaml:1366. Gradient-border card with a left accent strip and a chevron that
        rotates on expand. Expander's IsExpanded drives the content; the chevron rotation is a
        :expanded selector rather than a Storyboard. DropShadowEffect dropped. -->
