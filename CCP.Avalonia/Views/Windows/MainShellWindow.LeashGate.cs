@@ -258,11 +258,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF PanicFromLeashGate: the gate stands back ten minutes, then the panic stop pass.
         /// Nothing about the leash can stop or delay a panic, so it skips the global key's switches
         /// (PanicKeyEnabled, Lockdown) the way WPF's button does.</summary>
-        private void PanicFromLeashGate()
+        internal void PanicFromLeashGate()
         {
             _leashSnoozeUntilUtc = DateTime.UtcNow + LeashUiRules.PanicSnooze;
             HideLeashGate();
             PanicSurfaces.StopAll("leash gate", this);
+            NoteLocalPanicPause();
         }
 
         /// <summary>WPF CutRequested -> LeashSurfaces.Cut: the gate goes, the cut is said, and the Core

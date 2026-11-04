@@ -141,6 +141,21 @@ public sealed class MandatoryVideoOverlayTests
                     w = await Open(strict: false);
                     Assert.True((ducks, unducks) == (3, 2), $"one duck ref per open, released by each close ({ducks}/{unducks})");
 
+                    // WPF VideoService.cs:637-665. A voice hold freezes watchdog time.
+                    o.PausePrimary();
+                    Assert.True(o.VoicePaused);
+                    var elapsed = (Stopwatch)typeof(MandatoryVideoOverlay).GetField("_sinceShow",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(o)!;
+                    var heldAt = elapsed.ElapsedTicks;
+                    await Task.Delay(100);
+                    Assert.Equal(heldAt, elapsed.ElapsedTicks);
+                    o.GuardTick();
+                    Assert.True(v.IsPlaying);
+                    o.PlayPrimary();
+                    Assert.False(o.VoicePaused);
+                    await Task.Delay(50);
+                    Assert.True(elapsed.ElapsedTicks > heldAt);
+
                     // WPF blurred fill: the 16:9 clip leaves bars on the 4:3 headless window, so the fill shows a
                     // small, non-black copy of the frame under the scrim.
                     var sf = o.Surfaces[0];
@@ -204,6 +219,8 @@ public sealed class MandatoryVideoOverlayTests
                     o.Time = clock;
                     w.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
                     Assert.True(v.IsPlaying && o.GracePaused && sf.Grace.IsVisible && !sf.Layer.IsHitTestVisible, "first Esc = grace pause");
+                    o.PlayPrimary();
+                    Assert.True(o.GracePaused, "voice resume cannot release the grace card");
                     Assert.Contains("60", sf.Countdown.Text);
                     s.VideoMaxDurationSeconds = 1;
                     o.GuardTick();
