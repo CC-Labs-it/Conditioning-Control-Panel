@@ -27,6 +27,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     {
         public static EmiDeskService Instance { get; } = new();
 
+        // WPF IntakeHostService.Launch and DisposeAll. The line engine owns the silence,
+        // including when EMI is away; the opening line still needs the moment player.
+        internal void BeginIntake()
+        {
+            EmiState.NoteUsage("intake");
+            EmiLineEngine.Instance.Draw("intakeRunning");
+        }
+
+        internal void EndIntake() => EmiLineEngine.Instance.ReleaseHold("intakeRunning");
+
         private EmiDeskWindow? _window;
         private long _summonGen;
         private bool _muteAccepted;
