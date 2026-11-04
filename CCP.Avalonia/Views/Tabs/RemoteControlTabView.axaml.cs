@@ -82,6 +82,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal static string? ExecuteRemoteCommand(string action, Newtonsoft.Json.Linq.JObject? parameters)
         {
             if (action == "stop_session") { MainShellWindow.StopSessionFromRemote(); return null; }
+            // WPF RemoteControlService.cs:1023-1029,1653-1656: panic ends even a wearer-started session.
+            if (action == "trigger_panic")
+            {
+                try { MainShellWindow.StopSessionFromRemote(); }
+                catch (Exception ex) { Serilog.Log.Error(ex, "[RemoteControl] Remote panic: session stop failed"); }
+            }
             return RemoteCommands.Execute(action, parameters);
         }
 

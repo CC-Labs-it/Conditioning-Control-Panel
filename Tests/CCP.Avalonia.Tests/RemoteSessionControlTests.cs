@@ -70,6 +70,99 @@ public sealed class RemoteSessionControlTests
     });
 
     [Fact]
+    public Task Controller_panic_ends_the_wearers_session() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var saved = (CoreDispatch.InvokeProvider, AvApp.Sessions);
+        var runner = new SessionRunner(new SessionLogService());
+        var handler = new RelayHandler();
+        using var relay = new RemoteRelay(() => "token", () => "user", "1", RemoteControlTabView.ExecuteRemoteCommand,
+            RemoteCommands.StopEffects, handler) { AutoPoll = false };
+        try
+        {
+            AvApp.Sessions = runner;
+            CoreDispatch.InvokeProvider = (f, _) => (true, f());
+            runner.Start(new Session { Id = "panic-test", Name = "Panic test", DurationMinutes = 30,
+                Settings = new SessionSettings { FlashEnabled = true, SubliminalEnabled = false } });
+            Assert.True(runner.IsRunning && CoreEngine.IsRunning);
+            await relay.StartAsync("full");
+            handler.Poll = "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"trigger_panic\"}]}";
+            await relay.PollOnceAsync();
+            Assert.Equal("ok", (string?)handler.Status[^1]["last_executed"]!["status"]);
+            Assert.False(runner.IsRunning || CoreEngine.IsRunning || CoreFlash.IsRunning);
+        }
+        finally
+        {
+            try { runner.Stop(); CoreEngine.Stop(); }
+            finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); (CoreDispatch.InvokeProvider, AvApp.Sessions) = saved; }
+        }
+    });
+
+    private sealed class ThrowingQuizClock : TimeProvider
+    {
+        public bool DisposeAttempted;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) => new ThrowingTimer(this);
+        private sealed class ThrowingTimer(ThrowingQuizClock clock) : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { clock.DisposeAttempted = true; throw new InvalidOperationException("quiz timer stop"); }
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
+
+    private sealed class QuizHost : IPopQuizHost
+    {
+        public bool IsQuizOpen => false;
+        public bool IsLockCardOpen => false;
+        public bool IsInteractionBusy => false;
+        public bool Defer(Action replay) => false;
+        public void DropDeferred() { }
+        public void Open(bool isTest) { }
+        public void CloseAll() { }
+    }
+
+    [Fact]
+    public Task Panic_still_stops_effects_when_session_stop_throws() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var saved = (CoreDispatch.InvokeProvider, AvApp.Sessions, CoreEngine.PopQuiz, CoreSettings.Current.PopQuizEnabled);
+        var runner = new SessionRunner(new SessionLogService());
+        var clock = new ThrowingQuizClock();
+        var quiz = new PopQuizScheduler(new QuizHost(), clock);
+        var handler = new RelayHandler();
+        using var relay = new RemoteRelay(() => "token", () => "user", "1", RemoteControlTabView.ExecuteRemoteCommand,
+            RemoteCommands.StopEffects, handler) { AutoPoll = false };
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            AvApp.Sessions = runner;
+            CoreDispatch.InvokeProvider = (f, _) => (true, f());
+            CoreEngine.PopQuiz = null;
+            runner.Start(new Session { Id = "panic-failure", Name = "Panic failure", DurationMinutes = 30,
+                Settings = new SessionSettings { FlashEnabled = true, SubliminalEnabled = false } });
+            CoreSettings.Current.PopQuizEnabled = true;
+            CoreEngine.PopQuiz = quiz;
+            quiz.Start();
+            Assert.True(quiz.IsRunning && runner.IsRunning && CoreEngine.IsRunning);
+            await relay.StartAsync("full");
+            handler.Poll = "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"trigger_panic\"}]}";
+            await relay.PollOnceAsync();
+            Assert.True(clock.DisposeAttempted);
+            Assert.Equal("ok", (string?)handler.Status[^1]["last_executed"]!["status"]);
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning);
+        }
+        finally
+        {
+            CoreEngine.PopQuiz = null;
+            try { runner.Stop(); CoreEngine.Stop(); }
+            finally
+            {
+                ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+                (CoreDispatch.InvokeProvider, AvApp.Sessions, CoreEngine.PopQuiz, CoreSettings.Current.PopQuizEnabled) = saved;
+            }
+        }
+    });
+
+    [Fact]
     public Task Stop_also_stops_an_engine_without_a_session() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var saved = AvApp.Sessions;
