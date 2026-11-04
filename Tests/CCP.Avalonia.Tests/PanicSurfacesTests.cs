@@ -117,6 +117,7 @@ public sealed class PanicSurfacesTests
         "possession",
         "program-session",
         "remote-haptics",
+        "wallpaper",
         "takeover",
         "program-session",
         "engine",

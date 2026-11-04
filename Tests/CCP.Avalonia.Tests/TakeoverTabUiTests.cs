@@ -24,6 +24,45 @@ namespace CCP.Avalonia.Tests;
 public sealed class TakeoverTabUiTests
 {
     [Fact]
+    public Task WallpaperCreditRechecksConsentAndKeepOffRestores() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("bambitakeover");
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            foreach (var (source, consent, visible) in new[] { ("local", true, false), ("online", false, false), ("online", true, true), ("mixed", true, true) })
+            {
+                shell.ShowTab("settings");
+                (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented) = (source, consent, false);
+                shell.ShowTab("bambitakeover");
+                Assert.Equal(visible, tab.FindControl<global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine>("TxtWallpaperCredit")!.IsVisible);
+            }
+            var desktop = new CreditDesktop();
+            WallpaperHead.Service = new global::ConditioningControlPanel.Services.WallpaperHost(desktop);
+            tab.FindControl<CheckBox>("ChkWallpaperKeep")!.IsChecked = true;
+            s.WallpaperOriginalPath = "original";
+            tab.FindControl<CheckBox>("ChkWallpaperKeep")!.IsChecked = false;
+            await WallpaperHead.Service.WhenIdle;
+            Assert.True(desktop.Restored);
+        }
+        finally { shell.RequestExit(); }
+    });
+
+    private sealed class CreditDesktop : global::ConditioningControlPanel.Services.IWallpaperPlatform
+    {
+        public bool Restored;
+        public string? Capture() => null;
+        public bool Apply(string path) => false;
+        public bool Restore(string snapshot) { Restored = snapshot == "original"; return true; }
+    }
+
+    [Fact]
     public Task TabShowsWpfCopyAndItsButtonsGoWhereWpfsDo() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

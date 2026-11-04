@@ -86,7 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             try
             {
                 if (!ScrolllerCreditRules.CanOpenLink(CoreSettings.Current?.StrictLockEnabled == true,
-                        MainShellWindow.LockdownActive, ChaosRunHost.IsActive)) return false;
+                        MainShellWindow.LockdownActive, ChaosRunHost.IsActive || Views.Games.GameWindow.IsDtrhRunning)) return false;
                 return Opener(ScrolllerCreditRules.HomeLink);
             }
             catch (Exception ex) { Serilog.Log.Debug("ScrolllerCredit: home open failed: {E}", ex.Message); return false; }
