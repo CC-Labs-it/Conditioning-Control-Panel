@@ -235,7 +235,7 @@ public class OverlayService : IDisposable
     {
         if (_pinkLayer == null)
         {
-            _pinkLayer = new Compositor.PinkTintLayer(App.Compositor!.Wake);
+            _pinkLayer = new Compositor.PinkTintLayer(App.Compositor!.Wake, App.Compositor!.ResortLayers);
             App.Compositor!.RegisterLayer(_pinkLayer);
         }
         return _pinkLayer;

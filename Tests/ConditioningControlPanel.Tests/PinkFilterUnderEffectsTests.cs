@@ -46,14 +46,16 @@ public class PinkFilterUnderEffectsTests
     [Fact]
     public void A_show_and_the_toggle_both_resort_the_engine()
     {
-        var layer = File.ReadAllText(Path.Combine(AppDir(), "Services", "Compositor", "PinkTintLayer.cs"));
+        var layer = SourceRoots.ReadProductFile("Services", "Compositor", "PinkTintLayer.cs");
         int show = layer.IndexOf("public void Show(", StringComparison.Ordinal);
         int set = layer.IndexOf("public void Set(", StringComparison.Ordinal);
         Assert.True(show >= 0 && set > show);
         Assert.Contains("SyncOrder();", layer.Substring(show, set - show));
-        Assert.Contains("_engine.ResortLayers();", layer);
+        Assert.Contains("_resort?.Invoke();", layer);   // the layer is in Core; the WPF engine re-sort is passed in
+        Assert.Contains("App.Compositor!.ResortLayers",
+            SourceRoots.ReadProductFile("Services", "Notifications", "OverlayService.cs"));
 
-        var page = File.ReadAllText(Path.Combine(AppDir(), "Features", "PinkFilterFeatureControl.xaml.cs"));
+        var page = SourceRoots.ReadProductFile("Features", "PinkFilterFeatureControl.xaml.cs");
         Assert.Contains("RefreshPinkFilterOrder()", page);
     }
 
@@ -62,16 +64,8 @@ public class PinkFilterUnderEffectsTests
     [InlineData("pt-BR")] [InlineData("ru")] [InlineData("ja")] [InlineData("ko")] [InlineData("zh-CN")]
     public void The_switch_is_worded_in_every_language(string lang)
     {
-        var json = File.ReadAllText(Path.Combine(AppDir(), "Localization", "Languages", lang + ".json"));
+        var json = File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json"));
         Assert.Contains("\"setting_pink_filter_under_effects\":", json);
         Assert.Contains("\"tooltip_pink_filter_under_effects\":", json);
-    }
-
-    private static string AppDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "App.xaml.cs")))
-            dir = dir.Parent;
-        return Path.Combine(dir?.FullName ?? throw new InvalidOperationException("repo root not found"), "ConditioningControlPanel");
     }
 }
