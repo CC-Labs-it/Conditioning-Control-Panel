@@ -23,23 +23,17 @@ public sealed class InboxNoticeCard : Window, Services.Startup.IPassiveStartupSu
     private InboxNoticeCard(string heading, string body, string? primary, Action? onPrimary,
         string? secondary, Action? onSecondary)
     {
-        Title = "CC Labs";
-        Width = 400;
-        SizeToContent = SizeToContent.Height;
-        WindowDecorations = WindowDecorations.None;
+        (Title, Width, SizeToContent, ShowInTaskbar, CanResize) = ("CC Labs", 400, SizeToContent.Height, false, false);
+        (WindowDecorations, Background) = (WindowDecorations.None, Brushes.Transparent);
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
-        Background = Brushes.Transparent;
-        ShowInTaskbar = false;
-        CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         KeyDown += (_, e) => { if (e.Key == Key.Escape) { Close(); e.Handled = true; } };
         PointerPressed += (_, e) =>
         {
-            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-            for (var v = e.Source as Visual; v != null && v != this; v = v.GetVisualParent())
-                if (v is Button) return;
-            try { BeginMoveDrag(e); }
-            catch (InvalidOperationException) { } // the pointer was already released
+            // Anything clickable is skipped, or the drag eats its click (WPF InboxNoticeCard.cs:36-41).
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+                || (e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) != null) return;
+            try { BeginMoveDrag(e); } catch (InvalidOperationException) { } // the pointer was already released
         };
 
         var stack = new StackPanel();
@@ -58,11 +52,9 @@ public sealed class InboxNoticeCard : Window, Services.Startup.IPassiveStartupSu
             var button = new Button
             {
                 Name = "Primary", Content = primary, Cursor = new Cursor(StandardCursorType.Hand), FontSize = 14,
-                Padding = new Thickness(14, 9), Margin = new Thickness(0, 16, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(14, 9), Margin = new Thickness(0, 16, 0, 0), HorizontalAlignment = HorizontalAlignment.Stretch,
             };
-            if (Application.Current?.TryFindResource("SmallPinkButton", out var theme) == true && theme is ControlTheme t)
-                button.Theme = t;
+            if (Application.Current?.TryFindResource("SmallPinkButton", out var theme) == true && theme is ControlTheme t) button.Theme = t;
             button.Click += (_, _) => { Close(); Run(onPrimary, "primary"); };
             stack.Children.Add(button);
         }
@@ -75,15 +67,13 @@ public sealed class InboxNoticeCard : Window, Services.Startup.IPassiveStartupSu
                 Text = string.IsNullOrEmpty(secondary) ? Loc.Get("vaultgate_close") : secondary,
                 Foreground = Brush.Parse("#B8B1CC"), FontSize = 12, TextDecorations = TextDecorations.Underline,
             },
-            Cursor = new Cursor(StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 10, 0, 0),
+            Cursor = new Cursor(StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0),
         };
         quiet.Click += (_, _) => { Close(); Run(onSecondary, "secondary"); };
         stack.Children.Add(quiet);
         Content = new Border
         {
-            Background = Brush.Parse("#151528"), CornerRadius = new CornerRadius(14),
-            BorderThickness = new Thickness(1.5),
+            Background = Brush.Parse("#151528"), CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1.5),
             BorderBrush = Application.Current?.TryFindResource("PinkBrush", out var pink) == true && pink is IBrush brush
                 ? brush : Brush.Parse("#FF69B4"),
             Margin = new Thickness(12), Padding = new Thickness(22, 18, 22, 16), Child = stack,
@@ -97,11 +87,8 @@ public sealed class InboxNoticeCard : Window, Services.Startup.IPassiveStartupSu
         Current?.Close();
         Current = card;
         card.Closed += (_, _) => { if (ReferenceEquals(Current, card)) Current = null; };
-        if (owner is { IsVisible: true })
-        {
-            try { card.Show(owner); return; }
-            catch (InvalidOperationException) { } // owner closing: stand alone as WPF does
-        }
+        try { if (owner is { IsVisible: true }) { card.Show(owner); return; } }
+        catch (InvalidOperationException) { } // owner closing: stand alone as WPF does
         card.Show();
     }
 

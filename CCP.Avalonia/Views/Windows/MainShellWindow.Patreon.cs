@@ -293,11 +293,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (!CoreAccount.HasPremiumAccess) { TierOnNoticePass(mayShow: false); return; }
                 var s = CoreSettings.Current;
-                if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s))
-                { TierOnNoticePass(mayShow: false); return; }
+                if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) { TierOnNoticePass(mayShow: false); return; }
                 var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false))
-                { TierOnNoticePass(mayShow: true); return; }
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false)) { TierOnNoticePass(mayShow: true); return; }
                 TierOnNoticePass(mayShow: false);
                 var key = TierCelebration.KeyFor(tier)!;
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem

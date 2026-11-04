@@ -162,12 +162,13 @@ internal static class AccountSeed
         && !string.IsNullOrEmpty(_tierAnsweredToken) && _tierAnsweredAccount == CoreSettings.Current.UnifiedId
         && _tierAnsweredToken == CoreSettings.Current.AuthToken;
 
-    internal static void NoteTierReading(int tier, string account, string? token)
+    internal static bool NoteTierReading(int tier, string account, string? token)
     {
         var s = CoreSettings.Current;
-        if (s.OfflineMode || tier < 0 || tier > EntitlementTierRule.MaxTier || string.IsNullOrEmpty(token)
-            || account != s.UnifiedId || token != s.AuthToken) return;
+        if (s.OfflineMode || tier < 0 || tier > EntitlementTierRule.MaxTier || string.IsNullOrEmpty(account)
+            || string.IsNullOrEmpty(token) || account != s.UnifiedId || token != s.AuthToken) return false;
         (_tierAnsweredAccount, _tierAnsweredToken) = (account, token);
+        return true;
     }
 
     // WPF EntitlementTierSync.cs:43-53,60-94: apply a live rise on the UI thread.
@@ -178,11 +179,7 @@ internal static class AccountSeed
             try
             {
                 var s = CoreSettings.Current;
-                if (s.OfflineMode || tier < 0 || tier > EntitlementTierRule.MaxTier
-                    || string.IsNullOrEmpty(account) || string.IsNullOrEmpty(token)
-                    || account != s.UnifiedId || token != s.AuthToken) return;
-                NoteTierReading(tier, account, token);
-                if (!EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow)) return;
+                if (!NoteTierReading(tier, account, token) || !EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow)) return;
                 CoreSettings.Save();
                 Patreon?.NotifyEntitlementRaised(tier >= 2
                     ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);

@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -37,6 +38,14 @@ public sealed class InboxNoticeCardTests
     private static Button FindButton(string name) => InboxNoticeCard.Current!.GetVisualDescendants()
         .OfType<Button>().Single(b => b.Name == name);
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    private static MainShellWindow ShowAndFocusShell()
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow(); // app windows are closed by the isolation hook (TestIsolation.cs)
+        shell.Show();
+        shell.Activate();
+        return shell;
+    }
 
     private sealed class TierReply(string body, HttpStatusCode status) : HttpMessageHandler
     {
@@ -60,37 +69,27 @@ public sealed class InboxNoticeCardTests
         Assert.True(AccountSeed.Seed());
         CoreAccount.UnifiedUserId = s.UnifiedId;
         StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-        var shell = new MainShellWindow();
-        var notifications = 0;
-        var onUi = false;
-        AccountSeed.Patreon!.TierChanged += (_, _) =>
-        {
-            notifications++;
-            onUi = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess();
-        };
-        try
-        {
-            shell.Show();
-            void Heartbeat() => Assert.True(new SyncPush(() => null, () => false, new TierReply("{\"effective_tier\":2}", HttpStatusCode.OK))
-                { TierReceived = AccountSeed.OfferHeartbeatTier }.HeartbeatAsync().GetAwaiter().GetResult());
-            Heartbeat();
-            token = "new-token"; // the queued response belongs to the previous session
-            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            Assert.Equal(0, s.PatreonTier);
-            Assert.Equal(0, notifications);
-            Assert.DoesNotContain(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
-            Heartbeat();
-            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            Assert.True(onUi);
-            Assert.Equal(1, notifications);
-            Assert.Equal(2, s.PatreonTier);
-            Assert.True(CoreAccount.HasLabAccess);
-            Assert.True(s.PatreonLabValidUntil > DateTime.UtcNow);
-            Assert.Equal(2, s.LastKnownEffectiveTier);
-            Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
-        }
-        finally { shell.Close(); }
+        new MainShellWindow().Show();
+        var (notifications, onUi) = (0, false);
+        AccountSeed.Patreon!.TierChanged += (_, _) => (notifications, onUi) = (notifications + 1, Dispatcher.UIThread.CheckAccess());
+        void Heartbeat() => Assert.True(new SyncPush(() => null, () => false, new TierReply("{\"effective_tier\":2}", HttpStatusCode.OK))
+            { TierReceived = AccountSeed.OfferHeartbeatTier }.HeartbeatAsync().GetAwaiter().GetResult());
+        Heartbeat();
+        token = "new-token"; // the queued response belongs to the previous session
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, s.PatreonTier);
+        Assert.Equal(0, notifications);
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
+        Heartbeat();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(onUi);
+        Assert.Equal(1, notifications);
+        Assert.Equal(2, s.PatreonTier);
+        Assert.True(CoreAccount.HasLabAccess);
+        Assert.True(s.PatreonLabValidUntil > DateTime.UtcNow);
+        Assert.Equal(2, s.LastKnownEffectiveTier);
+        Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
     });
 
     [Theory]
@@ -115,48 +114,39 @@ public sealed class InboxNoticeCardTests
         s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
         StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
         var shell = new MainShellWindow();
-        try
-        {
-            shell.Show();
-            shell.TierOnNoticePass(true);
-            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
-            Assert.Equal(2, s.LastKnownEffectiveTier); // cached drop is not authoritative
-            foreach (var body in new[] { "{}", "{\"effective_tier\":\"0\"}", "{\"effective_tier\":9}", "bad json" })
-            {
-                Read(body, HttpStatusCode.OK);
-                Assert.False(AccountSeed.ServerTierAnsweredThisRun);
-            }
-            Read("{\"effective_tier\":0}", HttpStatusCode.InternalServerError);
-            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
-            Read("{\"effective_tier\":0}", HttpStatusCode.OK);
-            Assert.True(AccountSeed.ServerTierAnsweredThisRun);
-            shell.TierOnNoticePass(true);
-            Assert.Equal(0, s.LastKnownEffectiveTier);
-            Assert.Equal(2, s.PatreonTier);
-            Assert.Equal(grace, s.PatreonLabValidUntil);
-            premium = true;
-            shell.TierOnNoticePass(true);
-            shell.TierOnNoticePass(true);
-            Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
-            Assert.Equal(2, s.LastKnownEffectiveTier);
-            token = "rotated";
-            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
-            AccountSeed.NoteTierReading(0, s.UnifiedId, "notice-token"); // late response from old token
-            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
-            s.UnifiedId = "another-account";
-            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
-            token = null;
-            Read("{\"effective_tier\":0}", HttpStatusCode.OK);
-            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
-        }
-        finally { shell.Close(); }
+        shell.Show();
+        shell.TierOnNoticePass(true);
+        Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+        Assert.Equal(2, s.LastKnownEffectiveTier); // cached drop is not authoritative
+        foreach (var body in new[] { "{}", "{\"effective_tier\":\"0\"}", "{\"effective_tier\":9}", "bad json" })
+            Assert.False(Answered(body, HttpStatusCode.OK));
+        Assert.False(Answered("{\"effective_tier\":0}", HttpStatusCode.InternalServerError));
+        Assert.True(Answered("{\"effective_tier\":0}", HttpStatusCode.OK));
+        shell.TierOnNoticePass(true);
+        Assert.Equal(0, s.LastKnownEffectiveTier);
+        Assert.Equal(2, s.PatreonTier);
+        Assert.Equal(grace, s.PatreonLabValidUntil);
+        premium = true;
+        shell.TierOnNoticePass(true);
+        shell.TierOnNoticePass(true);
+        Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
+        Assert.Equal(2, s.LastKnownEffectiveTier);
+        token = "rotated";
+        Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+        AccountSeed.NoteTierReading(0, s.UnifiedId, "notice-token"); // late response from old token
+        Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+        s.UnifiedId = "another-account";
+        Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+        token = null;
+        Assert.False(Answered("{\"effective_tier\":0}", HttpStatusCode.OK));
 
-        void Read(string body, HttpStatusCode status)
+        bool Answered(string body, HttpStatusCode status)
         {
             var wire = new TierReply(profile ? "{\"user\":" + body + "}" : body, status);
             if (profile) AccountSeed.LoadProfileAsync(new V2AuthService(() => s, wire)).GetAwaiter().GetResult();
-            else new SyncPush(() => null, () => false, wire) { TierReceived = AccountSeed.NoteTierReading }
+            else new SyncPush(() => null, () => false, wire) { TierReceived = (t, a, k) => AccountSeed.NoteTierReading(t, a, k) }
                 .HeartbeatAsync().GetAwaiter().GetResult();
+            return AccountSeed.ServerTierAnsweredThisRun;
         }
     });
 
@@ -202,17 +192,10 @@ public sealed class InboxNoticeCardTests
         s.LastKnownEffectiveTier = 0;
         s.SeenFeatureIntros.Remove(TierCelebration.KeyT2);
         s.SeenFeatureIntros.Remove(TierCelebration.LegacyKey);
-        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-        var shell = new MainShellWindow();
-        try
-        {
-            shell.Show();
-            shell.Activate();
-            Assert.Contains(StartupLadder.Inbox.Items, i => i.Key == "intro:" + TierCelebration.KeyT2);
-            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("tier-on:"));
-            Assert.Equal(2, s.LastKnownEffectiveTier);
-        }
-        finally { shell.Close(); }
+        ShowAndFocusShell();
+        Assert.Contains(StartupLadder.Inbox.Items, i => i.Key == "intro:" + TierCelebration.KeyT2);
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("tier-on:"));
+        Assert.Equal(2, s.LastKnownEffectiveTier);
     });
 
     [Fact]
@@ -253,109 +236,64 @@ public sealed class InboxNoticeCardTests
     [Fact]
     public void RepeatTierRiseOpensNoticeFromRealInbox() => Run(() =>
     {
-        var oldPremium = CoreAccount.HasPremiumAccessProvider;
-        var oldLab = CoreAccount.HasLabAccessProvider;
-        var saved = CoreSettings.Current.LastKnownEffectiveTier;
-        var seen = CoreSettings.Current.SeenFeatureIntros.ToArray();
-        MainShellWindow? shell = null;
-        Window? host = null;
+        CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = () => true;
+        CoreSettings.Current.LastKnownEffectiveTier = 0;
+        CoreSettings.Current.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+        ShowAndFocusShell().Activate();   // the user path: Opened (celebration re-check) and the Activated focus hook
+        Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "tier-on:2");
+        var flyout = new InboxFlyout();
+        var host = new Window { Content = flyout };
         try
         {
-            CoreAccount.HasPremiumAccessProvider = () => true;
-            CoreAccount.HasLabAccessProvider = () => true;
-            CoreSettings.Current.LastKnownEffectiveTier = 0;
-            CoreSettings.Current.SeenFeatureIntros.Add(TierCelebration.KeyT2);
-            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-            shell = new MainShellWindow();
-            shell.Show();
-            shell.Activate();   // the user path: Opened (celebration re-check) and the Activated focus hook
-            shell.Activate();
-            Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "tier-on:2");
-            var flyout = new InboxFlyout();
-            host = new Window { Content = flyout };
             host.Show();
             var icon = flyout.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Name == "RowGlyph");
-            Assert.Equal("Heart", icon.Kind.ToString());
-            Assert.Equal("Filled", icon.Variant.ToString());
-            Assert.False(icon.IsFallback);
-            Assert.True(icon.IsVisible);
+            Assert.Equal(("Heart", "Filled", false, true), (icon.Kind.ToString(), icon.Variant.ToString(), icon.IsFallback, icon.IsVisible));
             Click(flyout.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("open")));
             Assert.Empty(StartupLadder.Inbox.Items);
             var title = InboxNoticeCard.Current!.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "Heading");
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("tier_on_prime"), title.Text);
             Assert.Equal(2, CoreSettings.Current.LastKnownEffectiveTier);
         }
-        finally
-        {
-            host?.Close(); shell?.Close();
-            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
-            CoreSettings.Current.LastKnownEffectiveTier = saved;
-            CoreSettings.Current.SeenFeatureIntros.Clear(); CoreSettings.Current.SeenFeatureIntros.AddRange(seen);
-        }
+        finally { host.Close(); }
     });
 
     [Fact]
     public void InviteWeekIsNotARiseOnFocus() => Run(() =>
     {
-        var oldPremium = CoreAccount.HasPremiumAccessProvider;
-        var oldLab = CoreAccount.HasLabAccessProvider;
         var s = CoreSettings.Current;
-        var saved = s.LastKnownEffectiveTier;
-        var grant = s.InviteGrantUntil;
-        var cached = s.PatreonPremiumValidUntil;
-        var seen = s.SeenFeatureIntros.ToArray();
-        MainShellWindow? shell = null;
-        try
-        {
-            CoreAccount.HasPremiumAccessProvider = () => true;
-            CoreAccount.HasLabAccessProvider = () => false;
-            s.InviteGrantUntil = DateTime.UtcNow.AddDays(5);
-            s.PatreonPremiumValidUntil = null;
-            s.LastKnownEffectiveTier = 0;
-            s.SeenFeatureIntros.Add(TierCelebration.KeyT1);
-            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-            shell = new MainShellWindow();
-            shell.Show();
-            shell.Activate();
-            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("tier-on:"));
-            Assert.Equal(0, s.LastKnownEffectiveTier); // a later real purchase still gets its card
-        }
-        finally
-        {
-            shell?.Close();
-            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
-            s.LastKnownEffectiveTier = saved; s.InviteGrantUntil = grant; s.PatreonPremiumValidUntil = cached;
-            s.SeenFeatureIntros.Clear(); s.SeenFeatureIntros.AddRange(seen);
-        }
+        CoreAccount.HasPremiumAccessProvider = () => true;
+        CoreAccount.HasLabAccessProvider = () => false;
+        s.InviteGrantUntil = DateTime.UtcNow.AddDays(5);
+        s.PatreonPremiumValidUntil = null;
+        s.LastKnownEffectiveTier = 0;
+        s.SeenFeatureIntros.Add(TierCelebration.KeyT1);
+        ShowAndFocusShell();
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("tier-on:"));
+        Assert.Equal(0, s.LastKnownEffectiveTier); // a later real purchase still gets its card
     });
 
     [Fact]
     public void FirstTierBaselineAndRiseSurviveReloadWithoutClosingTheShell() => Run(() =>
     {
-        var (oldPremium, oldLab, oldSettings) = (CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider, CoreSettings.ServiceProvider);
-        MainShellWindow? shell = null;
-        Window? other = null;
+        bool premium = false;
+        CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = () => premium;
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
+        service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
+        service.Current.WhatMovedCardShown = 1;
+        service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys.Except(service.Current.SeenFeatureIntros));
+        CoreSettings.ServiceProvider = () => service; // restored, and its pending save disarmed, by the isolation hook
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        shell.Show();
+        var other = new Window();
         try
         {
-            bool premium = false;
-            CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = () => premium;
-            var service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
-            service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
-            service.Current.WhatMovedCardShown = 1;
-            service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys.Except(service.Current.SeenFeatureIntros));
-            CoreSettings.ServiceProvider = () => service;
-            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-            shell = new MainShellWindow();
-            shell.Show();
-            other = new Window();
             other.Show();
             void Refocus()
             {
                 SettingsService.DisarmAllPendingSaves();
-                other.Activate();
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                shell.Activate();
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                other.Activate(); Dispatcher.UIThread.RunJobs();
+                shell.Activate(); Dispatcher.UIThread.RunJobs();
             }
             void Reload(int tier)
             {
@@ -377,12 +315,6 @@ public sealed class InboxNoticeCardTests
             Refocus();
             Assert.False(service.HasPendingSave);
         }
-        finally
-        {
-            other?.Close(); shell?.Close();
-            SettingsService.DisarmAllPendingSaves();
-            CoreSettings.ServiceProvider = oldSettings;
-            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
-        }
+        finally { other.Close(); }
     });
 }

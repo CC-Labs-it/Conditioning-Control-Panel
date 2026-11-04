@@ -97,11 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var current = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess
                     && !global::ConditioningControlPanel.Services.ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, settings) ? 1 : 0;
                 var verdict = Services.TierOnNotice.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: Platform.AccountSeed.ServerTierAnsweredThisRun);
-                if (verdict.Record != settings.LastKnownEffectiveTier)
-                {
-                    settings.LastKnownEffectiveTier = verdict.Record;
-                    CoreSettings.Save();
-                }
+                if (verdict.Record != settings.LastKnownEffectiveTier) { settings.LastKnownEffectiveTier = verdict.Record; CoreSettings.Save(); }
                 if (!verdict.Owed || !mayShow
                     || Services.TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
                 var title = global::ConditioningControlPanel.Localization.Loc.Get(Services.TierOnNotice.TitleKey(current));

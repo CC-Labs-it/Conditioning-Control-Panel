@@ -20,8 +20,7 @@ public sealed class TierOnNoticeTests
         Assert.Equal(owed, result.Owed);
         Assert.Equal(record, result.Record);
     }
-    [Theory]
-    [InlineData(1, "tier_on_basic")]
-    [InlineData(2, "tier_on_prime")]
-    public void TitleMatchesTheTier(int tier, string key) => Assert.Equal(key, TierOnNotice.TitleKey(tier));
+    [Fact]
+    public void TitleMatchesTheTier() =>
+        Assert.Equal(("tier_on_basic", "tier_on_prime"), (TierOnNotice.TitleKey(1), TierOnNotice.TitleKey(2)));
 }
