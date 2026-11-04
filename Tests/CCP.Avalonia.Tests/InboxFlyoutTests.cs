@@ -85,7 +85,7 @@ public sealed class InboxFlyoutTests
     {
         int opened = 0, dismissed = 0;
         StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-        StartupLadder.PresentOrInbox(new InboxItem { Key = "d", Open = () => opened++, Dismiss = () => dismissed++ });
+        StartupLadder.PresentOrInbox(new InboxItem { Key = "d", HasLinkIcon = true, Open = () => opened++, Dismiss = () => dismissed++ });
 
         var host = new Window { Content = new InboxFlyout() };
         try
@@ -93,6 +93,7 @@ public sealed class InboxFlyoutTests
             host.Show();
             Dispatcher.UIThread.RunJobs();
             var flyout = (InboxFlyout)host.Content!;
+            Assert.True(flyout.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().Single(i => i.Kind == FluentIcons.Common.Symbol.Link).IsVisible);
             bool closed = false;
             flyout.RequestClose += () => closed = true;
             Click(flyout.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("dismiss")));

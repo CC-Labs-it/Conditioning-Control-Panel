@@ -8,9 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
 namespace ConditioningControlPanel.Services.Lobby;
-
 /// <summary>WPF AvailableSubjectsService's directory list and claim wires. The session URL is
 /// returned only to the caller and is never logged or retained.</summary>
 public sealed class RemoteLobbyApi
@@ -25,7 +23,6 @@ public sealed class RemoteLobbyApi
         _identity = identity ?? LobbyWire.DefaultIdentity;
         _baseUrl = baseUrl ?? LobbyWire.DefaultBaseUrl() ?? "";
     }
-
     // WPF AvailableSubjectsService.cs:120-181,255-275: dual headers, parse entries, keep the last list on failure.
     public async Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)> FetchAsync(CancellationToken ct = default)
     {
@@ -52,7 +49,6 @@ public sealed class RemoteLobbyApi
         }
         catch { return (Array.Empty<RemoteSeat>(), false); }
     }
-
     // WPF AvailableSubjectsService.cs:196-251: 409 refreshes unless it is a merged account;
     // success returns the URL and refreshes. Never log the response or URL (it contains a PIN).
     public async Task<(string? Url, bool Refresh)> TryClaimAsync(string subjectId)

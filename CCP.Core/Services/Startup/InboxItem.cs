@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Services.Startup
 
         /// <summary>A single emoji or character for the row's left edge.</summary>
         public string Glyph { get; init; } = "";
+        public bool HasLinkIcon { get; init; } // A linked-account notice; heads choose how to render it.
 
         /// <summary>
         /// Shows the original surface. Runs on the UI thread, either immediately (nothing is

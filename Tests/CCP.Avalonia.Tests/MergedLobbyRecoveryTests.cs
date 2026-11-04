@@ -89,7 +89,7 @@ public sealed class MergedLobbyRecoveryTests
                 Assert.True(string.IsNullOrEmpty(settings.AuthToken));
                 Assert.False(sync.Loaded);
                 var item = Assert.Single(StartupLadder.Inbox.Items);
-                Assert.Equal("merged-account-signin:u_canon456", item.Key);
+                Assert.Equal("merged-account-signin:u_canon456", item.Key); Assert.True(item.HasLinkIcon);
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_title"), item.Title);
                 launcher?.Close(); launcher = null; game?.Close(); game = null;
                 // A different merged account with a provider credential mints a new token and reloads.

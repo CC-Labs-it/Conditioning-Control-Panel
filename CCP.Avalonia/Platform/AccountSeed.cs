@@ -101,7 +101,7 @@ internal static class AccountSeed
             if (!reauthed) StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
             {
                 Key = "merged-account-signin:" + canonical,
-                Glyph = "🔗",
+                HasLinkIcon = true,
                 Title = global::ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_title"),
                 Summary = global::ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_summary"),
                 Open = async () =>
@@ -113,7 +113,6 @@ internal static class AccountSeed
             });
         });
     }
-
     private static async Task<bool> ReauthenticateMergedAsync()
     {
         var v2 = NewV2();
@@ -138,7 +137,6 @@ internal static class AccountSeed
         if (Discord?.IsAuthenticated == true && await Try(Discord.GetAccessToken, t => v2.AuthenticateWithDiscordAsync(t))) return true;
         return SubscribeStar?.IsAuthenticated == true && await Try(SubscribeStar.GetAccessToken, t => v2.AuthenticateWithSubstarAsync(t));
     }
-
     /// <summary>WPF App.xaml.cs:2267 restore: the unified id persisted from the previous session. Unlike WPF,
     /// only when something can still prove it (an auth token, or a signed-in provider): with no Secret Service
     /// the token is gone after a restart, and showing "signed in" with nothing behind it is worse than signed out.</summary>

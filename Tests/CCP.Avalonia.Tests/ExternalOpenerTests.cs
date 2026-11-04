@@ -61,7 +61,6 @@ public sealed class ExternalOpenerTests
         }
         finally { ExternalOpener.Shell = oldShell; Serilog.Log.Logger = oldLog; }
     }
-
     private sealed class Capture : Serilog.Core.ILogEventSink
     {
         public readonly List<string> Events = new();
