@@ -2,6 +2,8 @@
 // ownership and quick pin gestures remain the named follow-up in the parity ledger.
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -59,6 +61,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 title.IsVisible = !string.IsNullOrEmpty(title.Text);
             }
         }
+
+        // WPF RefreshShowcasePinArt: retain the displayed profile's ids, not the local loadout.
+        private void OnModChangedShowcasePins(object? sender, ModPackage mod) =>
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ProfilePage?.FindControl<ItemsControl>("ProfilePinnedShowcase")?.ItemsSource
+                    is not System.Collections.IEnumerable source) return;
+                var ids = source.OfType<ProfileAchievementTile>().Select(tile => tile.Id).ToList();
+                if (ids.Count == 0 || ProfilePage is not { } page) return;
+                Step("pins", () => PaintPins(page, new ProfileCosmetics { PinnedAchievements = ids }));
+            });
 
         private void PaintPins(DiscordTabView page, ProfileCosmetics cosmetics)
         {
