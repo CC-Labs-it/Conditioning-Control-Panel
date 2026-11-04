@@ -21,6 +21,33 @@ namespace CCP.Avalonia.Tests;
 public sealed class FloatingVideoFrameTests
 {
     [Fact]
+    public Task Passive_drag_tracks_outside_and_releases_without_capture() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var field = typeof(FloatingVideoFrame).GetField("_readPointer", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var w = new Window { Width = 300, Height = 180 };
+        try
+        {
+            w.Show(); w.Position = new PixelPoint(100, 100);
+            var frame = new FloatingVideoFrame(w);
+            var start = w.PointToScreen(new Point(20, 20)); var before = w.Position;
+            var sample = (start, true);
+            field!.SetValue(frame, (System.Func<(PixelPoint, bool)>)(() => sample));
+            w.MouseDown(new Point(20, 20), MouseButton.Left);
+            sample = (new PixelPoint(start.X + 400, start.Y), true); frame.Tick();
+            Assert.Equal(before.X + 400, w.Position.X);
+            sample = (sample.Item1, false); frame.Tick();
+            var motion = Assert.IsType<FloatingVideoMotion>(typeof(FloatingVideoFrame)
+                .GetField("_motion", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(frame));
+            Assert.False(motion.Held);
+        }
+        finally { w.Close(); }
+        return Task.CompletedTask;
+    });
+    [Fact]
     public Task Drag_is_one_to_one_and_speed_updates_live() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
