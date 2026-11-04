@@ -96,8 +96,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var seasonSettings = CoreSettings.Current;
             void UpdateSeason()
             {
-                try { ConditioningControlPanel.Services.SeasonBookkeeping.Update(
-                    seasonSettings, App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0, _lbPercentile); }
+                try
+                {
+                    var (points, percentile) = SeasonSnapshotInputs();
+                    ConditioningControlPanel.Services.SeasonBookkeeping.Update(seasonSettings, points, percentile);
+                }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to update monthly bookkeeping"); }
             }
             System.ComponentModel.PropertyChangedEventHandler seasonChanged = (_, e) =>

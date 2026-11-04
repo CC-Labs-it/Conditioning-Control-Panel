@@ -38,22 +38,22 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>One ~1-second tick: credits the REAL time since the last tick, a whole minute at a time
         /// (main 8a89eaeb0, ConditioningClock: a busy UI drops ticks, so counting them lost minutes).</summary>
-        public void Tick(AppSettings s)
+        public void Tick(AppSettings s, long? lifetimePointsSpent = null, int? leaderboardPercentile = null)
         {
             if (!IsTracking) return;
             var now = _clock.GetUtcNow();
             var due = Progression.ConditioningClock.Tick(ref _pendingSeconds, (now - _lastTick).TotalSeconds);
             _lastTick = now;
-            if (due > 0) AddConditioningTime(s, due);
+            if (due > 0) AddConditioningTime(s, due, lifetimePointsSpent, leaderboardPercentile);
         }
 
         /// <summary>WPF StopConditioningTimeTracker (:826-836): top the store up to baseline + elapsed.</summary>
-        public void Stop(AppSettings s)
+        public void Stop(AppSettings s, long? lifetimePointsSpent = null, int? leaderboardPercentile = null)
         {
             if (!IsTracking) return;
             IsTracking = false;
             var remaining = _baseline + Elapsed - s.TotalConditioningMinutes;
-            if (remaining > 0) AddConditioningTime(s, remaining);
+            if (remaining > 0) AddConditioningTime(s, remaining, lifetimePointsSpent, leaderboardPercentile);
         }
 
         /// <summary>The live figure the stat pill shows (WPF UpdateStatPills :548-559): baseline + elapsed
@@ -64,13 +64,13 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF SkillTreeService.AddConditioningTime (:659-669) and
         /// SeasonRecapService.EnsureBucket/AddConditioningMinutes (:122-136).</summary>
-        public static void AddConditioningTime(AppSettings s, double minutes)
+        public static void AddConditioningTime(AppSettings s, double minutes, long? lifetimePointsSpent = null, int? leaderboardPercentile = null)
         {
             if (!(minutes > 0)) return;
             lock (SeasonBookkeeping.Gate)
             {
                 // The change notification can be delayed behind this write after adoption.
-                SeasonBookkeeping.Update(s);
+                SeasonBookkeeping.Update(s, lifetimePointsSpent, leaderboardPercentile);
                 s.TotalConditioningMinutes += minutes;
                 if (s.PendingSeasonSnapshot != null && !string.IsNullOrEmpty(s.PendingSeasonTarget))
                 {
@@ -80,7 +80,7 @@ namespace ConditioningControlPanel.Services
                     s.PendingSeasonMinutes ??= new();
                     s.PendingSeasonMinutes.TryGetValue(s.PendingSeasonTarget, out var pending);
                     s.PendingSeasonMinutes[s.PendingSeasonTarget] = pending + minutes;
-                    SeasonBookkeeping.Update(s);
+                    SeasonBookkeeping.Update(s, lifetimePointsSpent, leaderboardPercentile);
                     CoreSettings.Save();
                     return;
                 }

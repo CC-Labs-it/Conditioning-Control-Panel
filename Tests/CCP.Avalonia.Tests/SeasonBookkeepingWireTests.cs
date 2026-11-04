@@ -1,3 +1,7 @@
+using System;
+using System.IO;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using Avalonia;
@@ -12,6 +16,79 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class SeasonBookkeepingWireTests
 {
+    private sealed class SteppedClock : TimeProvider
+    {
+        public DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task TrackerWinsAdoptionRaceWithSnapshotInputs(bool stop) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = settings.Current;
+        var ended = stop ? "1911-01" : "1910-01";
+        s.CurrentSeason = ended;
+        s.SeasonStatsSeason = ended;
+        s.LastSeasonResetSeen = ended;
+        s.SeasonConditioningMinutes = 8;
+        s.TotalConditioningMinutes = 20;
+        using var notified = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        s.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AppSettings.CurrentSeason))
+            {
+                notified.Set();
+                release.Wait(TimeSpan.FromSeconds(30));
+            }
+        };
+        var prop = typeof(ConditioningControlPanel.Avalonia.App).GetProperty("Achievements", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var old = prop.GetValue(null);
+        var engine = new AchievementEngine(new AchievementStore(Path.Combine(CorePaths.UserData, "race-achievements.json")));
+        engine.Progress.LifetimeSkillPointsSpent = 42;
+        prop.SetValue(null, engine);
+        var clock = new SteppedClock();
+        var shell = new MainShellWindow();
+        Task? adoption = null;
+        try
+        {
+            shell.Show();
+            MainShellWindow.NoteLeaderboardPage(new LeaderboardPage<LeaderboardEntryData> { YourRank = 2, YourTotal = 10 });
+            shell.ConditioningTime = new ConditioningTimeTracker(clock);
+            shell.StartConditioningTimeTracker();
+            if (!stop)
+                for (var i = 0; i < 3; i++) { clock.Now = clock.Now.AddSeconds(15); shell.ConditioningTimeTick(); }
+            clock.Now = clock.Now.AddSeconds(stop ? 30 : 15);
+            adoption = Task.Factory.StartNew(() => s.CurrentSeason = stop ? "1911-02" : "1910-02",
+                CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            Assert.True(notified.Wait(TimeSpan.FromSeconds(5)));
+            if (stop) shell.StopConditioningTimeTracker(); else shell.ConditioningTimeTick();
+            var snapshot = SeasonRecapStore.Load(ended);
+            Assert.NotNull(snapshot);
+            Assert.Equal(8, snapshot.SeasonMinutes);
+            Assert.Equal(20, snapshot.AllTimeMinutes);
+            Assert.Equal(42, snapshot.LifetimePointsSpent);
+            Assert.Equal(20, snapshot.Percentile);
+        }
+        finally
+        {
+            release.Set();
+            adoption?.GetAwaiter().GetResult();
+            shell.Close();
+            prop.SetValue(null, old);
+            SettingsService.DisarmAllPendingSaves();
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task ShellRollsOnAnAdoptedSeasonKey() => AvaloniaTestDispatcher.RunAsync(() =>
     {
