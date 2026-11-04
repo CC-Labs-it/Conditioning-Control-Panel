@@ -46,9 +46,7 @@ public class UiThreadStackCaptureTests
         parked.Start();
         try
         {
-            // WaitSleepJoin alone can describe a runtime/startup wait. First prove the
-            // target entered our named frame, then wait for its blocking wait to begin.
-            Assert.True(entered.WaitOne(10_000), "target never entered the known frame");
+            Assert.True(entered.WaitOne(10_000), "target never entered the known frame"); // WaitSleepJoin alone can be a startup wait.
             var deadline = Stopwatch.StartNew();
             while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
             {
@@ -78,15 +76,10 @@ public class UiThreadStackCaptureTests
         }
     }
 
-    // The assertion requires this physical frame in Release too. NoInlining prevents folding
-    // into the lambda; NoOptimization prevents tail calls/other optimized frame elision.
-    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+    // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)] // Keep the named frame in Release.
     private static void ParkedInAKnownFrame(ManualResetEvent entered, ManualResetEvent release)
-    {
-        entered.Set();
-        release.WaitOne();
-        GC.KeepAlive(release);
-    }
+    { entered.Set(); release.WaitOne(); GC.KeepAlive(release); }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()

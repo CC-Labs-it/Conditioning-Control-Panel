@@ -58,7 +58,6 @@ public sealed class ContentHitTestTests
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
-                    RenderedInput.Render(w);
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
                     RenderLiveTree(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
@@ -97,6 +96,7 @@ public sealed class ContentHitTestTests
     internal static void RenderLiveTree(Visual w)
     {
         Dispatcher.UIThread.RunJobs();
+        var root = (MainShellWindow)w; Assert.Null(root.EnteringTab); root.UpdateLayout();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
         while (!batch.Rendered.IsCompleted)
@@ -105,6 +105,7 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+        batch.Rendered.GetAwaiter().GetResult();
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
