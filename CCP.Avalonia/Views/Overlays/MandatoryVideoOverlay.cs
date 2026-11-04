@@ -37,8 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog
-    /// (WPF VideoService.cs:2469; deferred until online clips can play here, WPF :7973).
+    /// attention input and no-activate z-order.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -138,6 +137,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
 
             var s = CoreSettings.Current;
+            var remote = VideoSelectionRules.IsRemoteMediaPath(path);
+            if (remote && (s.MediaSource == "local" || !s.HasRemoteMediaConsent))
+            {
+                Dispatcher.UIThread.Post(Scheduler.End);
+                return;
+            }
+            var scrolller = ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(path);
+            string? playbackPath = path;
+            if (scrolller)
+            {
+                playbackPath = s.MediaSource != "local" && s.HasRemoteMediaConsent
+                    && ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Enabled
+                    ? ConditioningControlPanel.Services.Fyp.Online.ScrolllerDiskCache.TryGetPath(path) : null;
+                if (playbackPath == null) { Dispatcher.UIThread.Post(Scheduler.End); return; }
+            }
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
             Floating = Floats(strict);
@@ -219,7 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
-            _media = new Media(vlc, path, FromType.FromPath);
+            _media = new Media(vlc, playbackPath, VideoSelectionRules.IsRemoteMediaPath(playbackPath) ? FromType.FromLocation : FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -275,6 +289,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
             var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
+            var credit = new ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge();
+            credit.SetShown(ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(_path));
             var w = new Window
             {
                 Title = "CCP Video",
@@ -283,7 +299,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
+                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row, credit } },
             };
             var floating = Floating;
             if (floating)
@@ -864,11 +880,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal Window? NoVideosOwnerForTests { get; set; }
 
         /// <summary>WPF's guidance dialog when the library is empty (once per launch).</summary>
-        private void ShowNoVideos() => Dispatcher.UIThread.Post(() =>
+        private void ShowNoVideos() => Dispatcher.UIThread.Post(async () =>
         {
             var owner = NoVideosOwnerForTests ?? (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             if (owner == null) return;
-            _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(Scheduler));
+            var scheduler = Scheduler;
+            var filtered = NoVideosReason.LengthFilterEmptied(scheduler.LastFunnelEnabled, scheduler.LastFunnelDuration);
+            try
+            {
+                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(scheduler));
+                if (!filtered) RemoteMediaOffer.Offer(owner);
+            }
+            catch (Exception ex) { Log.Debug(ex, "VideoService: no-videos dialog failed"); }
         });
 
         /// <summary>WPF TriggerVideo's guidance text: #1352 names the length filter when it emptied a

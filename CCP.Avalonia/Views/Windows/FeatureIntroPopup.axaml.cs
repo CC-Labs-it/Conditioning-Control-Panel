@@ -563,16 +563,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Glyph = "🌐",
                 RailTitle = "Remote Media",
                 Title = "Remote Media",
-                Tagline = "No folder of your own? She'll bring her own.",
+                Tagline = "Use online media when your folders are empty.",
                 Accent = "#5EC8F2",
                 Bullets = new[]
                 {
-                    "You don't need a library to start. The app can pull images and clips straight from Reddit.",
-                    "You choose the niches, and you can add any subreddit by name - only what you picked is ever fetched.",
-                    "It streams from your machine to your screen - nothing is saved, nothing is uploaded, and none of it passes through our servers.",
-                    "Switch back to your own assets whenever you like. The choice lives at the top of the Assets tab."
+                    "Use images and clips from the online media pool.",
+                    "Choose the niches and add subreddits by name.",
+                    "Clips may be cached on this device for playback.",
+                    "Change the source at the top of the Assets tab."
                 },
-                Footer = "Free for everyone - an empty assets folder should never be a dead end. It is adult content, so only switch it on if you want to see it."
+                Footer = "Free for everyone. Online media may contain adult content."
             },
 
             // ------------------------------------------------------------------------------

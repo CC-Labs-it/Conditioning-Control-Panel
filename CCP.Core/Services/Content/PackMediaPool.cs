@@ -40,6 +40,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>Decrypts on record (tests, diagnostics).</summary>
         public int TempCount { get { lock (_lock) return _temps.Count; } }
 
+        internal bool HasEntries { get { lock (_lock) return Entries().Count > 0; } }
+
         /// <summary>
         /// WPF GetNextImages (FlashService.cs:3555-3563), GetNextVideo (VideoService.cs:8017-8026) and
         /// BubbleCountService.cs:684-693: with local and pack entries both present a pack entry wins in

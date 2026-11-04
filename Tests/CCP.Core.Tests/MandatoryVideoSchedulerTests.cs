@@ -117,6 +117,29 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Fact]
+    public void OnlineVideoUsesBufferedClipAndFallsBackToLocal()
+    {
+        var s = CoreSettings.Current;
+        var oldSource = s.MediaSource;
+        var oldConsent = s.RemoteMediaConsented;
+        try
+        {
+            s.RemoteMediaConsented = true;
+            s.MediaSource = "online";
+            var v = new MandatoryVideoScheduler(new Host(), library: () => Clips);
+            v.RemotePick = () => "https://example.com/video.mp4";
+            Assert.Equal("https://example.com/video.mp4", v.PickNext());
+            v.RemotePick = () => null;
+            Assert.Contains(v.PickNext(), Clips);
+            s.RemoteMediaConsented = false;
+            s.MediaSource = "local";
+            v.RemotePick = () => throw new Exception("local must not fetch");
+            Assert.Contains(v.PickNext(), Clips);
+        }
+        finally { s.MediaSource = oldSource; s.RemoteMediaConsented = oldConsent; }
+    }
+
+    [Fact]
     public void Attention_rules_match_WPF()
     {
         var r = new Random(1);
