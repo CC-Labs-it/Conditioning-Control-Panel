@@ -865,46 +865,7 @@
                             </Button.Template>
                         </Button>
 
-                        <!-- Account chip (Phase 1, net-new). Sits beside the mod chip so the two
-                             "who am I / what am I running" facts read as one cluster.
-                             States are painted by RefreshAccountChip (MainWindow.UiUpdates.cs):
-                             signed out = pink CTA border, no badge; signed in free = neutral;
-                             T1 = gold 🔒; T2/whitelist = violet 🧪. Background/BorderBrush are
-                             TemplateBindings on purpose - the refresh sets them on the Button,
-                             and the signed-out/free states use SetResourceReference so a mod
-                             switch still repaints the accent.
-                             Phase 2 re-points the click at the real Settings/Account page. -->
-                        <Button x:Name="BtnAccountChip" Click="BtnAccountChip_Click"
-                                Margin="8,0,0,0" Height="24" VerticalAlignment="Center" Cursor="Hand"
-                                Background="{DynamicResource SurfaceBgBrush}"
-                                BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
-                                ToolTip.Tip="{loc:Str tooltip_account_chip}">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border x:Name="chip" CornerRadius="12" Padding="9,0"
-                                            Background="{TemplateBinding Background}"
-                                            BorderBrush="{TemplateBinding BorderBrush}"
-                                            BorderThickness="{TemplateBinding BorderThickness}">
-                                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"
-                                                         Content="{TemplateBinding Content}"
-                                                         ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                    </Border>
-                                    <!-- ponytail: WPF ControlTemplate.Triggers (IsMouseOver) dropped. Avalonia writes these as
-                                         Style selectors outside the template (":pointerover /template/ Border#x"); the
-                                         rest state renders correctly and only the hover/press/tag skins are lost. -->
-                                </ControlTemplate>
-                            </Button.Template>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock x:Name="TxtAccountChipBadge" Text="🔒" FontSize="10"
-                                           Margin="0,0,5,0" VerticalAlignment="Center"
-                                           IsVisible="False"/>
-                                <TextBlock x:Name="TxtAccountChipName" Text="{loc:Str account_chip_sign_in}"
-                                           FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}"
-                                           VerticalAlignment="Center"
-                                           MaxWidth="110" TextTrimming="CharacterEllipsis"/>
-                            </StackPanel>
-                        </Button>
+
                     </StackPanel>
                     <!-- The rank title used to ellipsise here: "PERFECT FUCKPUPPET" (level 100+,
                          MainWindow.UiUpdates.cs) measures past 200px at 18px bold and rendered as
@@ -1381,13 +1342,46 @@
                         </Grid>
                     </Button>
 
+                    <!-- Account chip beside the profile bubble, WPF 8621b519a. -->
+                    <Button x:Name="BtnAccountChip" Click="BtnAccountChip_Click"
+                            Margin="8,0,0,0" Height="24" VerticalAlignment="Center" Cursor="Hand"
+                            Background="{DynamicResource SurfaceBgBrush}"
+                            BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
+                            ToolTip.Tip="{loc:Str tooltip_account_chip}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="chip" CornerRadius="12" Padding="9,0"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}">
+                                    <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                     Content="{TemplateBinding Content}"
+                                                     ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                </Border>
+                                <!-- ponytail: WPF ControlTemplate.Triggers (IsMouseOver) dropped. Avalonia writes these as
+                                     Style selectors outside the template (":pointerover /template/ Border#x"); the
+                                     rest state renders correctly and only the hover/press/tag skins are lost. -->
+                            </ControlTemplate>
+                        </Button.Template>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtAccountChipBadge" Text="🔒" FontSize="10"
+                                       Margin="0,0,5,0" VerticalAlignment="Center"
+                                       IsVisible="False"/>
+                            <TextBlock x:Name="TxtAccountChipName" Text="{loc:Str account_chip_sign_in}"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="110" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Button>
+
                     <!-- Profile bubble: the user's avatar (Discord photo / preset bust / initials).
                          Hover opens the account menu below; a direct click jumps to the Profile
                          tab (key "discord"). It also reacts to app moments - XP pulses, level-up
                          bounce+burst, flash wobble, achievement glow. All logic lives in
                          MainWindow.ProfileBubble.cs; the visuals are named here so that partial
                          can paint and animate them without template digging. -->
-                    <Button x:Name="BtnProfileBubble" Width="34" Height="34" Margin="8,0,0,0" ClipToBounds="False"
+                    <Button x:Name="BtnProfileBubble" Width="34" Height="34" Margin="6,0,0,0" ClipToBounds="False"
                             Click="BtnProfileBubble_Click" Cursor="Hand"
                             PointerEntered="ProfileBubble_MouseEnter" PointerExited="ProfileBubble_MouseLeave">
                         <Button.Template>
