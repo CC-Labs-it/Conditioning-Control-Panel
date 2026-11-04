@@ -113,6 +113,7 @@ internal static class X11PanicKey
                             Log.Warning(ex, "Global Esc: ownership check failed; panic proceeds");
                         }
                     }
+                    else if (videoOwnsPress) Win32Input.QueueVideoEscape(eventTime?.Invoke());
                     // A video-owned press returns before WPF's panic and leash branches, including repeats.
                     if (videoOwnsPress) { otherPress?.Invoke(key.Code); continue; }
                 }

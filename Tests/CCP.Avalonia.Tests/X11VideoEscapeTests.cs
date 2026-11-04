@@ -30,7 +30,7 @@ public sealed class X11VideoEscapeTests
     }
 
     [Fact]
-    public void Raw_escape_routes_once_per_press_and_releases_without_consuming_other_keys()
+    public void Raw_escape_routes_repeats_and_releases_without_consuming_other_keys()
     {
         var oldCode = X11PanicKey.BoundKeycode;
         var s = CoreSettings.Current;
@@ -50,14 +50,16 @@ public sealed class X11VideoEscapeTests
             var events = new (bool, int, int)[] { (true, 10, 9), (false, 10, 9), (true, 0, 0),
                 (true, 9, 9), (true, 9, 9), (false, 10, 9), (true, 9, 9), (false, 9, 9), (true, 9, 9) };
             int i = 0;
+            ulong time = 1000;
             (bool, int, int)? Next()
             {
                 if (i == 3) Assert.Equal(0, deliveries);
-                if (i == 7) Assert.Equal(1, deliveries);
+                if (i == 7) Assert.Equal(3, deliveries);
+                if (i == 4) time += 201; // repeat after the video grace dedup window
                 return i < events.Length ? events[i++] : null;
             }
-            X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { panic++; leashTaskActive = false; }, Next);
-            Assert.Equal(2, deliveries); // one per physical Escape press
+            X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { panic++; leashTaskActive = false; }, Next, injectedTime: () => time);
+            Assert.Equal(4, deliveries); // every video-owned key-down, including repeats
             Assert.Equal(0, panic);      // video owns both, even when panic is bound to Escape
             Assert.True(leashTaskActive); // the leash path was never invoked
 
@@ -68,7 +70,7 @@ public sealed class X11VideoEscapeTests
             X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { panic++; leashTaskActive = false; }, () => i < one.Length ? one[i++] : null);
             Assert.Equal(1, panic);
             Assert.False(leashTaskActive);
-            Assert.Equal(2, deliveries);
+            Assert.Equal(4, deliveries);
         }
         finally
         {
