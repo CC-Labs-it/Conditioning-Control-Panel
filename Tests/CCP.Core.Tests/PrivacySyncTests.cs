@@ -154,6 +154,26 @@ public sealed class PrivacySyncTests
         finally { sync.Reset(); (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider) = (oldSettings, oldLogin); }
     }
 
+    [Fact]
+    public async Task ResetWaitsForNudgeSchedulingToFinish()
+    {
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false);
+        using var claimed = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        sync.MarkLoaded(null);
+        sync.NudgeClaimedForTest = () => { claimed.Set(); release.Wait(); };
+        var nudge = Task.Run(() => sync.Nudge("old"));
+        try
+        {
+            Assert.True(claimed.Wait(TimeSpan.FromSeconds(5)));
+            var reset = Task.Run(() => sync.Reset());
+            Assert.NotSame(reset, await Task.WhenAny(reset, Task.Delay(300)));
+            release.Set();
+            await Task.WhenAll(nudge, reset);
+        }
+        finally { release.Set(); await nudge; sync.Reset(); }
+    }
+
     private sealed class FakeSync : HttpMessageHandler
     {
         internal readonly List<JObject> Bodies = new();
