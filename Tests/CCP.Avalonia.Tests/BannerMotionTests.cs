@@ -59,6 +59,27 @@ public sealed class BannerMotionTests
     });
 
     [Fact]
+    public Task BannerDepthTracksSectionAndKeepsLinksClear() => InShell(w =>
+    {
+        var shade = w.Named<Border>("BannerDrumShade")!;
+        var lip = w.Named<Border>("BannerDrumLip")!;
+        w.PaintBannerDepth(global::Avalonia.Media.Colors.Red);
+        var first = Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(shade.Background).GradientStops[0].Color;
+        w.PaintBannerDepth(global::Avalonia.Media.Colors.Blue);
+        Assert.NotEqual(first, Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(shade.Background).GradientStops[0].Color);
+        Assert.Equal(4, ((global::Avalonia.Media.LinearGradientBrush)shade.Background!).GradientStops.Count);
+        Assert.False(lip.IsHitTestVisible);
+        Assert.False(shade.IsHitTestVisible);
+        Assert.False(w.Named<Border>("BannerDrumFoot")!.IsHitTestVisible);
+        Assert.False(w.Named<Border>("BannerGlass")!.IsHitTestVisible);
+        Assert.True(w.Named<Grid>("BannerDrum")!.ClipToBounds);
+        foreach (var name in new[] { "TxtBannerPrimary", "TxtBannerSecondary", "TxtBannerWeb", "TxtBannerPool" })
+            Assert.IsType<global::Avalonia.Media.DropShadowEffect>(w.Named<TextBlock>(name)!.Effect);
+        Assert.NotNull(w.Named<SafeLink>("BannerSupportLink"));
+        Assert.NotNull(w.Named<SafeLink>("BannerWebLink"));
+    });
+
+    [Fact]
     public Task SupportLinkUsesTheGuardedOpener() => InShell(w =>
     {
         var link = Assert.IsType<SafeLink>(w.Named<SafeLink>("BannerSupportLink"));

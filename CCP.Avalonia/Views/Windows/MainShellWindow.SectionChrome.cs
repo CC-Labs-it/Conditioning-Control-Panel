@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _washSection = section;
                 var hue = NavStripRules.Accent(section);
                 PaintSectionInk(section);
+                PaintBannerDepth(hue);
                 Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView>("QuestsTab")?.PaintDepthQuests(hue);
                 var level = CoreSettings.Current.MotionLevel;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
