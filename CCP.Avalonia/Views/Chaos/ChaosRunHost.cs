@@ -38,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
-    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
+    /// motion other than FloatUp and RainDown, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane).
@@ -77,6 +77,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _lastHeatTint = -1;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused;
         private static int _pendingWave;
+        private static bool _lessonCardsAfterDraft;
+        private static readonly List<ChaosUnlockCardInfo> _pendingLessonCards = new();
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
@@ -408,12 +410,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (newWave > _state.WaveIndex)
             {
                 // WPF BeginWaveTransition with drafts off (:1442-1449): lessons, tip, then roll straight on.
+                // Claim the draft pause before loop lessons fire, so their cards are deferred.
+                if (_state.Config.BoonDraftEnabled) _draftPaused = true;
                 ChaosRunLessons.OnLoopCompleted();
                 AwardLoopTip();
                 _state.AllLiveNextWave = false;
                 if (_state.Config.BoonDraftEnabled)
                 {
-                    _draftPaused = true;
                     _pendingWave = newWave;
                     _spawnTimer?.Stop();
                     ChaosWaveTimerWindow.Clear();
@@ -456,6 +459,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 bool shield = boon.IsCurse && _state.MaxedBoons.Contains("surrender") && !_state.SurrenderShieldUsed;
                 if (shield) _state.SurrenderShieldUsed = true;
+                if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Whisper);
+                if (boon.IsCurse && !ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Yes);
+                try
+                {
+                    ChaosLessons.Tick("draft4");
+                    if (boon.IsCurse) ChaosLessons.Tick("surrender");
+                }
+                catch (Exception ex) { Log.Debug("Chaos draft lessons: {E}", ex.Message); }
                 _state.ApplyBoon(boon, shield);
                 if (boon.IsCurse)
                 {
@@ -472,8 +483,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void ResumeAfterDraft()
         {
             if (!_draftPaused || !_spawning) return;
+            if (_pendingLessonCards.Count > 0)
+            {
+                _draftPaused = false;
+                _lessonCardPaused = true;
+                _lessonCardsAfterDraft = true;
+                BubbleOverlay.HoldChaos(true);
+                var cards = _pendingLessonCards.ToArray();
+                _pendingLessonCards.Clear();
+                foreach (var card in cards) ChaosUnlockCardOverlay.Show(card, ResumeAfterLessonCard, autoDismiss: false);
+                return;
+            }
             _draftPaused = false;
             if (!_manualPaused && !_lessonCardPaused) _spawnTimer?.Start();
+            if (_state?.WelcomeShowerEnabled == true) SpawnWelcomeShower();
+        }
+
+        /// <summary>WPF SpawnWelcomeShower (:1645): six flash or subliminal treats from above.</summary>
+        private static void SpawnWelcomeShower()
+        {
+            if (_state == null) return;
+            for (int i = 0; i < 6; i++)
+            {
+                var variant = ChaosBubbleVariants.All[Rng.Next(2)];
+                BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity, _state.FuseTimeMult,
+                    ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
+            }
+            var sound = ContentLocator.Resolve(System.IO.Path.Combine("Resources", "sounds", $"chime{Rng.Next(1, 4)}.mp3"));
+            if (System.IO.File.Exists(sound))
+            {
+                var settings = CoreSettings.Current;
+                float volume = (float)Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * 0.25f;
+                CoreAudio.PlayOneShot(sound, volume, "bubble-chime");
+            }
+            _state.PushEvent("welcome shower: treats from above");
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
@@ -505,18 +548,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF OnLessonCompleted: completion may come from any thread; present only
-        /// in the run that earned it. A manual pause or recap keeps its own pause ownership.
-        /// ponytail: no draft host exists here yet; its deferred-card/GO hand-off is lane
-        /// chaos-unlock-card-c, alongside the remaining gameplay lesson hooks.</summary>
+        /// in the run that earned it. A manual pause or recap keeps its own pause ownership.</summary>
         private static void OnLessonCompleted(string id)
         {
             var run = _state;
-            Dispatcher.UIThread.Post(() =>
+            void Present()
             {
                 if (!_active || run == null || !ReferenceEquals(run, _state)) return;
                 var card = ChaosUnlockCardRules.ForLesson(id);
                 if (card == null) return;
                 _state.PushEvent($"lesson learned — {card.Title}");
+                if (_spawning && _draftPaused && !_manualPaused && !_lessonCardPaused)
+                {
+                    _pendingLessonCards.Add(card);
+                    return;
+                }
                 bool claimPause = _spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused;
                 if (claimPause)
                 {
@@ -525,7 +571,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     BubbleOverlay.HoldChaos(true);
                 }
                 ChaosUnlockCardOverlay.Show(card, ResumeAfterLessonCard, autoDismiss: !_lessonCardPaused);
-            });
+            }
+            // Draft completions must be queued before a skippable GO can finish.
+            if (Dispatcher.UIThread.CheckAccess() && _draftPaused) Present();
+            else Dispatcher.UIThread.Post(Present);
         }
 
         private static void ResumeAfterLessonCard()
@@ -534,6 +583,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _lessonCardPaused = false;
             BubbleOverlay.HoldChaos(_manualPaused);
             if (_spawning && !_manualPaused && !_draftPaused) _spawnTimer?.Start();
+            if (_lessonCardsAfterDraft)
+            {
+                _lessonCardsAfterDraft = false;
+                if (_spawning && _state?.WelcomeShowerEnabled == true) SpawnWelcomeShower();
+            }
         }
 
         public static void RequestStop()
@@ -604,6 +658,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawning = false;
             _draftPaused = false;
             _pendingWave = 0;
+            _lessonCardsAfterDraft = false;
+            _pendingLessonCards.Clear();
             _overlay?.CancelDraftAndCountdown();
             _runTimer?.Stop();
             EndField();
@@ -769,6 +825,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _manualPaused = false;
             _draftPaused = false;
             _pendingWave = 0;
+            _lessonCardsAfterDraft = false;
+            _pendingLessonCards.Clear();
             _endingSoonFired = false;
         }
     }

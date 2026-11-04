@@ -98,6 +98,7 @@ public sealed class ChaosRunHostTests
             Setup(); FreshMeta();
             try
             {
+                ChaosMeta.State.LessonsComplete.Add("silk_touch");
                 var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = false;
                 ChaosRunHost.StartRun(cfg);
                 var overlay = ChaosRunHost.Overlay!;
@@ -142,6 +143,7 @@ public sealed class ChaosRunHostTests
             Setup(); FreshMeta();
             try
             {
+                ChaosMeta.State.LessonsComplete.Add("silk_touch");
                 var cfg = Cfg(); cfg.BoonDraftEnabled = true;
                 ChaosRunHost.StartRun(cfg);
                 var overlay = ChaosRunHost.Overlay!; overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
@@ -157,6 +159,36 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(0, ChaosMeta.State.RunsCompleted);
                 Assert.Equal(0, BubbleOverlay.ChaosCount);
                 Assert.Null(ChaosRunHost.RerollDraft());
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Draft_picks_award_first_times_and_advance_lessons(bool sin)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                var meta = ChaosMeta.State;
+                meta.LessonsComplete.Add("silk_touch");
+                var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(80);
+                var card = ChaosBoonPool.All.First(b => b.IsCurse == sin);
+                ChaosRunHost.ChooseBoon(card);
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
+                Assert.Equal(sin, ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
+                Assert.Equal(sin ? 25 : 10, meta.Sparks);
+                Assert.Equal(1, ChaosLessons.Progress("draft4"));
+                Assert.Equal(sin ? 1 : 0, ChaosLessons.Progress("surrender"));
             }
             finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
             return Task.CompletedTask;
@@ -487,7 +519,9 @@ public sealed class ChaosRunHostTests
             ChaosHubWindow? hub = null;
             try
             {
-                CoreSettings.Current.ChaosBoonDraftEnabled = false;
+                var settings = new SettingsService();
+                CoreSettings.ServiceProvider = () => settings;
+                settings.Current.ChaosBoonDraftEnabled = false;
                 hub = new ChaosHubWindow();
                 hub.FindControl<Button>("BtnMenuFallIn")!
                     .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
