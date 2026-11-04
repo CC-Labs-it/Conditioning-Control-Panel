@@ -12,6 +12,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -181,6 +182,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
         private static Action<AmbientBubble>? _chaosPopped;
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
+        private static Action<int>? _chaosEStimArc;
+        private static int _chaosGeneration;
+
+        // WPF BubbleService.cs:430-440: each hit lands on its own 70 ms hop timer.
+        internal static Action<int, Action> ScheduleEStimHit = (delayMs, action) =>
+        {
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(delayMs) };
+            timer.Tick += (_, _) => { timer.Stop(); action(); };
+            timer.Start();
+        };
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
         private static void AnchorPop(AmbientBubble b) { ChaosLastPopX = b.CenterX; ChaosLastPopY = b.CenterY; }
@@ -189,7 +200,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
         internal static void Press(AmbientBubble b, double x, double y)
         {
-            if (!b.IsLiveThreat) { Pop(b); return; }
+            if (!b.IsLiveThreat)
+            {
+                bool wasPopping = b.Popping;
+                Pop(b);
+                if (!wasPopping && b.Popping && b.Spec != null && _chaosPopped != null) ConductEStim(b);
+                return;
+            }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -214,10 +231,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// if the ambient field is not already running.</summary>
         internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
-            Func<AmbientBubble, bool>? canChannel = null)
+            Func<AmbientBubble, bool>? canChannel = null, Action<int>? onEStimArc = null)
         {
+            _chaosGeneration++;
+            Field.ResetEStim();
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
+            _chaosEStimArc = onEStimArc;
             Field.Held = false;
             Field.ChaosDefused = onDefuse == null ? null : b =>
             {
@@ -243,14 +263,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
+            _chaosGeneration++;
+            Field.ResetEStim();
             Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
+            _chaosEStimArc = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
+        }
+
+        // WPF BubbleService.cs:371-442: only a landed player click conducts. Hops use
+        // the ordinary paying pop/snap paths and cannot outlive the field that scheduled them.
+        private static void ConductEStim(AmbientBubble source)
+        {
+            var hits = Field.ConductEStim(source);
+            if (hits.Count == 0) return;
+            int generation = _chaosGeneration;
+            foreach (var hit in hits)
+            {
+                var target = hit.Target;
+                ScheduleEStimHit(hit.DelayMs, () =>
+                {
+                    if (generation != _chaosGeneration || _chaosPopped == null || Field.HoldChaos
+                        || !Field.Bubbles.Contains(target) || target.Popping) return;
+                    if (target.IsLiveThreat)
+                    {
+                        if (target.Snap()) { Field.ChaosDefused?.Invoke(target); RequestFrame(); }
+                    }
+                    else PopChaos(target);
+                });
+            }
+            PixelPoint CenterPx(AmbientBubble b)
+            {
+                double scale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                return new PixelPoint((int)Math.Round(b.CenterX * scale), (int)Math.Round(b.CenterY * scale));
+            }
+            var bolts = hits.Select(h => (From: CenterPx(h.From), To: CenterPx(h.Target))).ToArray();
+            if (ChaosSkiaFxOverlay.Enabled)
+                ChaosSkiaFxOverlay.Strike(bolts.Select(b => (new Point(b.From.X, b.From.Y), new Point(b.To.X, b.To.Y))).ToArray());
+            else ChaosEStimOverlay.Strike(bolts);
+            _chaosEStimArc?.Invoke(Field.EStimChargesLeft);
         }
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a

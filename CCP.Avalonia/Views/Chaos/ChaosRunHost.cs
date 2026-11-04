@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -39,16 +40,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
-    /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
+    /// milestones, most lessons and first-times, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
     /// announcer callers remain missing even though the announcer overlay is now present.
-    /// The FX window drives heat tint; colour pulse and screen shake calls retain WPF's values
-    /// through the unseeded <see cref="PulseFx"/>/<see cref="ShakeFx"/> hooks
-    /// (chaos-payout-fallin-d). FreezeBurst and edge-hold callers remain missing.
+    /// The FX window drives heat tint and colour pulses. Screen shake calls retain WPF's values
+    /// through the unseeded <see cref="ShakeFx"/> hook (chaos-payout-fallin-d).
+    /// FreezeBurst and edge-hold callers remain missing.
     /// The hold and the Snap Chain window run on wall time (<c>BubbleOverlay.Field.Clock</c>),
     /// as WPF does (:4531, ChaosModeService :2000).</para>
     ///
@@ -150,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = 0;
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnEStimArc);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
@@ -344,7 +345,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Pulse (:1672): gated by the run's colour-flash toggle.</summary>
         private static void Pulse(Color color, double strength)
         {
-            if (_state?.Config.ColorFlashesEnabled == true) PulseFx?.Invoke(color, strength);
+            if (_state?.Config.ColorFlashesEnabled == true)
+            {
+                _fx?.Pulse(color, strength);
+                PulseFx?.Invoke(color, strength);
+            }
         }
 
         /// <summary>WPF Shake (:1676): gated and scaled by the run's shake settings.</summary>
@@ -624,14 +629,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys' toy loop. ponytail: no toy effect runs on this head yet (they
-        /// live with the bubble field), so the glow state drops on the next tick.</summary>
+        /// <summary>WPF TickActiveToys: E-Stim glows while any charged clicks remain.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
-            foreach (var t in _state.ActiveToys) t.IsEffectActive = false;
+            foreach (var t in _state.ActiveToys) t.IsEffectActive = t.Id == "e_stim" && BubbleOverlay.Field.EStimChargesLeft > 0;
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -651,13 +655,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// freeze, DVD, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
+        /// <summary>WPF UseToy: E-Stim and its first-play award are wired; other toy effects remain.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+            if (r != ChaosToyRules.UseResult.Fired || toy.Id != "e_stim") return;
+            // WPF ChaosModeService.cs:2761-2775: the Overload boon doubles this charge.
+            double power = _state.ToyPower.TryGetValue(toy.Id, out var value) ? value : 0;
+            int charges = Math.Max(1, (int)power) * Math.Max(1, _state.EStimChargeMult);
+            bool maxed = _state.MaxedBoons.Contains(toy.Id);
+            BubbleOverlay.Field.ArmEStim(charges, maxed);
+            ChaosEStimOverlay.Arm();
+            ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
+            ChaosEffectBannerOverlay.Show("estim", "E-Stim", Color.FromRgb(0x9C, 0x5C, 0xFF));
+            Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
+            // The HUD separates the toy glyph into an IconGlyph; keep translated text bare.
+            _state.PushEvent($"{toy.Glyph} {IconText.BareLoc(maxed ? "chaos_estim_charged_chain" : "chaos_estim_charged", charges)}");
+            ChaosFirstTimes.TryAward(ChaosFirstTimes.Play); // WPF ChaosModeService.cs:2779-2780
+        }
+
+        // WPF ChaosModeService.cs:2785-2798: the last successful arc drops the halo and banner.
+        private static void OnEStimArc(int chargesLeft)
+        {
+            if (_state == null) return;
+            ChaosOverlayWindow.ChaosSfx.Play("estim_zap", 0.6f);
+            Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
+            string glyph = ChaosLifetimeBoons.ById("e_stim")?.Glyph ?? "";
+            if (chargesLeft > 0) _state.PushEvent($"{glyph} {IconText.BareLoc("chaos_estim_arc", chargesLeft)}");
+            else
+            {
+                ChaosEffectBannerOverlay.End("estim");
+                ChaosEStimOverlay.Disarm();
+                _state.PushEvent($"{glyph} {IconText.BareLoc("chaos_estim_spent")}");
+            }
         }
 
         private static void RunAgain()
