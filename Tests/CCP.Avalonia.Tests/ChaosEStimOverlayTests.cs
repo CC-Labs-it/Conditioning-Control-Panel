@@ -131,6 +131,38 @@ public sealed class ChaosEStimOverlayTests
         }
     });
 
+    [Fact]
+    public void Prewarm_creates_hidden_bolt_and_reuses_it_for_a_strike() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var canShow = ChaosEStimOverlay.CanShow;
+        ChaosEStimOverlay.CanShow = () => true;
+        ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+        try
+        {
+            ChaosEStimOverlay.EnsureCreated();
+            var bolt = ChaosEStimOverlay.Active;
+            Assert.NotNull(bolt);
+            Assert.False(bolt.IsVisible);
+            ChaosEStimOverlay.EnsureCreated();
+            Assert.Same(bolt, ChaosEStimOverlay.Active);
+            ChaosEStimOverlay.Strike(new[] { (new PixelPoint(100, 100), new PixelPoint(300, 100)) });
+            Assert.Same(bolt, ChaosEStimOverlay.Active);
+            Assert.True(bolt.IsVisible);
+            ChaosEStimOverlay.CloseActive();
+            Assert.Null(ChaosEStimOverlay.Active);
+        }
+        finally
+        {
+            ChaosEStimOverlay.CloseActive();
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -153,11 +185,24 @@ public sealed class ChaosEStimOverlayTests
         {
             ChaosRunHost.StartRun(new ConditioningControlPanel.Services.Chaos.ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
             Assert.Null(ChaosEStimGlow.Active);
+            Assert.Null(ChaosEStimOverlay.Active);
             ChaosRunHost.Overlay!.FinishCountdown();
             Assert.Equal(equipped, ChaosEStimGlow.Active != null);
-            if (equipped) Assert.False(ChaosEStimGlow.Active!.IsVisible);
+            Assert.Equal(equipped, ChaosEStimOverlay.Active != null);
+            if (equipped)
+            {
+                Assert.False(ChaosEStimGlow.Active!.IsVisible);
+                var bolt = ChaosEStimOverlay.Active!;
+                Assert.False(bolt.IsVisible);
+                ChaosEStimOverlay.EnsureCreated();
+                Assert.Same(bolt, ChaosEStimOverlay.Active);
+                ChaosEStimOverlay.Strike(new[] { (new PixelPoint(100, 100), new PixelPoint(300, 100)) });
+                Assert.Same(bolt, ChaosEStimOverlay.Active);
+                Assert.True(bolt.IsVisible);
+            }
             ChaosRunHost.ForceShutdown();
             Assert.Null(ChaosEStimGlow.Active);
+            Assert.Null(ChaosEStimOverlay.Active);
         }
         finally
         {
