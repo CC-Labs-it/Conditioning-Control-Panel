@@ -33,12 +33,71 @@ internal static class KeywordTriggerHead
                 _subscribed = true;
                 Win32PanicKey.EnsureListening(); // shares the existing hook and its panic binding
             }
+            SyncOcr();
         }
         else Stop();
     }
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); Engine.Stop(); }
+    internal static void Stop() { DetachKeyboard(); _ocr?.Stop(); Engine.Stop(); }
+
+    /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
+    /// net8.0 cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland capture is interactive only.
+    /// While null the scanner never starts; everything after the source is live.</summary>
+    internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
+    private static ScreenOcrService? _ocr;
+
+    /// <summary>WPF MainWindow.Awareness.cs:414-428,461-468 and KeywordTriggers.cs:119: master, OCR switch and interval.</summary>
+    internal static void SyncOcr()
+    {
+        var s = CoreSettings.Current;
+        if (OcrSource == null) { _ocr?.Stop(); return; }
+        _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]),
+            () => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"), DeliverOcr);
+        _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+    }
+
+    internal static Task TickOcrForTest() => _ocr?.TickAsync() ?? Task.CompletedTask;
+
+    // WPF ScreenOcrService.cs:143-198: own-UI filter, then the consumer on the UI thread. Stop runs on the
+    // UI thread too, so a scan that finished after it is dropped here.
+    private static Task<bool> DeliverOcr(IReadOnlyList<ScreenOcrService.Word> words, CancellationToken token) =>
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (token.IsCancellationRequested) return false;
+            var s = CoreSettings.Current;
+            if (s.AwarenessIgnoreOwnUi) words = WithoutOwnWindows(words, OwnWindowRects());
+            var foreground = (Process: (string?)null, Own: false);
+            if (KeywordMatchRules.NeedsForeground(s) && OperatingSystem.IsWindows())
+            {
+                GetWindowThreadProcessId(GetForegroundWindow(), out var id);
+                foreground = Foreground(id);
+            }
+            return Engine.CheckOcrWords(words, foreground.Process, foreground.Own);
+        }).GetTask();
+
+    internal static IReadOnlyList<ScreenOcrService.Word> WithoutOwnWindows(
+        IReadOnlyList<ScreenOcrService.Word> words, IReadOnlyList<System.Drawing.Rectangle> own) =>
+        own.Count == 0 ? words : words.Where(w => !own.Any(r => r.IntersectsWith(w.Bounds))).ToArray();
+
+    // WPF App.xaml.cs:1600-1720: visible, unminimised windows; one that covers a whole monitor is an
+    // overlay container and is skipped (#273).
+    // shortcut: bouncing/subliminal text rects (WPF :1722-1740) are not added, add them when those overlays port.
+    internal static IReadOnlyList<System.Drawing.Rectangle> OwnWindowRects()
+    {
+        if (global::Avalonia.Application.Current?.ApplicationLifetime is not
+            global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop) return [];
+        var rects = new List<System.Drawing.Rectangle>();
+        foreach (var w in desktop.Windows)
+        {
+            if (!w.IsVisible || w.WindowState == global::Avalonia.Controls.WindowState.Minimized) continue;
+            var size = global::Avalonia.PixelSize.FromSize(w.FrameSize ?? w.ClientSize, w.RenderScaling);
+            if (size.Width <= 0 || size.Height <= 0 || w.Screens.All.Any(m =>
+                size.Width >= m.Bounds.Width - 4 && size.Height >= m.Bounds.Height - 4)) continue;
+            rects.Add(new System.Drawing.Rectangle(w.Position.X, w.Position.Y, size.Width, size.Height));
+        }
+        return rects;
+    }
 
     /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
     internal static void DetachKeyboard()

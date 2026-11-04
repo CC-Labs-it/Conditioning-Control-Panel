@@ -117,6 +117,51 @@ public sealed class KeywordAudioRuntimeTests
         finally { (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled) = saved; }
     });
 
+    [Fact] // WPF MainWindow.Awareness.cs:414-428,461-468, Patreon.cs:190; ScreenOcrService.cs:143-198
+    public Task AwarenessSwitchesDriveTheOcrSourceIntoTheConsumer() => RunAsync(async (_, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi);
+        var realNow = KeywordTriggerHead.Engine.Now;
+        var scans = 0;
+        // A day before the other shared-engine tests, so this fire's echo mute has expired for them.
+        var clock = new DateTime(2026, 10, 13, 12, 0, 0);
+        KeywordTriggerHead.Engine.Now = () => clock;
+        KeywordTriggerHead.OcrSource = _ => { scans++; return Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>(
+            [new("sit", new System.Drawing.Rectangle(500, 500, 20, 10))]); };
+        try
+        {
+            s.KeywordTriggersEnabled = false; s.ScreenOcrEnabled = false;
+            s.OcrConfirmationScans = 1; s.OcrHighlightAll = true; s.AwarenessIgnoreOwnUi = true;
+            var view = new AwarenessTabView();
+            var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
+            var ocr = view.FindControl<CheckBox>("ChkAwarenessOcr")!;
+            master.IsChecked = true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(0, scans);   // OCR switch off
+            ocr.IsChecked = true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            Assert.Single(played);
+            Assert.Equal("OCR", KeywordTriggerHead.Engine.GetRecentFires()[0].Source);
+            CoreEntitlement.HasPremiumProvider = () => false;   // lapse: the screen is not even captured
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
+            Assert.Single(played);   // the fired position stays guarded while it is on screen
+            master.IsChecked = false;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
+            clock = clock.AddHours(1);   // past the echo mute of the first fire
+            master.IsChecked = true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(3, scans);
+            ocr.IsChecked = false;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(3, scans);
+            Assert.Equal(2, played.Count(p => p.Path != "stopped"));   // the engine restart cleared the guard
+        }
+        finally
+        {
+            KeywordTriggerHead.OcrSource = null; KeywordTriggerHead.Engine.Now = realNow;
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi) = saved;
+        }
+    });
+
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
 
     [Fact] // WPF KeywordTriggerService.cs:1366,1398,1847

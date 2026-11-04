@@ -1,22 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-// Scan orchestration only. A platform capture/recognition source and the OCR keyword consumer
-// are still needed before this can be attached to the Awareness switches.
+// Scan orchestration. KeywordTriggerHead.SyncOcr owns it and supplies the delivery to the consumer.
 internal sealed class ScreenOcrService : IDisposable
 {
     internal readonly record struct Word(string Text, Rectangle Bounds);
     private readonly Func<CancellationToken, Task<IReadOnlyList<Word>>> _scan;
     private readonly Func<bool> _hasAccess;
-    private readonly Func<IReadOnlyList<Rectangle>> _ownWindows;
-    private readonly Func<IReadOnlyList<Word>, bool> _deliver;
+    private readonly Func<IReadOnlyList<Word>, CancellationToken, Task<bool>> _deliver;
     private readonly Func<int, CancellationToken, Task> _delay;
     private readonly object _gate = new();
     private Timer? _timer;
@@ -25,19 +22,19 @@ internal sealed class ScreenOcrService : IDisposable
     internal int IntervalMs { get; private set; }
 
     internal ScreenOcrService(Func<CancellationToken, Task<IReadOnlyList<Word>>> scan,
-        Func<bool> hasAccess, Func<IReadOnlyList<Rectangle>> ownWindows,
-        Func<IReadOnlyList<Word>, bool> deliver, Func<int, CancellationToken, Task>? delay = null)
+        Func<bool> hasAccess, Func<IReadOnlyList<Word>, CancellationToken, Task<bool>> deliver,
+        Func<int, CancellationToken, Task>? delay = null)
     {
-        _scan = scan; _hasAccess = hasAccess; _ownWindows = ownWindows;
-        _deliver = deliver; _delay = delay ?? Task.Delay;
+        _scan = scan; _hasAccess = hasAccess; _deliver = deliver; _delay = delay ?? Task.Delay;
     }
 
-    // WPF MainWindow.Awareness.cs:414-428,461-468. Access is also checked at each delivery.
+    // WPF MainWindow.Awareness.cs:414-428,461-468, KeywordTriggers.cs:119. Access is checked per scan:
+    // a lapse skips scans and a regain resumes them (WPF Patreon.cs:190,457), as keyboard input does here.
     internal void Sync(bool master, bool ocr, int intervalMs)
     {
         lock (_gate)
         {
-            if (!master || !ocr || !_hasAccess()) { StopLocked(); return; }
+            if (!master || !ocr) { StopLocked(); return; }
             IntervalMs = Math.Max(1, intervalMs);
             if (_run == null)
             {
@@ -64,30 +61,17 @@ internal sealed class ScreenOcrService : IDisposable
             CancellationToken token;
             lock (_gate)
             {
-                if (_run == null) return;
-                if (!_hasAccess()) { StopLocked(); return; }
+                if (_run == null || !_hasAccess()) return;
                 token = _run.Token;
             }
             for (var quick = 0; quick <= 3; quick++)
             {
                 if (quick > 0) await _delay(200, token).ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-                lock (_gate)
-                {
-                    if (token.IsCancellationRequested) return;
-                    if (!_hasAccess()) { StopLocked(); return; }
-                }
+                if (token.IsCancellationRequested || !_hasAccess()) return;
                 var words = await _scan(token).ConfigureAwait(false);
-                bool needsConfirmation;
-                lock (_gate)
-                {
-                    if (token.IsCancellationRequested) return;
-                    if (!_hasAccess()) { StopLocked(); return; }
-                    var rects = _ownWindows();
-                    var filtered = words.Where(w => !rects.Any(r => r.IntersectsWith(w.Bounds))).ToArray();
-                    needsConfirmation = _deliver(filtered);
-                }
-                if (!needsConfirmation) return;
+                // In-flight results never outlive a stop or an access lapse (WPF KeywordTriggerService.cs:719).
+                if (token.IsCancellationRequested || !_hasAccess()) return;
+                if (!await _deliver(words, token).ConfigureAwait(false)) return;
             }
         }
         catch (OperationCanceledException) { }
