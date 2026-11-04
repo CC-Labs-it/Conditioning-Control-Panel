@@ -3,12 +3,17 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
+using ConditioningControlPanel;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Avalonia.Controls;
 
 namespace CCP.Avalonia.Tests;
 
@@ -155,6 +160,235 @@ public sealed class ChaosUnlockCardOverlayTests
         window.Close();
     });
 
+    [Theory]
+    [InlineData(false, false), InlineData(false, true), InlineData(true, false), InlineData(true, true)]
+    public async Task Wave_draft_and_ready_go_defer_cards_until_the_last_dismissal(bool flashes, bool mod) => await Run(clock =>
+    {
+        var pulses = new System.Collections.Generic.List<(uint, double)>();
+        var cues = new System.Collections.Generic.List<string>();
+        ChaosRunHost.PulseFx = (c, strength) => pulses.Add((c.ToUInt32(), strength));
+        CoreModArt.AudioOverridePathProvider = p => mod && p == (flashes ? "chaos/wave_clear.mp3" : "lvup.mp3")
+            ? System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "chime3.mp3") : null;
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(p));
+        ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        Begin(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, ColorFlashesEnabled = flashes });
+        var overlay = ChaosRunHost.Overlay!;
+        var state = ChaosRunHost.State!;
+        state.WelcomeShowerEnabled = true;
+        ChaosMeta.State.LessonsComplete.Remove("silk_touch");
+        ChaosMeta.State.LessonProgress["silk_touch"] = ChaosLessons.ById("silk_touch")!.Target - 1;
+        state.ElapsedSec = 40; // entering the final loop
+        var ambient = new AmbientBubble(); BubbleOverlay.Field.Bubbles.Add(ambient);
+        try { ChaosRunHost.Tick(); Assert.DoesNotContain(ambient, BubbleOverlay.Field.Bubbles); } finally { BubbleOverlay.Field.Bubbles.Remove(ambient); }
+        Assert.True(overlay.FindControl<global::Avalonia.Controls.Border>("DraftPanel")!.IsVisible);
+        Assert.Equal(flashes, pulses.Contains((0xFF96C8FFu, 0.30)));
+        Assert.Contains(mod ? "chime3" : "lvup", cues); // dedicated and fallback candidates both honor mods
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((true, false), (ChaosLessons.IsComplete("silk_touch"), ChaosUnlockCardOverlay.IsShowing));
+        double elapsed = state.ElapsedSec;
+        ChaosRunHost.Tick();
+        ChaosRunHost.SpawnTick();
+        Assert.Equal((elapsed, 0), (state.ElapsedSec, BubbleOverlay.ChaosCount));
+        int shields = state.Shields;
+        // Drive the overlay's actual selection callback, including HideDraft.
+        Choose(overlay, null);
+        Assert.Equal(shields + 1, state.Shields);
+        Assert.Equal(flashes, pulses.Contains((0xFF78DCA0u, 0.22)));
+        Assert.Equal(("resistance", ChaosAnnounceKind.Willpower, ConditioningControlPanel.Localization.Loc.Get("Chaos_DraftResistance")),
+            (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
+        ChaosAnnouncerOverlay.CloseActive(); // final-loop delivery below is a distinct announcement
+        Complete("intrusive_thoughts"); // a second completion during ReadyGo
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        Assert.DoesNotContain("ui_unlock", cues);
+        overlay.FinishCountdown();
+        Assert.Single(cues, c => c == "ui_unlock"); // WPF :1609, once at GO for the deferred cards
+        Assert.Equal((1, false), (ChaosUnlockCardOverlay.QueuedCount, ChaosUnlockCardOverlay.Active!.AutoDismiss));
+        Step(clock, 240); Click();
+        ChaosRunHost.Tick();
+        Assert.Equal(elapsed, state.ElapsedSec);
+        cues.Clear();
+        Step(clock, 240); Click(); Step(clock, 150);
+        ChaosRunHost.StopTimerForTests();
+        ChaosRunHost.Tick();
+        Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, state.ElapsedSec);
+        Assert.Equal((3, true, false, 6), (state.WaveIndex, state.WelcomeShowerEnabled, ChaosUnlockCardOverlay.IsShowing, BubbleOverlay.ChaosCount));
+        Assert.All(BubbleOverlay.Field.Bubbles, b => Assert.Equal(ChaosMotion.RainDown, b.Spec!.Motion)); // motion: Core ChaosLiveBubbleTests
+        Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+        Assert.Single(cues, c => c.StartsWith("chime", StringComparison.Ordinal)); // WPF :1658
+    });
+
+    [Fact] // WPF BubbleService.cs:2066 ResolveAudioPath: a pack-only install chimes from the pack; a miss is silent
+    public void Welcome_chime_resolves_from_a_pack_only_install()
+    {
+        var (install, pack) = (ContentLocator.InstallRoot, ContentLocator.ContentRoot);
+        string Chime(string root, int i, string ext = ".mp3") => System.IO.Path.Combine(root, "Resources", "sounds", $"chime{i}{ext}");
+        var (audio, played) = (CoreAudio.PlayOneShotProvider, new System.Collections.Generic.List<string>());
+        CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => played.Add(p);
+        try
+        {
+            Assert.StartsWith(TestUserDataProfile.Root, pack); // never the real profile
+            for (int i = 1; i <= 3; i++) System.IO.File.Move(Chime(install, i), Chime(install, i, ".aside"));
+            BubbleOverlay.PlayChime(0.25f); Assert.Empty(played);
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Chime(pack, 1))!);
+            for (int i = 1; i <= 3; i++) System.IO.File.WriteAllBytes(Chime(pack, i), new byte[1]);
+            BubbleOverlay.PlayChime(0.25f); Assert.StartsWith(pack, Assert.Single(played));
+        }
+        finally
+        {
+            CoreAudio.PlayOneShotProvider = audio;
+            for (int i = 1; i <= 3; i++) { if (System.IO.File.Exists(Chime(install, i, ".aside"))) System.IO.File.Move(Chime(install, i, ".aside"), Chime(install, i)); System.IO.File.Delete(Chime(pack, i)); }
+        }
+    }
+
+    [Theory]
+    [InlineData(0, false), InlineData(0, true), InlineData(1, false), InlineData(1, true), InlineData(2, false), InlineData(2, true)]
+    public async Task Draft_pick_earns_a_deferred_lesson_and_shutdown_drops_the_handoff(int pick, bool debut) => await Run(clock =>
+    {
+        bool curse = pick == 1;
+        var pulses = new System.Collections.Generic.List<(uint, double)>();
+        var cues = new System.Collections.Generic.List<string>();
+        ChaosRunHost.PulseFx = (c, strength) => pulses.Add((c.ToUInt32(), strength));
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(p));
+        ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = (debut ? 2 : 0, false);
+        Begin();
+        var state = ChaosRunHost.State!;
+        (state.ElapsedSec, state.RerollsLeft) = (20, 1);
+        ChaosMeta.State.LessonsComplete.Add("silk_touch"); ChaosMeta.State.LessonsComplete.Remove("draft4");
+        ChaosMeta.State.LessonProgress["draft4"] = ChaosLessons.ById("draft4")!.Target - 1;
+        ChaosRunHost.Tick();
+        var overlay = ChaosRunHost.Overlay!;
+        var reroll = overlay.FindControl<Button>("BtnReroll")!;
+        Assert.True(reroll.IsVisible);
+        reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal((0, false), (state.RerollsLeft, reroll.IsVisible));
+        if (debut) Assert.Equal(((string?)null, ChaosAnnounceKind.Willpower, "you're allowed to refuse now."),
+            (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
+        var boon = curse ? ChaosBoonPool.Draft(true, 3, guaranteeCurse: true).First(b => b.IsCurse)
+            : ChaosBoonPool.All.Single(b => b.Id == (pick == 2 ? "extra_shield" : "golden_touch"));
+        var (shields, mult) = (state.Shields, state.BoonMult);
+        state.SinExtraMult = 0.2; if (curse) state.MaxedBoons.Add("surrender");
+        ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Whisper); ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Yes);
+        CoreModArt.AudioOverridePathProvider = p => debut && p == "chaos/sin_accept.mp3"
+            ? System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "chime3.mp3") : null;
+        Choose(overlay, boon);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(boon, curse ? state.ActiveCurses : state.ActiveBoons);
+        Assert.Equal(mult + boon.RunMultBonus + (curse ? 0.2 : 0), state.BoonMult, 8);
+        Assert.Equal((shields + (curse ? 1 : pick == 2 ? 2 : 0), pick != 0, curse),
+            (state.Shields, pulses.Contains((0xFF78DCA0u, 0.22)), cues.Contains(debut ? "chime3" : "sin_accept")));
+        if (debut) Assert.Equal(1, ChaosAnnouncerOverlay.QueuedCount);
+        if (debut) { clock.Advance(ChaosAnnounceTiming.TotalMs(ChaosAnnounceTiming.HoldMs)); ChaosAnnouncerOverlay.Active!.Step(); }
+        Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
+        Assert.Equal((boon.Id, curse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, boon.Name),
+            (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
+        var icon = Assert.Single(ChaosAnnouncerOverlay.Active!.GetLogicalDescendants().OfType<IconGlyph>());
+        Assert.Equal(curse ? ChaosOverlayWindow.CurseIcon : FluentIcons.Common.Symbol.Diamond, icon.Kind);
+        Assert.Equal(FluentIcons.Common.IconVariant.Filled, icon.Variant);
+        Assert.Equal((curse, true, curse, true, false), (state.SurrenderShieldUsed,
+            ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper), ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes),
+            ChaosLessons.IsComplete("draft4"), ChaosUnlockCardOverlay.IsShowing));
+        ChaosRunHost.ForceShutdown();
+        overlay.FinishCountdown(); // an old GO cannot revive cards or spawns
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((false, false, 0), (ChaosUnlockCardOverlay.IsShowing, BubbleOverlay.Field.HoldChaos, BubbleOverlay.ChaosCount));
+        Begin();
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+    });
+
+    [Theory]
+    [InlineData(false, 0), InlineData(true, 0), InlineData(false, 1), InlineData(true, 1), InlineData(false, 2), InlineData(true, 2)]
+    public async Task Draft_pulses_render_in_the_real_fx_window_without_a_hook(bool flashes, int pick) => await Run(clock =>
+    {
+        // WPF ChaosModeService.cs:1467,1548,1562,1581,1672; ChaosFxWindow.cs:151.
+        Assert.Null(ChaosRunHost.PulseFx);
+        var (accept, time) = (ChaosFxWindow.Accept, ChaosFxWindow.Clock);
+        (ChaosFxWindow.Accept, ChaosFxWindow.Clock) = (_ => true, clock); // headless has no native click-through surface
+        try
+        {
+            Begin(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, ColorFlashesEnabled = flashes });
+            var overlay = ChaosRunHost.Overlay!;
+            var fx = ChaosRunHost.Fx!;
+            Assert.True(fx.IsVisible);
+            var state = ChaosRunHost.State!;
+            ChaosMeta.State.LessonsComplete.Add("silk_touch");
+            state.ElapsedSec = 20;
+            ChaosRunHost.Tick();
+            clock.Advance(40); fx.Frame();
+            Assert.Equal(flashes ? 0.37 : 0, fx.VignetteLayer.Opacity, 6);
+            if (flashes) Assert.Equal(global::Avalonia.Media.Color.FromRgb(150, 200, 255),
+                ((global::Avalonia.Media.IRadialGradientBrush)fx.VignetteLayer.Background!).GradientStops[2].Color);
+            clock.Advance(300); fx.Frame(); Assert.Equal(0, fx.VignetteLayer.Opacity);
+            ChaosBoon? boon = pick == 0 ? null : pick == 1
+                ? ChaosBoonPool.All.Single(b => b.Id == "extra_shield") : ChaosBoonPool.All.First(b => b.IsCurse);
+            if (pick == 2) state.MaxedBoons.Add("surrender");
+            Choose(overlay, boon);
+            clock.Advance(40); fx.Frame();
+            Assert.Equal(flashes ? 0.33 : 0, fx.VignetteLayer.Opacity, 6);
+            if (flashes) Assert.Equal(global::Avalonia.Media.Color.FromRgb(120, 220, 160),
+                ((global::Avalonia.Media.IRadialGradientBrush)fx.VignetteLayer.Background!).GradientStops[2].Color);
+            clock.Advance(300); fx.Frame(); Assert.Equal(0, fx.VignetteLayer.Opacity);
+            Assert.Null(ChaosRunHost.PulseFx);
+        }
+        finally { ChaosRunHost.ForceShutdown(); ChaosFxWindow.Clock = time; ChaosFxWindow.Accept = accept; }
+    });
+
+    [Theory]
+    [InlineData(0, false), InlineData(1, false), InlineData(2, false)]
+    [InlineData(0, true), InlineData(1, true), InlineData(2, true)]
+    public async Task Ending_during_draft_stops_reveal_autopick_and_confirmation(int stage, bool stop) => await Run(_ =>
+    {
+        Begin();
+        var state = ChaosRunHost.State!;
+        Assert.False(RevealService.IsUnlocked(RevealIds.DraftSkip));
+        (state.Config.DraftAutoResumeSec, state.Config.AllowCurses, state.ElapsedSec) = (1, false, 20);
+        var audio = new System.Collections.Generic.List<string>(); int barks = 0;
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => audio.Add(path);
+        CoreBark.ChaosDraftAutopick = () => barks++;
+        ChaosRunHost.Tick();
+        var window = ChaosRunHost.Overlay!;
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        object? Field(string name) => typeof(ChaosOverlayWindow).GetField(name, flags)!.GetValue(window);
+        void Tick(DispatcherTimer timer) => ((EventHandler)typeof(DispatcherTimer).GetField("Tick", flags)!.GetValue(timer)!)(timer, EventArgs.Empty);
+        if (stage > 0) for (int i = 0; i <= state.Config.DraftChoices; i++) Tick((DispatcherTimer)Field("_revealTimer")!);
+        if (stage > 1) Tick((DispatcherTimer)Field("_autoResumeTimer")!);
+        var names = new[] { "_revealTimer", "_autoResumeTimer", "_confirmTimer" };
+        var timers = names.Select(Field).OfType<DispatcherTimer>().ToArray();
+        var latePick = (Action<ChaosBoon?>)Field("_onBoonPick")!;
+        Assert.Equal((true, true), (timers.Any(t => t.IsEnabled), audio.Count > 0));
+        Assert.Equal(stage > 1 ? 1 : 0, barks);
+        audio.Clear(); barks = 0;
+        try
+        {
+            if (stop) { ChaosRunHost.RequestStop(); audio.Clear(); barks = 0; } else ChaosRunHost.ForceShutdown();
+            int shields = state.Shields; latePick(null);
+            Assert.Equal(shields, state.Shields);
+            if (stop) Assert.True(window.FindControl<Border>("ResultsPanel")!.IsVisible);
+            Assert.All(timers, t => Assert.False(t.IsEnabled));
+            foreach (var timer in timers) for (int i = 0; i < 20; i++) Tick(timer); // callbacks queued before Close
+            Assert.All(names.Append("_onBoonPick"), name => Assert.Null(Field(name)));
+            Assert.Equal((0, 0), (audio.Count, barks));
+        }
+        finally { foreach (var timer in timers.Concat(names.Select(Field).OfType<DispatcherTimer>())) timer.Stop(); }
+    });
+
+    [Fact]
+    public async Task Stop_during_ready_go_cancels_timer_and_callback() => await Run(_ =>
+    {
+        Begin();
+        ChaosRunHost.State!.ElapsedSec = 20;
+        ChaosRunHost.Tick();
+        var window = ChaosRunHost.Overlay!;
+        Choose(window, null);
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var timer = (DispatcherTimer)typeof(ChaosOverlayWindow).GetField("_countdownTimer", flags)!.GetValue(window)!;
+        ChaosRunHost.RequestStop();
+        Assert.False(timer.IsEnabled);
+        Assert.Null(typeof(ChaosOverlayWindow).GetField("_countdownComplete", flags)!.GetValue(window));
+        ((EventHandler)typeof(DispatcherTimer).GetField("Tick", flags)!.GetValue(timer)!)(timer, EventArgs.Empty);
+        Assert.True(window.FindControl<Border>("ResultsPanel")!.IsVisible);
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Ticks;
@@ -170,8 +404,15 @@ public sealed class ChaosUnlockCardOverlayTests
             Setup();
             var clock = new SteppedClock();
             ChaosUnlockCardOverlay.Clock = clock;
+            var (announcerTime, pulse, bark, announcer) = (ChaosAnnouncerOverlay.Clock, ChaosRunHost.PulseFx, CoreBark.ChaosDraftAutopick, CoreSettings.Current.ChaosAnnouncerEnabled);
+            var progression = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut);
+            (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut, ChaosAnnouncerOverlay.Clock) = (0, false, clock);
+            var (audio, modAudio) = (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider);
             try { body(clock); }
-            finally { ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System; }
+            finally { ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System;
+                ChaosRunHost.PulseFx = pulse; (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider) = (audio, modAudio);
+                (ChaosAnnouncerOverlay.Clock, CoreBark.ChaosDraftAutopick, CoreSettings.Current.ChaosAnnouncerEnabled) = (announcerTime, bark, announcer);
+                (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = progression; }
             return Task.CompletedTask;
         });
     }
@@ -197,6 +438,9 @@ public sealed class ChaosUnlockCardOverlayTests
         ChaosLessons.Tick(id, ChaosLessons.ById(id)!.Target);
         Dispatcher.UIThread.RunJobs();
     }
+
+    private static void Choose(ChaosOverlayWindow overlay, ChaosBoon? boon) => typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { boon });
+    private static void Begin(ChaosRunConfig config) { ChaosRunHost.StartRun(config); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests(); }
 
     private static void Begin()
     {

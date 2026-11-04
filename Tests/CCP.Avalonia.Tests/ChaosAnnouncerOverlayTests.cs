@@ -27,7 +27,7 @@ public sealed class ChaosAnnouncerOverlayTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -118,13 +118,24 @@ public sealed class ChaosAnnouncerOverlayTests
     [Fact]
     public async Task A_run_announces_its_last_ten_seconds_once_and_teardown_closes_it()
     {
-        await Run(_ =>
+        await Run(clock =>
         {
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
             ChaosRunHost.Overlay!.FinishCountdown();
-            for (int i = 0; i < 4 * 49; i++) ChaosRunHost.Tick();   // 49 s
-            Assert.Null(ChaosAnnouncerOverlay.Active);
-            for (int i = 0; i < 8; i++) ChaosRunHost.Tick();         // 51 s: inside T-10 s
+            for (int i = 0; i < 4 * 49; i++)
+            {
+                ChaosRunHostTests.TickRun(); // WPF draft + ReadyGo own the pause until a choice.
+                while (ChaosAnnouncerOverlay.IsShowing)
+                {
+                    Assert.NotEqual("ending_soon", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+                    Step(clock, 10000); // finish earlier draft/final-loop beats, without advancing run time
+                }
+            }
+            Assert.Equal(49, ChaosRunHost.State!.ElapsedSec);
+            Assert.Equal(3, ChaosRunHost.State.WaveIndex);
+            Assert.False(ChaosAnnouncerOverlay.IsShowing);
+            Assert.Null(ChaosAnnouncerOverlay.Active!.Current);
+            for (int i = 0; i < 8; i++) ChaosRunHostTests.TickRun();         // 51 s: inside T-10 s
             var w = ChaosAnnouncerOverlay.Active!;
             Assert.Equal("the hole is closing…", w.Current!.Text);
             Assert.Equal(ChaosAnnounceKind.Depth, w.Current.Kind);

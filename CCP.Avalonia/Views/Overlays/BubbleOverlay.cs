@@ -240,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        internal static void ClearField() { Field.Bubbles.Clear(); foreach (var w in Windows) w.Sync(); } // WPF PopAllBubbles
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
@@ -253,7 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble, FloatUp/RainDown. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
@@ -296,6 +297,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (cue.Length > 0 && File.Exists(cue)) { CoreAudio.PlayOneShot(cue, Math.Min(vol * scale, 1f), "chaos-cue"); return; }
             var pop = new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)];
             CoreAudio.PlayOneShot(Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "bubbles", pop), Math.Min(vol, 1f), "bubble-pop");
+        }
+
+        /// <summary>WPF BubbleService.PlayChime (:2061): ResolveAudioPath (mod, install, pack), silent when absent.</summary>
+        internal static void PlayChime(float scale)
+        {
+            var rel = $"chime{Field.Random.Next(1, 4)}.mp3";
+            var path = CoreModArt.AudioOverridePath(rel) ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel));
+            if (!File.Exists(path)) return;
+            var s = CoreSettings.Current;
+            var vol = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5) * scale;
+            CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-chime");
         }
 
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>

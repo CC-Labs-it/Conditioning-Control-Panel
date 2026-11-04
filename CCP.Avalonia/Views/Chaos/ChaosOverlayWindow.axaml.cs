@@ -269,6 +269,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(interval) };
             _countdownTimer.Tick += (_, _) =>
             {
+                if (_countdownFinished) return;
                 i++;
                 if (i < steps.Length) ShowCountdownStep(steps[i]);
                 else FinishCountdown();
@@ -401,6 +402,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _revealTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
             _revealTimer.Tick += (_, _) =>
             {
+                if (_closed || _onBoonPick == null) return;
                 if (_revealIndex >= _draftCards.Count)
                 {
                     _revealTimer?.Stop();
@@ -431,6 +433,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (dc.Boon.IsCurse) ChaosSfx.Play("sin_reveal", 0.55f);   // a sin lands with its own drone
             else ChaosSfx.PlayBoonReveal(dc.Boon.Rarity == ChaosRarity.Rare);
         }
+
+        internal void CancelDraft() { _onBoonPick = null; if (_draftPanel.IsVisible) HideDraft(); _countdownComplete = null; FinishCountdown(); }
 
         private void HideDraft()
         {
@@ -494,6 +498,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _autoResumeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _autoResumeTimer.Tick += (_, _) =>
             {
+                if (_closed || _onBoonPick == null) return;
                 _autoResumeRemainingSec--;
                 if (_selectionMade) { _autoResumeTimer?.Stop(); return; }
                 if (_autoResumeRemainingSec <= 0)
@@ -736,6 +741,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _confirmTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
             _confirmTimer.Tick += (_, _) =>
             {
+                if (_closed || _onBoonPick == null) return;
                 _confirmTimer?.Stop();
                 _confirmTimer = null;
                 ChooseBoon(_selectedBoon);
@@ -1099,8 +1105,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         protected override void OnClosed(EventArgs e)
         {
-            base.OnClosed(e);
             _closed = true;
+            // Close also owns draft timers; WPF ChaosOverlayWindow.xaml.cs:889 leaks them.
+            _revealTimer?.Stop(); _revealTimer = null;
+            _autoResumeTimer?.Stop(); _autoResumeTimer = null;
+            _confirmTimer?.Stop(); _confirmTimer = null;
+            _onBoonPick = null;
+            base.OnClosed(e);
             // The three forever tweens (the boon pulse, the two ken-burns drifts) would otherwise
             // keep the 16ms pump awake on a dead window for the process's life.
             _tweens.Clear();
@@ -1486,15 +1497,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <c>CoreSettings.Current.MasterVolume</c>, which is the same property WPF reads. The
         /// candidate lists and scales below are copied cue for cue.
         ///
-        /// <para>ponytail: the one half still missing is the MOD OVERRIDE. WPF resolves through
-        /// <c>ModResourceResolver.ResolveAudioPath</c>, which probes the active mod's
-        /// <c>resources/sounds/</c> (with a .wav/.mp3 swap) before falling back to
-        /// ContentLocator. <c>CoreModArt.OverridePath</c> is NOT that seam - App.xaml.cs seeds it
-        /// from <c>ModResourceResolver.ResolveUri</c>, the IMAGE chain - so a mod's replacement
-        /// cue is not heard here. It needs a sounds twin of that provider in
-        /// CCP.Core/CoreModArt.cs, seeded from <c>ResolveAudioPath</c>; a stock install already
-        /// sounds right.</para>
-        ///
         /// <para>Unseeded <c>CoreAudio</c> is silence, which is what this head is until a backend
         /// lands - and exactly what the stub gave. Nothing here can be louder than the user's
         /// master volume, and a missing file is still a silent no-op.</para>
@@ -1512,6 +1514,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                      : new[] { "chaos/thud.mp3", "bubbles/Pop2.mp3" },
                 rare ? 0.6f : 0.65f);
 
+            // WPF Services/Chaos/ChaosSfx.cs:21: dedicated cue, then bundled level-up fallback.
+            public static void PlayWaveClear() => PlayFirstAvailable(new[] { "chaos/wave_clear.mp3", "lvup.mp3" }, 0.8f);
+
             public static void PlayBoonPicked() => PlayFirstAvailable(new[] { "chaos/boon_pick.mp3", "chime2.mp3" }, 0.7f);
 
             /// <summary>First candidate that exists on disk wins; a miss in all of them is
@@ -1524,7 +1529,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     {
                         // Reject traversal before touching the disk, as ResolveAudioPath does.
                         if (rel.Contains("..") || System.IO.Path.IsPathRooted(rel)) continue;
-                        var path = ContentLocator.Resolve(System.IO.Path.Combine(
+                        var path = CoreModArt.AudioOverridePath(rel) ?? ContentLocator.Resolve(System.IO.Path.Combine(
                             "Resources", "sounds", rel.Replace('/', System.IO.Path.DirectorySeparatorChar)));
                         if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) continue;
                         CoreAudio.PlayOneShot(path, Volume(scale), "chaos-sfx");

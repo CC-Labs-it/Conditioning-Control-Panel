@@ -20,8 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// false, WS_EX_NOACTIVATE -> ShowActivated false, WS_EX_TRANSPARENT ->
     /// <see cref="X11Overlay.SetClickThrough"/>. UI thread only: <see cref="ChaosRunHost"/> calls it
     /// from its run tick and closes it on every teardown, including panic (PanicSurfaces "chaos").</para>
-    /// <para>ponytail: WPF's Clear() (the watch blanks while a boon draft is out) and RaiseActive()
-    /// (re-stack above a mandatory video) have no caller here yet: this head has no drafts and no
+    /// <para>Clear blanks the watch during a wave draft. WPF RaiseActive()
+    /// (re-stack above a mandatory video) has no caller here yet: this head has no
     /// chaos video toys.</para>
     /// </summary>
     internal sealed class ChaosWaveTimerWindow : Window
@@ -53,6 +53,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             EnsureCreated();
             Active?.SetText(ChaosWaveTimerReadout.For(wave, waveCount, secLeftInWave, score));
         }
+
+        // WPF ChaosWaveTimerOverlay.cs:62: blank the existing pill while drafting.
+        internal static void Clear() { if (Active != null) Active.Pill.IsVisible = false; }
 
         /// <summary>WPF CloseActive: instant teardown (run end, panic, shutdown). Safe when idle.</summary>
         internal static void CloseActive()
