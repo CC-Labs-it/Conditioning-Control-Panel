@@ -114,9 +114,11 @@ public sealed class PageFavoritesDrawer : Grid
     {
         IsOpen = open;
         _chevron.Kind = open ? IconKind.ChevronRight : IconKind.ChevronLeft;
-        Body.Transitions = animate && IsVisible && AmbientFxCanvas.Env.AllowTransitions
-            ? new Transitions { new DoubleTransition { Property = WidthProperty,
-                Duration = TimeSpan.FromMilliseconds(200), Easing = new CubicEaseOut() } } : null;
+        if (animate && IsVisible && AmbientFxCanvas.Env.AllowTransitions)
+            Body.Transitions ??= new Transitions { new DoubleTransition { Property = WidthProperty,
+                Duration = TimeSpan.FromMilliseconds(200), Easing = new CubicEaseOut() } };
+        else
+            Body.Transitions = null;
         Body.Width = open ? 92 : 0;
     }
     internal void OnNavigated(string? section)

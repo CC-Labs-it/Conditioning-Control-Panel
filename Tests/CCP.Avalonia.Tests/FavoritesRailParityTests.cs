@@ -153,6 +153,37 @@ public class FavoritesRailParityTests
         return Task.CompletedTask;
     });
 
+    // WPF PageFavoritesDrawer.cs:169-180: reverse from the animated width.
+    [Fact]
+    public Task DrawerReversesFromCurrentWidth() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var before = settings.MotionLevel;
+        var drawer = new global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer();
+        var window = new Window { Content = drawer, Width = 200, Height = 200 };
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            drawer.OnNavigated("play");
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            drawer.SetOpen(true, true);
+            for (int i = 0; i < 5; i++)
+            {
+                System.Threading.Thread.Sleep(10);
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+            }
+            double width = drawer.Body.Width;
+            Assert.InRange(width, 0.01, 91.99);
+            drawer.SetOpen(false, true);
+            Assert.Equal(width, drawer.Body.Width, 5);
+        }
+        finally { window.Close(); settings.MotionLevel = before; }
+        return Task.CompletedTask;
+    });
+
     // WPF MainWindow.FavoritesRail.cs:92-93,256-265.
     [Fact]
     public Task OwnedPillRepaintsAndChipStillNavigates() => AvaloniaTestDispatcher.RunAsync(() =>
