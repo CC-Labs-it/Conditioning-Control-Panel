@@ -67,7 +67,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void AttachHelpButton(Button button)
         {
             HelpContent content;
-            if (button.Name == "BtnIntakePassHelp") content = BuildIntakePassHelpContent();
+            if (button.Name == "BtnHelpPrizeCounter") content = BuildLocHelp("PrizeCounter", "help_counter", "✦");
+            else if (button.Name == "BtnIntakePassHelp") content = BuildIntakePassHelpContent();
             else if (button.Name is { } name && HelpButtonSections.TryGetValue(name, out var sectionId))
                 content = HelpContentService.GetContent(sectionId);
             else return;
@@ -75,6 +76,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ToolTip.SetTip(button, null); // popover and ToolTip must never double-render (WPF Presets.cs:130)
             HelpPopover.Attach(button, content);
         }
+
+        internal static HelpContent BuildLocHelp(string sectionId, string stem, string icon) => new()
+        {
+            SectionId = sectionId,
+            Icon = icon,
+            Title = Loc.Get(stem + "_title"),
+            WhatItDoes = Loc.Get(stem + "_what"),
+            Tips = new List<string> { Loc.Get(stem + "_tip1"), Loc.Get(stem + "_tip2"), Loc.Get(stem + "_tip3") },
+            HowItWorks = Loc.Get(stem + "_how"),
+        };
 
         /// <summary>WPF MainWindow.UiUpdates.cs:1730. Its punch-card tip is gated on
         /// IntakePunchCardService.UiEnabled, a static readonly false, so it is left out.</summary>
