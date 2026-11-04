@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
-    /// <para>ponytail: not here yet, each a later branch - ducking and sound-linked lifetime/XP,
+    /// <para>ponytail: not here yet, each a later branch - the avatar's speech bubble for the flash line,
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// GIF animation (first frame only), remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF FlashService _packImageList + PackBag + _tempPackFiles (:173-191).</summary>
         internal static readonly ConditioningControlPanel.Services.PackMediaPool PackImages =
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
-        private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
+        private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed, _voiced;
         private static int _generation;
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
@@ -76,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
             _busy = true;
+            _voiced = false;   // WPF _soundPlayingForCurrentFlash, reset per flash event (FlashService.cs:709)
             var generation = _generation;
             var scheduled = false;
             try
@@ -97,21 +98,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
 
-                FlashVoice.Play(s);
                 var clickable = s.FlashClickable;
-                var lifetime = Lifetime(s, ambient, durationMs);
                 var cap = Cap(s, ambient);
                 var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
                 var alpha = Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
 
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
                 // staggers 300 ms per image.
-                Schedule(flashes, 1000, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
-                    done: () => _busy = false);
+                DispatcherTimer.RunOnce(() => SpeakThenSchedule(flashes, generation, s, ambient, durationMs,
+                    cap, alpha, fade, clickable, () => _busy = false), TimeSpan.FromSeconds(1));
                 scheduled = true;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
             finally { if (!scheduled && generation == _generation) _busy = false; }
+        }
+
+        /// <summary>WPF ShowImages (FlashService.cs:1535-1557): the voice starts with the first picture and
+        /// its length, not FlashDuration, sets the burst's lifetime. A retired burst speaks nothing.</summary>
+        internal static void SpeakThenSchedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int generation,
+            AppSettings s, bool ambient, int? durationMs, int cap, double alpha, TimeSpan fade, bool clickable, Action? done)
+        {
+            void Go(int? ms) => Schedule(flashes, 0, StaggerMs, generation, cap, alpha, fade, Lifetime(s, ambient, ms),
+                clickable, ambient, hydraGeneration: 0, done);
+            if (generation != _generation || _closed) { Go(durationMs); return; }
+            FlashVoice.Speak(s, seconds => Dispatcher.UIThread.Post(() =>
+            {
+                if (generation == _generation) _voiced = seconds != null;
+                Go(seconds is { } d ? (int)(d * 1000) : durationMs);
+            }));
         }
 
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
@@ -159,7 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>What a shown flash pays (WPF FlashService.cs:1608, 1834-1877, 2165-2172): session
-        /// log and history, the lucky chime, XP (4: this head plays no flash sound; a hydra child with
+        /// log and history, the lucky chime, XP (8 while the burst's line plays, else 4; a hydra child with
         /// independent timing pays less; x10 lucky), and the achievement + quest tick, which a linked
         /// hydra child skips only when timing is independent.</summary>
         internal static void Paid(string path, AppSettings s, int hydraGeneration, int multiplier)
@@ -167,7 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
             if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed
-            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: false, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
+            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: _voiced, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
             if (s.HydraLinkedTiming || hydraGeneration == 0)
             {
                 App.Achievements?.TrackFlashImage();   // WPF AchievementService.cs:388
@@ -355,6 +369,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _generation++;
             FlashVoice.Stop();
             _busy = false;
+            _voiced = false;
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
