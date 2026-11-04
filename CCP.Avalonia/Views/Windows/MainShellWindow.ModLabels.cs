@@ -98,6 +98,8 @@ public partial class MainShellWindow
         Label("TxtAutoBouncing", "Bouncing", "label_bouncing_text");
         Label("TxtAutoMindwipe", "Mindwipe", "label_mind_wipe");
         var title = App.Mods?.GetTakeoverLabel() ?? Loc.Get("tab_takeover");
+        AppSettingsPage?.FindControl<Controls.AppSettings.AccountSettingsSection>("SectionAccount")
+            ?.RefreshSupportFeatures(title);
         if (takeover?.FindControl<TextBlock>("TxtBambiTakeoverHeader") is { } header) header.Text = title;
         if (takeover?.FindControl<IconLabel>("TxtTakeoverLocked") is { } locked)
         {

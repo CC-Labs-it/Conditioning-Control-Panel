@@ -87,6 +87,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             };
         }
 
+        internal string? SupportFeaturesText => RunPatreonFeatures.Text;
+
+        // WPF MainWindow.xaml.cs:2423-2431: the account card names the active takeover.
+        internal void RefreshSupportFeatures(string title) =>
+            RunPatreonFeatures.Text = Loc.GetF("label_patreon_features", title);
+
         /// <summary>
         /// Host seam: the Settings door repaints the tier card every time it opens, so a login that
         /// happened behind another door is never shown stale.
