@@ -188,6 +188,286 @@ public sealed class JustSubscribedTests
         finally { AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
     });
     [Fact]
+    public Task LapseReadingIsPublishedWhenStoredAndCleared() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = new SettingsService(); var s = settings.Current;
+        s.PatreonTier = 1; s.ServerTierSeen = null; s.OfflineMode = false;
+        s.UnifiedId = "test-user";
+        CoreSettings.ServiceProvider = () => settings;
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        s.AuthToken = "test-token";
+        AccountSeed.Seed(p => new ProviderSubscription(p, () => s));
+        var oldFactory = AccountSeed.NewV2;
+        var readings = new List<int?>();
+        void OnReading() => readings.Add(s.ServerTierSeen);
+        AccountSeed.SubscriptionReadingApplied += OnReading;
+        try
+        {
+            foreach (var tier in new[] { 0, 0, 1 })
+            {
+                var wire = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+                wire.Answer("{\"user\":{\"effective_tier\":" + tier + "}}");
+                await AccountSeed.CheckSubscriptionNowAsync();
+            }
+            Assert.Equal(new int?[] { 0, null }, readings);
+        }
+        finally { AccountSeed.SubscriptionReadingApplied -= OnReading; AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
+    });
+    [Theory, InlineData(false, false), InlineData(false, true), InlineData(true, false)]
+    public Task ManualCheckPresentsLapseNoticeAndCleansUp(bool reconnect, bool closed) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        LocalizationManager.Instance.SetLanguage("en");
+        var settings = new SettingsService(); var s = settings.Current;
+        s.Welcomed = s.HasAcceptedAgeVerification = true; s.WhatMovedCardShown = 1;
+        foreach (var key in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(key)) s.SeenFeatureIntros.Add(key);
+        s.MotionLevel = MotionLevel.Off; s.OfflineMode = false; s.PatreonTier = 1;
+        s.PatreonPremiumValidUntil = closed ? DateTime.UtcNow.AddHours(-2) : DateTime.UtcNow.AddDays(2); s.PatreonLabValidUntil = null;
+        s.ServerTierSeen = 0; s.InboxStamps.Clear(); s.UnifiedId = "test-user";
+        CoreSettings.ServiceProvider = () => settings;
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        s.AuthToken = "test-token";
+        AccountSeed.Seed(p => new ProviderSubscription(p, () => s));
+        var oldFactory = AccountSeed.NewV2; var oldReconnect = TierGate.ReconnectIsTheAnswerProvider;
+        var oldAnswered = AccountSeed.EntitlementServerAnswered; var oldShell = ExternalOpener.Shell;
+        AccountSeed.EntitlementServerAnswered = false; TierGate.ReconnectIsTheAnswerProvider = () => reconnect;
+        var launches = new List<string>(); ExternalOpener.Shell = target => { launches.Add(target); return true; };
+        StartupLadder.ResetForTests(); StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
+        var shell = new MainShellWindow { Width = 1400, Height = 900 }; int repairs = 0;
+        shell.ReconnectFromGateOverride = () => { repairs++; return Task.CompletedTask; };
+        try
+        {
+            shell.Show(); shell.ShowTab("premium"); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items.Where(i => i.Key.StartsWith("conv:lapse_"))); // remembered reading alone is not enough
+            s.ServerTierSeen = null;
+            var wire = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            var button = shell.Named<ExclusivesTabView>("ExclusivesTab")!.FindControl<Button>("BtnJustSubscribed")!;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, wire.Reads); wire.Answer("{\"user\":{\"effective_tier\":0}}");
+            string key = reconnect ? "lapse_reconnect" : closed ? "lapse_closed" : "lapse_warn_3";
+            await Until(() => StartupLadder.Inbox.Items.Any(i => i.Key == "conv:" + key));
+            var item = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "conv:" + key);
+            var end = s.PatreonPremiumValidUntil!.Value.ToLocalTime();
+            var expectedTitle = reconnect ? Loc.Get("tiergate_denied_reconnect") : closed
+                ? (end.Date == DateTime.Today ? Loc.Get("conv_lapse_closed_basic_today") : Loc.GetF("conv_lapse_closed_basic", end.ToString("ddd d MMM")))
+                : Loc.GetF("conv_lapse_warn_basic", 2);
+            Assert.Equal(expectedTitle, item.Title);
+            Assert.True(s.InboxStamps.ContainsKey(key));
+            Assert.True(shell.Named<Button>("BtnInbox")!.IsVisible);
+            StartupLadder.Inbox.Open(item);
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.InboxNoticeCard>());
+            Assert.Equal(item.Title, dialog.Heading.Text);
+            Assert.Equal(400, dialog.Width); Assert.Equal(WindowDecorations.None, dialog.WindowDecorations); Assert.False(dialog.ShowInTaskbar);
+            var stack = Assert.IsType<StackPanel>(Assert.IsType<Border>(dialog.Content).Child);
+            Assert.True(stack.Children.IndexOf(dialog.Primary) < stack.Children.IndexOf(dialog.Quiet));
+            Assert.Equal(reconnect ? Loc.Get("tiergate_reconnect_action") : Loc.Get(closed ? "conv_reopen_basic" : "conv_keep_basic"),
+                ((TextBlock)dialog.Primary.Content!).Text);
+            Assert.Equal(reconnect ? Loc.Get("vaultgate_close") : Loc.Get(closed ? "conv_leave_closed" : "conv_let_close"), ((TextBlock)dialog.Quiet.Content!).Text);
+            dialog.Quiet.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.False(dialog.IsVisible); Assert.Equal(0, repairs);
+            item.Open(); dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.InboxNoticeCard>());
+            dialog.RaiseEvent(new global::Avalonia.Input.KeyEventArgs { RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent, Key = global::Avalonia.Input.Key.Escape });
+            Assert.False(dialog.IsVisible); Assert.Equal(0, repairs);
+            item.Open(); dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.InboxNoticeCard>());
+            dialog.Primary.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(reconnect ? 1 : 0, repairs);
+            Assert.Empty(launches); // the test sandbox blocks the real checkout URL
+
+            // A second lower reading for this same end cannot file another row.
+            s.ServerTierSeen = null;
+            wire = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            wire.Answer("{\"user\":{\"effective_tier\":0}}");
+            await AccountSeed.CheckSubscriptionNowAsync();
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "conv:" + key);
+
+            // A live Patreon grant covers the tier even if the server reading is lower.
+            s.InboxStamps.Clear(); s.ServerTierSeen = null;
+            AccountSeed.Patreon!.SetWhitelistStatus(true);
+            wire = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            wire.Answer("{\"user\":{\"effective_tier\":0}}");
+            await AccountSeed.CheckSubscriptionNowAsync();
+            Assert.False(s.InboxStamps.ContainsKey(key));
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "conv:" + key);
+            AccountSeed.Patreon.Logout();
+            s.PatreonTier = 1; s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(2);
+
+            // A closed shell cannot receive a later event or persist a new notice.
+            shell.Close(); s.InboxStamps.Clear(); s.ServerTierSeen = null;
+            wire = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            wire.Answer("{\"user\":{\"effective_tier\":0}}");
+            await AccountSeed.CheckSubscriptionNowAsync(); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(s.InboxStamps); Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("conv:lapse_"));
+        }
+        finally
+        {
+            foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
+            shell.Close(); StartupLadder.ResetForTests(); AccountSeed.NewV2 = oldFactory;
+            TierGate.ReconnectIsTheAnswerProvider = oldReconnect; AccountSeed.EntitlementServerAnswered = oldAnswered;
+            ExternalOpener.Shell = oldShell; CheckoutWatch.Disarm(); CoreSettings.ServiceProvider = null;
+        }
+    });
+    [Fact]
+    public Task LapseCardEscapeClosesWithoutActing() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var owner = new Window(); var actions = 0;
+        try
+        {
+            owner.Show();
+            global::ConditioningControlPanel.Avalonia.Views.Dialogs.InboxNoticeCard.Present(owner, "Heading", "Body", "Continue", null, () => actions++);
+            var card = Assert.Single(owner.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.InboxNoticeCard>());
+            card.RaiseEvent(new global::Avalonia.Input.KeyEventArgs { RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent, Key = global::Avalonia.Input.Key.Escape });
+            Assert.False(card.IsVisible); Assert.Equal(0, actions);
+        }
+        finally { foreach (var child in owner.OwnedWindows.ToArray()) child.Close(); owner.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task LapseCheckoutRechecksOnAnyWindowReturn() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var settings = new SettingsService(); var s = settings.Current;
+        s.Welcomed = s.HasAcceptedAgeVerification = true; s.WhatMovedCardShown = 1; s.MotionLevel = MotionLevel.Off;
+        foreach (var key in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(key)) s.SeenFeatureIntros.Add(key);
+        s.OfflineMode = false; s.UnifiedId = "first"; s.PatreonTier = 1; s.ServerTierSeen = null;
+        s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(2); s.PatreonLabValidUntil = null; s.InboxStamps.Clear();
+        CoreSettings.ServiceProvider = () => settings;
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        s.AuthToken = "token"; var validation = new PendingValidation();
+        AccountSeed.Seed(p => new ProviderSubscription(p, () => s, p == "patreon" ? validation : null));
+        var oldFactory = AccountSeed.NewV2; var oldReconnect = TierGate.ReconnectIsTheAnswerProvider;
+        var oldAnswered = AccountSeed.EntitlementServerAnswered;
+        TierGate.ReconnectIsTheAnswerProvider = () => false; AccountSeed.EntitlementServerAnswered = false;
+        CheckoutWatch.Disarm(); StartupLadder.ResetForTests(); StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
+        using var hook = AccountSeed.WatchCheckoutReturns();
+        var shell = new MainShellWindow { Width = 1400, Height = 900 }; var other = new Window();
+        try
+        {
+            shell.Show(); shell.ShowTab("premium"); Dispatcher.UIThread.RunJobs();
+            var first = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, first);
+            var button = shell.Named<ExclusivesTabView>("ExclusivesTab")!.FindControl<Button>("BtnJustSubscribed")!;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); first.Answer("{\"user\":{\"effective_tier\":0}}");
+            await Until(() => button.IsEnabled && StartupLadder.Inbox.Items.Any(i => i.Key == "conv:lapse_warn_3"));
+            var item = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "conv:lapse_warn_3");
+            StartupLadder.Inbox.Open(item);
+            var card = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.InboxNoticeCard>());
+            s.OfflineMode = true; card.Primary.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(CheckoutWatch.IsArmed);
+            var profile = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, profile);
+            AccountSeed.Patreon!.StoreTokens("access", "refresh", DateTime.UtcNow.AddDays(1));
+            other.Show();
+            void Activate()
+            {
+                var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                typeof(WindowBase).GetMethod("HandleDeactivated", flags)!.Invoke(other, null);
+                typeof(WindowBase).GetMethod("HandleActivated", flags)!.Invoke(other, null);
+            }
+            Activate(); Assert.Equal(0, profile.Reads); Assert.Equal(0, validation.Reads); Assert.True(CheckoutWatch.IsArmed);
+            s.OfflineMode = false; Activate();
+            Assert.Equal(1, profile.Reads); Assert.Equal(1, validation.Reads);
+            Activate(); Assert.Equal(1, profile.Reads); Assert.Equal(1, validation.Reads); // 20-second gap
+            profile.Answer("{\"user\":{\"effective_tier\":2}}");
+            await Until(() => s.PatreonTier == 2);
+            Assert.False(CheckoutWatch.IsArmed);
+            validation.Reply.SetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"is_active\":true,\"tier\":2}") });
+            await Until(() => !AccountSeed.Patreon.IsVerifying);
+        }
+        finally
+        {
+            if (!validation.Reply.Task.IsCompleted) validation.Reply.TrySetResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            other.Close(); foreach (var child in shell.OwnedWindows.ToArray()) child.Close(); shell.Close();
+            CheckoutWatch.Disarm(); StartupLadder.ResetForTests(); AccountSeed.NewV2 = oldFactory;
+            TierGate.ReconnectIsTheAnswerProvider = oldReconnect; AccountSeed.EntitlementServerAnswered = oldAnswered; CoreSettings.ServiceProvider = null;
+        }
+    });
+
+    [Theory, InlineData(false, false), InlineData(true, false), InlineData(false, true)]
+    public Task CheckoutResponsesCannotRestoreAChangedSession(bool logout, bool offline) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = new SettingsService(); var s = settings.Current;
+        s.UnifiedId = "first"; s.OfflineMode = false; s.PatreonTier = 1; s.PatreonPremiumValidUntil = null;
+        CoreSettings.ServiceProvider = () => settings;
+        var secrets = new Dictionary<string, string?> { ["patreon_auth"] = JsonConvert.SerializeObject(new PatreonTokenData
+            { AccessToken = "a", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(1) }) };
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        s.AuthToken = "first-token"; var validation = new PendingValidation();
+        AccountSeed.Seed(p => new ProviderSubscription(p, () => s, p == "patreon" ? validation : null));
+        var oldFactory = AccountSeed.NewV2; var profile = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, profile);
+        try
+        {
+            CheckoutWatch.Disarm(); CheckoutWatch.NoteOpened("https://cclabs.app/subscribe");
+            s.OfflineMode = true; await AccountSeed.OnCheckoutActivated();
+            Assert.True(CheckoutWatch.IsArmed); Assert.Equal(0, profile.Reads); Assert.Equal(0, validation.Reads);
+            s.OfflineMode = false; var check = AccountSeed.OnCheckoutActivated();
+            Assert.Equal(1, profile.Reads); Assert.Equal(1, validation.Reads);
+            if (logout) AccountSeed.Patreon!.Logout();
+            else if (offline) s.OfflineMode = true;
+            else { s.UnifiedId = "second"; s.AuthToken = "second-token"; }
+            profile.Answer("{\"user\":{\"effective_tier\":2}}");
+            validation.Reply.SetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"is_active\":true,\"tier\":2,\"auth_token\":\"old\"}") });
+            await check;
+            Assert.Equal(logout ? 0 : 1, s.PatreonTier); Assert.Equal(PatreonTier.None, AccountSeed.Patreon!.CurrentTier);
+            Assert.Null(s.PatreonPremiumValidUntil); Assert.Equal(logout || offline ? "first-token" : "second-token", s.AuthToken);
+        }
+        finally { CheckoutWatch.Disarm(); AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
+    });
+    [Theory, InlineData(false), InlineData(true)]
+    public Task QueuedLapseReadingDoesNotFollowAChangedSession(bool logout) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var settings = new SettingsService(); var s = settings.Current;
+        s.Welcomed = s.HasAcceptedAgeVerification = true; s.WhatMovedCardShown = 1; s.MotionLevel = MotionLevel.Off;
+        foreach (var key in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(key)) s.SeenFeatureIntros.Add(key);
+        s.OfflineMode = false; s.UnifiedId = "first"; s.PatreonTier = 1; s.ServerTierSeen = null;
+        s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(2); s.InboxStamps.Clear();
+        CoreSettings.ServiceProvider = () => settings;
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        s.AuthToken = "token";
+        AccountSeed.Seed(p => new ProviderSubscription(p, () => s));
+        var oldFactory = AccountSeed.NewV2; var oldAnswered = AccountSeed.EntitlementServerAnswered;
+        AccountSeed.EntitlementServerAnswered = false;
+        StartupLadder.ResetForTests(); StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
+        var shell = new MainShellWindow { Width = 1400, Height = 900 };
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            var wire = new ProfileWire(); wire.Answer("{\"user\":{\"effective_tier\":0}}");
+            AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            // Keep the UI thread occupied until the background response has queued its notification.
+            var check = Task.Run(() => AccountSeed.CheckSubscriptionNowAsync());
+            Assert.True(check.Wait(TimeSpan.FromSeconds(20)));
+            Assert.Equal(0, s.ServerTierSeen);
+            if (logout)
+            {
+                AccountSeed.Patreon!.Logout();
+                s.PatreonTier = 1; s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(2);
+            }
+            else s.UnifiedId = "second";
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("conv:lapse_"));
+            Assert.DoesNotContain(s.InboxStamps.Keys, key => key.StartsWith("lapse_"));
+        }
+        finally
+        {
+            foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
+            shell.Close(); StartupLadder.ResetForTests(); AccountSeed.NewV2 = oldFactory;
+            AccountSeed.EntitlementServerAnswered = oldAnswered; CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
     public Task LateProfileCannotGrantTheNextAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var settings = new SettingsService(); var s = settings.Current;

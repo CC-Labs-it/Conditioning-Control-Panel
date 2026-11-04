@@ -196,10 +196,12 @@ internal static class AccountSeed
     }
 
     internal static event Action<int>? SubscriptionTierRaised;
+    // WPF EntitlementTierSync.ReadingApplied: lower reading stored or cleared.
+    internal static event Action? SubscriptionReadingApplied;
     internal static bool EntitlementServerAnswered;
     private static int _subscriptionReadInFlight;
 
-    internal static async Task<JustSubscribedOutcome> CheckSubscriptionNowAsync()
+    internal static async Task<JustSubscribedOutcome> CheckSubscriptionNowAsync(bool revalidatePatreon = true)
     {
         var before = EffectivePaidTier();
         var s = CoreSettings.Current;
@@ -208,7 +210,7 @@ internal static class AccountSeed
         var tokenAtStart = s.AuthToken;
         var generation = patreon?.SessionGeneration;
         bool SameSession() => ReferenceEquals(s, CoreSettings.Current) && s.UnifiedId == idAtStart
-            && s.AuthToken == tokenAtStart && ReferenceEquals(patreon, Patreon) && patreon?.SessionGeneration == generation;
+            && s.AuthToken == tokenAtStart && ReferenceEquals(patreon, Patreon) && patreon?.SessionGeneration == generation && !s.OfflineMode;
         var signedInV2 = !string.IsNullOrEmpty(s.UnifiedId) && !string.IsNullOrEmpty(s.AuthToken);
         var signedIn = signedInV2 || patreon?.IsAuthenticated == true;
         bool reached = false;
@@ -229,6 +231,11 @@ internal static class AccountSeed
                         var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, tier, s.ServerTierSeen);
                         bool changed = seen != s.ServerTierSeen;
                         s.ServerTierSeen = seen;
+                        if (changed)
+                        {
+                            try { SubscriptionReadingApplied?.Invoke(); }
+                            catch (Exception ex) { Log.Warning(ex, "Subscription reading handler failed"); }
+                        }
                         bool rose = EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
                         changed |= rose;
                         int accessBeforeRestamp = EffectivePaidTier();
@@ -248,7 +255,7 @@ internal static class AccountSeed
                 catch (Exception ex) { Log.Debug("Just-subscribed profile read failed: {E}", ex.Message); }
                 finally { Interlocked.Exchange(ref _subscriptionReadInFlight, 0); }
             }
-            if (SameSession() && patreon?.IsAuthenticated == true)
+            if (revalidatePatreon && SameSession() && patreon?.IsAuthenticated == true)
             {
                 try { await patreon.ValidateSubscriptionAsync(forceRefresh: true, canApply: SameSession, onApplied: () => reached = true); reached |= SameSession(); }
                 catch (Exception ex) { Log.Debug("Just-subscribed validation failed: {E}", ex.Message); }
@@ -256,6 +263,33 @@ internal static class AccountSeed
         }
         catch (Exception ex) { Log.Debug("Just-subscribed check failed: {E}", ex.Message); }
         return JustSubscribedRule.Decide(signedIn, reached, before, EffectivePaidTier());
+    }
+
+    // WPF EntitlementTierSync.cs:204-220: any app window returning from checkout.
+    internal static IDisposable WatchCheckoutReturns() => global::Avalonia.Controls.Window.WindowOpenedEvent
+        .AddClassHandler<global::Avalonia.Controls.Window>((window, args) =>
+        {
+            EventHandler activated = (sender, eventArgs) => { _ = OnCheckoutActivated(); };
+            window.Activated += activated;
+            window.Closed += (_, _) => window.Activated -= activated;
+        });
+
+    internal static Task OnCheckoutActivated()
+    {
+        var s = CoreSettings.Current;
+        if (s.OfflineMode || !CheckoutWatch.TakeCheck(DateTime.UtcNow)) return Task.CompletedTask;
+        var patreon = Patreon;
+        var id = s.UnifiedId; var token = s.AuthToken; var generation = patreon?.SessionGeneration;
+        bool SameSession() => ReferenceEquals(s, CoreSettings.Current) && s.UnifiedId == id && s.AuthToken == token
+            && ReferenceEquals(patreon, Patreon) && patreon?.SessionGeneration == generation && !s.OfflineMode;
+        var profile = CheckSubscriptionNowAsync(revalidatePatreon: false);
+        var validation = patreon?.IsAuthenticated == true ? Validate() : Task.CompletedTask;
+        return Task.WhenAll(profile, validation);
+        async Task Validate()
+        {
+            try { await patreon!.ValidateSubscriptionAsync(forceRefresh: true, canApply: SameSession); }
+            catch (Exception ex) { Log.Debug("Checkout validation failed: {E}", ex.Message); }
+        }
     }
 
     /// <summary>Signs a provider out (WPF AccountService.LogoutProvider).</summary>

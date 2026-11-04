@@ -484,6 +484,8 @@ namespace ConditioningControlPanel.Avalonia
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
                 desktop.Exit += OnDesktopExit;
+                var checkoutReturns = Platform.AccountSeed.WatchCheckoutReturns();
+                desktop.Exit += (_, _) => checkoutReturns.Dispose();
 
                 // Real settings on this head: SettingsService now lives in Core and reads and
                 // writes settings.json under CorePaths.UserData (~/.local/share on Linux), with
