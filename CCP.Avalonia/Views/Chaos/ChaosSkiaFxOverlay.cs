@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests step frames (P08); the live source is the window's animation frame.</summary>
         internal static IFrameSource? FramesForTests;
         internal static IReadOnlyList<PixelRect>? MonitorBoundsForTests;
+        internal static double? MonitorScaleForTests;
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
         private static bool _refused;
 
@@ -88,6 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Active = null;
             _refused = false;   // a new run may use a newly available platform surface
             if (w == null) return;
+            w.Screens.Changed -= w.OnScreensChanged;
+            w._listeningForScreens = false;
             w.Fx.Clear();
             w.StopRendering();
             w._hideTimer.Stop();
@@ -127,26 +130,68 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return null;
             }
             var w = new ChaosSkiaFxOverlay(live: true);
-            var primary = w.Screens.Primary ?? w.Screens.All.FirstOrDefault();
-            if (primary == null) { w.Close(); return null; }
-            w._scale = primary.Scaling > 0 ? primary.Scaling : 1;
-            w.Fx.OnActivated(); // Sample the primary scale before the first emission.
-            var screens = MonitorBoundsForTests ?? ((CoreSettings.Current?.DualMonitorEnabled ?? true)
-                ? w.Screens.All.Select(s => s.Bounds).ToArray() : new[] { primary.Bounds });
-            foreach (var screen in screens)
+            if (!w.ReconcileScreens())
             {
-                var host = w._hosts.Count == 0 ? w : new ChaosSkiaFxOverlay(live: true, shared: w.Fx);
-                host._stagePx = screen;
-                w._hosts.Add(host);
+                foreach (var host in w._hosts) try { host.Close(); } catch { }
+                if (w._hosts.Count == 0) try { w.Close(); } catch { }
+                return null;
+            }
+            w.Screens.Changed += w.OnScreensChanged;
+            w._listeningForScreens = true;
+            return w;
+        }
+
+        // WPF CompositorEngine.OnDisplaySettingsChanged defers until fresh screen data is available.
+        internal void OnScreensChanged(object? sender, EventArgs e)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_listeningForScreens || !ReferenceEquals(Active, this)) return;
+                try
+                {
+                    if (!ReconcileScreens()) CloseActive();
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("ChaosSkiaFx: display change failed: {E}", ex.Message);
+                    CloseActive();
+                }
+            }, DispatcherPriority.Background);
+        }
+
+        private bool ReconcileScreens()
+        {
+            var primary = Screens.Primary ?? Screens.All.FirstOrDefault();
+            if (primary == null) return _hosts.Count > 0; // WPF keeps hosts while no screens are reported.
+            var screens = MonitorBoundsForTests ?? ((CoreSettings.Current?.DualMonitorEnabled ?? true)
+                ? Screens.All.Select(s => s.Bounds).ToArray() : new[] { primary.Bounds });
+            if (screens.Count == 0) return _hosts.Count > 0;
+            var scale = MonitorScaleForTests ?? primary.Scaling;
+            _scale = scale > 0 ? scale : 1;
+            Fx.OnActivated();
+            bool visible = IsVisible;
+            for (int i = 0; i < screens.Count; i++)
+            {
+                var host = i < _hosts.Count ? _hosts[i] :
+                    _hosts.Count == 0 ? this : new ChaosSkiaFxOverlay(live: true, shared: Fx);
+                if (i == _hosts.Count) _hosts.Add(host);
+                host._stagePx = screens[i];
                 if ((!X11Overlay.SetClickThrough(host, true) | !X11Overlay.SetOverrideRedirect(host, host._stagePx)) && !SkipPlatformChecksForTests)
                 {
                     Log.Warning("ChaosSkiaFx: the platform refused a click-through topmost overlay, so no chaos sparkle field");
                     _refused = true;
-                    foreach (var created in w._hosts) try { created.Close(); } catch { }
-                    return null;
+                    return false;
                 }
+                if (visible && !host.IsVisible) host.Show();
+                (host.Content as Control)?.InvalidateVisual();
             }
-            return w;
+            while (_hosts.Count > screens.Count)
+            {
+                var host = _hosts[_hosts.Count - 1];
+                _hosts.RemoveAt(_hosts.Count - 1);
+                try { host.Close(); } catch { }
+            }
+            return true;
         }
 
         // ---- instance ----
@@ -160,11 +205,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private double _scale = 1;
         private PixelRect _stagePx;
         private readonly List<ChaosSkiaFxOverlay> _hosts = new();
+        private bool _listeningForScreens;
 
         /// <summary>True while the frame loop is subscribed (tests).</summary>
         internal bool IsRendering => _frames != null;
         internal bool HidePending => _hideTimer.IsEnabled;
         internal IReadOnlyList<ChaosSkiaFxOverlay> Hosts => _hosts;
+        internal bool ListeningForScreens => _listeningForScreens;
 
         /// <summary>Render-all sample: a burst, a strong ripple, a bolt and the cursor glow, mid-flight.</summary>
         internal ChaosSkiaFxOverlay() : this(live: false)

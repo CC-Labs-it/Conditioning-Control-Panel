@@ -116,6 +116,100 @@ public sealed class ChaosSkiaFxOverlayTests
     });
 
     [Fact]
+    public Task DisplayChangesUpdateHostsScaleAndTeardown() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var frames = new SteppedFrames();
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.FramesForTests = frames;
+            ChaosSkiaFxOverlay.MonitorScaleForTests = 1;
+            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-200, 0, 200, 200), new PixelRect(0, 0, 200, 200) };
+            ChaosSkiaFxOverlay.ArmCursorGlow();
+            ChaosSkiaFxOverlay.MoveCursorGlowToPx(150, 150);
+            var owner = ChaosSkiaFxOverlay.Active!;
+            var fx = owner.Fx;
+            Assert.True(owner.ListeningForScreens);
+            Assert.Equal(2, owner.Hosts.Count);
+            Assert.Single(frames.Subs);
+
+            byte GlowAtDistance()
+            {
+                using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(400, 300));
+                fx.Render(surface.Canvas, new SkiaSharp.SKRectI(0, 0, 400, 300), 1, TimeSpan.Zero);
+                using var image = surface.Snapshot();
+                using var bitmap = SkiaSharp.SKBitmap.FromImage(image);
+                return bitmap.GetPixel(235, 150).Alpha;
+            }
+            Assert.Equal(0, GlowAtDistance());
+
+            // Rearrange, resize, add a display and change the primary DPI while the field is live.
+            ChaosSkiaFxOverlay.MonitorScaleForTests = 2;
+            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-400, -100, 400, 300), new PixelRect(0, -100, 300, 300), new PixelRect(300, -100, 200, 300) };
+            owner.OnScreensChanged(null, EventArgs.Empty);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(3, owner.Hosts.Count);
+            Assert.Equal(new PixelPoint(-400, -100), owner.Hosts[0].Position);
+            Assert.InRange(Math.Abs(owner.Width * owner.DesktopScaling - 400), 0, 0.01);
+            Assert.InRange(Math.Abs(owner.Height * owner.DesktopScaling - 300), 0, 0.01);
+            Assert.Equal(new PixelPoint(300, -100), owner.Hosts[2].Position);
+            Assert.All(owner.Hosts, host => { Assert.Same(fx, host.Fx); Assert.True(host.IsVisible); Assert.False(host.IsHitTestVisible); });
+            Assert.Single(frames.Subs);
+            Assert.True(GlowAtDistance() > 0);
+
+            var removed = owner.Hosts.Skip(1).ToArray();
+            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-500, 20, 300, 250) };
+            owner.OnScreensChanged(null, EventArgs.Empty);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(owner.Hosts);
+            Assert.Equal(new PixelPoint(-500, 20), owner.Position);
+            Assert.All(removed, host => Assert.False(host.IsVisible));
+
+            // A parked field stays hidden when displays change, then shows all new hosts on activity.
+            fx.Clear();
+            frames.Step(5);
+            owner.HideTick();
+            Assert.False(owner.IsVisible);
+            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-500, 20, 300, 250), new PixelRect(-200, 20, 300, 250) };
+            owner.OnScreensChanged(null, EventArgs.Empty);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, owner.Hosts.Count);
+            Assert.All(owner.Hosts, host => Assert.False(host.IsVisible));
+            ChaosSkiaFxOverlay.ArmCursorGlow();
+            Assert.All(owner.Hosts, host => Assert.True(host.IsVisible));
+
+            owner.OnScreensChanged(null, EventArgs.Empty); // queued callbacks must not revive closed hosts
+            var closed = owner.Hosts.ToArray();
+            ChaosSkiaFxOverlay.CloseActive();
+            Assert.False(owner.ListeningForScreens);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            Assert.All(closed, host => Assert.False(host.IsVisible));
+            Assert.Empty(frames.Subs);
+        }
+        finally
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.FramesForTests = null;
+            ChaosSkiaFxOverlay.MonitorBoundsForTests = null;
+            ChaosSkiaFxOverlay.MonitorScaleForTests = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task NativeRefusalDoesNotLeakAcrossSnapshots() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
