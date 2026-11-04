@@ -12,15 +12,17 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class MasterSoundTests
 {
-    private sealed class Voice(Action ended) : LibVlcAudio.ISoundVoice
+    private sealed class Voice(Action ended, string? failure = null) : LibVlcAudio.ISoundVoice
     {
         public double Gain;
+        public int Writes;
         public bool Disposed, Playing;
         public string? Routed;
-        public double Volume { set => Gain = value; }
-        public Action<long>? Started { private get; set; }
+        public double Volume { set { Writes++; Gain = value; } }
+        private Action<long>? _started;
+        public Action<long>? Started { set { if (failure == "setup") throw new InvalidOperationException(); _started = value; } }
         public void ApplyPreferredDevice() { Assert.True(Playing); Routed = LibVlcAudio.PreferredDevice(CoreSettings.Current.AudioOutputDeviceId, "default", new[] { "headset" }); }
-        public bool Play() { Playing = true; Started?.Invoke(2000); return true; }
+        public bool Play() { if (failure == "play") throw new InvalidOperationException(); Playing = true; ApplyPreferredDevice(); _started?.Invoke(2000); return true; }
         public void Dispose() { Disposed = true; ended(); }
     }
     [Theory]
@@ -101,8 +103,32 @@ public sealed class MasterSoundTests
         }
         finally { if (voice?.Disposed == false) stop?.Invoke(); (settings.MasterVolume, settings.AudioOutputDeviceId) = before; }
     }
-    [Fact]
-    public void Native_sound_stays_muted_until_a_delayed_setup_lands()
+    [Theory]
+    [InlineData("setup"), InlineData("play")]
+    public void Setup_failure_disposes_voice_and_detaches_volume_watch(string failure)
+    {
+        var settings = CoreSettings.Current;
+        var before = settings.MasterVolume;
+        Voice? voice = null;
+        var finished = 0;
+        var started = 0;
+        try
+        {
+            var stop = LibVlcAudio.StartSound(done => voice = new Voice(done, failure), 50, _ => started++, () => finished++);
+            Assert.True(voice!.Disposed);
+            Assert.Equal(0, started);
+            Assert.Equal(1, finished);
+            var writes = voice.Writes;
+            settings.MasterVolume = before == 0 ? 50 : 0;
+            Assert.Equal(writes, voice.Writes);
+            stop();
+            Assert.Equal(1, finished);
+        }
+        finally { settings.MasterVolume = before; }
+    }
+    [Theory]
+    [InlineData(false), InlineData(true)]
+    public void Native_sound_stays_muted_until_a_delayed_setup_lands(bool stopDuringSetup)
     {
         if (!OperatingSystem.IsLinux()) Assert.Skip("ALSA null output is Linux-only");
         LibVlcAudio audio;
@@ -110,7 +136,7 @@ public sealed class MasterSoundTests
         try { audio = new LibVlcAudio("--aout=alsa", "--alsa-audio-device=null"); }
         catch (Exception e) when (Environment.GetEnvironmentVariable("CI") != "true") { Assert.Skip("libvlc not installed: " + e.Message); return; }
         var wav = System.IO.Path.Combine(System.IO.Directory.CreateTempSubdirectory("ccp-sound-").FullName, "a.wav");
-        LayeredAudioLoopTests.WriteSilentWav(wav, ms: 3000);
+        LayeredAudioLoopTests.WriteSilentWav(wav, ms: 250);
         LibVlcAudio.Voice? voice = null;
         bool? mutedAtStart = null;
         using ManualResetEventSlim started = new(), held = new(), release = new();
@@ -125,11 +151,21 @@ public sealed class MasterSoundTests
                 held.Wait();
                 return voice;
             });
-            Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
-            Thread.Sleep(200);
-            Assert.True(mutedAtStart == true && voice!.Player.Mute, "audible before device and gain were applied");
+            Assert.False(started.Wait(TimeSpan.FromMilliseconds(600)), "reported success before device and gain setup");
+            Assert.True(SpinWait.SpinUntil(() => voice!.Player.State == LibVLCSharp.Shared.VLCState.Paused, 5000), "clip never paused");
+            Assert.Equal(0, voice!.Player.Time);
+            Assert.True(voice.Player.Mute, "audible before device and gain setup");
+            if (stopDuringSetup)
+            {
+                audio.StopSound();
+                release.Set();
+                Assert.False(started.Wait(TimeSpan.FromMilliseconds(500)), "stopped clip started after setup");
+                return;
+            }
             release.Set();
-            Assert.True(SpinWait.SpinUntil(() => { lock (voice!.Player) return !voice.Player.Mute; }, 5000), "setup never unmuted");
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10)), "setup never started playback");
+            Assert.False(mutedAtStart);
+
         }
         finally { release.Set(); holder?.Wait(); audio.StopSound(); }
     }
