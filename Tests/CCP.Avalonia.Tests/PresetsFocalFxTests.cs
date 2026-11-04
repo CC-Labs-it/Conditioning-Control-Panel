@@ -89,6 +89,23 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task TurningMotionOffCancelsActiveEntrancesBeforeHover() => WithPresets((host, view) =>
+    {
+        view.IsVisible = false; Settle();
+        view.IsVisible = true; Settle();
+        var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
+        var row = rack.Children.OfType<Border>().First();
+        Assert.Contains(rack.Children.OfType<Border>(), card => card.Opacity < 1);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged(); Settle();
+        Assert.Equal(1, row.Opacity);
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.Equal(0, slide.Y);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
