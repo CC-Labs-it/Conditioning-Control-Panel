@@ -26,7 +26,7 @@ internal sealed class LeashCutConfirmWindow : Window
         string.IsNullOrWhiteSpace(holderName) ? Loc.Get("leash_cut_confirm_body_anon") : Loc.GetF("leash_cut_confirm_body", holderName!.Trim()),
         Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-cut-confirm", onYes);
 
-    private static void Show(string title, string body, string yes, string no, string tag, Action onYes)
+    internal static void Show(string title, string body, string yes, string no, string tag, Action onYes)
     {
         if (_open != null) { try { _open.Activate(); } catch { } return; }
         var w = new LeashCutConfirmWindow(title, body, yes, no, tag, onYes);

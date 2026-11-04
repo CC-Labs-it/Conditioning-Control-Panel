@@ -66,6 +66,14 @@ public sealed class LeashHolderCard : Border
         who.Children.Add(Text(Loc.GetF("leash_holder_day", _held.Day), 11.5, F.Gold));
         who.Children.Add(Text(Loc.Get(dnd ? "leash_state_quiet" : _held.Online ? "leash_state_online" : "leash_state_offline"), 10.5, dnd ? F.Lilac : _held.Online ? F.Mint : F.Dim));
         Grid.SetColumn(who, 1); head.Children.Add(who);
+        var more = Button("…", "leash-holder-more", F.Text);
+        var menu = new ContextMenu();
+        var release = new MenuItem { Header = Loc.GetF("leash_menu_release", _held.Who.Name), Tag = "leash-menu-release" };
+        release.Click += (_, _) => ConfirmRelease();
+        menu.Items.Add(release);
+        more.ContextMenu = menu;
+        more.Click += (_, _) => menu.Open(more);
+        Grid.SetColumn(more, 2); head.Children.Add(more);
         _body.Children.Add(head);
         Figures();
         if (_held.Assignment is { } a)
@@ -103,6 +111,24 @@ public sealed class LeashHolderCard : Border
         ILeashService? service = null;
         try { service = _service(); } catch { }
         if (LeashSentList.For(service, _held.Who.Id) is { } sent) _body.Children.Add(sent);
+    }
+    internal void ConfirmRelease() => LeashCutConfirmWindow.Show(
+        Loc.GetF("leash_release_confirm_title", _held.Who.Name),
+        Loc.GetF("leash_release_confirm_body", _held.Who.Name),
+        Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"),
+        "leash-release-confirm", () => _ = ReleaseAsync());
+    internal async Task<bool> ReleaseAsync()
+    {
+        bool ok = false;
+        try { if (_service() is { } s) ok = await s.ReleaseAsync(_held.Who.Id); } catch { }
+        if (!ok)
+        {
+            _result = (Loc.GetF("leash_release_failed", _held.Who.Name), false);
+            _resultUntil = DateTimeOffset.MaxValue;
+            _resultTimer?.Dispose(); _resultTimer = null;
+            Render();
+        }
+        return ok;
     }
     private void Figures()
     {
@@ -275,6 +301,7 @@ public sealed class LeashHolderCard : Border
     private void ArmExpiry()
     {
         _resultTimer?.Dispose();
+        if (_resultUntil == DateTimeOffset.MaxValue) return;
         var remaining = _resultUntil - Clock.GetUtcNow();
         if (remaining <= TimeSpan.Zero) { ExpireResult(); return; }
         _resultTimer = Clock.CreateTimer(_ => Dispatcher.UIThread.Post(ExpireResult), null, remaining, Timeout.InfiniteTimeSpan);

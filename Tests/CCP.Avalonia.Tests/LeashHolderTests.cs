@@ -55,6 +55,7 @@ public sealed class LeashHolderTests
         public IReadOnlyList<LeashSentItem> SentTo(string id) => Items;
         public LeashSendResult Reply = new(LeashSendStatus.Sent);
         public bool ThrowSend;
+        public bool ReleaseResult = true;
         public readonly List<(string Op, object? Kind, object? Value, LeashWatch? Watch)> Calls = new();
         public void Publish(params HeldLeash[] held) { Snapshot = new(null, held, Array.Empty<LeashOffer>()); SnapshotChanged?.Invoke(Snapshot); }
         public void Receipt(LeashSentItem item) { Items = new[] { item }; ReceiptsChanged?.Invoke(); }
@@ -65,7 +66,7 @@ public sealed class LeashHolderTests
         public Task<LeashSendResult> PunishAsync(string id, PunishKind kind, int size, LeashWatch? watch = null) => Send("punish", kind, size, watch);
         public Task<LeashSendResult> RewardAsync(string id, RewardKind kind, string? token = null, int? size = null) => Send("reward", kind, token ?? (object?)size);
         public Task<LeashSendResult> TugAsync(string id) => Send("tug");
-        public Task<bool> ReleaseAsync(string id) { Calls.Add(("release", id, null, null)); Publish(); return Task.FromResult(true); }
+        public Task<bool> ReleaseAsync(string id) { Calls.Add(("release", id, null, null)); if (ReleaseResult) Publish(); return Task.FromResult(ReleaseResult); }
         public Task<LeashAnswerResult> AnswerAsync(string id, bool accept, LeashIntensity intensity) => throw new NotSupportedException();
         public Task CutAsync() => Task.CompletedTask; public Task SetIntensityAsync(LeashIntensity i) => Task.CompletedTask;
         public Task SetDndAsync(LeashDnd d) => Task.CompletedTask;
@@ -88,6 +89,24 @@ public sealed class LeashHolderTests
         var window = new Window { Content = page, Width = 660, Height = 750 };
         try { window.Show(); page.OnShown(); Dispatcher.UIThread.RunJobs(); action(page, service, held); }
         finally { window.Close(); }
+    });
+    [Fact]
+    public void ReleaseRequiresConfirmationAndFailureStaysVisible() => Run((page, svc, held) =>
+    {
+        var card = Assert.Single(page.HolderCards.Values);
+        var more = Tagged<Button>(card, "leash-holder-more");
+        var release = Assert.IsType<MenuItem>(Assert.Single(more.ContextMenu!.Items));
+        release.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        Assert.Empty(svc.Calls);
+        LeashGateCardTests.Click(LeashCutConfirmWindow.Current!.NoButton);
+        Assert.Empty(svc.Calls);
+        svc.ReleaseResult = false;
+        release.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        LeashGateCardTests.Click(LeashCutConfirmWindow.Current!.YesButton);
+        Assert.Equal("release", Assert.Single(svc.Calls).Op);
+        Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
+        card.Render();
+        Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
     });
     [Fact]
     public void HoldingAloneReachesTheCardAndPollsKeepItsOpenSheet() => Run((page, svc, held) =>
