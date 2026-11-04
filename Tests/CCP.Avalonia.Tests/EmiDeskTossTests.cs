@@ -49,7 +49,7 @@ public sealed class EmiDeskTossTests
             EmiSfx.Clock = clock;
             EmiDeskWindow.TossClock = clock;
 
-            desk = new EmiDeskWindow();
+            desk = new EmiDeskWindow { PatClock = clock };
             desk.Show();
             Dispatcher.UIThread.RunJobs();
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot", Priv)!.GetValue(desk)!;
@@ -87,10 +87,17 @@ public sealed class EmiDeskTossTests
 
             // WPF's LandChain: ^_^, then her rest face, not the startled pickup face forever.
             Assert.Equal("^_^", desk.Face);
-            Assert.Equal(TimeSpan.FromMilliseconds(EmiDeskWindow.LandFaceMs), clock.Due);
-            clock.Fire();
-            Dispatcher.UIThread.RunJobs();
+            string Pose() => (string)typeof(EmiDeskWindow).GetField("_pose", Priv)!.GetValue(desk)!;
+            Assert.Equal("celebration", Pose());
+            Assert.True(desk.ChainLive);
+            clock.Now += TimeSpan.FromMilliseconds(600).Ticks;
+            desk.AdvancePatFeedback();
             Assert.Equal("0_0", desk.Face);
+            Assert.Equal("celebration", Pose());
+            clock.Now += TimeSpan.FromMilliseconds(160).Ticks;
+            desk.AdvancePatFeedback();
+            Assert.Equal("idle", Pose());
+            Assert.False(desk.ChainLive);
         }
         finally
         {

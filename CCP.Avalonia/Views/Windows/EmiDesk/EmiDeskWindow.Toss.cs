@@ -10,11 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 // thrown. The numbers, the throw detection and the landing curve are Core EmiTossRules /
 // EmiFlingDetector, shared with WPF.
 //
-// The "land" chain's faces play here (PlayLandFace); its "celebration" body frame does not.
-// ponytail: WPF also plays the "dizzy" chain, the land body frame, and fires the moment bus ("dragged",
-// "dropped", "flung" with zoneRow / flings20 / flings50). Both need the chain player and
-// EmiDeskService.Fire, neither on this head (folded into row win-emi-desk); PlayChain is the
-// head's no-op stub until then.
+// The dizzy chain and moment bus remain to be ported.
 public partial class EmiDeskWindow
 {
     /// <summary>The throw clock; tests step it.</summary>
@@ -35,7 +31,6 @@ public partial class EmiDeskWindow
         try
         {
             _toss.PickUp(Position.Y / SafeScale());
-            CancelLandFace();
             EmiSfx.Lift();
             if (!ChainLive && _wobbleFace == null) DrawFace(EmiTossRules.PickupFace);
         }
@@ -64,35 +59,16 @@ public partial class EmiDeskWindow
             }
             EmiSfx.Bump();
             PlayLanding(thrown: false);
-            if (!ChainLive) PlayLandFace();
+            if (!ChainLive) StartPatFeedback(LandFrames, "celebration");
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] put down failed"); }
     }
 
-    /// <summary>The faces of WPF's LandChain (Toss.cs:42-45): ^_^ for 600 ms, then her rest face.
-    /// Without it the pickup face would stay after a gentle drop.</summary>
-    internal const int LandFaceMs = 600;
-    private ITimer? _landFace;
-
-    private void PlayLandFace()
+    // WPF Toss.cs:42-45: hold celebration through both face frames.
+    private static readonly EmiPatFrame[] LandFrames =
     {
-        CancelLandFace();
-        DrawFace("^_^");
-        ITimer? t = null;
-        t = TossClock.CreateTimer(_ => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            if (_landFace != t) return;   // a pickup since then cancelled it
-            _landFace = null;
-            if (!_closingForGood && !ChainLive) DrawFace(EmiChains.RestFace);
-        }), null, TimeSpan.FromMilliseconds(LandFaceMs), Timeout.InfiniteTimeSpan);
-        _landFace = t;
-    }
-
-    private void CancelLandFace()
-    {
-        _landFace?.Dispose();
-        _landFace = null;
-    }
+        new("^_^", 600), new(EmiChains.RestFace, 160)
+    };
 
     /// <summary>WPF Toss.cs:163. The landing squash from her feet, on the squash's own slot: it
     /// replaces a running click squash the way WPF's BeginAnimation did.</summary>
