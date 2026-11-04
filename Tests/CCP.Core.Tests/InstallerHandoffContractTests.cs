@@ -117,11 +117,24 @@ public class InstallerHandoffContractTests
         Assert.Contains("Name: \"fileassoc\"", wpf);
         Assert.Contains("Tasks: fileassoc", wpf);
         Assert.Contains("if not WizardIsTaskSelected('fileassoc') then", wpf);
-        Assert.DoesNotContain("Name: \"fileassoc\"", ava);
-        Assert.DoesNotContain("Tasks: fileassoc", ava);
-        Assert.DoesNotContain("WizardIsTaskSelected('fileassoc')", ava);
+        Assert.Contains("Name: \"fileassoc\"", ava);
+        Assert.Contains("Tasks: fileassoc", ava);
+        Assert.Contains("if not WizardIsTaskSelected('fileassoc') then", ava);
         Assert.DoesNotContain("Type: files; Name: \"{app}\\WebView2Loader.dll\"", wpf);
         Assert.Matches(@"Type: files;\s+Name: ""\{app\}\\WebView2Loader.dll""", ava);
+    }
+
+    [Fact]
+    public void ExplorerAssociationsMatchWpfRegistryContract()
+    {
+        var wpf = Read("installer.iss");
+        var ava = Read("installer-avalonia.iss");
+        static string AssociationRows(string source) => string.Join("\n", source.Replace("\r\n", "\n")
+            .Split('\n').Where(line => line.StartsWith("Root: HKCU;") && line.Contains("Tasks: fileassoc")));
+        Assert.Equal(34, AssociationRows(wpf).Split('\n').Length);
+        Assert.Equal(AssociationRows(wpf), AssociationRows(ava));
+        Assert.Contains("Flags: unchecked", ava.Split('\n').Single(line => line.StartsWith("Name: \"fileassoc\"")));
+        Assert.Contains("if not WizardIsTaskSelected('fileassoc') then\n      CleanupFileAssociations();", ava.Replace("\r\n", "\n"));
     }
 
     // WPF csproj:146,945-953 ships LibVLC 3.0.21 under {app}\libvlc; Avalonia
