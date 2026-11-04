@@ -31,6 +31,20 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class ModChoiceTests
 {
+    [Fact]
+    public Task AccountSupportCopyTracksTakeoverName() => Run(async (shell, svc, server) =>
+    {
+        shell.ShowTab("appsettings");
+        var section = shell.AppSettingsPage!.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection>("SectionAccount")!;
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_patreon_features", AvApp.Mods.GetTakeoverLabel()), section.SupportFeaturesText);
+        AvApp.Mods.ActivateMod(BuiltInMods.CCPDefaultId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_patreon_features", AvApp.Mods.GetTakeoverLabel()), section.SupportFeaturesText);
+        await Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(1, "BASIC BIMBO")]
     [InlineData(19, "BASIC BIMBO")]
