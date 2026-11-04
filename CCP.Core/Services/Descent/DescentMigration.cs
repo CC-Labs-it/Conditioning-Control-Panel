@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services.Descent
 {
@@ -82,6 +84,45 @@ namespace ConditioningControlPanel.Services.Descent
         /// still gets the bonus its migration earned.</para>
         /// </summary>
         public static double XpBonusFor(Models.AppSettings? settings) => DescentCycleXp.XpBonusFor(settings);
+
+        // WPF DescentMigrationService.cs:202-219, 254-329, 359-377: silent restore,
+        // including the server ladder and watermark reset before arming the submit.
+        public static bool ApplyRestore(AppSettings settings, DescentMigrationOffer offer, DescentStage? stage, DateTime nowUtc)
+        {
+            if (settings.DescentMigrationCompleted || DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice))
+                return false;
+            var result = Resolve(DescentMigrationChoices.Restore, offer);
+            settings.DescentPreMigrationLevel = settings.PlayerLevel;
+            settings.DescentPreMigrationLifetimeXp = result.LifetimeXp;
+            settings.DescentEpoch = DescentEpochs.AccountDescent;
+            settings.PlayerLevel = result.Level;
+            settings.PlayerXP = result.XpIntoLevel;
+            if (settings.PlayerLevel > settings.HighestLevelEver) settings.HighestLevelEver = settings.PlayerLevel;
+            settings.DescentCycleXpBonus = CycleXpBonus;
+            var reached = stage?.Thresholds is { Count: > 0 } thresholds
+                ? thresholds.Count(t => offer.DevotionDays >= t) : Math.Max(0, stage?.N ?? 0);
+            settings.DescentPendingStageCeremonies = Enumerable.Range(1, reached).ToList();
+            settings.DescentVeteranArchive = true;
+            settings.DescentAnchorUtc = nowUtc;
+            settings.DescentLastStageDripDate = null;
+            ProfileAdopt.ClearXpWatermark(settings, "descent migration ceremony");
+            settings.DescentMigrationOffered = false;
+            settings.PendingDescentMigrationChoice = DescentMigrationChoices.Restore;
+            return true;
+        }
+
+        // WPF DescentMigrationService.cs:390-412: release at most one stage per local day after an ack.
+        public static int? ReleaseStageCeremony(AppSettings settings, DateTime localNow)
+        {
+            var queue = settings.DescentPendingStageCeremonies;
+            if (!settings.DescentMigrationCompleted || queue is not { Count: > 0 }) return null;
+            var today = localNow.ToString("yyyy-MM-dd");
+            if (settings.DescentLastStageDripDate == today) return null;
+            var stage = queue[0];
+            settings.DescentPendingStageCeremonies = queue.Skip(1).ToList();
+            settings.DescentLastStageDripDate = today;
+            return stage;
+        }
 
         /// <summary>
         /// What a choice does to the ledger, in one place, with no side effects.

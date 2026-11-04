@@ -1,5 +1,9 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -67,6 +71,27 @@ public sealed class DescentFuseDirectorTests
         Assert.False(shell.FuseRetryRunning);
         Assert.Equal(0, shell.FuseRetryAttempts);
     });
+
+    [Fact] public Task RetryStopsWhenAnOfferIsInHand() => Run(true, (shell, fuse, s) => {
+        var oldLogin = CoreAccount.IsLoggedInProvider; var queued = new List<Action>(); var sync = new SyncPush(() => Array.Empty<string>(), () => false, new OfferHandler()) { PostMigration = queued.Add };
+        try {
+            LateZeroNoCrackOwed(shell, fuse, s);
+            Assert.True(shell.FuseRetryRunning);
+            s.UnifiedId = "fuse-offer"; s.OfflineMode = false; s.LastConfirmedServerXp = 0; CoreAccount.IsLoggedInProvider = () => true; ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = sync;
+            sync.MarkLoaded(null);
+            Assert.True(sync.PushAsync("offer").GetAwaiter().GetResult()); Assert.Single(queued);
+            shell.TickFuseRetry();
+            Assert.False(shell.FuseRetryRunning); Assert.Equal(0, shell.FuseRetryAttempts);
+        }
+        finally { sync.Reset(); CoreAccount.IsLoggedInProvider = oldLogin; }
+    });
+
+    private sealed class OfferHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                { Content = new StringContent("{\"descent_migration\":{\"required\":true}}") });
+    }
 
     [Fact]
     public Task PanicClosesAnyShow() => Run(true, (shell, fuse, s) =>

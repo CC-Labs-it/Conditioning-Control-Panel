@@ -124,11 +124,11 @@ namespace ConditioningControlPanel.Services
         /// The login-path adopt (WPF V2AuthServiceHead.ApplyUserDataToSettings): identity, the linked-tier
         /// grace extension, then level/XP take-higher by TOTAL XP. Does not save.
         /// </summary>
-        public static void ApplyUserData(AppSettings settings, V2User user, string? authToken, DateTime nowUtc)
+        public static void ApplyUserData(AppSettings settings, V2User user, string? authToken, DateTime nowUtc, bool holdPendingMigration = false)
         {
             ApplyIdentity(settings, user, authToken);
             EntitlementTierRule.ExtendGrace(settings, user.PatreonTier, nowUtc);
-            if (user.Level <= 0) return;
+            if (user.Level <= 0 || (holdPendingMigration && DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice))) return;
             var localTotalXp = TotalXp(settings);
             if (user.Xp >= localTotalXp)
             {
@@ -161,10 +161,11 @@ namespace ConditioningControlPanel.Services
         /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), no skills union, recap or
         /// SeasonResetPending on level_reset - add each with its feature. Does not save.
         /// </summary>
-        public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
+        public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc, bool migrationSubmitInFlight = false)
         {
             if (response["user"] is not JObject node) return;
             var user = node.ToObject<V2User>()!;
+            var hold = (migrationSubmitInFlight || DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) && !(response["descent_migration"] is JObject block && block["completed"]?.Type == JTokenType.Boolean && block.Value<bool>("completed"));
             ApplyCurveEpoch(settings, user.CurveEpoch);
             if (ShouldAdoptServerSeason(user.CurrentSeason, settings.CurrentSeason))
             {
@@ -186,7 +187,7 @@ namespace ConditioningControlPanel.Services
                     settings.HighestLevelEver = user.HighestLevelEver;
                 }
             }
-            else if (user.Level > 0)
+            else if (user.Level > 0 && !hold)
             {
                 var localTotalXp = TotalXp(settings);
                 if (user.Xp > localTotalXp + ServerAheadBand(settings, localTotalXp))
@@ -197,7 +198,7 @@ namespace ConditioningControlPanel.Services
                     settings.PlayerXP = XpCurve.GetCurrentLevelXP(user.Level, user.Xp, Epoch(settings));
                 }
             }
-            RecordAgreedServerXp(settings, user.Xp, TotalXp(settings), "V2 sync");
+            if (!hold) RecordAgreedServerXp(settings, user.Xp, TotalXp(settings), "V2 sync");
         }
 
         /// <summary>
@@ -205,13 +206,14 @@ namespace ConditioningControlPanel.Services
         /// epoch: level/XP take-higher, the season key forward only (clearing the watermark), and the watermark
         /// when the server's season is the one we sync under. Nothing else. Returns true when the season advanced.
         /// </summary>
-        public static bool AdoptReadBeforeWrite(AppSettings settings, V2User user)
+        public static bool AdoptReadBeforeWrite(AppSettings settings, V2User user, bool holdPendingMigration = false)
         {
+            var hold = holdPendingMigration && DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice);
             var localTotalXp = TotalXp(settings);
             var keepSeason = settings.CurrentSeason;
             var seasonAdvances = ShouldAdoptServerSeason(user.CurrentSeason, keepSeason);
             var serverTotalXp = (double)user.Xp;
-            if (user.Level > 0 && serverTotalXp >= localTotalXp)
+            if (!hold && user.Level > 0 && serverTotalXp >= localTotalXp)
             {
                 settings.PlayerLevel = user.Level;
                 settings.PlayerXP = XpCurve.GetCurrentLevelXP(user.Level, serverTotalXp, Epoch(settings));
@@ -224,9 +226,9 @@ namespace ConditioningControlPanel.Services
                 ClearXpWatermark(settings, "season rollover (read-before-write)");
             }
             var scopedSeason = settings.CurrentSeason ?? string.Empty;
-            if (string.Equals(user.CurrentSeason ?? string.Empty, scopedSeason, StringComparison.Ordinal))
+            if (!hold && string.Equals(user.CurrentSeason ?? string.Empty, scopedSeason, StringComparison.Ordinal))
                 RecordAgreedServerXp(settings, serverTotalXp, TotalXp(settings), "read-before-write");
-            else
+            else if (!hold)
                 Log.Debug("Read-before-write: server season {SS} is not the scope we sync under ({LS}) — not recording a watermark",
                     string.IsNullOrEmpty(user.CurrentSeason) ? "(none)" : user.CurrentSeason,
                     string.IsNullOrEmpty(scopedSeason) ? "(none)" : scopedSeason);

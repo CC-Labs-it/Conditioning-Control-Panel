@@ -761,7 +761,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             if (_closed) { Log.Warning("Sign-in finished after the login dialog closed; ignored"); return; }
             // WPF MainWindow.Login.cs:110-141: a PROVEN different account never inherits the last one's progression.
             ClearIfOtherAccount(user.UnifiedId);
-            ProfileAdopt.ApplyUserData(CoreSettings.Current, user, authToken, DateTime.UtcNow);
+            ProfileAdopt.ApplyUserData(CoreSettings.Current, user, authToken, DateTime.UtcNow, holdPendingMigration: true);
             // WPF V2AuthServiceHead: an invite week rides its own exact end date (main 6f5e76610).
             ConditioningControlPanel.Services.Invites.InviteRules.ApplyGrant(CoreSettings.Current, ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(user.InviteGrantUntilRaw), DateTime.UtcNow);
             Controls.Invites.InvitePanel.ArmExpiry();
@@ -788,12 +788,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         private static void ClearIfOtherAccount(string? newId)
         {
-            var previousId = CoreSettings.Current.UnifiedId;
-            if (!string.IsNullOrEmpty(previousId) && !string.IsNullOrEmpty(newId) && previousId != newId)
+            var s = CoreSettings.Current;
+            var previousId = !string.IsNullOrEmpty(s.UnifiedId) ? s.UnifiedId : (s.PendingDescentMigrationChoice != null ? s.PendingDescentMigrationAccountId : null);
+            if (!string.IsNullOrEmpty(newId) && previousId != newId && (!string.IsNullOrEmpty(previousId)
+                || s.PendingDescentMigrationChoice != null || s.DescentMigrationCompleted || s.DescentMigrationOffered))
             {
-                ProgressionClear.Apply(CoreSettings.Current);
-                App.Achievements?.Reset();
                 AccountSeed.Sync?.Reset();
+                if (!string.IsNullOrEmpty(previousId))
+                { ProgressionClear.Apply(s); App.Achievements?.Reset(); }
+                AccountSeed.ClearMigration(s, preserveEpoch: string.IsNullOrEmpty(previousId));
             }
         }
 

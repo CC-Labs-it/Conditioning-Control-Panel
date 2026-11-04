@@ -50,7 +50,7 @@ public partial class MainShellWindow
         _fuseRetryAttempts,
         fuseArmed: _showCountdown?.CeremonyAtUtc != null,
         ceremonyOpen: false, // retired on both heads (WPF IsCeremonyOpen is constant false)
-        offerInHand: false,  // SyncPush applies the silent migration acknowledgment immediately
+        offerInHand: Platform.AccountSeed.Sync?.HasLiveMigrationOffer(CoreSettings.Current) == true, // WPF DescentShowDirector.cs:368-378
         migrationCompleted: CoreSettings.Current.DescentMigrationCompleted,
         choicePending: DescentMigrationChoices.IsValid(CoreSettings.Current.PendingDescentMigrationChoice));
 

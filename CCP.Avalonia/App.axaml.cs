@@ -669,7 +669,11 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown, DescentReader = Descent };
+                        { Countdown = DescentCountdown, DescentReader = Descent,
+                            PostMigration = action => global::Avalonia.Threading.Dispatcher.UIThread.Post(action),
+                            StageCeremonyDue = stage => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(
+                                global::ConditioningControlPanel.Localization.Loc.GetF("descent_stage_drip", Services.Descent.DescentStageCopy.RomanNumeral(stage)),
+                                playSound: false, aiGenerated: false) };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>

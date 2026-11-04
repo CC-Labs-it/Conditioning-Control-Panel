@@ -1,4 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -62,6 +67,36 @@ public sealed class SpiralMigrationGateTests
         s.DescentMigrationOffered = false;
         Fog(view, false);
     });
+
+    [Fact] public void LiveOfferWithholdsTheVisibleRoomUntilRestore() => Run((service, view, window) => {
+        var oldSync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync; var oldReader = AvApp.Descent;
+        var oldLogin = CoreAccount.IsLoggedInProvider; var queued = new List<Action>(); var reader = new DescentService();
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, new OfferResponse())
+            { DescentReader = reader, PostMigration = queued.Add };
+        try {
+            service.Current.UnifiedId = "room-offer-test"; service.Current.OfflineMode = false; service.Current.LastConfirmedServerXp = 0; CoreAccount.IsLoggedInProvider = () => true;
+            AvApp.Descent = reader; ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = sync;
+            sync.MarkLoaded(null);
+            window.Show();
+            Fog(view, false);
+            Assert.True(sync.PushAsync("offer").GetAwaiter().GetResult());
+            Fog(view, true);
+            Assert.Single(queued)();
+            Fog(view, false);
+            Assert.Equal(DescentMigrationChoices.Restore, service.Current.PendingDescentMigrationChoice);
+        }
+        finally {
+            sync.Reset();
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = oldSync; AvApp.Descent = oldReader; CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    });
+
+    private sealed class OfferResponse : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                { Content = new StringContent("{\"descent_migration\":{\"required\":true,\"total_xp_earned\":1000}}") });
+    }
 
     [Fact]
     public void CloudRestore_RebindsToTheReplacementSettingsInstance() => Run((service, view, window) =>

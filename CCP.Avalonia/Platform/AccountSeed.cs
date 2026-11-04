@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -117,8 +118,9 @@ internal static class AccountSeed
         if (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true)
         {
             Log.Information("Validating restored session for {Id}...", id);
+            if (CoreSettings.Current.PendingDescentMigrationChoice != null) { CoreSettings.Current.PendingDescentMigrationAccountId = id; CoreSettings.Save(); }
             var outcome = await v2.ValidateRestoredSessionAsync(id);
-            if (outcome == V2AuthService.RestoreOutcome.Cleared) CoreAccount.UnifiedUserId = null;
+            if (outcome == V2AuthService.RestoreOutcome.Cleared) { CoreAccount.UnifiedUserId = null; Sync?.Reset(); if (CoreSettings.Current.PendingDescentMigrationChoice == null) ClearMigration(CoreSettings.Current, preserveEpoch: true); CoreSettings.Save(); }
             if (outcome != V2AuthService.RestoreOutcome.Validated) return;
         }
         await LoadProfileAsync(v2);
@@ -171,7 +173,7 @@ internal static class AccountSeed
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
         if (!string.IsNullOrEmpty(s.AuthToken))
             EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
-        ProfileAdopt.AdoptReadBeforeWrite(s, user);
+        ProfileAdopt.AdoptReadBeforeWrite(s, user, holdPendingMigration: true);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
@@ -194,6 +196,16 @@ internal static class AccountSeed
         }
     }
 
+    // Account-owned migration state must not follow a logout or a different sign-in.
+    internal static void ClearMigration(AppSettings s, bool preserveEpoch = false)
+    {
+        if (!preserveEpoch) s.DescentEpoch = 0; s.DescentMigrationCompleted = false; s.DescentMigrationChoice = null;
+        s.PendingDescentMigrationChoice = null; s.DescentMigrationOffered = false; s.DescentAnchorUtc = null;
+        s.DescentCycle = 0; s.DescentCycleXpBonus = 1; s.DescentVeteranArchive = false;
+        s.DescentPreMigrationLevel = 0; s.DescentPreMigrationLifetimeXp = 0;
+        s.DescentPendingStageCeremonies = new(); s.DescentLastStageDripDate = null;
+    }
+
     /// <summary>
     /// WPF BtnQuickLogout_Click + the identity half of ClearAccountData (MainWindow.Login.cs:320-410):
     /// every provider out, identity and the rotated auth token (#455) cleared. Tokens and identity ONLY.
@@ -205,7 +217,7 @@ internal static class AccountSeed
     internal static async Task Logout(bool accountDeleted = false)
     {
         if (!accountDeleted && Sync is { Loaded: true } sync) await sync.PushAsync("pre-logout", waitForGate: true);
-        Sync?.StopHeartbeat();
+        Sync?.Reset();
         SecretStore.ClearFailed = false;
         Patreon?.Logout();
         Discord?.Logout();
@@ -218,10 +230,10 @@ internal static class AccountSeed
         s.HasLinkedDiscord = false;
         s.HasLinkedPatreon = false;
         ProgressionClear.Apply(s);
+        ClearMigration(s);
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
         App.Achievements?.Reset();
-        Sync?.Reset();
     }
 
     /// <summary>All three validate at once, as WPF starts them (App.xaml.cs). Never throws.</summary>

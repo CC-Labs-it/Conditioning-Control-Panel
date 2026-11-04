@@ -18,7 +18,7 @@ namespace CCP.Avalonia.Tests;
 /// <summary>
 /// Main sync #5 rows fc9640ff7 / abac4fa02 on this head: the bonus is for migrated accounts only (not a bare
 /// curve_epoch 1 stamp), the server's ack settles and heals an account migrated on any device, and the own
-/// Trainer Card wears the receipt + "(+N%)" readout. This head never takes the offer (no descent_auto).
+/// Trainer Card wears the receipt + "(+N%)" readout. Sync advertises silent auto-restore.
 /// </summary>
 public sealed partial class AccountSeedTests
 {
@@ -53,7 +53,7 @@ public sealed partial class AccountSeedTests
         before = s.PlayerXP;
         ProgressionBank.Add(100, "Session");
         Assert.Equal(before + 110, s.PlayerXP, 3);
-        Assert.DoesNotContain(wire.Syncs, b => b.ContainsKey("descent_auto"));   // never claims to take offers
+        Assert.All(wire.Syncs, b => Assert.True((bool)b["descent_auto"]!));
     });
 
     [Fact]

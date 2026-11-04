@@ -23,7 +23,7 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "descent_auto", "achievements" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -87,7 +87,7 @@ public sealed partial class AccountSeedTests
     {
         var s = CoreSettings.Current;
         var saved = Touched.ToDictionary(n => n, n => Get(s, n));
-        var (oldToken, oldNew, oldOffline) = (s.AuthToken, AccountSeed.NewV2, s.OfflineMode);
+        var (oldToken, oldNew, oldOffline, oldPendingAccount) = (s.AuthToken, AccountSeed.NewV2, s.OfflineMode, s.PendingDescentMigrationAccountId);
         try
         {
             Assert.True(AccountSeed.Seed(Make, p => new DiscordAccount(() => p, () => new AppSettings())));
@@ -100,7 +100,7 @@ public sealed partial class AccountSeedTests
             AccountSeed.Sync?.Reset();
             AccountSeed.Sync = null;
             foreach (var n in Touched) Set(s, n, saved[n]);
-            (s.AuthToken, AccountSeed.NewV2, s.OfflineMode) = (oldToken, oldNew, oldOffline);
+            (s.AuthToken, AccountSeed.NewV2, s.OfflineMode, s.PendingDescentMigrationAccountId) = (oldToken, oldNew, oldOffline, oldPendingAccount);
             CoreAccount.UnifiedUserId = null;
         }
     }
@@ -143,6 +143,7 @@ public sealed partial class AccountSeedTests
         Assert.True((int)body["xp"]! >= L40Xp, $"xp {body["xp"]} < {L40Xp}");
         Assert.Equal(40, (int)body["level"]!);
         Assert.Equal(1, (int)body["descent_epoch"]!);
+        Assert.True((bool)body["descent_auto"]!);
         Assert.Superset(new HashSet<string> { "first_steps", "night_owl", "linux_only" },
             body["achievements"]!.Values<string>().ToHashSet()!);
     });
@@ -200,26 +201,34 @@ public sealed partial class AccountSeedTests
         var (wire, _, _) = SignIn("u1", L40Profile("u1"));
         Assert.True(await AccountSeed.LoadProfileAsync());
         Assert.Equal(40, CoreSettings.Current.PlayerLevel);
-
+        CoreSettings.Current.PendingDescentMigrationChoice = "restore";
+        CoreSettings.Current.DescentEpoch = 1;
+        CoreSettings.Current.DescentVeteranArchive = true;
         await AccountSeed.Logout();
         Assert.Equal(1, CoreSettings.Current.PlayerLevel);
         Assert.Equal(0, CoreSettings.Current.PlayerXP);
         Assert.Equal(0, CoreSettings.Current.LastConfirmedServerXp);
+        Assert.Null(CoreSettings.Current.PendingDescentMigrationChoice);
+        Assert.False(CoreSettings.Current.DescentVeteranArchive);
 
         var second = """{"user":{"unified_id":"u2","level":2,"xp":900,"current_season":"2026-08"}}""";
         SignIn("u2", second, wire);
         Assert.True(await AccountSeed.LoadProfileAsync());
         var body = wire.Syncs.Last();
         Assert.Equal("u2", (string?)body["unified_id"]);
+        Assert.Null(body["descent_migration"]);
         Assert.Equal(900, (int)body["xp"]!);
         Assert.Equal(2, (int)body["level"]!);
     });
 
-    [Fact]
-    public void SigningInAsADifferentAccount_ClearsTheLastOnesProgression_BeforeTheFirstPush() => WithFreshInstall(async () =>
+    [Theory]
+    [InlineData("uA")]
+    public void SigningInAsADifferentAccount_ClearsTheLastOnesProgression_BeforeTheFirstPush(string? previousId) => WithFreshInstall(async () =>
     {
         var s = CoreSettings.Current;
         var (wire, _, _) = SignIn("uA", profile: null);
+        s.UnifiedId = previousId;
+        s.PendingDescentMigrationChoice = "restore";
         (s.PlayerLevel, s.PlayerXP, s.HighestLevelEver) = (40, 500, 40);   // account A's progression, still in settings
         wire.Profile = """{"user":{"unified_id":"uB","level":2,"xp":900,"current_season":"2026-08","achievements":["b_only"]}}""";
         await AvaloniaTestDispatcher.RunAsync(async () =>
@@ -234,9 +243,55 @@ public sealed partial class AccountSeedTests
         });
         var body = Assert.Single(wire.Syncs);
         Assert.Equal("uB", (string?)body["unified_id"]);
+        Assert.Null(body["descent_migration"]);
         Assert.Equal(900, (int)body["xp"]!);
         Assert.Equal(2, (int)body["level"]!);
         Assert.Equal(new[] { "b_only" }, body["achievements"]!.Values<string>());
+    });
+
+    [Theory] [InlineData(true, false, null)] [InlineData(false, true, null)] [InlineData(false, false, "restore")]
+    public void UnknownPreviousAccount_PreservesLocalProgressAndAchievements(bool completed, bool offered, string? pending) => WithFreshInstall(async () => {
+        var s = CoreSettings.Current;
+        var (wire, _, _) = SignIn("u1", """{"user":{"unified_id":"u1","level":2,"xp":900,"current_season":"2026-08","curve_epoch":1}}""");
+        s.UnifiedId = null; s.PlayerLevel = 80; s.PlayerXP = 250; s.DescentEpoch = 1; s.PendingDescentMigrationChoice = pending; s.DescentMigrationCompleted = completed; s.DescentMigrationOffered = offered; var beforeXp = ProfileAdopt.TotalXp(s);
+        var property = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var previous = property.GetValue(null); var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(TestUserDataProfile.Root, Guid.NewGuid() + ".json")));
+        engine.Progress.Unlock("first_steps"); property.SetValue(null, engine);
+        try {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                var dialog = new global::ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog();
+                dialog.Succeed(new V2AuthService.V2User { UnifiedId = "u1", Level = 2, Xp = 900 }, "tok", null, false);
+                await dialog.ProfileLoad;
+            });
+            Assert.False(Assert.Single(wire.Syncs).ContainsKey("descent_migration")); Assert.Equal(80, s.PlayerLevel); Assert.Equal(250, s.PlayerXP); Assert.Equal(beforeXp, ProfileAdopt.TotalXp(s)); Assert.True(engine.Progress.IsUnlocked("first_steps")); Assert.False(s.DescentMigrationCompleted); Assert.False(s.DescentMigrationOffered);
+        }
+        finally { property.SetValue(null, previous); }
+    });
+
+    [Theory] [InlineData("u1", 80, true)] [InlineData("u2", 2, false)]
+    public void ClearedRestore_ReauthenticatesPendingMigrationWithoutLosingProgress(string account, int level, bool keepAchievement) => WithFreshInstall(async () => {
+        var s = CoreSettings.Current;
+        SignIn("u1", """{"user":{"unified_id":"u1","level":2,"xp":900,"current_season":"2026-08","curve_epoch":1}}""");
+        s.PlayerLevel = 80; s.PlayerXP = 250; s.DescentEpoch = 1; s.PendingDescentMigrationChoice = "restore";
+        await AccountSeed.ValidateRestoredSessionAsync(new V2AuthService(() => s, new Answer(HttpStatusCode.NotFound)));
+        Assert.Null(s.UnifiedId); Assert.Equal("u1", s.PendingDescentMigrationAccountId);
+        s = Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(Newtonsoft.Json.JsonConvert.SerializeObject(s))!;
+        Assert.Equal("u1", s.PendingDescentMigrationAccountId);
+        var current = CoreSettings.Current; current.PendingDescentMigrationAccountId = s.PendingDescentMigrationAccountId; s = current;
+        var property = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var previous = property.GetValue(null); var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(TestUserDataProfile.Root, Guid.NewGuid() + ".json")));
+        engine.Progress.Unlock("first_steps"); property.SetValue(null, engine);
+        try {
+            await AvaloniaTestDispatcher.RunAsync(async () => {
+                var dialog = new global::ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog();
+                dialog.Succeed(new V2AuthService.V2User { UnifiedId = account, Level = 2, Xp = 900 }, "tok", null, false);
+                await dialog.ProfileLoad;
+            });
+            Assert.Equal(level, s.PlayerLevel); Assert.Equal(keepAchievement, engine.Progress.IsUnlocked("first_steps"));
+            if (keepAchievement) { Assert.Equal(250, s.PlayerXP); Assert.Equal("restore", s.PendingDescentMigrationChoice); }
+            else Assert.Null(s.PendingDescentMigrationChoice);
+        } finally { property.SetValue(null, previous); }
     });
 
     [Fact]
