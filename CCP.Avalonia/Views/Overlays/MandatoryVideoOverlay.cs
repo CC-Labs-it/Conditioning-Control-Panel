@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
 
         private readonly List<Surface> _surfaces = new();
+        private readonly List<ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge> _creditBadges = new();
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
@@ -136,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
-            _queuedCreditPath = null;
+            ResetCreditBadges();
             _sinceShow.Restart();
             _guardStartedAt = 0;
             _sinceFrame.Reset();
@@ -275,6 +276,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal Button CreditButton(string path)
         {
             var mark = CreditFor(path);
+            _creditBadges.Add(mark);
+            if (_queuedCreditPath == path) SetCreditQueued(mark, true);
             var button = new Button { Content = mark, Padding = new Thickness(0), BorderThickness = new Thickness(0),
                 Background = Brushes.Transparent, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Right,
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom,
@@ -287,8 +290,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var link = CreditLink(path);
             if (!Scheduler.IsPlaying || path != _path || link == null || !CreditLinkAllowed()) return;
-            if (!Floating) { _queuedCreditPath = path; return; }
+            if (!Floating)
+            {
+                _queuedCreditPath = path;
+                // WPF VideoService.Browser.cs:648-649 broadcasts to every screen;
+                // Assets/web/player/player.js:958-961 shows the tick on each badge.
+                foreach (var badge in _creditBadges) SetCreditQueued(badge, true);
+                return;
+            }
             PostCreditLink(link, _strict);
+        }
+
+        private static void SetCreditQueued(ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge badge, bool queued)
+        {
+            if (badge.Child is TextBlock label)
+                label.Text = ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.Mark + (queued ? " ✓" : "");
+        }
+
+        private void ResetCreditBadges()
+        {
+            _queuedCreditPath = null;
+            foreach (var badge in _creditBadges) SetCreditQueued(badge, false);
+            _creditBadges.Clear();
         }
 
         internal void OpenQueuedCreditLink()
@@ -969,7 +992,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 _attention = _gracePaused = false;
-                _queuedCreditPath = null;
+                ResetCreditBadges();
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
                 _userMuted = false;

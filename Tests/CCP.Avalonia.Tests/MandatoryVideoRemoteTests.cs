@@ -75,6 +75,51 @@ public sealed class MandatoryVideoRemoteTests
     });
 
     [Fact]
+    public void QueuedCreditShowsTickOnEveryScreenAndClearsOnCleanupAndNextClip() => AvaloniaTestDispatcher.Run(() =>
+    {
+        const string path = "https://v.scrolller.com/credit-tick-test.mp4";
+        ScrolllerItemIndex.Remember(path, new ScrolllerCacheMeta("clip", "test_sub"));
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var scheduler = new MandatoryVideoScheduler(o, new StillTime(), Array.Empty<string>); o.Scheduler = scheduler;
+        typeof(MandatoryVideoOverlay).GetField("_path", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, path);
+        static string? Text(Button button) => ((TextBlock)((Border)button.Content!).Child!).Text;
+        var floating = typeof(MandatoryVideoOverlay).GetProperty("Floating", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var oldOpener = MandatoryVideoOverlay.CreditOpener;
+        var opened = 0; MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; };
+        try
+        {
+            Assert.True(scheduler.Trigger(strictOverride: true, path: path));
+            var locked = o.CreditButton(path); o.CreditPressed(path);
+            Assert.Equal("via Scrolller", Text(locked));
+            scheduler.ForceCleanup();
+            Assert.True(scheduler.Trigger(strictOverride: false, path: path));
+            var first = o.CreditButton(path); var second = o.CreditButton(path);
+            Assert.Equal("via Scrolller", Text(first)); Assert.Equal("via Scrolller", Text(second));
+            floating.SetValue(o, true);
+            o.CreditPressed(path); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, opened); Assert.Equal("via Scrolller", Text(first));
+            o.CreditPressed("/local.mp4"); // unrelated or uncredited presses do not change the badge
+            Assert.Equal("via Scrolller", Text(first));
+            floating.SetValue(o, false);
+            first.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("via Scrolller ✓", Text(first)); Assert.Equal("via Scrolller ✓", Text(second));
+            scheduler.ForceCleanup();
+            Assert.Equal("via Scrolller", Text(first)); Assert.Equal("via Scrolller", Text(second));
+
+            Assert.True(scheduler.Trigger(strictOverride: false, path: path));
+            var next = o.CreditButton(path);
+            Assert.Equal("via Scrolller", Text(next));
+            next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("via Scrolller ✓", Text(next));
+            // A new clip whose cache entry has vanished tears down the old run and its feedback.
+            o.Show($"https://v.scrolller.com/missing-{Guid.NewGuid():N}.mp4", false);
+            Assert.Equal("via Scrolller", Text(next));
+            Assert.False(scheduler.IsPlaying);
+        }
+        finally { scheduler.ForceCleanup(); MandatoryVideoOverlay.CreditOpener = oldOpener; }
+    });
+
+    [Fact]
     public void CreditLinkRefusesLocksAtPressAndBeforeDispatch() => AvaloniaTestDispatcher.Run(() =>
     {
         const string path = "https://v.scrolller.com/credit-lock-test.mp4";
