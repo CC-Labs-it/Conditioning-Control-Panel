@@ -999,6 +999,54 @@ public sealed partial class GameWindowTests
     }
 
     [Fact]
+    public void Dtrh_PanicRequestsEndAndPageSettlesOnlyOnce() => RunDtrh(lab: true, (shell, xp, runs, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        w.HandleMessage("{\"type\":\"run-progress\",\"score\":100,\"durationSec\":180}");
+        sent.Clear();
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+        var end = Assert.Single(sent);
+        Assert.Equal("end-run", (string?)end["type"]);
+        Assert.Equal("host", (string?)end["reason"]);
+        Assert.True(w.IsVisible);
+        w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+        w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+        w.HandleMessage("{\"type\":\"exit-done\"}");
+        Assert.False(w.IsVisible);
+        Assert.Single(xp);
+        Assert.Single(runs);
+    });
+
+    [Fact]
+    public void Dtrh_PanicForcesCloseAfterWatchdog() => RunDtrh(lab: true, (shell, xp, runs, _) =>
+    {
+        var old = GameWindow.DtrhScheduleClose;
+        Action? close = null;
+        TimeSpan delay = default;
+        try
+        {
+            GameWindow.DtrhScheduleClose = (d, callback) => { delay = d; close = callback; };
+            var w = GameWindow.Launch("dtrh")!;
+            w.HandleMessage("{\"type\":\"ready\"}");
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage("{\"type\":\"run-progress\",\"score\":100,\"durationSec\":180}");
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+            Assert.True(w.IsVisible);
+            Assert.Equal(TimeSpan.FromMilliseconds(1200), delay);
+            Assert.NotNull(close);
+            close();
+            Assert.False(w.IsVisible);
+            Assert.Single(xp);
+            Assert.Single(runs);
+        }
+        finally { GameWindow.DtrhScheduleClose = old; }
+    });
+
+    [Fact]
     public void Dtrh_BasicAndDailyGiftAgreeAcrossDoorsAndPayout() => RunDtrh(lab: false, (shell, _, _, denied) =>
     {
         bool premium = false;
@@ -1205,6 +1253,9 @@ public sealed partial class GameWindowTests
 
             shell.HandlePanicKeyPress(t0.AddSeconds(1));                          // again within 2 s: panic
             Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen());
+            Assert.Equal("end-run", (string?)sent.Last()["type"]);
+            w.HandleMessage("{\"type\":\"exit-done\"}");
             Assert.False(GameWindow.IsAnyOpen());
             Assert.False(shellClosed);                                            // a game owned the screen: no exit rung
         }
