@@ -1,0 +1,151 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Threading;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services.Startup;
+using Xunit;
+
+namespace CCP.Avalonia.Tests;
+
+public sealed class StartupModalLadderTests
+{
+    private static void Setup()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        StartupLadder.ResetForTests();
+        StartupLadder.ModalWindowReady = () => true;
+    }
+
+    private static async Task Step()
+    {
+        Dispatcher.UIThread.RunJobs();
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+        for (var i = 0; i < 5; i++) await Task.Yield();
+    }
+
+    [Fact]
+    public Task OffersRunInPriorityOrder() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var order = new List<int>();
+            foreach (var priority in new[] { 30, 10, 20 })
+                StartupLadder.EnqueueModal(priority.ToString(), priority, () => { order.Add(priority); return Task.CompletedTask; });
+            await Step(); await Step(); await Step();
+            Assert.Equal(new[] { 10, 20, 30 }, order);
+        }
+        finally { StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task DuplicateKeysAreOfferedOnceAndTheScreenGateIsRespected() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var ready = false;
+            var calls = 0;
+            StartupLadder.ModalWindowReady = () => ready;
+            StartupLadder.EnqueueModal("same", 10, () => { calls++; return Task.CompletedTask; });
+            StartupLadder.EnqueueModal("SAME", 1, () => { calls += 100; return Task.CompletedTask; });
+            await Step();
+            Assert.Equal(0, calls);
+            ready = true;
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalPoll);
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            Assert.Equal(1, calls);
+        }
+        finally { StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task UnavailableScreenEventuallyAbandonsTheOffer() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var shown = false;
+            var abandoned = false;
+            StartupLadder.ModalWindowReady = () => false;
+            StartupLadder.EnqueueModal("blocked", 10, () => { shown = true; return Task.CompletedTask; }, () => abandoned = true);
+            await Step();
+            var clock = (StartupLadder.TestClock)StartupLadder.Time;
+            for (var i = 0; i < (int)(StartupLadder.ModalMaxWait / StartupLadder.ModalPoll); i++)
+            {
+                clock.Advance(StartupLadder.ModalPoll);
+                for (var j = 0; j < 5; j++) await Task.Yield();
+            }
+            Assert.False(shown);
+            Assert.True(abandoned);
+        }
+        finally { StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task ModalOwnsScreenUntilItsTaskCompletes() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var closed = new TaskCompletionSource();
+            var second = false;
+            StartupLadder.EnqueueModal("first", 10, () => closed.Task);
+            StartupLadder.EnqueueModal("second", 20, () => { second = true; return Task.CompletedTask; });
+            await Step();
+            Assert.True(MainShellWindow.IsStartupDialogShowing);
+            await Step();
+            Assert.False(second);
+            closed.SetResult();
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            await Step();
+            Assert.True(second);
+            Assert.False(MainShellWindow.IsStartupDialogShowing);
+        }
+        finally { MainShellWindow.IsStartupDialogShowing = false; StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task FailureReleasesOwnershipAndRunsNext() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var second = false;
+            StartupLadder.EnqueueModal("failure", 10, () => throw new InvalidOperationException());
+            StartupLadder.EnqueueModal("next", 20, () => { second = true; return Task.CompletedTask; });
+            await Step();
+            Assert.False(MainShellWindow.IsStartupDialogShowing);
+            await Step();
+            Assert.True(second);
+            Assert.False(MainShellWindow.IsStartupDialogShowing);
+        }
+        finally { MainShellWindow.IsStartupDialogShowing = false; StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task PassiveSurfaceWaitsForQueuedModalThenIsReevaluated() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var opened = 0;
+            StartupLadder.EnqueueModal("modal", 10, () => Task.CompletedTask);
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "passive", Open = () => opened++ });
+            Assert.Equal(0, opened);
+            Assert.Equal(0, StartupLadder.Inbox.UnreadCount);
+            await Step();
+            Assert.Equal(1, opened);
+            Assert.Equal(0, StartupLadder.Inbox.UnreadCount);
+        }
+        finally { StartupLadder.ResetForTests(); }
+    });
+}
