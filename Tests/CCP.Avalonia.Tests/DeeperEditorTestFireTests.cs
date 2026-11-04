@@ -183,6 +183,7 @@ public sealed class DeeperEditorTestFireTests
             await editor.WaveformLoad.WaitAsync(TimeSpan.FromSeconds(10));
             Dispatcher.UIThread.RunJobs();
             Assert.NotNull(editor.WaveformPath.Data);
+            Assert.Equal("0:12", editor.TxtTotalTime.Text);
         }
         finally
         {
@@ -193,4 +194,133 @@ public sealed class DeeperEditorTestFireTests
             Directory.Delete(dir, true);
         }
     });
+    // These tests start the preview directly. A later framework Loaded event must not start a
+    // second preview and supersede the task they are controlling; the normal Loaded path is
+    // exercised by LocalAudioDrawsItsWaveform.
+    private static void DisableAutomaticPreview(DeeperEditorWindow editor)
+    {
+        var method = typeof(DeeperEditorWindow).GetMethod("DeeperEditorWindow_Loaded", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        editor.Loaded -= (EventHandler<RoutedEventArgs>)method.CreateDelegate(typeof(EventHandler<RoutedEventArgs>), editor);
+    }
+
+    private sealed class DurationAudio : IDeeperLocalAudio
+    {
+        public double DurationSeconds => 29;
+        public double PositionSeconds { get; set; }
+        public event Action? Ended { add { } remove { } }
+        public void Play() { }
+        public void Pause() { }
+        public void Dispose() { }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task DecodedDurationWinsRegardlessOfCompletionOrder(bool waveformFirst) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-duration-race-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var oldOpen = DeeperLocalAudio.Open;
+        var oldDecoder = ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder;
+        var audio = new TaskCompletionSource<IDeeperLocalAudio?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseDecode = new System.Threading.ManualResetEventSlim();
+        var decodeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        DeeperLocalAudio.Open = _ => audio.Task;
+        ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder = _ =>
+        {
+            decodeStarted.TrySetResult();
+            if (!releaseDecode.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException();
+            return new() { DurationSeconds = 12, Peaks = new float[] { 0.5f } };
+        };
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        DisableAutomaticPreview(editor);
+        try
+        {
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var preview = (Task)typeof(DeeperEditorWindow).GetMethod("InitializePreviewAsync", flags)!.Invoke(editor, null)!;
+            await decodeStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            editor.RaiseEvent(new RoutedEventArgs(Control.LoadedEvent));
+            if (waveformFirst)
+            {
+                releaseDecode.Set();
+                await editor.WaveformLoad.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.True(editor.TxtTotalTime.Text == "0:12", $"seconds={typeof(DeeperEditorWindow).GetField("_totalSeconds", flags)!.GetValue(editor)} decoded={typeof(DeeperEditorWindow).GetField("_hasWaveformDuration", flags)!.GetValue(editor)} generation={typeof(DeeperEditorWindow).GetField("_previewGeneration", flags)!.GetValue(editor)} disposed={typeof(DeeperEditorWindow).GetField("_playbackDisposed", flags)!.GetValue(editor)}");
+                audio.SetResult(new DurationAudio());
+                await preview.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            else
+            {
+                audio.SetResult(new DurationAudio());
+                await preview.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.Equal("0:29", editor.TxtTotalTime.Text);
+                releaseDecode.Set();
+                await editor.WaveformLoad.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            Assert.Equal("0:12", editor.TxtTotalTime.Text);
+            typeof(DeeperEditorWindow).GetMethod("PlayheadTimer_Tick", flags)!.Invoke(editor, new object?[] { null, EventArgs.Empty });
+            Assert.Equal("0:12", editor.TxtTotalTime.Text);
+        }
+        finally
+        {
+            releaseDecode.Set();
+            audio.TrySetResult(null);
+            editor.ForceClose();
+            DeeperLocalAudio.Open = oldOpen;
+            ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder = oldDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public Task ReloadIgnoresOldDecodeAndFallsBackToPlayback() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-duration-reload-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var oldOpen = DeeperLocalAudio.Open;
+        var oldDecoder = ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder;
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new System.Threading.ManualResetEventSlim();
+        var calls = 0;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(new DurationAudio());
+        ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder = _ =>
+        {
+            if (System.Threading.Interlocked.Increment(ref calls) == 1)
+            {
+                started.TrySetResult();
+                if (!release.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException();
+                return new() { DurationSeconds = 12, Peaks = new float[] { 0.5f } };
+            }
+            throw new InvalidOperationException("decode failed");
+        };
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        DisableAutomaticPreview(editor);
+        try
+        {
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var initialize = typeof(DeeperEditorWindow).GetMethod("InitializePreviewAsync", flags)!;
+            await ((Task)initialize.Invoke(editor, null)!).WaitAsync(TimeSpan.FromSeconds(10));
+            var oldLoad = editor.WaveformLoad;
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            editor.RaiseEvent(new RoutedEventArgs(Control.LoadedEvent));
+            await ((Task)initialize.Invoke(editor, null)!).WaitAsync(TimeSpan.FromSeconds(10));
+            await editor.WaveformLoad.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("0:29", editor.TxtTotalTime.Text);
+            release.Set();
+            await oldLoad.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("0:29", editor.TxtTotalTime.Text);
+        }
+        finally
+        {
+            release.Set();
+            editor.ForceClose();
+            DeeperLocalAudio.Open = oldOpen;
+            ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder = oldDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
 }
