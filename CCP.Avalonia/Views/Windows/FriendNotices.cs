@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Controls.Documents;
 using Avalonia.Animation;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
@@ -146,26 +147,29 @@ internal sealed class FriendNotices : Window
         _drawn.Clear();
         foreach (var n in _stack.Visible)
         {
-            var body = new StackPanel { Spacing = 5 };
+            var body = new StackPanel();
             var item = n.Payload as InboxItem;
-            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            head.Children.Add(Avatar(n.Name, item?.FromAvatarUrl));
-            head.Children.Add(new TextBlock { Text = n.Name, FontWeight = FontWeight.SemiBold });
-            var ago = new TextBlock { Text = Ago(n), Tag = "notice-ago" };
-            head.Children.Add(ago);
-            body.Children.Add(head);
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+            grid.Children.Add(Avatar(n.Name, item?.FromAvatarUrl));
+            body.Margin = new Thickness(10, 0, 4, 0); Grid.SetColumn(body, 1); grid.Children.Add(body);
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            head.Children.Add(new TextBlock { Text = n.Name, FontFamily = FriendsDrawer.Display, FontSize = 13.5, Foreground = FriendsDrawer.Text, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Tag = "notice-name" });
+            var ago = new TextBlock { Text = Ago(n), Tag = "notice-ago", FontSize = 10.5, Margin = new Thickness(6, 0, 0, 0), Foreground = FriendsDrawer.Muted };
+            Grid.SetColumn(ago, 1); head.Children.Add(ago); body.Children.Add(head);
             var word = FriendsLanding.Str("friends_poke_" + item?.PokeId, LandingRules.PokeFallback(item?.PokeId));
-            body.Children.Add(new TextBlock { Text = Loc.Get("friends_notice_poked") + " " + word + FriendNoticeRules.CountSuffix(n.Count), TextWrapping = TextWrapping.Wrap, Tag = "notice-line" });
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            var back = new Button { Content = Loc.Get("friends_notice_poke_back"), Focusable = false };
+            var line = new TextBlock { FontSize = 12, Margin = new Thickness(0, 1, 0, 0), Foreground = FriendsDrawer.Muted, TextWrapping = TextWrapping.Wrap, Tag = "notice-line" };
+            line.Inlines!.Add(new Run(Loc.Get("friends_notice_poked") + " "));
+            line.Inlines.Add(new Run(word) { FontWeight = FontWeight.SemiBold, Foreground = LandingRules.PokeIsPink(item?.PokeId) ? FriendsDrawer.Pink : FriendsDrawer.Mint });
+            line.Inlines.Add(new Run(FriendNoticeRules.CountSuffix(n.Count)) { FontWeight = FontWeight.SemiBold, Foreground = FriendsDrawer.Gold }); body.Children.Add(line);
+            var back = FriendsDrawer.Pill(Loc.Get("friends_notice_poke_back"), FriendsDrawer.Mint, new SolidColorBrush(Color.FromRgb(0x10, 0x2A, 0x22)), "notice-back"); back.Focusable = false; back.HorizontalAlignment = HorizontalAlignment.Left; back.FontWeight = FontWeight.SemiBold; back.Padding = new Thickness(12, 4); back.Margin = new Thickness(0, 7, 0, 0);
             back.Click += (_, _) => Dismiss(n, true);
-            var close = new Button { Content = Loc.Get("friends_notice_close"), Focusable = false };
-            close.Click += (_, _) => Dismiss(n, false);
-            buttons.Children.Add(back); buttons.Children.Add(close); body.Children.Add(buttons);
-            var bar = new ProgressBar { Minimum = 0, Maximum = 1, Value = n.Fraction, Height = 2, Tag = "notice-bar" };
-            body.Children.Add(bar);
+            var close = FriendsDrawer.Pill(new IconGlyph { Kind = FluentIcons.Common.Symbol.Dismiss, Size = 10 }, Brushes.Transparent, FriendsDrawer.Muted, "notice-close");
+            close.Focusable = false; close.Padding = new Thickness(5); close.VerticalAlignment = VerticalAlignment.Top; ToolTip.SetTip(close, Loc.Get("friends_notice_close"));
+            close.Click += (_, _) => Dismiss(n, false); Grid.SetColumn(close, 2); grid.Children.Add(close); body.Children.Add(back);
+            var bar = new ProgressBar { Minimum = 0, Maximum = 1, Value = n.Fraction, Height = 2, Margin = new Thickness(0, 9, 0, 0), Foreground = LandingRules.PokeIsPink(item?.PokeId) ? FriendsDrawer.Pink : FriendsDrawer.Lilac, Tag = "notice-bar" };
+            var content = new StackPanel(); content.Children.Add(grid); content.Children.Add(bar);
             _drawn[n] = (bar, ago);
-            var card = new Border { Child = body, Tag = n, Background = new SolidColorBrush(Color.Parse("#F32B2035")), BorderBrush = Brushes.Plum, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 8) };
+            var card = new Border { Child = content, Tag = n, Background = new SolidColorBrush(Color.Parse("#F2221641")), BorderBrush = FriendsDrawer.Line2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(11, 10, 9, 8), Margin = new Thickness(0, 0, 0, 8) };
             card.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Open(n); e.Handled = true; } };
             _column.Children.Add(card);
         }
@@ -180,7 +184,7 @@ internal sealed class FriendNotices : Window
 
     private static Control Avatar(string name, string? path)
     {
-        var grid = new Grid { Width = 34, Height = 34, Tag = "notice-avatar" };
+        var grid = new Grid { Width = 34, Height = 34, VerticalAlignment = VerticalAlignment.Top, Tag = "notice-avatar" };
         grid.Children.Add(FriendsDrawer.Avatar(name, 34, null));
         if (!string.IsNullOrEmpty(path) && path.StartsWith('/'))
         {

@@ -5,6 +5,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Controls.Shapes;
+using Avalonia.Controls.Documents;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using System.Threading.Tasks;
@@ -252,12 +253,24 @@ public class FriendCornerNoticeTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         try
         {
-            foreach (var poke in new[] { "unknown", "" })
+            foreach (var poke in new[] { "unknown", "", "tut", "hi" })
             {
-                var item = new InboxItem("unknown", SendKind.Poke, "u_on", "Mia", null, poke, null, null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
-                FriendNotices.ShowPoke(null, Notice("u_on", item), _ => { }, _ => { });
-                var line = FriendNotices.Current!.GetLogicalDescendants().OfType<TextBlock>().Single(x => Equals(x.Tag, "notice-line"));
-                Assert.EndsWith(" hi", line.Text);
+                var item = new InboxItem("unknown", SendKind.Poke, "u_on", new string('M', 200), null, poke, null, null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
+                FriendNotices.ShowPoke(null, new FriendNotice(NoticeKind.Poke, "u_on", item.FromName, item.At, 6000, item), _ => { }, _ => { });
+                var window = FriendNotices.Current!; window.UpdateLayout();
+                var name = window.GetLogicalDescendants().OfType<TextBlock>().Single(x => Equals(x.Tag, "notice-name"));
+                var ago = window.GetLogicalDescendants().OfType<TextBlock>().Single(x => Equals(x.Tag, "notice-ago"));
+                var avatar = window.GetLogicalDescendants().OfType<Grid>().Single(x => Equals(x.Tag, "notice-avatar"));
+                Assert.Equal(0, Grid.GetColumn(avatar)); Assert.Equal(global::Avalonia.Layout.VerticalAlignment.Top, avatar.VerticalAlignment);
+                Assert.Equal(1, Grid.GetColumn((Control)((Grid)name.Parent!).Parent!));
+                Assert.Equal(TextTrimming.CharacterEllipsis, name.TextTrimming);
+                Assert.True(name.Bounds.Width < 200 && name.Bounds.Right <= ago.Bounds.Left && ago.Bounds.Right <= ((Grid)ago.Parent!).Bounds.Width);
+                var line = window.GetLogicalDescendants().OfType<TextBlock>().Single(x => Equals(x.Tag, "notice-line"));
+                var word = line.Inlines!.OfType<Run>().Skip(1).First();
+                Assert.Equal(poke == "tut" ? "tut tut" : "hi", word.Text);
+                Assert.Equal(poke == "tut" ? Color.FromRgb(0xFF, 0x5F, 0xB4) : Color.FromRgb(0x5F, 0xFF, 0xD0), ((ISolidColorBrush)word.Foreground!).Color);
+                var close = window.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Tag, "notice-close"));
+                Assert.Equal(2, Grid.GetColumn(close)); Assert.IsType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(close.Content);
                 FriendNotices.CloseAll();
             }
         }
