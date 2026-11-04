@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -606,8 +607,10 @@ public sealed class ChaosRunHostTests
             Setup(); FreshMeta();
             var settings = global::ConditioningControlPanel.CoreSettings.Current;
             bool skia = settings.ChaosSkiaFxEnabled;
+            var previousLanguage = LocalizationManager.Instance.CurrentLanguage;
             try
             {
+                LocalizationManager.Instance.SetLanguage("en");
                 settings.ChaosSkiaFxEnabled = false;
                 ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
                 ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
@@ -620,6 +623,8 @@ public sealed class ChaosRunHostTests
                 var live = BubbleOverlay.SpawnChaos(LiveSpec());
                 treat.X = treat.Y = live.X = live.Y = 0;
                 Assert.True(source.Snap()); BubbleOverlay.Field.ChaosDefused!(source);
+                Assert.Equal(aftermath && fuse <= 1.5 ? 1 : 0,
+                    st.RecentEvents.Count(e => e == "⚡ aftermath: the air still crackles"));
                 Assert.Equal((ripple ? 1 : 0) + (aftermath && fuse <= 1.5 ? 1 : 0),
                     ChaosFieldFxOverlay.Active!.Model.TransientCount);
                 BubbleOverlay.HoldChaos(true); BubbleOverlay.TickSnapHazards();
@@ -645,7 +650,46 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.ForceShutdown(); BubbleOverlay.EndChaos(); FreshMeta();
                 BubbleOverlay.Field.Clock = () => DateTime.UtcNow;
                 settings.ChaosSkiaFxEnabled = skia;
+                LocalizationManager.Instance.SetLanguage(previousLanguage);
                 ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosModeService.cs:2028-2032: the feed follows the active language at the snap.
+    [Theory]
+    [InlineData("en", "⚡ aftermath: the air still crackles")]
+    [InlineData("de", "⚡ Nachwirkung: die Luft knistert noch")]
+    [InlineData("es", "⚡ secuela: el aire aún chisporrotea")]
+    [InlineData("fr", "⚡ rémanence : l’air crépite encore")]
+    [InlineData("it", "⚡ strascico: l’aria crepita ancora")]
+    [InlineData("ja", "⚡ 余波: 空気がまだぱちぱちしている")]
+    [InlineData("ko", "⚡ 여파: 공기가 아직 찌릿하다")]
+    [InlineData("pt-BR", "⚡ rescaldo: o ar ainda crepita")]
+    [InlineData("ru", "⚡ последствие: воздух ещё потрескивает")]
+    [InlineData("zh-CN", "⚡ 余波：空气仍在噼啪作响")]
+    public async Task Aftermath_feed_uses_the_active_language(string language, string expected)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var localization = LocalizationManager.Instance;
+            var previousLanguage = localization.CurrentLanguage;
+            try
+            {
+                localization.SetLanguage(language);
+                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!; state.AftermathEnabled = true;
+                var source = BubbleOverlay.SpawnChaos(LiveSpec());
+                source.FuseRemainingMs = 1500;
+                Assert.True(source.Snap()); BubbleOverlay.Field.ChaosDefused!(source);
+                Assert.Equal(1, state.RecentEvents.Count(e => e == expected));
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); BubbleOverlay.EndChaos(); FreshMeta();
+                localization.SetLanguage(previousLanguage);
             }
             return Task.CompletedTask;
         });
