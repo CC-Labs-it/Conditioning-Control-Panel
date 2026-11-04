@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
+using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -62,7 +63,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosOverlayWindow? _overlay;
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
-        private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
+        private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt, _chromeTicks;
+        internal static Action<Window> RaiseChromeWindow = w => X11Overlay.Raise(w);
+        internal static Action RaiseBubbles = () => BubbleOverlay.RaiseAll(RaiseChromeWindow);
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
@@ -142,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
             _spawning = true;
+            _chromeTicks = 0;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
             _runTimer.Tick += (_, _) => Tick();
@@ -377,11 +381,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             BubbleOverlay.EndChaos();
         }
 
+        // WPF ChaosModeService.KeepChromeTopmost: chrome first, then bubbles.
+        internal static void KeepChromeTopmost()
+        {
+            if (!_spawning || !CoreSettings.Current.ChaosPinOnTop) return;
+            void Raise(Window? w) { if (w is { IsVisible: true }) RaiseChromeWindow(w); }
+            Raise(_hud);
+            Raise(_fx);
+            Raise(ChaosWaveTimerWindow.Active);
+            Raise(_boonBar);
+            foreach (var toy in _toyButtons) Raise(toy);
+            RaiseBubbles();
+            ChaosGifCascadeOverlay.RaiseActive();
+        }
+
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>
         internal static void Tick()
         {
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
+            if (++_chromeTicks >= 4) { _chromeTicks = 0; KeepChromeTopmost(); }
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
             TickToys();

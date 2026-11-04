@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Collections.Generic;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -23,6 +25,45 @@ public sealed class ChaosBoonBarOverlayTests
     }
 
     private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
+
+    [Fact]
+    public async Task Pinned_run_reasserts_chrome_then_bubbles_without_activation()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var settings = global::ConditioningControlPanel.CoreSettings.Current;
+            bool pin = settings.ChaosPinOnTop;
+            var raised = new List<Window>();
+            try
+            {
+                settings.ChaosPinOnTop = true;
+                ChaosRunHost.RaiseChromeWindow = raised.Add;
+                var bubble = new BubbleOverlayWindow();
+                ChaosRunHost.RaiseBubbles = () => raised.Add(bubble);
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                var bar = ChaosRunHost.BoonBar!;
+                Assert.Contains(bar, raised);
+                Assert.False(bar.ShowActivated);
+                Assert.True(raised.FindIndex(w => w is BubbleOverlayWindow) > raised.IndexOf(bar));
+                raised.Clear();
+                settings.ChaosPinOnTop = false;
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Assert.Empty(raised);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosRunHost.RaiseChromeWindow = w => ConditioningControlPanel.Avalonia.Platform.X11Overlay.Raise(w);
+                ChaosRunHost.RaiseBubbles = () => BubbleOverlay.RaiseAll(ChaosRunHost.RaiseChromeWindow);
+                settings.ChaosPinOnTop = pin;
+            }
+            return Task.CompletedTask;
+        });
+    }
 
     [Fact]
     public async Task Picks_land_live_in_order_and_panic_closes_the_ribbon()
