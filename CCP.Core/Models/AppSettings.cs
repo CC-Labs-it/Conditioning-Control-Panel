@@ -7755,6 +7755,8 @@ namespace ConditioningControlPanel.Models
             set { _descentMigrationChoice = value; OnPropertyChanged(); }
         }
 
+        // Identity of a pending ledger when session validation clears UnifiedId.
+        [JsonProperty] public string? PendingDescentMigrationAccountId { get; set; }
         private string? _pendingDescentMigrationChoice = null;
         /// <summary>
         /// A choice the user has made and this client has applied locally, but which the server
@@ -7767,7 +7769,7 @@ namespace ConditioningControlPanel.Models
         public string? PendingDescentMigrationChoice
         {
             get => _pendingDescentMigrationChoice;
-            set { _pendingDescentMigrationChoice = value; OnPropertyChanged(); }
+            set { _pendingDescentMigrationChoice = value; if (value == null) PendingDescentMigrationAccountId = null; OnPropertyChanged(); }
         }
 
         private bool _descentMigrationOffered = false;

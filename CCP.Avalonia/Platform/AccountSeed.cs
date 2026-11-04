@@ -118,6 +118,7 @@ internal static class AccountSeed
         if (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true)
         {
             Log.Information("Validating restored session for {Id}...", id);
+            if (CoreSettings.Current.PendingDescentMigrationChoice != null) { CoreSettings.Current.PendingDescentMigrationAccountId = id; CoreSettings.Save(); }
             var outcome = await v2.ValidateRestoredSessionAsync(id);
             if (outcome == V2AuthService.RestoreOutcome.Cleared) { CoreAccount.UnifiedUserId = null; Sync?.Reset(); if (CoreSettings.Current.PendingDescentMigrationChoice == null) ClearMigration(CoreSettings.Current, preserveEpoch: true); CoreSettings.Save(); }
             if (outcome != V2AuthService.RestoreOutcome.Validated) return;

@@ -789,14 +789,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private static void ClearIfOtherAccount(string? newId)
         {
             var s = CoreSettings.Current;
-            var previousId = s.UnifiedId;
+            var previousId = !string.IsNullOrEmpty(s.UnifiedId) ? s.UnifiedId : (s.PendingDescentMigrationChoice != null ? s.PendingDescentMigrationAccountId : null);
             if (!string.IsNullOrEmpty(newId) && previousId != newId && (!string.IsNullOrEmpty(previousId)
                 || s.PendingDescentMigrationChoice != null || s.DescentMigrationCompleted || s.DescentMigrationOffered))
             {
                 AccountSeed.Sync?.Reset();
-                if (!string.IsNullOrEmpty(previousId) || s.PendingDescentMigrationChoice != null)
+                if (!string.IsNullOrEmpty(previousId))
                 { ProgressionClear.Apply(s); App.Achievements?.Reset(); }
-                AccountSeed.ClearMigration(s, preserveEpoch: string.IsNullOrEmpty(previousId) && s.PendingDescentMigrationChoice == null);
+                AccountSeed.ClearMigration(s, preserveEpoch: string.IsNullOrEmpty(previousId));
             }
         }
 
