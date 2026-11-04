@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
                 ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
-                // WPF LauncherCatalogue :241: Lab tier (or the daily-free drop); GameWindow.Launch runs DemandLab.
+                // WPF LauncherCatalogue :241: Basic (or the daily-free drop); GameWindow.Launch runs DemandPremium.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
 

@@ -152,6 +152,7 @@
                       ..\Assets\web\**\*demo.html;..\Assets\web\backroom\stations\breakout\**\*.test.js;
                       ..\Assets\web\backroom\stations\breakout\dev.html;..\Assets\web\backroom\stations\breakout\showcase*;
                       ..\Assets\web\piecebypiece\dev\**\*;..\Assets\web\piecebypiece\package.json;
+                      ..\Assets\web\prizecounter\mock\**\*;..\Assets\web\prizecounter\dev.html;
                       ..\Assets\web\intake\assets\vo\**\*.mp3;..\Assets\web\intake\assets\sfx\**\*.mp3;
                       ..\Assets\web\intake\assets\music\**\*.mp3;..\Assets\web\dtrh\assets\**\*.mp3">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

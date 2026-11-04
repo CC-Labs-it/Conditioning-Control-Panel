@@ -4,9 +4,9 @@ import {loadOptions} from './options.js';
 import {courseTheme} from '../track/themes.js';
 import {mediaRecap} from './courseMedia.js';
 
-const COLORS={threshold:'#ff88b5',mainframe:'#70e6c3',keep:'#ffce62',boudoir:'#e49cfa',goonworks:'#bd006e'};
+const COLORS={threshold:'#ff88b5',mainframe:'#e0b0ff',keep:'#ffce62',boudoir:'#e49cfa',goonworks:'#bd006e'};
 // Race / Time trial: two small pills above the grid (Logbook TRIAL lane); the pick is saved and sent as glassroad-mode
-const MODE_CSS='.g-track-mode{display:flex;gap:8px;margin:0 0 14px}#race-garage .g-track-mode button{min-height:34px;padding:6px 14px;border:2px solid #0b1420;border-radius:999px;background:#102d39;color:#b1ded8;font-size:13px}#race-garage .g-track-mode button[aria-pressed=true]{background:#8ee8d1;color:#10101b;border-color:#10101b}';
+const MODE_CSS='.g-track-mode{display:flex;gap:8px;margin:0 0 14px}#race-garage .g-track-mode button{min-height:34px;padding:6px 14px;border:2px solid #121220;border-radius:999px;background:#181830;color:#a7a7c1;font-size:13px}#race-garage .g-track-mode button[aria-pressed=true]{background:#cbb9fc;color:#10101b;border-color:#10101b}';
 /** The chooser's in-game shot of a course: art/ui/course-<id>.webp (960 x 540) and a -phone variant (480 x 270). */
 export function courseShot(id){const at=name=>new URL('../art/ui/'+name+'.webp',import.meta.url).href;
   const id2=COLORS[id]?id:'threshold';return {src:at('course-'+id2),srcset:at('course-'+id2+'-phone')+' 480w, '+at('course-'+id2)+' 960w'};}
