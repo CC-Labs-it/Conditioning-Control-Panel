@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Fx;
@@ -23,9 +24,13 @@ internal sealed partial class FirstShowStageWindow
     private bool _guiding, _waitForHover;
     private int _guideIndex = -1;
     private double _hoverTime, _targetWait, _highlightWait;
+    internal Func<Screen?>? GuideScreenOverride;
+    private Screen? GuideScreen() => GuideScreenOverride != null ? GuideScreenOverride() : _main == null ? null : Screens?.ScreenFromWindow(_main);
     private Control? _guideTarget;
     private FeatureCard? _previewCard;
     private string? _targetName;
+    internal Window GuideSpeechWindow => _speechWindow;
+    internal Point GuideBodyCenter => ToScreen(_x, _y);
     internal int GuideIndex => _guideIndex;
     internal Control? GuideTarget => _guideTarget;
     internal FeatureCard? PreviewCard => _previewCard;
@@ -42,20 +47,27 @@ internal sealed partial class FirstShowStageWindow
         if (_main == null) { Close(); return; }
         _guiding = true; _ending = false; _logo.Opacity = 0;
         if (_effects != null) { _stage.Children.Remove(_effects); _effects.Dispose(); _effects = null; }
-        try
-        {
-            if (Screens?.ScreenFromWindow(_main) is { } screen && screen.Bounds != _screenPx)
-            {
-                _screenPx = screen.Bounds; _scale = screen.Scaling > 0 ? screen.Scaling : 1;
-                Position = _screenPx.Position; Width = _screenPx.Width / _scale; Height = _screenPx.Height / _scale;
-            }
-        }
-        catch (Exception ex) { Log.Debug(ex, "First show guide: could not follow the app window"); }
+        FollowGuideScreen();
         if (!_stage.Children.Contains(_highlight)) _stage.Children.Insert(0, _highlight);
         if (!_main.IsVisible) _main.Show();
         if (_main.WindowState == WindowState.Minimized) _main.WindowState = WindowState.Normal;
         _main.Activate();
         NextGuideStep();
+    }
+
+    // WPF Guide.cs :44-47 spans the desktop; this head uses one monitor at a time.
+    private bool FollowGuideScreen()
+    {
+        try
+        {
+            if (GuideScreen() is not { } screen) return false;
+            double scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            if (screen.Bounds == _screenPx && scale == _scale) return false;
+            _screenPx = screen.Bounds; _scale = scale;
+            Position = _screenPx.Position; Width = _screenPx.Width / scale; Height = _screenPx.Height / scale;
+            return true;
+        }
+        catch (Exception ex) { Log.Debug(ex, "First show guide: could not follow the app window"); return false; }
     }
 
     private void NextGuideStep()
@@ -101,6 +113,7 @@ internal sealed partial class FirstShowStageWindow
     private void GuideFrame(double dt)
     {
         if (_main == null || !_main.IsVisible || _main.WindowState == WindowState.Minimized) { _highlight.IsVisible = false; return; }
+        bool changedScreen = FollowGuideScreen();
         if (_guideTarget == null && _targetName != null)
         {
             var all = _main.GetVisualDescendants().OfType<Control>().Where(x => x.IsEffectivelyVisible).ToArray();
@@ -141,7 +154,7 @@ internal sealed partial class FirstShowStageWindow
         }
         _highlight.InvalidateVisual();
         var placement = FirstShowLayout.GuideBody(safe, BodySize(), SpeechSize(), TargetRect);
-        double ease = (CoreSettings.Current?.MotionLevel ?? MotionLevel.Full) == MotionLevel.Off ? 1 : 1 - Math.Exp(-dt * 7);
+        double ease = changedScreen || (CoreSettings.Current?.MotionLevel ?? MotionLevel.Full) == MotionLevel.Off ? 1 : 1 - Math.Exp(-dt * 7);
         _x += (placement.Left + placement.Width / 2 - _x) * ease; _y += (placement.Top + placement.Height / 2 - _y) * ease;
     }
 

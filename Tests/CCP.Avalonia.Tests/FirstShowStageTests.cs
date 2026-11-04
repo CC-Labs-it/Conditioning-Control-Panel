@@ -26,7 +26,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>EMI's welcome show (WPF Services/FirstShow): the stage opens with the real desk EMI presenting,
 /// plays the script's beats on a stepped clock, and Stop, panic and Esc close it and hand her back.</summary>
-public sealed class FirstShowStageTests
+public sealed partial class FirstShowStageTests
 {
     [Fact]
     public Task OpensPlaysTheScriptAndStopHandsEmiBack() => Run(stage =>

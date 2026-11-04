@@ -423,7 +423,7 @@ internal sealed partial class FirstShowStageWindow : Window
     private ShowSize BodySize() => _emi == null ? new ShowSize(0, 0) : new ShowSize(_emi.BodyWidth, _emi.BodyWidth * EmiDeskWindow.BodyAspect);
     private RectD SafeBounds()
     {
-        var area = (_guiding && _main != null ? Screens?.ScreenFromWindow(_main) : Screens?.Primary)?.WorkingArea;
+        var area = (_guiding && _main != null ? GuideScreen() : Screens?.Primary)?.WorkingArea;
         if (area == null) return new RectD(16, 16, Math.Max(1, Width - 32), Math.Max(1, Height - 32));
         var a = area.Value;
         double ax = (a.X - Position.X) / _scale, ay = (a.Y - Position.Y) / _scale;
