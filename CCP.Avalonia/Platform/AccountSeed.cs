@@ -162,6 +162,10 @@ internal static class AccountSeed
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         var user = await v2.GetUserProfileAsync(id);
+        // A response belongs to the identity that started the read, not a later login.
+        if (!ReferenceEquals(CoreSettings.Current, s) || s.OfflineMode
+            || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal)
+            || !string.Equals(CoreAccount.UnifiedUserId, id, StringComparison.Ordinal)) return false;
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);

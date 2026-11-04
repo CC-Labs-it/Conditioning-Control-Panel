@@ -32,6 +32,8 @@ public sealed partial class AccountSeedTests
         public string? Profile;
         public HttpStatusCode SyncStatus = HttpStatusCode.OK;
         public string SyncReply = "{\"success\":true}";
+        public TaskCompletionSource? ReadHold;
+        public readonly TaskCompletionSource ReadSeen = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource? Hold;   // a sync answer that waits until released
         public readonly TaskCompletionSource SyncSeen = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly Queue<(HttpStatusCode, string)> Next = new();   // one-shot sync answers, then SyncStatus
@@ -44,8 +46,12 @@ public sealed partial class AccountSeedTests
             var path = $"{r.Method} {r.RequestUri!.AbsolutePath}";
             lock (Seen) Seen.Add((path, body));
             if (path == "GET /v2/user/profile")
+            {
+                ReadSeen.TrySetResult();
+                if (ReadHold is { } readHold) await readHold.Task;
                 return Profile == null ? new(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") }
                     : new(HttpStatusCode.OK) { Content = new StringContent(Profile) };
+            }
             if (path == "POST /v2/user/sync")
             {
                 SyncSeen.TrySetResult();
@@ -106,6 +112,30 @@ public sealed partial class AccountSeedTests
             CoreAccount.UnifiedUserId = null;
         }
     }
+
+    [Fact]
+    public void ProfileRead_DiscardedAfterIdentityChanges() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        var hold = wire.ReadHold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var notifications = 0;
+        void OnLoaded() => notifications++;
+        AccountSeed.ProfileLoaded += OnLoaded;
+        try
+        {
+            var loading = AccountSeed.LoadProfileAsync();
+            await wire.ReadSeen.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            CoreSettings.Current.UnifiedId = "u2";
+            CoreAccount.UnifiedUserId = "u2";
+            hold.SetResult();
+            Assert.False(await loading);
+            Assert.Equal(1, CoreSettings.Current.PlayerLevel);
+            Assert.False(sync.Loaded);
+            Assert.Empty(wire.Syncs);
+            Assert.Equal(0, notifications);
+        }
+        finally { hold.TrySetResult(); AccountSeed.ProfileLoaded -= OnLoaded; }
+    });
 
     [Fact]
     public void NoPush_BeforeASuccessfulLoad_NorAfterLogout_UntilTheNextLoad() => WithFreshInstall(async () =>
