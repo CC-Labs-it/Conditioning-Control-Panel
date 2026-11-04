@@ -166,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var s = CoreSettings.Current;
             var want = ChkEnable.IsChecked ?? false;
             if (s.SpiralEnabled == want) return;   // an echo of the seed must not save
-            if (!want) Windows.MainShellWindow.InvalidateOverlayStart();
+            if (!want) Windows.MainShellWindow.InvalidateAiOverlayStart();
             s.SpiralEnabled = want;
             CoreSettings.Save();
             if (want && Overlays.SpiralOverlay.AiRunning)

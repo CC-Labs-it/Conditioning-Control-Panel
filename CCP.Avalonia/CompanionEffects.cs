@@ -129,10 +129,10 @@ namespace ConditioningControlPanel.Avalonia
         /// refresh and save. Refuse an unsafe or absent host before changing the user's settings.</summary>
         internal static bool ApplySpiral(Window? host, bool on, int? opacity) => OnUi(() =>
         {
-            var generation = MainShellWindow.EngineGeneration;
+            var generation = MainShellWindow.OverlayGeneration;
             return Start(() =>
             {
-                if (generation != MainShellWindow.EngineGeneration || host is null
+                if (generation != MainShellWindow.OverlayGeneration || host is null
                     || (on && (!SpiralOverlay.CanStartForAi(host) || !SpiralOverlay.Preflight(host)))) return false;
                 var s = CoreSettings.Current;
                 var (oldEnabled, oldOpacity) = (s.SpiralEnabled, s.SpiralOpacity);

@@ -238,7 +238,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "braindrain": s.BrainDrainEnabled = on; break;
                     default: return;   // unknown key: no write, no save
                 }
-                if (key == "spiral" && !on) InvalidateOverlayStart();
+                if (key == "spiral" && !on) InvalidateAiOverlayStart();
                 CoreSettings.Save();
                 CoreEngine.ApplyLive(key, on);
                 void RefreshOverlay() { if (key == "spiral") Overlays.SpiralOverlay.Refresh(this); else if (key == "pinkfilter") Overlays.PinkFilterOverlay.Refresh(this); }
