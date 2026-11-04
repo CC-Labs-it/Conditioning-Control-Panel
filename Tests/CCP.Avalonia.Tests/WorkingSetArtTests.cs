@@ -20,10 +20,10 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class WorkingSetArtTests(ITestOutputHelper output)
 {
-    // WPF MainWindow.xaml.cs playHeroMap; Chess uses the same 512px card budget as Goon.
+    // WPF MainWindow.xaml.cs playHeroMap; Chess and Rabbit Hole (dtrh) use the same 512px card budget as Goon.
     private static readonly (string Name, int Width)[] PlayPlates =
     {
-        ("PlayGoonHeroPlate", 512), ("PlayChessHeroPlate", 512),
+        ("PlayGoonHeroPlate", 512), ("PlayChessHeroPlate", 512), ("PlayDtrhHeroPlate", 512),
         ("PlayRemoteHeroPlate", 768), ("PlayGazeHeroPlate", 512),
         ("PlayFocusHeroPlate", 512), ("PlayBlinkHeroPlate", 512),
         ("PlayIntakeHeroPlate", 512), ("PlayFypHeroPlate", 512),

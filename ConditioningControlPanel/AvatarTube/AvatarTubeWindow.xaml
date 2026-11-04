@@ -474,6 +474,8 @@
                             </MenuItem.ItemContainerStyle>
                         </MenuItem>
                         <MenuItem x:Name="MenuItemMute" Header="{loc:Str section_mute_avatar}" Click="MenuItemMute_Click"/>
+                        <!-- Rain's wardrobe: shown only while the tube plays Rain (UpdateQuickMenuState). -->
+                        <MenuItem x:Name="MenuItemRainWardrobe" Header="{loc:Str section_rain_wardrobe}" Click="MenuItemRainWardrobe_Click" Visibility="Collapsed"/>
                         <!-- Emote MenuItems replace the 5 items above (Engine, TriggerMode, BambiTakeover,
                              Personality, Mute) whenever a remote controller is connected. Header strings
                              and Tag references are populated in AvatarContextMenu_Opened from
@@ -764,9 +766,10 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <!-- the lamp's sheen across the plate's top half -->
-                    <Border Grid.ColumnSpan="3" Margin="-7,-5,-7,0" Height="18" VerticalAlignment="Top" CornerRadius="10,10,4,4"
+                    <Border Grid.ColumnSpan="4" Margin="-7,-5,-7,0" Height="18" VerticalAlignment="Top" CornerRadius="10,10,4,4"
                             Background="{StaticResource DepthRaisedSheen}" IsHitTestVisible="False"/>
 
                     <!-- Left Arrow (Previous Avatar): a raised coin with its drop disc -->
@@ -817,6 +820,34 @@
                                     <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI" FontSize="13"
                                                Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="1,0,0,0"/>
                                 </Border>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- V1 | V2 pill (Rain, handoff-1030/RAIN-V2-PLAN.md 2.1): a well with two segments,
+                         the chosen one PRESSED IN (depth law), painted by AvatarTubeWindow.GenerationPill.cs.
+                         Shown only on mods with a v2 emote row, never in portrait mode or under the
+                         Possession glitch; it fades, never pops. The click handler marks the press
+                         handled and Window_MouseLeftButtonDown skips it, so it is never a drag. -->
+                    <Border x:Name="BtnAvatarGeneration" Grid.Column="3"
+                            Width="46" Height="18" CornerRadius="9"
+                            Margin="10,0,0,0" VerticalAlignment="Center"
+                            Background="{StaticResource DepthWellFloorBrush}"
+                            BorderBrush="{StaticResource DepthPressedBevel}" BorderThickness="1"
+                            Cursor="Hand" Visibility="Collapsed" Opacity="0"
+                            MouseLeftButtonDown="BtnAvatarGeneration_Click">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="PillSegV1" Grid.Column="0" CornerRadius="8,0,0,8" Margin="1,1,0,1">
+                                <TextBlock x:Name="PillTxtV1" Text="V1" FontSize="9" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <Border x:Name="PillSegV2" Grid.Column="1" CornerRadius="0,8,8,0" Margin="0,1,1,1">
+                                <TextBlock x:Name="PillTxtV2" Text="V2" FontSize="9" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </Grid>
                     </Border>

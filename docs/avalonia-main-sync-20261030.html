@@ -16,7 +16,7 @@ table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid va
 th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
 .counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
 </style>
-<script type="application/json" id="ledger-meta">{"total": 594}</script>
+<script type="application/json" id="ledger-meta">{"total": 613}</script>
 </head>
 <body>
 <h1 id="main-sync-9-delta-ledger-2026-10-30">Main sync #9 delta ledger (2026-10-30)</h1>
@@ -24,9 +24,11 @@ th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockq
 <code>review/mich-1025-merge</code> (<code>950aedaa1</code>: Mich's frozen tip <code>a3d9e984f</code> + <code>port/7.2</code> + the port-review fixes #3099-#3125).
 Pin: <code>origin/main</code> = <code>7e01ec326</code> (Merge PR #3132 rt-prime-only, 2026-10-29), then follow-up pin <code>a11ada22e</code>
 (Merge PR #3138 garage-owned-bodies, 2026-10-29; rows 590-591, merge <code>a9605b2cc</code>), then <code>ddc43afeb</code>
-(Merge PR #3146 rain-wardrobe page 4, 2026-10-30; rows 592-594, merge <code>047449d1f</code>).
+(Merge PR #3146 rain-wardrobe page 4, 2026-10-30; rows 592-594, merge <code>047449d1f</code>), then <code>39845d2af</code>
+(Merge PR #3157 rain-v2 packplay, 2026-10-30; rows 595-607, merge <code>7127eba85</code>), then <code>aa9918833</code>
+(Merge PR #3162 rain-v2 assets, 2026-10-30; rows 608-613, merge <code>df54ebd05</code>).
 Last sync pin: <code>f81ea01fb</code> (main sync #8, <a href="avalonia-main-sync-20261024.html"><code>avalonia-main-sync-20261024.html</code></a>).
-Delta: 594 non-merge commits (589 + 2 + 3 follow-up), 1562 + 22 + 12 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
+Delta: 613 non-merge commits (589 + 2 + 3 + 13 + 6 follow-up), 1562 + 22 + 12 + 71 + 30 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
 lives in <code>Assets/web/glassroad</code> (moved in the merge, same rule git applied to the other web trees). The rest is the 7.1.15
 release, Sparkles by place (B1), Lobby race rows and the friends race invite (A3), and a few bug fixes.</p>
 <p>Every non-merge commit has one row. Status legend as in <code>avalonia-main-sync-20261005.html</code>:</p>
@@ -45,10 +47,14 @@ Sparkles waits for the B1 DECISIONS file; Lobby/invite waits for the A3 server h
 <tr><td><code>sync9-fixes</code></td><td>4</td><td><code>97eca18de</code>, <code>08bb30ba7</code>, <code>81bc9fa21</code>, <code>cdda883ac</code></td></tr>
 <tr><td><code>sync9-glassroad</code></td><td>4</td><td><code>5121933ee</code>, <code>099607382</code>, <code>c7af815a0</code>, <code>9718fd3f4</code></td></tr>
 <tr><td><code>sync9-lobby-invite</code></td><td>3</td><td><code>5a353e6b0</code>, <code>d6a39c7ac</code>, <code>cc6ad7a39</code></td></tr>
+<tr><td><code>sync9-rain</code></td><td>14</td><td><code>9654cbdc3</code>, <code>5b1fd1cef</code>, <code>7e169d311</code>, <code>005e6b16e</code>, <code>4ce385c71</code>, <code>e1183f408</code>, <code>18c6980f4</code>, <code>bbd74c792</code>, <code>baabe4839</code>, <code>68b0a3eda</code>, <code>8b53ae720</code>, <code>1e03a33dd</code>, <code>3bfe3d96f</code>, <code>2d005c419</code></td></tr>
 <tr><td><code>sync9-sparkles</code></td><td>15</td><td><code>3930199ac</code>, <code>9d7d5406e</code>, <code>28c334234</code>, <code>21873bc05</code>, <code>48d232dd9</code>, <code>a568665e0</code>, <code>de0947d9f</code>, <code>b96b5931c</code>, <code>cc1bdc4b0</code>, <code>b2487a365</code>, <code>7c086f322</code>, <code>70c3d96e6</code>, <code>d7348e6a0</code>, <code>ba537a09b</code>, <code>e0356be6e</code></td></tr>
 </table>
 <p>What each lane is:</p>
 <ul>
+<li><code>sync9-rain</code>: the Avalonia avatar tube gains the v2 (Rain) generation: an animated-WebP clip lane, the V1 | V2 pill
+and <code>AvatarGeneration</code> setting, the baked look pack store and playback, and the wardrobe window. Ownership of
+wardrobe items follows the B3 shop decision.</li>
 <li><code>sync9-glassroad</code>: the Avalonia door (<code>GameWindow.Glassroad.cs</code>, still behind <code>CCP_GLASSROAD=1</code>) opens for everyone,
 Prime only, and the 2D race door is retired (WPF <code>LauncherCatalogue</code> &quot;race&quot;, <code>GameSurfaces</code>, Play tab). Panic/Escape
 rules from <code>5121933ee</code> are already in <code>PanicPolicy.KeptEscapePage.Glassroad</code>; recheck against <code>c7af815a0</code>.</li>
@@ -661,6 +667,25 @@ the face through <code>SubliminalLayer.BundledFaceStream</code>), browser fullsc
 <tr><td>592</td><td><code>fe3c3790c</code></td><td>feat(rain-wardrobe): fitting room page shell and viewer (1/4)</td><td>Assets/web/rain-wardrobe (web only, no host references it yet on either head)</td><td>ported-by-merge</td></tr>
 <tr><td>593</td><td><code>503817d4c</code></td><td>feat(rain-wardrobe): garment, hair and jewellery modules (3/4)</td><td>Assets/web/rain-wardrobe (web only, no host references it yet on either head)</td><td>ported-by-merge</td></tr>
 <tr><td>594</td><td><code>9ef595efc</code></td><td>feat(rain-wardrobe): colour studio, review studio and runtime info (4/4)</td><td>Assets/web/rain-wardrobe (web only, no host references it yet on either head)</td><td>ported-by-merge</td></tr>
+<tr><td>595</td><td><code>469813aba</code></td><td>feat(rain-wardrobe): host bridge, foundation and fit modules (2/4)</td><td>Assets/web/rain-wardrobe (web only)</td><td>ported-by-merge</td></tr>
+<tr><td>596</td><td><code>9654cbdc3</code></td><td>feat(tube): a SkiaSharp clip lane next to XamlAnimatedGif for animated WebP emotes</td><td>WPF: AvatarTube EmoteClipPlayer, EmoteLayers, CirceEmotes</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>597</td><td><code>5b1fd1cef</code></td><td>feat(rain): Rain's 12 WebP tube clips as the v2 generation on Bambi, Sissy and CCP Default</td><td>Assets/rain_emotes (moved in the merge), Assets/avatar_emotes_registry.json; the Avalonia tube must play the v2 generation</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>598</td><td><code>b0b1c6e2c</code></td><td>fix(rain-wardrobe): big assets on the ccp.rain-assets host (RAIN-V2-PLAN 2.4)</td><td>Assets/web/rain-wardrobe (web only)</td><td>ported-by-merge</td></tr>
+<tr><td>599</td><td><code>7e169d311</code></td><td>feat(rain-wardrobe): the wardrobe window on WPF with the Prize Counter ownership hook</td><td>WPF: AvatarTube ChatInput/CirceEmotes/xaml, RainWardrobeHostService; Core AppSettings and languages merged</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>600</td><td><code>5404d7cf8</code></td><td>feat(rain): five new reactions (joy, surprise, affection, confidence, disappointment)</td><td>Assets/rain_emotes clips + emotes.json (shared assets; the player half is row of 9654cbdc3)</td><td>ported-by-merge</td></tr>
+<tr><td>601</td><td><code>005e6b16e</code></td><td>feat(rain): look hash, clip strips and the machine-local pack setting (R7a)</td><td>WPF: Services/Companion RainLookHash, RainPackSink, ProfileSyncService; Core AppSettings merged</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>602</td><td><code>4ce385c71</code></td><td>feat(rain-v2): V1 | V2 pill on the tube, AvatarGeneration setting and rule</td><td>WPF: AvatarTube GenerationPill/Avatar/Windowing, AvatarGenerationRule; Core AppSettings and languages merged</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>603</td><td><code>e1183f408</code></td><td>feat(rain): baked-look pack store under &lt;userdata&gt;/rain-packs (R7b)</td><td>WPF: App.xaml.cs, Services/Companion RainPackStore</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>604</td><td><code>18c6980f4</code></td><td>feat(rain-v2): item manifest, per-item access and the one look clamp (R3)</td><td>WPF: Services/Companion RainItemAccess, RainLookClamp, RainWardrobeCatalog; Assets/web/rain-wardrobe/items.json merged</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>605</td><td><code>673447410</code></td><td>feat(rain-wardrobe): bake on Apply, page side (R6)</td><td>Assets/web/rain-wardrobe bake.js + test (web only); WPF csproj exclude kept in the merge</td><td>ported-by-merge</td></tr>
+<tr><td>606</td><td><code>bbd74c792</code></td><td>feat(rain-v2): the tube plays baked look packs (R8)</td><td>WPF: AvatarTube EmoteClipPlayer/EmoteLayers/CirceEmotes, RainPackPlayback</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>607</td><td><code>baabe4839</code></td><td>fix(rain): pack fold knows the five new reactions (main red after #3150 + #3154)</td><td>WPF: Services/Companion RainPackStore</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>608</td><td><code>ca1ae972b</code></td><td>feat(rain-v2): dressing room shop layer - badges, try-on, draft then Apply (R4)</td><td>Assets/web/rain-wardrobe (web only, shop layer; Lobby of B3)</td><td>ported-by-merge</td></tr>
+<tr><td>609</td><td><code>68b0a3eda</code></td><td>feat(rain-v2): the wardrobe's Apply transaction, host side (R5a)</td><td>WPF: Services/Companion RainApplyController; web half merged in Assets/web/rain-wardrobe</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>610</td><td><code>8b53ae720</code></td><td>feat(rain-v2): the wardrobe window speaks Apply, and the hero card door (R5b)</td><td>WPF: AvatarTube RainLook, RainWardrobeHostService, CompanionHeroCard door; languages merged</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>611</td><td><code>1e03a33dd</code></td><td>feat(rain-v2): in-app install of Rain's 3D files (R12)</td><td>WPF: Services/Companion RainAssetInstaller, Windows/RainAssetInstallWindow; languages merged</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>612</td><td><code>3bfe3d96f</code></td><td>feat(rain-v2): the wardrobe knows all 17 actions (R9)</td><td>WPF: RainLookHash; Assets/web/rain-wardrobe/assets/runtime-info.json merged</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
+<tr><td>613</td><td><code>2d005c419</code></td><td>fix(rain-assets): an older pack is not &quot;installed&quot;</td><td>WPF: RainAssetInstaller, RainWardrobeHostService</td><td>needs-port (<code>sync9-rain</code>)</td></tr>
 </table>
 <h2 id="follow-up-merge-a9605b2cc-pin-a11ada22e">Follow-up merge <code>a9605b2cc</code> (pin <code>a11ada22e</code>)</h2>
 <p>On <code>avalonia-port/main-20261030-compat</code>, after the compat commit. Conflict resolutions only: the two new files
@@ -671,6 +696,20 @@ the face through <code>SubliminalLayer.BundledFaceStream</code>), browser fullsc
 <p>No conflicts. Main added a new web tree <code>ConditioningControlPanel/Resources/web/rain-wardrobe</code> (12 files, the
 fitting room pages 1, 3 and 4; page 2 is not on main yet). Git does not move a new tree, so the merge <code>git mv</code>s it to
 <code>Assets/web/rain-wardrobe</code>; the existing <code>Assets/web/**</code> content glob ships it for both heads. No C# references it yet.</p>
+<h2 id="follow-up-merge-7127eba85-pin-39845d2af">Follow-up merge <code>7127eba85</code> (pin <code>39845d2af</code>)</h2>
+<p>Rain v2 on the WPF head: the tube plays Rain's animated WebP clips as a &quot;v2&quot; avatar generation (Bambi, Sissy, CCP
+Default) with a V1 | V2 pill, the wardrobe window bakes looks into packs under <code>&lt;userdata&gt;/rain-packs</code>, and the tube
+plays those packs. Conflict fixes only: <code>App.UserDataPath</code> stays on <code>CorePaths</code>; the csproj keeps the stack's Assets
+layout with Rain's emote includes and the wardrobe test exclude. The new <code>Resources/rain_emotes</code> tree moves to
+<code>Assets/rain_emotes</code> (the emote sets' shared layout, linked back to the same pack:// paths). -compat: main's new tests
+read through <code>SourceRoots</code> and <code>Assets/</code>, and <code>App.ResolveUserDataPath(string?)</code> forwards to the new pure
+<code>CorePaths.UserDataFor</code>. Lane <code>sync9-rain</code> ports the WPF-only half (clip player, pill, pack store/playback, wardrobe
+window) to the Avalonia tube; the wardrobe's Prize Counter ownership hook waits for the B3 shop decision.</p>
+<h2 id="follow-up-merge-df54ebd05-pin-aa9918833">Follow-up merge <code>df54ebd05</code> (pin <code>aa9918833</code>)</h2>
+<p>Rain v2 wardrobe: the dressing-room shop layer (web), the Apply transaction (host), the hero card door, the in-app
+install of Rain's 3D files and all 17 actions. Conflict fixes only: two new wardrobe files kept where git's
+directory-rename detection put them (<code>Assets/web/rain-wardrobe</code>). -compat: <code>RainApplyTests</code> reads <code>Assets/</code> through
+<code>SourceRoots</code>. The host half belongs to <code>sync9-rain</code> (and the shop ownership to the B3 decision).</p>
 <h2 id="watch-list-on-the-way-to-main-not-merged-here-yet">Watch list: on the way to main, not merged here yet</h2>
 <p>These are not in this sync. The next sync (or A5) must pick them up, and must add a ledger row for each commit:</p>
 

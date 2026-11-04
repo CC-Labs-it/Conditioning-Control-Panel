@@ -101,11 +101,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <c>lockdown_icon.png</c> sits at the RESOURCE ROOT, the path a mod keys its override against.
         /// </summary>
         // WPF MainWindow.xaml.cs playHeroMap: size decodes for the card headers, including
-        // Remote 768 and Lockdown 1024 (WPF's numbers). Chess is not in WPF's table: capped at Goon's 512 (ponytail: WPF decodes it full size; switch if HiDPI parity beats the memory margin).
+        // Remote 768 and Lockdown 1024 (WPF's numbers). Chess and Rabbit Hole (dtrh) are not in WPF's table: capped at Goon's 512 (ponytail: WPF decodes it full size; switch if HiDPI parity beats the memory margin).
         private static readonly (string Plate, string Art, Stretch Fit, int DecodeWidth)[] HeroPlates =
         {
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill, 512),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill, 512),
+            ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill, 512),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill, 768),
             ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill, 512),
             ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill, 512),
@@ -189,11 +190,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 PlayLockLockdown.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_lockdown_mode")).Allowed;
                 PlayLockBlink.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_blink_trainer")).Allowed;
                 PlayLockFyp.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_fyp"), "fyp").Allowed;
+                PlayLockDtrh.IsVisible = Games.GameWindow.DtrhLocked();
 
                 // FREE TODAY (WPF :145): only on a door that is otherwise shut - an owner gets no gift.
                 bool premium = CoreEntitlement.HasPremium;
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
+                PlayBadgeDtrh.FreeToday = !premium && CoreEntitlement.IsFreeToday("dtrh");
 
                 RefreshPlayIntakeCard();
             }
@@ -238,6 +241,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
+
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e)
+        {
+            if (Owner is { } owner) LauncherWindow.LaunchGame(owner, Games.GameWindow.DtrhId);
+        }
 
         // ---- TOGETHER --------------------------------------------------------------------
 
