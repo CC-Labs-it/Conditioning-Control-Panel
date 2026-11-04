@@ -164,11 +164,22 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
-                {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                }
+                // The headless mouse helpers render between events and timestamp them from the
+                // wall clock. Slow rendering can turn this double-click into two single clicks.
+                // Send the same raw pointer input with timestamps inside the double-click interval.
+                using var mouse = (global::Avalonia.Input.MouseDevice)Activator.CreateInstance(
+                    typeof(global::Avalonia.Input.MouseDevice), new object?[] { null })!;
+                var input = (Action<global::Avalonia.Input.Raw.RawInputEventArgs>)typeof(global::Avalonia.Platform.ITopLevelImpl)
+                    .GetProperty("Input")!.GetValue(w.PlatformImpl)!;
+                var root = typeof(TopLevel).GetProperty("InputRoot", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(w);
+                void Pointer(global::Avalonia.Input.Raw.RawPointerEventType type, ulong time) =>
+                    input((global::Avalonia.Input.Raw.RawInputEventArgs)Activator.CreateInstance(
+                        typeof(global::Avalonia.Input.Raw.RawPointerEventArgs),
+                        mouse, time, root, type, at, global::Avalonia.Input.RawInputModifiers.None)!);
+                Pointer(global::Avalonia.Input.Raw.RawPointerEventType.LeftButtonDown, 1000);
+                Pointer(global::Avalonia.Input.Raw.RawPointerEventType.LeftButtonUp, 1010);
+                Pointer(global::Avalonia.Input.Raw.RawPointerEventType.LeftButtonDown, 1100);
+                Pointer(global::Avalonia.Input.Raw.RawPointerEventType.LeftButtonUp, 1110);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;

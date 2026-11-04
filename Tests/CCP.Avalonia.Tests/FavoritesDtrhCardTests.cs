@@ -21,6 +21,22 @@ namespace CCP.Avalonia.Tests;
 public sealed class FavoritesDtrhCardTests
 {
     [Fact]
+    public void GamesWallUsesThreeColumns()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var play = new PlayTabView();
+            var first = play.FindControl<Grid>("SlotBreakoutDemo")!;
+            var wall = Assert.IsType<global::Avalonia.Controls.Primitives.UniformGrid>(first.Parent);
+            Assert.Equal(3, wall.Columns);
+        });
+    }
+
+    [Fact]
     public void PlayCardPinsAndUsesTheAccountAndDailyFreeGates()
     {
         AvaloniaTestDispatcher.Run(() =>
