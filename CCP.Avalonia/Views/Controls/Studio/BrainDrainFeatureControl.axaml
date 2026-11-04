@@ -46,7 +46,7 @@
                 <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
                     <TextBlock Text="{loc:Str section_brain_drain}" FontSize="17" FontWeight="Bold"
                                Foreground="{StaticResource TextLightBrush}"/>
-                    <TextBlock Text="{loc:Str st4_braindrain_enable_hint}" FontSize="11.5"
+                    <TextBlock x:Name="TxtEnableHint" Text="{loc:Str st4_braindrain_visual_only_hint}" FontSize="11.5"
                                Foreground="{StaticResource TextMutedBrush}"
                                TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
                 </StackPanel>
@@ -101,7 +101,7 @@
 
                             <!-- AUDIO trigger rate (BrainDrainIntensity), NOT the blur. Its own key
                                  deliberately, not the shared setting_intensity. -->
-                            <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_intensity_hint}">
+                            <Grid x:Name="AudioRateRow" Height="36" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_audio_unavailable}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
                                     <ColumnDefinition Width="*"/>
@@ -121,7 +121,7 @@
 
                             <!-- VISUAL half's dial (BrainDrainBlurStrength): how hard the screen
                                  blur presses in. -->
-                            <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_blur_strength_hint}">
+                            <Grid x:Name="VisualStrengthRow" Height="36" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_visual_only_hint}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
                                     <ColumnDefinition Width="*"/>
@@ -169,7 +169,7 @@
                             <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- High refresh. Comfort/perf knob, stays editable mid-session. -->
-                            <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_high_refresh_hint}">
+                            <Grid x:Name="HighRefreshRow" Height="34" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_audio_unavailable}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -231,16 +231,18 @@
                                 <Button Grid.Column="2" x:Name="BtnRefreshAudio"
                                         Theme="{DynamicResource OutlineButton}"
                                         Padding="10,5" FontSize="11"
-                                        ToolTip.Tip="{loc:Str st4_braindrain_refresh_clips_tt}">
+                                        ToolTip.Tip="{loc:Str st4_braindrain_discovery_hint}">
                                     <TextBlock Text="{loc:Str btn_refresh_2}"/>
                                 </Button>
                             </Grid>
-                            <TextBlock Text="{loc:Str st4_braindrain_folder_hint}"
+                            <TextBlock x:Name="TxtAudioUnavailable" Text="{loc:Str st4_braindrain_audio_unavailable}"
+                                       Foreground="#FFA500" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                            <TextBlock x:Name="TxtFolderHint" Text="{loc:Str st4_braindrain_discovery_hint}"
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="11" TextWrapping="Wrap"/>
 
                             <!-- WHAT belongs in the folder: whole tracks, not one-second stings. -->
-                            <TextBlock Text="{loc:Str st4_braindrain_folder_contents}"
+                            <TextBlock x:Name="TxtFolderContents" IsVisible="False" Text="{loc:Str st4_braindrain_folder_contents}"
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
 
@@ -254,7 +256,7 @@
                             <!-- Shown ONLY when the old install-directory folder still holds clips.
                                  Nothing is migrated automatically. -->
                             <TextBlock x:Name="TxtLegacyFolderNote"
-                                       Text="{loc:Str st4_braindrain_legacy_folder_note}"
+                                       Text="{loc:Str st4_braindrain_legacy_discovery_note}"
                                        Foreground="#FFA500"
                                        FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
                                        IsVisible="False"/>
@@ -278,7 +280,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_no_audio_hint}"
+                        <TextBlock Grid.Column="0" x:Name="TxtNoAudioHint" Text="{loc:Str st4_braindrain_no_clips_found}"
                                    Foreground="#FFA500" FontSize="11" TextWrapping="Wrap"
                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <Button Grid.Column="1" x:Name="BtnOpenAudioFolderEmpty"
