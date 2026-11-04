@@ -15,7 +15,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -67,10 +70,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
 
-        /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
-        private bool _dtrhFullscreen;
-        private global::Avalonia.Controls.WindowState _dtrhWindowedState;
+        private bool _dtrhFullscreen, _dtrhChangingMode;
+        private WindowState _dtrhWindowedState;
+        private PixelPoint _dtrhFramePosition;
+        private double _dtrhFrameWidth, _dtrhFrameHeight, _dtrhFrameScale;
+        private bool _dtrhHasFrame;
 
+        // WPF ChaosWebViewHost.cs:771-784: retain the normal frame, including before maximization.
+        private void CaptureDtrhWindowedFrame()
+        {
+            if (_dtrhFullscreen || WindowState != WindowState.Normal || !IsVisible || Bounds.Width <= 0 || Bounds.Height <= 0) return;
+            _dtrhFramePosition = Position;
+            _dtrhFrameWidth = Bounds.Width;
+            _dtrhFrameHeight = Bounds.Height;
+            _dtrhFrameScale = Screens.ScreenFromWindow(this)?.Scaling ?? 1;
+            if (_dtrhFrameScale <= 0) _dtrhFrameScale = 1;
+            _dtrhHasFrame = true;
+        }
+
+        // WPF ChaosWebViewHost.cs:369-391,411-420: do not restore onto a disconnected monitor.
+        private void RestoreDtrhWindowedFrame()
+        {
+            var screens = ScreenList.Enumerate(this);
+            double left = _dtrhFramePosition.X, top = _dtrhFramePosition.Y;
+            double right = left + _dtrhFrameWidth * _dtrhFrameScale;
+            double bottom = top + _dtrhFrameHeight * _dtrhFrameScale;
+            bool reachable = _dtrhHasFrame && screens.Any(s => left < s.Bounds.Right && s.Bounds.X < right
+                && top < s.Bounds.Bottom && s.Bounds.Y < bottom);
+            if (reachable)
+            {
+                Width = _dtrhFrameWidth; Height = _dtrhFrameHeight; Position = _dtrhFramePosition;
+                WindowState = _dtrhWindowedState;
+                return;
+            }
+            var screen = screens.FirstOrDefault(s => s.Bounds.Contains(Position)) ?? screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
+            if (screen == null) return;
+            double scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            double width = Math.Min(_dtrhHasFrame ? _dtrhFrameWidth : 1280, screen.Bounds.Width / scale);
+            double height = Math.Min(_dtrhHasFrame ? _dtrhFrameHeight : 800, screen.Bounds.Height / scale);
+            Width = width; Height = height;
+            Position = new PixelPoint(screen.Bounds.X + (int)((screen.Bounds.Width - width * scale) / 2),
+                screen.Bounds.Y + (int)((screen.Bounds.Height - height * scale) / 2));
+        }
+
+        /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleDtrh(JObject o)
         {
             switch ((string?)o["type"])
@@ -97,13 +140,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     try
                     {
                         bool on = (bool?)o["on"] ?? false;
-                        if (on != _dtrhFullscreen)
+                        bool actual = WindowState == WindowState.FullScreen;
+                        if (_dtrhFullscreen && !actual) _dtrhFullscreen = false;
+                        if (on && !actual)
                         {
-                            if (on) _dtrhWindowedState = WindowState;
-                            WindowState = on ? global::Avalonia.Controls.WindowState.FullScreen : _dtrhWindowedState;
-                            _dtrhFullscreen = on;
+                            CaptureDtrhWindowedFrame();
+                            _dtrhWindowedState = WindowState;
+                            _dtrhFullscreen = true; // suppress frame capture during the state transition
+                            _dtrhChangingMode = true;
+                            try { WindowState = WindowState.FullScreen; }
+                            finally { _dtrhChangingMode = false; }
                         }
-                        Post(new { type = "fullscreen", on = _dtrhFullscreen });
+                        else if (!on && actual)
+                        {
+                            _dtrhChangingMode = true;
+                            try
+                            {
+                                WindowState = WindowState.Normal;
+                                RestoreDtrhWindowedFrame();
+                            }
+                            finally { _dtrhFullscreen = false; _dtrhChangingMode = false; }
+                        }
+                        Post(new { type = "fullscreen", on = WindowState == WindowState.FullScreen });
                     }
                     catch (Exception ex) { Log.Debug("DtrhHost: fullscreen: {E}", ex.Message); }
                     return true;

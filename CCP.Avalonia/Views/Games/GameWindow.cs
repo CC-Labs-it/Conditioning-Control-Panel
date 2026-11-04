@@ -92,6 +92,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal GameWindow(Game spec)
         {
             Spec = spec;
+            if (IsDtrh)
+            {
+                Opened += (_, _) => CaptureDtrhWindowedFrame();
+                PositionChanged += (_, _) => CaptureDtrhWindowedFrame();
+                SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
+                PropertyChanged += (_, e) =>
+                {
+                    if (e.Property == WindowStateProperty && !_dtrhChangingMode)
+                        _dtrhFullscreen = WindowState == WindowState.FullScreen;
+                };
+            }
             Web = new WebHost();
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
