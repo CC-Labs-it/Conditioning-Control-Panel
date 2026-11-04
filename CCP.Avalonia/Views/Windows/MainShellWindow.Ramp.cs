@@ -38,6 +38,8 @@ public partial class MainShellWindow
         if (_rampBaseValues.Count == 0) return;
         SessionSettingsJournal.ApplyRamp(SessionSettingsJournal.BuildRamp(_rampBaseValues), CoreSettings.Current);
         _rampBaseValues.Clear();
+        Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
+        Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
         SessionSettingsJournal.ClearRamp(CorePaths.UserData);
     }
 
@@ -52,7 +54,12 @@ public partial class MainShellWindow
         if (!sessionActive && s.RampLinkFlashOpacity) s.FlashOpacity = Value(nameof(s.FlashOpacity), 100);
         if (!sessionActive && s.RampLinkSpiralOpacity) s.SpiralOpacity = Value(nameof(s.SpiralOpacity), 100);
         if (!sessionActive && s.RampLinkPinkFilterOpacity) s.PinkFilterOpacity = Value(nameof(s.PinkFilterOpacity), 50);
-        if (s.RampLinkMasterAudio) s.MasterVolume = Value(nameof(s.MasterVolume), 100);
+        if (s.RampLinkMasterAudio)
+        {
+            s.MasterVolume = Value(nameof(s.MasterVolume), 100);
+            Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
+            Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
+        }
         if (s.RampLinkSubliminalAudio) s.SubAudioVolume = Value(nameof(s.SubAudioVolume), 100);
         if (!sessionActive && s.RampLinkBrainDrain) s.BrainDrainBlurStrength = Value(nameof(s.BrainDrainBlurStrength), 100);
         if (progress >= 1.0 && s.EndSessionOnRampComplete && !sessionActive)
