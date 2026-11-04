@@ -15,6 +15,13 @@ export const CONFIG = Object.freeze({
   /** Where pictures come from until the player chooses: online, own or none (ui/pictures.js). */
   PICTURES_DEFAULT: 'none',
 
+  /** How many rows of one plain lane stretch are sold as one purchase (data/folds.js). 1 = no bundles. */
+  FOLD_SIZE: 3,
+  /** Every price, bundles included, is multiplied by this. Tuned with dev/measure.mjs, not the route test. */
+  PRICE_SCALE: 1.5,
+  /** Open windows at once. Opening one more minimizes the one used longest ago to the window strip. */
+  MAX_OPEN_WINDOWS: 12,
+
   /** Rows in the shop window. The goal row is extra. */
   SHOP_MIN: 3,
   SHOP_MAX: 8,
@@ -24,9 +31,10 @@ export const CONFIG = Object.freeze({
   SIDE_SHARE: 0.25,
   /** How much of the budget a prize can claim, per unit it asks for. A choice the player got right should not shrink like a
    * corner hit nobody pressed for. Sources not named here are 1. */
-  SIDE_WEIGHT: Object.freeze({ quiz: 7, levels: 4, golden: 3 }),
-  /** Limited coins and brief Toy Box windows already restrict these prizes. Completed games pay in full. */
-  FULL_PRIZE_SOURCES: Object.freeze(['mini_slots', 'toy_box']),
+  SIDE_WEIGHT: Object.freeze({ quiz: 7, levels: 4, golden: 3, toy_box: 5 }),
+  /** Limited coins already restrict these prizes: they pay in full. Toy Box paid in full until 2026-11-04 and then made
+   *  half of a run's income on its own (dev/measure.mjs), so it is back inside the budget at a high weight. */
+  FULL_PRIZE_SOURCES: Object.freeze(['mini_slots']),
   /** A prize never pays less than this part of what it asked for, so a press always shows something. */
   SIDE_FLOOR: 0.05,
   /** Value modifiers keep working past these multiples of the plan, at MOD_SLOPE of their strength. */

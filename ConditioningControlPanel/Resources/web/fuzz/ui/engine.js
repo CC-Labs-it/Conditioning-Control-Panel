@@ -292,12 +292,19 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   function afterGain(id, res) {
     noteSeen(life, run);
     const item = res.item;
-    emit('buy', { item, count: res.count, cost: res.cost });
+    /* One purchase, one 'buy': a bundle's riders ride along in `also` (data/folds.js). */
+    const also = (res.riders || []).map((r) => BY_ID[r]).filter(Boolean);
+    emit('buy', { item, count: res.count, cost: res.cost, also });
     const scope = scopes.get(id);
     delete run.off[id];   // buying a row again means wanting it
     if (scope && scope.ret?.grow) guard(scope, scope.ret.grow, res.count);
     else if (liveOn(run.off, id)) mount(id);
     emit('switch', { id, on: true });
+    for (const r of also) {
+      delete run.off[r.id];
+      if (liveOn(run.off, r.id)) mount(r.id);
+      emit('switch', { id: r.id, on: true });
+    }
     syncQuiet();
     save();
     ui.bought?.(item, res);

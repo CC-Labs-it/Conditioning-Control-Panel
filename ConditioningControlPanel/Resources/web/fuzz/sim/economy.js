@@ -7,6 +7,7 @@
 import { ITEMS, BY_ID, FORKS, FORK_OF_LANE } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { moodOf } from './moods.js';
+import { ridersOf } from '../data/folds.js';
 
 export const WALL_BASE = 1;
 
@@ -87,15 +88,26 @@ export function rates(s, mods = null, now = s.clock) {
   };
 }
 
+/** A lead's price carries every rider it still brings (data/folds.js). Every price follows CONFIG.PRICE_SCALE. */
 export function price(s, id, mods = null, now = s.clock) {
   const it = BY_ID[id];
   if (!it) return Infinity;
-  let v = it.cost;
-  if (it.grow) v = it.cost * Math.pow(it.grow.ratio, count(s, id));
+  let v = unitPrice(s, it, mods, now);
+  for (const r of ridersFor(s, id)) v += unitPrice(s, BY_ID[r], mods, now);
+  return Math.max(0, Math.round(v));
+}
+
+/** The riders a purchase of id would bring right now. */
+export const ridersFor = (s, id) => ridersOf(id).filter((r) => !has(s, r) && BY_ID[r]);
+
+/** The scale comes first, so a mood or an unlock that sets a price has the last word. */
+function unitPrice(s, it, mods, now) {
+  let v = it.cost * CONFIG.PRICE_SCALE;
+  if (it.grow) v *= Math.pow(it.grow.ratio, count(s, it.id));
   const mp = moodOf(s)?.price;
   if (mp) v = mp(v, it);
   v = fold('price', v, s, mods, now, it);
-  return Math.max(0, Math.round(v));
+  return Math.max(0, v);
 }
 
 const laneOpen = (s, it) => { const f = FORK_OF_LANE[it.lane]; return !f || s.picks[f] === it.lane; };
@@ -200,12 +212,14 @@ export function buy(s, id, mods = null) {
   const cost = price(s, id, mods);
   if (s.fuzz < cost) return { ok: false, reason: 'short', cost };
   s.fuzz -= cost;
+  const riders = ridersFor(s, id);
   add(s, id);
+  for (const r of riders) add(s, r, false);
   if (it.kind === 'end') {
     if (id === 'onemore') s.endless = true;
     else s.ended = { id, at: s.clock };
   }
-  return { ok: true, item: it, count: count(s, id), cost };
+  return { ok: true, item: it, count: count(s, id), cost, riders };
 }
 
 /** A fork costs nothing to take; it only needs its cost reached. The lanes not picked stay locked this run. */
@@ -219,10 +233,11 @@ export function choose(s, forkId, lane, mods = null) {
   return { ok: true, item: it, lane };
 }
 
-function add(s, id) {
+/** A rider comes with its lead's purchase: it is owned, but it is not a purchase of its own. */
+function add(s, id, purchase = true) {
   s.owned[id] = (s.owned[id] || 0) + 1;
   if (!s.order.includes(id)) s.order.push(id);
-  s.buys += 1;
+  if (purchase) s.buys += 1;
   recalc(s);
 }
 

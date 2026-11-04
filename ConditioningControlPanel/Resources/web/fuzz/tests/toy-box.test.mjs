@@ -1,17 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { advanceBox, BOX_WINDOW, boxInterval, boxPrizeSeconds, createToyBox, dealBox, fitPiece, restoreBox, PIECES } from '../ui/unlocks/arcade/toy-box-model.js';
-import { createRun, sideLump } from '../sim/economy.js';
+import { createRun, earn, sideLump } from '../sim/economy.js';
 
-test('completed boxes keep their increasing prize even after other side games exhaust their budget', () => {
+/* Toy Box paid outside the side budget until 2026-11-04 and made half a run's income (dev/measure.mjs). It is weighted now. */
+test('completed boxes pay more each time, from a weighted share of the side budget', () => {
   const run = createRun();
-  sideLump(run, 100000, 'noise');
-  const before = { ...run.side };
-  for (const completed of [0, 1, 10]) {
-    const prize = boxPrizeSeconds(completed) * 100;
-    assert.equal(sideLump(run, prize, 'toy_box'), prize);
-  }
-  assert.deepEqual(run.side, before);
+  earn(run, 1e6);
+  sideLump(run, 1e6, 'noise');
+  const paid = [0, 1, 10].map((completed) => sideLump(run, boxPrizeSeconds(completed) * 100, 'toy_box'));
+  assert.ok(paid[0] < paid[1] && paid[1] < paid[2], `box prizes ${paid}`);
+  assert.ok(paid[0] > boxPrizeSeconds(0) * 100 * 0.2, 'the weight keeps a real part of the ask after other prizes drained the budget');
+  assert.ok(run.side.paid <= run.side.budget + 1e6 * 0.05 + 1, 'the budget holds');
 });
 
 test('intro has two pieces, later boxes rise to four distinct approved pieces', () => {

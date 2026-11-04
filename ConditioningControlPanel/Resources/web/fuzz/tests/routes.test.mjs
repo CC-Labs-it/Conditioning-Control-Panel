@@ -8,33 +8,35 @@ import * as E from '../sim/economy.js';
 const minutes = (r) => r.end / 60;
 const name = (p) => Object.values(p).join('/');
 /* What dev/measure.mjs saw the real game do, as pure numbers: every prize pays its whole budget, modifiers hold at the knee. */
+/* Bundles and PRICE_SCALE 1.5 (2026-11-04): the pure route reads about 55 minutes where the real page ends at 33-39
+ * (dev/measure.mjs, arcade prizes and slots included), so these bounds guard the plan, not the length a player sees. */
 const real = { side: true, mods: [{ fps: (v) => v * CONFIG.MOD_FPS_KNEE, click: (v) => v * CONFIG.MOD_CLICK_KNEE }] };
 
 test('192 routes', () => assert.equal(allRoutes().length, 192));
 
 /* Nobody plays like this, Levels and questions never pressed and no modifier counted; it is the floor. Bimbo is the worst of it: its pay is in its modifiers. */
-test('buying every optional toy without collecting any prizes still ends within 51 minutes', () => {
+test('buying every optional toy without collecting any prizes still ends within 95 minutes', () => {
   for (const p of allRoutes()) {
     const r = playRoute(p);
     assert.equal(r.stuck, false, `${name(p)} got stuck`);
-    assert.ok(minutes(r) <= 51, `${name(p)} took ${minutes(r).toFixed(1)} min`);
-    assert.ok(r.longest <= 90, `${name(p)} idled ${r.longest} s between buys`);
+    assert.ok(minutes(r) <= 95, `${name(p)} took ${minutes(r).toFixed(1)} min`);
+    assert.ok(r.longest <= 210, `${name(p)} idled ${r.longest} s between buys`);
   }
 });
 
-test('with side money and modifiers every route takes 25 to 37 minutes at 4 taps/s, under 50 at 2, with no long wall', () => {
+test('with side money and modifiers every route takes 50 to 62 planned minutes at 4 taps/s, under 80 at 2, with no long wall', () => {
   const times = [];
   for (const p of allRoutes()) {
     const r = playRoute(p, real);
     times.push(minutes(r));
-    assert.ok(minutes(r) >= 25 && minutes(r) <= 37, `${name(p)} took ${minutes(r).toFixed(1)} min`);
-    assert.ok(r.longest <= 60, `${name(p)} idled ${r.longest} s between buys`);
-    assert.ok(r.firstAlt / 60 >= 20, `${name(p)} could leave at ${(r.firstAlt / 60).toFixed(1)} min`);
+    assert.ok(minutes(r) >= 50 && minutes(r) <= 62, `${name(p)} took ${minutes(r).toFixed(1)} min`);
+    assert.ok(r.longest <= 140, `${name(p)} idled ${r.longest} s between buys`);
+    assert.ok(r.firstAlt / 60 >= 30, `${name(p)} could leave at ${(r.firstAlt / 60).toFixed(1)} min`);
     assert.ok(r.at.f1 <= 120, `${name(p)} first fork at ${r.at.f1} s`);
     assert.ok(r.at.f5 <= 240, `${name(p)} theme at ${(r.at.f5 / 60).toFixed(1)} min`);
     assert.ok(r.at.f3 > r.at.f5 && r.at.f3 <= 300, `${name(p)} pictures at ${(r.at.f3 / 60).toFixed(1)} min`);
     const lazy = playRoute(p, { ...real, taps: 2 });
-    assert.ok(minutes(lazy) <= 50, `${name(p)} lazy took ${minutes(lazy).toFixed(1)} min`);
+    assert.ok(minutes(lazy) <= 80, `${name(p)} lazy took ${minutes(lazy).toFixed(1)} min`);
   }
   assert.ok(Math.max(...times) - Math.min(...times) < 10, `routes differ by ${Math.max(...times) - Math.min(...times)} min`);
 });
@@ -93,7 +95,7 @@ test('every mood still finishes every sampled route', () => {
     for (const p of routes) {
       const r = playRoute(p, { mood });
       assert.equal(r.stuck, false, `${mood} ${name(p)} got stuck`);
-      assert.ok(minutes(r) >= 20 && minutes(r) <= 50, `${mood} ${name(p)} took ${minutes(r).toFixed(1)} min`);
+      assert.ok(minutes(r) >= 45 && minutes(r) <= 90, `${mood} ${name(p)} took ${minutes(r).toFixed(1)} min`);
     }
   }
 });

@@ -113,6 +113,8 @@ button { font: inherit; color: inherit; }
 .tip-demo { position: relative; aspect-ratio: 8 / 5; margin-bottom: 6px; overflow: hidden; background: #d4d0c8; border: 1px solid #8a867d; pointer-events: none; }
 .row.tip .body { display: block; }
 .row.tip .tag { display: block; margin-bottom: 2px; }
+.row.tip .also { display: block; margin-top: 4px; font-size: 13px; font-style: normal; line-height: 1.2; color: var(--ink); }
+.row.bundle::after { content: ''; position: absolute; right: 3px; top: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--niche, #c45); pointer-events: none; }
 .row.tip .cost { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; font-size: 14px; }
 .row.tip .cost i { display: block; color: var(--ink-soft); }
 .row.tip.tip-short .cost > span { color: var(--stamp); }
@@ -130,7 +132,7 @@ body.gentle #goal .row.ready, body.gentle .row.no { animation: none; }
 #l-side { position: absolute; inset: 0; z-index: 62; pointer-events: none; }
 #l-over { z-index: 63; }
 .rail { display: contents; }
-.dk { position: absolute; display: flex; flex-direction: column; min-height: 32px; pointer-events: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font-size: 14px; box-shadow: 2px 2px 0 rgba(0, 0, 0, .25); }
+.dk { position: absolute; display: flex; flex-direction: column; min-height: 32px; pointer-events: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 2px solid var(--niche); font-size: 12px; box-shadow: 2px 2px 0 rgba(0, 0, 0, .25); }
 .dk-t { flex: none; display: flex; align-items: center; gap: 5px; width: 100%; min-height: 32px; padding: 1px 4px 1px 6px; background: color-mix(in srgb, var(--niche) 12%, var(--panel)); color: var(--ink-soft); border: 0; font: 13px/1.2 var(--font); text-align: left; cursor: grab; touch-action: none; user-select: none; }
 .dk.min .dk-t, .dk.door .dk-t { padding-right: 38px; }
 .dk.open:not(.door) .dk-t { position: absolute; z-index: 2; top: 2px; left: 3px; width: 26px; min-height: 0; height: 22px; padding: 0; justify-content: center; border: 1px solid var(--line); }

@@ -41,13 +41,13 @@ export function createTip({ doc, buyLabel, onBuy }) {
 
   function sync() {
     const src = cur.el;
-    const parts = ['.tag', 'b', 'small', '.cost'].map((sel) => src.querySelector(sel));
-    const [tag, name, what, cost] = parts;
+    const parts = ['.tag', 'b', 'small', '.also', '.cost'].map((sel) => src.querySelector(sel));
+    const [tag, name, what, also, cost] = parts;
     const next = [src.className, ...parts.map((p) => (p ? `${gone(p)}:${p.innerHTML}` : '')), buyLabel(cur)].join('|');
     if (next === stamp) return;
     stamp = next;
     el.className = `row tip${touch ? ' touch' : ''}${src.classList.contains('short') ? ' tip-short' : ''} ${[...src.classList].filter((c) => c !== 'row' && !NOT_COPIED.has(c)).join(' ')}`;
-    words.replaceChildren(...[tag, name, what, cost].filter((p) => !gone(p)).map((p) => p.cloneNode(true)));
+    words.replaceChildren(...[tag, name, what, also, cost].filter((p) => p && !gone(p)).map((p) => p.cloneNode(true)));
     buy.hidden = !touch;
     buy.textContent = buyLabel(cur);
     buy.disabled = src.classList.contains('short');

@@ -11,10 +11,13 @@ import { iconFor } from './icons.js';
 import { createTip } from './shop-tip.js';
 import { hueClass } from './palette.js';
 import { goalState } from './purchase-feel.js';
+import { ridersFor } from '../sim/economy.js';
 
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 
-const payText = (it) => (it.fps ? `+${fmt(it.fps)}/s` : it.click ? `+${fmt(it.click)} a tap` : it.wall ? `+${fmt(it.wall)} a wall` : '');
+/* A bundle shows what all of it pays together. */
+const sum = (list, k) => list.reduce((t, x) => t + (x[k] || 0), 0);
+const payText = (list) => { const f = sum(list, 'fps'), c = sum(list, 'click'), w = sum(list, 'wall'); return f ? `+${fmt(f)}/s` : c ? `+${fmt(c)} a tap` : w ? `+${fmt(w)} a wall` : ''; };
 
 /* These two open a card that already explains them, so a finger goes straight there. */
 const opensCard = (it) => it.kind === 'fork' || it.kind === 'end';
@@ -46,11 +49,19 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const what = doc.createElement('small');
     what.textContent = brandText(item.kind === 'fork' ? FORKS[item.id].ask : item.what);
     body.append(name, what);
+    const riders = ridersFor(engine.run, item.id).map((id) => BY_ID[id]);
+    if (riders.length) {
+      const also = doc.createElement('em');
+      also.className = 'also';
+      also.textContent = `Comes with ${riders.map((r) => brandText(r.name)).join(', ')}`;
+      body.appendChild(also);
+      el.classList.add('bundle');
+    }
     const cost = doc.createElement('span');
     cost.className = 'cost';
     const costNum = doc.createElement('span');
     const pay = doc.createElement('i');
-    pay.textContent = payText(item);
+    pay.textContent = payText([item, ...riders]);
     cost.append(costNum, pay);
     const bar = doc.createElement('span');
     bar.className = 'bar';

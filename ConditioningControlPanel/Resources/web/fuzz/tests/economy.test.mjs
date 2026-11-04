@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { BY_ID, ITEMS } from '../data/items.js';
 import * as E from '../sim/economy.js';
 import { MOODS, MOOD_IDS, rollMood } from '../sim/moods.js';
+import { CONFIG } from '../data/config.js';
+
+/** What a catalog cost sells for: every price follows CONFIG.PRICE_SCALE. */
+const P = (cost) => Math.round(cost * CONFIG.PRICE_SCALE);
 
 const rich = (s, n = 1e9) => { E.lump(s, n, 'test'); return s; };
 
@@ -18,9 +22,9 @@ test('parents gate a row, and a buy spends the price', () => {
   const s = rich(E.createRun(), 100);
   assert.equal(E.buy(s, 'fpsv').reason, 'closed');
   assert.equal(E.buy(s, 'stray').ok, true);
-  assert.equal(s.fuzz, 97);
+  assert.equal(s.fuzz, 100 - P(3));
   assert.equal(E.buy(s, 'fpsv').ok, true);
-  assert.equal(s.fuzz, 72);
+  assert.equal(s.fuzz, 100 - P(3) - P(25));
 });
 
 test('short of money is refused and costs nothing', () => {
@@ -33,7 +37,7 @@ test('stacking rows get dearer and stop at their max', () => {
   const s = rich(E.createRun());
   const prices = [];
   for (let i = 0; i < 12; i++) { prices.push(E.price(s, 'stray')); assert.ok(E.buy(s, 'stray').ok); }
-  assert.deepEqual(prices.slice(0, 4), [3, 5, 7, 10]);
+  assert.deepEqual(prices.slice(0, 4), [0, 1, 2, 3].map((n) => P(3 * 1.5 ** n)));
   assert.equal(E.count(s, 'stray'), 12);
   assert.equal(E.buy(s, 'stray').reason, 'closed');
   assert.equal(E.rates(s).wall, 2, 'a stack pays through bounces, not through its row number');
@@ -54,7 +58,7 @@ test('a fork costs nothing, needs its price reached, and locks the other lanes',
 });
 
 test('a fork below its price is refused', () => {
-  const s = rich(E.createRun(), 30);
+  const s = rich(E.createRun(), P(3) + P(25) + P(100) - 1);
   E.buy(s, 'stray'); E.buy(s, 'fpsv');
   assert.equal(E.choose(s, 'f1', 'eyes').reason, 'short');
 });
@@ -150,16 +154,16 @@ test('the shop is a rolling window: the goal plus the next few by price, never a
 test('a row far out of reach stays out of the window; the goal never does', () => {
   const s = E.createRun();
   assert.equal(E.shopWindow(s).goal.id, 'stray');
-  assert.deepEqual(E.shopWindow(s).rows.map((r) => r.id), ['rounded', 'title']);
+  assert.deepEqual(E.shopWindow(s).rows.map((r) => r.id), ['rounded', 'title'].filter((id) => E.price(s, id) <= 8));
 });
 
 test('moods change prices and pay without touching the base rows', () => {
   const pink = E.createRun({ mood: 'm_pink' });
   assert.equal(E.price(pink, 'colour'), 0);
-  assert.equal(E.price(pink, 'rounded'), Math.round(BY_ID.rounded.cost * 0.5));
-  assert.equal(E.price(pink, 'f1'), Math.round(BY_ID.f1.cost * 1.1));
+  assert.equal(E.price(pink, 'rounded'), Math.round(BY_ID.rounded.cost * CONFIG.PRICE_SCALE * 0.5));
+  assert.equal(E.price(pink, 'f1'), Math.round(BY_ID.f1.cost * CONFIG.PRICE_SCALE * 1.1));
   const rush = E.createRun({ mood: 'm_rush' });
-  assert.equal(E.price(rush, 'drop'), BY_ID.drop.cost * 0.75);
+  assert.equal(E.price(rush, 'drop'), Math.round(BY_ID.drop.cost * CONFIG.PRICE_SCALE * 0.75));
   E.lump(rush, 1e7);
   E.grant(rush, 'f5');
   assert.equal(E.shopWindow(rush, null, 6).rows.length, 3);

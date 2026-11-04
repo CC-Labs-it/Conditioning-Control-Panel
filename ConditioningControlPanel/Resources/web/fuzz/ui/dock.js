@@ -8,6 +8,17 @@ export const emptierEdge = (left, right) => left <= right ? 'left' : 'right';
 export const slotOrder = (boughtAt, nth = 0) => (boughtAt < 0 ? 100000 : boughtAt * 8) + Math.min(7, nth);
 export const WINDOW_MIN = Object.freeze({ w: 180, h: 100 });
 const desired = (v, floor) => Number.isFinite(v) && v > 0 ? Math.min(4096, Math.max(floor, v)) : null;
+/** A fresh window takes this part of its rail, so a dozen can sit on screen at once. */
+export const WINDOW_SHARE = 0.8;
+export const defaultWindowWidth = (w) => dockIsRail(w) ? Math.max(WINDOW_MIN.w, Math.round((railWidth(w) - 12) * WINDOW_SHARE)) : Math.min(360, w - 16);
+/** Over the limit, the open window used longest ago goes to the strip. Pinned and kept windows go last; `except` never.
+ *  Each entry: {z, min, door, pin, keep}. Answers the windows to minimize, oldest first. */
+export function overLimit(slots, max, except = null) {
+  const open = slots.filter((s) => !s.min && !s.door);
+  if (open.length <= max) return [];
+  const rank = (s) => (s.pin || s.keep ? 1 : 0);
+  return open.filter((s) => s !== except).sort((a, b) => rank(a) - rank(b) || a.z - b.z).slice(0, open.length - max);
+}
 
 /** A small viewport clips the presentation, never the player's chosen size. Null height means content-sized. */
 export function windowSize({ w, h }, { W, H, y, defaultW }) {
@@ -23,12 +34,12 @@ export function clampWindow({ x = 8, y = 48 }, { w, W, H }) {
   };
 }
 
-export function createDock({ doc, rails, strip, onStrip }) {
+export function createDock({ doc, rails, strip, onStrip, max = 12 }) {
   const win = doc.defaultView;
   const slots = new Set(), count = { left: 0, right: 0 };
   let topZ = 0, queued = false, active = null;
   const isRail = () => dockIsRail(win.innerWidth);
-  const width = (s) => s?.defaultW ?? (isRail() ? railWidth(win.innerWidth) - 12 : Math.min(360, win.innerWidth - 16));
+  const width = (s) => s?.defaultW ?? defaultWindowWidth(win.innerWidth);
   const paused = () => doc.getElementById('pause')?.hidden === false;
   function layout(s) { return { edge: s.side, x: s.x, y: s.y, w: s.w, h: s.h, min: s.min, z: s.z }; }
   function save(s) { s.onLayout?.(layout(s)); }
@@ -60,6 +71,11 @@ export function createDock({ doc, rails, strip, onStrip }) {
     s.min = value; s.fresh = false;
     if (!value) raise(s);
     paint(s, true); save(s); s.onMin?.(value);
+    if (!value) limit(s);
+  }
+  /** At most `max` open windows: the one opened or raised longest ago folds to the strip. */
+  function limit(except) {
+    for (const s of overLimit([...slots], max, except)) minimize(s, true);
   }
   function drawStrip() {
     const any = strip.childElementCount > 0;
@@ -109,7 +125,7 @@ export function createDock({ doc, rails, strip, onStrip }) {
     const restored = Number.isFinite(saved.x) && Number.isFinite(saved.y);
     const z = Number.isFinite(saved.z) && saved.z > 0 ? Math.min(saved.z, 1000000) : topZ + 1;
     topZ = Math.max(topZ, z);
-    const slot = { root, body, head, fold, title, side, chip: null, pin, keep, onMin, onLayout, z, defaultW: desired(defaultWidth, WINDOW_MIN.w),
+    const slot = { root, body, head, fold, title, side, chip: null, pin, keep, door: !!door, onMin, onLayout, z, defaultW: desired(defaultWidth, WINDOW_MIN.w),
       x: saved.x ?? 8, y: saved.y ?? 48, w: desired(saved.w, WINDOW_MIN.w), h: desired(saved.h, WINDOW_MIN.h),
       min: typeof min === 'boolean' ? min : !isRail(), fresh: !restored };
     slots.add(slot);
@@ -185,6 +201,7 @@ export function createDock({ doc, rails, strip, onStrip }) {
       strip.appendChild(c); slot.chip = c; drawStrip();
     } else root.classList.add('nochip');
     paint(slot); queueFit();
+    if (!slot.min) limit(slot);
     slot.layout = () => layout(slot);
     slot.remove = () => {
       slot.finish({}); count[side] = Math.max(0, count[side] - 1); slots.delete(slot);
