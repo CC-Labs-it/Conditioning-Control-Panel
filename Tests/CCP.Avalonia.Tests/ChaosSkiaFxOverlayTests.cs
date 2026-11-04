@@ -41,6 +41,55 @@ public sealed class ChaosSkiaFxOverlayTests
     }
 
     [Fact]
+    public Task VideoRestackRaisesOnlyVisibleSparklesDuringPinnedRun() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var pin = settings.ChaosPinOnTop;
+        var enabled = settings.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var skip = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
+        var raise = ChaosSkiaFxOverlay.RaiseWindow;
+        var calls = 0;
+        try
+        {
+            settings.ChaosPinOnTop = true;
+            settings.ChaosSkiaFxEnabled = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.RaiseWindow = _ => calls++;
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.RaiseSparklesAboveVideo(); // idle prewarm is hidden
+            Assert.Equal(0, calls);
+            ChaosSkiaFxOverlay.Burst(new Point(400, 300), Colors.Cyan);
+            ChaosRunHost.RaiseSparklesAboveVideo(); // video shown
+            ChaosRunHost.RaiseSparklesAboveVideo(); // video clicked
+            Assert.Equal(2, calls);
+            settings.ChaosPinOnTop = false;
+            ChaosRunHost.RaiseSparklesAboveVideo();
+            Assert.Equal(2, calls);
+            ChaosRunHost.ForceShutdown();
+            ChaosRunHost.RaiseSparklesAboveVideo();
+            Assert.Equal(2, calls);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosSkiaFxOverlay.CloseActive();
+            ChaosSkiaFxOverlay.RaiseWindow = raise;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = skip;
+            settings.ChaosPinOnTop = pin;
+            settings.ChaosSkiaFxEnabled = enabled;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task NativeRefusalDoesNotLeakAcrossSnapshots() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

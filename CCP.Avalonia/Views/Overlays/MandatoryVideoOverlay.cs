@@ -15,6 +15,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using LibVLCSharp.Shared;
@@ -314,6 +315,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     case VideoKeyAction.Swallow: e.Handled = true; break;
                 }
             }
+            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => ChaosRunHost.RaiseSparklesAboveVideo(),
+                global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
             w.KeyDown += (_, e) => OnKey(e);
             // The panic key always wins: tunnel it so a focused Resume button cannot take it as a click
             // when the panic key is Enter/Space (the WPF card was a separate window). Other keys bubble as before.
@@ -333,6 +336,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
+            ChaosRunHost.RaiseSparklesAboveVideo();
+            DispatcherTimer.RunOnce(ChaosRunHost.RaiseSparklesAboveVideo, TimeSpan.FromMilliseconds(50));
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 

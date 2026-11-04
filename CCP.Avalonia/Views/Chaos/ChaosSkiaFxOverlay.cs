@@ -47,6 +47,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static IFrameSource? FramesForTests;
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
         private static bool _refused;
+        internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
+
+        internal static void RaiseAboveVideo()
+        {
+            if (Active is { IsVisible: true } w) RaiseWindow(w);
+        }
 
         /// <summary>WPF HideGrace: the window stays up this long after the field empties, so the next pop
         /// reuses the presented surface instead of re-mapping a stage-wide window.</summary>
