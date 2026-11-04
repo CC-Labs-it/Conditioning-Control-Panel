@@ -20,6 +20,49 @@ public sealed class ChaosTeaseBurstTests
     private sealed class ZeroRandom : Random { public override double NextDouble() => 0; }
 
     [Fact]
+    public Task Debut_uses_the_selected_language() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
+        var seen = ChaosMeta.State.SeenTease;
+        var runs = ChaosMeta.State.RunsCompleted;
+        var rng = ChaosRunHost.Rng;
+        var announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+        try
+        {
+            loc.SetLanguage("es");
+            ChaosMeta.State.SeenTease = false;
+            ChaosMeta.State.RunsCompleted = 10;
+            CoreSettings.Current.ChaosAnnouncerEnabled = true;
+            ChaosRunHost.Rng = new ZeroRandom();
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            ChaosAnnouncerOverlay.CloseActive();
+            BubbleOverlay.Field.Bubbles.Clear();
+            ChaosRunHost.SpawnTick();
+            var cue = ChaosAnnouncerOverlay.Active!.Current!;
+            Assert.Equal("LA TENTACIÓN", cue.Text);
+            Assert.Equal("no la toques", cue.SubText);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosAnnouncerOverlay.CloseActive();
+            ChaosRunHost.Rng = rng;
+            ChaosMeta.State.SeenTease = seen;
+            ChaosMeta.State.RunsCompleted = runs;
+            CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+            loc.SetLanguage(language);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task Tease_spawn_touch_and_off_switch_follow_the_run_path() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

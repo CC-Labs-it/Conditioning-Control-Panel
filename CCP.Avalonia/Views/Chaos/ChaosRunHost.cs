@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -173,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     {
                         ChaosMeta.State.SeenTease = true;
                         ChaosMeta.Save();
-                        ChaosAnnouncerOverlay.Announce("THE TEASE", ChaosAnnounceKind.Temptation, artKey: "tease", subText: "do not touch");
+                        ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_tease_debut_title"), ChaosAnnounceKind.Temptation, artKey: "tease", subText: Loc.Get("chaos_tease_debut_subtitle"));
                     }
                     ChaosMeta.MarkDiscovered("bubble:tease");
                     BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildTease(effIntensity, cfg.EffectIntensity, _state.BubbleScale));
