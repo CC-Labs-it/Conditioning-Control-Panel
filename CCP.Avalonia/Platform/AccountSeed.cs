@@ -210,6 +210,7 @@ internal static class AccountSeed
     /// <summary>A confirmed reading ended a grace window: the same repaint as a tier change, with no
     /// celebration, which is why it is not TierChanged (WPF EntitlementTierSync.GraceClosed).</summary>
     internal static event Action? GraceClosed;
+    internal static event Action<int>? TierRaised;
 
     private static readonly EntitlementReadings Readings = new();
 
@@ -254,6 +255,11 @@ internal static class AccountSeed
             if (!reading.Rose && after <= before) return;
             var tier = reading.Rose ? serverTier!.Value : after;
             Log.Information("[Entitlement] {Source}: access now tier {Tier}", source, tier);
+            if (reading.Rose)
+            {
+                try { TierRaised?.Invoke(tier); }
+                catch (Exception ex) { Log.Warning(ex, "[Entitlement] TierRaised handler failed"); }
+            }
             Patreon?.NotifyEntitlementRaised(tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
         }
         catch (Exception ex) { Log.Warning(ex, "[Entitlement] apply failed ({Source})", source); }

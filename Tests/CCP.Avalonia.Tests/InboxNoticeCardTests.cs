@@ -118,6 +118,33 @@ public sealed class InboxNoticeCardTests
         });
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LegacyFlagCelebratesOnlyAnActualLiveRise(bool rise) => Run(() =>
+    {
+        var s = SignIn("legacy-token");
+        s.SeenFeatureIntros.RemoveAll(key => key == TierCelebration.KeyT2);
+        s.SeenFeatureIntros.Add(TierCelebration.LegacyKey);
+        s.PatreonTier = rise ? 0 : 2;
+        var account = s.UnifiedId;
+        s.UnifiedId = null; // Opening the shell must not start an unrelated focus fetch.
+        CoreAccount.UnifiedUserId = null;
+        Assert.True(AccountSeed.Seed());
+        NewShell();
+        s.UnifiedId = account;
+        CoreAccount.UnifiedUserId = account;
+        var sync = new SyncPush(() => null, () => false, new TierReply("{\"effective_tier\":2}", HttpStatusCode.OK))
+        { TierReceived = (tier, id, token) => AccountSeed.OfferHeartbeatTier(tier, id, token) };
+        Assert.True(sync.HeartbeatAsync().GetAwaiter().GetResult());
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(rise, StartupLadder.Inbox.Items.Any(item => item.Key == "intro:" + TierCelebration.KeyT2));
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, item => item.Key.StartsWith("tier-on:"));
+        Assert.Equal(2, s.LastKnownEffectiveTier);
+        Assert.DoesNotContain(TierCelebration.KeyT2, s.SeenFeatureIntros); // Spent only when opened.
+    });
+
     [Fact]
     public void HeartbeatRiseAppliesAndPostsRepeatNotice() => Run(() =>
     {
