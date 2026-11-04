@@ -97,6 +97,23 @@ public sealed class TutorialStageTests
     });
 
     [Fact]
+    public Task LiveCardFadesInOver300Milliseconds() => WithHost((_, overlay, _, _, _) =>
+    {
+        var root = Assert.IsAssignableFrom<Control>(overlay.StageRoot);
+        // The headless render timer drives Avalonia's real opacity transition.
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        System.Threading.Thread.Sleep(60);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        Assert.InRange(root.Opacity, 0.01, 0.95);
+        System.Threading.Thread.Sleep(400);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, root.Opacity, 2);
+    });
+
+    [Fact]
     public Task ClosingLiveCardRestoresHostInputAndLeavesNoCardOrSubscriptions() => WithHost((host, overlay, target, _, _) =>
     {
         overlay.Close();

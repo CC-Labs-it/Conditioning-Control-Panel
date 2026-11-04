@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
@@ -53,12 +54,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_live || _targetWindow == null) { base.Show(); return; }
             if (_tornDown || IsOnStage) return;
+            // WPF TutorialOverlay.xaml.cs:99-109 fades the whole overlay in on Loaded.
+            if (Content is Control root) root.Opacity = 0;
             if (!AttachTo(_targetWindow))
             {
                 Serilog.Log.Warning("Tutorial: {Window} has no overlay layer, the tour cannot draw; ending it", _targetWindow.GetType().Name);
                 Close();
                 return;
             }
+            _stage!.Transitions = new Transitions
+            {
+                new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(300) }
+            };
+            _stage.Opacity = 1;
             _loaded = true;
             if (CoreTutorial.CurrentStep is { } first) UpdateStep(first);
         }
