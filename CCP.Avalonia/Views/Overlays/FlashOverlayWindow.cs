@@ -62,6 +62,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal FlashShatterState? Shatter { get; private set; }
         private double _alpha = 1;
         private DispatcherTimer? _lifetimeTimer;
+        private DispatcherTimer? _luckyTimer;
+        private long _luckyStart;
+        private FlashGlowLook _luckyLook;
         private TimeSpan _fade;
         private long _expiresAt;
         internal long ExpiresAt => _expiresAt;
@@ -367,6 +370,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return GlowPadPx = (int)Math.Round(pad * (scaling > 0 ? scaling : 1));
         }
 
+        // WPF FlashService.cs:2001 and FlashLayer.cs:417: 400 ms up, 400 ms down.
+        internal void StartLuckyPulse(FlashGlowLook look)
+        {
+            _luckyLook = look;
+            _luckyStart = FlashOverlay.Clock.GetTimestamp();
+            LuckyPulseFrame();
+            _luckyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+            _luckyTimer.Tick += (_, _) => LuckyPulseFrame();
+            _luckyTimer.Start();
+        }
+
+        internal void LuckyPulseFrame()
+        {
+            var seconds = FlashOverlay.Clock.GetElapsedTime(_luckyStart).TotalSeconds;
+            var (blur, opacity) = FlashFxRules.LuckyPulseAt(_luckyLook.BlurRadius, seconds);
+            var c = Color.FromArgb((byte)(opacity * 255), (byte)(_luckyLook.Rgb >> 16), (byte)(_luckyLook.Rgb >> 8), (byte)_luckyLook.Rgb);
+            _glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = blur, Color = c });
+        }
+
+        internal bool LuckyPulseRunning => _luckyTimer?.IsEnabled == true;
+
         /// <summary>Pixels the glow added on each edge of the picture (0 without a glow).</summary>
         internal int GlowPadPx { get; private set; }
 
@@ -420,7 +444,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; _closed = true; _image.Source = null; picture.Dispose(); };
+            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; _luckyTimer?.Stop(); _luckyTimer = null; _closed = true; _image.Source = null; picture.Dispose(); };
         }
 
         /// <summary>

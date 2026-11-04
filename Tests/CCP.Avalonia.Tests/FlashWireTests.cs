@@ -27,6 +27,11 @@ namespace CCP.Avalonia.Tests;
 /// the hydra multiply on a pop, and the TvOff whiten, Glitch slices and Pop sparks of a leave.</summary>
 public sealed class FlashWireTests
 {
+    private sealed class LuckyRandom : Random
+    {
+        public override double NextDouble() => 0;
+    }
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Now = 1_000_000;
@@ -129,6 +134,36 @@ public sealed class FlashWireTests
             Assert.Equal(2, xp.Count);
         }
         finally { s.SuppressPerkNotifications = quiet; }
+    });
+
+    [Fact]
+    public Task Lucky_roll_pulses_until_closed_and_respects_glow_settings() => OnUi((s, clock, xp, _) =>
+    {
+        var rng = FlashOverlay.Rng;
+        var quiet = s.SuppressPerkNotifications;
+        try
+        {
+            FlashOverlay.Rng = new LuckyRandom();
+            s.SuppressPerkNotifications = true;
+            s.UnlockedSkills.Add(FlashFxRules.LuckySkillId);
+            s.FlashGlowEnabled = true;
+            var w = ShowOne();
+            Assert.True(w.LuckyPulseRunning);
+            var start = w.GlowShadow[0].Blur;
+            clock.Now += TimeSpan.FromMilliseconds(400).Ticks;
+            w.LuckyPulseFrame();
+            Assert.Equal(start * 1.6, w.GlowShadow[0].Blur, 6);
+            Assert.Equal(255, w.GlowShadow[0].Color.A);
+            Assert.Equal(40, xp[0].Xp);
+            w.Close();
+            Assert.False(w.LuckyPulseRunning);
+            s.FlashGlowEnabled = false;
+            Assert.False(ShowOne().LuckyPulseRunning);
+            s.FlashGlowEnabled = true;
+            s.PerformanceMode = true;
+            Assert.False(ShowOne().LuckyPulseRunning);
+        }
+        finally { FlashOverlay.Rng = rng; s.SuppressPerkNotifications = quiet; }
     });
 
     [Fact]
