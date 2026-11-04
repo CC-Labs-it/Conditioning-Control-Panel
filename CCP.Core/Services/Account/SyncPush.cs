@@ -92,6 +92,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IEnumerable<string>?> _localAchievements;
         private readonly Func<bool> _inSession;
         private readonly SemaphoreSlim _gate = new(1, 1);
+        private int _syncSuccesses;
         private string[]? _serverAchievements;   // null: the profile carried none, so achievements are not known
         private Timer? _heartbeat;
         private int _nudgePending;
@@ -284,6 +285,7 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 LastSyncTime = UtcNow();
+                Interlocked.Increment(ref _syncSuccesses);
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
@@ -314,6 +316,21 @@ namespace ConditioningControlPanel.Services
                 return false;
             }
             finally { _gate.Release(); }
+        }
+
+        /// <summary>WPF SyncBeforeRetryAsync: wait for an in-flight sync or push after the cooldown.</summary>
+        public async Task<bool> SyncBeforePurchaseRetryAsync()
+        {
+            var id = CoreSettings.Current.UnifiedId;
+            var before = Volatile.Read(ref _syncSuccesses);
+            if (!await _gate.WaitAsync(Cooldown)) return false;
+            _gate.Release();
+            if (id != CoreSettings.Current.UnifiedId || !Loaded) return false;
+            if (Volatile.Read(ref _syncSuccesses) != before || await PushAsync("skill purchase", waitForGate: true)) return id == CoreSettings.Current.UnifiedId;
+            var left = LastSyncTime.HasValue ? Cooldown - (UtcNow() - LastSyncTime.Value) : TimeSpan.Zero;
+            if (left <= TimeSpan.Zero || left > Cooldown) return false;
+            await Task.Delay(left + TimeSpan.FromMilliseconds(250));
+            return id == CoreSettings.Current.UnifiedId && await PushAsync("skill purchase retry", waitForGate: true);
         }
 
         /// <summary>WPF NudgeSyncSoon: one coalesced push, 3 s out or just past the cooldown.</summary>

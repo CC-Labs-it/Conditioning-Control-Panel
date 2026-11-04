@@ -133,6 +133,26 @@ public sealed class PrivacySyncTests
         }
     }
 
+    [Fact]
+    public async Task PurchaseRetryWaitsForARealInFlightSync()
+    {
+        var oldSettings = CoreSettings.ServiceProvider; var oldLogin = CoreAccount.IsLoggedInProvider;
+        var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings; CoreAccount.IsLoggedInProvider = () => true;
+        var handler = new FakeSync { Hold = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler);
+        try
+        {
+            settings.Current.UnifiedId = "purchase-sync"; settings.Current.OfflineMode = false;
+            Assert.False(await sync.SyncBeforePurchaseRetryAsync()); Assert.Empty(handler.Bodies);
+            sync.MarkLoaded(null);
+            var push = sync.PushAsync("test"); await handler.Received.Task;
+            var retry = sync.SyncBeforePurchaseRetryAsync(); Assert.False(retry.IsCompleted);
+            handler.Hold.SetResult(true);
+            Assert.True(await push); Assert.True(await retry); Assert.Single(handler.Bodies);
+        }
+        finally { sync.Reset(); CoreSettings.ServiceProvider = oldSettings; CoreAccount.IsLoggedInProvider = oldLogin; }
+    }
+
     private sealed class FakeSync : HttpMessageHandler
     {
         internal readonly List<JObject> Bodies = new();

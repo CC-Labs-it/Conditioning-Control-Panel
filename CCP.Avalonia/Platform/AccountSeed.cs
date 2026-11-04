@@ -71,6 +71,31 @@ internal static class AccountSeed
             ? NewV2().ChangeDisplayNameAsync(id, name) : null;
         CoreAccount.DeleteAccountProvider = () => CoreSettings.Current.UnifiedId is { Length: > 0 } id
             ? NewV2().DeleteAccountAsync(id) : null;
+        // WPF MergedAccountRecoveryHead: stop writes to the tombstone, restamp quests and reauthenticate.
+        V2AuthService.MergedRecovery = MergedAccountRecovery.TryHandleAsync;
+        MergedAccountRecovery.StopSync = () => Sync?.Reset();
+        MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
+        MergedAccountRecovery.Reauthenticate = async () =>
+        {
+            var settings = CoreSettings.Current; var canonical = settings.UnifiedId;
+            var v2 = NewV2();
+            foreach (var provider in new[] { "patreon", "discord", "substar" })
+            {
+                string? token = provider switch { "patreon" when patreon.IsAuthenticated => patreon.GetAccessToken(), "discord" when discord.IsAuthenticated => discord.GetAccessToken(), "substar" when substar.IsAuthenticated => substar.GetAccessToken(), _ => null };
+                if (string.IsNullOrEmpty(token)) continue;
+                var result = provider switch { "patreon" => await v2.AuthenticateWithPatreonAsync(token), "discord" => await v2.AuthenticateWithDiscordAsync(token), _ => await v2.AuthenticateWithSubstarAsync(token) };
+                if (result.Success && result.User?.UnifiedId == canonical && !string.IsNullOrEmpty(result.AuthToken) && ReferenceEquals(settings, CoreSettings.Current) && settings.UnifiedId == canonical)
+                { settings.AuthToken = result.AuthToken; CoreSettings.Save(suppressCloudBackup: true); return true; }
+            }
+            return false;
+        };
+        MergedAccountRecovery.ReloadProfile = async () => { await LoadProfileAsync(); };
+        MergedAccountRecovery.Finished = (id, signedIn) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if ((global::Avalonia.Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow is not Views.Windows.MainShellWindow shell) return;
+            shell.UpdateQuickLoginUI();
+            if (!signedIn) StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = "merged-account-signin:" + id, Title = global::ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_title"), Summary = global::ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_summary"), Open = () => _ = shell.OpenUnifiedLoginDialog() });
+        });
         // WPF ProfileSyncService.HandleUnauthorizedAsync (StartHeartbeat on success) / TryProviderRevalidateAsync.
         AuthRecovery.Recovered = () => { if (Sync is { Loaded: true } sync) sync.StartHeartbeat(); };
         AuthRecovery.ProviderRevalidate = async () =>
