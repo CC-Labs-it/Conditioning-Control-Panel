@@ -6,7 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section, no lock-day chip, no juice (.Juice.cs), no bell
+// ponytail: no leash drawer section, no lock-day chip, no juice (.Juice.cs), no bell
 // (the corner notices are not on this head). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
@@ -55,6 +55,7 @@ public sealed partial class FriendsDrawer : Border
     private string? _openId;
     private (string Id, string What)? _confirm;
     private readonly Dictionary<string, (string Text, bool Good)> _results = new();
+    private readonly HashSet<string> _leashOffers = new(), _leashPending = new();
     private readonly Border _head = new(), _addBox = new(), _foot = new();
     private readonly Border _ask = new() { Tag = "friends-presence-ask", Margin = new Thickness(10, 8, 10, 0) };
     private readonly StackPanel _list = new();
@@ -430,6 +431,7 @@ public sealed partial class FriendsDrawer : Border
             return card;
         }
         card.Children.Add(CardActions(f));
+        if (FriendLeashOffer.Create(f, _leashOffers, _leashPending, Render) is { } offer) card.Children.Add(offer);
         var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
         more.HorizontalAlignment = HorizontalAlignment.Stretch;
         more.HorizontalContentAlignment = HorizontalAlignment.Center;
