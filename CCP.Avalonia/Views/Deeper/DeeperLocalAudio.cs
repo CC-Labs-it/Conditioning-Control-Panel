@@ -39,13 +39,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // AudioFileReader.TotalTime: the parse gives the duration before anything plays.
             var status = await media.Parse(MediaParseOptions.ParseLocal, 5000);
             if (status != MediaParsedStatus.Done || media.Duration <= 0) { media.Dispose(); return null; }
-            var mp = new MediaPlayer(media);
+            // Prime with audio disabled at the media level: LibVLC mute is not reliable before
+            // an output exists. The original media is used only after an explicit Play.
+            var previewMedia = image == null ? null : new Media(vlc, path, FromType.FromPath);
+            previewMedia?.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
+            Media currentMedia = previewMedia ?? media;
+            var mp = new MediaPlayer(currentMedia);
             Transport? audio = null;
-            var sink = image == null ? null : new VlcFrameSink(mp, () => media, bmp => image.Source = bmp,
+            var sink = image == null ? null : new VlcFrameSink(mp, () => currentMedia, bmp => image.Source = bmp,
                 () => { image.InvalidateVisual(); audio?.OnVideoFrame(); });
-            audio = new Transport(new VlcEngine(mp), media.Duration, () =>
+            audio = new Transport(new VlcEngine(mp, previewMedia == null ? null : () =>
             {
-                try { mp.Stop(); sink?.Free(); mp.Dispose(); media.Dispose(); }
+                mp.Stop();
+                currentMedia = media;
+                mp.Media = media;
+                LibVlcAudio.PreparePreferredDevice(mp);
+            }), media.Duration, () =>
+            {
+                try { mp.Stop(); sink?.Free(); mp.Dispose(); previewMedia?.Dispose(); media.Dispose(); }
                 catch (Exception ex) { Serilog.Log.Debug(ex, "DeeperEditor: local audio dispose"); }
             });
             // Never act inside libvlc's own event (deadlock; device and seek do not stick there).
@@ -70,9 +81,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             void Play();
             void SetPause(bool pause);
             void Stop();
+            bool PreparePlayback();
         }
 
-        private sealed class VlcEngine(MediaPlayer p) : IEngine
+        private sealed class VlcEngine(MediaPlayer p, Action? switchToFull) : IEngine
         {
             public VLCState State => p.State;
             public long Time { get => p.Time; set => p.Time = value; }
@@ -80,6 +92,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             public void Play() => p.Play();
             public void SetPause(bool pause) => p.SetPause(pause);
             public void Stop() => p.Stop();
+            public bool PreparePlayback()
+            {
+                var switchMedia = switchToFull;
+                if (switchMedia == null) return false;
+                switchToFull = null;
+                switchMedia();
+                return true;
+            }
         }
 
         /// <summary>Play/pause/seek/end over an <see cref="IEngine"/>. <see cref="OnPlaying"/> and
@@ -89,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             internal readonly object Gate = new();
             private long _pendingMs;   // a seek made before playback could take it; consumed once
             private bool _primingVideo, _primePlaying, _primePauseRequested, _playAfterPrime;
+            private Timer? _primeTimer;
             private int _disposed;
             internal bool IsDisposed => _disposed != 0;
 
@@ -133,9 +154,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 lock (Gate)
                 {
                     if (_primingVideo) { _playAfterPrime = true; return; }
-                    if (player.State == VLCState.Paused) player.SetPause(false);
-                    else player.Play();
+                    StartPlayback();
                 }
+            }
+
+            private void StartPlayback()
+            {
+                var position = Live ? player.Time : _pendingMs;
+                if (player.PreparePlayback())
+                {
+                    _pendingMs = Math.Max(0, position);
+                    player.Play();
+                }
+                else if (player.State == VLCState.Paused) player.SetPause(false);
+                else player.Play();
             }
 
             /// <summary>Paused when playing; while the clip is still opening, stopped, so a pause
@@ -144,7 +176,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 lock (Gate)
                 {
-                    if (_primingVideo) { _playAfterPrime = false; return; }
+                    if (_primingVideo)
+                    {
+                        _primingVideo = false;
+                        _playAfterPrime = false;
+                        _primeTimer?.Dispose();
+                        _primeTimer = null;
+                        player.Stop();
+                        return;
+                    }
                     if (player.State == VLCState.Playing) player.SetPause(true);
                     else if (player.State != VLCState.Paused) player.Stop();
                 }
@@ -160,7 +200,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     _primePlaying = false;
                     _primePauseRequested = false;
                     _playAfterPrime = false;
+                    _primeTimer = new Timer(_ => OnPrimeTimeout(), null, TimeSpan.FromSeconds(2), Timeout.InfiniteTimeSpan);
                     player.Play();
+                }
+            }
+
+            internal void OnPrimeTimeout()
+            {
+                lock (Gate)
+                {
+                    if (IsDisposed || !_primingVideo) return;
+                    _primingVideo = false;
+                    _primeTimer?.Dispose();
+                    _primeTimer = null;
+                    player.Stop();
+                    if (_playAfterPrime) StartPlayback();
+                    _playAfterPrime = false;
                 }
             }
 
@@ -193,9 +248,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 {
                     if (IsDisposed || !_primingVideo) return;
                     _primingVideo = false;
+                    _primeTimer?.Dispose();
+                    _primeTimer = null;
                     _primePlaying = false;
                     _primePauseRequested = false;
-                    if (_playAfterPrime) player.SetPause(false);
+                    if (_playAfterPrime) StartPlayback();
                     _playAfterPrime = false;
                 }
             }
@@ -203,7 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             /// <summary>WPF OnVlcEndReached: Stop + rewind so the next Play replays.</summary>
             internal void OnEndReached()
             {
-                lock (Gate) { if (IsDisposed) return; player.Stop(); _pendingMs = 0; _primingVideo = false; _playAfterPrime = false; }
+                lock (Gate) { if (IsDisposed) return; _primeTimer?.Dispose(); _primeTimer = null; player.Stop(); _pendingMs = 0; _primingVideo = false; _playAfterPrime = false; }
                 Ended?.Invoke();
             }
 
@@ -211,6 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
                 Ended = null;
+                _primeTimer?.Dispose();
                 // Never dispose a player from inside its own libvlc event: that deadlocks.
                 ThreadPool.QueueUserWorkItem(_ => { lock (Gate) release(); });
             }

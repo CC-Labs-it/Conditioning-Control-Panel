@@ -991,7 +991,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             foreach (var ed in s_open)
             {
-                if (ed._localAudio == null || !ed._isPlaying) continue;
+                if (ed._localAudio == null) continue;
                 ed._localAudio.Pause();
                 ed._isPlaying = false;
                 ed._playheadTimer?.Stop();

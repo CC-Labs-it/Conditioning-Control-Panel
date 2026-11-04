@@ -570,6 +570,27 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static string? PreferredDevice(string? saved, string? current, IEnumerable<string> available)
             => string.IsNullOrEmpty(saved) || saved == current || !available.Contains(saved) ? null : saved;
 
+        // Pulse accepts a module-specific device before playback, unlike its live device list.
+        // This lets a silent preview switch to the chosen output before audio starts.
+        internal static void PreparePreferredDevice(MediaPlayer player)
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            try
+            {
+                PreparePreferredDevice(CoreSettings.Current.AudioOutputDeviceId,
+                    EnumerateOutputDevices().Select(d => d.Id), player.SetAudioOutput,
+                    (id, module) => player.SetOutputDevice(id, module));
+            }
+            catch (Exception ex) { Log.Debug("PreparePreferredDevice: {Error}", ex.Message); }
+        }
+
+        internal static void PreparePreferredDevice(string? saved, IEnumerable<string> available,
+            Func<string, bool> selectOutput, Action<string, string> setDevice)
+        {
+            var id = PreferredDevice(saved, null, available);
+            if (id != null && selectOutput("pulse")) setDevice(id, "pulse");
+        }
+
         /// <summary>Call once the player is live (its Playing event), never before: like WPF's
         /// mmdevice, the output's device list is only meaningful once it exists.</summary>
         internal static void ApplyPreferredDevice(MediaPlayer player)
