@@ -48,10 +48,53 @@ public class ChaosLiveBubbleTests
         for (int i = 0; i < 100_000 && f.Bubbles.Count > 0; i++) misses += f.Step();
         Assert.Equal(("det:fuse", 1, 0), (log[0], log.Count, misses));
 
-        var (g, _, log2) = Field(new EffectBubbleSpec { VariantId = "flash", SizePx = 200 });
+        var (g, _, log2) = Field(new EffectBubbleSpec { VariantId = "flash", SizePx = 200, TreatLifeMs = 10000000 });
         misses = 0;
         for (int i = 0; i < 100_000 && g.Bubbles.Count > 0; i++) misses += g.Step();
         Assert.Equal((0, 1), (log2.Count, misses));
+    }
+
+    [Fact]
+    public void Treat_rot_waits_for_its_lifetime_pauses_and_dissolves_once()
+    {
+        var (f, b, _) = Field(new EffectBubbleSpec { SizePx = 200, TreatLifeMs = 320 });
+        int expired = 0;
+        f.ChaosTreatExpired = x => { Assert.Same(b, x); expired++; };
+        for (int i = 0; i < 9; i++) f.Step();
+        f.HoldChaos = true;
+        for (int i = 0; i < 20; i++) f.Step();
+        Assert.Equal(0, expired);
+        f.HoldChaos = false;
+        f.Step();
+        Assert.Equal(1, expired);
+        Assert.True(b.Popping);
+        double oldScale = b.Scale, oldAngle = b.Angle;
+        f.Step();
+        Assert.True(b.Scale < oldScale);
+        Assert.Equal(oldAngle, b.Angle);
+        for (int i = 0; i < 30; i++) f.Step();
+        Assert.Equal(1, expired);
+        Assert.Empty(f.Bubbles);
+    }
+
+    [Fact]
+    public void Special_pickups_and_hazards_do_not_rot()
+    {
+        var specs = new[] {
+            new EffectBubbleSpec { IsHeart = true }, new EffectBubbleSpec { IsDroplet = true },
+            new EffectBubbleSpec { IsEscort = true }, new EffectBubbleSpec { IsTease = true },
+            new EffectBubbleSpec { IsBrittle = true }, new EffectBubbleSpec { IsFreeze = true },
+            new EffectBubbleSpec { IsDarter = true }
+        };
+        foreach (var spec in specs)
+        {
+            var (f, b, _) = Field(spec);
+            int expired = 0;
+            f.ChaosTreatExpired = _ => expired++;
+            for (int i = 0; i < 160; i++) f.Step();
+            Assert.Equal(0, expired);
+            Assert.False(b.Popping);
+        }
     }
 
     [Fact]

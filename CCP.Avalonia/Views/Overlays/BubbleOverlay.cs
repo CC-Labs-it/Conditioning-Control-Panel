@@ -214,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// if the ambient field is not already running.</summary>
         internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
-            Func<AmbientBubble, bool>? canChannel = null)
+            Func<AmbientBubble, bool>? canChannel = null, Action<AmbientBubble>? onTreatExpired = null)
         {
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
@@ -227,6 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 onDefuse(b);
             };
             Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); };
+            Field.ChaosTreatExpired = onTreatExpired;
             if (_running) return;
             Start(host, null, ambient: false);
             _chaosOpenedWindows = _running;
@@ -246,7 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
-            Field.ChaosDefused = Field.ChaosDetonated = null;
+            Field.ChaosDefused = Field.ChaosDetonated = Field.ChaosTreatExpired = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }

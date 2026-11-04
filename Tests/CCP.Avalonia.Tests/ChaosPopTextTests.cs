@@ -102,6 +102,61 @@ public sealed class ChaosPopTextTests
         });
     }
 
+    // WPF BubbleService :4864 and ChaosModeService :1898: rot applies the penalty even with text off.
+    [Theory]
+    [InlineData(true, 5, 2)]
+    [InlineData(false, 1, 0)]
+    public async Task Treat_expiry_delivers_faded_at_its_centre_and_docks_combo(bool enabled, int combo, int expected)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var prepare = ChaosPopText.Prepare;
+            var canShow = ChaosPopText.PlatformCanShow;
+            var hook = ChaosRunHost.PopText;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+            ChaosPopText.PlatformCanShow = () => true;
+            ChaosRunHost.PopText = ChaosPopText.Show;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                ChaosRunHost.State!.Combo = combo;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "flash", SizePx = 100, TreatLifeMs = 64 });
+                BubbleOverlay.Field.Step();
+                BubbleOverlay.Field.Step();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(b.Popping);
+                Assert.Equal(expected, ChaosRunHost.State.Combo);
+                Assert.Contains("faded", ChaosRunHost.State.RecentEvents[0]);
+                if (enabled)
+                {
+                    var w = Assert.Single(ChaosPopText.Pool.All);
+                    Assert.Equal("FADED", w.LabelText);
+                    var (r, g, blue) = M.Lift(0xB8, 0xB8, 0xD0);
+                    Assert.Equal(Color.FromRgb(r, g, blue), ((ISolidColorBrush)w.LabelFill).Color);
+                    var k = w.Screens.Primary?.Scaling is > 0 and var scale ? scale : 1.0;
+                    Assert.Equal(new PixelPoint((int)Math.Round((b.CenterX - 140) * k),
+                        (int)Math.Round((b.CenterY - 44) * k)), w.Position);
+                }
+                else Assert.Empty(ChaosPopText.Pool.All);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosPopText.ShutdownPool();
+                ChaosPopText.Prepare = prepare;
+                ChaosPopText.PlatformCanShow = canShow;
+                ChaosRunHost.PopText = hook;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     // WPF ChaosPopText.cs:80-93: teardown follows pending displays and leaves no windows.
     [Theory]
     [InlineData(false)]
