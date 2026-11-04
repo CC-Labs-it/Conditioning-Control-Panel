@@ -122,7 +122,7 @@ public sealed class FirstShowPreviewBackendTests
         if (Environment.GetEnvironmentVariable("CCP_TEST_AUDIO_FIXTURE") != "1")
         {
             Assert.True(OperatingSystem.IsLinux(), "Native routing requires the isolated Windows CI audio fixture");
-            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            static string Source([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path; var root = new DirectoryInfo(Path.GetDirectoryName(Source())!);
             while (root != null && !File.Exists(Path.Combine(root.FullName, ".github/scripts/with-test-pulse.sh"))) root = root.Parent;
             Assert.NotNull(root);
             var info = new System.Diagnostics.ProcessStartInfo("bash") { WorkingDirectory = root.FullName, RedirectStandardOutput = true };
