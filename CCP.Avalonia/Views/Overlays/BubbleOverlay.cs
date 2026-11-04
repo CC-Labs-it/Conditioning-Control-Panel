@@ -34,8 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
-    /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
+    /// <para>ponytail: chaos motion supports FloatUp and RainDown. Not here yet: the dashboard's
+    /// ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
     /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
     /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
     /// (no AchievementService on this head; quests are credited).</para>
@@ -240,6 +240,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF PopAllBubbles at a wave boundary, retaining the chaos callbacks.</summary>
+        internal static void ClearChaos()
+        {
+            Field.Held = false;
+            Field.Bubbles.Clear();
+            foreach (var w in Windows) w.Sync();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
@@ -253,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble, FloatUp and RainDown. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {

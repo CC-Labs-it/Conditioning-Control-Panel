@@ -1778,7 +1778,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ? ChaosPlayMode.FreeDesktop : ChaosPlayMode.Story;
             SaveToSettings();
             Close();
-            var cfg = ChaosRunConfig.FromSettings();
+            var cfg = ChaosMeta.State.RunsCompleted == 0 ? DtrhRunWire.FirstRunConfig() : ChaosRunConfig.FromSettings();
             cfg.PlayMode = mode;
             Dispatcher.UIThread.Post(() => ChaosRunHost.StartRun(cfg));
         }
