@@ -206,7 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal MindWipePlayer.IVoice? PlayVoice(string path, double volume, bool loop, Action onEnded)
         {
             var voice = CreateVoice(path, volume, loop, onEnded);
-            return voice?.Play() == true ? voice : null;
+            return loop ? voice : voice?.Play() == true ? voice : null;
         }
 
         // WPF BrainDrainService.cs:345-387: creation is silent; Play belongs to the stop arbitration.
@@ -300,17 +300,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             public bool Play() => Start();
             public bool Start()
             {
-                Voice v;
+                Voice v = null!;
+                v = audio.NewVoice(path, () => Retire(v));
                 lock (_gate)
                 {
-                    if (_done) return false;
-                    v = null!;
-                    v = audio.NewVoice(path, () => Retire(v));
+                    if (_done) { v.Dispose(); return false; }
                     v.Volume = _vol;
                     v.Started = Schedule;
                     _live.Add(v);
+                    return v.Play();
                 }
-                return v.Play();
             }
 
             /// <summary>WPF: interval = length - overlap, at least 100 ms. Unknown length: back to back.</summary>
