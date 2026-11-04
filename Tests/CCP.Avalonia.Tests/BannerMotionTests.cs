@@ -113,10 +113,14 @@ public sealed class BannerMotionTests
     [InlineData("provider")]
     [InlineData("signed-in")]
     [InlineData("stale-id")]
+    [InlineData("signed-out")]
+    [InlineData("offline")]
     public Task WelcomeFollowsIdentityChangesAndProviderFallback(string source) => InShell(w =>
     {
         var s = CoreSettings.Current;
-        s.OfflineMode = false;
+        var settings = (s.OfflineMode, s.OfflineUsername, s.UserDisplayName, s.UnifiedId);
+        s.OfflineMode = source == "offline";
+        s.OfflineUsername = source == "offline" ? "Offline" : null;
         var property = typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed).GetProperty("Patreon", BindingFlags.Static | BindingFlags.NonPublic)!;
         var previous = property.GetValue(null);
         var account = (CoreAccount.IsLoggedInProvider, CoreAccount.UnifiedUserId);
@@ -127,20 +131,23 @@ public sealed class BannerMotionTests
             s.UserDisplayName = source == "unified" ? "Bambi" : " ";
             provider.DisplayName = source == "provider" ? "Provider" : null;
             CoreAccount.IsLoggedInProvider = () => !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
-            CoreAccount.UnifiedUserId = source == "stale-id" ? null : "signed-in";
+            CoreAccount.UnifiedUserId = source is "stale-id" or "signed-out" or "offline" ? null : "signed-in";
             s.UnifiedId = source == "stale-id" ? "stale-id" : null;
-            Assert.Equal(source != "stale-id", CoreAccount.IsLoggedIn);
+            Assert.Equal(source is not ("stale-id" or "signed-out" or "offline"), CoreAccount.IsLoggedIn);
             w.UpdateQuickLoginUI(accountChanged: true);
-            var expected = source == "stale-id"
+            var expected = source == "offline"
+                ? ConditioningControlPanel.Localization.Loc.GetF("label_welcome_back_0_offline_mode", "Offline")
+                : source == "signed-out"
                 ? ConditioningControlPanel.Localization.Loc.Get("label_welcome_consider_logging_in_with_patreon_for")
-                : source == "signed-in"
+                : source is "signed-in" or "stale-id"
                 ? ConditioningControlPanel.Localization.Loc.Get("banner_signed_in_no_name")
                 : ConditioningControlPanel.Localization.Loc.GetF("label_welcome_back_0", source == "unified" ? "Bambi" : "Provider");
             Assert.Equal(expected, w.Named<TextBlock>("TxtBannerSecondary")!.Text);
-            Assert.Equal(source == "stale-id", w.SettingsPage!.FindControl<Button>("BtnUnifiedLogin")!.IsVisible);
+            Assert.Equal(source is "stale-id" or "signed-out" or "offline", w.SettingsPage!.FindControl<Button>("BtnUnifiedLogin")!.IsVisible);
         }
         finally
         {
+            (s.OfflineMode, s.OfflineUsername, s.UserDisplayName, s.UnifiedId) = settings;
             property.SetValue(null, previous);
             CoreAccount.UnifiedUserId = account.UnifiedUserId;
             CoreAccount.IsLoggedInProvider = account.IsLoggedInProvider;
