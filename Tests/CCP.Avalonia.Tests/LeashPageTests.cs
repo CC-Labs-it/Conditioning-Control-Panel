@@ -56,7 +56,7 @@ public sealed class LeashPageTests
         public Task<JObject?> CallAsync(string op, JObject body, CancellationToken ct = default)
         {
             Calls.Add((op, (JObject)body.DeepClone()));
-            return Task.FromResult<JObject?>(new JObject { ["ok"] = true });
+            return Task.FromResult<JObject?>(new JObject { ["ok"] = true, ["status"] = op == "answer" ? "declined" : null });
         }
     }
 
@@ -85,6 +85,38 @@ public sealed class LeashPageTests
             cap.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.PageUp });
             Assert.Equal(cap.Value, (int?)wire.Calls.Last().Body["video_max"]);
             Assert.All(wire.Calls, call => Assert.Equal("settings", call.Op));
+        });
+
+    [Fact]
+    public void IncomingOfferAppearsCanBeDeclinedAndIsSeenOnlyOnTheVisiblePage() =>
+        Run(false, (shell, _, _) =>
+        {
+            var wire = new Wire();
+            var seen = new List<string>();
+            var service = new LeashService(wire, () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
+            const string id = "abcdef0123456789";
+            var block = new JObject { ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+                ["offers"] = new JArray { new JObject { ["id"] = id, ["from"] = new JObject { ["id"] = "u_vex", ["name"] = "Vex" }, ["at"] = DateTimeOffset.UtcNow.ToString("o") } } };
+            LeashHead.Service = service;
+            service.ApplyBlock(block);
+            Assert.Empty(seen);
+            shell.Show(); shell.ShowTab("leash"); Dispatcher.UIThread.RunJobs();
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            Assert.False(page.ShowingEmpty);
+            Assert.Equal(new[] { id }, seen);
+            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { id }, seen);
+            LeashGateCardTests.Click(Find(page, "leash-offer-look"));
+            Assert.True(page.GetLogicalDescendants().OfType<StackPanel>().Single(p => p.Tag as string == "leash-offer-ask").IsVisible);
+            LeashGateCardTests.Click(Find(page, "leash-ask-no"));
+            Assert.Equal("answer", wire.Calls.Last().Op);
+            Assert.Equal(false, (bool?)wire.Calls.Last().Body["accept"]);
+            shell.ShowTab("friends");
+            block["offers"]![0]!["id"] = "0123456789abcdef";
+            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            Assert.Single(seen);
+            shell.ShowTab("leash"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { id, "0123456789abcdef" }, seen);
         });
 
     private sealed class Runner : ILeashTaskRunner
