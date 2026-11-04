@@ -29,14 +29,16 @@ public sealed class ServerAnnouncementInboxTests
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        public TaskCompletionSource<bool>? AnnouncementGate;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             lock (Calls) Calls.Add(r.Method + " " + path + r.RequestUri.Query + " " + r.Content?.ReadAsStringAsync().Result);
+            if (path == "/config/announcement" && AnnouncementGate is { } gate) await gate.Task;
             var body = path == "/config/announcement"
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 
@@ -105,6 +107,82 @@ public sealed class ServerAnnouncementInboxTests
             Assert.Empty(StartupLadder.Inbox.Items);
         }
         finally { shell.Close(); }
+    });
+
+    private sealed class ScheduledCheck : IDisposable
+    {
+        public bool Disposed;
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public Task ScheduledChecksAreRetiredAfterAnExplicitCheckOrShellClose() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var scheduled = new List<(Action Callback, ScheduledCheck Timer)>();
+        MainShellWindow NewShell()
+        {
+            var shell = new MainShellWindow();
+            shell.ScheduleAnnouncement = (callback, _) =>
+            {
+                var timer = new ScheduledCheck();
+                scheduled.Add((callback, timer));
+                return timer;
+            };
+            shell.Show();
+            return shell;
+        }
+
+        var first = NewShell();
+        try
+        {
+            var pending = Assert.Single(scheduled);
+            await first.CheckServerAnnouncementAsync();
+            Assert.True(pending.Timer.Disposed);
+            var row = Assert.Single(StartupLadder.Inbox.Items);
+            StartupLadder.Inbox.Items.Remove(row);
+            pending.Callback(); // a timer already dispatched when disposed
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items);
+            Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement")));
+        }
+        finally { first.Close(); }
+
+        var second = NewShell();
+        var stale = scheduled[1];
+        second.Close();
+        Assert.True(stale.Timer.Disposed);
+        stale.Callback();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(StartupLadder.Inbox.Items);
+        Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement")));
+
+        var third = NewShell();
+        try
+        {
+            scheduled[2].Callback();
+            await Until(() => StartupLadder.Inbox.Items.Count == 1);
+            Assert.Single(StartupLadder.Inbox.Items);
+            Assert.Equal(2, fake.Calls.Count(c => c.StartsWith("GET /config/announcement")));
+        }
+        finally { third.Close(); }
+    });
+
+    [Fact]
+    public Task InFlightAnnouncementDoesNotFileAfterShellCloses() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        fake.AnnouncementGate = new TaskCompletionSource<bool>();
+        var shell = new MainShellWindow();
+        shell.Show();
+        var check = shell.CheckServerAnnouncementAsync();
+        await Until(() => fake.Calls.Any(c => c.StartsWith("GET /config/announcement")));
+        Assert.Contains(fake.Calls, c => c.StartsWith("GET /config/announcement"));
+        shell.Close();
+        fake.AnnouncementGate.SetResult(true);
+        await check;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(StartupLadder.Inbox.Items);
     });
 
     [Fact]
