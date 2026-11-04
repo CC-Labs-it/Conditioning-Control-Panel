@@ -10,6 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 public partial class EmiDeskWindow
 {
+    private EmiTypingTick? _typingTick;
     private DispatcherTimer? _tourSpeechTimer;
     private EmiChain? _tourSpeech;
     private int _tourSpeechFrame;
@@ -75,6 +76,9 @@ public partial class EmiDeskWindow
             Resized += (_, _) => LayoutTourBubble();
             Moved += (_, _) => { if (_book != null) PostTourBubbleRelayout(); };
         }
+        var bubble = frame.Bubble?.Trim();
+        if (bubble is "." or ".." or "...") (_typingTick ??= new EmiTypingTick()).Tick();
+        else _typingTick?.Stop();
         _tourText!.Text = frame.Bubble;
         _tourBubble.IsVisible = !string.IsNullOrEmpty(frame.Bubble);
         _tourBubbleTail!.IsVisible = _tourBubble.IsVisible;
@@ -135,6 +139,7 @@ public partial class EmiDeskWindow
     internal void StopTourSpeech()
     {
         _tourSpeechTimer?.Stop();
+        _typingTick?.Stop();
         _tourSpeech = null;
         _tourSpeechDone = null;
         if (_tourBubble != null) _tourBubble.IsVisible = false;
