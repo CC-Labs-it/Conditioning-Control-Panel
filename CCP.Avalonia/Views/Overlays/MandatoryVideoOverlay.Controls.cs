@@ -42,10 +42,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
         private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
 
-        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p)
+        // Headless tests can observe the volume sent to a playing video without a native LibVLC player.
+        internal Action<int>? VolumeSink;
+
+        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer? p)
         {
             var s = CoreSettings.Current;
-            p.Volume = PlayerVolume = _userMuted ? 0 : MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            var volume = PlayerVolume = _userMuted ? 0 : MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            if (p != null) p.Volume = volume;
+            VolumeSink?.Invoke(volume);
         }
 
         /// <summary>WPF ShowVideoControls: once the first frame is up, on every screen. UI thread.</summary>

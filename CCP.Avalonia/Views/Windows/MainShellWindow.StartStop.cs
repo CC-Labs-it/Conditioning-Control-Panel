@@ -4,7 +4,7 @@
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
 // ponytail: still missing, each with no service on this head: the remote-control gate,
 // Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler, the Presets "running" label and the hero FX.
+// the scheduler, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -87,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
+                if (CoreSettings.Current.IntensityRampEnabled) StartRampTimer();
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
             });
@@ -108,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            StopRampTimer();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);

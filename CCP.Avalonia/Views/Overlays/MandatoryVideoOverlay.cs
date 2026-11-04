@@ -240,7 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
         internal void UpdateVolume()
         {
-            if (_player is { } p) ApplyVolume(p);
+            if (_player != null || VolumeSink != null) ApplyVolume(_player);
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
