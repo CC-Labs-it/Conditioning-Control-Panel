@@ -40,11 +40,13 @@ public class UiThreadStackCaptureTests
         // caught in native code with no transition frame (MRES.Wait's spin phase), the DAC walk
         // starts at the next explicit frame and every frame above RuntimeMethodHandle.InvokeMethod
         // vanished. That failed twice on loaded Windows runners (flakes.md, 2026-10-13).
+        using var entered = new ManualResetEvent(false);
         using var release = new ManualResetEvent(false);
-        var parked = new Thread(() => ParkedInAKnownFrame(release)) { IsBackground = true, Name = "ParkedTarget" };
+        var parked = new Thread(() => ParkedInAKnownFrame(entered, release)) { IsBackground = true, Name = "ParkedTarget" };
         parked.Start();
         try
         {
+            Assert.True(entered.WaitOne(10_000), "target never entered the known frame"); // WaitSleepJoin alone can be a startup wait.
             var deadline = Stopwatch.StartNew();
             while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
             {
@@ -75,8 +77,9 @@ public class UiThreadStackCaptureTests
     }
 
     // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)] // Keep the named frame in Release.
+    private static void ParkedInAKnownFrame(ManualResetEvent entered, ManualResetEvent release)
+    { entered.Set(); release.WaitOne(); GC.KeepAlive(release); }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()
