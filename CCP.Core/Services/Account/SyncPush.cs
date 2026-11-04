@@ -22,6 +22,9 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public sealed class SyncPush
     {
+        /// <summary>Head callback after an authenticated sync receipt, before look sync clamps owned items.</summary>
+        public Action<string, PrizesBlock?>? PrizesReceived { get; set; }
+
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
             | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
         public const SyncBody.Field Privacy = SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus
@@ -212,6 +215,7 @@ namespace ConditioningControlPanel.Services
         /// <param name="waitForGate">Logout: wait (bounded) for an in-flight push instead of skipping.</param>
         public async Task<bool> PushAsync(string reason, bool waitForGate = false)
         {
+            var prizeSession = CoreAccount.SessionVersion;
             var s = CoreSettings.Current;
             if (!Loaded || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
             if (!await _gate.WaitAsync(waitForGate ? TimeSpan.FromSeconds(5) : TimeSpan.Zero)) return false;
@@ -291,6 +295,13 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    // WPF prize ownership first; neither reply branch may suppress the other.
+                    try
+                    {
+                        var snapshot = (reply["prizes"] as JObject)?.ToObject<PrizesBlock>();
+                        CoreAccount.ForSession(prizeSession, () => PrizesReceived?.Invoke(id, snapshot));
+                    }
+                    catch (Exception ex) { Log.Debug("V2 Sync: Could not apply prizes: {Error}", ex.Message); }
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.

@@ -35,6 +35,7 @@ internal static class AccountSeed
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
     internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
     {
+        CoreAccount.TrackSessions(() => { try { RainLookSyncHead.Stop(); } finally { PrizeOwnership.ResetHeld(); } });
         make ??= prefix => new ProviderSubscription(prefix);
         makeDiscord ??= peer => new DiscordAccount(() => peer);
         ProviderSubscription patreon, substar;
@@ -45,6 +46,7 @@ internal static class AccountSeed
             Log.Warning(ex, "Account providers unavailable: signed out, no entitlement");
             return false;
         }
+        ProviderSubscription.PrizesSink = (requested, answered, prizes, source) => RainLookSyncHead.ApplyPrizes(requested, answered, prizes, source);
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
@@ -260,9 +262,14 @@ internal static class AccountSeed
         Patreon?.Logout();
         Discord?.Logout();
         SubscribeStar?.Logout();
-        CoreAccount.UnifiedUserId = null;
         var s = CoreSettings.Current;
-        s.UnifiedId = null;
+        CoreAccount.EndSession(() =>
+        {
+            RainLookSyncHead.Stop();
+            PrizeOwnership.ResetHeld();
+            CoreAccount.UnifiedUserId = null;
+            s.UnifiedId = null;
+        });
         s.AuthToken = null;
         s.UserDisplayName = null;
         s.HasLinkedDiscord = false;

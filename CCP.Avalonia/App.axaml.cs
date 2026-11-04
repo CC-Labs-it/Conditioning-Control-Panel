@@ -671,7 +671,8 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown, DescentReader = Descent };
+                        { Countdown = DescentCountdown, DescentReader = Descent,
+                            PrizesReceived = Platform.RainLookSyncHead.ApplySyncPrizes };
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
@@ -1316,6 +1317,7 @@ namespace ConditioningControlPanel.Avalonia
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
             try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }
             try { Platform.WebcamTracker.Instance.Stop(); } catch { /* WPF App.OnExit:6185 Webcam.Dispose */ }
+            Platform.RainLookSyncHead.Stop();
             try { Platform.Win32PanicKey.Stop(); } catch { /* WPF GlobalKeyboardHook.Dispose; no-op off Windows */ }
 
             // Roadmap is lazy: do not construct it merely to dispose it on a profile that never

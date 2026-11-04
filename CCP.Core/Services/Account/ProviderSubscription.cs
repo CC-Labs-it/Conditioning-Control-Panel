@@ -206,10 +206,11 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Validate subscription status with the proxy. Never throws: any failure keeps
         /// the current (cached or None) tier.</summary>
-        public async Task<PatreonTier> ValidateSubscriptionAsync(bool forceRefresh = false)
+        public async Task<PatreonTier> ValidateSubscriptionAsync(bool forceRefresh = false, long? session = null)
         {
             if (IsVerifying && !forceRefresh) return CurrentTier;
 
+            var prizeSession = session ?? CoreAccount.SessionVersion;
             var settings = _settings();
             if (settings?.OfflineMode == true) { Log.Debug("Offline mode enabled, skipping {Provider} validation", _label); return CurrentTier; }
 
@@ -269,7 +270,7 @@ namespace ConditioningControlPanel.Services
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
                 {
                     if (await RefreshTokensAsync(tokens.RefreshToken, tokens.ExpiresAt))
-                        return await ValidateSubscriptionAsync(forceRefresh: true);
+                        return await ValidateSubscriptionAsync(forceRefresh: true, session: prizeSession);
                     ClearTokens();
                     return Drop();
                 }
@@ -287,7 +288,7 @@ namespace ConditioningControlPanel.Services
                     return CurrentTier;
                 }
 
-                return ApplyValidated(sub, settings, prizesFor);
+                return ApplyValidated(sub, settings, prizesFor, prizeSession);
             }
             catch (Exception ex)
             {
@@ -299,11 +300,11 @@ namespace ConditioningControlPanel.Services
 
         private PatreonTier Drop() { UpdateTier(PatreonTier.None, false); return PatreonTier.None; }
 
-        private PatreonTier ApplyValidated(PatreonSubscriptionResponse sub, AppSettings? settings, string? prizesFor)
+        private PatreonTier ApplyValidated(PatreonSubscriptionResponse sub, AppSettings? settings, string? prizesFor, long prizeSession)
         {
             // The stored grant just reached the provider and came back with an answer: it is alive.
             GrantLooksDead = false;
-            PrizesSink?.Invoke(prizesFor, sub.UnifiedId, sub.Prizes, $"{_label} validate");
+            CoreAccount.ForSession(prizeSession, () => PrizesSink?.Invoke(prizesFor, sub.UnifiedId, sub.Prizes, $"{_label} validate"));
 
             // Server-healed auth token (only on mismatch; never cached). Patreon refuses one for a
             // DIFFERENT unified record: adopting it would flip-flop with the other provider forever.
