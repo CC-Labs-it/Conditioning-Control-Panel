@@ -963,12 +963,13 @@
                     <Border Grid.Column="3" x:Name="HeaderBannerHost"
                             Background="{DynamicResource SurfaceBgBrush}"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
-                            CornerRadius="13" Padding="12,0" Height="26" MaxWidth="620"
+                            CornerRadius="13" Padding="0" Height="26" MaxWidth="620"
                             Margin="12,0,12,0"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid>
                             <Border x:Name="BannerDrumShade" CornerRadius="13" IsHitTestVisible="False" />
                             <Border x:Name="BannerDrumLip" CornerRadius="13" IsHitTestVisible="False" />
+                            <Grid x:Name="BannerContent" Margin="12,0">
                             <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="12" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -1056,6 +1057,7 @@
                                         </TransformGroup>
                                     </Border.RenderTransform>
                                 </Border>
+                            </Grid>
                             </Grid>
                         </Grid>
                     </Border>
