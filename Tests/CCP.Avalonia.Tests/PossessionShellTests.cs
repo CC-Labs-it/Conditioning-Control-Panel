@@ -154,6 +154,51 @@ public sealed class PossessionShellTests
         Assert.Equal(saved, (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe)); return Task.CompletedTask;
     });
     [Fact]
+    public Task ReadoutTracksRungsRestartExitAndRepeatedRuns() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = LockdownService.Current; using var lockdown = new LockdownService();
+        var now = DateTime.UtcNow; lockdown.UtcNow = () => now; LockdownService.Current = lockdown;
+        var shell = new MainShellWindow(); shell.Show(); Dispatcher.UIThread.RunJobs();
+        var settings = CoreSettings.Current; var saved = (settings.LockdownPossessionEnabled, settings.LockdownPossessionIntensity);
+        var tab = shell.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView>("LockdownTab")!;
+        var text = tab.FindControl<TextBlock>("TxtPossessionRung")!;
+        var pips = tab.FindControl<StackPanel>("PossessionPips")!;
+        var director = shell.PossessionDirector!;
+        var field = typeof(PossessionDirector).GetField("RungChanged", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        int Subscribers() => ((Delegate?)field.GetValue(director))?.GetInvocationList().Length ?? 0;
+        void Paint(int index)
+        {
+            Assert.True(text.IsVisible); Assert.True(pips.IsVisible);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("lockdown_poss_readout_fmt", ConditioningControlPanel.Localization.Loc.Get("lockdown_poss_rung_" + index)), text.Text);
+            for (int i = 0; i < 5; i++) Assert.Equal(Color.Parse(i <= index ? "#FF8A5C" : "#33FF8A5C"), ((SolidColorBrush)((Border)pips.Children[i]).Background!).Color);
+        }
+        try
+        {
+            settings.LockdownPossessionEnabled = true; settings.LockdownPossessionIntensity = 2;
+            var baseline = Subscribers();
+            lockdown.Activate(TimeSpan.FromMinutes(10)); Dispatcher.UIThread.RunJobs(); Paint(0);
+            Assert.Equal(baseline + 1, Subscribers());
+            now += TimeSpan.FromMinutes(9);
+            typeof(LockdownService).GetMethod("OnCountdownTick", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(lockdown, new object?[] { null, EventArgs.Empty });
+            Dispatcher.UIThread.RunJobs(); Paint((int)director.CurrentRung); Assert.NotEqual(PossessionRung.Settle, director.CurrentRung);
+            lockdown.RestartTimer("test"); Dispatcher.UIThread.RunJobs(); Paint(0);
+            lockdown.Deactivate(); Dispatcher.UIThread.RunJobs();
+            Assert.False(text.IsVisible); Assert.False(pips.IsVisible); Assert.Equal("", text.Text); Assert.Equal(baseline, Subscribers());
+            lockdown.Activate(TimeSpan.FromMinutes(10)); Dispatcher.UIThread.RunJobs(); Paint(0); Assert.Equal(baseline + 1, Subscribers());
+            lockdown.Deactivate(); Dispatcher.UIThread.RunJobs(); Assert.Equal(baseline, Subscribers());
+            settings.LockdownPossessionEnabled = false;
+            lockdown.Activate(TimeSpan.FromMinutes(10)); Dispatcher.UIThread.RunJobs();
+            Assert.False(text.IsVisible); Assert.False(pips.IsVisible); Assert.Equal(baseline, Subscribers());
+        }
+        finally
+        {
+            lockdown.Deactivate(); Dispatcher.UIThread.RunJobs(); shell.Close(); LockdownService.Current = previous;
+            (settings.LockdownPossessionEnabled, settings.LockdownPossessionIntensity) = saved;
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
     public Task ChargeCompletesWhenFramesStop() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
