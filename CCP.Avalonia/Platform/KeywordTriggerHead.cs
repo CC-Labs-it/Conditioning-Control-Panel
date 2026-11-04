@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -55,6 +56,7 @@ internal static class KeywordTriggerHead
         // Hook thread: translate now (modifier state belongs to this press), then post. Never break panic.
         try
         {
+            if (!Engine.IsActive || !CoreSettings.Current.KeywordTriggersEnabled || !KeywordAudioRuntime.HasAccess) return;
             var special = vk switch
             {
                 0x0D or 0x1B or 0x09 => (KeywordInputKey?)KeywordInputKey.Clear,
@@ -66,11 +68,14 @@ internal static class KeywordTriggerHead
             var ch = special == null ? Translate(vk) : null;
             uint processId = 0;
             var needsForeground = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
-            if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+            // WPF KeywordTriggerService.cs:650-666: sample every two seconds even in Everywhere.
+            var resolveForeground = Engine.ShouldResolveForeground(needsForeground, DateTime.UtcNow);
+            if (resolveForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;
-                var foreground = needsForeground ? Foreground(processId) : (null, false);
+                var foreground = resolveForeground ? Foreground(processId) : (null, false);
+                if (resolveForeground) Engine.ObserveForeground(foreground.Process, foreground.Own);
                 if (special is { } key) Engine.Key(key, foreground.Process, foreground.Own);
                 else if (ch is { } c) Engine.Character(c, foreground.Process, foreground.Own);
                 else Engine.Key(KeywordInputKey.None, foreground.Process, foreground.Own);
@@ -79,8 +84,9 @@ internal static class KeywordTriggerHead
         catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); }
     }
 
-    private static (string? Process, bool Own) Foreground(uint id)
+    internal static (string? Process, bool Own) Foreground(uint id)
     {
+        if (id == 0) return (null, false);
         try
         {
             using var p = Process.GetProcessById((int)id);
@@ -116,8 +122,33 @@ internal sealed class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
     private readonly KeywordCooldowns _cooldowns = new();
+    private readonly LinkedList<string> _seenApps = new();
+    private DateTime _lastSampleAt = DateTime.MinValue;
+
+    // WPF KeywordTriggerService.cs:489-520,582,618-622. Only the hook thread samples;
+    // the UI thread records and reads the bounded, session-only list.
+    internal bool ShouldResolveForeground(bool needsForeground, DateTime now)
+    {
+        if (needsForeground) return true;
+        if ((now - _lastSampleAt).TotalSeconds < 2) return false;
+        _lastSampleAt = now;
+        return true;
+    }
+
+    internal void ObserveForeground(string? process, bool own)
+    {
+        if (!IsActive || !CoreSettings.Current.KeywordTriggersEnabled || !HasAccess || own ||
+            string.IsNullOrWhiteSpace(process)) return;
+        var existing = _seenApps.FirstOrDefault(a => string.Equals(a, process, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) _seenApps.Remove(existing);
+        _seenApps.AddFirst(existing ?? process);
+        while (_seenApps.Count > 8) _seenApps.RemoveLast();
+    }
+
+    internal IReadOnlyList<string> GetRecentForegroundApps() => _seenApps.ToArray();
     private CancellationTokenSource? _audio;
     private Action? _stop;
+    private long _clipGeneration;
     private long? _duckGeneration;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
@@ -164,37 +195,49 @@ internal sealed class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
-        // WPF merge: preset first, and only the first enabled PlayAudio action wins.
-        var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
-        if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
-        {
-            var t = fired[0];
-            audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
-                PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
-        }
-        if (audio != null) Play(audio);
-        FireExactSubliminal(fired);
+        _ = Dispatch(fired);
     }
 
-    private void FireExactSubliminal(System.Collections.Generic.List<KeywordTrigger> fired)
+    // WPF KeywordTriggerService.cs:1283-1293,1363-1366,1511-1517,1698-1713.
+    private async Task Dispatch(List<KeywordTrigger> fired)
     {
-        // WPF KeywordTriggerService.cs:1257-1313,1713,1774-1782.
-        // A merged response borrows the first keyword and deduplicates each visual effect.
-        var exact = fired.SelectMany(t => t.Actions ?? new()).OfType<VisualEffectAction>()
-            .Any(a => a.Enabled && a.Effect == KeywordVisualEffect.ExactSubliminal);
-        if (fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
-            exact = fired[0].VisualEffect == KeywordVisualEffect.ExactSubliminal;
-        if (!exact || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        var first = fired[0];
+        if (fired.Count == 1 && (first.Actions == null || first.Actions.Count == 0))
+        {
+            if (!await Play(new PlayAudioAction { FilePath = first.AudioFilePath, Volume = first.AudioVolume,
+                PlayCount = first.AudioPlayCount, DelayBetweenMs = first.AudioDelayBetweenMs, DuckSystemAudio = first.DuckAudio })) return;
+            if (first.VisualEffect == KeywordVisualEffect.ExactSubliminal) FireExactSubliminal(first);
+            return;
+        }
+        var audioSeen = false; var exactSeen = false;
+        foreach (var action in fired.SelectMany(t => t.Actions ?? new()).Where(a => a != null && a.Enabled).ToList())
+        {
+            if (action is PlayAudioAction audio && (fired.Count == 1 || !audioSeen))
+            {
+                audioSeen = true;
+                if (!await Play(audio)) return;
+            }
+            else if (action is VisualEffectAction { Effect: KeywordVisualEffect.ExactSubliminal } && (fired.Count == 1 || !exactSeen))
+            {
+                exactSeen = true;
+                FireExactSubliminal(first);
+            }
+        }
+    }
+
+    private void FireExactSubliminal(KeywordTrigger trigger)
+    {
+        if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
         try
         {
             // WPF SubliminalService.cs:311-324: custom one-shot has no linked whisper.
-            var text = fired[0].Keyword.ToUpperInvariant().Trim();
+            var text = trigger.Keyword.ToUpperInvariant().Trim();
             if (text.Length > 200) text = text.Substring(0, 200);
             text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]*>", "");
             Views.Overlays.SubliminalWhisperShow.HapticThenDraw(text);
             CoreProgression.AddXP(10, "Subliminal");
             // Mandatory echo protection, independent of the optional loop-protection toggle.
-            _cooldowns.Mute(fired[0].Keyword, 3000, Now().ToUniversalTime());
+            _cooldowns.Mute(trigger.Keyword, 3000, Now().ToUniversalTime());
         }
         catch (Exception ex) { Log.Debug(ex, "Keyword exact subliminal failed"); }
     }
@@ -206,16 +249,23 @@ internal sealed class KeywordAudioRuntime
     internal void StopAudio()
     {
         _audio?.Cancel(); _audio?.Dispose(); _audio = null;
+        StopClip();
+    }
+
+    // WPF KeywordTriggerService.cs:1511-1517,1859-1865: replacing a clip does not cancel dispatch.
+    private void StopClip()
+    {
+        _clipGeneration++;
         var stop = _stop; _stop = null;
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
         if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio)
+    private Task<bool> Play(PlayAudioAction audio)
     {
         // WPF KeywordTriggerService.cs:1398,1841-1855: unsolicited audio requires an engine or session.
-        if ((!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) || string.IsNullOrEmpty(audio.FilePath)) return;
+        if ((!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) || string.IsNullOrEmpty(audio.FilePath)) return Task.FromResult(true);
         var path = audio.FilePath;
         if (!Path.IsPathRooted(path))
         {
@@ -223,17 +273,16 @@ internal sealed class KeywordAudioRuntime
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return;
-        StopAudio();
-        var cancellation = _audio = new CancellationTokenSource();
-        var token = cancellation.Token;
+        if (!File.Exists(path)) return Task.FromResult(true);
+        StopClip();
+        var token = (_audio ??= new CancellationTokenSource()).Token;
         if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
         {
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             _duckGeneration = CoreAudio.DuckGeneration;
         }
-        _ = Repeat();
-        async Task Repeat()
+        return Repeat();
+        async Task<bool> Repeat()
         {
             try
             {
@@ -242,21 +291,24 @@ internal sealed class KeywordAudioRuntime
                 {
                     if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
                     token.ThrowIfCancellationRequested();
-                    // Old lane's stricter hold: also check after every repeat gap.
-                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return; }
+                    // Stricter than WPF: recheck the engine-off audio hold after every repeat gap. It holds only
+                    // audio (WPF KeywordTriggerService.cs:1841-1846), so the following visual still fires.
+                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopClip(); return true; }
                     _stop?.Invoke();
+                    var generation = ++_clipGeneration;
                     var last = i == count - 1;
                     _stop = CoreAudio.PlayStoppable(path,
                         KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                         onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
                         {
-                            try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
+                            try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _clipGeneration) StopClip(); }
                             catch (OperationCanceledException) { }
                         }); });
                 }
+                return true;
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); return false; }
         }
     }
 }

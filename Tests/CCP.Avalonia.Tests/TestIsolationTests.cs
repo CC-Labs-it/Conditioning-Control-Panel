@@ -49,6 +49,38 @@ public class TestIsolationTests
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 
     [Fact]
+    public void RestoreRoundTripsPanicQuietHoldAndCount()
+    {
+        var initial = ProcessStateSnapshot.Take();
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            var count = ConditioningControlPanel.Services.Safety.PanicAftermath.PanicCount;
+            var clear = ProcessStateSnapshot.Take();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart);
+            clear.Restore();
+            Assert.False(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            Assert.False(ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(count, ConditioningControlPanel.Services.Safety.PanicAftermath.PanicCount);
+
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            var armedCount = ConditioningControlPanel.Services.Safety.PanicAftermath.PanicCount;
+            var armed = ProcessStateSnapshot.Take();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            armed.Restore();
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(armedCount, ConditioningControlPanel.Services.Safety.PanicAftermath.PanicCount);
+        }
+        finally
+        {
+            initial.Restore();
+        }
+    }
+
+    [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()
     {
         var settingsFile = Path.Combine(TestUserDataProfile.Root, "settings.json");

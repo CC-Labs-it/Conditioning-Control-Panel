@@ -218,20 +218,33 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(count, played.Count);
     });
 
-    [Fact] // Recheck WPF's engine-off audio hold before each pending repeat.
-    public void EngineStoppingDuringRepeatGapCutsTheClipAndHoldsTheRepeat() => Run((engine, s, played) =>
+    [Theory] // Recheck WPF's engine-off audio hold before each pending repeat; it holds audio only (:1841-1846).
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EngineStoppingDuringRepeatGapCutsTheClipAndHoldsTheRepeat(bool legacy) => Run((engine, s, played) =>
     {
-        var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        var t = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)t.Actions[0];
         audio.PlayCount = 2; audio.DelayBetweenMs = 50;
+        if (legacy)
+        {
+            t.AudioFilePath = audio.FilePath; t.AudioPlayCount = 2; t.AudioDelayBetweenMs = 50;
+            t.VisualEffect = KeywordVisualEffect.ExactSubliminal; t.Actions.Clear();
+        }
+        else t.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
         var gap = new TaskCompletionSource();
         engine.Delay = (_, _) => gap.Task;
         Type(engine, "sit");
         Assert.Single(played);
+        Assert.Empty(shown);
         CoreSession.IsEngineRunningProvider = () => false;
         gap.SetResult();
         Dispatcher.UIThread.RunJobs();
         Assert.Single(played.Where(x => x.Path != "stopped"));
         Assert.Equal("stopped", played.Last().Path);
+        Assert.Equal(new[] { "SIT" }, shown);   // the hold cuts audio, never the visual
     });
 
     [Fact] // WPF MainWindow.Patreon.cs:187-189,452-454
@@ -296,6 +309,105 @@ public sealed class KeywordAudioRuntimeTests
         now = now.AddMilliseconds(1);
         Type(engine, "sit");
         Assert.Equal(new[] { "SIT", "SIT" }, shown);
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1393-1403,1511-1517,1841-1846.
+    public void EngineOffDuringOverlappingRepeatGapsPreservesBothVisuals() => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        s.AwarenessLoopProtectionEnabled = false;
+        var first = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)first.Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 5000;
+        first.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stand", CooldownSeconds = 0,
+            Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = audio.FilePath, PlayCount = 2, DelayBetweenMs = 5000, DuckSystemAudio = false },
+                new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } } });
+        var gaps = new Queue<TaskCompletionSource>();
+        engine.Delay = (_, _) => { var gap = new TaskCompletionSource(); gaps.Enqueue(gap); return gap.Task; };
+        var clock = engine.Now(); engine.Now = () => clock;
+        Type(engine, "sit"); clock = clock.AddSeconds(2); Type(engine, "stand");
+        Assert.Equal(2, gaps.Count);
+        Assert.Equal(2, played.Count(x => x.Path != "stopped"));
+        Assert.Empty(shown);
+        CoreSession.IsEngineRunningProvider = () => false;
+        gaps.Dequeue().SetResult(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "SIT" }, shown);
+        gaps.Dequeue().SetResult(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "SIT", "STAND" }, shown);
+        Assert.Equal(2, played.Count(x => x.Path != "stopped"));
+        Assert.Equal("stopped", played.Last().Path);
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1511-1517,1859-1865.
+    public void OverlappingAudioReplacesClipButBothResponsesFinish() => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        var completed = new List<Action>();
+        CoreAudio.PlayStoppableProvider = (path, volume, _, _, done) => { played.Add((path, volume)); completed.Add(done!); return () => played.Add(("stopped", 0)); };
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        s.AwarenessLoopProtectionEnabled = false;
+        var first = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)first.Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 5000;
+        first.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stand", CooldownSeconds = 0,
+            Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false },
+                new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } } });
+        var gap = new TaskCompletionSource();
+        var clock = engine.Now(); engine.Now = () => clock;
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Single(played);
+        clock = clock.AddSeconds(2);
+        Type(engine, "stand");
+        Assert.Equal(new[] { "STAND" }, shown);
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, played.Count(x => x.Path != "stopped"));
+        Assert.Equal(new[] { "STAND", "SIT" }, shown);
+        completed[1](); Dispatcher.UIThread.RunJobs();
+        Assert.NotEqual("stopped", played.Last().Path);
+    });
+
+    [Theory] // WPF KeywordTriggerService.cs:1283-1293,1363-1366,1511-1517,1698-1713.
+    [InlineData(0, false)] [InlineData(0, true)] [InlineData(1, false)]
+    [InlineData(2, false)] [InlineData(2, true)] [InlineData(3, false)] [InlineData(3, true)]
+    [InlineData(4, false)] [InlineData(5, false)]
+    public void ExactSubliminalFollowsAudioRepeatOrderAndCancellation(int mode, bool cancel) => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        var playsAtFlash = new List<int>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = text => { shown.Add(text); playsAtFlash.Add(played.Count(x => x.Path != "stopped")); };
+        var t = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)t.Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 5000;
+        var flash = new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal };
+        if (mode == 1 || mode == 4) { t.Actions.Insert(0, flash); if (mode == 4) t.Actions.Insert(0, flash); }
+        else if (mode == 2)
+        {
+            t.AudioFilePath = audio.FilePath; t.AudioPlayCount = 2; t.AudioDelayBetweenMs = 5000;
+            t.VisualEffect = KeywordVisualEffect.ExactSubliminal; t.Actions.Clear();
+        }
+        else if (mode == 3 || mode == 5)
+        {
+            if (mode == 5) t.Actions = new List<KeywordAction> { flash };
+            s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "sit", CooldownSeconds = 0,
+                Actions = mode == 5 ? new List<KeywordAction> { audio, flash } : new List<KeywordAction> { flash, audio, flash } });
+        }
+        else t.Actions.Add(flash);
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Single(played.Where(x => x.Path != "stopped"));
+        Assert.Equal(mode == 4 ? 2 : mode == 1 || mode == 5 ? 1 : 0, shown.Count);
+        if (cancel) { if (mode == 2) engine.Stop(); else engine.StopAudio(); }
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(cancel ? 0 : mode == 4 ? 2 : 1, shown.Count);
+        Assert.All(playsAtFlash, n => Assert.Equal(mode == 1 || mode == 4 || mode == 5 ? 0 : 2, n));
+        Assert.Equal(cancel ? 1 : 2, played.Count(x => x.Path != "stopped"));
     });
 
     [Fact] // WPF Subliminal/SubliminalService.cs:311-324.

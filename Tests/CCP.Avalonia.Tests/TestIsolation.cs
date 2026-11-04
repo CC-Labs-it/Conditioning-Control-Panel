@@ -242,6 +242,10 @@ internal sealed class ProcessStateSnapshot
             .Where(t => !t.ContainsGenericParameters).ToList();
         var byName = types.ToLookup(t => t.Name);
         var found = new HashSet<MemberInfo>();
+        // Panic APIs mutate private fields, so assignment scanning cannot discover this state.
+        foreach (var name in new[] { "_quietUntilMs", "_engineHeld", "_panics" })
+            found.Add(typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetField(name, AnyStatic)
+                ?? throw new InvalidOperationException($"PanicAftermath field {name} not found"));
 
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
