@@ -81,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static int _pendingWave;
         private static readonly List<ChaosUnlockCardInfo> _pendingDraftCards = new();
         // WPF ChaosModeService.cs:1476-1479: defer cards until their advertised effects are hosted.
-        private static readonly string[] DraftableBoons = { "defuse_chain", "golden_touch", "extra_shield", "welcome_shower", "heavy_drop", "hair_trigger", "the_urge", "double_or_nothing" };
+        private static readonly string[] DraftableBoons = { "defuse_chain", "golden_touch", "extra_shield", "welcome_shower", "heavy_drop", "hair_trigger", "playing_fire", "bright_colors", "double_or_nothing" };
         // The HUD splits the marker from the localized feed text for its IconGlyph.
         private static void PushLocalizedEvent(string key, params object[] args) =>
             _state?.PushEvent(ConditioningControlPanel.Localization.Loc.GetF(key, args));

@@ -54,9 +54,9 @@ public sealed class ChaosBoonDraftRunTests
     [Fact] public async Task Draft_and_reroll_offer_only_implemented_cards() { await AvaloniaTestDispatcher.RunAsync(() => {
             Setup(); var all = ChaosBoonPool.All.ToArray();
             try {
-                ChaosBoonPool.All.RemoveAll(b => b.Id is not ("golden_touch" or "extra_shield" or "gg_rabbits"));
+                ChaosBoonPool.All.RemoveAll(b => b.Id is not ("golden_touch" or "extra_shield" or "gg_rabbits" or "the_urge"));
                 Assert.Contains(ChaosBoonPool.Draft(false), b => b.Id == "gg_rabbits"); // WPF retains the full pool
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, AllowCurses = false });
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, AllowCurses = true, SinChance = 1 });
                 ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests(); ChaosRunHost.State!.RerollsLeft = 1;
                 Ticks(80); var overlay = ChaosRunHost.Overlay; var cards = overlay.FindControl<StackPanel>("BoonCardHost")!;
                 void CheckCards() {
