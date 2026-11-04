@@ -44,12 +44,7 @@ public static class PerformanceProfile
     }
 
     /// <summary>Largest pixel dimension to decode flash images/GIF frames at, per tier.</summary>
-    public static int MaxDecodeDimension(PerformanceTier tier) => tier switch
-    {
-        PerformanceTier.Performance => 512,
-        PerformanceTier.Balanced => 768,
-        _ => 1024,
-    };
+    public static int MaxDecodeDimension(PerformanceTier tier) => Flash.FlashGifRules.MaxDecodeDimension(tier);
 
     /// <summary>Bitmap scaling quality for flash/bubble image controls, per tier.</summary>
     public static BitmapScalingMode ScalingMode(PerformanceTier tier) => tier switch

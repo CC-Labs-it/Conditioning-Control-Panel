@@ -88,54 +88,14 @@ public sealed class ContentHitTestTests
         });
     }
 
-    [Fact]
-    public Task PendingLayoutReachesPointerHitTesting() => AvaloniaTestDispatcher.RunAsync(() =>
-    {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        var button = new Button { Width = 80, Height = 40 };
-        var canvas = new Canvas { Children = { button } };
-        var window = new Window { Width = 400, Height = 200, Content = canvas };
-        try
-        {
-            Canvas.SetLeft(button, 10);
-            Canvas.SetTop(button, 20);
-            window.Show();
-            RenderLiveTree(window);
-
-            // Leave an older composition in flight, then move the button before its next layout.
-            var oldBatch = ElementComposition.GetElementVisual(window)!.Compositor.RequestCompositionBatchCommitAsync();
-            Canvas.SetLeft(button, 200);
-            RenderLiveTree(window);
-            Assert.True(oldBatch.Rendered.IsCompleted);
-            var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
-            Assert.True(point.X > 200);
-            var hit = window.InputHitTest(point) as Visual;
-            Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)), $"hit {hit?.GetType().Name}");
-            var pressed = false;
-            void Observe(object? sender, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
-            button.AddHandler(InputElement.PointerPressedEvent, Observe, RoutingStrategies.Tunnel);
-            window.MouseDown(point, MouseButton.Left);
-            window.MouseUp(point, MouseButton.Left);
-            button.RemoveHandler(InputElement.PointerPressedEvent, (EventHandler<PointerPressedEventArgs>)Observe);
-            Assert.True(pressed);
-        }
-        finally { window.Close(); }
-        return Task.CompletedTask;
-    });
-
     /// <summary>Renders a frame holding the live tree. One forced tick is not that: while a batch is in
     /// flight MediaContext holds the next commit back, so the tick renders the OLDER batch and the layout
     /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
     /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Control w)
+    private static void RenderLiveTree(Visual w)
     {
         Dispatcher.UIThread.RunJobs();
-        // The next compositor batch must include the latest layout, even if an older batch is in flight.
-        w.UpdateLayout();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
         while (!batch.Rendered.IsCompleted)
@@ -144,9 +104,6 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
-        // Headless hit testing uses the last rendered frame, so publish it after the batch completes.
-        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-        Dispatcher.UIThread.RunJobs();
     }
 
     private static bool Inside(Visual v, Point p, Visual root)

@@ -36,20 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool _picturesReleased;
         internal int FrameIndex { get; private set; }
         internal bool HasAnimation => _frames.Count > 1;
-
         // WPF FlashService.cs:119-125 and 1773-1776: speed is snapshotted at spawn,
         // then the safety setting can lengthen the delay further.
-        internal const double MIN_GIF_FRAME_DELAY_MS = 10.0;
-
-        internal static TimeSpan ScaleFrameDelay(TimeSpan sourceDelay, double multiplier)
-        {
-            var ms = sourceDelay.TotalMilliseconds;
-            if (double.IsNaN(ms) || double.IsInfinity(ms) || ms <= 0) ms = 100.0;
-            if (double.IsNaN(multiplier) || double.IsInfinity(multiplier) || multiplier <= 0) multiplier = 1.0;
-            multiplier = Math.Clamp(multiplier, 0.25, 4.0);
-            return TimeSpan.FromMilliseconds(Math.Max(MIN_GIF_FRAME_DELAY_MS, ms / multiplier));
-        }
-
         internal void StartFrames(long start) => _frameStart = start;
         internal void AdvanceFrames(long now)
         {
@@ -59,7 +47,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             FrameIndex = index;
             _image.Source = _frames[index];
         }
-
         internal void ReleasePictures()
         {
             if (_picturesReleased) return;
@@ -363,7 +350,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public FlashOverlayWindow(Bitmap picture, List<Bitmap>? frames = null, TimeSpan frameDelay = default)
         {
             _frames = frames ?? new List<Bitmap> { picture };
-            var delay = ScaleFrameDelay(frameDelay, CoreSettings.Current.FlashGifSpeedMultiplier);
+            var delay = FlashGifRules.ScaleFrameDelay(frameDelay, CoreSettings.Current.FlashGifSpeedMultiplier);
             if (Services.Safety.GentleVisuals.On)
                 delay = TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.ScaleDelayMs(delay.TotalMilliseconds));
             _frameDelay = delay;

@@ -16,9 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using SkiaSharp;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class FlashAnimationTests
 {
     private static Task OnUi(Action action) => AvaloniaTestDispatcher.RunAsync(() =>
@@ -31,7 +29,6 @@ public sealed class FlashAnimationTests
         action();
         return Task.CompletedTask;
     });
-
     private static void WithGif(int count, Action<string> body)
     {
         var root = Directory.CreateTempSubdirectory("ccp-flash-").FullName;
@@ -56,7 +53,6 @@ public sealed class FlashAnimationTests
         }
         finally { FlashOverlay.DisposeFrames(frames); }
     }));
-
     [Fact]
     public Task Webp_animates_and_a_single_frame_gif_falls_back_to_a_still() => OnUi(() =>
     {
@@ -84,7 +80,6 @@ public sealed class FlashAnimationTests
             finally { FlashOverlay.DisposeFrames(frames); }
         });
     });
-
     [Fact]
     public Task Long_clips_keep_the_tail_and_scale_the_delay_by_the_stride() => OnUi(() => WithGif(130, path =>
     {
@@ -97,7 +92,6 @@ public sealed class FlashAnimationTests
         }
         finally { FlashOverlay.DisposeFrames(frames); }
     }));
-
     [Fact]
     public Task Shown_flash_uses_speed_and_gentle_delay_and_stops_the_shared_clock() => OnUi(() => WithGif(8, path =>
     {
@@ -176,7 +170,6 @@ public sealed class FlashAnimationTests
             CoreSettings.ServiceProvider = oldProvider;
         }
     }));
-
     [Fact]
     public async Task Animated_decodes_wait_when_both_native_decode_slots_are_in_use()
     {
@@ -243,7 +236,6 @@ public sealed class FlashAnimationTests
             }
         });
     }
-
     [Fact]
     public async Task A_scheduled_flash_keeps_its_animation_frames()
     {
@@ -274,15 +266,6 @@ public sealed class FlashAnimationTests
             }
         });
     }
-
-    [Fact]
-    public void Speed_has_the_wpf_floor_and_rejects_invalid_values()
-    {
-        Assert.Equal(10, FlashOverlayWindow.ScaleFrameDelay(TimeSpan.FromMilliseconds(20), 4).TotalMilliseconds);
-        Assert.Equal(100, FlashOverlayWindow.ScaleFrameDelay(TimeSpan.Zero, double.NaN).TotalMilliseconds);
-        Assert.Equal(400, FlashOverlayWindow.ScaleFrameDelay(TimeSpan.FromMilliseconds(100), 0.1).TotalMilliseconds);
-    }
-
     [Fact]
     public Task Large_burst_uses_tier_cap_and_shares_frames_until_last_release() => OnUi(() => WithGif(10, path =>
     {
@@ -317,7 +300,6 @@ public sealed class FlashAnimationTests
             (CorePaths.EffectiveAssetsProvider, ConditioningControlPanel.Services.ContentPackStore.Current) = old;
         }
     }));
-
     private static SKColor Pixel(Bitmap bitmap, int x, int y)
     {
         using var bytes = new MemoryStream();
@@ -326,13 +308,9 @@ public sealed class FlashAnimationTests
         using var decoded = SKBitmap.Decode(bytes);
         return decoded.GetPixel(x, y);
     }
-
     private static Screen MakeScreen(double scaling, PixelRect bounds, PixelRect workingArea, bool primary)
     {
-        // Avalonia's reference assembly hides the runtime platform-screen constructor.
-        // These synthetic handles never reach a native backend or the real desktop.
-        // Pinned to Avalonia 12.1 internals (PlatformScreen ctor, Screen setters): an Avalonia
-        // upgrade that renames them throws here; fix this factory, not the assertions.
+        // Synthetic Avalonia 12.1 handles never reach a native backend; update this factory if its internals change.
         var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen),
             new object[] { new PlatformHandle(new IntPtr(bounds.X), "headless-test") })!;
         typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(screen, scaling);
@@ -341,7 +319,6 @@ public sealed class FlashAnimationTests
         typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, primary);
         return screen;
     }
-
     private const int Size = 16;
     private static byte[] Gif(int count) => Gif(Enumerable.Range(0, count).Select(i => i == 0 ? 1 : 3).ToArray());
 

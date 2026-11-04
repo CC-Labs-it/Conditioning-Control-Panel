@@ -260,12 +260,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return true;
         }
 
-        // WPF FlashService.cs:1771-1777, 3330-3338: one heartbeat for all live GIFs,
-        // indexed from real elapsed time so a late tick does not slow the animation.
+        // WPF FlashService.cs:1771-1777, 3330-3338: one heartbeat, indexed by elapsed time.
         internal static readonly List<FlashOverlayWindow> Animated = new();
         private static FrameClock? _animationTimer;
         internal static bool AnimationRunning => _animationTimer != null;
-
         internal static void StartAnimation(FlashOverlayWindow w)
         {
             if (!w.HasAnimation) return;
@@ -274,14 +272,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Closed += (_, _) => StopAnimation(w);
             if (_animationTimer == null) StartFrameClock();
         }
-
         private static void StartFrameClock()
         {
             _animationTimer = new FrameClock(Animated[0]) { Interval = TimeSpan.Zero };
             _animationTimer.Tick += (_, _) => AnimationTick();
             _animationTimer.Start();
         }
-
         internal static void StopAnimation(FlashOverlayWindow w)
         {
             bool owner = Animated.Count > 0 && Animated[0] == w;
@@ -290,13 +286,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _animationTimer?.Stop(); _animationTimer = null;
             if (Animated.Count > 0) StartFrameClock();
         }
-
         internal static void AnimationTick()
         {
             var now = Clock.GetTimestamp();
             foreach (var w in Animated) w.AdvanceFrames(now);
         }
-
         // ---- Flashes v2 motion: Drift and Bounce (WPF FlashService.SpawnLayerVisual + FlashLayer tick) ----
 
         /// <summary>Stepped clock for the drift tick (tests swap it).</summary>
@@ -502,7 +496,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // WPF shares decoded sources; each queued or shown flash owns one reference.
         private static readonly Dictionary<List<Bitmap>, (string Path, int Cap, TimeSpan Delay, int Uses)> Decodes = new();
-
         internal static void DisposeFrames(IEnumerable<Bitmap> frames)
         {
             lock (Decodes)
@@ -515,10 +508,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var frame in frames) frame.Dispose();
             }
         }
-
         // WPF AnimatedWebp.cs:62-84 bounds concurrent native composition canvases.
         internal static readonly SemaphoreSlim DecodeGate = new(2, 2);
-
         private static (List<Bitmap> Frames, TimeSpan Delay)? Acquire(string path, int cap)
         {
             foreach (var (frames, entry) in Decodes)
@@ -529,7 +520,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
             return null;
         }
-
         /// <summary>WPF FlashService.cs:1419-1475 and AnimatedWebp.cs:167-244: GIF/WebP
         /// frames are composed in order, kept at display size with a 60-frame / 30 MB budget,
         /// then timed at the average kept delay times the stride. Static decode is the fallback.</summary>
@@ -550,17 +540,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             finally { DecodeGate.Release(); }
         }
-
-        /// <summary>Largest pixel dimension to decode flash images/GIF frames at, per tier.</summary>
-        public static int MaxDecodeDimension(PerformanceTier tier) => tier switch
-        {
-            PerformanceTier.Performance => 512,
-            PerformanceTier.Balanced => 768,
-            _ => 1024,
-        };
-
-        internal static int DecodeMax(AppSettings settings, PerformanceTier tier) => Math.Clamp((int)(MaxDecodeDimension(tier) * (settings.ImageScale / 100.0)), 256, 2048);
-
+        internal static int DecodeMax(AppSettings settings, PerformanceTier tier) => FlashGifRules.DecodeMax(tier, settings.ImageScale);
         private static (List<Bitmap> Frames, TimeSpan Delay) DecodePictureCore(string path, int maxDimension)
         {
             var frames = new List<Bitmap>();
@@ -590,7 +570,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             catch (Exception ex) { Log.Debug("Flash: still decode failed for {Path}: {E}", path, ex.Message); }
             return (frames, TimeSpan.FromMilliseconds(100));
         }
-
         private static TimeSpan? DecodeAnimation(SKCodec codec, int maxDim, List<Bitmap> frames)
         {
             int frameCount = codec.FrameCount;
@@ -609,7 +588,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (estimatedMemoryMB > maxMemoryMb)
                 maxKeep = Math.Max(10, (int)(frameCount * (maxMemoryMb / estimatedMemoryMB)));
             maxKeep = Math.Min(maxKeep, maxFrames);
-            var plan = (Step: Math.Max(1, (int)Math.Ceiling(frameCount / (double)maxKeep)), DecodeCount: Math.Min(frameCount, 600), MaxKeep: maxKeep);
+            var plan = FlashGifRules.FramePlan.Create(frameCount, maxKeep);
             int step = plan.Step;
 
             // Delta frames must be composed in order, so every frame up to the hard ceiling is
