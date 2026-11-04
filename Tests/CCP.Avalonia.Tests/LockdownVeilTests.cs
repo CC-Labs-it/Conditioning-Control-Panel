@@ -483,6 +483,11 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    private sealed class FrozenFlashClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+    }
+
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
@@ -491,6 +496,7 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        shell.LockdownFlashClock = new FrozenFlashClock();
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -502,6 +508,8 @@ public sealed class LockdownVeilTests
         Assert.Null(shell.LockdownFlash);
 
         ld.Activate(TimeSpan.FromMinutes(30));
+        // Simulate dispatcher work which outlasts the flash after its activation post runs.
+        Dispatcher.UIThread.Post(() => System.Threading.Thread.Sleep(800));
         Frame();
         Assert.True(res.TryGetResource("PinkBrush", null, out pb));
         Assert.Equal("ffdc143c", Hex(pb));
