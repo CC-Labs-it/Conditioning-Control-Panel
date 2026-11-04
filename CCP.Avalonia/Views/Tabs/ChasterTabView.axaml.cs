@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             NumbersInit();
             MenuInit();
             KeysInit();
+            NudgeInit();
             Refresh();
             LadderRenderSample();
         }
@@ -243,25 +244,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!linked)
             {
                 SetupHint.IsVisible = false;
+                NudgeKeys(false);
                 HeroClockRow.IsVisible = false;
                 TxtHeroEnds.IsVisible = false;
                 HeroPills.IsVisible = false;
                 BuildCalendar(null);
                 return;
             }
-            // WPF RefreshSetupHint (:265-273): adds switched off by the keyholder (61a331c1d) and
-            // nothing switched on to count (c8dead5b3) each get their own line.
-            var key = TabPageText.SetupHint(true, chaster!.LockLookup, snapshot != null, CoreSettings.Current.ChasterTabEnabled,
-                addsBlocked: chaster.AddsBlocked,
-                anyRowOn: TabPageText.AnyRowOn(CoreSettings.Current.ChasterPrices));
-            SetupHint.Text = key == null ? "" : Loc.Get(key);
-            SetupHint.IsVisible = key != null;
+            RefreshSetupHint();
             PaintHeroClock();
-            var ends = LiveLockClock.EndsAt(snapshot, chaster.BalanceSeconds, DateTime.UtcNow)?.ToLocalTime();
+            var ends = LiveLockClock.EndsAt(snapshot, chaster!.BalanceSeconds, DateTime.UtcNow)?.ToLocalTime();
             TxtHeroEnds.Text = ends is { } when ? Loc.GetF("chaster_hero_ends", when.ToString("ddd d MMM HH:mm")) : "";
             TxtHeroEnds.IsVisible = ends != null;
             RefreshPills(chaster.LockLookup, snapshot, chaster.SafetyHoldRemaining);
             BuildCalendar(snapshot);
+        }
+
+        private void RefreshSetupHint()
+        {
+            var chaster = ChasterHead.Service;
+            var key = TabPageText.SetupHint(chaster?.IsLinked == true, chaster?.LockLookup ?? LockLookup.Unlinked,
+                chaster?.Lock != null, CoreSettings.Current.ChasterTabEnabled, addsBlocked: chaster?.AddsBlocked == true,
+                anyRowOn: TabPageText.AnyRowOn(CoreSettings.Current.ChasterPrices));
+            SetupHint.Text = key == null ? "" : Loc.Get(key);
+            SetupHint.IsVisible = key != null;
+            NudgeKeys(key == "chaster_setup_nothing");
         }
 
         /// <summary>WPF PaintHeroClock (:301), without the count-up on show: d h m s off the last snapshot.</summary>
