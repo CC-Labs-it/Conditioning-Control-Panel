@@ -723,6 +723,11 @@ public sealed class FriendsDrawerTests
             Click(d, "friends-feed-more");
             d.OpenFromFeed("u_on");
             Assert.NotNull(Tagged<Button>(d, "friends-action:poke"));
+            chip.Toggle();
+            chip.OpenFriend("u_off");
+            var target = Tagged<Control>(d, "friends-row:u_off");
+            Assert.NotNull(target);
+            Assert.NotNull(Tagged<Button>(target!, "friends-action:poke"));
         }
         finally { chip.Toggle(); w.Close(); }
     });
