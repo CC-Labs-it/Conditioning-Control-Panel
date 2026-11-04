@@ -3146,6 +3146,7 @@
   "dialog_purchase_enhancement": "Talent kaufen",
   "msg_purchase_skill": "'{0}' für {1} {2} kaufen?\n\n{3}\n\n{4}",
   "skill_purchase_server_error": "Serverfehler: {0}",
+  "skill_purchase_signin": "Sitzung abgelaufen. Melde dich unter {0} > Konto erneut an.",
   "skill_purchase_failed": "Kauf fehlgeschlagen",
   "skill_purchase_invalid_response": "Ungültige Serverantwort",
   "skill_purchase_connection_failed": "Verbindung fehlgeschlagen. Bitte überprüfe deine Internetverbindung.",

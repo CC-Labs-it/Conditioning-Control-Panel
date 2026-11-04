@@ -3146,6 +3146,7 @@
   "dialog_purchase_enhancement": "Comprar Habilidade",
   "msg_purchase_skill": "Comprar '{0}' por {1} {2}?\n\n{3}\n\n{4}",
   "skill_purchase_server_error": "Erro do servidor: {0}",
+  "skill_purchase_signin": "Sessão expirada. Entre novamente em {0} > Conta.",
   "skill_purchase_failed": "Falha na compra",
   "skill_purchase_invalid_response": "Resposta inválida do servidor",
   "skill_purchase_connection_failed": "Falha na conexão. Verifique sua conexão com a internet.",

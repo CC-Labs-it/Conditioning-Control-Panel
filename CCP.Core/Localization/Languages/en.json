@@ -4311,6 +4311,7 @@
   "dialog_purchase_enhancement": "Purchase Skill",
   "msg_purchase_skill": "Purchase '{0}' for {1} {2}?\n\n{3}\n\n{4}",
   "skill_purchase_server_error": "Server error: {0}",
+  "skill_purchase_signin": "Session expired. Sign in again under {0} > Account.",
   "skill_purchase_failed": "Purchase failed",
   "skill_purchase_invalid_response": "Invalid server response",
   "skill_purchase_connection_failed": "Connection failed. Please check your internet connection.",

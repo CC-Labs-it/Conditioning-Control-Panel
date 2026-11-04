@@ -103,7 +103,9 @@ public sealed class SkillPurchaseTests : IDisposable
         Assert.Equal(2, fake.Calls); Assert.Equal("new", fake.Token);
         fake.Calls = 0; purchase.Recover = _ => Task.FromResult(false);
         Assert.False((await purchase.BuyAsync(s, "pink_hours")).success); Assert.Equal(1, fake.Calls);
-        fake.Calls = 0; purchase.Recover = _ => { s.UnifiedId = "different"; return Task.FromResult(true); };
+        fake.Calls = 0; bool recovered = false; purchase.IsCurrent = _ => false; purchase.Recover = _ => { recovered = true; return Task.FromResult(false); };
+        Assert.False((await purchase.BuyAsync(s, "pink_hours")).success); Assert.Equal(1, fake.Calls); Assert.False(recovered);
+        fake.Calls = 0; purchase.IsCurrent = _ => true; purchase.Recover = _ => { s.UnifiedId = "different"; return Task.FromResult(true); };
         Assert.False((await purchase.BuyAsync(s, "pink_hours")).success); Assert.Equal(1, fake.Calls);
     }
 
@@ -144,9 +146,35 @@ public sealed class SkillPurchaseTests : IDisposable
     {
         var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", language + ".json");
         var strings = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
-        foreach (var key in new[] { "skill_purchase_server_error", "skill_purchase_failed", "skill_purchase_invalid_response", "skill_purchase_connection_failed" })
+        foreach (var key in new[] { "skill_purchase_server_error", "skill_purchase_failed", "skill_purchase_invalid_response", "skill_purchase_connection_failed", "skill_purchase_signin" })
             Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
         Assert.Contains("{0}", (string)strings["skill_purchase_server_error"]!);
+    }
+
+    [Fact]
+    public async Task BalanceRefusalRetriesOnlyAfterSyncAndReturnsSurvivingServerBalance()
+    {
+        var s = Settings(); var fake = new Fake { Response = "{\"success\":false,\"error\":\"balance\",\"skill_points\":1}" };
+        var calls = 0; var purchase = new SkillPurchase(fake) { SyncBeforeRetry = () => { calls++; return Task.FromResult(false); } };
+        var refused = await purchase.BuyAsync(s, "pink_hours");
+        Assert.False(refused.success); Assert.Null(refused.points); Assert.Equal(1, fake.Calls); Assert.Equal(1, calls);
+        fake.Calls = 0; purchase.SyncBeforeRetry = () => Task.FromResult(true);
+        refused = await purchase.BuyAsync(s, "pink_hours");
+        Assert.False(refused.success); Assert.Equal(1, refused.points); Assert.Equal(2, fake.Calls); Assert.Equal(100, s.SkillPoints);
+        fake.Calls = 0; fake.Reply = n => n == 1 ? (HttpStatusCode.OK, fake.Response) : (HttpStatusCode.OK, "{\"success\":true,\"skill_points\":98,\"unlocked_skills\":[\"pink_hours\"]}");
+        Assert.True((await purchase.BuyAsync(s, "pink_hours")).success); Assert.Equal(2, fake.Calls);
+        fake.Calls = 0; purchase.SyncBeforeRetry = () => { s.UnifiedId = "other"; return Task.FromResult(true); };
+        Assert.False((await purchase.BuyAsync(s, "pink_hours")).success); Assert.Equal(1, fake.Calls);
+    }
+
+    [Fact]
+    public async Task UnauthorizedFailurePointsToSettingsAccount()
+    {
+        var fake = new Fake { Status = HttpStatusCode.Unauthorized, Response = "{}" };
+        var purchase = new SkillPurchase(fake) { Recover = _ => Task.FromResult(false) };
+        var result = await purchase.BuyAsync(Settings(), "pink_hours");
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("skill_purchase_signin", ConditioningControlPanel.Localization.Loc.Get("nav_door_settings")), result.error);
+        Assert.Equal(1, fake.Calls);
     }
 
     [Fact]

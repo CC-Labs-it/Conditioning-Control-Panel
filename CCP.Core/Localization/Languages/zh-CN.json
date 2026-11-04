@@ -3930,6 +3930,7 @@
   "dialog_purchase_enhancement": "购买技能",
   "msg_purchase_skill": "花费 {1} {2} 购买 '{0}'？\n\n{3}\n\n{4}",
   "skill_purchase_server_error": "服务器错误：{0}",
+  "skill_purchase_signin": "会话已过期。请在 {0} > 账户中重新登录。",
   "skill_purchase_failed": "购买失败",
   "skill_purchase_invalid_response": "服务器响应无效",
   "skill_purchase_connection_failed": "连接失败，请检查网络连接。",

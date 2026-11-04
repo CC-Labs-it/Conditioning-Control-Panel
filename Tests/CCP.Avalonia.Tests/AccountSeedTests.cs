@@ -93,6 +93,27 @@ public sealed partial class AccountSeedTests : IDisposable
     }
 
     [Fact]
+    public async Task AccountSeedConnectsMergedRecoveryAndRefusesReauthWithoutProvider()
+    {
+        var previous = V2AuthService.MergedRecovery;
+        var stop = MergedAccountRecovery.StopSync; var stamp = MergedAccountRecovery.StampQuests;
+        var reauth = MergedAccountRecovery.Reauthenticate; var reload = MergedAccountRecovery.ReloadProfile; var finished = MergedAccountRecovery.Finished;
+        try
+        {
+            V2AuthService.MergedRecovery = null; Assert.True(AccountSeed.Seed(Make));
+            Assert.Equal(MergedAccountRecovery.TryHandleAsync, V2AuthService.MergedRecovery);
+            Assert.NotNull(MergedAccountRecovery.StopSync); Assert.NotNull(MergedAccountRecovery.StampQuests);
+            Assert.NotNull(MergedAccountRecovery.ReloadProfile); Assert.NotNull(MergedAccountRecovery.Finished);
+            Assert.False(await MergedAccountRecovery.Reauthenticate!());
+        }
+        finally
+        {
+            V2AuthService.MergedRecovery = previous; MergedAccountRecovery.StopSync = stop; MergedAccountRecovery.StampQuests = stamp;
+            MergedAccountRecovery.Reauthenticate = reauth; MergedAccountRecovery.ReloadProfile = reload; MergedAccountRecovery.Finished = finished;
+        }
+    }
+
+    [Fact]
     public void AProviderThatCannotBeBuilt_SeedsNothing()
     {
         Assert.False(AccountSeed.Seed(_ => throw new InvalidOperationException("boom")));
