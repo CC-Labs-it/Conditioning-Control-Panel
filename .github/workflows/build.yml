@@ -47,6 +47,8 @@ jobs:
       - run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release
         env:
           CCP_REQUIRE_VOSK: "1"
+      - name: Test installer integration result validator
+        run: python3 -m unittest discover -s Tests/CCP.Installer.Windows.Tests -p 'test_*.py'
       - name: Test Core settings publication (isolated profile)
         run: dotnet test Tests/CCP.Core.Settings.Tests/CCP.Core.Settings.Tests.csproj -c Release
       - name: Test release-content packs (loopback fake server, isolated profile)

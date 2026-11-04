@@ -226,8 +226,11 @@ public class InstallerHandoffContractTests
         var post = Read("installer-avalonia.iss").Split("procedure CurStepChanged(CurStep: TSetupStep);")[1].Split("// Clean uninstall")[0];
         Assert.Contains(@"if not WizardSilent and (DirExists(UserDataPath + '\browser_data') or", post);
         Assert.Contains(@"FileExists(UserDataPath + '\browser-reset.pending')) then", post);
-        Assert.Contains("if ExecAsOriginalUser(ExpandConstant('{cmd}'), '/c if /i \"%LOCALAPPDATA%\"==\"' + ExpandConstant('{localappdata}') +", post);
-        Assert.Contains("'\" (exit 0) else (exit 1)', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then", post);
+        Assert.Contains("OriginalUserExecOk := ExecAsOriginalUser(ExpandConstant('{cmd}'), '/c if /i \"%LOCALAPPDATA%\"==\"' + ExpandConstant('{localappdata}') +", post);
+        Assert.Contains("'\" (exit 0) else (exit 1)', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);", post);
+        Assert.Contains("if OriginalUserExecOk and (ResultCode = 0) then", post);
+        Assert.Contains("Browser reset original user comparison failed", post);
+        Assert.Contains("Browser reset original user comparison exit:", post);
         Assert.Contains(@"SaveStringToFile(UserDataPath + '\browser-reset.ack.json', '{}', False)", post);
         Assert.Contains("BrowserResetAcknowledged = \"browser-reset.ack.json\"", Read("CCP.Avalonia/Platform/AppUpdater.cs"));
     }

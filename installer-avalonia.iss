@@ -645,6 +645,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   SelectedAssetsPath, UserDataPath, UserDataOverride: String;
   ResultCode: Integer;
+  OriginalUserExecOk: Boolean;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -664,10 +665,17 @@ begin
     // Interactive setup showed InfoBeforeFile; UAC as another account must not acknowledge for it.
     if not WizardSilent and (DirExists(UserDataPath + '\browser_data') or
        FileExists(UserDataPath + '\browser-reset.pending')) then
-      if ExecAsOriginalUser(ExpandConstant('{cmd}'), '/c if /i "%LOCALAPPDATA%"=="' + ExpandConstant('{localappdata}') +
-         '" (exit 0) else (exit 1)', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+    begin
+      OriginalUserExecOk := ExecAsOriginalUser(ExpandConstant('{cmd}'), '/c if /i "%LOCALAPPDATA%"=="' + ExpandConstant('{localappdata}') +
+         '" (exit 0) else (exit 1)', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      if OriginalUserExecOk then
+        Log('Browser reset original user comparison exit: ' + IntToStr(ResultCode))
+      else
+        Log('Browser reset original user comparison failed');
+      if OriginalUserExecOk and (ResultCode = 0) then
         if not SaveStringToFile(UserDataPath + '\browser-reset.ack.json', '{}', False) then
           Log('Could not write browser reset acknowledgment');
+    end;
     if WizardSilent and DirExists(UserDataPath + '\browser_data') and
        not DirExists(UserDataPath + '\browser_data_avalonia') then
       if not SaveStringToFile(UserDataPath + '\browser-reset.pending', 'pending', False) then
