@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             X11Overlay.IsAvailable && X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOpacity(w, 0)
             && X11Overlay.SetOverrideRedirect(w, bounds);
         internal static Action<Window, double> ApplyAlpha = (w, a) => X11Overlay.SetOpacity(w, a);
+        internal static Action<Window> Raise = w => X11Overlay.Raise(w);
 
         /// <summary>Show (or replace) the persistent cue. Safe from any thread.</summary>
         public static void ShowCue(string? text)
@@ -66,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     _active = w;
                     w.Show();
                 }
-                else if (!_active.IsVisible) _active.Show();
+                else if (!_active.IsVisible) { _active.Show(); Raise(_active); }
                 _active.Display(text);
             }
             catch (Exception ex) { Log.Debug("SpeakCueOverlay.Show: {E}", ex.Message); }

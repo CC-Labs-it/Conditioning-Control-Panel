@@ -27,7 +27,7 @@ public sealed class SpeakCueOverlayTests
 
     private static async Task Run(Action<SteppedClock, List<double>> body)
     {
-        var (clock, prepare, alpha, warned) = (SpeakCueOverlay.Clock, SpeakCueOverlay.Prepare, SpeakCueOverlay.ApplyAlpha, SpeakCueOverlay.Warned);
+        var (clock, prepare, alpha, raise, warned) = (SpeakCueOverlay.Clock, SpeakCueOverlay.Prepare, SpeakCueOverlay.ApplyAlpha, SpeakCueOverlay.Raise, SpeakCueOverlay.Warned);
         var c = new SteppedClock();
         var alphas = new List<double>();
         SpeakCueOverlay.Clock = c;
@@ -45,8 +45,8 @@ public sealed class SpeakCueOverlayTests
         }
         finally
         {
-            (SpeakCueOverlay.Clock, SpeakCueOverlay.Prepare, SpeakCueOverlay.ApplyAlpha, SpeakCueOverlay.Warned) =
-                (clock, prepare, alpha, warned);
+            (SpeakCueOverlay.Clock, SpeakCueOverlay.Prepare, SpeakCueOverlay.ApplyAlpha, SpeakCueOverlay.Raise, SpeakCueOverlay.Warned) =
+                (clock, prepare, alpha, raise, warned);
         }
     }
 
@@ -89,6 +89,21 @@ public sealed class SpeakCueOverlayTests
         Assert.Same(w, SpeakCueOverlay.Active);
         Assert.True(w.IsVisible);
         Assert.Equal(new[] { "SAY IT", "Say AGAIN" }, Texts(w));
+    });
+
+    [Fact]
+    public Task ReusedHiddenCue_IsRaisedAfterShowing() => Run((c, _) =>
+    {
+        var raised = new List<Window>();
+        SpeakCueOverlay.Raise = w => { Assert.True(w.IsVisible); raised.Add(w); };
+        SpeakCueOverlay.ShowCue("Say YES");
+        var w = SpeakCueOverlay.Active!;
+        SpeakCueOverlay.HideCue();
+        c.Advance(200); w.Step();
+        Assert.False(w.IsVisible);
+        SpeakCueOverlay.ShowCue("Say AGAIN");
+        Assert.Same(w, SpeakCueOverlay.Active);
+        Assert.Same(w, Assert.Single(raised));
     });
 
     [Fact]
