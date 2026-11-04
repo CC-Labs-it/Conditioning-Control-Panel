@@ -11,6 +11,10 @@
 using System;
 using System.Collections.Generic;
 using Avalonia.Input.Platform;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Styling;
+using ConditioningControlPanel.Models;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
@@ -377,7 +381,7 @@ public sealed partial class FriendsDrawer : Border
         var row = new Border
         {
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
-            Background = open ? Raised : Brushes.Transparent, Cursor = Hand(),
+            Background = open ? Raised : Brushes.Transparent, Cursor = Hand(), ClipToBounds = true,
             Tag = "friends-row:" + f.Id, Child = outer, ContextMenu = Menu(f),
         };
         if (table != null && !open) DressHostingRow(row);
@@ -386,13 +390,53 @@ public sealed partial class FriendsDrawer : Border
         top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
         return row;
     }
-    // WPF FriendsDrawer.Juice.cs:93-102: the wash replaces the resting brush only while closed.
+    // WPF FriendsDrawer.Juice.cs:93-134: the wash and one non-interactive lilac sweep.
     private static void AttachRowHover(Border row, bool open)
     {
-        if (open) return;
+        if (row.Child is not Grid && row.Child is { } content)
+        {
+            row.Child = null;
+            row.Child = new Grid { Children = { content } };
+        }
         var rest = row.Background;
-        row.PointerEntered += (_, _) => row.Background = Hover;
-        row.PointerExited += (_, _) => row.Background = rest;
+        row.PointerEntered += (_, _) =>
+        {
+            if (!open) row.Background = Hover;
+            SweepRow(row);
+        };
+        row.PointerExited += (_, _) => { if (!open) row.Background = rest; };
+    }
+
+    private static async void SweepRow(Border row)
+    {
+        var level = AmbientFxCanvas.Env.Level;
+        if (level == MotionLevel.Off || row.Child is not Grid host) return;
+        double amount = level == MotionLevel.Reduced ? 0.5 : 1;
+        var band = new Rectangle
+        {
+            Width = 70, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false,
+            Opacity = 0.9 * amount, Tag = "friends-sheen",
+            Fill = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops = new GradientStops
+                {
+                    new(Color.FromArgb(0, 0xB9, 0x9C, 0xFF), 0),
+                    new(Color.FromArgb(0x30, 0xB9, 0x9C, 0xFF), 0.5),
+                    new(Color.FromArgb(0, 0xB9, 0x9C, 0xFF), 1),
+                },
+            },
+            RenderTransform = new TranslateTransform(-90, 0),
+        };
+        Grid.SetRowSpan(band, Math.Max(1, host.RowDefinitions.Count));
+        Grid.SetColumnSpan(band, Math.Max(1, host.ColumnDefinitions.Count));
+        host.Children.Add(band);
+        var sweep = new Animation { Duration = TimeSpan.FromMilliseconds(520 / amount), Easing = new QuadraticEaseInOut() };
+        sweep.Children.Add(new KeyFrame { Cue = new Cue(0), Setters = { new Setter(TranslateTransform.XProperty, -90d) } });
+        sweep.Children.Add(new KeyFrame { Cue = new Cue(1), Setters = { new Setter(TranslateTransform.XProperty, Math.Max(row.Bounds.Width, 200) + 20) } });
+        try { await sweep.RunAsync(band); } catch { }
+        finally { host.Children.Remove(band); }
     }
 
     private TextBlock ActivityLine(Friend f)
