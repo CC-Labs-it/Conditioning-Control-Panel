@@ -162,15 +162,11 @@ public sealed class ReleaseFeedTests
         try
         {
             ReleaseFeed.SetPendingUpdateAttempt(d, "6.11.4");
-            Assert.False(ReleaseFeed.ConsumePendingUpdateOutcome(d, "6.11.3", consume: false)!.Succeeded);
-            Assert.True(ReleaseFeed.GetSkippedUpdateVersion(d) == "6.11.4" && File.Exists(ReleaseFeed.AttemptFilePath(d))); ReleaseFeed.ClearSkippedUpdateVersion(d); // failed feed check
-            Assert.False(ReleaseFeed.ConsumePendingUpdateOutcome(d, "6.11.3", consume: false)!.Succeeded); Assert.Equal("6.11.4", ReleaseFeed.GetSkippedUpdateVersion(d)); // restart
-            ReleaseFeed.SetSkippedUpdateVersion(d, "6.11.9");   // manual Later, then exit before the report
             var o = ReleaseFeed.ConsumePendingUpdateOutcome(d, "6.11.3");   // no result: unknown exit
             Assert.NotNull(o);
             Assert.False(o!.Succeeded);
             Assert.Equal(ReleaseFeed.UnknownExitCode, o.ExitCode);
-            Assert.Equal("6.11.9", ReleaseFeed.GetSkippedUpdateVersion(d));
+            Assert.Equal("6.11.4", ReleaseFeed.GetSkippedUpdateVersion(d));
             Assert.False(File.Exists(ReleaseFeed.AttemptFilePath(d)));
 
             // Too old to report: still cleared and skipped, but not surfaced.

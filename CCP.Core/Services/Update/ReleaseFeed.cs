@@ -324,7 +324,7 @@ namespace ConditioningControlPanel.Services
         /// attempt was pending (or it was too old to be worth reporting). On failure the version is
         /// also written to the skip marker so we stop retrying the same broken install every launch.
         /// </summary>
-        public static PendingUpdateOutcome? ConsumePendingUpdateOutcome(string userData, string currentVersion, bool consume = true)
+        public static PendingUpdateOutcome? ConsumePendingUpdateOutcome(string userData, string currentVersion)
         {
             try
             {
@@ -332,7 +332,7 @@ namespace ConditioningControlPanel.Services
                 if (!File.Exists(attemptFile))
                     return null;
 
-                var lines = File.ReadAllLines(attemptFile); var version = lines.FirstOrDefault()?.Trim() ?? "";
+                var version = File.ReadAllLines(attemptFile).FirstOrDefault()?.Trim() ?? "";
                 var age = DateTime.Now - File.GetLastWriteTime(attemptFile);
 
                 var exitCode = UnknownExitCode;
@@ -347,7 +347,7 @@ namespace ConditioningControlPanel.Services
                 }
                 catch { }
 
-                if (consume) ClearPendingUpdateAttempt(userData);
+                ClearPendingUpdateAttempt(userData);
 
                 if (string.IsNullOrEmpty(version))
                     return null;
@@ -357,15 +357,15 @@ namespace ConditioningControlPanel.Services
                 if (succeeded)
                 {
                     Log.Information("Previous update to {Version} completed (installer exit={Code})", version, exitCode);
-                    ClearPendingUpdateAttempt(userData); ClearSkippedUpdateVersion(userData); // only a failure is kept
+                    ClearSkippedUpdateVersion(userData);
                     return new PendingUpdateOutcome { Version = version, ExitCode = exitCode, Succeeded = true };
                 }
 
                 Log.Error("Update to {Version} did not install (installer exit={Code}, still running {Current})",
                     version, exitCode, currentVersion);
 
-                if (lines.Length < 2 || GetSkippedUpdateVersion(userData) is null) SetSkippedUpdateVersion(userData, version);
-                if (!consume && lines.Length < 2) { File.AppendAllText(attemptFile, "\nskipped"); File.SetLastWriteTime(attemptFile, DateTime.Now - age); }
+                // Stop the silent retry loop: don't re-offer this version for 24h.
+                SetSkippedUpdateVersion(userData, version);
 
                 if (age.TotalDays > AttemptMarkerReportWindowDays)
                 {

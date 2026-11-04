@@ -155,7 +155,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         // ---- flows (WPF App.xaml.cs) --------------------------------------------------------------
 
-        /// <summary>WPF App.xaml.cs:5410-5425 reports a failed install, then :5366-5373 queues an update; the feed check runs independently.</summary>
+        /// <summary>
+        /// WPF CheckForUpdatesInBackgroundAsync (:4858): report a previous install that did not take
+        /// (reads WPF's own update_attempt/update_result markers), light the pill, then offer the
+        /// notification dialog once (App.xaml.cs:4903). WPF queues it last on its StartupLadder;
+        /// this head has no ladder, so it waits until the age gate is accepted and the first-run
+        /// wizard / age-gate modals are closed. A skipped version never gets here (CheckAsync).
+        /// </summary>
         internal static async Task StartupAsync(MainShellWindow shell)
         {
             var closed = false;
@@ -163,17 +169,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 await Task.Delay(500);
-                // WPF :5414 classifies before the check; a failed version is skipped before its pill lights.
-                var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion, consume: false); var report = ShowFailedUpdateAsync(shell, () => closed, outcome);
+                var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
+                var report = outcome is { Succeeded: false }
+                    ? UpdateFailedDialog.ShowFor(shell, Loc.Get("title_update_failed"),
+                        Loc.GetF("msg_update_install_failed", outcome.Version, CoreReleaseContent.AppVersion))
+                    : null;
                 var notice = ShowBrowserResetWhenReadyAsync(shell, report, () => closed);
 
                 var info = await CheckAsync(force: false);
-                if (info?.IsNewer == true) shell.ShowUpdatePill(info.Version);
-                await notice;
-                await report;
-                if (info?.IsNewer != true || closed || ReleaseFeed.GetSkippedUpdateVersion(UserData) == info.Version) return;
-                var owner = await WaitForStartupOwnerAsync(shell, () => closed, requireAge: true, panelOnly: true);
-                if (owner != null && !_busy && ReleaseFeed.GetSkippedUpdateVersion(UserData) != info.Version) await OfferAsync(owner, info);
+                if (info?.IsNewer == true)
+                    shell.ShowUpdatePill(info.Version);
+                await notice; // the update offer is last on WPF's ladder (App.xaml.cs:5366-5373)
+                if (info?.IsNewer != true)
+                    return;
+
+                while (!closed && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible || StartupModalOpen()))
+                    await Task.Delay(500);
+                if (!closed && !_busy) await OfferAsync(shell, info);
             }
             catch (Exception ex)
             {
@@ -181,92 +193,81 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        internal const string BrowserResetMarker = "browser-reset.pending";
         internal const string BrowserResetAcknowledged = "browser-reset.ack.json";
         internal static MessageDialog? BrowserResetDialog { get; private set; }
 
-        // WPF BrowserService.cs:125-132 keeps this per user; checking it each Windows launch covers machine
-        // installs, another elevated installer account, and a profile this head already created.
-        internal static bool NeedsBrowserResetNotice(string userData, bool windows) =>
-            !File.Exists(Path.Combine(userData, BrowserResetAcknowledged)) &&
-            (File.Exists(Path.Combine(userData, BrowserResetMarker)) ||
-             (windows && Directory.Exists(Path.Combine(userData, "browser_data"))));
+        // Test seam: the old WPF browser profile only exists on Windows.
+        internal static bool OnWindows = OperatingSystem.IsWindows();
 
-        private static async Task ShowBrowserResetWhenReadyAsync(MainShellWindow shell, Task report, Func<bool> closed)
+        // WPF BrowserService.cs:125-132 keeps the old profile per user; checking it on each Windows launch covers
+        // machine installs, an installer run by another account, and a profile this head already created.
+        internal static bool NeedsBrowserResetNotice(string userData, bool windows) =>
+            windows && Directory.Exists(Path.Combine(userData, "browser_data"))
+            && !File.Exists(Path.Combine(userData, BrowserResetAcknowledged));
+
+        private static async Task ShowBrowserResetWhenReadyAsync(MainShellWindow shell, Window? report, Func<bool> closed)
         {
-            if (!NeedsBrowserResetNotice(UserData, OperatingSystem.IsWindows())) return;
-            await report;  // WPF's failed update report is the first startup modal (:5417-5425).
-            var owner = await WaitForStartupOwnerAsync(shell, closed, requireAge: true);
-            if (owner != null) await ShowBrowserResetNoticeAsync(owner, UserData);
+            if (!NeedsBrowserResetNotice(UserData, OnWindows))
+                return;
+            // WPF's failed update report is the first startup modal (App.xaml.cs:5417-5425).
+            while (report is { IsVisible: true } && !closed())
+                await Task.Delay(500);
+            var owner = await WaitForStartupOwnerAsync(shell, closed);
+            if (owner != null)
+                await ShowBrowserResetNoticeAsync(owner, UserData);
         }
 
-        // The installer page is skipped by WPF's silent updater. Keep the notice owed until OK.
+        // WPF's updater runs setup /SILENT (UpdateService.cs:914, ReleaseFeed.cs:432), skipping the installer page; owed until OK.
         internal static async Task ShowBrowserResetNoticeAsync(Window owner, string userData)
         {
-            var marker = Path.Combine(userData, BrowserResetMarker);
-            if (!NeedsBrowserResetNotice(userData, OperatingSystem.IsWindows())) return;
+            if (!NeedsBrowserResetNotice(userData, OnWindows))
+                return;
             var notice = Loc.Get("installer_avalonia_upgrade_notice").Split(new[] { "\n\n" }, 2, StringSplitOptions.None);
             var dialog = BrowserResetDialog = new MessageDialog(notice[0], notice.Length > 1 ? notice[1] : notice[0], false);
-            // WPF StartupPresenter.cs:569-587 uses this guard for startup modals.
+            // WPF StartupPresenter.cs:569-587 raises this guard for startup modals.
             var previous = MainShellWindow.IsStartupDialogShowing;
             MainShellWindow.IsStartupDialogShowing = true;
             try
             {
                 if (await dialog.ShowDialogSafe<bool?>(owner) == true)
-                {
                     File.WriteAllText(Path.Combine(userData, BrowserResetAcknowledged), "{}");
-                    File.Delete(marker);
-                }
             }
-            catch (Exception ex) { Log.Warning(ex, "Browser reset notice failed"); }
-            finally { BrowserResetDialog = null; MainShellWindow.IsStartupDialogShowing = previous; }
-        }
-
-        private static async Task ShowFailedUpdateAsync(MainShellWindow shell, Func<bool> closed, ReleaseFeed.PendingUpdateOutcome? outcome)
-        {
-            if (!File.Exists(ReleaseFeed.AttemptFilePath(UserData))) return;
-            // WPF StartupPresenter.cs:353-389 parks the ladder while the launcher or a game has the screen.
-            while (!closed() && (StartupModalOpen() || StartupLadder.PassiveWindowUp()
-                || LauncherWindow.Instance is { IsVisible: true } || Views.Games.GameWindow.IsAnyOpen())) await Task.Delay(500);
-            if (closed()) return; // leave the attempt on disk until it can be reported
-            ReleaseFeed.ClearPendingUpdateAttempt(UserData);
-            if (outcome is not { Succeeded: false }) return;
-            var owner = StartupOwner(shell); // WPF UpdateFailedDialog.ShowFor supports no visible owner
-            var previous = MainShellWindow.IsStartupDialogShowing;
-            MainShellWindow.IsStartupDialogShowing = true;
-            try
+            catch (Exception ex)
             {
-                var dialog = new UpdateFailedDialog(Loc.Get("title_update_failed"),
-                    Loc.GetF("msg_update_install_failed", outcome.Version, CoreReleaseContent.AppVersion)) { Topmost = true };
-                await dialog.ShowDialogSafe(owner);
+                Log.Warning(ex, "Browser reset notice failed");
             }
-            catch (Exception ex) { Log.Warning(ex, "Failed to show update failure dialog"); }
-            finally { MainShellWindow.IsStartupDialogShowing = previous; }
+            finally
+            {
+                BrowserResetDialog = null;
+                MainShellWindow.IsStartupDialogShowing = previous;
+            }
         }
 
         private static Window? StartupOwner(MainShellWindow shell)
         {
-            if (Views.Games.GameWindow.IsAnyOpen()) return null; // WPF StartupQueueCore.cs:256 parks for a game
-            if (shell.IsVisible && shell.IsActive && !shell.BuildingHiddenForBoot) return shell;
-            if (LauncherWindow.Instance is { IsVisible: true } launcher) return launcher;
+            if (Views.Games.GameWindow.IsAnyOpen())
+                return null; // WPF StartupQueueCore.cs:256 parks the ladder for a game
+            if (shell.IsVisible && shell.IsActive && !shell.BuildingHiddenForBoot)
+                return shell;
+            if (LauncherWindow.Instance is { IsVisible: true } launcher)
+                return launcher;
             return shell.IsVisible && !shell.BuildingHiddenForBoot ? shell : null;
         }
 
-        private static async Task<Window?> WaitForStartupOwnerAsync(MainShellWindow shell, Func<bool> closed, bool requireAge, bool panelOnly = false)
+        private static async Task<Window?> WaitForStartupOwnerAsync(MainShellWindow shell, Func<bool> closed)
         {
             while (!closed())
             {
-                var owner = panelOnly
-                    ? shell.IsVisible && shell.WindowState != WindowState.Minimized && !shell.BuildingHiddenForBoot
-                        && LauncherWindow.Instance is not { IsVisible: true } && !Views.Games.GameWindow.IsAnyOpen() ? shell : null
-                    : StartupOwner(shell);
-                if (owner != null && (!requireAge || CoreSettings.Current.HasAcceptedAgeVerification)
-                    && !StartupModalOpen() && !StartupLadder.PassiveWindowUp()) return owner;
+                var owner = StartupOwner(shell);
+                if (owner != null && CoreSettings.Current.HasAcceptedAgeVerification
+                    && !StartupModalOpen() && !StartupLadder.PassiveWindowUp())
+                    return owner;
                 await Task.Delay(500);
             }
             return null;
         }
 
+        // WPF StartupQueueCore.CanStartModal: no other startup modal, update dialog or tutorial.
         private static bool StartupModalOpen() =>
             MainShellWindow.IsStartupDialogShowing || IsUpdateDialogActive || CoreTutorial.IsActive ||
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Windows

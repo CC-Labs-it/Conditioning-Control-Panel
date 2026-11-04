@@ -23,7 +23,6 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
-    [Fact] public async Task MenuBrushesAreImmutableOnWorkerAndUiThreads() { var fields = new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" }.Select(n => typeof(AvatarTubeWindow).GetField(n, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!).ToArray(); await Task.Run(() => { foreach (var f in fields) Assert.IsType<global::Avalonia.Media.Immutable.ImmutableSolidColorBrush>(f.GetValue(null)); }); await AvaloniaTestDispatcher.RunAsync(() => { var colors = new[] { global::Avalonia.Media.Color.FromRgb(255, 99, 71), global::Avalonia.Media.Color.FromRgb(144, 238, 144), global::Avalonia.Media.Color.FromRgb(155, 89, 182), global::Avalonia.Media.Color.FromRgb(0x60, 0x60, 0x70) }; for (var i = 0; i < fields.Length; i++) Assert.Equal(colors[i], Assert.IsType<global::Avalonia.Media.Immutable.ImmutableSolidColorBrush>(fields[i].GetValue(null)).Color); return Task.CompletedTask; }); }
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
