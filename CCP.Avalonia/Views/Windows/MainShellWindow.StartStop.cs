@@ -7,6 +7,10 @@
 // ramp starts, the scheduler, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
+using System;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Services;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Media;
@@ -47,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StartEngineFromUser()
         {
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-            StartEngine();
+            StartEngine(userInitiated: true);
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -77,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine()
+        internal void StartEngine(bool userInitiated = false)
         {
             var gen = ++_engineGen;
             StartEffect(() =>
@@ -89,7 +93,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 SpiralOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
+                if (userInitiated) WarnIfFlashLibraryEmpty();
             });
+        }
+
+        /// <summary>WPF MainWindow.StartStop.cs:258-280, :350: only a deliberate UI start earns this non-blocking notice.
+        /// Core/session/remote starts stay silent, and online/mixed or audio-only starts do too.</summary>
+        internal void WarnIfFlashLibraryEmpty()
+        {
+            try
+            {
+                if (!LocalMediaLibrary.FlashIsEmpty(CoreSettings.Current, CorePaths.EffectiveAssets)) return;
+                App.Notifications.Show(
+                    string.Format(Loc.Get("msg_no_flash_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
+                    Helpers.NotificationType.Warning, TimeSpan.FromSeconds(18),
+                    actionLabel: Loc.Get("btn_open_media_manager"), action: () => ShowTab("assets"),
+                    secondaryActionLabel: IconText.BareLoc("btn_get_packs"),
+                    secondaryAction: () => Platform.ExternalOpener.Open(DiscordLinks.PackCatalogue));
+                Serilog.Log.Information("[empty-state] Flashes started with an empty local image library");
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "[empty-state] flash library check failed"); }
         }
 
         /// <summary>WPF StopEngine. Saved flags are left alone; <see cref="OnEngineStopped"/> clears the screen.
