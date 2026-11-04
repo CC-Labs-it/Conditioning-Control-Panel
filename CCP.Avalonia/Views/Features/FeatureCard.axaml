@@ -14,10 +14,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.FeatureCard"
              Cursor="Hand">
 
     <Panel>
+    <!-- The socket a mosaic tile sits in (DashboardDepth only): a SUNKEN well, the floor with its
+         top band, left band and lit foot, so an on tile reads as pressed into it. -->
+    <Border x:Name="DepthSocket" Margin="6,9,6,2" CornerRadius="12" Background="{DynamicResource DepthWellFloorBrush}"
+            BorderBrush="{DynamicResource DepthPressedBevel}" BorderThickness="1" ClipToBounds="True"
+            IsVisible="False" IsHitTestVisible="False">
+        <Grid>
+            <Border Background="{DynamicResource DepthWellTop}" Height="9" VerticalAlignment="Top" CornerRadius="11"/>
+            <Border Background="{DynamicResource DepthWellLeft}" Width="6" HorizontalAlignment="Left"/>
+            <Border Background="{DynamicResource DepthWellFoot}" Height="1" VerticalAlignment="Bottom"/>
+        </Grid>
+    </Border>
+    <Panel x:Name="PressFace">
     <!-- The on glow (lag fix, P82): a sibling BoxShadow layer whose Opacity breathes on the
          30 fps beat, never a DropShadowEffect on RootBorder - an Effect makes the whole tile an
          offscreen layer re-blurred on every breath frame. Shadow colour = FxGlowColor (CardGlow). -->
@@ -35,9 +48,15 @@
              reachable through FindControl. -->
 
         <Grid x:Name="ContentRoot">
-            <!-- Full-bleed background image via ImageBrush (respects parent CornerRadius) -->
+            <!-- Full-bleed background image via ImageBrush (respects parent CornerRadius). The child
+                 is the same art in greyscale (ArtDesaturate), faded in over the colour while the
+                 feature is off (DimWhenInactive). Opacity is written only by ApplyMute. -->
             <Border x:Name="ImgIconHost" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    RenderOptions.BitmapInterpolationMode="HighQuality">
+                <Border x:Name="ImgIconMute" CornerRadius="11"
+                        RenderOptions.BitmapInterpolationMode="HighQuality"
+                        IsHitTestVisible="False" Opacity="0"/>
+            </Border>
 
             <!-- Glyph fallback (for cards without an image) -->
             <Border x:Name="GlyphHost"
@@ -128,18 +147,23 @@
                 </StackPanel>
             </Border>
 
-            <!-- Tier badge (top-left). A price tag, NOT the LockedOverlay veil above: the art
-                 stays bright and the badge names the price. IsHitTestVisible=False on purpose,
-                 so a locked click still lands on the real handler. -->
+            <!-- THE MARK COLUMN (top-left): price tag first, then the v2 pill, stacked so they
+                 cannot land on each other. Tier badge: a price tag, NOT the LockedOverlay veil
+                 above. IsHitTestVisible=False on purpose, so a locked click still lands on the
+                 real handler. -->
+            <StackPanel x:Name="BadgeColumn"
+                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="8,8,0,0"
+                        IsHitTestVisible="False"
+                        ZIndex="11">
             <Border x:Name="TierBadgeHost"
-                    HorizontalAlignment="Left" VerticalAlignment="Top"
-                    Margin="8,8,0,0" Padding="6,2,7,3"
+                    HorizontalAlignment="Left"
+                    Margin="0,0,0,4" Padding="6,2,7,3"
                     CornerRadius="7"
                     Background="#D91A1A2E"
                     BorderBrush="{DynamicResource PinkBrush}"
                     BorderThickness="1"
                     IsHitTestVisible="False"
-                    ZIndex="11"
                     IsVisible="False">
                 <TextBlock x:Name="TxtTierBadge"
                            Text="TIER 1"
@@ -147,6 +171,29 @@
                            FontSize="9"
                            FontWeight="Bold"/>
             </Border>
+            <!-- v2 pill (ShowV2Badge): the tier badge's pill family in champagne #FFE08A. -->
+            <Border x:Name="V2BadgeHost"
+                    HorizontalAlignment="Left"
+                    Padding="6,2,7,3"
+                    CornerRadius="7"
+                    Background="#D91A1A2E"
+                    BorderBrush="#FFE08A"
+                    BorderThickness="1"
+                    IsHitTestVisible="False"
+                    IsVisible="False">
+                <TextBlock x:Name="TxtV2Badge"
+                           Text="{loc:Str badge_v2}"
+                           Foreground="#FFE08A"
+                           FontSize="9"
+                           FontWeight="Bold"/>
+            </Border>
+            </StackPanel>
+
+            <!-- The shared lamp: a 1 px bevel, DepthRaisedBevel while the tile stands off its
+                 socket, DepthPressedBevel while it is on or pressed (DashboardCardDepth.Refresh). -->
+            <Border x:Name="DepthBevel" CornerRadius="11" BorderThickness="1"
+                    BorderBrush="{DynamicResource DepthRaisedBevel}"
+                    IsHitTestVisible="False" IsVisible="False"/>
 
             <!-- Help icon overlay (top-right corner) -->
             <Button x:Name="BtnHelp"
@@ -158,5 +205,6 @@
                     IsVisible="False"/>
         </Grid>
     </Border>
+    </Panel>
     </Panel>
 </UserControl>
