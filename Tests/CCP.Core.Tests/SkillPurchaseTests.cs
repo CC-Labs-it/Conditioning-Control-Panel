@@ -17,13 +17,15 @@ public sealed class SkillPurchaseTests : IDisposable
     private readonly Func<string, string?>? _oldGet = CoreSecrets.RetrieveProvider;
     private readonly Action<string, string?>? _oldSet = CoreSecrets.StoreProvider;
     private readonly Dictionary<string, string?> _secrets = new();
-    public SkillPurchaseTests() { CoreSecrets.RetrieveProvider = n => _secrets.GetValueOrDefault(n); CoreSecrets.StoreProvider = (n, v) => _secrets[n] = v; }
-    public void Dispose() { CoreSecrets.RetrieveProvider = _oldGet; CoreSecrets.StoreProvider = _oldSet; }
+    private readonly string _oldLanguage = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage;
+    public SkillPurchaseTests() { ConditioningControlPanel.Localization.LocalizationManager.Instance.Initialize("en"); CoreSecrets.RetrieveProvider = n => _secrets.GetValueOrDefault(n); CoreSecrets.StoreProvider = (n, v) => _secrets[n] = v; }
+    public void Dispose() { CoreSecrets.RetrieveProvider = _oldGet; CoreSecrets.StoreProvider = _oldSet; ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(_oldLanguage); }
 
     private sealed class Fake : HttpMessageHandler
     {
         public int Calls;
         public bool Throw;
+        public Func<int, (HttpStatusCode status, string response)>? Reply;
         public string? Body, Token, Url;
         public HttpStatusCode Status = HttpStatusCode.OK;
         public string Response = "";
@@ -36,7 +38,8 @@ public sealed class SkillPurchaseTests : IDisposable
             Token = request.Headers.TryGetValues("X-Auth-Token", out var values) ? System.Linq.Enumerable.Single(values) : null;
             Body = await request.Content!.ReadAsStringAsync(cancellationToken);
             if (Wait != null) await Wait.Task;
-            return new HttpResponseMessage(Status) { Content = new StringContent(Response) };
+            var (status, response) = Reply?.Invoke(Calls) ?? (Status, Response);
+            return new HttpResponseMessage(status) { Content = new StringContent(response) };
         }
     }
     private static AppSettings Settings() => new() { UnifiedId = "u", AuthToken = "token", SkillPoints = 100, NightTimeUsageCount = 10 };
@@ -88,6 +91,62 @@ public sealed class SkillPurchaseTests : IDisposable
         Assert.Null(result.points); Assert.Empty(s.UnlockedSkills); Assert.Equal(100, s.SkillPoints);
         fake.Throw = false; fake.Response = "{\"success\":true,\"skill_points\":98,\"unlocked_skills\":[\"pink_hours\"]}";
         Assert.True((await purchase.BuyAsync(s, "pink_hours")).success);
+    }
+
+    [Fact]
+    public async Task UnauthorizedRetriesOnceOnlyAfterRecoveryForTheSameAccount()
+    {
+        var s = Settings();
+        var fake = new Fake { Reply = n => n == 1 ? (HttpStatusCode.Unauthorized, "{}") : (HttpStatusCode.OK, "{\"success\":true,\"skill_points\":98,\"unlocked_skills\":[\"pink_hours\"]}") };
+        var purchase = new SkillPurchase(fake) { Recover = _ => { s.AuthToken = "new"; return Task.FromResult(true); } };
+        Assert.True((await purchase.BuyAsync(s, "pink_hours")).success);
+        Assert.Equal(2, fake.Calls); Assert.Equal("new", fake.Token);
+        fake.Calls = 0; purchase.Recover = _ => Task.FromResult(false);
+        Assert.False((await purchase.BuyAsync(s, "pink_hours")).success); Assert.Equal(1, fake.Calls);
+        fake.Calls = 0; purchase.Recover = _ => { s.UnifiedId = "different"; return Task.FromResult(true); };
+        Assert.False((await purchase.BuyAsync(s, "pink_hours")).success); Assert.Equal(1, fake.Calls);
+    }
+
+    [Fact]
+    public async Task MergedResponseDelegatesAndStopsWithoutRetry()
+    {
+        var old = V2AuthService.MergedRecovery;
+        try
+        {
+            int handled = 0;
+            V2AuthService.MergedRecovery = (response, body) => { handled++; return Task.FromResult(true); };
+            var fake = new Fake { Status = HttpStatusCode.Conflict, Response = "{}" };
+            var result = await new SkillPurchase(fake).BuyAsync(Settings(), "pink_hours");
+            Assert.False(result.success); Assert.Equal(1, handled); Assert.Equal(1, fake.Calls);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("account_merged_retry_hint"), result.error);
+        }
+        finally { V2AuthService.MergedRecovery = old; }
+    }
+
+    [Fact]
+    public async Task FallbackErrorsUseLocalizationKeys()
+    {
+        var s = Settings(); var fake = new Fake { Status = HttpStatusCode.BadRequest, Response = "broken" };
+        var purchase = new SkillPurchase(fake);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("skill_purchase_server_error", 400), (await purchase.BuyAsync(s, "pink_hours")).error);
+        fake.Status = HttpStatusCode.OK; fake.Response = "{}";
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("skill_purchase_failed"), (await purchase.BuyAsync(s, "pink_hours")).error);
+        fake.Response = "{\"success\":true}";
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("skill_purchase_invalid_response"), (await purchase.BuyAsync(s, "pink_hours")).error);
+        fake.Throw = true;
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("skill_purchase_connection_failed"), (await purchase.BuyAsync(s, "pink_hours")).error);
+    }
+
+    [Theory]
+    [InlineData("en")][InlineData("de")][InlineData("es")][InlineData("fr")][InlineData("it")]
+    [InlineData("ja")][InlineData("ko")][InlineData("pt-BR")][InlineData("ru")][InlineData("zh-CN")]
+    public void PurchaseFallbacksExistInEveryLanguage(string language)
+    {
+        var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", language + ".json");
+        var strings = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
+        foreach (var key in new[] { "skill_purchase_server_error", "skill_purchase_failed", "skill_purchase_invalid_response", "skill_purchase_connection_failed" })
+            Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
+        Assert.Contains("{0}", (string)strings["skill_purchase_server_error"]!);
     }
 
     [Fact]
