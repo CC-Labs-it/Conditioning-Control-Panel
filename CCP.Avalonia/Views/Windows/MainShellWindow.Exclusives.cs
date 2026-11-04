@@ -1,57 +1,4 @@
-// PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.Exclusives.cs (1296 lines).
-//
-// Restored in ExclusivesTabView (rows-exclusives): BuildComingSoonCard, ApplyVeilLockBreath, ApplyFreeTodayPulse,
-// RefreshExclusiveTierPlates, Start/StopExclusivesMotion, Restart/AttachExclusiveSheens, VaultLivery.Apply.
-// wire-shell-exclusives adds mod-aware accent edges and badge/pill gradients in that same view;
-// the HSV hue rotation is shared with WPF through Core Services/UI/VaultColor.cs.
-// ponytail: stub except RefreshExclusivesTab (the roster/gate repaint now lives in ExclusivesTabView). Every member below reaches App.*, a service, a device, a
-// WebView2 or Win32 - none of which this head may touch (see the layer rules: "Do not
-// move services"). The file exists and each member is NAMED so nothing disappears
-// silently; the bodies come back when the services move to Core.
-//
-// Members dropped (41; the accent retint - VaultPartner, ShiftHue, RetintVaultChrome, TintShadow/TintGradient - is in ExclusivesTabView + Core VaultColor):
-//   private sealed class ExclusiveCardUi
-//   private readonly List<ExclusiveCardUi> _exclusiveCards
-//   private readonly List<TextBlock> _exclusiveTeaserMarks
-//   private readonly List<Border> _exclusiveTeaserCards
-//   private readonly List<(…)
-//   private readonly List<DropShadowEffect> _exclusiveAccentShadows
-//   private bool _exclusivesBuilt
-//   private bool _exclusivesSheenRetryQueued
-//   private Storyboard? _spotFreeFx
-//   private static readonly FontFamily FredokaFont
-//   private static readonly Color FreeTodayGold
-//   private static SolidColorBrush Freeze(…)
-//   private static Color VaultAccent(…)
-//   private const byte TeaserMarkAlpha
-//   private static SolidColorBrush ExclusiveEdgeDefault(…)
-//   private static SolidColorBrush SpotlightEdgeDefault(…)
-//   private LinearGradientBrush AccentGradient(…)
-//   private DropShadowEffect AccentTitleShadow(…)
-//   private static bool IsExclusiveFreeToday(…)
-//   internal void OpenExclusiveSpotlight(…)
-//   private void EnsureExclusivesBuilt(…)
-//   private void ApplySpotlightArt(…)
-//   private Border BuildExclusiveCard(…)
-//   private Border BuildComingSoonCard(…)
-//   private static string TeaserEmoji(…)
-//   private static void OnExclusiveCardHover(…)
-//   internal void RefreshExclusivesTab(…)
-//   private void ApplyExclusiveCardState(…)
-//   private static void ApplyVeilLockBreath(…)
-//   private static Storyboard? ApplyFreeTodayPulse(…)
-//   private void RefreshExclusiveTierPlates(…)
-//   private void StartExclusivesMotion(…)
-//   private void StopExclusivesMotion(…)
-//   private int _exclusivesSheenRetries
-//   private void RestartExclusiveSheens(…)
-//   private void AttachExclusiveSheens(…)
-//   private static string ExclusiveTitle(…)
-//   private static string ExclusiveArtPath(…)
-//   private const int ExclusiveCardDecodeWidth
-//   private const int ExclusiveHeroDecodeWidth
-//   private static ImageSource? LoadPackImage(…)
-
+// WPF MainWindow.Exclusives.cs: shell routing; shared view owns roster and chrome.
 using Avalonia.Controls;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -65,6 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshExclusivesTab()
         {
             Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.RefreshVault();
+            PlansVault?.RefreshVault();
             RefreshInvites();
         }
 
@@ -82,7 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF _invitePanel.RefreshAsync(): throttled inside, so a repaint storm costs one read.</summary>
-        internal void RefreshInvites() => _ = Named<Tabs.ExclusivesTabView>("ExclusivesTab")
-            ?.FindControl<Controls.Invites.InvitePanel>("InvitesHost")?.RefreshAsync();
+        internal Tabs.ExclusivesTabView? PlansVault => AppSettingsPage?.FindControl<Controls.AppSettings.AccountSettingsSection>("SectionAccount")?.PlansView;
+
+        internal void RefreshInvites() => _ = PlansVault?.InvitesPanel?.RefreshAsync();
     }
 }

@@ -67,6 +67,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (pill != null) pill.Click += SectionPill_Click;
             }
             SectionScroll.ScrollChanged += SectionScroll_ScrollChanged;
+            Loaded += (_, _) => SyncPlansVisibility();
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) SyncPlansVisibility(); };
         }
 
         // =====================================================================================
@@ -186,8 +188,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             finally { _syncingPills = false; }
             if (key == _raisedKey) return; // the spy calls this every scroll step (P07)
             _raisedKey = key;
+            SyncPlansVisibility();
             SectionChecked?.Invoke();
         }
+
+        private void SyncPlansVisibility() => SectionAccount?.PlansView.SetPlansActive(IsVisible && CheckedSectionKey == "account");
 
         private string? _raisedKey;
 

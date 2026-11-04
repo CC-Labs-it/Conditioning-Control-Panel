@@ -67,6 +67,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "deeper": EnsureDeeperFx(); break;
                     // WPF EnsureExclusivesBuilt registers against "premium" (the old
                     // "exclusives" key redirects there). The view already composes its room.
+                    case "appsettings":
+                        RegisterTabFx("appsettings", PlansVault?.FindControl<AmbientFxCanvas>("ExclusivesAmbientFx"));
+                        break;
                     case "premium":
                         RegisterTabFx("premium", Named<Tabs.ExclusivesTabView>("ExclusivesTab")
                             ?.FindControl<AmbientFxCanvas>("ExclusivesAmbientFx"));

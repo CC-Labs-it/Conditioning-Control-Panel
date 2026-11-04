@@ -8,7 +8,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -62,7 +64,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -150,7 +152,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -158,17 +160,41 @@ public sealed partial class AccountSeedTests
                 w.ShowTab("leaderboard");
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
+                w.CompleteTabTransition(); // settle the entrance before sampling pointer geometry (P08)
                 Dispatcher.UIThread.RunJobs();
+                var batch = global::Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (!batch.Rendered.IsCompleted)
+                {
+                    Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the leaderboard");
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();
+                }
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
+                Assert.Same(row, (w.InputHitTest(at) as Visual)?.GetSelfAndVisualAncestors()
+                    .OfType<ListBoxItem>().FirstOrDefault());
+                var clicks = new List<int>();
+                w.AddHandler(InputElement.PointerPressedEvent, (_, e) => clicks.Add(e.ClickCount),
+                    global::Avalonia.Interactivity.RoutingStrategies.Tunnel, true);
+                // The public headless helpers render around each event, exceeding the double-click
+                // interval on slow runners. Dispatch through the same headless mouse device without
+                // rendering between the presses. Keep real hit testing and gesture recognition.
+                var input = w.PlatformImpl!;
+                var headless = input.GetType().GetInterfaces().Single(t => t.FullName == "Avalonia.Headless.IHeadlessWindow");
+                var down = headless.GetMethod("MouseDown")!
+                    .CreateDelegate<Action<Point, MouseButton, RawInputModifiers>>(input);
+                var up = headless.GetMethod("MouseUp")!
+                    .CreateDelegate<Action<Point, MouseButton, RawInputModifiers>>(input);
                 for (var i = 0; i < 2; i++)
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    down(at, MouseButton.Left, RawInputModifiers.None);
+                    up(at, MouseButton.Left, RawInputModifiers.None);
                 }
+                Assert.Equal(new[] { 1, 2 }, clicks);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
