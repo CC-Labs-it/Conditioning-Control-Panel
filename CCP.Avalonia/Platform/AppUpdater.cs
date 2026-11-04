@@ -175,7 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 await report;
                 if (info?.IsNewer != true || closed || ReleaseFeed.GetSkippedUpdateVersion(UserData) == info.Version) return;
                 var owner = await WaitForStartupOwnerAsync(shell, () => closed, requireAge: true, panelOnly: true);
-                if (owner != null && !_busy) await OfferAsync(owner, info);
+                if (owner != null && !_busy && ReleaseFeed.GetSkippedUpdateVersion(UserData) != info.Version) await OfferAsync(owner, info);
             }
             catch (Exception ex)
             {
