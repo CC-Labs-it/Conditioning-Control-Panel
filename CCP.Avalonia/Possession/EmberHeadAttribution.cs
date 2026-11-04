@@ -22,6 +22,7 @@ internal sealed class EmberHeadAttribution(Canvas layer, Func<Control, Rect?> bo
         public bool Static;
         public TaskCompletionSource Done = new();
         public CancellationTokenRegistration Cancellation;
+        public IDisposable? Timer;
     }
     private readonly List<Mark> _marks = new();
     private bool _subscribed;
@@ -33,6 +34,7 @@ internal sealed class EmberHeadAttribution(Canvas layer, Func<Control, Rect?> bo
         if (target is not Control control) return Task.CompletedTask;
         var mark = Add(control, false);
         mark.Duration = mark.Static ? Math.Max(600, durationMs) : Math.Max(80, durationMs);
+        mark.Timer = DispatcherTimer.RunOnce(() => { Remove(mark); mark.Done.TrySetResult(); }, TimeSpan.FromMilliseconds(mark.Duration));
         mark.Cancellation = ct.Register(() =>
         {
             void Cancel() { Remove(mark); mark.Done.TrySetCanceled(ct); }
@@ -86,7 +88,7 @@ internal sealed class EmberHeadAttribution(Canvas layer, Func<Control, Rect?> bo
     private void Remove(Mark mark)
     {
         if (!_marks.Remove(mark)) return;
-        layer.Children.Remove(mark.Glass); mark.Cancellation.Dispose();
+        layer.Children.Remove(mark.Glass); mark.Cancellation.Dispose(); mark.Timer?.Dispose();
         if (_marks.Count == 0 && _subscribed) { _subscribed = false; frames.Unsubscribe(OnFrame); }
     }
     public void EdgePulse(double strength) { }

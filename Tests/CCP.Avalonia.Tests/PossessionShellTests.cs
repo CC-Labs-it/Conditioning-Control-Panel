@@ -153,6 +153,17 @@ public sealed class PossessionShellTests
         }
         Assert.Equal(saved, (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe)); return Task.CompletedTask;
     });
+    [Fact]
+    public Task ChargeCompletesWhenFramesStop() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var layer = new Canvas();
+        var attribution = new EmberHeadAttribution(layer, _ => new Rect(0, 0, 100, 30), new Frames(), () => false);
+        var charge = attribution.ChargeAsync(Button("BtnVictim"), default, 80);
+        Assert.Single(layer.Children);
+        await charge.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Empty(layer.Children);
+    });
     private sealed class Frames : global::ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource
     {
         private event Action<TimeSpan>? Tick;
