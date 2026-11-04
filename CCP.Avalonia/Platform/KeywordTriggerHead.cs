@@ -284,8 +284,9 @@ internal sealed class KeywordAudioRuntime
                 {
                     if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
                     token.ThrowIfCancellationRequested();
-                    // Old lane's stricter hold: also check after every repeat gap.
-                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return false; }
+                    // Stricter than WPF: recheck the engine-off audio hold after every repeat gap. It holds only
+                    // audio (WPF KeywordTriggerService.cs:1841-1846), so the following visual still fires.
+                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return true; }
                     _stop?.Invoke();
                     var last = i == count - 1;
                     _stop = CoreAudio.PlayStoppable(path,

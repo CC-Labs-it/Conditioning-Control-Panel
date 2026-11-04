@@ -218,20 +218,33 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(count, played.Count);
     });
 
-    [Fact] // Recheck WPF's engine-off audio hold before each pending repeat.
-    public void EngineStoppingDuringRepeatGapCutsTheClipAndHoldsTheRepeat() => Run((engine, s, played) =>
+    [Theory] // Recheck WPF's engine-off audio hold before each pending repeat; it holds audio only (:1841-1846).
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EngineStoppingDuringRepeatGapCutsTheClipAndHoldsTheRepeat(bool legacy) => Run((engine, s, played) =>
     {
-        var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        var t = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)t.Actions[0];
         audio.PlayCount = 2; audio.DelayBetweenMs = 50;
+        if (legacy)
+        {
+            t.AudioFilePath = audio.FilePath; t.AudioPlayCount = 2; t.AudioDelayBetweenMs = 50;
+            t.VisualEffect = KeywordVisualEffect.ExactSubliminal; t.Actions.Clear();
+        }
+        else t.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
         var gap = new TaskCompletionSource();
         engine.Delay = (_, _) => gap.Task;
         Type(engine, "sit");
         Assert.Single(played);
+        Assert.Empty(shown);
         CoreSession.IsEngineRunningProvider = () => false;
         gap.SetResult();
         Dispatcher.UIThread.RunJobs();
         Assert.Single(played.Where(x => x.Path != "stopped"));
         Assert.Equal("stopped", played.Last().Path);
+        Assert.Equal(new[] { "SIT" }, shown);   // the hold cuts audio, never the visual
     });
 
     [Fact] // WPF MainWindow.Patreon.cs:187-189,452-454
