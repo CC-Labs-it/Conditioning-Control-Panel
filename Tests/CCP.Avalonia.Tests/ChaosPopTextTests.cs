@@ -29,6 +29,77 @@ public sealed class ChaosPopTextTests
                 .SetupWithoutStarting();
     }
 
+    // WPF ChaosModeService :2736-2748 and :2780: only a fired toy earns first play.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Snap_field_pays_first_play_once_and_snaps_the_field(bool maxed)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var meta = ChaosMeta.State;
+            int sparks = meta.Sparks;
+            bool played = meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+            bool snapped = meta.FirstTimesAwarded.Contains(ChaosFirstTimes.Snap);
+            bool tasted = meta.FirstTimesAwarded.Contains(ChaosFirstTimes.Taste);
+            meta.FirstTimesAwarded.Add(ChaosFirstTimes.Snap);
+            meta.FirstTimesAwarded.Add(ChaosFirstTimes.Taste);
+            var hook = ChaosRunHost.PopText;
+            var texts = new System.Collections.Generic.List<(double x, double y, string text, Color color)>();
+            ChaosRunHost.PopText = (x, y, text, color) => texts.Add((x, y, text, color));
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                var toy = new ChaosToyState { Id = "snap_field", CooldownSec = 60 };
+                state.ToyPower[toy.Id] = 45;
+                state.ActiveToys.Clear();
+                state.ActiveToys.Add(toy);
+                if (maxed) state.MaxedBoons.Add(toy.Id);
+                var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "pink", IsLive = true, SizePx = 100, FuseMs = 5000, Payload = new FlashPayload() });
+                var treat = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "flash", SizePx = 100, Payload = new FlashPayload() });
+                ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.UseToyById(toy.Id);
+                Assert.False(live.Popping);
+                Assert.False(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+                ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.UseToyById(toy.Id);
+                Assert.True(live.Popping);
+                Assert.Equal(maxed, treat.Popping);
+                Assert.True(toy.IsEffectActive);
+                Assert.Equal(45, toy.CooldownRemainingSec);
+                double x = BubbleOverlay.ChaosLastPopX, y = BubbleOverlay.ChaosLastPopY;
+                Dispatcher.UIThread.RunJobs();
+                string text = $"+15 {ChaosGlyphs.Drops} first play";
+                Assert.Equal(sparks + 15, meta.Sparks);
+                Assert.Contains(text, state.RecentEvents);
+                var word = Assert.Single(texts.Where(t => t.text == text));
+                Assert.Equal((x, y - 30, Color.FromRgb(0xC8, 0xA8, 0xFF)), (word.x, word.y, word.color));
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Assert.False(toy.IsEffectActive);
+                ChaosRunHost.UseToyById(toy.Id); // cooldown denies
+                toy.CooldownRemainingSec = 0;
+                ChaosRunHost.UseToyById(toy.Id); // a later successful fire
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(sparks + 15, meta.Sparks);
+                Assert.Single(texts.Where(t => t.text == text));
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosRunHost.PopText = hook;
+                meta.Sparks = sparks;
+                if (played) meta.FirstTimesAwarded.Add(ChaosFirstTimes.Play); else meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+                if (!snapped) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Snap);
+                if (!tasted) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Taste);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     // WPF BubbleService :4712/:4910-4918: a treat click delivers its variant word
     // at the bubble centre. ChaosPopText :54-55: the announcer switch gates delivery.
     [Theory]
