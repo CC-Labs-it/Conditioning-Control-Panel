@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -127,6 +128,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ShowTrophyStats = true;
 
             InitializeLeaderboardFx();
+            AttachedToVisualTree += (_, _) => { CoreMods.ModChanged += OnLeaderboardModChanged; UpdateModeButtons(); };
+            DetachedFromVisualTree += (_, _) => CoreMods.ModChanged -= OnLeaderboardModChanged;
             Loaded += OnLeaderboardTabLoaded;
             PropertyChanged += OnLeaderboardTabPropertyChanged;
 
@@ -175,11 +178,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// Repaints the segmented Monthly/All-Time pill, as UpdateLeaderboardModeButtons does.
         /// Gold for the active All-Time half is a literal there too.
         ///
-        /// ponytail: the mod accent IS on the seam - <c>CoreMods.AccentColorHex</c> plus
-        /// <c>CoreMods.TryParseHexColor</c> is what WPF's <c>App.Mods.GetAccentColorHex</c>
-        /// reduces to, and this method just has not been switched over. The theme resource used
-        /// here is the same colour until a mod repaints it, so nothing reads wrong meanwhile; the
-        /// change is two lines plus a <c>CoreMods.ModChanged</c> repaint.
         /// </summary>
         private void UpdateModeButtons()
         {
@@ -187,12 +185,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var allTime = this.FindControl<Button>("BtnLeaderboardAllTime");
             if (monthly == null || allTime == null) return;
 
-            var pink = Res("PinkBrush");
+            var pink = new SolidColorBrush(Color.TryParse(CoreMods.AccentColorHex, out var accent) ? accent : Color.Parse("#FF69B4"));
             var inactive = Res("AccentTintedBgBrush");
             var gold = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00));
 
             Set(monthly, IsAllTimeMode ? inactive : pink, IsAllTimeMode ? pink : Brushes.White);
             Set(allTime, IsAllTimeMode ? gold : inactive, IsAllTimeMode ? Res("DarkerBgBrush") : pink);
+
+            var boardAccent = IsAllTimeMode ? gold.Color : pink.Color;
+            Resources["LeaderboardAccentBrush"] = new SolidColorBrush(boardAccent);
+            Resources["LeaderboardTint20Brush"] = new SolidColorBrush(Color.FromArgb(0x20, boardAccent.R, boardAccent.G, boardAccent.B));
+            Resources["LeaderboardTint40Brush"] = new SolidColorBrush(Color.FromArgb(0x40, boardAccent.R, boardAccent.G, boardAccent.B));
 
             // A missing resource leaves the markup's own brush alone; blanking a button's
             // foreground would hide its label, which is worse than the wrong half looking active.
@@ -204,6 +207,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             IBrush? Res(string key) => this.TryFindResource(key, out var v) ? v as IBrush : null;
         }
+
+        private void OnLeaderboardModChanged(object? sender, ModPackage mod) =>
+            Dispatcher.UIThread.Post(() => { if (VisualRoot != null) UpdateModeButtons(); });
 
         /// <summary>
         /// Retitle the Level column for the active board.
