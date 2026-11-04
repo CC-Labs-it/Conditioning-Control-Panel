@@ -7,6 +7,8 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
@@ -66,13 +68,24 @@ public partial class MainShellWindow : IPossessionHost
         if (lockdown.IsActive) PossessionDirector.OnLockdownActivated();
         LayoutUpdated += (_, _) => _possessionDirty = true; // only flag; rebuild floor is 750 ms
         PointerMoved += (_, e) => _possessionPointer = e.GetPosition(this);
+        AddHandler(InputElement.PointerPressedEvent, OnPossessionPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         Closed += (_, _) =>
         {
             _possessionClosed = true;
+            RemoveHandler(InputElement.PointerPressedEvent, OnPossessionPressed);
             lockdownTab?.SetPossessionReadoutDirector(null);
             PossessionDirector.Dispose();
             runtime.UndoAll();
         };
+    }
+    // WPF PossessionEvents.cs:83-99: a press on a card requests a breath.
+    private void OnPossessionPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.Source is not Control source || PossessionTree.IsOffLimits(source)) return;
+        _possessionPointer = e.GetPosition(this);
+        var director = PossessionDirector;
+        var card = director?.TargetFor(source, PossessionRole.Card);
+        if (card != null) director!.RequestReactive("breathe", card);
     }
     IReadOnlyList<PossessionTarget> IPossessionHost.Targets => GetPossessionTargets();
     bool IPossessionHost.IsUsable => IsVisible && !_possessionClosed && WindowState != WindowState.Minimized
