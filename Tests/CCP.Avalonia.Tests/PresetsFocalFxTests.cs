@@ -89,6 +89,26 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task MotionOffCancelsAnInFlightArrivalBeforeRowHover() => WithPresets((host, view) =>
+    {
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var clock = new SharedDeeperThemeTests.StepClock();
+        row.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+        typeof(PresetsTabView).GetMethod("StaggerZones", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(view, null);
+        clock.Step(0); clock.Step(100); Settle();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.True(slide.Y > 0, $"arrival did not start: {slide.Y}");
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged(); Settle();
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y);
+        clock.Step(260); Settle();
+        Assert.Equal(-2, slide.Y);
+        host.MouseMove(new Point(1, 1)); Settle();
+        Assert.Equal(0, slide.Y);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
