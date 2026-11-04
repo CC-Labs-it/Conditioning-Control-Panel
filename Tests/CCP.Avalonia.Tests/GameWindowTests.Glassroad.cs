@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
@@ -40,6 +41,8 @@ public sealed partial class GameWindowTests
     {
         var (oldDoor, oldOwns, oldHttp, oldBase) = (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
+        var settings = CoreSettings.Current;
+        var (oldSettingsId, oldOffline) = (settings.UnifiedId, settings.OfflineMode);
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
@@ -50,6 +53,8 @@ public sealed partial class GameWindowTests
             GameWindow.PbpServerBase = () => GrBase;
             CoreAccount.IsLoggedInProvider = () => true;
             CoreAccount.UnifiedUserId = "discord:12";
+            settings.UnifiedId = "discord:12";
+            settings.OfflineMode = false;
             CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : null;
             MainShellWindow.LeashGateDueProvider = () => false;
             launcher.Hide();
@@ -57,6 +62,8 @@ public sealed partial class GameWindowTests
         }
         finally
         {
+            PrizeOwnership.ResetHeld();
+            (settings.UnifiedId, settings.OfflineMode) = (oldSettingsId, oldOffline);
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
@@ -105,6 +112,16 @@ public sealed partial class GameWindowTests
         Assert.Equal(1500, (int)o["gentle"]!["fadeMs"]!);
         Assert.Equal(GentleVisuals.RiseFloorMs, (int)o["gentle"]!["riseMs"]!);
         Assert.Equal(0.25, (double)o["gentle"]!["speed"]!);
+    }
+
+    [Fact]
+    public void Glassroad_Init_OnlyCarriesSortedKartGrants()
+    {
+        var grants = new[] { "cos.rain.hair.ink", "cos.kart.body.petal", "cos.prime.trail.podium", "cos.kart.body.petal", "cos.prime.paint.gold", "cos.kart." + new string('a', 60) };
+        var frame = GlassroadHostRules.InitFrame("u", "Kit", 2, false, 1, 1, grants);
+        Assert.Equal(new[] { "cos.kart.body.petal", "cos.prime.paint.gold", "cos.prime.trail.podium" },
+            ((JArray)frame["identity"]!["grants"]!).Values<string>().ToArray());
+        Assert.Equal(64, GlassroadHostRules.KartGrants(Enumerable.Range(0, 70).Select(i => $"cos.kart.{i:D2}")).Count);
     }
 
     [Fact]
@@ -173,6 +190,7 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Glassroad_InitFramesNetRelayExitAndWatchdog() => RunGlassroad("1", (_, _, fake) =>
     {
+        PrizeOwnership.ApplySnapshot("discord:12", 1, new[] { "cos.kart.body.petal", "cos.rain.hair.ink" });
         var w = GameWindow.Launch(GameWindow.GlassroadId)!;
         Dispatcher.UIThread.RunJobs();
         var sent = new List<JObject>();
@@ -182,6 +200,7 @@ public sealed partial class GameWindowTests
         Assert.Equal("init", (string?)init["type"]);
         Assert.Equal(2, (int)init["v"]!);
         Assert.Equal("discord:12", (string?)init["identity"]!["unifiedId"]);
+        Assert.Equal(new[] { "cos.kart.body.petal" }, ((JArray)init["identity"]!["grants"]!).Values<string>().ToArray());
         w.Web.OnWebMessage("{\"type\":\"heartbeat\"}");               // first message, still booting: init again
         Assert.Equal(2, sent.Count(o => (string?)o["type"] == "init"));
         w.Web.OnWebMessage("{\"type\":\"heartbeat\"}");               // only once

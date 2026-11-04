@@ -44,6 +44,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (Gate) return current != null && current == _heldAccount && _grants.Contains(id);
         }
 
+        /// <summary>The current account's snapshot, copied under the lock.</summary>
+        internal static string[] Grants()
+        {
+            var current = FriendsHead.Identity()?.UnifiedId;
+            lock (Gate) return current != null && current == _heldAccount ? _grants.ToArray() : Array.Empty<string>();
+        }
+
         /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
         /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
         internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
