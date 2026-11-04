@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
@@ -38,11 +39,9 @@ public sealed class ChaosBoonBarOverlayTests
             var previous = CoreModArt.AudioOverridePathProvider; var audio = CoreAudio.PlayOneShotProvider; var paths = new System.Collections.Generic.List<string>();
             try {
                 var sounds = System.IO.Directory.CreateDirectory(System.IO.Path.Combine(dir.FullName, "resources", "sounds"));
-                for (int i = 1; i <= 3; i++) System.IO.File.WriteAllBytes(System.IO.Path.Combine(sounds.FullName, $"chime{i}.{extension}"), new byte[1]);
-                CoreModArt.AudioOverridePathProvider = name => CoreModArt.ModAudioFile(name, dir.FullName);
+                for (int i = 1; i <= 3; i++) System.IO.File.WriteAllBytes(System.IO.Path.Combine(sounds.FullName, $"chime{i}.{extension}"), new byte[1]); CoreModArt.AudioOverridePathProvider = name => CoreModArt.ModAudioFile(name, dir.FullName);
                 CoreAudio.PlayOneShotProvider = (path, _, tag, _, _) => { if (tag == "bubble-chime") paths.Add(path); }; BubbleOverlay.PlayChime(0.25f);
-                var overridden = Assert.Single(paths); Assert.StartsWith(sounds.FullName, overridden); Assert.EndsWith("." + extension, overridden);
-                foreach (var file in sounds.GetFiles()) file.Delete(); BubbleOverlay.PlayChime(0.25f);
+                var overridden = Assert.Single(paths); Assert.StartsWith(sounds.FullName, overridden); Assert.EndsWith("." + extension, overridden); foreach (var file in sounds.GetFiles()) file.Delete(); BubbleOverlay.PlayChime(0.25f);
                 Assert.Equal(2, paths.Count); Assert.DoesNotContain(dir.FullName, paths[1]); Assert.EndsWith(".mp3", paths[1]);
             }
             finally { CoreModArt.AudioOverridePathProvider = previous; CoreAudio.PlayOneShotProvider = audio; dir.Delete(true); }
@@ -53,17 +52,13 @@ public sealed class ChaosBoonBarOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() => {
             Setup(); var hub = new ChaosHubWindow(); var host = new Window { Width = 500, Height = 150 };
             Assert.Equal(ChaosBoonPool.All.Count, hub.FindControl<StackPanel>("MantrasHost")!.Children.Count); var boon = ChaosBoonPool.All.First(b => !b.IsCurse);
-            var curse = ChaosBoonPool.All.First(b => b.IsCurse); var meta = ChaosMeta.State; var equipped = meta.EquippedStartBoon;
-            var discovered = meta.DiscoveredCodexIds.ToArray();
+            var curse = ChaosBoonPool.All.First(b => b.IsCurse); var meta = ChaosMeta.State; var equipped = meta.EquippedStartBoon; var discovered = meta.DiscoveredCodexIds.ToArray();
             void Click(ChaosBoon b) {
-                host.Content = hub.MantraRow(b); host.Show(); host.UpdateLayout(); host.MouseDown(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
-                host.MouseUp(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
+                host.Content = hub.MantraRow(b); host.Show(); host.UpdateLayout(); host.MouseDown(new Point(30, 30), global::Avalonia.Input.MouseButton.Left); host.MouseUp(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
             }
             try {
-                meta.EquippedStartBoon = null; meta.DiscoveredCodexIds.Remove("boon:" + boon.Id); Click(boon); Assert.Null(meta.EquippedStartBoon);
-                ChaosMeta.MarkDiscovered("boon:" + boon.Id); Click(boon);
-                Assert.Equal(boon.Id, meta.EquippedStartBoon); Assert.Equal(boon.Id, ChaosMetaStore.Load().EquippedStartBoon); ChaosMeta.MarkDiscovered("boon:" + curse.Id);
-                Click(curse); Assert.Equal(boon.Id, meta.EquippedStartBoon); Click(boon);
+                meta.EquippedStartBoon = null; meta.DiscoveredCodexIds.Remove("boon:" + boon.Id); Click(boon); Assert.Null(meta.EquippedStartBoon); ChaosMeta.MarkDiscovered("boon:" + boon.Id); Click(boon);
+                Assert.Equal(boon.Id, meta.EquippedStartBoon); Assert.Equal(boon.Id, ChaosMetaStore.Load().EquippedStartBoon); ChaosMeta.MarkDiscovered("boon:" + curse.Id); Click(curse); Assert.Equal(boon.Id, meta.EquippedStartBoon); Click(boon);
                 Assert.Null(meta.EquippedStartBoon); Assert.Null(ChaosMetaStore.Load().EquippedStartBoon);
             }
             finally {
@@ -76,8 +71,7 @@ public sealed class ChaosBoonBarOverlayTests
     public async Task Equipped_welcome_shower_lands_with_art_and_treats_unless_scripted_or_invalid() {
         await AvaloniaTestDispatcher.RunAsync(() => {
             Setup(); var resolver = ChaosRunState.IconResolver; ChaosRunState.IconResolver = null; var boon = ChaosBoonPool.All.First(b => b.Id == "welcome_shower");
-            var meta = ChaosMeta.State; var equipped = meta.EquippedStartBoon; var audio = CoreAudio.PlayOneShotProvider;
-            var chimes = new System.Collections.Generic.List<float>();
+            var meta = ChaosMeta.State; var equipped = meta.EquippedStartBoon; var audio = CoreAudio.PlayOneShotProvider; var chimes = new System.Collections.Generic.List<float>();
             CoreAudio.PlayOneShotProvider = (_, volume, tag, _, _) => { if (tag == "bubble-chime") chimes.Add(volume); };
             var path = System.IO.Path.Combine(global::ConditioningControlPanel.CorePaths.UserData,
                 "assets", "assets", "Chaos", "boons", boon.Id + ".png"); var prior = System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null; var cache = (System.Collections.Generic.Dictionary<string, global::Avalonia.Media.Imaging.Bitmap?>)typeof(ChaosEffectBannerOverlay).GetField("ArtCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!; var hadCached = cache.TryGetValue(path, out var priorArt); cache.Remove(path);
@@ -85,18 +79,15 @@ public sealed class ChaosBoonBarOverlayTests
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
                 using (var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(2, 2),
                     new Vector(96, 96), global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul))
-                    bitmap.Save(path); meta.EquippedStartBoon = boon.Id; ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
-                var pick = Assert.Single(ChaosRunHost.State!.RunPickTiles);
+                    bitmap.Save(path); meta.EquippedStartBoon = boon.Id; ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); var pick = Assert.Single(ChaosRunHost.State!.RunPickTiles);
                 Assert.Equal(boon.Id, pick.Id); Assert.Contains(ChaosRunHost.State.ActiveBoons, b => b.Id == boon.Id);
                 var tile = (Border)Assert.Single(ChaosRunHost.BoonBar!.Row.Children); var image = Assert.IsType<Image>(((Panel)tile.Child!).Children[0]);
-                Assert.Same(pick.Icon, image.Source); Assert.NotNull(image.Source); Assert.Same(image.Source, ChaosEffectBannerOverlay.ResolveArt(boon.Id, "boons"));
-                Assert.Contains("boon:" + boon.Id, meta.DiscoveredCodexIds);
+                Assert.Same(pick.Icon, image.Source); Assert.NotNull(image.Source); Assert.Same(image.Source, ChaosEffectBannerOverlay.ResolveArt(boon.Id, "boons")); Assert.Contains("boon:" + boon.Id, meta.DiscoveredCodexIds);
                 // WPF ChaosModeService.cs:438-440,1645-1659: six opening treats, chime and feed.
                 Assert.Equal(6, BubbleOverlay.ChaosCount);
                 Assert.All(BubbleOverlay.Field.Bubbles.Where(b => b.Spec != null), b => {
                     Assert.False(b.Spec!.IsLive); Assert.Equal(ChaosMotion.RainDown, b.Spec.Motion);
-                    var y = b.Y; b.Step(); Assert.True(b.Y > y); Assert.Contains(b.Spec.Payload.Kind, new[] { EffectBubblePayloadKind.Flash, EffectBubblePayloadKind.Subliminal });
-                }); var settings = CoreSettings.Current;
+                    var y = b.Y; b.Step(); Assert.True(b.Y > y); Assert.Contains(b.Spec.Payload.Kind, new[] { EffectBubblePayloadKind.Flash, EffectBubblePayloadKind.Subliminal }); }); var settings = CoreSettings.Current;
                 Assert.Equal((float)System.Math.Pow(settings.MasterVolume / 100f * (settings.BubblesVolume / 100f), 1.5) * 0.25f, Assert.Single(chimes));
                 var feed = Assert.Single(ChaosRunHost.State.RecentEvents, e => e.EndsWith(Loc.Get("chaos_welcome_shower_event"), System.StringComparison.Ordinal));
                 Assert.Equal("🚿", global::ConditioningControlPanel.Avalonia.Controls.IconText.Split(feed).Icons.Single()); // WPF :1659 marker
@@ -115,21 +106,42 @@ public sealed class ChaosBoonBarOverlayTests
     }
     [Fact] public async Task Closing_a_draft_retires_its_callback_and_timers() {
         await AvaloniaTestDispatcher.RunAsync(() => {
-            Setup(); var overlay = new ChaosOverlayWindow(); overlay.Show(); int picks = 0;
-            overlay.ShowBoonDraft(1, ChaosBoonPool.All.Take(3).ToList(), _ => picks++, 30); overlay.Close();
+            Setup(); var overlay = new ChaosOverlayWindow(); overlay.Show(); int picks = 0; overlay.ShowBoonDraft(1, ChaosBoonPool.All.Take(3).ToList(), _ => picks++, 30); overlay.Close();
             typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null }); Assert.Equal(0, picks);
             foreach (var name in new[] { "_revealTimer", "_autoResumeTimer", "_confirmTimer", "_onBoonPick" })
-                Assert.Null(typeof(ChaosOverlayWindow).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(overlay));
+                Assert.Null(typeof(ChaosOverlayWindow).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(overlay)); return Task.CompletedTask; });
+    }
+    [Fact] public async Task Saved_unavailable_start_can_be_cleared_or_replaced() {
+        await AvaloniaTestDispatcher.RunAsync(() => {
+            Setup(); var before = ChaosMeta.State; var saved = new ChaosMetaState { EquippedStartBoon = "aftermath" }; ChaosMetaStore.Save(saved); ChaosHubWindow? hub = null; Window? host = null;
+            try {
+                hub = new ChaosHubWindow(); Assert.Equal("aftermath", ChaosMeta.State.EquippedStartBoon);
+                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); Assert.False(ChaosRunHost.State!.AftermathEnabled); Assert.Empty(ChaosRunHost.State.RunPickTiles); ChaosRunHost.ForceShutdown();
+                var unavailable = ChaosBoonPool.All.First(b => b.Id == "aftermath"); var row = hub.MantraRow(unavailable);
+                Assert.True(row.IsVisible); Assert.Contains(row.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("v2_get_unavailable"));
+                host = new Window { Width = 500, Height = 150, Content = row }; host.Show(); host.UpdateLayout(); host.MouseDown(new Point(30, 30), global::Avalonia.Input.MouseButton.Left); host.MouseUp(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
+                Assert.Null(ChaosMeta.State.EquippedStartBoon); Assert.Null(ChaosMetaStore.Load().EquippedStartBoon); Assert.False(hub.MantraRow(unavailable).IsVisible);
+                ChaosMetaStore.Save(saved); hub.Close(); hub = new ChaosHubWindow(); var replacement = ChaosBoonPool.All.First(b => b.Id == "extra_shield"); ChaosMeta.MarkDiscovered("boon:" + replacement.Id);
+                host.Content = hub.MantraRow(replacement); host.UpdateLayout(); host.MouseDown(new Point(30, 30), global::Avalonia.Input.MouseButton.Left); host.MouseUp(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
+                Assert.Equal(replacement.Id, ChaosMetaStore.Load().EquippedStartBoon);
+            } finally { ChaosRunHost.ForceShutdown(); host?.Close(); hub?.Close(); ChaosMetaStore.Save(before); ChaosMeta.Init(); }
             return Task.CompletedTask; });
     }
-    [Fact] public async Task Unsupported_saved_mantra_is_not_applied_or_offered_in_the_hub() {
+    [Fact] public async Task Surrender_deals_distinct_supported_sins_across_consecutive_drafts() {
         await AvaloniaTestDispatcher.RunAsync(() => {
-            Setup(); var meta = ChaosMeta.State; var old = meta.EquippedStartBoon; var hub = new ChaosHubWindow();
+            Setup(); var old = ChaosMeta.State.EquippedStartBoon; int oldGold = ChaosMeta.State.Gold; bool oldSeenGold = ChaosMeta.State.SeenGoldFirst; ChaosMeta.State.EquippedStartBoon = null;
             try {
-                meta.EquippedStartBoon = "aftermath"; Assert.False(hub.MantraRow(ChaosBoonPool.All.First(b => b.Id == "aftermath")).IsVisible);
-                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
-                Assert.False(ChaosRunHost.State!.AftermathEnabled); Assert.Empty(ChaosRunHost.State.RunPickTiles);
-            } finally { ChaosRunHost.ForceShutdown(); hub.Close(); meta.EquippedStartBoon = old; }
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 6, AllowCurses = true, SinChance = 0 }); var state = ChaosRunHost.State!; state.MaxedBoons.Add("surrender");
+                var deal = typeof(ChaosRunHost).GetMethod("DealDraft", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+                for (int i = 0; i < 5; i++) { var cards = (System.Collections.Generic.List<ChaosBoon>)deal.Invoke(null, null)!; var sin = Assert.Single(cards.Where(b => b.IsCurse)); Assert.DoesNotContain(state.ActiveCurses, b => b.Id == sin.Id); state.ApplyBoon(sin); }
+                Assert.Equal(5, state.ActiveCurses.Count); Assert.Equal(0.75, state.FuseTimeMult); Assert.Equal(1.5, state.DetonationDurationMult); Assert.True(state.LastSecondGoldEnabled); Assert.Equal(0.05, state.PrismChance); Assert.True(state.ActivesDisabled); Assert.Equal(3, state.UrgeMult); Assert.Equal(ChaosToyRules.UseResult.Denied, ChaosToyRules.Use(state, new ChaosToyState { Id = "snap_field" }, true));
+                int gold = ChaosMeta.State.Gold; ChaosRunHost.OnDefused(new AmbientBubble { Spec = new EffectBubbleSpec { IsLive = true }, FuseRemainingMs = 500 }); Assert.InRange(ChaosMeta.State.Gold - gold, 5, 9);
+                var safe = new ChaosRunState(new ChaosRunConfig()); safe.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == "bright_colors"), true); var prism = ChaosBubbleVariants.BuildPrism(0.5, 1, safe.PrismTreatOnly); Assert.False(ChaosBubbleVariants.All.First(v => v.Id == prism.MimicVariantId).IsLive);
+                var shielded = new ChaosRunState(new ChaosRunConfig()); shielded.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == "double_or_nothing"), true); Assert.True(shielded.RelapseLoopArmed); Assert.Equal(ChaosRunEngine.EndCheck.Relapse, ChaosRunEngine.CheckEnd(shielded, shielded.RunDurationSec)); Assert.Equal(14, ChaosRunEngine.GoldScaled(shielded, 7));
+                shielded.DropPerPop = 2; Assert.Equal(4, ChaosRunEngine.DropsPerPop(shielded));
+                var firer = EffectPayload.Firer; double during = 0, priorMult = EffectPayload.GlobalDurationMult;
+                try { EffectPayload.Firer = _ => during = EffectPayload.GlobalDurationMult; typeof(ChaosRunHost).GetMethod("FireScaledPayload", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, new object[] { new FlashPayload() }); Assert.Equal(priorMult * 1.5, during); Assert.Equal(priorMult, EffectPayload.GlobalDurationMult); } finally { EffectPayload.Firer = firer; }
+            } finally { ChaosRunHost.ForceShutdown(); ChaosMeta.State.EquippedStartBoon = old; ChaosMeta.State.Gold = oldGold; ChaosMeta.State.SeenGoldFirst = oldSeenGold; }
             return Task.CompletedTask; });
     }
     [Fact] public async Task Draft_does_not_deal_unimplemented_effects() {
@@ -138,8 +150,7 @@ public sealed class ChaosBoonBarOverlayTests
             try {
                 ChaosMeta.State.EquippedStartBoon = null; ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, DraftChoices = 4, AllowCurses = false });
                 var state = ChaosRunHost.State!; foreach (var id in new[] { "size_queen", "welcome_shower" }) state.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == id));
-                var deal = typeof(ChaosRunHost).GetMethod("DealDraft", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
-                var cards = (System.Collections.Generic.List<ChaosBoon>)deal.Invoke(null, null)!;
+                var deal = typeof(ChaosRunHost).GetMethod("DealDraft", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!; var cards = (System.Collections.Generic.List<ChaosBoon>)deal.Invoke(null, null)!;
                 Assert.NotEmpty(cards); Assert.All(cards, b => Assert.Contains(b.Id, new[] { "defuse_chain", "golden_touch", "extra_shield" }));
             } finally { ChaosRunHost.ForceShutdown(); ChaosMeta.State.EquippedStartBoon = old; }
             return Task.CompletedTask; });
@@ -175,15 +186,13 @@ public sealed class ChaosBoonBarOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() => {
             Setup(); var meta = ChaosMeta.State; var equipped = meta.EquippedStartBoon; var oldClock = BubbleOverlay.Field.Clock; var t = System.DateTime.UnixEpoch;
             try {
-                meta.EquippedStartBoon = "size_queen"; ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
-                var state = ChaosRunHost.State!; state.Focus = 100; BubbleOverlay.Field.Clock = () => t = t.AddMilliseconds(32);
+                meta.EquippedStartBoon = "size_queen"; ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); var state = ChaosRunHost.State!; state.Focus = 100; BubbleOverlay.Field.Clock = () => t = t.AddMilliseconds(32);
                 var snap = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, FuseMs = 5000, SizePx = 40 }); BubbleOverlay.Press(snap, snap.CenterX, snap.CenterY);
                 for (int i = 0; i < 40 && !snap.Popping; i++) BubbleOverlay.Field.Step(); Assert.Equal(1, state.Defused); Assert.True(state.RippleEnabled);
                 AmbientBubble Place(double dx, EffectBubbleSpec spec) {
                     var b = BubbleOverlay.SpawnChaos(spec); b.X = snap.CenterX + dx - b.Size / 2; b.Y = snap.CenterY - b.Size / 2; return b;
                 }
-                var treat = Place(50, new EffectBubbleSpec { SizePx = 20 }); var outside = Place(500, new EffectBubbleSpec { SizePx = 20 });
-                var live = Place(10, new EffectBubbleSpec { IsLive = true, FuseMs = 5000, SizePx = 20 });
+                var treat = Place(50, new EffectBubbleSpec { SizePx = 20 }); var outside = Place(500, new EffectBubbleSpec { SizePx = 20 }); var live = Place(10, new EffectBubbleSpec { IsLive = true, FuseMs = 5000, SizePx = 20 });
                 var freeze = Place(10, new EffectBubbleSpec { IsFreeze = true, SizePx = 20 }); var darter = Place(10, new EffectBubbleSpec { IsDarter = true, SizePx = 20 });
                 var before = state.Score; BubbleOverlay.HoldChaos(true); for (int i = 0; i < 20; i++) BubbleOverlay.StepSizeQueenRipples(); Assert.False(treat.Popping);
                 BubbleOverlay.HoldChaos(false); BubbleOverlay.StepSizeQueenRipples(); Assert.False(treat.Popping); BubbleOverlay.StepSizeQueenRipples();
@@ -200,48 +209,32 @@ public sealed class ChaosBoonBarOverlayTests
     [Fact]
     public async Task Fresh_fall_deals_discoverable_mantras_and_selection_persists() {
         await AvaloniaTestDispatcher.RunAsync(async () => {
-            Setup(); var before = ChaosMeta.State; var service = new SettingsService(); CoreSettings.ServiceProvider = () => service; var settings = service.Current;
-            ChaosHubWindow? hub = null; Window? clickHost = null;
+            Setup(); var before = ChaosMeta.State; var service = new SettingsService(); CoreSettings.ServiceProvider = () => service; var settings = service.Current; ChaosHubWindow? hub = null; Window? clickHost = null;
             try {
-                ChaosMetaStore.Save(new ChaosMetaState()); ChaosMeta.Init(); Assert.Empty(ChaosMeta.State.DiscoveredCodexIds);
-                settings.ChaosRunDurationSec = 120; settings.ChaosWaveCount = 3; settings.ChaosBoonDraftEnabled = true;
-                hub = new ChaosHubWindow(); hub.FallIn(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                var overlay = ChaosRunHost.Overlay!; var state = ChaosRunHost.State!;
+                ChaosMetaStore.Save(new ChaosMetaState()); ChaosMeta.Init(); Assert.Empty(ChaosMeta.State.DiscoveredCodexIds); settings.ChaosRunDurationSec = 120; settings.ChaosWaveCount = 3; settings.ChaosBoonDraftEnabled = true;
+                hub = new ChaosHubWindow(); hub.FallIn(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); var overlay = ChaosRunHost.Overlay!; var state = ChaosRunHost.State!;
                 overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); var priorBubble = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, FuseMs = 5000 }); BubbleOverlay.Press(priorBubble, priorBubble.CenterX, priorBubble.CenterY); Assert.True(BubbleOverlay.Field.Held);
                 for (int i = 0; i < 4 * 1200 && !overlay.FindControl<Border>("DraftPanel")!.IsVisible; i++) ChaosRunHost.Tick();
                 Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible); Assert.DoesNotContain(priorBubble, BubbleOverlay.Field.Bubbles); Assert.False(BubbleOverlay.Field.Held); var boundary = state.ElapsedSec;
                 Assert.InRange(boundary, (double)state.RunDurationSec / state.WaveCount, (double)state.RunDurationSec / state.WaveCount + 0.25); Assert.Equal(1, state.WaveIndex);
-                ChaosRunHost.Tick(); Assert.Equal(boundary, state.ElapsedSec); var cards = overlay.FindControl<StackPanel>("BoonCardHost")!;
-                Assert.Equal(3, cards.Children.Count); var panel = (StackPanel)((Border)cards.Children[0]).Child!;
+                ChaosRunHost.Tick(); Assert.Equal(boundary, state.ElapsedSec); var cards = overlay.FindControl<StackPanel>("BoonCardHost")!; Assert.Equal(3, cards.Children.Count); var panel = (StackPanel)((Border)cards.Children[0]).Child!;
                 var description = panel.Children.OfType<TextBlock>().Select(x => x.Text).First(x => x != null); var chosen = ChaosBoonPool.All.First(b => b.Desc == description);
-                Assert.True(ChaosMeta.IsDiscovered("boon:" + chosen.Id)); Assert.Contains("boon:" + chosen.Id, ChaosMetaStore.Load().DiscoveredCodexIds);
-                var accept = Assert.Single(panel.Children.OfType<Button>());
-                Assert.True(accept.IsEnabled); accept.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.False(accept.IsEnabled);
-                var wait = System.Diagnostics.Stopwatch.StartNew();
+                Assert.True(ChaosMeta.IsDiscovered("boon:" + chosen.Id)); Assert.Contains("boon:" + chosen.Id, ChaosMetaStore.Load().DiscoveredCodexIds); var accept = Assert.Single(panel.Children.OfType<Button>());
+                Assert.True(accept.IsEnabled); accept.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.False(accept.IsEnabled); var wait = System.Diagnostics.Stopwatch.StartNew();
                 while (state.RunPickTiles.Count == 0 && wait.Elapsed < System.TimeSpan.FromSeconds(10)) await Task.Delay(20);
                 Assert.Equal(chosen.Id, Assert.Single(state.RunPickTiles).Id); Assert.Equal(2, state.WaveIndex); ChaosRunHost.Tick(); Assert.Equal(boundary, state.ElapsedSec);
                 overlay.FinishCountdown(); ChaosUnlockCardOverlay.Active?.Dismiss(); wait.Restart(); while (ChaosUnlockCardOverlay.IsShowing && wait.Elapsed < System.TimeSpan.FromSeconds(10)) await Task.Delay(20); Assert.False(ChaosUnlockCardOverlay.IsShowing); ChaosRunHost.Tick(); Assert.True(state.ElapsedSec > boundary);
-                ChaosRunHost.ForceShutdown(); hub = new ChaosHubWindow();
-                clickHost = new Window { Width = 500, Height = 150, Content = hub.MantraRow(chosen) }; clickHost.Show(); clickHost.UpdateLayout();
-                clickHost.MouseDown(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
-                clickHost.MouseUp(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
-                Assert.Equal(chosen.Id, ChaosMeta.State.EquippedStartBoon);
-                Assert.Equal(chosen.Id, ChaosMetaStore.Load().EquippedStartBoon);
-                clickHost.Close(); clickHost = null; hub.Close(); hub = null;
+                ChaosRunHost.ForceShutdown(); hub = new ChaosHubWindow(); clickHost = new Window { Width = 500, Height = 150, Content = hub.MantraRow(chosen) }; clickHost.Show(); clickHost.UpdateLayout();
+                clickHost.MouseDown(new Point(30, 30), global::Avalonia.Input.MouseButton.Left); clickHost.MouseUp(new Point(30, 30), global::Avalonia.Input.MouseButton.Left); Assert.Equal(chosen.Id, ChaosMeta.State.EquippedStartBoon);
+                Assert.Equal(chosen.Id, ChaosMetaStore.Load().EquippedStartBoon); clickHost.Close(); clickHost = null; hub.Close(); hub = null;
                 ChaosMeta.State.RunsCompleted = 2; // WPF reveal gate makes skip available on run 3
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, SinChance = 0 });
-                overlay = ChaosRunHost.Overlay!; state = ChaosRunHost.State!; state.RerollsLeft = 1;
-                overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
-                for (int i = 0; i < 80; i++) ChaosRunHost.Tick();
-                var reroll = overlay.FindControl<Button>("BtnReroll")!; Assert.True(reroll.IsVisible);
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, SinChance = 0 }); overlay = ChaosRunHost.Overlay!; state = ChaosRunHost.State!; state.RerollsLeft = 1;
+                overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); for (int i = 0; i < 80; i++) ChaosRunHost.Tick(); var reroll = overlay.FindControl<Button>("BtnReroll")!; Assert.True(reroll.IsVisible);
                 reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(0, state.RerollsLeft);
                 cards = overlay.FindControl<StackPanel>("BoonCardHost")!; Assert.All(cards.Children.OfType<Border>(), c => { var d = ((StackPanel)c.Child!).Children.OfType<TextBlock>().Select(x => x.Text).First(x => x != null); Assert.Contains("boon:" + ChaosBoonPool.All.First(b => b.Desc == d).Id, ChaosMetaStore.Load().DiscoveredCodexIds); });
-                int shields = state.Shields; var skip = overlay.FindControl<Button>("BtnSkipBoon")!; Assert.True(skip.IsVisible);
-                skip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-                Assert.Equal(shields + 1, state.Shields); Assert.Equal(2, state.WaveIndex);
-                ChaosRunHost.RequestStop(); overlay.FinishCountdown();
-                Assert.False(ChaosRunHost.IsDescending); Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
-                ChaosRunHost.ForceShutdown(); ChaosMeta.State.EquippedStartBoon = "";
+                int shields = state.Shields; var skip = overlay.FindControl<Button>("BtnSkipBoon")!; Assert.True(skip.IsVisible); skip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(shields + 1, state.Shields); Assert.Equal(2, state.WaveIndex); ChaosRunHost.RequestStop(); overlay.FinishCountdown();
+                Assert.False(ChaosRunHost.IsDescending); Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible); ChaosRunHost.ForceShutdown(); ChaosMeta.State.EquippedStartBoon = "";
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, AllowCurses = true, SinChance = 1 }); overlay = ChaosRunHost.Overlay!; state = ChaosRunHost.State!; state.MaxedBoons.Add("surrender"); state.SinExtraMult = 0.15;
                 overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); for (int i = 0; i < 80; i++) ChaosRunHost.Tick();
                 cards = overlay.FindControl<StackPanel>("BoonCardHost")!; var sinPanel = (StackPanel)((Border)cards.Children.Last()).Child!; var giveIn = Assert.Single(sinPanel.Children.OfType<Button>()); wait.Restart(); while (!giveIn.IsEnabled && wait.Elapsed < System.TimeSpan.FromSeconds(10)) await Task.Delay(20); Assert.True(giveIn.IsEnabled);

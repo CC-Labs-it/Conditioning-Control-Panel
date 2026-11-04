@@ -1334,9 +1334,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal Border MantraRow(ChaosBoon b)
         {
             // WPF ChaosHubWindow.xaml.cs:1271-1273: discovery gates the start pick.
-            bool seen = ChaosMeta.IsDiscovered("boon:" + b.Id);
             bool isStart = ChaosMeta.State.EquippedStartBoon == b.Id;
-            bool pickable = seen && !b.IsCurse && ChaosRunHost.IsAvailableBoon(b);
+            bool available = ChaosRunHost.IsAvailableBoon(b);
+            bool seen = isStart || ChaosMeta.IsDiscovered("boon:" + b.Id);
+            bool pickable = !b.IsCurse && (isStart || (seen && available));
             var accent = b.IsCurse ? Color.FromRgb(0xFF, 0x8A, 0x8A) : Color.FromRgb(0x9C, 0xE8, 0xA0);
 
             var row = new Grid();
@@ -1373,12 +1374,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 var badge = new TextBlock
                 {
-                    Text = isStart ? null : b.IsCurse ? "taken, never chosen" : "set start",
+                    Text = isStart ? (available ? null : ConditioningControlPanel.Localization.Loc.Get("v2_get_unavailable")) : b.IsCurse ? "taken, never chosen" : "set start",
                     Foreground = isStart ? GoldBrush : new SolidColorBrush(Color.FromArgb(0x90, 0xB8, 0xB8, 0xD0)),
                     FontSize = 10.5, FontWeight = isStart ? FontWeight.Bold : FontWeight.Normal,
                     VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0)
                 };
-                if (isStart)   // WPF "start ★": the star is a filled icon after the word
+                if (isStart && available)   // WPF "start ★": the star is a filled icon after the word
                     badge.Inlines = new InlineCollection
                     {
                         new Run("start "),
@@ -1390,7 +1391,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             var card = new Border
             {
-                IsVisible = ChaosRunHost.IsAvailableBoon(b),
+                IsVisible = available || isStart,
                 Child = row,
                 Background = RowBg,
                 BorderBrush = isStart
