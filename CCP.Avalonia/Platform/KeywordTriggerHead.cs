@@ -43,6 +43,7 @@ internal static class KeywordTriggerHead
     internal static void DetachKeyboard()
     {
         Interlocked.Increment(ref _generation);
+        Engine.ClearInput();
         if (_subscribed) Win32PanicKey.KeyDown -= OnKey;
         _subscribed = false;
     }
@@ -124,12 +125,14 @@ internal sealed class KeywordAudioRuntime
     internal bool IsActive { get; private set; }
     internal void Start() { IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
+    internal void ClearInput() => _input.Clear();
 
     private bool Accept(string? process, bool own)
     {
         var s = CoreSettings.Current;
         if (!IsActive || !s.KeywordTriggersEnabled ||
-            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
+            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness")))
+        { _input.Clear(); return false; }
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
