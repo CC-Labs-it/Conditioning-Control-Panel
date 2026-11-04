@@ -13,7 +13,8 @@ public partial class MainShellWindow
 {
     private IDisposable? _cameraRegistration;
     private DispatcherTimer? _cameraBindingWatch;
-    private (string Key, uint Mods, bool Global, bool Recal)? _cameraBinding;
+    private (string Key, uint Mods, bool Global)? _cameraBinding;
+    private KeyBinding? _cameraKeyBinding;
     private bool _cameraClosed;
     internal Func<Window, string, uint, Action, IDisposable?> RegisterCamera = CameraGlobalHotkey.Register;
     internal bool CameraPlatformSupported = OperatingSystem.IsWindows();
@@ -22,7 +23,7 @@ public partial class MainShellWindow
     // WPF MainWindow.SessionIO.cs:1324. The timer also catches settings loaded by a preset.
     internal void StartCameraHotkey()
     {
-        if (!CameraPlatformSupported || _cameraBindingWatch != null || _cameraClosed) return;
+        if (_cameraBindingWatch != null || _cameraClosed) return;
         ApplyCameraHotkey();
         _cameraBindingWatch = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
             (_, _) => ApplyCameraHotkey());
@@ -45,21 +46,35 @@ public partial class MainShellWindow
     {
         var (key, mods) = CameraChord();
         var s = CoreSettings.Current;
-        var binding = (key, mods, s.CompanionPrompt?.CameraShortcutGlobal != false, s.WebcamQuickRecalHotkeyEnabled);
+        var binding = (key, mods, s.CompanionPrompt?.CameraShortcutGlobal != false);
         if (_cameraBinding == binding) return;
         _cameraBinding = binding;
         _cameraRegistration?.Dispose();
         _cameraRegistration = null;
-        // Reserve Quick Recal's chord even if the native registration has failed.
-        if (_cameraClosed || !binding.Item3 || (binding.Item4 && HotkeyNames.Matches(Key.G, key) && mods == 3)) return;
+        if (_cameraKeyBinding != null) KeyBindings.Remove(_cameraKeyBinding);
+        var localMods = (mods & 1) != 0 ? KeyModifiers.Alt : KeyModifiers.None;
+        if ((mods & 2) != 0) localMods |= KeyModifiers.Control;
+        if ((mods & 4) != 0) localMods |= KeyModifiers.Shift;
+        if ((mods & 8) != 0) localMods |= KeyModifiers.Meta;
+        _cameraKeyBinding = new KeyBinding { Gesture = new KeyGesture(Enum.Parse<Key>(key), localMods),
+            Command = new NavSectionCommand(ToggleCameraFromHotkey) };
+        KeyBindings.Insert(0, _cameraKeyBinding);
+        if (_cameraClosed || !CameraPlatformSupported || !binding.Item3) return;
+        // Camera registers first in WPF. Release our Quick Recal registration on a rebind
+        // to its chord, then let Quick Recal retry after the camera attempt.
+        if (HotkeyNames.Matches(Key.G, key) && mods == 3 && _quickRecalRegistration != null)
+        {
+            _quickRecalRegistration.Dispose();
+            _quickRecalRegistration = null;
+            _quickRecalBinding = null;
+        }
         try
         {
             _cameraRegistration = RegisterCamera(this, key, mods, () => Dispatcher.UIThread.Post(() =>
             {
                 // A queued message from an old registration must not toggle a newly rebound camera.
                 if (!_cameraClosed && _cameraBinding == binding && CameraChord() == (key, mods)
-                    && CoreSettings.Current.CompanionPrompt?.CameraShortcutGlobal != false
-                    && !(CoreSettings.Current.WebcamQuickRecalHotkeyEnabled && HotkeyNames.Matches(Key.G, key) && mods == 3))
+                    && CoreSettings.Current.CompanionPrompt?.CameraShortcutGlobal != false)
                     ToggleCameraFromHotkey();
             }));
         }
@@ -70,11 +85,16 @@ public partial class MainShellWindow
     {
         if (!WebcamTracker.Instance.IsRunning && !WebcamConsent.IsCurrent(CoreSettings.Current))
         {
-            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
-            if (!IsVisible) Show();
-            Activate();
+            try
+            {
+                if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+                if (!IsVisible) Show();
+                Activate();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Camera hotkey window restore failed"); }
         }
-        this.FindControl<BlinkTrainerTabView>("BlinkTrainerTab")?.BtnBlinkTrainerStartStopTracker_Click(null, null!);
+        var tab = this.FindControl<BlinkTrainerTabView>("BlinkTrainerTab");
+        if (tab != null) _ = tab.ToggleWebcamTrackingAsync(announce: true);
     }
 
     internal void StopCameraHotkey()
@@ -84,5 +104,7 @@ public partial class MainShellWindow
         _cameraBindingWatch = null;
         _cameraRegistration?.Dispose();
         _cameraRegistration = null;
+        if (_cameraKeyBinding != null) KeyBindings.Remove(_cameraKeyBinding);
+        _cameraKeyBinding = null;
     }
 }
