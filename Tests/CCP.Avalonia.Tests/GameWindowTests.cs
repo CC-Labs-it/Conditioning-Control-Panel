@@ -1020,6 +1020,47 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
+    public void Dtrh_Fullscreen_NativeExitUpdatesPageBeforeNextToggle() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        // WPF DtrhHostService.cs:488-502 echoes the actual host state. The page's
+        // scene.js:75-84,482-486 uses that echo to choose the next toggle request.
+        var w = GameWindow.Launch("dtrh")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        var sent = new List<JObject>();
+        bool pageFullscreen = false;
+        w.Posted += json =>
+        {
+            var frame = JObject.Parse(json);
+            sent.Add(frame);
+            if ((string?)frame["type"] == "fullscreen") pageFullscreen = (bool)frame["on"]!;
+        };
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.True(pageFullscreen);
+        Assert.Single(sent); // the host-driven transition has one echo
+        sent.Clear();
+        w.WindowState = global::Avalonia.Controls.WindowState.Normal; // native exit
+        var notification = Assert.Single(sent);
+        Assert.Equal("fullscreen", (string?)notification["type"]);
+        Assert.False((bool)notification["on"]!);
+        Assert.False(pageFullscreen);
+        sent.Clear();
+        w.WindowState = global::Avalonia.Controls.WindowState.Maximized;
+        Assert.Empty(sent); // windowed to windowed is not a fullscreen edge
+        w.HandleMessage(new JObject { ["type"] = "fullscreen-set", ["on"] = !pageFullscreen }.ToString());
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        Assert.True(pageFullscreen);
+        Assert.Single(sent);
+        sent.Clear();
+        w.WindowState = global::Avalonia.Controls.WindowState.Normal;
+        Assert.False(pageFullscreen);
+        Assert.Single(sent);
+        sent.Clear();
+        w.WindowState = global::Avalonia.Controls.WindowState.FullScreen; // native entry
+        Assert.True(pageFullscreen);
+        Assert.Single(sent);
+    });
+
+    [Fact]
     public void Dtrh_Fullscreen_ExternalExitCanEnterAgain() => RunDtrh(lab: true, (_, _, _, _) =>
     {
         var w = GameWindow.Launch("dtrh")!;

@@ -100,7 +100,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 PropertyChanged += (_, e) =>
                 {
                     if (e.Property == WindowStateProperty && !_dtrhChangingMode)
-                        _dtrhFullscreen = WindowState == WindowState.FullScreen;
+                    {
+                        bool on = WindowState == WindowState.FullScreen;
+                        if (on == _dtrhFullscreen) return;
+                        _dtrhFullscreen = on;
+                        // WPF DtrhHostService.cs:488-502 echoes the host state to the page.
+                        // Also report native changes, so the page's next toggle uses the actual state.
+                        if (IsReady && !_closing)
+                        {
+                            try { Post(new { type = "fullscreen", on }); }
+                            catch (Exception ex) { Log.Debug("DtrhHost: fullscreen notification: {E}", ex.Message); }
+                        }
+                    }
                 };
             }
             Web = new WebHost();
