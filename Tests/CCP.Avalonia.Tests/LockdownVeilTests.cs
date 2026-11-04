@@ -483,6 +483,13 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Milliseconds;
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => Milliseconds;
+    }
+
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
@@ -491,6 +498,7 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        shell.LockdownFlashClock = new FlashClock();
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -502,6 +510,8 @@ public sealed class LockdownVeilTests
         Assert.Null(shell.LockdownFlash);
 
         ld.Activate(TimeSpan.FromMinutes(30));
+        Dispatcher.UIThread.RunJobs();
+        System.Threading.Thread.Sleep(750); // simulate a busy UI thread past the 600 ms animation
         Frame();
         Assert.True(res.TryGetResource("PinkBrush", null, out pb));
         Assert.Equal("ffdc143c", Hex(pb));
@@ -510,7 +520,7 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
         shell.PaintLockdownFlash(300);
@@ -527,6 +537,25 @@ public sealed class LockdownVeilTests
         Assert.Equal(windowBefore, Hex(shell.Background));
         Assert.IsAssignableFrom<global::Avalonia.Media.ILinearGradientBrush>(card.BorderBrush);
         Assert.False(shell.LockdownThemed);
+    });
+
+    [Fact]
+    public void FlashTimer_UsesElapsedTimeAndRemovesAt600Milliseconds() => Run((shell, ld) =>
+    {
+        var clock = new FlashClock();
+        shell.LockdownFlashClock = clock;
+        ld.Activate(TimeSpan.FromMinutes(30));
+        Frame();
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
+        clock.Milliseconds = 300;
+        System.Threading.Thread.Sleep(100);
+        Frame();
+        Assert.Equal(0.25, flash.Opacity, 3);
+        clock.Milliseconds = 600;
+        System.Threading.Thread.Sleep(100);
+        Frame();
+        Assert.Null(shell.LockdownFlash);
+        Assert.Null(flash.Parent);
     });
 
     /// <summary>WPF OnLockdownActivated / Deactivated (Lab.cs:640-656 / 726-739): the Studio rack's
