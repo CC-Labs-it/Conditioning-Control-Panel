@@ -170,6 +170,15 @@ internal sealed class AchievementEngine
         if (Progress.TotalFlashImages >= AchievementRules.RetinalBurnFlashImages) TryUnlock("retinal_burn");
     }
 
+    /// <summary>WPF GamificationBridge.OnKeywordTriggerFired: count every fire and unlock at its thresholds.</summary>
+    public void TrackKeywordTrigger()
+    {
+        Progress.KeywordTriggersFired++;
+        _isDirty = true;
+        TryUnlockExclusive("magic_word");
+        if (Progress.KeywordTriggersFired >= AchievementRules.PavlovKeywordTriggers) TryUnlockExclusive("pavlov");
+    }
+
     /// <summary>WPF GamificationBridge.OnGazePopped: one bubble popped by gaze, hands_free (exclusive) at 50.</summary>
     public void TrackGazePop()
     {
