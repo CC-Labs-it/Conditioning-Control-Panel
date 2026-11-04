@@ -252,7 +252,7 @@ public sealed partial class AccountSeedTests
     [Theory] [InlineData(true, false, null)] [InlineData(false, true, null)] [InlineData(false, false, "restore")]
     public void UnknownPreviousAccount_PreservesLocalProgressAndAchievements(bool completed, bool offered, string? pending) => WithFreshInstall(async () => {
         var s = CoreSettings.Current;
-        SignIn("u1", """{"user":{"unified_id":"u1","level":2,"xp":900,"current_season":"2026-08","curve_epoch":1}}""");
+        var (wire, _, _) = SignIn("u1", """{"user":{"unified_id":"u1","level":2,"xp":900,"current_season":"2026-08","curve_epoch":1}}""");
         s.UnifiedId = null; s.PlayerLevel = 80; s.PlayerXP = 250; s.DescentEpoch = 1; s.PendingDescentMigrationChoice = pending; s.DescentMigrationCompleted = completed; s.DescentMigrationOffered = offered; var beforeXp = ProfileAdopt.TotalXp(s);
         var property = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
         var previous = property.GetValue(null); var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(TestUserDataProfile.Root, Guid.NewGuid() + ".json")));
@@ -264,7 +264,7 @@ public sealed partial class AccountSeedTests
                 dialog.Succeed(new V2AuthService.V2User { UnifiedId = "u1", Level = 2, Xp = 900 }, "tok", null, false);
                 await dialog.ProfileLoad;
             });
-            Assert.Equal(80, s.PlayerLevel); Assert.Equal(250, s.PlayerXP); Assert.Equal(beforeXp, ProfileAdopt.TotalXp(s)); Assert.True(engine.Progress.IsUnlocked("first_steps")); Assert.False(s.DescentMigrationCompleted); Assert.False(s.DescentMigrationOffered);
+            Assert.False(Assert.Single(wire.Syncs).ContainsKey("descent_migration")); Assert.Equal(80, s.PlayerLevel); Assert.Equal(250, s.PlayerXP); Assert.Equal(beforeXp, ProfileAdopt.TotalXp(s)); Assert.True(engine.Progress.IsUnlocked("first_steps")); Assert.False(s.DescentMigrationCompleted); Assert.False(s.DescentMigrationOffered);
         }
         finally { property.SetValue(null, previous); }
     });
