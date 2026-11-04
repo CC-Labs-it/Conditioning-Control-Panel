@@ -76,6 +76,31 @@ public sealed class InvitePanelTests
         finally { (InviteRewards.UnlockedProvider, InviteRewards.TryUnlockProvider) = (oldUnlocked, oldUnlock); }
     });
 
+    /// <summary>WPF BadgeImage(grey: !reached): a locked rung's badge is greyscale, an earned one keeps its colour.</summary>
+    [Fact]
+    public Task LockedRungBadgesAreGreyEarnedOnesKeepTheirColour() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsurePlatform();
+        var rung = InviteRewards.Ladder[0];
+        Assert.Equal(0, ColouredPixels(InvitePanel.RungTile(rung, converted: 0, isNext: true)));
+        Assert.True(ColouredPixels(InvitePanel.RungTile(rung, converted: rung.Converted, isNext: false)) > 100);
+        return Task.CompletedTask;
+    });
+
+    private static int ColouredPixels(Control tile)
+    {
+        var bmp = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(All<Image>(tile).First().Source);
+        int w = bmp.PixelSize.Width, h = bmp.PixelSize.Height, stride = w * 4;
+        var px = new byte[stride * h];
+        var pin = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try { bmp.CopyPixels(new PixelRect(0, 0, w, h), pin.AddrOfPinnedObject(), px.Length, stride); }
+        finally { pin.Free(); }
+        int n = 0;
+        for (var i = 0; i < px.Length; i += 4)
+            if (Math.Abs(px[i] - px[i + 1]) > 8 || Math.Abs(px[i + 1] - px[i + 2]) > 8) n++;
+        return n;
+    }
+
     private static void Body(InvitePanel panel)
     {
         Assert.True(panel.IsVisible);

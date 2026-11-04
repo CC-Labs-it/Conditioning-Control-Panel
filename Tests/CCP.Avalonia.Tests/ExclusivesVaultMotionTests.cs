@@ -88,9 +88,14 @@ public sealed class ExclusivesVaultMotionTests
             Assert.True(((ScaleTransform)pill.RenderTransform!).ScaleX > 1);
 
             // Another tab: every loop parks and the room rests.
+            var kept = view.MotionParts;
+            Assert.NotNull(kept.Loop);
+            Assert.NotNull(kept.Sheen);
             shell.ShowTab("settings"); Settle();
             Assert.False(view.MotionRunning);
             Assert.Equal(0, view.SheenCount);
+            Assert.False(kept.Loop!.IsTicking);   // parked clocks really stop, not just hide
+            Assert.False(kept.Sheen!.IsTicking);
             Assert.False(Lit(mark));
             Assert.Equal(1, pill.Opacity);
             Assert.Equal(1, ((ScaleTransform)pill.RenderTransform!).ScaleX);
@@ -99,9 +104,20 @@ public sealed class ExclusivesVaultMotionTests
             CoreEntitlement.HasPremiumProvider = () => true;
             shell.ShowTab("premium"); Settle();
             Assert.True(view.MotionRunning);
+            // perf-exclusives-p95: a show wakes the parked loop and sheens; it does not rebuild them.
+            Assert.Same(kept.Loop, view.MotionParts.Loop);
+            Assert.Same(kept.Sheen, view.MotionParts.Sheen);
+            Assert.True(view.SheenCount > 0);
+            // A show starts afresh like WPF: the zoom from 1.0 and every sheen sweeping on entry.
+            Step(view, 0);
+            Assert.Equal(1, ((ScaleTransform)view.FindControl<Image>("SpotArtImage")!.RenderTransform!).ScaleX);
+            double rest = kept.Sheen.BandOffset;
+            Clock.Now += (long)(0.65 * TimeSpan.TicksPerSecond);
+            kept.Sheen.Tick();
+            Assert.True(kept.Sheen.BandOffset > rest);
             Assert.Same(p1, view.LitPlate);
             Assert.Equal(0.3, view.FindControl<Border>("TierPlate2")!.Opacity);
-            Step(view, 3.4 * 2 + 1.7);
+            Step(view, 3.4 * 2 + 1.7 - 0.65);   // 0.65 s already spent on the sheen above
             Assert.InRange(p1.Opacity, 0.87, 0.88);
 
             // Reduced motion: no clock, the lit plate rests at full.
