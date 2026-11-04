@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -86,6 +88,23 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(0.97, press.ScaleX);
         host.MouseMove(new Point(1, 1)); host.MouseUp(new Point(1, 1), MouseButton.Left, RawInputModifiers.None); Settle();
         Assert.Equal(1, press.ScaleX);
+    });
+
+    [Fact]
+    public Task MotionOffCancelsRunningEntranceBeforeHover() => WithPresets((host, view) =>
+    {
+        view.IsVisible = false;
+        view.IsVisible = true;
+        var entrance = Assert.IsType<CancellationTokenSource>(typeof(PresetsTabView)
+            .GetField("_entranceCancellation", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(view));
+        Assert.False(entrance.IsCancellationRequested);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(entrance.IsCancellationRequested);
+        host.MouseMove(new Point(1, 1)); Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single().Y);
     });
 
     [Fact]
