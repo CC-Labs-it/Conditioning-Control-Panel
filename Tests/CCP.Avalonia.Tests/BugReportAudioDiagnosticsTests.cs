@@ -5,13 +5,12 @@ using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Services;
 using Serilog;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class BugReportAudioDiagnosticsTests
 {
-    [Fact]
-    public void DraftUsesAvaloniaLogAndKeepsSampledEngineOffAudio()
+    [Theory]
+    [InlineData(true), InlineData(false)]
+    public void DraftUsesAvaloniaLogAndKeepsSampledEngineOffAudio(bool rollover)
     {
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);
         var dir = Path.Combine(CorePaths.UserData, "logs");
@@ -23,7 +22,7 @@ public sealed class BugReportAudioDiagnosticsTests
             BugReportService.DiagnosticTailProvider, BugReportService.FlightRecorderDump,
             BugReportService.NewestFlightRecorderDump, CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider);
         var file = new Program.ReportLogFile();
-        var logger = new LoggerConfiguration().WriteTo.File(av, fileSizeLimitBytes: 10000,
+        var logger = new LoggerConfiguration().WriteTo.File(av, fileSizeLimitBytes: rollover ? 10000 : 1000000,
             rollOnFileSizeLimit: true, hooks: file).CreateLogger();
         try
         {
@@ -33,17 +32,18 @@ public sealed class BugReportAudioDiagnosticsTests
             (BugReportService.SessionLogFile, BugReportService.DiagnosticTailProvider,
                 BugReportService.FlightRecorderDump, BugReportService.NewestFlightRecorderDump) = (null, null, null, null);
             Program.ConfigureBugReportLogging(file);
-            Log.Information("{Padding}", new string('x', 11000));
+            Log.Information("{Padding}", new string('x', rollover ? 11000 : 1000001));
             var first = file.CurrentFile;
             Log.Information("next file");
             Assert.NotNull(first);
             Assert.NotEqual(first, file.CurrentFile);
             CoreAudioDiagnostics.Note("report-" + id, "C:clip.wav");
-            for (var i = 0; i < 120; i++) Log.Information("normal event {Number}", i);
+            if (rollover) { Log.Information("{Padding}", new string('x', 11000)); Log.Information("after rollover"); }
+            else for (var i = 0; i < 2100; i++) Log.Information("x");
             var service = new BugReportService();
             var draft = service.CreateDraft("", "", includeAppLog: true);
             Assert.Contains("[VideoDiag] AUDIO", draft.ScrubbedAppLog);
-            Assert.Contains("started 'clip.wav'", draft.ScrubbedAppLog);
+            Assert.Contains($"engine off: report-{id} started 'clip.wav'", draft.ScrubbedAppLog);
             Assert.DoesNotContain("stale-wpf-marker", draft.ScrubbedAppLog);
             BugReportService.SessionLogFile = () => wpf;
             Assert.Equal(file.CurrentFile, BugReportService.PickLogFile(dir));

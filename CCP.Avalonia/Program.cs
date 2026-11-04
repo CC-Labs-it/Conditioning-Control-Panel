@@ -251,8 +251,11 @@ namespace ConditioningControlPanel.Avalonia
             return 0;
         }
 
-        internal static void ConfigureBugReportLogging(ReportLogFile file) =>
+        internal static void ConfigureBugReportLogging(ReportLogFile file)
+        {
             Services.BugReportService.AppLogFileSelector = () => file.CurrentFile;
+            Services.BugReportService.DiagnosticTailProvider = CoreAudioDiagnostics.Tail;
+        }
 
         internal sealed class ReportLogFile : Serilog.Sinks.File.FileLifecycleHooks
         {

@@ -6,9 +6,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Services.AudioPlayer;
 using Xunit;
 using WpfAudio = ConditioningControlPanel.Services.Audio.EngineOffAudioLog;
-
 namespace CCP.Core.Tests;
-
 public class Sync7AudioTests
 {
     [Fact]
@@ -28,7 +26,6 @@ public class Sync7AudioTests
         }
         finally { CoreAudioDiagnostics.ResetForTests(); }
     }
-
     [Fact]
     public void HeldLinesKeepTheirOwnSharedSlotAndWpfWording()
     {
@@ -39,7 +36,6 @@ public class Sync7AudioTests
         Assert.Null(CoreAudioDiagnostics.HeldLineFor(player, "audio", now.AddSeconds(9)));
         Assert.NotNull(CoreAudioDiagnostics.HeldLineFor(player, "audio", now.AddSeconds(10)));
     }
-
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(false, true, true)]
@@ -50,14 +46,12 @@ public class Sync7AudioTests
         Assert.Equal(running, WpfAudio.IsRunning(engine, session));
         Assert.Equal(running, CoreAudioDiagnostics.IsRunning(engine, session));
     }
-
     [Fact]
     public void PlaylistRulesHaveOnlyOneProductSource()
     {
         var source = Assert.Single(SourceRoots.EnumerateProductSources("AudioPlaylistRules.cs"));
         Assert.Equal(Path.Combine(SourceRoots.RepoRoot, "CCP.Core", "Services", "AudioPlayer", "AudioPlaylistRules.cs"), source);
     }
-
     [Fact]
     public void DiagnosticsArePrivateAndRateLimitedPerPlayer()
     {
@@ -77,7 +71,6 @@ public class Sync7AudioTests
         Assert.Equal("clip.wav", WpfAudio.NameOf("C:clip.wav"));
         Assert.Equal("?", CoreAudioDiagnostics.NameOf("z:"));
     }
-
     [Fact]
     public void PlaylistEditsPreserveTheSelectedTrackAndIgnoreDuplicatePaths()
     {
@@ -94,7 +87,6 @@ public class Sync7AudioTests
         Assert.Equal(-1, r.CurrentIndex);
         Assert.Empty(r.Tracks);
     }
-
     [Fact]
     public void AutomaticEndStopsButManualNextWrapsAndLoopOneOnlyRepeatsAutomatically()
     {
@@ -112,7 +104,6 @@ public class Sync7AudioTests
         Assert.Equal(25, AudioPlaylistRules.EffectiveVolume(50, 50));
         Assert.Equal(100, AudioPlaylistRules.EffectiveVolume(200, 200));
     }
-
     [Fact]
     public void ShuffleVisitsEachTrackOnceAndBackUsesHistory()
     {
