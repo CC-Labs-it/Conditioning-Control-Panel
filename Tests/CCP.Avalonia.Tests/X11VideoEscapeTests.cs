@@ -30,47 +30,37 @@ public sealed class X11VideoEscapeTests
     }
 
     [Fact]
-    public void Raw_escape_routes_repeats_and_releases_without_consuming_other_keys()
+    public void Raw_escape_retains_ownership_until_release()
     {
-        var oldCode = X11PanicKey.BoundKeycode;
-        var s = CoreSettings.Current;
+        var oldCode = X11PanicKey.BoundKeycode; var s = CoreSettings.Current;
         var oldPanic = (s.PanicKeyEnabled, s.PanicKey);
-        var oldState = Win32Input.EscapeState;
-        var oldPost = Win32Input.PostEscape;
-        var oldTry = Win32Input.TryVideoEscape;
+        var oldState = Win32Input.EscapeState; var oldPost = Win32Input.PostEscape; var oldTry = Win32Input.TryVideoEscape;
         try
         {
-            (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape");
-            X11PanicKey.BindKeycodeForTest(9);
-            bool video = true, leashTaskActive = true;
-            int deliveries = 0, panic = 0;
+            (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape"); X11PanicKey.BindKeycodeForTest(9);
+            bool video = true, leashTaskActive = true; int deliveries = 0, panic = 0;
             Win32Input.EscapeState = () => (video, false, false);
-            Win32Input.PostEscape = action => action();
-            Win32Input.TryVideoEscape = () => { deliveries++; return true; };
+            Win32Input.PostEscape = action => action(); Win32Input.TryVideoEscape = () => { deliveries++; return true; };
             var events = new (bool, int, int)[] { (true, 10, 9), (false, 10, 9), (true, 0, 0),
                 (true, 9, 9), (true, 9, 9), (false, 10, 9), (true, 9, 9), (false, 9, 9), (true, 9, 9) };
             int i = 0;
-            ulong time = 1000;
             (bool, int, int)? Next()
             {
                 if (i == 3) Assert.Equal(0, deliveries);
-                if (i == 7) Assert.Equal(3, deliveries);
-                if (i == 4) time += 201; // repeat after the video grace dedup window
+                if (i == 7) Assert.Equal(1, deliveries);
+                if (i == 8) { System.Threading.Thread.Sleep(650); Assert.Equal(1, deliveries); } // release stopped repeats
                 return i < events.Length ? events[i++] : null;
             }
-            X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { panic++; leashTaskActive = false; }, Next, injectedTime: () => time);
-            Assert.Equal(4, deliveries); // every video-owned key-down, including repeats
+            X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { panic++; leashTaskActive = false; }, Next);
+            Assert.Equal(2, deliveries); // one delivery per physical press
             Assert.Equal(0, panic);      // video owns both, even when panic is bound to Escape
             Assert.True(leashTaskActive); // the leash path was never invoked
 
             // When panic can run, WPF leaves Escape to panic instead of the video.
-            (s.PanicKeyEnabled, s.PanicKey) = (true, "Escape");
-            i = 0;
+            (s.PanicKeyEnabled, s.PanicKey) = (true, "Escape"); i = 0;
             var one = new (bool, int, int)[] { (true, 9, 9) };
             X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { panic++; leashTaskActive = false; }, () => i < one.Length ? one[i++] : null);
-            Assert.Equal(1, panic);
-            Assert.False(leashTaskActive);
-            Assert.Equal(4, deliveries);
+            Assert.Equal(1, panic); Assert.False(leashTaskActive); Assert.Equal(2, deliveries);
         }
         finally
         {
@@ -278,7 +268,7 @@ public sealed class X11VideoEscapeTests
     });
 
     [Fact]
-    public async Task Unfocused_escape_reaches_the_video_grace_door_without_stopping_the_engine()
+    public async Task Held_unfocused_escape_pauses_then_dismisses_video()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -286,12 +276,9 @@ public sealed class X11VideoEscapeTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var o = MandatoryVideoOverlay.Instance;
-            var saved = o.Scheduler;
-            var s = CoreSettings.Current;
+            var saved = o.Scheduler; var s = CoreSettings.Current;
             var original = (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll, s.AttentionChecksEnabled);
-            var oldAvailable = o.PlayerAvailableOverride;
-            var oldPause = o.SetPlayerPauseOverride;
-            var oldPost = Win32Input.PostEscape;
+            var oldAvailable = o.PlayerAvailableOverride; var oldPause = o.SetPlayerPauseOverride; var oldPost = Win32Input.PostEscape;
             var surfaces = (System.Collections.Generic.List<MandatoryVideoOverlay.Surface>)typeof(MandatoryVideoOverlay)
                 .GetField("_surfaces", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(o)!;
             var lastGrace = typeof(MandatoryVideoOverlay).GetField("_lastGraceUtc", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
@@ -301,28 +288,38 @@ public sealed class X11VideoEscapeTests
             try
             {
                 (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll, s.AttentionChecksEnabled) = (true, "F12", false, false);
-                lastGrace.SetValue(o, default(DateTime));
-                consumed.SetValue(o, false);
+                lastGrace.SetValue(o, default(DateTime)); consumed.SetValue(o, false);
                 bool decoderPaused = false;
                 o.PlayerAvailableOverride = () => true;
                 o.SetPlayerPauseOverride = value => decoderPaused = value;
-                var layer = new Canvas();
-                var grace = new Border { IsVisible = false };
+                var layer = new Canvas(); var grace = new Border { IsVisible = false };
                 surfaces.Add(new MandatoryVideoOverlay.Surface(new Window(), new Image(), new Border(), new Image(),
                     layer, grace, new TextBlock(), null!));
                 Assert.True(v.Trigger(false));
-                var sent = false;
-                X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { }, () => sent ? null : (sent = true, 9, 9));
-                Dispatcher.UIThread.RunJobs();
-                Assert.True(o.GracePaused);
-                Assert.True(decoderPaused);
-                Assert.True(grace.IsVisible);
-                Assert.False(layer.IsHitTestVisible);
-                Assert.True(v.IsPlaying);
-                o.ResumeFromGrace("test");
-                Assert.False(decoderPaused);
-                Assert.False(o.GracePaused);
-                v.Stop();
+                int step = 0;
+                (bool, int, int)? Next()
+                {
+                    if (step++ == 0) return (true, 9, 9);
+                    if (step == 2)
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.True(o.GracePaused); Assert.True(decoderPaused); Assert.True(grace.IsVisible);
+                        Assert.False(layer.IsHitTestVisible); Assert.True(v.IsPlaying);
+                        o.ResumeFromGrace("test"); Assert.False(decoderPaused); Assert.False(o.GracePaused);
+                        lastGrace.SetValue(o, default(DateTime)); consumed.SetValue(o, false);
+                        return (false, 9, 9);
+                    }
+                    if (step == 3) return (true, 9, 9);
+                    if (step == 4)
+                    {
+                        Dispatcher.UIThread.RunJobs(); Assert.True(o.GracePaused); Assert.True(v.IsPlaying);
+                        System.Threading.Thread.Sleep(1000); Dispatcher.UIThread.RunJobs();
+                        return (false, 9, 9);
+                    }
+                    return null;
+                }
+                X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { }, Next);
+                Assert.False(v.IsPlaying);
                 Assert.Empty(o.Windows);
             }
             finally

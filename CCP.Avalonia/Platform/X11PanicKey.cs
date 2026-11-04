@@ -46,6 +46,18 @@ internal static class X11PanicKey
     [DllImport(LibXi)] private static extern int XIQueryVersion(IntPtr display, ref int major, ref int minor);
     [DllImport(LibXi)] private static extern int XISelectEvents(IntPtr display, IntPtr window, ref XIEventMask mask, int count);
 
+    [DllImport(LibX11)] private static extern int XGetKeyboardControl(IntPtr display, [Out] byte[] state);
+    [DllImport(LibX11)] private static extern bool XkbGetAutoRepeatRate(IntPtr display, uint device, out uint delay, out uint interval);
+    private static (int, int)? RepeatRate(IntPtr display, int code)
+    {
+        var state = new byte[128];
+        XGetKeyboardControl(display, state);
+        int offset = 16 + IntPtr.Size;
+        if (BitConverter.ToInt32(state, offset) == 0 || (state[offset + 4 + (code >> 3)] & (1 << (code & 7))) == 0) return null;
+        return XkbGetAutoRepeatRate(display, 0x100, out var delay, out var interval) && delay > 0 && interval > 0
+            ? ((int)delay, (int)interval) : (500, 33);
+    }
+
     private static int _started;
 
     /// <summary>True once the listener is up: a panic press can actually arrive (LockCardWindow's
@@ -86,18 +98,23 @@ internal static class X11PanicKey
     /// <summary>The event loop shared by the XInput listener and its tests. A null event ends the
     /// injected stream; a negative code resets held-key state after an X keyboard mapping change.</summary>
     internal static void ListenRawEvents(Func<(bool Press, int Code, int EscapeCode)?> next,
-        Action onPanic, Action<int>? otherPress = null, Func<ulong>? eventTime = null)
+        Action onPanic, Action<int>? otherPress = null, Func<ulong>? eventTime = null, Func<int, (int, int)?>? repeatRate = null)
     {
         bool escapeDown = false, videoOwnsPress = false;
-        while (next() is { } key)
+        var gate = new object();
+        Timer? repeat = null;
+        int generation = 0;
+        void StopRepeat() { lock (gate) { generation++; repeat?.Dispose(); repeat = null; } }
+        try { while (next() is { } key)
         {
             try
             {
-                if (key.Code < 0) { escapeDown = videoOwnsPress = false; continue; }
+                if (key.Code < 0) { StopRepeat(); escapeDown = videoOwnsPress = false; continue; }
                 if (key.EscapeCode != 0 && key.Code == key.EscapeCode)
                 {
                     if (!key.Press)
                     {
+                        StopRepeat();
                         escapeDown = videoOwnsPress = false;
                         Route(false, key.Code, onPanic);
                         continue;
@@ -112,8 +129,16 @@ internal static class X11PanicKey
                             videoOwnsPress = false;
                             Log.Warning(ex, "Global Esc: ownership check failed; panic proceeds");
                         }
+                        if (videoOwnsPress && (repeatRate == null ? (500, 33) : repeatRate(key.Code) ?? (0, 0)) is var rate && rate.Item1 > 0)
+                        {
+                            lock (gate)
+                            {
+                                int version = ++generation;
+                                repeat = new Timer(_ => { lock (gate) if (version == generation) try { Win32Input.QueueVideoEscape(); }
+                                    catch (Exception ex) { Log.Warning(ex, "Global Esc: repeat failed"); } }, null, rate.Item1, rate.Item2);
+                            }
+                        }
                     }
-                    else if (videoOwnsPress) Win32Input.QueueVideoEscape(eventTime?.Invoke());
                     // A video-owned press returns before WPF's panic and leash branches, including repeats.
                     if (videoOwnsPress) { otherPress?.Invoke(key.Code); continue; }
                 }
@@ -121,7 +146,7 @@ internal static class X11PanicKey
                 if (key.Press) otherPress?.Invoke(key.Code);
             }
             catch (Exception ex) { Log.Warning(ex, "Panic key: listener event failed"); }
-        }
+        } } finally { StopRepeat(); }
     }
 
     [DllImport(LibX11)] private static extern int XQueryKeymap(IntPtr display, byte[] keys);
@@ -254,7 +279,8 @@ internal static class X11PanicKey
                     if (KeysymOf(k) is var ts and not 0 && keycode == XKeysymToKeycode(display, ts)) { toy(k); break; }
         }
         try { ListenRawEvents(injectedNext ?? Next, onPress, injectedNext == null ? OtherPress : injectedOther,
-            injectedNext == null ? () => eventTime : injectedTime); }
+            injectedNext == null ? () => eventTime : injectedTime,
+            injectedNext == null ? code => RepeatRate(display, code) : null); }
         finally { if (ev != IntPtr.Zero) Marshal.FreeHGlobal(ev); }
     }
 
