@@ -79,6 +79,12 @@ namespace ConditioningControlPanel.Services
                 case "stop_bubbles": CoreBubbles.Stop(); return null;
                 case "start_bounce_text": CoreBouncingText.Start(); return null;
                 case "stop_bounce_text": CoreBouncingText.Stop(); return null;
+                // WPF RemoteControlService.cs:1413 validates the only URL supplied by a controller.
+                // Playback is not wired yet; eligible links remain refused instead of reporting success.
+                case "play_hypnotube":
+                    if (p == null) return NotOnThisBuild;
+                    return Helpers.HtUrlHelper.IsEligibleHtUrl(p["url"]?.ToString())
+                        ? NotOnThisBuild : "not an eligible HypnoTube URL";
                 case "trigger_video": return CoreEngine.Video?.Trigger() == true ? null : CoreEngine.Video == null ? NotOnThisBuild : "a video is already playing";
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
                 case "stop_video": CoreEngine.Video?.Stop(); return null;
