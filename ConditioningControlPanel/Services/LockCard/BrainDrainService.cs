@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
@@ -60,7 +58,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
-                try { return Path.Combine(App.EffectiveAssetsPath, "braindrain"); }
+                try { System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(App).TypeHandle); return BrainDrainClips.AudioFolderPath; }
                 catch { return LegacyAudioFolderPath; }   // pre-settings startup / test host
             }
         }
@@ -72,48 +70,20 @@ namespace ConditioningControlPanel.Services
         /// the place to put new ones, never written to, never emptied, and deliberately NOT added to
         /// installer-content-deletions (that would delete their files on the next update).
         /// </summary>
-        public static string LegacyAudioFolderPath =>
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", "braindrain");
-
-        /// <summary>Supported clip extensions. One list, used by both folder scans.</summary>
-        private static readonly string[] AudioExtensions = { ".mp3", ".wav", ".ogg" };
+        public static string LegacyAudioFolderPath => BrainDrainClips.LegacyFolderPath;
 
         /// <summary>Create the primary (assets) clip folder if it does not exist yet and hand back
         /// its path. Used by the feature card's "Open folder" button so Explorer never opens onto
         /// nothing, and by the first scan so the folder EXISTS to be found.</summary>
-        public static string EnsureAudioFolder()
-        {
-            var path = AudioFolderPath;
-            try { Directory.CreateDirectory(path); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "BrainDrain: could not create the audio folder"); }
-            return path;
-        }
+        public static string EnsureAudioFolder() => BrainDrainClips.EnsureFolder(AudioFolderPath);
 
         /// <summary>How many clips live in the LEGACY install folder. The feature card shows a
         /// "your old clips still work, but new ones go here" note only when this is non-zero, so a
         /// clean install never sees a line about a folder it has no reason to care about.</summary>
         public static int LegacyAudioFileCount()
         {
-            try { return EnumerateClips(LegacyAudioFolderPath).Count(); }
+            try { return BrainDrainClips.Count(LegacyAudioFolderPath); }
             catch { return 0; }
-        }
-
-        /// <summary>Clip files directly inside <paramref name="folder"/>, or nothing when the folder
-        /// is absent/unreadable. Never throws - a missing legacy folder is the normal case.</summary>
-        private static IEnumerable<string> EnumerateClips(string folder)
-        {
-            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
-                return Array.Empty<string>();
-            try
-            {
-                return Directory.GetFiles(folder, "*.*")
-                    .Where(f => AudioExtensions.Any(ext => f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)));
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning(ex, "BrainDrain: could not read clip folder {Path}", folder);
-                return Array.Empty<string>();
-            }
         }
 
         /// <summary>
@@ -161,26 +131,10 @@ namespace ConditioningControlPanel.Services
             {
                 var assetsFolder = EnsureAudioFolder();
                 var legacyFolder = LegacyAudioFolderPath;
-
                 App.Logger?.Debug("BrainDrain: Looking for audio files in {Path} (+ legacy {Legacy})",
                     assetsFolder, legacyFolder);
-
-                // Assets first so its entries claim their file names; the legacy folder then only
-                // contributes names the assets folder does not already have.
-                var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var file in EnumerateClips(assetsFolder))
-                    byName[Path.GetFileName(file)] = file;
-
-                int legacyAdded = 0;
-                foreach (var file in EnumerateClips(legacyFolder))
-                {
-                    var name = Path.GetFileName(file);
-                    if (byName.ContainsKey(name)) continue;
-                    byName[name] = file;
-                    legacyAdded++;
-                }
-
-                _audioFiles = byName.Values.ToArray();
+                var scan = BrainDrainClips.Scan(assetsFolder, legacyFolder, out var legacyAdded, ensurePrimary: false);
+                _audioFiles = scan.Clips;
 
                 if (_audioFiles.Length == 0)
                 {

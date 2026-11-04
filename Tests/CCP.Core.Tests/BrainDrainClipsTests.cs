@@ -69,4 +69,45 @@ public class BrainDrainClipsTests
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
+    [Fact]
+    public void LegacyOnlyCountDoesNotCreatePrimaryAndAddedCountExcludesDuplicates()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ccp-brain-seam-" + Guid.NewGuid());
+        var primary = Path.Combine(root, "primary"); var legacy = Path.Combine(root, "legacy");
+        try
+        {
+            Directory.CreateDirectory(legacy);
+            File.WriteAllText(Path.Combine(legacy, "same.MP3"), "old");
+            File.WriteAllText(Path.Combine(legacy, "other.ogg"), "old");
+            Assert.Equal(2, BrainDrainClips.Count(legacy));
+            Assert.False(Directory.Exists(primary));
+            BrainDrainClips.Scan(primary, legacy, out var missingAdded, ensurePrimary: false);
+            Assert.Equal(2, missingAdded); Assert.False(Directory.Exists(primary));
+            Directory.CreateDirectory(primary);
+            File.WriteAllText(Path.Combine(primary, "same.mp3"), "new");
+            var scan = BrainDrainClips.Scan(primary, legacy, out var added);
+            Assert.Equal(2, scan.LegacyCount); Assert.Equal(1, added); Assert.Equal(2, scan.Clips.Length);
+            BrainDrainClips.Scan(legacy, legacy, out var sameFolderAdded);
+            Assert.Equal(0, sameFolderAdded);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void WpfServiceUsesSharedDiscoveryAndRetainsLogCount()
+    {
+        var root = Directory.GetParent(Directory.GetParent(Here())!.FullName)!.FullName;
+        var source = File.ReadAllText(Path.Combine(root, "ConditioningControlPanel", "Services", "LockCard", "BrainDrainService.cs"));
+        Assert.Contains("RunClassConstructor(typeof(App).TypeHandle)", source);
+        Assert.Contains("BrainDrainClips.AudioFolderPath", source);
+        Assert.Contains("BrainDrainClips.LegacyFolderPath", source);
+        Assert.Contains("BrainDrainClips.EnsureFolder(AudioFolderPath)", source);
+        Assert.Contains("BrainDrainClips.Count(LegacyAudioFolderPath)", source);
+        Assert.Contains("BrainDrainClips.Scan(assetsFolder, legacyFolder, out var legacyAdded, ensurePrimary: false)", source);
+        Assert.Contains("_audioFiles.Length, legacyAdded", source);
+        Assert.DoesNotContain("private static readonly string[] AudioExtensions", source);
+    }
+
+    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
+
 }

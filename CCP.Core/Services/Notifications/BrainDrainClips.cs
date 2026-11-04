@@ -38,12 +38,19 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        public static (string[] Clips, int LegacyCount) Scan(string primary, string legacy)
+        // WPF BrainDrainService.cs:95-99: counting legacy files never creates the primary folder.
+        public static int Count(string folder) => Enumerate(folder).Length;
+
+        public static (string[] Clips, int LegacyCount) Scan(string primary, string legacy) => Scan(primary, legacy, out _);
+
+        // WPF BrainDrainService.cs:168-183: log only legacy files that actually joined the pool.
+        public static (string[] Clips, int LegacyCount) Scan(string primary, string legacy, out int legacyAdded, bool ensurePrimary = true)
         {
             var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var file in Enumerate(EnsureFolder(primary))) byName[Path.GetFileName(file)] = file;
+            foreach (var file in Enumerate(ensurePrimary ? EnsureFolder(primary) : primary)) byName[Path.GetFileName(file)] = file;
             var old = Enumerate(legacy);
-            foreach (var file in old) byName.TryAdd(Path.GetFileName(file), file);
+            legacyAdded = 0;
+            foreach (var file in old) if (byName.TryAdd(Path.GetFileName(file), file)) legacyAdded++;
             return (byName.Values.ToArray(), old.Length);
         }
     }
