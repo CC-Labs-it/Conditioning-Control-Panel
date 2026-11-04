@@ -214,6 +214,29 @@ public sealed class GateFxAdornerTests
 
     private static readonly SteppedClock Clock = new();
 
+    [Fact]
+    public Task ChasterLinkCometStopsOnCancelHideAndReducedMotion() => Run(shell =>
+    {
+        shell.ShowTab("chaster"); Settle(shell);
+        var tab = shell.Named<ChasterTabView>("ChasterTab")!;
+        tab.ShowLinking(true);
+        var comet = Assert.IsType<PerimeterCometAdorner>(tab.LinkComet);
+        Assert.True(comet.IsLapping);
+        tab.ShowLinking(false);
+        Assert.Null(tab.LinkComet);
+        Assert.False(comet.IsTicking);
+        tab.ShowLinking(true);
+        comet = Assert.IsType<PerimeterCometAdorner>(tab.LinkComet);
+        shell.ShowTab("presets"); Settle(shell);
+        Assert.Null(tab.LinkComet);
+        Assert.False(comet.IsTicking);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        shell.ShowTab("chaster"); Settle(shell);
+        tab.ShowLinking(true);
+        Assert.Null(tab.LinkComet);
+        tab.ShowLinking(false);
+    });
+
     private static void Settle(Window w) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
 
     private static Task Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>

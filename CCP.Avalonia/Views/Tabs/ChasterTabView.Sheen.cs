@@ -8,6 +8,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class ChasterTabView
 {
     private IDisposable? _heroVisibility;
+    internal PerimeterCometAdorner? LinkComet { get; private set; }
+
+    private void SetLinkComet(bool linking)
+    {
+        PerimeterCometAdorner.Detach(LinkComet);
+        LinkComet = null;
+        if (linking && IsEffectivelyVisible && AmbientFxCanvas.Env.AllowAmbientLoops)
+            LinkComet = PerimeterCometAdorner.Attach(HeroCard, 18, 6);
+    }
     internal CardSheenAdorner? HeroSheen { get; private set; }
 
     private void InitializeHeroSheen()
@@ -17,20 +26,28 @@ public partial class ChasterTabView
             _heroVisibility = EffectiveVisibility.Watch(this, () =>
             {
                 RefreshHeroSheen();
+                if (!IsEffectivelyVisible) SetLinkComet(false);
                 // Parent visibility changes precede the card’s layer/visibility propagation.
                 Dispatcher.UIThread.Post(RefreshHeroSheen, DispatcherPriority.Loaded);
             });
-            AmbientFxCanvas.Env.MotionGateChanged += RefreshHeroSheen;
+            AmbientFxCanvas.Env.MotionGateChanged += RefreshChasterMotion;
             CoreMods.ModChanged += HeroSheenModChanged;
             Dispatcher.UIThread.Post(RefreshHeroSheen, DispatcherPriority.Loaded);
         };
         DetachedFromVisualTree += (_, _) =>
         {
             _heroVisibility?.Dispose(); _heroVisibility = null;
-            AmbientFxCanvas.Env.MotionGateChanged -= RefreshHeroSheen;
+            AmbientFxCanvas.Env.MotionGateChanged -= RefreshChasterMotion;
             CoreMods.ModChanged -= HeroSheenModChanged;
             ParkHeroSheen();
+            SetLinkComet(false);
         };
+    }
+
+    private void RefreshChasterMotion()
+    {
+        RefreshHeroSheen();
+        SetLinkComet(LinkingRow.IsVisible);
     }
 
     private void HeroSheenModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(RefreshHeroSheen);
