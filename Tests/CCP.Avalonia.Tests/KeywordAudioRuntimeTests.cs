@@ -114,11 +114,11 @@ public sealed class KeywordAudioRuntimeTests
             Assert.Single(played); // merged audio dispatch stays single
             Type(engine, "sit"); // per-keyword mute
             Assert.Equal(2, quests.Progress.WeeklyQuest.CurrentProgress);
-            engine.FireDemo("sit", "tutorial"); // demo dispatch is not implemented here
-            Assert.Equal(2, quests.Progress.WeeklyQuest.CurrentProgress);
+            engine.FireDemo("sit", "tutorial");
+            Assert.Equal(3, quests.Progress.WeeklyQuest.CurrentProgress);
             CoreEntitlement.HasPremiumProvider = () => false;
             Type(engine, "sit");
-            Assert.Equal(2, quests.Progress.WeeklyQuest.CurrentProgress);
+            Assert.Equal(3, quests.Progress.WeeklyQuest.CurrentProgress);
         }
         finally
         {
@@ -148,6 +148,44 @@ public sealed class KeywordAudioRuntimeTests
             Type(engine, "sit");
             Assert.Single(played);
             Assert.Equal(1, quests.Progress.DailyQuests[0]!.CurrentProgress);
+        }
+        finally
+        {
+            PanicAftermath.EndQuiet();
+            AvApp.Quests = oldQuests;
+            quests.Dispose();
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    });
+
+    [Fact]
+    public void TutorialDemoCreditsOnlyAcceptedFiresIncludingDuringPanicQuiet() => Run((engine, s, played) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-demo-quest-").FullName;
+        var oldQuests = AvApp.Quests;
+        var quests = new QuestService(null, dir);
+        try
+        {
+            quests.Progress.DailyQuests = new List<ActiveQuest> { new("trigger_words_d") };
+            AvApp.Quests = quests;
+            CoreEntitlement.HasPremiumProvider = () => false;
+            engine.FireDemo("sit", "Tutorial");
+            Assert.Equal(0, quests.Progress.DailyQuests[0]!.CurrentProgress);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            engine.FireDemo(" ", "Tutorial");
+            Assert.Equal(0, quests.Progress.DailyQuests[0]!.CurrentProgress);
+            engine.Stop();
+            s.KeywordTriggersEnabled = false;
+            engine.FireDemo("sit", "Tutorial");
+            Assert.Equal(1, quests.Progress.DailyQuests[0]!.CurrentProgress);
+            PanicAftermath.ArmQuiet();
+            engine.FireDemo("sit", "Tutorial");
+            Assert.Equal(2, quests.Progress.DailyQuests[0]!.CurrentProgress);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            CoreEntitlement.IsFreeTodayProvider = _ => true;
+            engine.FireDemo("sit", "Tutorial");
+            Assert.Equal(3, quests.Progress.DailyQuests[0]!.CurrentProgress);
+            Assert.Empty(played);
         }
         finally
         {

@@ -178,9 +178,13 @@ internal sealed class KeywordAudioRuntime
         if (audio != null) Play(audio);
     }
 
-    // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
-    // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
-    internal void FireDemo(string keyword, string source) { }
+    // WPF demo dispatches directly, including during panic quiet. Its visual and avatar actions remain unported.
+    internal void FireDemo(string keyword, string source)
+    {
+        if (string.IsNullOrWhiteSpace(keyword) ||
+            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        App.Quests?.TrackKeywordTrigger();
+    }
 
     internal void StopAudio()
     {
