@@ -103,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool IsManuallyPaused => _manualPaused;
         /// <summary>Tests: stop the real 4 Hz timer so only stepped <see cref="Tick"/> calls move the clock (P08).</summary>
         internal static void StopTimerForTests() => _runTimer?.Stop();
+        internal static TimeSpan? SpawnIntervalForTests => _spawnTimer?.Interval;
 
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
@@ -410,6 +411,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double elapsed = ChaosRunEngine.Advance(_state);
             if (_slowRemainingSec > 0 && (_slowRemainingSec -= ChaosRunEngine.TICK_SEC) <= 0) EndSlow();
             if (_freezeRemainingSec > 0 && (_freezeRemainingSec -= ChaosRunEngine.TICK_SEC) <= 0) EndFreeze();
+            // WPF :977-982: refill a completely empty field without waiting for the spawn timer.
+            if (_freezeRemainingSec <= 0 && BubbleOverlay.Field.Bubbles.Count == 0) SpawnTick();
             UpdateHeatTint();
             TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).

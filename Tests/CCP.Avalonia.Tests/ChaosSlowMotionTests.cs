@@ -17,6 +17,81 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class ChaosSlowMotionTests
 {
+    [Fact]
+    public Task Empty_field_refills_during_slow_motion_and_retimes_after_expiry() => WithSpawnRun(() =>
+    {
+        ChaosRunHost.SpawnTick();
+        ChaosRunHost.ActivatePendulum();
+        BubbleOverlay.PopChaos(Assert.Single(BubbleOverlay.Field.Bubbles));
+        ChaosRunHost.Tick(); // a popping bubble still occupies the WPF field
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        for (int i = 0; i < 20; i++) BubbleOverlay.Field.Step();
+        Assert.Empty(BubbleOverlay.Field.Bubbles);
+        ChaosRunHost.Tick();
+        Assert.Equal(1, BubbleOverlay.ChaosCount);
+        var state = ChaosRunHost.State!;
+        var slowInterval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(
+            state.RunIntensity, state.Config.DifficultyMult, state.Config.SpawnRateMult, 0.12));
+        Assert.Equal(slowInterval, ChaosRunHost.SpawnIntervalForTests);
+        ChaosRunHost.Tick();
+        Assert.Equal(1, BubbleOverlay.ChaosCount); // occupied field is not rescued
+        for (int i = 0; i < 7; i++) ChaosRunHost.Tick();
+        Assert.Equal(0, ChaosRunHost.SlowRemainingSec);
+        BubbleOverlay.PopChaos(Assert.Single(BubbleOverlay.Field.Bubbles));
+        ChaosRunHost.Tick(); // the pop animation still occupies the WPF field
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        for (int i = 0; i < 20; i++) BubbleOverlay.Field.Step();
+        Assert.Empty(BubbleOverlay.Field.Bubbles);
+        ChaosRunHost.Tick();
+        Assert.Equal(1, BubbleOverlay.ChaosCount);
+        var normalInterval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(
+            state.RunIntensity, state.Config.DifficultyMult, state.Config.SpawnRateMult));
+        Assert.Equal(normalInterval, ChaosRunHost.SpawnIntervalForTests);
+        Assert.True(normalInterval < slowInterval);
+    });
+
+    [Fact]
+    public Task Empty_field_rescue_waits_during_pause_and_freeze() => WithSpawnRun(() =>
+    {
+        ChaosRunHost.ToggleManualPause();
+        ChaosRunHost.Tick();
+        Assert.Empty(BubbleOverlay.Field.Bubbles);
+        ChaosRunHost.ToggleManualPause();
+        ChaosRunHost.ActivateFreeze();
+        for (int i = 0; i < 13; i++) ChaosRunHost.Tick();
+        Assert.Empty(BubbleOverlay.Field.Bubbles);
+        Assert.True(ChaosRunHost.FreezeRemainingSec > 0);
+        ChaosRunHost.Tick(); // expiry and rescue share this run tick in WPF
+        Assert.Equal(0, ChaosRunHost.FreezeRemainingSec);
+        Assert.Equal(1, BubbleOverlay.ChaosCount);
+    });
+
+    private static Task WithSpawnRun(Action test) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        bool checks = ChaosEffectBannerOverlay.SkipPlatformChecksForTests;
+        try
+        {
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+                EnabledVariants = new List<string> { "flash" } });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            ChaosRunHost.State!.PrismChance = 0;
+            BubbleOverlay.Field.Bubbles.Clear();
+            test();
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = checks;
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
