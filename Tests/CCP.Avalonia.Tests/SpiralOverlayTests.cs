@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -36,6 +37,69 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
     [InlineData(double.NaN, 0.0)]
     public void Opacity_curve_matches_wpf_722(double slider, double painted)
         => Assert.Equal(painted, SpiralFrames.Paint(slider), 10);
+
+    [Fact]
+    public async Task Unified_gif_shares_stage_animates_repaints_and_releases_its_lease()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-spiral-stage-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            SubliminalSilentHintTests.EnsureAvalonia();
+            var configure = SharedOverlayHost.Configure;
+            var transparent = SharedOverlayHost.IsTransparent;
+            var provider = CoreSession.IsEngineRunningProvider;
+            var s = CoreSettings.Current;
+            var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralOpacity, s.SpiralTargetMonitor, s.UnifiedOverlayHost);
+            var owner = new Window();
+            Window? stage = null;
+            SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
+            SharedOverlayHost.IsTransparent = _ => true;
+            CoreSession.IsEngineRunningProvider = () => true;
+            SpiralOverlay.SkipPlatformChecksForTests = true;
+            owner.Show();
+            try
+            {
+                await Settle();
+                (s.SpiralEnabled, s.SpiralPath, s.SpiralOpacity, s.SpiralTargetMonitor, s.UnifiedOverlayHost) = (true, gif, 40, -1, true);
+                SpiralOverlay.Refresh(owner);
+                await Settle();
+                Assert.True(SpiralOverlay.IsShowing && SpiralOverlay.IsAnimating);
+                Assert.Empty(SpiralOverlay.Shown);
+                var canvas = Assert.IsType<Grid>(stage!.Content);
+                var root = Assert.Single(canvas.Children.OfType<Panel>());
+                Assert.Equal(ConditioningControlPanel.Services.Compositor.CompositorLayers.Spiral, root.ZIndex);
+                var image = Assert.IsType<Image>(Assert.Single(root.Children));
+                stage.UpdateLayout();
+                Assert.Equal(canvas.Bounds.Size, image.Bounds.Size);
+                var first = image.Source;
+                SpiralOverlay.Tick();
+                Assert.NotSame(first, image.Source);
+                s.SpiralOpacity = 80;
+                SpiralOverlay.Refresh(owner);
+                Assert.Equal(SpiralFrames.Paint(0.8), image.Opacity, 10);
+                var bounds = owner.Screens.Primary!.Bounds;
+                using var other = SharedOverlayHost.Acquire(bounds)!;
+                SpiralOverlay.CloseAll();
+                Assert.True(stage.IsVisible);
+                Assert.Empty(canvas.Children);
+                other.Dispose();
+                Assert.False(stage.IsVisible);
+            }
+            finally
+            {
+                SpiralOverlay.CloseAll();
+                SpiralOverlay.SkipPlatformChecksForTests = false;
+                CoreSession.IsEngineRunningProvider = provider;
+                (s.SpiralEnabled, s.SpiralPath, s.SpiralOpacity, s.SpiralTargetMonitor, s.UnifiedOverlayHost) = saved;
+                SharedOverlayHost.Configure = configure;
+                SharedOverlayHost.IsTransparent = transparent;
+                owner.Close();
+                Directory.Delete(dir, true);
+            }
+        });
+    }
 
     [Fact]
     public void Frame_plan_caps_size_frames_and_scales_the_delay()
