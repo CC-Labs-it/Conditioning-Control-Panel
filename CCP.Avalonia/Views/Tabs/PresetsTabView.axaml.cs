@@ -276,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _rackToolbarSyncing;
 
         private SessionManager? _sessionManager;
+        internal SessionManager? RemoteSessionManager => _sessionManager;
 
         // Every session, locked ones included: WPF lists them and only disables Start
         // ("🔒 Coming Soon", MainWindow.SessionIO.cs:971-972).
