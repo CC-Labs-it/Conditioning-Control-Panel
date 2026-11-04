@@ -42,6 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Func<Window, PixelRect, bool, bool> PrepareLogoWindow = (w, bounds, clickable) =>
             PrepareNativeWindow(w, bounds, !clickable, true, w.Topmost);
         private static readonly Dictionary<ChaosDvdLogo, Window> Windows = new();
+        private static readonly Stack<Window> Pool = new();
+        internal static int PooledWindowCount => Pool.Count;
         internal static IReadOnlyDictionary<ChaosDvdLogo, Window> LogoWindows => Windows;
         private static bool _shared;
         private static double _scaling;
@@ -165,14 +167,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 var panel = new Border { Child = t, Background = clickable
                     ? new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) : Brushes.Transparent };
                 if (clickable) panel.Cursor = new Cursor(StandardCursorType.Hand);
-                var w = new Window
+                var w = Pool.Count > 0 ? Pool.Pop() : new Window
                 {
                     WindowDecorations = WindowDecorations.None,
                     TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
                     Background = Brushes.Transparent, Topmost = CoreSettings.Current.ChaosPinOnTop, ShowInTaskbar = false,
                     ShowActivated = false, CanResize = false, Focusable = false,
-                    IsHitTestVisible = clickable, Content = panel,
                 };
+                w.Topmost = CoreSettings.Current.ChaosPinOnTop;
+                w.IsHitTestVisible = clickable;
+                w.Content = panel;
                 var bounds = new PixelRect((int)Math.Round((_origin.X + l.X) * _scaling),
                     (int)Math.Round((_origin.Y + l.Y) * _scaling),
                     (int)Math.Ceiling(l.W * _scaling), (int)Math.Ceiling(l.H * _scaling));
@@ -235,7 +239,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             foreach (var l in f.Removed)
             {
                 if (Labels.Remove(l, out var t)) _canvas?.Children.Remove(t);
-                if (Windows.Remove(l, out var w)) w.Close();
+                if (Windows.Remove(l, out var w))
+                {
+                    if (ReferenceEquals(w, _clockWindow)) StopLoop();
+                    w.Hide();
+                    w.Content = null;
+                    if (Pool.Count < 12) Pool.Push(w);
+                    else w.Close();
+                }
             }
             var clones = new List<ChaosDvdLogo>();
             foreach (var (l, t) in Labels)
@@ -307,6 +318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Labels.Clear();
             foreach (var logoWindow in Windows.Values) logoWindow.Close();
             Windows.Clear();
+            while (Pool.Count > 0) Pool.Pop().Close();
             var w = _window;
             _window = null;
             _canvas = null;
