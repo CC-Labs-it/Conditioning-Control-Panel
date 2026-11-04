@@ -183,6 +183,7 @@ public sealed class DeeperEditorTestFireTests
             await editor.WaveformLoad.WaitAsync(TimeSpan.FromSeconds(10));
             Dispatcher.UIThread.RunJobs();
             Assert.NotNull(editor.WaveformPath.Data);
+            Assert.Equal("0:12", editor.TxtTotalTime.Text);
         }
         finally
         {

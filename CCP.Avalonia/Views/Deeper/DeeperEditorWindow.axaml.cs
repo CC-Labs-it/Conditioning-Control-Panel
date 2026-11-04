@@ -1025,7 +1025,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 var result = await AudioWaveformCache.LoadAsync(path);
                 if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
                 _waveformPeaks = Array.ConvertAll(result.Peaks, p => (double)p);
+                _totalSeconds = result.DurationSeconds;
+                TxtTotalTime.Text = FormatTime(_totalSeconds);
                 UpdateWaveformPath();
+                RebuildTimelineRuler();
+                RebuildRegionVisuals();
+                RebuildHapticVisuals();
+                RebuildEffectVisuals();
+                RebuildRuleVisuals();
+                UpdatePlayheadPosition();
             }
             catch (Exception ex) { Log.Warning(ex, "DeeperEditor: waveform decode failed"); }
         }
