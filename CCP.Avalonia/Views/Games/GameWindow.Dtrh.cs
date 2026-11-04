@@ -129,18 +129,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());   // WPF :944-946
                     return;
                 }
-                if (ChaosHubWindow.Current is { } current) { current.Activate(); return; }
-                var hub = new ChaosHubWindow();
                 var shell = MainShellWindow.Current ?? LauncherWindow.Instance?.Panel;
-                // WPF :951 owns the hub by the loaded main window. Avalonia requires a
-                // visible owner, and Hide detaches owned children, so also follow Closed.
-                if (shell is { IsVisible: true }) hub.Show(shell); else hub.Show();
-                if (shell != null)
+                if (ChaosHubWindow.Current is { } current)
                 {
-                    void CloseHub(object? sender, EventArgs e) => hub.Close();
-                    shell.Closed += CloseHub;
-                    hub.Closed += (_, _) => shell.Closed -= CloseHub;
+                    current.BindShell(shell);
+                    current.Activate();
+                    return;
                 }
+                var hub = new ChaosHubWindow();
+                hub.ShowForShell(shell);
             }
             catch (Exception ex) { Log.Error(ex, "Dtrh fallback failed"); }
         }

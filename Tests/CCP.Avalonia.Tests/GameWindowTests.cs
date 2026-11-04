@@ -898,6 +898,8 @@ public sealed partial class GameWindowTests
         var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var metaPath = ChaosMetaStore.SlotFilePath(ChaosMetaStore.ActiveSlot);
+        var savedMeta = File.Exists(metaPath) ? File.ReadAllBytes(metaPath) : null;
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
         var xp = new List<double>();
         var runs = new List<bool>();
@@ -924,6 +926,7 @@ public sealed partial class GameWindowTests
             (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
+            if (savedMeta == null) File.Delete(metaPath); else File.WriteAllBytes(metaPath, savedMeta);
             GameWindow.CloseAllForPanic();
             Directory.Delete(lib, true);
         }
@@ -1004,6 +1007,8 @@ public sealed partial class GameWindowTests
     [InlineData(2)]
     public void Dtrh_boot_error_reaches_a_run_and_its_pooled_pop_text(int completed) => RunDtrh(true, (_, _, _, _) =>
     {
+        var oldBeatTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
         var prepare = ChaosPopText.Prepare;
         var canShow = ChaosPopText.PlatformCanShow;
         var enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
@@ -1069,6 +1074,7 @@ public sealed partial class GameWindowTests
             ChaosHubWindow.Current?.Close();
             ChaosRunHost.ForceShutdown();
             ChaosPopText.ShutdownPool();
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldBeatTime;
             ChaosPopText.Prepare = prepare;
             ChaosPopText.PlatformCanShow = canShow;
             CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
@@ -1108,6 +1114,39 @@ public sealed partial class GameWindowTests
             Assert.False(hub.IsVisible);
             Assert.Null(ChaosHubWindow.Current);
             Assert.False(ChaosRunHost.IsActive);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosRunHost.ForceShutdown();
+        }
+    });
+
+    [Fact]
+    public void Dtrh_reuses_recap_hub_and_closes_it_with_shell() => RunDtrh(true, (shell, _, _, _) =>
+    {
+        shell.TrayHostPresent = () => false;
+        try
+        {
+            ChaosMeta.Init();
+            ChaosMeta.State.RunsCompleted = 2;
+            ChaosMeta.State.SeenIntroGuide = true;
+            ChaosMeta.Save();
+            var recap = new ChaosOverlayWindow();
+            recap.Show();
+            typeof(ChaosOverlayWindow).GetMethod("OpenHubAt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(recap, new object?[] { null });
+            Dispatcher.UIThread.RunJobs();
+            var hub = Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current);
+            Assert.True(hub.IsVisible);
+            var game = GameWindow.Launch("dtrh")!;
+            game.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(hub, ChaosHubWindow.Current);
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(hub.IsVisible);
+            Assert.Null(ChaosHubWindow.Current);
         }
         finally
         {
