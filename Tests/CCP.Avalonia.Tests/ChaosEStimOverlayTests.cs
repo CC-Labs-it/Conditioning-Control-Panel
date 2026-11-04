@@ -3,6 +3,9 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -77,6 +80,61 @@ public sealed class ChaosEStimOverlayTests
             ChaosEStimOverlay.SkipPlatformChecksForTests = false;
             ChaosEStimOverlay.Clock = TimeProvider.System;
             ChaosEStimGlow.ReadPointer = read;
+        }
+    });
+
+    [Fact]
+    public void Gentle_strike_stays_static_and_new_strike_replaces_its_timeline() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldCanShow = ChaosEStimOverlay.CanShow;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreSettings.Current.GentleVisuals = true;
+        CoreSettings.Current.GentleFadeSeconds = 2;
+        var clock = new SteppedClock();
+        ChaosEStimOverlay.Clock = clock;
+        ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+        ChaosEStimOverlay.CanShow = () => true;
+        try
+        {
+            var bolt = new[] { (new PixelPoint(100, 100), new PixelPoint(300, 100)) };
+            ChaosEStimOverlay.Strike(bolt);
+            var w = ChaosEStimOverlay.Active!;
+            var points = w.FirstBoltPoints.ToArray();
+            int rise = GentleVisuals.RiseMs(0), fade = GentleVisuals.FadeMs(80);
+            Assert.Equal(0, w.StrikeAlpha);
+            clock.Now = TimeSpan.FromMilliseconds(40).Ticks;
+            w.Step();
+            Assert.Equal(points, w.FirstBoltPoints);
+            clock.Now = TimeSpan.FromMilliseconds(rise / 2.0).Ticks;
+            w.Step();
+            Assert.Equal(0.425, w.StrikeAlpha, 6);
+            Assert.Equal(points, w.FirstBoltPoints);
+            clock.Now = TimeSpan.FromMilliseconds(rise + 120 + fade / 2.0).Ticks;
+            w.Step();
+            Assert.Equal(0.425, w.StrikeAlpha, 6);
+            Assert.Equal(points, w.FirstBoltPoints);
+            ChaosEStimOverlay.Strike(bolt);
+            Assert.Equal(0, w.StrikeAlpha);
+            clock.Now += TimeSpan.FromMilliseconds(fade / 2.0).Ticks;
+            w.Step();
+            Assert.True(w.IsVisible);
+            clock.Now += TimeSpan.FromMilliseconds(rise + 120 + fade).Ticks;
+            w.Step();
+            Assert.False(w.IsVisible);
+        }
+        finally
+        {
+            ChaosEStimOverlay.CloseActive();
+            ChaosEStimOverlay.Clock = TimeProvider.System;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+            ChaosEStimOverlay.CanShow = oldCanShow;
+            CoreSettings.ServiceProvider = oldProvider;
         }
     });
 
