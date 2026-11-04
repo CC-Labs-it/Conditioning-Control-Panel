@@ -98,9 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // the cell is on screen would show every user the default whatever they had bound.
                 RefreshChatShortcutLabel();
 
-                // TxtCameraShortcutLabel keeps its XAML literal on purpose: the combo it would
-                // report drives WebcamTrackingService, which does not exist on this head, so there
-                // is no live binding for it to be honest about. Same call as the camera pill's.
+                TxtCameraShortcutLabel.Text = Windows.MainShellWindow.FormatCameraShortcut();
 
                 // ChkPauseBrowserCompanion is deliberately NOT seeded: WPF restores it only from a
                 // session snapshot (MainWindow.Patreon.cs:1923), never from settings.

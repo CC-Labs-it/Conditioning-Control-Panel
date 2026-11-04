@@ -10,6 +10,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -232,6 +233,34 @@ public sealed class WebcamCalibrationTests
             (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamCalibrated, s.WebcamCalibrationMode, WebcamTracker.SourceFactory,
                 s.MasterVolume, CoreAudio.PlayOneShotProvider) = old;
         }
+    });
+
+    [Fact]
+    public void CameraShortcutStopsAndRestartsTrackerWithNotices() => WithTracker(start: true, (tracker, _) =>
+    {
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var host = new StackPanel();
+            ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
+            void Toggle()
+            {
+                var task = shell.ToggleWebcamFromHotkey();
+                var deadline = DateTime.UtcNow.AddSeconds(10);
+                while (!task.IsCompleted && DateTime.UtcNow < deadline)
+                { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+                Assert.True(task.IsCompleted, "camera toggle timed out");
+                task.GetAwaiter().GetResult();
+            }
+            Toggle();
+            Assert.False(tracker.IsRunning);
+            Assert.Contains(host.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == ConditioningControlPanel.Localization.Loc.Get("camera_shortcut_toast_stopped"));
+            Toggle();
+            Assert.True(tracker.IsRunning);
+            Assert.Contains(host.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == ConditioningControlPanel.Localization.Loc.Get("camera_shortcut_toast_started"));
+        }
+        finally { shell.RequestExit(); }
     });
 
     private static WebcamCalibrationWindow OpenAndContinue()

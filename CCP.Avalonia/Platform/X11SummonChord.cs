@@ -14,10 +14,17 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// </summary>
 internal static class X11SummonChord
 {
+    private static readonly X11Chord Chord = new();
+    internal static bool Arm(ChordMods mods, string key, Action onPress) => Chord.Arm(mods, key, onPress);
+    internal static void Disarm() => Chord.Disarm();
+}
+
+internal sealed class X11Chord
+{
     private const string LibX11 = "libX11.so.6";
-    private const int KeyPress = 2, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1, AnyModifier = 1 << 15;
+    private const int KeyPress = 2, KeyRelease = 3, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1, AnyModifier = 1 << 15;
     private const uint ShiftMask = 1, LockMask = 2, ControlMask = 4, Mod1Mask = 8, Mod2Mask = 16, Mod4Mask = 64;
-    private const int XEventSize = 192, KeyEventKeycode = 84, ErrorEventCode = 32;
+    private const int XEventSize = 192, KeyEventTime = 56, KeyEventKeycode = 84, ErrorEventCode = 32;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PollFd { public int Fd; public short Events; public short REvents; }
@@ -41,21 +48,23 @@ internal static class X11SummonChord
     [DllImport("libc")] private static extern int pipe(int[] fds);
     [DllImport("libc")] private static extern nint read(int fd, byte[] buf, nint count);
     [DllImport("libc")] private static extern nint write(int fd, byte[] buf, nint count);
-    private static readonly int[] _wake = { -1, -1 };   // self-pipe: Arm wakes the listener to drain what XSync queued
+    private readonly int[] _wake = { -1, -1 };   // self-pipe: Arm wakes the listener to drain what XSync queued
 
     private static readonly object Gate = new();
-    private static IntPtr _display, _root;
-    private static int _keycode;
-    private static Action? _onPress;
-    private static bool _badAccess;
+    private IntPtr _display, _root;
+    private int _keycode;
+    private readonly X11ChordPressGate _press = new();
+    private Action? _onPress;
+    private bool _badAccess;
     // Rooted for the process lifetime: Xlib keeps the pointer while it is installed.
-    private static readonly XErrorHandler Handler = OnXError;
-    private static IntPtr _previousHandler;
+    private readonly XErrorHandler Handler;
+    internal X11Chord() => Handler = OnXError;
+    private IntPtr _previousHandler;
 
     /// <summary>Grab <paramref name="mods"/>+<paramref name="key"/> (a WPF/Avalonia Key name) and run
     /// <paramref name="onPress"/> on the listener thread for each press. Replaces any earlier grab.
     /// False when there is no X display, the key has no keycode, or another client holds the combo.</summary>
-    internal static bool Arm(ChordMods mods, string key, Action onPress)
+    internal bool Arm(ChordMods mods, string key, Action onPress)
     {
         if (!OperatingSystem.IsLinux()) return false;
         try
@@ -95,7 +104,7 @@ internal static class X11SummonChord
     }
 
     /// <summary>Release the chord (feature switched off, chord refused). Safe to call when nothing is armed.</summary>
-    internal static void Disarm()
+    internal void Disarm()
     {
         lock (Gate)
         {
@@ -104,16 +113,17 @@ internal static class X11SummonChord
         }
     }
 
-    private static void UngrabLocked()
+    private void UngrabLocked()
     {
         _onPress = null;
+        _press.Reset();
         if (_keycode == 0) return;
         XUngrabKey(_display, _keycode, AnyModifier, _root);
         XFlush(_display);
         _keycode = 0;
     }
 
-    private static bool EnsureDisplay()
+    private bool EnsureDisplay()
     {
         if (_display != IntPtr.Zero) return true;
         _display = XOpenDisplay(IntPtr.Zero);
@@ -125,7 +135,7 @@ internal static class X11SummonChord
         return true;
     }
 
-    private static int OnXError(IntPtr display, IntPtr errorEvent)
+    private int OnXError(IntPtr display, IntPtr errorEvent)
     {
         if (display == _display)
         {
@@ -136,7 +146,7 @@ internal static class X11SummonChord
             : Marshal.GetDelegateForFunctionPointer<XErrorHandler>(_previousHandler)(display, errorEvent);
     }
 
-    private static void Listen(int fd)
+    private void Listen(int fd)
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
         var pfd = new[] { new PollFd { Fd = fd, Events = 1 /* POLLIN */ }, new PollFd { Fd = _wake[0], Events = 1 } };
@@ -156,8 +166,10 @@ internal static class X11SummonChord
                         XNextEvent(_display, ev);
                         int type = Marshal.ReadInt32(ev);
                         if (type == MappingNotify) XRefreshKeyboardMapping(ev);
-                        else if (type == KeyPress && _keycode != 0 && Marshal.ReadInt32(ev, KeyEventKeycode) == _keycode)
-                            fire = _onPress;
+                        else if ((type == KeyPress || type == KeyRelease) && _keycode != 0
+                            && Marshal.ReadInt32(ev, KeyEventKeycode) == _keycode
+                            && _press.Accept(type == KeyPress, unchecked((ulong)Marshal.ReadInt64(ev, KeyEventTime))))
+                            fire += _onPress;
                     }
                 }
                 fire?.Invoke();
@@ -168,4 +180,24 @@ internal static class X11SummonChord
             }
         }
     }
+}
+
+// WPF GlobalHotkeyService.cs:108 uses MOD_NOREPEAT. X11 can send either repeated
+// presses or synthetic release/press pairs with the same server timestamp.
+internal sealed class X11ChordPressGate
+{
+    private bool _held;
+    private ulong? _releasedAt;
+
+    internal bool Accept(bool pressed, ulong time)
+    {
+        if (!pressed) { _releasedAt = time; return false; }
+        if (_releasedAt is { } release && release != time) _held = false;
+        _releasedAt = null;
+        if (_held) return false;
+        _held = true;
+        return true;
+    }
+
+    internal void Reset() { _held = false; _releasedAt = null; }
 }

@@ -14,9 +14,10 @@
 // the seeded CoreWebcam verb), Quick Recal over the gaze feed, the 16-point calibration
 // (WebcamCalibrationWindow), the help popover, and the status pulse (the page calls
 // SetBlinkTrainerStatusPulse in MainShellWindow.TabFxTakeoverLabStatus.cs). STILL MISSING:
-// ToggleWebcamFromHotkey (global hotkey), GIF/animated webp animation (first frame only), the
-// explicit tracking-monitor pick, the SeasonRecap credit and the Deeper status chip repaint (WPF
-// UpdateWebcamStatusChips, MainWindow.LabTab.cs:356). The loading splash is live in
+// GIF/animated webp animation (first frame only), the SeasonRecap credit (WPF
+// BlinkTrainerService.cs:177). Camera shortcuts live in MainShellWindow.CameraShortcut.cs;
+// tracking-monitor selection uses Platform.WebcamScreens. Status presentation follows WPF
+// UpdateWebcamStatusChips (MainWindow.LabTab.cs:356). The loading splash is live in
 // MainShellWindow.WebcamSplash.cs; the Deeper hub webcam twins now relay to the same Blink Trainer
 // actions and refresh consent/calibration/tracker state on both cards.
 
