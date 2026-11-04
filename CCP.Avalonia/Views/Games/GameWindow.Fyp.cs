@@ -35,6 +35,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) return Open.Any(w => w.Spec.Id == FypId && w.IsVisible);
         }
 
+        // WPF MainWindow.xaml.cs:1776: a solid feed consumes the legacy panic-key rung.
+        internal static bool CloseForYouForPanicKey()
+        {
+            GameWindow? feed;
+            lock (Open)
+            {
+                // WPF hands an active DtRH off before the feed (:1734).
+                if (Open.Any(w => w.Spec.Id == DtrhId)) return false;
+                feed = Open.FirstOrDefault(w => w.Spec.Id == FypId);
+            }
+            if (feed == null) return false;
+            feed.Close();
+            return true;
+        }
+
         private FypMetaStore? _fypMeta;
         private bool _fypHooked;
         private bool _fypFileMenuHooked;
