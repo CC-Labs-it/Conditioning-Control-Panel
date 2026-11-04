@@ -1295,7 +1295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     SyncAskButtonsFor(text);
                     if (trigger) StartTriggerTypewriter(text);
-                    else _txtSpeech.Text = text;
+                    else RenderSpeechLinks(_txtSpeech, text);
                     _speechBubble.MaxWidth = 380;
                     ApplySpeechBubblePlacement();
                     _speechBubble.IsVisible = true;

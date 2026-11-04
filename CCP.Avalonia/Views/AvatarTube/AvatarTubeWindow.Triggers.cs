@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
+using Avalonia.Interactivity;
 using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using Avalonia.Threading;
@@ -116,17 +117,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (_triggerTextIndex == _triggerText.Length)
             {
                 StopTriggerTypewriter();
-                RenderTriggerLinks(_triggerOriginal);
+                RenderSpeechLinks(_txtSpeech, _triggerOriginal);
             }
         }
 
         // WPF Speech.cs:1277-1296,1417-1455,2975-3033: after typing, restore
         // the original markdown as inline links. The shared launcher owns the remote guard,
         // embedded browser and HTTPS-only fallback (WPF Speech.cs:1490-1532).
-        private void RenderTriggerLinks(string text)
+        private void RenderSpeechLinks(TextBlock target, string text)
         {
             var matches = Regex.Matches(text, @"\[([^\]]+)\]\(([^)]+)\)");
-            if (matches.Count == 0) return;
+            if (matches.Count == 0) { target.Text = text; return; }
             var inlines = new InlineCollection();
             var last = 0;
             foreach (Match match in matches)
@@ -140,8 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     var link = new Button
                     {
                         Theme = (ControlTheme)Resources["SpeechInlineLink"]!,
-                        Content = new TextBlock { Text = label, FontSize = _txtSpeech.FontSize,
-                            FontWeight = _txtSpeech.FontWeight, Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)),
+                        Content = new TextBlock { Text = label, FontSize = target.FontSize,
+                            FontWeight = target.FontWeight, Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)),
                             TextDecorations = TextDecorations.Underline },
                         Command = CompanionLinkLauncher.CommandFor(url)
                     };
@@ -151,8 +152,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 last = match.Index + match.Length;
             }
             if (last < text.Length) inlines.Add(new Run(text.Substring(last)));
-            _txtSpeech.Text = null;
-            _txtSpeech.Inlines = inlines;
+            target.Text = null;
+            target.Inlines = inlines;
+        }
+
+        private void ChatHistoryText_Loaded(object? sender, RoutedEventArgs e)
+        {
+            if (sender is TextBlock target && target.Tag is string text)
+                RenderSpeechLinks(target, text);
         }
 
         private void StopTriggerTypewriter()
