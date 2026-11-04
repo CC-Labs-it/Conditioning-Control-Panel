@@ -51,6 +51,22 @@ public sealed class ShopProfileTests
     }
 
     [Fact]
+    public void UnseededWireUsesShippedRegistryAndStillRejectsUnknownIds()
+    {
+        var prior = PlayerLook.KnownIdsProvider;
+        try
+        {
+            PlayerLook.KnownIdsProvider = null;
+            var worn = PlayerLook.From(JObject.Parse("""{"avatar_id":"profile.avatar.emi-pixel","frame_id":"profile.frame.lace"}"""));
+            Assert.Equal(new PlayerLook("profile.avatar.emi-pixel", "profile.frame.lace"), worn);
+            Assert.True(PlayerLook.From(JObject.Parse("""{"avatar_id":"unknown","frame_id":"unknown"}""")).IsEmpty);
+            PlayerLook.KnownIdsProvider = () => (new HashSet<string>(), null);
+            Assert.True(PlayerLook.From(JObject.Parse("""{"avatar_id":"profile.avatar.emi-pixel","frame_id":"profile.frame.lace"}""")).IsEmpty);
+        }
+        finally { PlayerLook.KnownIdsProvider = prior; }
+    }
+
+    [Fact]
     public void ShippedShopIdsSurviveWireValidation()
     {
         var avatars = ShopCosmeticsRegistry.AllAvatarIds();
