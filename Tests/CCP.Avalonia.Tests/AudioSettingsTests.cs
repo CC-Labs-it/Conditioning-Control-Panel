@@ -127,6 +127,57 @@ public sealed class AudioSettingsTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RampUpdatesBothMasterSlidersAndLabelsOnTickAndRestore(bool restore)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var s = service.Current;
+            s.MasterVolume = 25; s.RampLinkMasterAudio = true; s.SchedulerMultiplier = 2;
+            var oldEnumerate = AudioSettingsBinder.Enumerate;
+            AudioSettingsBinder.Enumerate = () => new[] { Default };
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                shell.ShowTab("appsettings");
+                Dispatcher.UIThread.RunJobs();
+                var audio = shell.AppSettingsPage!.FindControl<AudioSettingsSection>("SectionAudio")!;
+                var home = shell.Named<SettingsTabView>("SettingsTab")!;
+                var settingsSlider = audio.FindControl<Slider>("SliderMaster")!;
+                var settingsLabel = audio.FindControl<TextBlock>("TxtMaster")!;
+                var homeSlider = home.FindControl<Slider>("HomeSliderMaster")!;
+                var homeLabel = home.FindControl<TextBlock>("HomeTxtMaster")!;
+                shell.StartRampTimer();
+                shell.RampTick(1, false);
+                if (restore)
+                {
+                    // Establish the ramped display independently, so this case proves restoration itself.
+                    AudioSettingsBinder.RaiseChanged();
+                    Assert.Equal((50d, "50%", 50d, "50%"), (settingsSlider.Value, settingsLabel.Text, homeSlider.Value, homeLabel.Text));
+                    shell.StopRampTimer();
+                }
+                var expected = restore ? 25 : 50;
+                Assert.Equal((expected, (double)expected, $"{expected}%", (double)expected, $"{expected}%"),
+                    (s.MasterVolume, settingsSlider.Value, settingsLabel.Text, homeSlider.Value, homeLabel.Text));
+            }
+            finally
+            {
+                shell.StopRampTimer(); shell.Close();
+                AudioSettingsBinder.Enumerate = oldEnumerate;
+                CoreSettings.ServiceProvider = null;
+            }
+        });
+    }
+
     [Fact]
     public void UntickingDashboardDuckRestoresDuckedAppsNow()
     {

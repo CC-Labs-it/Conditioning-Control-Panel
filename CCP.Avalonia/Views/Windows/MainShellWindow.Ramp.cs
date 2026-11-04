@@ -37,6 +37,7 @@ public partial class MainShellWindow
         _rampTimer = null;
         if (_rampBaseValues.Count == 0) return;
         SessionSettingsJournal.ApplyRamp(SessionSettingsJournal.BuildRamp(_rampBaseValues), CoreSettings.Current);
+        Controls.AppSettings.AudioSettingsBinder.RaiseChanged();
         _rampBaseValues.Clear();
         Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
         Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
@@ -57,6 +58,7 @@ public partial class MainShellWindow
         if (s.RampLinkMasterAudio)
         {
             s.MasterVolume = Value(nameof(s.MasterVolume), 100);
+            Controls.AppSettings.AudioSettingsBinder.RaiseChanged();
             Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
             Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
         }
