@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, bool testMode = false)
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
@@ -80,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (live != null) { live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
-            var window = new GameWindow(spec);
+            var window = new GameWindow(spec, testMode);
             window.Load(Server());
             window.Show();
             return window;
@@ -89,9 +89,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
         internal GameWindow() : this(Games["breakoutdemo"]) { }
 
-        internal GameWindow(Game spec)
+        internal GameWindow(Game spec, bool testMode = false)
         {
             Spec = spec;
+            _dtrhTestMode = testMode;
             Web = new WebHost();
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
@@ -187,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "boot-error":
                     Log.Warning("[Game] {Id}: page boot-error: {Msg}", Spec.Id, (string?)o["msg"]);
                     Close();
+                    if (IsDtrh && !_dtrhTestMode) Dispatcher.UIThread.Post(LaunchDtrhClassicFallback);
                     break;
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.

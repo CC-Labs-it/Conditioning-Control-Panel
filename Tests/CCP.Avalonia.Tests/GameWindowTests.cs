@@ -889,6 +889,53 @@ public sealed partial class GameWindowTests
         });
     });
 
+    [Fact]
+    public void Dtrh_BootError_FallsBackToClassicOnlyOutsideTestMode() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        try
+        {
+            ChaosMeta.State.RunsCompleted = 0;
+            var normal = GameWindow.Launch(GameWindow.DtrhId)!;
+            normal.HandleMessage("{\"type\":\"ready\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+            normal.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State!.Config.ScriptedFirstRun);
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
+
+            var test = GameWindow.Launch(GameWindow.DtrhId, testMode: true)!;
+            test.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+            Assert.Null(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow.Current);
+
+            var other = GameWindow.Launch("breakoutdemo")!;
+            other.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+            Assert.Null(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow.Current);
+
+            ChaosMeta.State.RunsCompleted = 1;
+            var returning = GameWindow.Launch(GameWindow.DtrhId)!;
+            returning.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            var hub = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow.Current;
+            Assert.NotNull(hub);
+            ChaosMeta.State.RunsCompleted = 1;
+            var again = GameWindow.Launch(GameWindow.DtrhId)!;
+            again.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(hub, ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow.Current);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow.Current?.Close();
+        }
+    });
+
     // ---- Down the Rabbit Hole (WPF Services/Chaos/DtrhHostService.cs, slice A) ----
 
     /// <summary>Lab (or not), signed in, a throwaway library; XP and each payout's counts-as-run go to lists.</summary>

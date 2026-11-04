@@ -19,6 +19,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -45,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
+        private readonly bool _dtrhTestMode;
         private bool _dtrhRunActive, _dtrhExiting;
         private JObject? _dtrhLastProgress;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
@@ -58,6 +60,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static GameWindow? DtrhInFront()
         {
             lock (Open) return Open.FirstOrDefault(w => w.IsDtrh && w.IsActive);
+        }
+
+        // WPF DtrhHostService.OnBootError / LaunchLegacyFallback (:923-954).
+        private static void LaunchDtrhClassicFallback()
+        {
+            try
+            {
+                if (ChaosRunHost.IsActive) return;
+                if (ChaosMeta.State.RunsCompleted == 0)
+                {
+                    ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                    return;
+                }
+                if (ChaosHubWindow.Current is { } existing) { existing.Activate(); return; }
+                var hub = new ChaosHubWindow();
+                if (Windows.MainShellWindow.Current is { IsVisible: true } owner) hub.Show(owner);
+                else hub.Show();
+            }
+            catch (Exception ex) { Log.Error(ex, "DtrhHost: classic fallback failed"); }
         }
 
         // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
