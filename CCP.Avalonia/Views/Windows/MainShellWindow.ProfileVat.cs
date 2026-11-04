@@ -19,7 +19,7 @@
 //
 // The shared DescentService now supplies read-only server data, sign-in/logout and gated polling.
 // ponytail: ApplyDescentToVat (the only ArmVat caller) remains follow-up wire-shell-profile-vat-b;
-// the faucet host is row shell-profile-faucet. Until the jar is armed it stays dark, and the 60 s
+// the charge host is wired by ArmVat; coordinator application remains part B. Until the jar is armed it stays dark, and the 60 s
 // poll stays off with it (P07): one read on card open still feeds the curve-epoch follow.
 
 using System;
@@ -80,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _vatOnScreen = onScreen;
             if (onScreen) _vatDescent?.RequestRefresh("trainer card open");
-            // ponytail: keep the jar dark until the faucet host can honor the persisted hold.
+            // ponytail: keep the jar dark until the coordinator feeds the persisted faucet hold.
             // A server reading alone must not auto-pour or strand held XP in a jar without a tap.
             EvaluateVatPoll();
         }
@@ -212,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateVatReadout();
             EvaluateVatPoll();   // the jar is drawn now: the recurring read has a reader
 
-            // ponytail: ArmFaucet(glass, jarW, jarH) belongs here - see the header.
+            ArmFaucet(glass, jarW, jarH);
             Log.Information("[Descent] vat armed on the Trainer Card");
         }
 
@@ -220,7 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Put the hero back exactly as it ships without the Descent: 104px avatar at its original
         /// 6px margin, no jar, no readout, and a bay that measures to the avatar alone.
         /// </summary>
-        private void DisarmVat()
+        internal void DisarmVat()
         {
             var glass = VatGlass;
             if (!_vatArmed)
@@ -246,7 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (readout != null) readout.IsVisible = false;
             EvaluateVatPoll();
 
-            // ponytail: DisarmFaucet() belongs here - see the header.
+            DisarmFaucet();
         }
     }
 }
