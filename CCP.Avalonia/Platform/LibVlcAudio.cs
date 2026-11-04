@@ -279,9 +279,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             internal MediaPlayer Player => player;
             private int _vol, _done;
-            private volatile bool _setupPending = true;
-            private bool _ready, _released;
-            internal bool Hold { get; set; }
+            private volatile bool _setupPending = true; private bool _ready, _released;
+            internal bool Hold { get; set; } internal Action? FailedEarly { get; set; }
             internal void Release()
             {
                 lock (player)
@@ -292,7 +291,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
             public Action<long>? Started { get; set; }
-            internal volatile bool Failed;
+            private volatile bool _failed; internal bool Failed { get => _failed; set { _failed = value; if (value) Fire(FailedEarly); } }
             public double Volume
             {
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
@@ -366,9 +365,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             private readonly object _gate = new();
             private readonly List<Voice> _live = new();
             private Timer? _next;
-            private Voice? _prepared;
-            private bool _done, _due;
-            private int _cycle, _built = -1;   // _built: the cycle whose next copy exists
+            private Voice? _prepared; private bool _done, _due;
+            private int _cycle, _built = -1, _retried = -1;   // built copy and one early retry per cycle
             private double _vol;
 
             public double Volume { set { lock (_gate) { _vol = value; foreach (var v in _live) v.Volume = value; } } }
@@ -384,9 +382,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     catch (Exception ex) { Log.Warning(ex, "[Audio] mindwipe loop copy failed"); return false; }
                     if (prepared) _built = cycle;
                     v.Volume = _vol;
-                    v.Hold = prepared && !_due;
-                    if (v.Hold) _prepared = v;
-                    v.Started = Schedule;
+                    v.Hold = prepared && !_due; if (v.Hold) { _prepared = v; v.FailedEarly = () => ThreadPool.QueueUserWorkItem(_ => RetryPrepared(v)); }
+                    v.Started = ms => { lock (_gate) if (_prepared == v) _prepared = null; Schedule(ms); };
                     _live.Add(v);
                     return v.Play();
                 }
@@ -400,27 +397,27 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     if (_done) return;
                     _next?.Dispose();
-                    var cycle = ++_cycle;
-                    _due = false;
+                    var cycle = ++_cycle; _due = false;
                     _next = new Timer(_ =>
                     {
                         Voice? v;
-                        lock (_gate) { if (_done || cycle != _cycle) return; _due = true; v = _prepared; _prepared = null; }
+                        lock (_gate) { if (_done || cycle != _cycle) return; _due = true; v = _prepared; if (v?.Failed == true) { _prepared = null; v = null; _built = -1; } }
                         // Nothing parked (its build failed): build and play now, as WPF's self-repair (MindWipeService.cs:428).
-                        if (v is null) Start(prepared: true, cycle); else v.Release();
+                        if (v is null) Start(prepared: true, cycle); else { v.Release(); if (v.Failed) { lock (_gate) { if (_prepared == v) { _prepared = null; _built = -1; } } Start(prepared: true, cycle); } }
                     }, null, Math.Max(100, lengthMs - OverlapMs), Timeout.Infinite);
                     // Prepare off the LibVLC event thread while the current copy plays.
                     ThreadPool.QueueUserWorkItem(_ => Start(prepared: true, cycle));
                 }
             }
 
+            private void RetryPrepared(Voice v) { lock (_gate) { if (_done || v != _prepared || _retried == _cycle) return; _prepared = null; _built = -1; _retried = _cycle; Start(prepared: true, _cycle); } }
             private void Retire(Voice v)
             {
                 bool restart = false, dead = false;
                 lock (_gate)
                 {
                     _live.Remove(v);
-                    if (v == _prepared) { _prepared = null; _built = -1; }   // a failed parked copy is rebuilt at the overlap
+                    if (v == _prepared) { RetryPrepared(v); if (v == _prepared) { _prepared = null; _built = -1; } }
                     if (_done || _live.Count > 0) return;
                     if (v.Failed) dead = _done = true; else { _cycle++; _next?.Dispose(); restart = true; }
                 }

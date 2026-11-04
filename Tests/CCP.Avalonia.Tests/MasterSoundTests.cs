@@ -189,8 +189,8 @@ public sealed class MasterSoundTests
                 Assert.InRange(next!.Player.Volume, 49, 51);
                 LibVlcAudio.Voice[] old = []; LibVlcAudio.Voice? parked = null, fresh = null; var overlapped = false;
                 Assert.True(SpinWait.SpinUntil(() => { lock (gate) { old = live.ToArray(); return (parked = (LibVlcAudio.Voice?)loop.GetType().GetField("_prepared", flags)!.GetValue(loop)) != null; } }, 6000), "no copy parked");
-                parked!.Failed = true; parked.Dispose();   // what EncounteredError does to a parked copy
-                Assert.True(SpinWait.SpinUntil(() => { lock (gate) { fresh = live.FirstOrDefault(v => !old.Contains(v)); overlapped = live.Contains(next); return fresh != null; } }, 6000) && overlapped, "failed parked copy was not replaced at the overlap");
+                parked!.Failed = true; lock (parked.Player) { parked.Dispose();   // cleanup is blocked while the copy fails
+                Assert.True(SpinWait.SpinUntil(() => { lock (gate) { fresh = live.FirstOrDefault(v => !old.Contains(v)); overlapped = live.Contains(next); return fresh != null; } }, 6000) && overlapped, "failed parked copy was not replaced at the overlap"); }
                 Assert.True(SpinWait.SpinUntil(() => fresh!.Player.IsPlaying, 5000), "replacement never played");
             }
         }
