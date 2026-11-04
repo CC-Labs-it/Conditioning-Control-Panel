@@ -467,9 +467,12 @@
                         BorderThickness="0,0,0,1"
                         BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
                         Padding="12,6">
-                    <TextBlock x:Name="TxtStatus"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               FontSize="10" TextWrapping="Wrap"/>
+                    <StackPanel>
+                        <TextBlock x:Name="TxtStatus" Foreground="{DynamicResource TextMutedBrush}"
+                                   FontSize="10" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="TxtHint" Foreground="{DynamicResource TextMutedBrush}"
+                                   FontSize="10" TextWrapping="Wrap" IsVisible="False"/>
+                    </StackPanel>
                 </Border>
 
                 <!-- Filter strip -->

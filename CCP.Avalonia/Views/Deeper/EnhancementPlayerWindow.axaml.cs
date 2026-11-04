@@ -136,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _isVideoMode;
 
         private DispatcherTimer? _uiTimer;
+        private DispatcherTimer? _hintTimer;
         private float[]? _peaks;
 
         // Video clock read-back. See PollVideoTimeAsync. _videoNavigated is the gate on every
@@ -590,19 +591,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         /// <summary>
         /// Core's EnhancementResolver ladder (embedded -> sidecar -> library), as WPF calls it.
-        ///
-        /// Embedded enhancement auto-promotion into the library and its 6 s toast are still missing.
+
         /// </summary>
         private void TryAutoLoadEnhancement(string mediaPath)
         {
             _lastMediaPathForCreateNew = mediaPath;
             _btnCreateNewEnhancement.IsVisible = false;
+            ClearHint();
             try
             {
                 var resolved = EnhancementResolver.ResolveForLocalMedia(mediaPath);
                 switch (resolved.Source)
                 {
                     case EnhancementDiscoverySource.Embedded:
+                        var library = App.DeeperLibrary;
+                        var mediaType = DeeperPreview.IsLocalVideoFile(mediaPath) ? MediaTypes.Video : MediaTypes.Audio;
+                        if (library != null && library.FindMatch(mediaPath, mediaType) == null)
+                        {
+                            var saved = library.PromoteToLibrary(resolved.Enhancement!, mediaPath);
+                            if (!string.IsNullOrEmpty(saved))
+                            {
+                                _lastDiscoverySource = DiscoverySource.PromotedFromEmbedded;
+                                LoadEnhancementFile(saved);
+                                var hint = this.FindControl<TextBlock>("TxtHint")!;
+                                hint.Text = Loc.GetF("deeper_player_promoted_to_library_fmt", System.IO.Path.GetFileName(saved));
+                                hint.IsVisible = true;
+                                _hintTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+                                _hintTimer.Tick += (_, _) => ClearHint();
+                                _hintTimer.Start();
+                                return;
+                            }
+                        }
                         _lastDiscoverySource = DiscoverySource.Embedded;
                         LoadEnhancementInMemory(resolved.Enhancement!, "embedded:" + System.IO.Path.GetFileName(mediaPath));
                         return;
@@ -627,6 +646,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // WPF swallowed IO errors here too: the button stays hidden and no status is set.
                 Log.Debug("EnhancementPlayer: auto-load enhancement failed: {Error}", ex.Message);
             }
+        }
+
+        private void ClearHint()
+        {
+            _hintTimer?.Stop();
+            _hintTimer = null;
+            var hint = this.FindControl<TextBlock>("TxtHint")!;
+            hint.Text = "";
+            hint.IsVisible = false;
         }
 
         private void BtnCreateNewEnhancement_Click()
@@ -1693,6 +1721,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // Stop the tick timer first so no UI work is queued onto a dying window — and because
             // --render-all opens and closes every view in one process, a timer left running would
             // accumulate one live 100ms tick per view.
+            ClearHint();
             try { _uiTimer?.Stop(); } catch { }
             try { if (_uiTimer != null) _uiTimer.Tick -= UiTimer_Tick; } catch { }
             _uiTimer = null;
