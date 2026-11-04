@@ -42,7 +42,7 @@ internal static class KeywordTriggerHead
     internal static void Stop() { DetachKeyboard(); _ocr?.Stop(); Engine.Stop(); }
 
     /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
-    /// net8.0 cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland capture is interactive only.
+    /// plain net10.0 (no Windows TFM) cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland capture is interactive only.
     /// While null the scanner never starts; everything after the source is live.</summary>
     internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
     private static ScreenOcrService? _ocr;
@@ -175,7 +175,8 @@ internal static class KeywordTriggerHead
 internal sealed class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
-    private readonly KeywordCooldowns _cooldowns = new();
+    private KeywordCooldowns _cooldowns = new();
+    internal void ResetCooldownsForTest() => _cooldowns = new();
     private CancellationTokenSource? _audio;
     private Action? _stop;
     private int _playGeneration;
@@ -244,11 +245,10 @@ internal sealed class KeywordAudioRuntime
     {
         NeedsOcrConfirmation = false;
         var s = CoreSettings.Current;
-        if (!Accept(process, own) || !s.ScreenOcrEnabled || words.Count == 0)
-        {
-            ClearOcr();
-            return false;
-        }
+        // WPF :716-743: a lapse or stop keeps the streak; an empty scan or a blocked app clears it.
+        if (!IsActive || !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
+        if (words.Count == 0 || !KeywordMatchRules.AppAllowed(s, process, own)) { ClearOcr(); return false; }
+        if (!s.KeywordTriggersEnabled || !s.ScreenOcrEnabled) return false;
         var now = Now();
         if ((now - _cooldowns.LastGlobal).TotalSeconds < s.KeywordGlobalCooldownSeconds) return false;
         var matched = new List<ScreenOcrService.Word>();

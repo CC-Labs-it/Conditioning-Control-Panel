@@ -75,7 +75,7 @@ internal sealed class ScreenOcrService : IDisposable
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception) { Log.Debug("Screen OCR scan failed"); }
+        catch (Exception ex) { Log.Debug(ex, "Screen OCR scan failed"); }
         finally { Volatile.Write(ref _scanning, 0); }
     }
 

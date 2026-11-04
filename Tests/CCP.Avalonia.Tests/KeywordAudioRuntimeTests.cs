@@ -49,12 +49,13 @@ public sealed class KeywordAudioRuntimeTests
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
+            KeywordTriggerHead.Engine.ResetCooldownsForTest();   // the shared engine outlives each test
             engine.Start();
             await body(engine, s, played);
         }
         finally
         {
-            engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
+            engine.Stop(); KeywordTriggerHead.Stop(); KeywordTriggerHead.Engine.ResetCooldownsForTest(); File.Delete(file);
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
                 CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider) = saved;
@@ -62,7 +63,7 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact] // WPF KeywordTriggerService.cs:712-739,842-862,913-943
-    public void OcrRequiresConsecutivePositionsAndClearsAfterStopAccessOrScopeLoss() => Run((engine, s, played) =>
+    public void OcrRequiresConsecutivePositionsKeepsThemThroughALapseAndClearsOnStopOrScopeLoss() => Run((engine, s, played) =>
     {
         var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled);
         try
@@ -73,20 +74,21 @@ public sealed class KeywordAudioRuntimeTests
             var fired = 0; engine.TriggerFired += _ => fired++;
             Assert.True(engine.CheckOcrWords(words)); Assert.Equal(0, fired);
             CoreEntitlement.HasPremiumProvider = () => false;
-            Assert.False(engine.CheckOcrWords(words));
+            Assert.False(engine.CheckOcrWords(words));   // WPF :719 returns without clearing the streak
             CoreEntitlement.HasPremiumProvider = () => true;
-            Assert.True(engine.CheckOcrWords(words)); Assert.Equal(0, fired);
+            Assert.False(engine.CheckOcrWords(words)); Assert.Equal(1, fired);
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 10);   // cooldowns clamp to at least 1 s
             s.KeywordTriggerIgnoreOwnFocus = true;
             Assert.False(engine.CheckOcrWords(words, "ccp", true));
-            Assert.True(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(0, fired);
-            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(1, fired);
-            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(1, fired);
-            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 10);
+            Assert.True(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(1, fired);
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(2, fired);
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(2, fired);
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 20);
             engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>(), "editor", false);
             Assert.True(engine.CheckOcrWords(words, "editor", false));
             engine.Stop(); engine.Start();
-            Assert.True(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(1, fired);
-            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(2, fired);
+            Assert.True(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(2, fired);
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(3, fired);
             Assert.Equal("OCR", engine.GetRecentFires()[0].Source);
         }
         finally { (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled) = saved; }
@@ -120,11 +122,10 @@ public sealed class KeywordAudioRuntimeTests
     [Fact] // WPF MainWindow.Awareness.cs:414-428,461-468, Patreon.cs:190; ScreenOcrService.cs:143-198
     public Task AwarenessSwitchesDriveTheOcrSourceIntoTheConsumer() => RunAsync(async (_, s, played) =>
     {
-        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi);
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi, s.ScreenOcrIntervalMs);
         var realNow = KeywordTriggerHead.Engine.Now;
         var scans = 0;
-        // A day before the other shared-engine tests, so this fire's echo mute has expired for them.
-        var clock = new DateTime(2026, 10, 13, 12, 0, 0);
+        var clock = new DateTime(2026, 10, 14, 12, 0, 0);
         KeywordTriggerHead.Engine.Now = () => clock;
         KeywordTriggerHead.OcrSource = _ => { scans++; return Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>(
             [new("sit", new System.Drawing.Rectangle(500, 500, 20, 10))]); };
@@ -132,6 +133,7 @@ public sealed class KeywordAudioRuntimeTests
         {
             s.KeywordTriggersEnabled = false; s.ScreenOcrEnabled = false;
             s.OcrConfirmationScans = 1; s.OcrHighlightAll = true; s.AwarenessIgnoreOwnUi = true;
+            s.ScreenOcrIntervalMs = 10000;   // the real timer must not tick between the manual ticks
             var view = new AwarenessTabView();
             var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
             var ocr = view.FindControl<CheckBox>("ChkAwarenessOcr")!;
@@ -158,7 +160,7 @@ public sealed class KeywordAudioRuntimeTests
         finally
         {
             KeywordTriggerHead.OcrSource = null; KeywordTriggerHead.Engine.Now = realNow;
-            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi) = saved;
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi, s.ScreenOcrIntervalMs) = saved;
         }
     });
 
