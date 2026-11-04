@@ -182,13 +182,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var image = new Image
             {
                 Source = bitmap, Stretch = Stretch.Uniform, IsHitTestVisible = false,
-                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
                 Width = rect.Width / scale, Height = rect.Height / scale,
-                Margin = new Thickness((rect.X - screen.X) / scale, (rect.Y - screen.Y) / scale, 0, 0),
-                ZIndex = CompositorLayers.Flash, Opacity = 0,
             };
             var radius = FlashCorners.Resolve(rounded, ownsV2, hasGlow: false, Math.Min(image.Width, image.Height), dpiScale: 1);
-            if (radius > 0) image.Clip = new RectangleGeometry(new Rect(0, 0, image.Width, image.Height), radius, radius);
+            var fit = Stretch.Uniform.CalculateSize(new Size(image.Width, image.Height),
+                new Size(bitmap.PixelSize.Width, bitmap.PixelSize.Height));
+            if (radius > 0)
+                image.Clip = new RectangleGeometry(new Rect((image.Width - fit.Width) / 2, (image.Height - fit.Height) / 2,
+                    fit.Width, fit.Height), radius, radius);
+            var backing = new Border { Background = Brushes.Black, CornerRadius = new CornerRadius(radius), Opacity = 0 };
+            image.Opacity = 0;
+            var root = new Grid
+            {
+                Name = "HostedFlash", Children = { backing, image },
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Width = image.Width, Height = image.Height,
+                Margin = new Thickness((rect.X - screen.X) / scale, (rect.Y - screen.Y) / scale, 0, 0),
+                IsHitTestVisible = false, ZIndex = CompositorLayers.Flash,
+            };
             var entry = (lease, image, rect);
             var closed = false;
             var fadeGeneration = 0;
@@ -203,12 +214,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 timers.Clear();
                 Hosted.Remove(entry);
                 HostedCleanup.Remove(image);
-                lease.Canvas.Children.Remove(image);
+                lease.Canvas.Children.Remove(root);
                 lease.Dispose();
                 bitmap.Dispose();
             }
             lease.Window.Closed += OnStageClosed;
-            lease.Canvas.Children.Add(image);
+            lease.Canvas.Children.Add(root);
             Hosted.Add(entry);
             HostedCleanup[image] = Remove;
             void Fade(double from, double to, Action? done = null)
@@ -220,7 +231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var value = from + (to - from) * i / steps;
                     var last = i == steps;
-                    timers.Add(ScheduleHosted(() => { if (closed || generation != fadeGeneration) return; image.Opacity = value; if (last) done?.Invoke(); },
+                    timers.Add(ScheduleHosted(() => { if (closed || generation != fadeGeneration) return; backing.Opacity = image.Opacity = value; if (last) done?.Invoke(); },
                         span * i / steps + TimeSpan.FromMilliseconds(1)));
                 }
             }

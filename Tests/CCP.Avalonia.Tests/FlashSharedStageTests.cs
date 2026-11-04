@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
@@ -57,10 +58,10 @@ public sealed class FlashSharedStageTests
             Assert.True(FlashOverlay.ShowHosted(new WriteableBitmap(new PixelSize(4, 4), new Vector(96, 96)), new PixelRect(10, 20, 40, 50), bounds, 1, 1, TimeSpan.Zero, TimeSpan.FromSeconds(1)));
             Assert.True(FlashOverlay.ShowHosted(new WriteableBitmap(new PixelSize(4, 4), new Vector(96, 96)), new PixelRect(60, 20, 40, 50), bounds, 1, 1, TimeSpan.Zero, TimeSpan.FromSeconds(2)));
             var canvas = Assert.IsType<Grid>(stage!.Content);
-            var flashes = canvas.Children.OfType<Image>().ToArray();
+            var flashes = canvas.Children.OfType<Grid>().Where(g => g.Name == "HostedFlash").ToArray();
             Assert.Equal(2, flashes.Length);
-            Assert.All(flashes, image => { Assert.False(image.IsHitTestVisible); Assert.Equal(CompositorLayers.Flash, image.ZIndex); });
-            Assert.True(canvas.Children.OfType<Grid>().Single().ZIndex > flashes[0].ZIndex);
+            Assert.All(flashes, root => { Assert.False(root.IsHitTestVisible); Assert.False(root.Children.OfType<Image>().Single().IsHitTestVisible); Assert.Equal(CompositorLayers.Flash, root.ZIndex); });
+            Assert.True(canvas.Children.OfType<Grid>().Single(g => g.Name != "HostedFlash").ZIndex > flashes[0].ZIndex);
             Assert.True(canvas.Children.OfType<Border>().Single().ZIndex > flashes[0].ZIndex);
             Assert.False(stage.IsHitTestVisible);
             actions.Single(x => x.Delay == TimeSpan.FromSeconds(1)).Fire();
@@ -154,6 +155,73 @@ public sealed class FlashSharedStageTests
             (s.UnifiedOverlayHost, s.FlashGazePopEnabled, s.FlashGazeLingerEnabled, s.FlashGlowEnabled, s.FlashMotionStyle, s.FlashRoundedCorners) = saved;
             s.UnlockedSkills.Clear(); s.UnlockedSkills.AddRange(skills);
             (SharedOverlayHost.Configure, SharedOverlayHost.IsTransparent, PrizeOwnership.IsGranted) = (configure, transparent, granted);
+        }
+    });
+
+    [Theory]
+    [InlineData(100, 10, 200, 50, 0, 15, 200, 20)]
+    [InlineData(10, 100, 50, 200, 15, 0, 20, 200)]
+    public void Rounded_clip_follows_letterboxed_picture(int sourceWidth, int sourceHeight, int width, int height,
+        int x, int y, int fitWidth, int fitHeight) => AvaloniaTestDispatcher.Run(() =>
+    {
+        SubliminalSilentHintTests.EnsureAvalonia();
+        var (configure, transparent) = (SharedOverlayHost.Configure, SharedOverlayHost.IsTransparent);
+        try
+        {
+            SharedOverlayHost.Configure = (w, _) => { w.Width = 300; w.Height = 300; return true; };
+            SharedOverlayHost.IsTransparent = _ => true;
+            Assert.True(FlashOverlay.ShowHosted(new WriteableBitmap(new PixelSize(sourceWidth, sourceHeight), new Vector(96, 96)),
+                new PixelRect(0, 0, width, height), new PixelRect(0, 0, 300, 300), 1, 1, TimeSpan.Zero, TimeSpan.FromSeconds(10), true, true));
+            var clip = Assert.IsType<RectangleGeometry>(Assert.Single(FlashOverlay.Hosted).Image.Clip);
+            Assert.Equal(new Rect(x, y, fitWidth, fitHeight), clip.Rect);
+            Assert.Equal(Math.Min(width, height) * 0.07, clip.RadiusX, 6);
+        }
+        finally { FlashOverlay.CloseHosted(); (SharedOverlayHost.Configure, SharedOverlayHost.IsTransparent) = (configure, transparent); }
+    });
+
+    [Fact]
+    public void Transparent_picture_and_letterbox_show_black_backing_at_flash_opacity() => AvaloniaTestDispatcher.Run(() =>
+    {
+        SubliminalSilentHintTests.EnsureAvalonia();
+        var (configure, transparent, schedule) = (SharedOverlayHost.Configure, SharedOverlayHost.IsTransparent, FlashOverlay.ScheduleHosted);
+        var timers = new List<Scheduled>();
+        try
+        {
+            SharedOverlayHost.Configure = (w, _) => { w.Width = 300; w.Height = 200; return true; };
+            SharedOverlayHost.IsTransparent = _ => true;
+            FlashOverlay.ScheduleHosted = (action, delay) => { var timer = new Scheduled(action, delay); timers.Add(timer); return timer; };
+            using var input = new SkiaSharp.SKBitmap(10, 10);
+            input.Erase(SkiaSharp.SKColors.Transparent);
+            using (var canvas = new SkiaSharp.SKCanvas(input))
+            using (var paint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Red }) canvas.DrawRect(5, 0, 5, 10, paint);
+            using var encoded = SkiaSharp.SKImage.FromBitmap(input).Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            using var stream = new MemoryStream(encoded.ToArray());
+            Assert.True(FlashOverlay.ShowHosted(new Bitmap(stream), new PixelRect(0, 0, 100, 50),
+                new PixelRect(0, 0, 300, 200), 1, 0.5, TimeSpan.Zero, TimeSpan.FromSeconds(10), true, true));
+            var entry = Assert.Single(FlashOverlay.Hosted);
+            timers[^2].Fire(); // last fade-in step, immediately before expiry
+            var root = Assert.IsType<Grid>(Assert.Single(entry.Lease.Canvas.Children));
+            entry.Lease.Window.UpdateLayout();
+            using var rendered = new RenderTargetBitmap(new PixelSize(100, 50), new Vector(96, 96));
+            rendered.Render(root);
+            using var png = new MemoryStream();
+            rendered.Save(png); png.Position = 0;
+            using var pixels = SkiaSharp.SKBitmap.Decode(png);
+            foreach (var point in new[] { (X: 35, Y: 25), (X: 5, Y: 25) })
+            {
+                var color = pixels.GetPixel(point.X, point.Y);
+                Assert.Equal(0, color.Red); Assert.Equal(0, color.Green); Assert.Equal(0, color.Blue);
+                Assert.InRange(color.Alpha, (byte)125, (byte)130);
+            }
+            var opaque = pixels.GetPixel(65, 25);
+            Assert.InRange(opaque.Alpha, (byte)189, (byte)193);
+            Assert.InRange(opaque.Red, (byte)168, (byte)173);
+            Assert.Equal(0, pixels.GetPixel(0, 0).Alpha);
+        }
+        finally
+        {
+            FlashOverlay.CloseHosted();
+            (SharedOverlayHost.Configure, SharedOverlayHost.IsTransparent, FlashOverlay.ScheduleHosted) = (configure, transparent, schedule);
         }
     });
 
