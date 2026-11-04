@@ -449,7 +449,7 @@ namespace ConditioningControlPanel.Services
             {
                 var enabled = _library();
                 var kept = KeepByLength(enabled, CoreSettings.Current.VideoMinDurationSeconds,
-                    CoreSettings.Current.VideoMaxDurationSeconds, DurationOf);
+                    0, DurationOf);
                 LastFunnelEnabled = enabled.Count;   // WPF _lastFunnelEnabled / _lastFunnelDuration (#1352)
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
@@ -473,7 +473,8 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF RefillVideoQueues' duration filter: drop clips shorter than <paramref name="min"/> or
         /// longer than <paramref name="max"/> seconds (0 = unset). A clip with no cached length is kept
-        /// (fall open; <paramref name="durationOf"/> starts its parse for the next refill).</summary>
+        /// (fall open; <paramref name="durationOf"/> starts its parse for the next refill). WPF and
+        /// the local scheduler pass 0 for max, so only the minimum filters selection.</summary>
         public static List<string> KeepByLength(IReadOnlyList<string> files, int min, int max, Func<string, double?>? durationOf)
         {
             if ((min <= 0 && max <= 0) || durationOf == null) return files.ToList();
