@@ -98,7 +98,7 @@ internal static class X11PanicKey
     /// <summary>The event loop shared by the XInput listener and its tests. A null event ends the
     /// injected stream; a negative code resets held-key state after an X keyboard mapping change.</summary>
     internal static void ListenRawEvents(Func<(bool Press, int Code, int EscapeCode)?> next,
-        Action onPanic, Action<int>? otherPress = null, Func<ulong>? eventTime = null, Func<int, (int, int)?>? repeatRate = null)
+        Action onPanic, Action<int>? otherPress = null, Func<ulong>? eventTime = null, Func<int, (int, int)?>? repeatRate = null, Func<int, bool?>? isDown = null)
     {
         bool escapeDown = false, videoOwnsPress = false;
         var gate = new object();
@@ -109,6 +109,8 @@ internal static class X11PanicKey
         {
             try
             {
+                lock (gate)
+                {
                 if (key.Code < 0) { StopRepeat(); escapeDown = videoOwnsPress = false; continue; }
                 if (key.EscapeCode != 0 && key.Code == key.EscapeCode)
                 {
@@ -129,13 +131,18 @@ internal static class X11PanicKey
                             videoOwnsPress = false;
                             Log.Warning(ex, "Global Esc: ownership check failed; panic proceeds");
                         }
-                        if (videoOwnsPress && (repeatRate == null ? (500, 33) : repeatRate(key.Code) ?? (0, 0)) is var rate && rate.Item1 > 0)
+                        if ((repeatRate == null ? (500, 33) : repeatRate(key.Code) ?? (0, 0)) is var rate && rate.Item1 > 0)
                         {
                             lock (gate)
                             {
                                 int version = ++generation;
-                                repeat = new Timer(_ => { lock (gate) if (version == generation) try { Win32Input.QueueVideoEscape(); }
-                                    catch (Exception ex) { Log.Warning(ex, "Global Esc: repeat failed"); } }, null, rate.Item1, rate.Item2);
+                                repeat = new Timer(_ => { lock (gate) if (version == generation) try
+                                {
+                                    if (isDown != null && isDown(key.Code) != true) { StopRepeat(); escapeDown = videoOwnsPress = false; return; }
+                                    videoOwnsPress = Win32Input.QueueVideoEscape();
+                                    if (!videoOwnsPress) Route(true, key.Code, onPanic);
+                                }
+                                catch (Exception ex) { Log.Warning(ex, "Global Esc: repeat failed"); } }, null, rate.Item1, rate.Item2);
                             }
                         }
                     }
@@ -144,6 +151,7 @@ internal static class X11PanicKey
                 }
                 Route(key.Press, key.Code, onPanic);
                 if (key.Press) otherPress?.Invoke(key.Code);
+                }
             }
             catch (Exception ex) { Log.Warning(ex, "Panic key: listener event failed"); }
         } } finally { StopRepeat(); }
@@ -158,7 +166,11 @@ internal static class X11PanicKey
     /// leaves for a native Wayland window, so a lost key-up reads as up here.</summary>
     internal static bool? IsPanicKeyDown()
     {
-        var code = _boundCode;
+        return IsKeyDown(_boundCode);
+    }
+
+    private static bool? IsKeyDown(int code)
+    {
         if (!IsListening || code is <= 0 or > 255) return null;
         lock (QueryGate)
         {
@@ -280,7 +292,8 @@ internal static class X11PanicKey
         }
         try { ListenRawEvents(injectedNext ?? Next, onPress, injectedNext == null ? OtherPress : injectedOther,
             injectedNext == null ? () => eventTime : injectedTime,
-            injectedNext == null ? code => RepeatRate(display, code) : null); }
+            injectedNext == null ? code => RepeatRate(display, code) : null,
+            injectedNext == null ? IsKeyDown : null); }
         finally { if (ev != IntPtr.Zero) Marshal.FreeHGlobal(ev); }
     }
 
