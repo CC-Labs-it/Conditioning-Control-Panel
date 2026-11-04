@@ -1,9 +1,13 @@
+using System;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Controls.Invites;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Startup;
+using ConditioningControlPanel.Services.Invites;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -14,13 +18,17 @@ internal static class MergedAccountRecoveryHead
     {
         MergedAccountRecovery.StopSync = () => AccountSeed.Sync?.Reset();
         MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
-        // Provider token exchange is part B. Until then every swap offers the ordinary sign-in.
-        MergedAccountRecovery.Reauthenticate = null;
-        MergedAccountRecovery.ReloadProfile = null;
+        MergedAccountRecovery.Reauthenticate = ReauthenticateAsync;
+        MergedAccountRecovery.ReloadProfile = async () => { await AccountSeed.LoadProfileAsync(); };
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
             var shell = MainShellWindow.Current;
             shell?.UpdateQuickLoginUI();
+            if (reauthed)
+            {
+                InvitePanel.ArmExpiry();
+                return;
+            }
             var item = new InboxItem
             {
                 Key = "merged-account-signin:" + canonical,
@@ -37,9 +45,46 @@ internal static class MergedAccountRecoveryHead
                 StartupLadder.PresentOrInbox(item);
         });
         V2AuthService.MergedRecovery = MergedAccountRecovery.TryHandleAsync;
+        AiService.MergedAccountHook = response => MergedAccountRecovery.TryHandleAsync(response);
     }
 
-    private static async System.Threading.Tasks.Task OpenSignInAsync()
+    // WPF App.xaml.cs:4615: try the signed-in providers in order until one mints a V2 token.
+    private static async Task<bool> ReauthenticateAsync()
+    {
+        if (AccountSeed.Patreon?.IsAuthenticated == true &&
+            await ExchangeAsync(AccountSeed.Patreon.GetAccessToken, (v, t) => v.AuthenticateWithPatreonAsync(t))) return true;
+        if (AccountSeed.Discord?.IsAuthenticated == true &&
+            await ExchangeAsync(AccountSeed.Discord.GetAccessToken, (v, t) => v.AuthenticateWithDiscordAsync(t))) return true;
+        if (AccountSeed.SubscribeStar?.IsAuthenticated == true &&
+            await ExchangeAsync(AccountSeed.SubscribeStar.GetAccessToken, (v, t) => v.AuthenticateWithSubstarAsync(t))) return true;
+        return false;
+    }
+
+    private static async Task<bool> ExchangeAsync(Func<string?> getToken,
+        Func<V2AuthService, string, Task<V2AuthService.V2AuthResponse>> authenticate)
+    {
+        try
+        {
+            var token = getToken();
+            if (string.IsNullOrEmpty(token)) return false;
+            var result = await authenticate(AccountSeed.NewV2(), token);
+            if (!result.Success || result.NeedsRegistration || result.User == null ||
+                string.IsNullOrEmpty(result.User.UnifiedId) || string.IsNullOrEmpty(result.AuthToken)) return false;
+            var now = DateTime.UtcNow;
+            ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, now);
+            InviteRules.ApplyGrant(CoreSettings.Current, InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), now);
+            CoreAccount.UnifiedUserId = result.User.UnifiedId;
+            CoreSettings.Save();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "Merged account provider sign-in failed");
+            return false;
+        }
+    }
+
+    private static async Task OpenSignInAsync()
     {
         var shell = MainShellWindow.Current;
         if (shell == null) return;
