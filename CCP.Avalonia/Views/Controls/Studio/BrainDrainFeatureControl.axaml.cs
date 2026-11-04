@@ -1,4 +1,8 @@
+using System.ComponentModel;
 using Avalonia;
+using Avalonia.Threading;
+using SettingsModel = ConditioningControlPanel.Models.AppSettings;
+using ConditioningControlPanel.Services;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using ConditioningControlPanel.Avalonia.Views.Features;
@@ -91,22 +95,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         private readonly CheckBox _keepClear;
         private bool _loading;
         private readonly System.Action _loadAudio;
+        private SettingsService? _settingsService;
+        private SettingsModel? _settings;
+        private bool _attached;
 
         // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
         // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
-            LoadKeepClear();
-            _loadAudio();
+            _attached = true;
+            _settingsService = CoreSettings.Service;
+            if (_settingsService != null) _settingsService.CurrentReplaced += RebindSettings;
+            RebindSettings();
             RefreshClipCount();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            _attached = false;
+            if (_settingsService != null) _settingsService.CurrentReplaced -= RebindSettings;
+            if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
+            _settingsService = null;
+            _settings = null;
             base.OnDetachedFromVisualTree(e);
+        }
+
+        private void RebindSettings()
+        {
+            if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
+            _settings = CoreSettings.Current;
+            _settings.PropertyChanged += SettingsChanged;
+            if (Dispatcher.UIThread.CheckAccess()) LoadKeepClear();
+            else Dispatcher.UIThread.Post(() => { if (_attached) LoadKeepClear(); });
+        }
+
+        private void SettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(SettingsModel.BrainDrainEnabled) or nameof(SettingsModel.BrainDrainIntensity)
+                or nameof(SettingsModel.BrainDrainVolume) or nameof(SettingsModel.BrainDrainHighRefresh))
+                Dispatcher.UIThread.Post(() => { if (_attached) _loadAudio(); });
         }
 
         private void LoadKeepClear()
@@ -120,6 +148,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             Platform.BrainDrainPlayer.Instance?.Reload();
             var clips = Platform.BrainDrainPlayer.Instance?.ClipCount ?? 0;
             this.FindControl<TextBlock>("TxtAudioFolderPath")!.Text = Platform.BrainDrainPlayer.Folder;
+            var legacy = Platform.BrainDrainPlayer.HasClips(Platform.BrainDrainPlayer.LegacyFolder);
+            this.FindControl<TextBlock>("TxtLegacyFolderNote")!.IsVisible = legacy;
+            var legacyPath = this.FindControl<TextBlock>("TxtLegacyFolderPath")!;
+            legacyPath.IsVisible = legacy;
+            legacyPath.Text = Platform.BrainDrainPlayer.LegacyFolder;
             this.FindControl<TextBlock>("TxtClipCount")!.Text = Loc.GetF("st4_braindrain_clips_loaded_0", clips);
             this.FindControl<Border>("NoAudioHint")!.IsVisible = clips == 0;
         }

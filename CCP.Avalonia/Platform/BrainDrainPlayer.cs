@@ -27,7 +27,8 @@ internal sealed class BrainDrainPlayer {
     internal bool IsRunning { get { lock (_gate) return _running; } }
     internal int ClipCount { get { lock (_gate) return _clips.Length; } }
     internal static string Folder => Path.Combine(CorePaths.EffectiveAssets, "braindrain");
-    internal static string LegacyFolder => Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "braindrain");
+    internal static Func<string>? LegacyFolderProvider;
+    internal static string LegacyFolder => LegacyFolderProvider?.Invoke() ?? Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "braindrain");
     internal static string EnsureFolder() { Directory.CreateDirectory(Folder); return Folder; }
     internal BrainDrainPlayer(Func<string, double, bool, Action, MindWipePlayer.IVoice?> create,
         TimeProvider? time = null, Func<double>? roll = null) {
@@ -42,6 +43,7 @@ internal sealed class BrainDrainPlayer {
         try { return Directory.GetFiles(folder).Where(p => new[] { ".mp3", ".wav", ".ogg" }
             .Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)).ToArray(); }
         catch { return []; } }
+    internal static bool HasClips(string folder) => Clips(folder).Any();
     internal void Reload() {
         try { EnsureFolder(); } catch { }
         var files = Clips(Folder).Concat(Clips(LegacyFolder))
