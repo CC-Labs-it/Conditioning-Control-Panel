@@ -57,6 +57,46 @@ public sealed class DeeperRowsTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task PreviewFromPlayerOwnedEditorReusesOwner() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var player = new EnhancementPlayerWindow(null, null);
+        var enh = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "/tmp/preview.mp3" };
+        enh.Metadata.Name = "Unsaved";
+        var editor = new DeeperEditorWindow(enh, null);
+        try
+        {
+            player.Show();
+            editor.Show(player);
+            Click(editor.FindControl<Button>("BtnPreview")!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Unsaved", player.FindControl<TextBlock>("TxtEnhName")!.Text);
+            Assert.Null(player.LoadedFilePath);
+        }
+        finally { editor.Close(); player.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PreviewReportsMissingPlayer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio }, null);
+        try
+        {
+            editor.Show();
+            Click(editor.FindControl<Button>("BtnPreview")!);
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(editor.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("deeper_editor_preview_not_initialized"),
+                dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+            dialog.Close();
+        }
+        finally { editor.Close(); }
+        return Task.CompletedTask;
+    });
+
     private sealed class FakeAudio : IDeeperLocalAudio
     {
         public bool Playing, Disposed;
