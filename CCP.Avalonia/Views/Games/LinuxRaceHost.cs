@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games;
 internal sealed class LinuxRaceHost : IDisposable
 {
     internal static LinuxRaceHost? Current { get; private set; }
+    internal static Func<MainShellWindow?> Shell = () => MainShellWindow.Current;
     private readonly Process _process;
     private readonly Action<DateTime> _panic;
     private readonly int _pid;
@@ -65,7 +66,7 @@ internal sealed class LinuxRaceHost : IDisposable
     {
         _process = process; _pid = process.Id;
         _x11Listening = x11Listening ?? (() => Platform.X11PanicKey.IsListening && Platform.X11PanicKey.BoundKeycode != 0);
-        _panic = panic ?? (now => MainShellWindow.Current?.HandlePanicKeyPress(now, raceOwned: _closed != 0));
+        _panic = panic ?? (now => Shell()?.HandlePanicKeyPress(now, raceOwned: _closed != 0));
         _session = new GlassroadSession(Post, Dispose, () => Post(new { type = "focus" }));
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _watch.Tick += (_, _) => { if (UnsupportedPanicKey) Dispose(); else _session.CheckGlassroadWatch(DateTime.UtcNow); };

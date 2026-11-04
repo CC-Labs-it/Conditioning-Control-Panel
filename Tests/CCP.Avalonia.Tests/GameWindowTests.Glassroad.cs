@@ -359,6 +359,34 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
+    public void Glassroad_WatchdogRecoveryUsesRealPanicWithoutAdvancingExitLadder() => RunGlassroad("1", (shell, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        CoreSettings.Current.PanicKey = "Escape"; CoreSettings.Current.PanicKeyEnabled = true; CoreSettings.Current.PanicOverridesAll = false;
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var host = new LinuxRaceHost(p, x11Listening: () => false);
+        using var fired = new System.Threading.ManualResetEventSlim();
+        var watchdog = ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown;
+        var surfaces = PanicSurfaces.All; var shellProvider = LinuxRaceHost.Shell; var stops = 0;
+        try
+        {
+            LinuxRaceHost.Shell = () => shell;
+            PanicSurfaces.All = new[] { new PanicSurfaces.Surface("test", _ => stops++) };
+            ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = () => { host.Kill(); fired.Set(); };
+            host.ReadFrame(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "wayland" });
+            host.ReadFrame(new JObject { ["type"] = "shell-escape", ["sequence"] = 1 });
+            Assert.True(fired.Wait(TimeSpan.FromSeconds(6)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, stops); Assert.Null(LinuxRaceHost.Current);
+            var count = typeof(MainShellWindow).GetField("_panicPressCount", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.Equal(0, (int)count.GetValue(shell)!);
+        }
+        finally { LinuxRaceHost.Shell = shellProvider; PanicSurfaces.All = surfaces; ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = watchdog; Dispatcher.UIThread.RunJobs(); }
+    });
+
+    [Fact]
     public void Glassroad_ReaderEscapeWatchdogKillsWhileUiIsBlocked() => RunGlassroad("1", (_, _, _) =>
     {
         if (!OperatingSystem.IsLinux()) return;

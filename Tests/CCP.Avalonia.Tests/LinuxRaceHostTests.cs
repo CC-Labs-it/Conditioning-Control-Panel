@@ -14,6 +14,7 @@ public sealed class LinuxRaceHostTests
     [InlineData("wayland", true, true)]
     [InlineData("x11", false, true)]
     [InlineData(null, true, false)]
+    [InlineData(null, false, true)]
     public void EscapeDeliveryHasOneSourceAndDeduplicatesBySequence(string? backend, bool listening, bool accepted)
     {
         long last = 0;
