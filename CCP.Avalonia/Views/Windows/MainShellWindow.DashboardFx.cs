@@ -9,8 +9,6 @@
 // STILL MISSING (each a WPF member of MainWindow.DashboardFx.cs):
 //   the "? box" doorbell + hover flip - ApplyMysteryFx/ApplyMysteryBreath/ApplyMysteryBadgeVisibility/
 //     EnsureMysteryTileFx/RequestMysteryFace/RunMysteryFlip/Open/SettleMysteryPlate/StartMysteryPop;
-//   the centre wordmark's sheen - ApplyLogoSheenTimer/SweepLogoSheen (ApplyLogoDrift is LIVE for the logo's
-//     AmbientAllowed gate; its Ken Burns drift only runs for a mod's still logo in WPF, and is not ported);
 // LIVE: browser frame sweep and localized loading-status pulse (ApplyBrowserFx), shared BeatLoop.
 // Not to port: PrepareRailArtNudge/ApplyRailHover/ApplyRailDotPulse were retired with the premium
 // quick-toggle rail on WPF (2026-09-11); the dashboard column is the favorites rail now
@@ -22,6 +20,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Controls.Shapes;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Features;
@@ -55,12 +55,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RegisterTabFx("settings", tab?.FindControl<AmbientFxCanvas>("FavoritesDrawerFx"));
 
                 LoadLogo();
+                if (tab?.FindControl<Border>("LogoFaceLogo") is { } face)
+                    face.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) ApplyLogoFx(); };
+                if (tab?.FindControl<AnimatedLogoImage>("ImgLogo") is { } artwork)
+                    artwork.ArtworkChanged += ApplyLogoFx;
                 Activated += OnDashboardFxWindowStateish;
                 Deactivated += OnDashboardFxWindowStateish;
                 PropertyChanged += OnDashboardFxWindowProperty;
                 if (tab != null)
                 {
-                    tab.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) ApplyVaultCtaBreath(); };
+                    tab.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { ApplyVaultCtaBreath(); ApplyLogoFx(); } };
                     // The browser writes status from many paths. Watch the text as WPF does,
                     // so connected and failed statuses immediately stop the progress cue.
                     if (tab.FindControl<TextBlock>("TxtBrowserStatus") is { } status)
@@ -68,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 // A static event: subscribe while open, never root a closed shell (P41).
                 Opened += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; Env.MotionGateChanged += ApplyDashboardFxLoops; ApplyDashboardFxLoops(); };
-                Closed += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; StopVaultCtaBreath(); StopBrowserFx(); };
+                Closed += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; StopVaultCtaBreath(); StopBrowserFx(); StopLogoFx(); };
             }
             catch (Exception ex) { Log.Warning(ex, "InitializeDashboardFx failed"); }
         }
@@ -77,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnDashboardFxWindowProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
-            if (e.Property == WindowStateProperty) ApplyDashboardFxLoops();
+            if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) ApplyDashboardFxLoops();
         }
 
         /// <summary>
@@ -98,9 +102,78 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF ApplyLogoDrift (:753): the logo animates under the chrome gate; BeatLoop parks it hidden.
                 if (tab.FindControl<AnimatedLogoImage>("ImgLogo") is { } logo)
                     logo.AmbientAllowed = Env.AllowAmbientLoops && IsActive && WindowState != WindowState.Minimized;
+                ApplyLogoFx();
                 tab.ApplyHostShown(WindowState != WindowState.Minimized);   // drawer + fold breaths
             }
             catch (Exception ex) { Log.Debug("ApplyDashboardFxLoops: {E}", ex.Message); }
+        }
+
+        private BeatLoop? _logoDrift, _logoSweep;
+        private DispatcherTimer? _logoSheenTimer;
+        internal bool LogoDrifting => _logoDrift?.IsRunning == true;
+        internal bool LogoSheenScheduled => _logoSheenTimer?.IsEnabled == true;
+
+        // WPF ApplyLogoDrift / ApplyLogoSheenTimer, MainWindow.DashboardFx.cs:748-811.
+        private void ApplyLogoFx()
+        {
+            var tab = Named<Tabs.SettingsTabView>("SettingsTab");
+            var face = tab?.FindControl<Border>("LogoFaceLogo");
+            var logo = tab?.FindControl<AnimatedLogoImage>("ImgLogo");
+            if (face?.RenderTransform is not ScaleTransform scale || logo == null) return;
+            bool run = Env.AllowAmbientLoops && IsActive && IsVisible && WindowState != WindowState.Minimized
+                       && face.IsEffectivelyVisible && !logo.IsAnimatedArtwork;
+            if (!run) { StopLogoFx(); return; }
+            if (_logoDrift == null)
+            {
+                _logoDrift = new BeatLoop(face, t => scale.ScaleX = scale.ScaleY = 1 + .04 * BeatLoop.Breath(t, 40));
+                _logoDrift.Start();
+            }
+            if (_logoSheenTimer == null)
+            {
+                _logoSheenTimer = new DispatcherTimer();
+                _logoSheenTimer.Tick += OnLogoSheenTick;
+                ScheduleLogoSheen();
+            }
+        }
+
+        private void ScheduleLogoSheen()
+        {
+            if (_logoSheenTimer == null) return;
+            _logoSheenTimer.Interval = TimeSpan.FromSeconds(Random.Shared.Next(25, 41));
+            _logoSheenTimer.Start();
+        }
+
+        private void OnLogoSheenTick(object? sender, EventArgs e)
+        {
+            ScheduleLogoSheen();
+            var tab = Named<Tabs.SettingsTabView>("SettingsTab");
+            var face = tab?.FindControl<Border>("LogoFaceLogo");
+            var band = tab?.FindControl<Rectangle>("LogoSheen");
+            if (face == null || band?.RenderTransform is not TransformGroup { Children: [_, TranslateTransform slide] } || face.Bounds.Width <= 0) return;
+            _logoSweep?.Stop();
+            _logoSweep = new BeatLoop(face, t =>
+            {
+                double p = Math.Clamp(t / 1.1, 0, 1);
+                double ease = (1 - Math.Cos(Math.PI * p)) / 2;
+                slide.X = -band.Width + (face.Bounds.Width + band.Width * 1.25) * ease;
+                band.Opacity = .26 * Math.Min(1, Math.Min(p / .2, (1 - p) / .25));
+                if (p >= 1) { _logoSweep?.Stop(); _logoSweep = null; }
+            });
+            _logoSweep.Start();
+        }
+
+        private void StopLogoFx()
+        {
+            _logoDrift?.Stop(); _logoDrift = null;
+            _logoSweep?.Stop(); _logoSweep = null;
+            if (_logoSheenTimer != null) { _logoSheenTimer.Stop(); _logoSheenTimer.Tick -= OnLogoSheenTick; _logoSheenTimer = null; }
+            var tab = Named<Tabs.SettingsTabView>("SettingsTab");
+            if (tab?.FindControl<Border>("LogoFaceLogo")?.RenderTransform is ScaleTransform scale) scale.ScaleX = scale.ScaleY = 1;
+            if (tab?.FindControl<Rectangle>("LogoSheen") is { } band)
+            {
+                band.Opacity = 0;
+                if (band.RenderTransform is TransformGroup { Children: [_, TranslateTransform slide] }) slide.X = 0;
+            }
         }
 
         /// <summary>
