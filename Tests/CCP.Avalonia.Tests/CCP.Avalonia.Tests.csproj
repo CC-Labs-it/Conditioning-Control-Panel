@@ -17,6 +17,11 @@
     <PackageReference Include="Avalonia.Skia" Version="12.1.2" />
   </ItemGroup>
 
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win')) Or ('$(RuntimeIdentifier)' == '' And $([MSBuild]::IsOSPlatform('Windows')))">
+    <!-- The native cue tests require the real x64 LibVLC, including the DirectSound and file outputs. -->
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Include="..\Shared\AvaloniaTestDispatcher.cs" Link="AvaloniaTestDispatcher.cs" />
     <Compile Include="..\Shared\FakeContentServer.cs" Link="FakeContentServer.cs" />

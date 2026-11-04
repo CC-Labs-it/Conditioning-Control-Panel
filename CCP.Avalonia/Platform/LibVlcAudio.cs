@@ -233,14 +233,44 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     try
                     {
                         media.AddOption(NoVideo);
-                        var player = new MediaPlayer(media);
+                        var player = CreatePlayer(media);
                         _media = media; _player = player;
+                        // Some outputs only expose devices after starting. Keep the old live-device
+                        // fallback, but never touch a player which has since stopped or been replaced.
+                        player.Playing += (_, _) => ThreadPool.QueueUserWorkItem(_ =>
+                        {
+                            lock (_gate) if (ReferenceEquals(_player, player)) ApplyPreferredDevice(player);
+                        });
                         PlayerCreated?.Invoke(player);
                         if (!player.Play()) StopCurrent();
                         return () => { lock (_gate) { if (ReferenceEquals(_player, player)) StopCurrent(); } };
                     }
                     catch { if (ReferenceEquals(_media, media)) StopCurrent(); else media.Dispose(); throw; }
                 }
+            }
+            private static MediaPlayer CreatePlayer(Media media)
+            {
+                var player = new MediaPlayer(media);
+                var saved = CoreSettings.Current.AudioOutputDeviceId;
+                var module = OperatingSystem.IsLinux() ? "pulse" : OperatingSystem.IsWindows() ? "directsound" : null;
+                if (string.IsNullOrEmpty(saved) || module == null) return player;
+                try
+                {
+                    // Opening the output first lets Pulse select a valid sink before any samples are
+                    // audible. WPF's show uses the default (FirstShowAudio.cs:37-39); retain this
+                    // Avalonia head's existing saved-device behavior and its stale-device fallback.
+                    if (!player.SetAudioOutput(module)) return player;
+                    var devices = player.AudioOutputDeviceEnum.Select(d => d.DeviceIdentifier).ToArray();
+                    if (devices.Contains(saved))
+                    {
+                        var id = PreferredDevice(saved, player.OutputDevice, devices);
+                        if (id != null) player.SetOutputDevice(id);
+                        return player;
+                    }
+                }
+                catch (Exception ex) { Log.Debug(ex, "First show output device unavailable"); }
+                player.Dispose();
+                return new MediaPlayer(media);
             }
             private void StopCurrent()
             {

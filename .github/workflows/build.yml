@@ -328,6 +328,17 @@ jobs:
       - run: bash .github/scripts/fetch-vosk-model.sh
       # LibVLC tests use the system libvlc, like --smoke in core-linux.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvlc-dev vlc-plugin-base
+      - name: Provision two silent sinks for first-show routing
+        if: matrix.shard == 1
+        run: |
+          sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/ccp-pulse"
+          mkdir -m 700 -p "$XDG_RUNTIME_DIR"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ccp_default
+          pactl load-module module-null-sink sink_name=ccp_headphones
+          pactl set-default-sink ccp_default
       - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
       - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
         run: bash .github/scripts/avalonia-tests-sharded.sh --shard ${{ matrix.shard }}
@@ -361,6 +372,23 @@ jobs:
             10.0.x
           cache: true
           cache-dependency-path: "**/*.csproj"
+      - name: Provision a silent DirectSound endpoint for first-show tests
+        if: matrix.shard == 1
+        shell: pwsh
+        run: |
+          Start-Service AudioEndpointBuilder
+          Start-Service Audiosrv
+          $zip = "$env:RUNNER_TEMP/scream.zip"
+          Invoke-WebRequest 'https://github.com/duncanthrax/scream/releases/download/3.6/Scream3.6.zip' -OutFile $zip
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne '25EA5E778B4E6995A98D448B9B5F6D321F681663F1AEEEC69D8E63183D008B19') { throw 'Scream fixture checksum mismatch' }
+          $dir = "$env:RUNNER_TEMP/scream"
+          Expand-Archive $zip -DestinationPath $dir
+          $cert = (Get-AuthenticodeSignature "$dir/Install/driver/Scream.sys").SignerCertificate
+          if ($null -eq $cert) { throw 'Scream driver has no signing certificate' }
+          $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'LocalMachine')
+          $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
+          & "$dir/Install/helpers/devcon.exe" install "$dir/Install/driver/Scream.inf" '*Scream'
+          if ($LASTEXITCODE -ne 0) { throw "Scream installation failed: $LASTEXITCODE" }
       - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
       - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
         shell: bash

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +17,7 @@ public sealed class FirstShowPreviewBackendTests
     [Fact]
     public void NativeOutputHasRequestedGainFromTheFirstSample()
     {
-        RequireLinuxVlc();
+        RequireNativeVlc();
         var dir = Path.Combine(Path.GetTempPath(), "ccp-preview-gain-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         var input = Path.Combine(dir, "input.wav"); var output = Path.Combine(dir, "output.wav");
@@ -53,7 +54,7 @@ public sealed class FirstShowPreviewBackendTests
     [InlineData(false)]
     public async Task ReplacementAndCloseWaitForTheNativeStop(bool preview)
     {
-        RequireLinuxVlc();
+        RequireNativeVlc();
         var path = Path.Combine(Path.GetTempPath(), "ccp-preview-stop-" + Guid.NewGuid().ToString("N") + ".wav");
         WriteConstantWav(path);
         var settings = CoreSettings.ServiceProvider; var overridePath = CoreModArt.AudioOverridePathProvider;
@@ -115,10 +116,72 @@ public sealed class FirstShowPreviewBackendTests
         }
     }
 
-    private static void RequireLinuxVlc()
+    [Fact]
+    public void NativeCueSelectsTheSavedDeviceBeforePlayingAndFallsBackForStaleIds()
     {
-        if (!OperatingSystem.IsLinux()) Assert.Skip("Linux LibVLC file and dummy outputs are required");
-        if (!NativeLibrary.TryLoad("libvlc.so.5", out var handle)) Assert.Skip("LibVLC is not installed");
+        RequireNativeVlc();
+        var path = Path.Combine(Path.GetTempPath(), "ccp-cue-route-" + Guid.NewGuid().ToString("N") + ".wav");
+        WriteConstantWav(path);
+        var oldSettings = CoreSettings.ServiceProvider;
+        try
+        {
+            var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+            service.Current.AudioOutputDeviceId = "";
+            var output = OperatingSystem.IsWindows() ? "directsound" : "pulse";
+            string? selected = OperatingSystem.IsLinux() ? "ccp_headphones" : null;
+            if (OperatingSystem.IsWindows())
+            {
+                using var probe = new LibVlcAudio.FirstShowCue("--aout=directsound,none");
+                probe.PlayerCreated = player =>
+                {
+                    Assert.True(player.SetAudioOutput("directsound"));
+                    selected = player.AudioOutputDeviceEnum.Select(d => d.DeviceIdentifier).FirstOrDefault(id => !string.IsNullOrEmpty(id));
+                };
+                var stop = probe.Play(path, .25f, "device-probe"); stop();
+                Assert.False(string.IsNullOrEmpty(selected), "The Windows test requires a DirectSound output device");
+            }
+            using var backend = new LibVlcAudio.FirstShowCue("--aout=" + output + ",none");
+            foreach (var saved in new[] { selected!, "", "ccp-missing-output" })
+            {
+                service.Current.AudioOutputDeviceId = saved;
+                using var playing = new ManualResetEventSlim();
+                LibVLCSharp.Shared.MediaPlayer? current = null; string? beforePlay = null;
+                backend.PlayerCreated = player => { current = player; beforePlay = player.OutputDevice; player.Playing += (_, _) => playing.Set(); };
+                var stop = backend.Play(path, .25f, "device-test");
+                Assert.True(playing.Wait(TimeSpan.FromSeconds(10)), "Native audio did not start");
+                if (saved == selected) Assert.Equal(selected, beforePlay);
+                else Assert.NotEqual(saved.Length == 0 ? "ccp-missing-output" : saved, beforePlay);
+                if (OperatingSystem.IsLinux())
+                {
+                    var expected = saved == selected ? selected : "ccp_default";
+                    Assert.True(SpinWait.SpinUntil(() => current!.OutputDevice == expected, TimeSpan.FromSeconds(5)), "Pulse sink was not selected");
+                }
+                stop();
+            }
+            // A device that becomes available after player creation still uses the existing live fallback.
+            service.Current.AudioOutputDeviceId = "";
+            using var latePlaying = new ManualResetEventSlim();
+            LibVLCSharp.Shared.MediaPlayer? late = null;
+            backend.PlayerCreated = player => { late = player; service.Current.AudioOutputDeviceId = selected!; player.Playing += (_, _) => latePlaying.Set(); };
+            var lateStop = backend.Play(path, .25f, "late-device-test");
+            Assert.True(latePlaying.Wait(TimeSpan.FromSeconds(10)), "Native audio did not start");
+            Assert.True(SpinWait.SpinUntil(() => late!.OutputDevice == selected, TimeSpan.FromSeconds(5)), "Live device fallback was not applied");
+            lateStop();
+        }
+        finally { CoreSettings.ServiceProvider = oldSettings; File.Delete(path); }
+    }
+
+    private static void RequireNativeVlc()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var dir = Path.Combine(AppContext.BaseDirectory, "libvlc", Environment.Is64BitProcess ? "win-x64" : "win-x86");
+            Assert.True(File.Exists(Path.Combine(dir, "libvlc.dll")), "Windows LibVLC is required");
+            Assert.True(File.Exists(Path.Combine(dir, "plugins", "audio_output", "libdirectsound_plugin.dll")), "DirectSound plugin is required");
+            return;
+        }
+        Assert.True(OperatingSystem.IsLinux(), "Native audio tests require Windows or Linux");
+        Assert.True(NativeLibrary.TryLoad("libvlc.so.5", out var handle), "Linux LibVLC is required");
         NativeLibrary.Free(handle);
     }
 
