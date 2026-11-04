@@ -90,8 +90,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             bool inWindow = SchedulerTime.InWindow(s, SchedulerNow());
-            // WPF settings check starts inside the window; its timer handles an exit.
-            if (settingsChange && !inWindow) return;
+            // WPF edits wait for the timer; retire a queued start if its window ended.
+            if (settingsChange) { if (!inWindow && _schedulerPending) { _engineGen++; _schedulerPending = _schedulerAutoStarted = false; } return; }
             if (inWindow && !SchedulerRunning() && !_schedulerAutoStarted && !_schedulerManualStop)
             {
                 // WPF's settings-change check does not minimize; startup and timer do.

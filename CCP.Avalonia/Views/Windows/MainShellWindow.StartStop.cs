@@ -79,19 +79,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine(System.Action? onStarted = null)
+        internal void StartEngine(System.Action? onScheduledStarted = null)
         {
             var gen = ++_engineGen;
             (EngineStartDispatchOverride ?? StartEffect)(() =>
             {
-                if (gen != _engineGen || CoreEngine.IsRunning) return;
+                if (gen != _engineGen || CoreEngine.IsRunning) return; if (onScheduledStarted != null && (!CoreSettings.Current.SchedulerEnabled || !ConditioningControlPanel.Helpers.SchedulerTime.InWindow(CoreSettings.Current, SchedulerNow()))) { SchedulerTick(settingsChange: true); return; }
                 CoreEngine.Start();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
-                onStarted?.Invoke();
+                onScheduledStarted?.Invoke();
             });
         }
 

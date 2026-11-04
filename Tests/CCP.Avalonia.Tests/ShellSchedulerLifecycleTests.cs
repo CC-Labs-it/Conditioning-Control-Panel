@@ -84,7 +84,7 @@ public sealed class ShellSchedulerLifecycleTests
     });
 
     [Fact]
-    public void SettingsChangesStartWithoutHidingAndCloseUnhooks() => Run((shell, service) =>
+    public void SettingsChangesWaitForTimerAndCloseUnhooks() => Run((shell, service) =>
     {
         var s = service.Current;
         var now = new DateTime(2026, 11, 2, 10, 30, 0);
@@ -120,8 +120,8 @@ public sealed class ShellSchedulerLifecycleTests
         Assert.Equal(0, starts);
         s.SchedulerEndTime = "11:00";
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(1, starts);
-        Assert.Equal(0, hidden);
+        Assert.Equal(0, starts); Assert.Equal(0, hidden);
+        shell.SchedulerTick(); Assert.Equal(1, starts); Assert.Equal(1, hidden);
         s.SchedulerEndTime = "10:15";
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(0, stops);
@@ -177,9 +177,13 @@ public sealed class ShellSchedulerLifecycleTests
         shell.EngineStartDispatchOverride = action => pending = action;
         shell.SchedulerMinimizeOverride = () => { };
         shell.SchedulerNoticeOverride = (_, _) => { };
-        shell.Show();
+        service.Current.AudioOnlySession = true; shell.Show();
         shell.SchedulerStartup();
         Assert.NotNull(pending);
+        service.Current.SchedulerEndTime = "10:00"; pending!(); Assert.False(CoreEngine.IsRunning);
+        service.Current.SchedulerEndTime = "11:00"; pending!(); Assert.False(CoreEngine.IsRunning);
+        Dispatcher.UIThread.RunJobs(); shell.SchedulerTick(); service.Current.SchedulerEndTime = "10:00"; Dispatcher.UIThread.RunJobs();
+        service.Current.SchedulerEndTime = "11:00"; pending!(); Assert.False(CoreEngine.IsRunning); Dispatcher.UIThread.RunJobs(); shell.SchedulerTick();
         now = now.AddHours(1); shell.SchedulerTick();
         pending!();
         Assert.False(CoreEngine.IsRunning);
