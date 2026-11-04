@@ -103,6 +103,8 @@ jobs:
       # CCP_MIGRATION_PROFILE runs a real profile locally only). Own testhost: UserData is per process.
       - name: Test Avalonia settings migration
         run: dotnet test Tests/CCP.Avalonia.Migration.Tests/CCP.Avalonia.Migration.Tests.csproj -c Release
+      - name: Test Avalonia Deeper desktop lifecycle
+        run: dotnet test Tests/CCP.Avalonia.DeeperLifecycle.Tests/CCP.Avalonia.DeeperLifecycle.Tests.csproj -c Release
       # CCP.Avalonia.Tests (sharded, one testhost per shard) runs in the avalonia-linux matrix job below.
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release
@@ -257,6 +259,8 @@ jobs:
       # CCP_MIGRATION_PROFILE runs a real profile locally only). Own testhost: UserData is per process.
       - name: Test Avalonia settings migration
         run: dotnet test Tests/CCP.Avalonia.Migration.Tests/CCP.Avalonia.Migration.Tests.csproj -c Release
+      - name: Test Avalonia Deeper desktop lifecycle
+        run: dotnet test Tests/CCP.Avalonia.DeeperLifecycle.Tests/CCP.Avalonia.DeeperLifecycle.Tests.csproj -c Release
       # CCP.Avalonia.Tests (sharded, one testhost per shard) runs in the avalonia-windows matrix job below.
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release

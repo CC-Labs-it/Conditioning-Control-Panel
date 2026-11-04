@@ -49,11 +49,14 @@ namespace ConditioningControlPanel.Services.Deeper
         // has a "welcome.ccpenh.json", their copy wins (they may have edited it).
         private void SeedBundledDemos()
         {
+            SeedBundledDemos(LibraryFolder, Path.Combine(AppContext.BaseDirectory, "Resources", "DeeperDemos"));
+        }
+
+        internal static void SeedBundledDemos(string libraryFolder, string demoSource)
+        {
             try
             {
                 if (CoreSettings.Current.HasSeededDeeperDemos) return;
-
-                var demoSource = Path.Combine(AppContext.BaseDirectory, "Resources", "DeeperDemos");
                 if (!Directory.Exists(demoSource))
                 {
                     Log.Debug("EnhancementLibrary: no bundled demos folder at {Path}", demoSource);
@@ -65,8 +68,21 @@ namespace ConditioningControlPanel.Services.Deeper
                 foreach (var src in sources)
                 {
                     var name = Path.GetFileName(src);
-                    var dst = Path.Combine(LibraryFolder, name);
-                    if (File.Exists(dst)) continue; // respect user-edited copy
+                    var dst = Path.Combine(libraryFolder, name);
+                    if (File.Exists(dst)) continue;
+                    // Windows resolves case itself. Elsewhere, preserve differently cased edits
+                    // when listing is allowed, but still try the copy if it is not.
+                    if (!OperatingSystem.IsWindows())
+                    {
+                        try
+                        {
+                            if (Directory.EnumerateFiles(libraryFolder).Any(existing =>
+                                string.Equals(Path.GetFileName(existing), name, StringComparison.OrdinalIgnoreCase)))
+                                continue;
+                        }
+                        catch (UnauthorizedAccessException) { }
+                        catch (IOException) { }
+                    }
                     try { File.Copy(src, dst, overwrite: false); copied++; }
                     catch (Exception ex) { Log.Debug("EnhancementLibrary: failed to copy demo {Name}: {Error}", name, ex.Message); }
                 }
@@ -90,7 +106,8 @@ namespace ConditioningControlPanel.Services.Deeper
             {
                 if (!Directory.Exists(LibraryFolder)) return;
 
-                _watcher = new FileSystemWatcher(LibraryFolder, "*" + FileSuffix)
+                // A wildcard suffix is case-sensitive on Linux; filter events below like the hub scan.
+                _watcher = new FileSystemWatcher(LibraryFolder)
                 {
                     NotifyFilter = NotifyFilters.FileName
                                  | NotifyFilters.LastWrite
@@ -112,8 +129,18 @@ namespace ConditioningControlPanel.Services.Deeper
             }
         }
 
-        private void OnFsEvent(object sender, FileSystemEventArgs e) => ScheduleChangeNotification();
-        private void OnFsRenamed(object sender, RenamedEventArgs e) => ScheduleChangeNotification();
+        private static bool IsEnhancementFile(string? name) =>
+            name?.EndsWith(FileSuffix, StringComparison.OrdinalIgnoreCase) == true;
+
+        private void OnFsEvent(object sender, FileSystemEventArgs e)
+        {
+            if (IsEnhancementFile(e.Name)) ScheduleChangeNotification();
+        }
+
+        private void OnFsRenamed(object sender, RenamedEventArgs e)
+        {
+            if (IsEnhancementFile(e.Name) || IsEnhancementFile(e.OldName)) ScheduleChangeNotification();
+        }
         private void OnFsError(object sender, ErrorEventArgs e)
         {
             Log.Warning(e.GetException(), "EnhancementLibrary: watcher error");
@@ -345,8 +372,9 @@ namespace ConditioningControlPanel.Services.Deeper
                 if (!Directory.Exists(LibraryFolder)) return null;
 
                 var wanted = EnhancementImportRules.NormalizedContentHash(File.ReadAllText(sourcePath));
-                foreach (var candidate in Directory.GetFiles(LibraryFolder, "*" + FileSuffix, SearchOption.TopDirectoryOnly))
+                foreach (var candidate in Directory.GetFiles(LibraryFolder, "*", SearchOption.TopDirectoryOnly))
                 {
+                    if (!IsEnhancementFile(candidate)) continue;
                     try
                     {
                         if (EnhancementImportRules.NormalizedContentHash(File.ReadAllText(candidate)) == wanted)
@@ -368,9 +396,10 @@ namespace ConditioningControlPanel.Services.Deeper
             try
             {
                 if (!Directory.Exists(LibraryFolder)) return results;
-                var files = Directory.GetFiles(LibraryFolder, "*" + FileSuffix, SearchOption.TopDirectoryOnly);
+                var files = Directory.GetFiles(LibraryFolder, "*", SearchOption.TopDirectoryOnly);
                 foreach (var path in files)
                 {
+                    if (!IsEnhancementFile(path)) continue;
                     var entry = TryReadMetadata(path);
                     if (entry != null) results.Add(entry);
                 }

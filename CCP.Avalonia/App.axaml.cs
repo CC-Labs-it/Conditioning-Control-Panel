@@ -18,6 +18,22 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
+        // WPF App.xaml.cs:308,3415-3418,6541: one library for the app lifetime.
+        internal static Services.Deeper.EnhancementLibrary? DeeperLibrary { get; private set; }
+
+        internal static void StartDeeperLibrary()
+        {
+            DeeperLibrary ??= new Services.Deeper.EnhancementLibrary();
+            Services.Deeper.EnhancementResolver.LibraryMatchProvider = (path, type) => DeeperLibrary?.FindMatch(path, type);
+        }
+
+        internal static void StopDeeperLibrary()
+        {
+            Services.Deeper.EnhancementResolver.LibraryMatchProvider = null;
+            DeeperLibrary?.Dispose();
+            DeeperLibrary = null;
+        }
+
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
         public static Helpers.NotificationService Notifications { get; } = new();
 
@@ -498,6 +514,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                StartDeeperLibrary();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
@@ -1305,6 +1322,7 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            try { StopDeeperLibrary(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper library shutdown failed"); }
             Platform.ScrolllerHead.Stop();   // WPF App.OnExit:6284-6285: the share's ledger and the cache index
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
