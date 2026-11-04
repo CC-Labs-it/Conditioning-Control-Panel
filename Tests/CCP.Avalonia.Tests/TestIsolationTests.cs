@@ -37,6 +37,8 @@ public class TestIsolationTests
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
+    [InlineData(typeof(ConditioningControlPanel.Services.V2AuthService), nameof(ConditioningControlPanel.Services.V2AuthService.MergedRecovery))]
+    [InlineData(typeof(ConditioningControlPanel.Services.MergedAccountRecovery), nameof(ConditioningControlPanel.Services.MergedAccountRecovery.ReloadProfile))]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]

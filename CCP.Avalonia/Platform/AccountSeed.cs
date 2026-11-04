@@ -1,5 +1,9 @@
 using System;
 using System.Threading.Tasks;
+using Avalonia.Threading;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Startup;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -71,6 +75,25 @@ internal static class AccountSeed
             ? NewV2().ChangeDisplayNameAsync(id, name) : null;
         CoreAccount.DeleteAccountProvider = () => CoreSettings.Current.UnifiedId is { Length: > 0 } id
             ? NewV2().DeleteAccountAsync(id) : null;
+        // WPF App.xaml.cs:416-419 and MergedAccountRecoveryHead.Seed.
+        V2AuthService.MergedRecovery = MergedAccountRecovery.TryHandleAsync;
+        MergedAccountRecovery.StopSync = () => Sync?.Reset();
+        MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
+        MergedAccountRecovery.Reauthenticate = ReauthenticateAfterMergedSwapAsync;
+        MergedAccountRecovery.ReloadProfile = async () => { await LoadProfileAsync(); };
+        MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
+        {
+            MainShellWindow.Current?.UpdateQuickLoginUI(accountChanged: true);
+            if (!reauthed)
+                StartupLadder.PresentOrInbox(new InboxItem
+                {
+                    Key = "merged-account-signin:" + canonical,
+                    Glyph = "🔗",
+                    Title = Loc.Get("account_merged_signin_title"),
+                    Summary = Loc.Get("account_merged_signin_summary"),
+                    Open = () => { if (MainShellWindow.Current is { } shell) _ = shell.OpenUnifiedLoginDialog(); },
+                });
+        });
         // WPF ProfileSyncService.HandleUnauthorizedAsync (StartHeartbeat on success) / TryProviderRevalidateAsync.
         AuthRecovery.Recovered = () => { if (Sync is { Loaded: true } sync) sync.StartHeartbeat(); };
         AuthRecovery.ProviderRevalidate = async () =>
@@ -85,6 +108,40 @@ internal static class AccountSeed
             h => { patreon.TierChanged += h; substar.TierChanged += h; },
             h => { patreon.TierChanged -= h; substar.TierChanged -= h; });
         return true;
+    }
+
+    /// <summary>WPF App.ReauthenticateAfterMergedSwapAsync: mint a fresh token from an existing provider.</summary>
+    internal static async Task<bool> ReauthenticateAfterMergedSwapAsync()
+    {
+        var v2 = NewV2();
+        foreach (var provider in new[] { "patreon", "discord", "substar" })
+        {
+            try
+            {
+                var token = provider switch
+                {
+                    "patreon" when Patreon?.IsAuthenticated == true => Patreon.GetAccessToken(),
+                    "discord" when Discord?.IsAuthenticated == true => Discord.GetAccessToken(),
+                    "substar" when SubscribeStar?.IsAuthenticated == true => SubscribeStar.GetAccessToken(),
+                    _ => null,
+                };
+                if (string.IsNullOrEmpty(token)) continue;
+                var result = provider switch
+                {
+                    "patreon" => await v2.AuthenticateWithPatreonAsync(token),
+                    "discord" => await v2.AuthenticateWithDiscordAsync(token),
+                    _ => await v2.AuthenticateWithSubstarAsync(token),
+                };
+                if (!result.Success || result.User == null || string.IsNullOrEmpty(result.User.UnifiedId)
+                    || string.IsNullOrEmpty(result.AuthToken)) continue;
+                ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, DateTime.UtcNow);
+                CoreAccount.UnifiedUserId = result.User.UnifiedId;
+                CoreSettings.Save();
+                return true;
+            }
+            catch (Exception ex) { Log.Warning(ex, "Merged account provider sign-in failed"); }
+        }
+        return false;
     }
 
     /// <summary>WPF App.xaml.cs:2267 restore: the unified id persisted from the previous session. Unlike WPF,
