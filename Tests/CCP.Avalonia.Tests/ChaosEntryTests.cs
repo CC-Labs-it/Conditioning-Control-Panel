@@ -38,15 +38,17 @@ public sealed class ChaosEntryTests
                     .SetupWithoutStarting();
             using var log = new LogCapture();
             var previous = ChaosMeta.State;
-            ChaosMeta.Init();
-            ChaosMeta.State.RunsCompleted = returning ? 1 : 0;
-            ChaosMeta.State.SeenIntroGuide = true;
-            ChaosMeta.Save();
-            ChaosMeta.State.RunsCompleted = returning ? 0 : 1; // stale in-memory state must not choose the door
-            CoreEntitlement.HasPremiumProvider = () => true;
-            GameWindow.DtrhBootFailedThisSession = !bootError;
+            var oldGate = CoreEntitlement.HasPremiumProvider;
+            bool oldFailed = GameWindow.DtrhBootFailedThisSession;
             try
             {
+                ChaosMeta.Init();
+                ChaosMeta.State.RunsCompleted = returning ? 1 : 0;
+                ChaosMeta.State.SeenIntroGuide = true;
+                ChaosMeta.Save();
+                ChaosMeta.State.RunsCompleted = returning ? 0 : 1; // stale in-memory state must not choose the door
+                CoreEntitlement.HasPremiumProvider = () => true;
+                GameWindow.DtrhBootFailedThisSession = !bootError;
                 if (bootError)
                 {
                     var game = new GameWindow(GameWindow.Games[GameWindow.DtrhId]);
@@ -77,11 +79,19 @@ public sealed class ChaosEntryTests
             }
             finally
             {
-                ChaosHubWindow.Current?.Close();
-                ChaosRunHost.ForceShutdown();
-                GameWindow.CloseAllForPanic();
-                ChaosMetaStore.Save(previous);
-                ChaosMeta.Init();
+                try
+                {
+                    ChaosHubWindow.Current?.Close();
+                    ChaosRunHost.ForceShutdown();
+                    GameWindow.CloseAllForPanic();
+                    ChaosMetaStore.Save(previous);
+                    ChaosMeta.Init();
+                }
+                finally
+                {
+                    CoreEntitlement.HasPremiumProvider = oldGate;
+                    GameWindow.DtrhBootFailedThisSession = oldFailed;
+                }
             }
             return Task.CompletedTask;
         });
@@ -97,21 +107,84 @@ public sealed class ChaosEntryTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             using var log = new LogCapture();
-            ChaosPopText.PlatformCanShow = () => true;
-            ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
-            ChaosRunHost.PopText = null;
-            CoreSettings.Current.ChaosAnnouncerEnabled = true;
+            var oldPlatform = ChaosPopText.PlatformCanShow;
+            var oldPrepare = ChaosPopText.Prepare;
+            var oldPop = ChaosRunHost.PopText;
+            bool oldAnnouncer = CoreSettings.Current.ChaosAnnouncerEnabled;
             try
             {
+                ChaosPopText.PlatformCanShow = () => true;
+                ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+                ChaosRunHost.PopText = null;
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
                 ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var spec = new EffectBubbleSpec { VariantId = "flash", Payload = new FlashPayload { Strength = 0 } };
                 ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = spec });
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(System.Linq.Enumerable.Any(ChaosPopText.Pool.All, w => w.IsVisible && w.LabelText == "FLASH"), log.Details);
+                ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = spec });
+                ChaosRunHost.ForceShutdown(); // panic before the second posted word is delivered
+                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(ChaosPopText.Pool.All);
             }
-            finally { ChaosRunHost.ForceShutdown(); ChaosPopText.ShutdownPool(); }
+            finally
+            {
+                try { ChaosRunHost.ForceShutdown(); }
+                finally
+                {
+                    try { ChaosPopText.ShutdownPool(); }
+                    finally
+                    {
+                        ChaosPopText.PlatformCanShow = oldPlatform;
+                        ChaosPopText.Prepare = oldPrepare;
+                        ChaosRunHost.PopText = oldPop;
+                        CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer;
+                    }
+                }
+            }
             return Task.CompletedTask;
         });
     }
+    [Fact]
+    public async Task EntryTestsRestoreTheirProcessGlobals()
+    {
+        var oldGate = CoreEntitlement.HasPremiumProvider;
+        var oldFailed = GameWindow.DtrhBootFailedThisSession;
+        var oldPlatform = ChaosPopText.PlatformCanShow;
+        var oldPrepare = ChaosPopText.Prepare;
+        var oldPop = ChaosRunHost.PopText;
+        bool oldAnnouncer = CoreSettings.Current.ChaosAnnouncerEnabled;
+        System.Func<bool> gate = () => false;
+        System.Func<bool> platform = () => false;
+        System.Func<ChaosPopText, PixelRect, bool> prepare = (_, _) => false;
+        System.Action<double, double, string, global::Avalonia.Media.Color> pop = (_, _, _, _) => { };
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = gate;
+            GameWindow.DtrhBootFailedThisSession = false;
+            ChaosPopText.PlatformCanShow = platform;
+            ChaosPopText.Prepare = prepare;
+            ChaosRunHost.PopText = pop;
+            CoreSettings.Current.ChaosAnnouncerEnabled = false;
+            await BootErrorAndNextAppEntryOpenFirstRunOrHub(false, true);
+            Assert.Same(gate, CoreEntitlement.HasPremiumProvider);
+            Assert.False(GameWindow.DtrhBootFailedThisSession);
+            await PoppingATreatInTheLegacyRunShowsItsWord();
+            Assert.Same(platform, ChaosPopText.PlatformCanShow);
+            Assert.Same(prepare, ChaosPopText.Prepare);
+            Assert.Same(pop, ChaosRunHost.PopText);
+            Assert.False(CoreSettings.Current.ChaosAnnouncerEnabled);
+        }
+        finally
+        {
+            CoreEntitlement.HasPremiumProvider = oldGate;
+            GameWindow.DtrhBootFailedThisSession = oldFailed;
+            ChaosPopText.PlatformCanShow = oldPlatform;
+            ChaosPopText.Prepare = oldPrepare;
+            ChaosRunHost.PopText = oldPop;
+            CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer;
+        }
+    }
+
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -38,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     internal sealed class ChaosPopText : Window
     {
         internal static readonly ChaosPopPool<ChaosPopText> Pool = new(ChaosPopTextMotion.POOL_MAX);
+        private static long _generation;
 
         /// <summary>Click-through + invisible + override-redirect at <paramref name="rect"/> (screen
         /// px), before the first map. False = the platform refused; the word is dropped. Test seam.</summary>
@@ -54,12 +56,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             try
             {
+                long generation = Volatile.Read(ref _generation);
                 if (!ChaosPopTextMotion.ShouldShow(text, CoreSettings.Current.ChaosAnnouncerEnabled)) return;
                 Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
-                        if (!PlatformCanShow()) return;
+                        if (generation != Volatile.Read(ref _generation) || !PlatformCanShow()) return;
                         var w = Pool.Acquire(() => new ChaosPopText(sample: false));
                         w?.Play(anchorXDip, anchorYDip, text, color);   // null = pool exhausted: drop the word
                     }
@@ -75,6 +78,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             void Run()
             {
+                // Discard shows queued before this teardown, including ones posted from another thread.
+                Interlocked.Increment(ref _generation);
                 foreach (var w in Pool.All) { try { w.Close(); } catch (Exception ex) { Log.Debug("ChaosPopText close: {E}", ex.Message); } }
                 Pool.Clear();
             }

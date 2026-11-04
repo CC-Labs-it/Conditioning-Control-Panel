@@ -144,6 +144,40 @@ public sealed class ChaosPopTextTests
     }
 
     [Fact]
+    public async Task Pending_show_is_discarded_on_shutdown_but_a_later_show_is_allowed()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var canShow = ChaosPopText.PlatformCanShow;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            int probes = 0;
+            try
+            {
+                ChaosPopText.ShutdownPool();
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                ChaosPopText.PlatformCanShow = () => { probes++; return false; };
+                ChaosPopText.Show(500, 300, "snap", Colors.Red);
+                ChaosPopText.ShutdownPool(); // the posted show has not run yet
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, probes);
+                Assert.Empty(ChaosPopText.Pool.All);
+
+                ChaosPopText.Show(500, 300, "next", Colors.Red);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, probes); // a later run may show text normally
+            }
+            finally
+            {
+                ChaosPopText.ShutdownPool();
+                ChaosPopText.PlatformCanShow = canShow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task The_run_host_closes_the_pool_on_end_and_on_panic()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
