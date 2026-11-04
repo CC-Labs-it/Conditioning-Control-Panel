@@ -34,7 +34,7 @@ public sealed class ContentHitTestTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            var w = new MainShellWindow { TabClock = new FrozenTabClock() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -47,6 +47,7 @@ public sealed class ContentHitTestTests
                 w.ShowTab(tab);
                 // MouseDown renders again; finish the real entrance before sampling its geometry.
                 w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -101,6 +102,12 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    // Keep a queued entrance from advancing between geometry sampling and rendering.
+    private sealed class FrozenTabClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
