@@ -418,8 +418,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             _media = new Media(vlc, _videoPath, FromType.FromPath);
-            // WPF 7.2.2 a0b6d5779 (#1549): the primary video names itself in the recent-sounds ring.
-            if (player.Play(_media)) Services.Audio.RecentSounds.Shared.Note("bubblecount-video", _videoPath, CoreEngine.IsRunning, false, DateTime.Now);
+            // WPF 7.2.2 a0b6d5779 (#1549): the primary video names itself in the recent-sounds ring;
+            // running = engine or session (WPF EngineOffAudioLog.cs:29), a paused session is not engine-off.
+            if (player.Play(_media)) Services.Audio.RecentSounds.Shared.Note("bubblecount-video", _videoPath, CoreEngine.IsRunning || CoreSession.IsSessionRunning, false, DateTime.Now);
             return true;
         }
 
