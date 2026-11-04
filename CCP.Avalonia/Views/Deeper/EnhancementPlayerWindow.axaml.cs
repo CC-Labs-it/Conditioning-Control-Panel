@@ -103,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> Waveform decoding and WebcamTracking remain WPF-side.
+    ///   <item><b>Services.</b> WebcamTracking remains WPF-side.
     ///         Local audio transport uses DeeperLocalAudio; editor jumps are wired below.
     ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
@@ -140,6 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private static readonly List<EnhancementPlayerWindow> OpenPlayers = new();
         private string? _audioPath;
         private int _audioLoad;
+        private int _waveformLoad;
+        private bool _waveformPending, _waveformPlayRequested;
         private bool _closing;
 
 
@@ -662,11 +664,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // ====================================================================================
 
         // WPF EnhancementPlayerWindow.xaml.cs:616-662, 836-859, 2621: replace, play and cancel on close.
+        internal static Func<string, Task<AudioWaveformResult>> LoadWaveform = DeeperWaveformDecoder.LoadAsync;
+
         private async void LoadAudio(string path)
         {
             if (_closing) return;
             StopAudio();
             var load = _audioLoad;
+            var waveform = _waveformLoad;
             _audioPath = path;
             _txtAudioPath.Text = path;
             _txtStatus.Text = Loc.Get("deeper_player_status_loading_audio");
@@ -693,6 +698,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 audio.Ended += _audioEnded; audio.Failed += _audioFailed;
                 audio.Volume = (int)_sliderVolume.Value;
                 _durationSec = audio.DurationSeconds;
+                _waveformPending = true;
+                _waveformPlayRequested = true;
+                await LoadWaveformForAudioAsync(path, waveform);
+                if (_closing || waveform != _waveformLoad) return;
+                _waveformPending = false;
+                _txtTotal.Text = FormatTime(_durationSec);
+                if (!_waveformPlayRequested)
+                {
+                    _txtStatus.Text = Loc.Get("deeper_player_status_stopped");
+                    UpdateStatusPill();
+                    return;
+                }
                 audio.Play();
                 _isPlaying = true;
                 _txtTotal.Text = FormatTime(_durationSec);
@@ -702,9 +719,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
             catch (Exception ex)
             {
-                if (_closing || load != _audioLoad) return;
+                if (_closing || waveform != _waveformLoad || (load != _audioLoad && _localAudio == null)) return;
                 AudioFailed();
                 Log.Warning(ex, "Deeper player audio load failed");
+            }
+        }
+
+        private async Task LoadWaveformForAudioAsync(string path, int waveform)
+        {
+            try
+            {
+                var result = await LoadWaveform(path);
+                if (_closing || waveform != _waveformLoad) return;
+                _peaks = result.Peaks;
+                RenderWaveform();
+            }
+            catch (Exception ex)
+            {
+                if (!_closing && waveform == _waveformLoad)
+                    Log.Debug(ex, "EnhancementPlayer: waveform decode failed");
             }
         }
 
@@ -713,7 +746,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             foreach (var p in OpenPlayers.ToArray())
             {
-                ++p._audioLoad; ++p._videoLoad; p._localAudio?.Pause(); p._isPlaying = false;
+                ++p._audioLoad; ++p._videoLoad; p._waveformPlayRequested = false;
+                p._localAudio?.Pause(); p._isPlaying = false;
                 p._txtPlayPauseGlyph.Kind = IconKind.Play;
                 if (p._videoNavigated) _ = p._videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause();"));
             }
@@ -729,6 +763,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void StopAudio()
         {
             ++_audioLoad; // Invalidate an asynchronous open before it can start sound.
+            ++_waveformLoad; _waveformPending = false; _waveformPlayRequested = false;
             var audio = _localAudio;
             _localAudio = null;
             _isPlaying = false;
@@ -847,6 +882,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (!_isVideoMode && _audioPath != null)
             {
                 if (_localAudio == null) { LoadAudio(_audioPath); return; }
+                if (_waveformPending) { _waveformPlayRequested = true; return; }
                 try { if (_isPlaying) _localAudio.Pause(); else _localAudio.Play(); }
                 catch (Exception ex) { AudioFailed(); Log.Warning(ex, "Deeper audio start failed"); return; }
                 _isPlaying = !_isPlaying;
