@@ -101,6 +101,61 @@ public sealed class ChaosFreezeGameplayTests
         Assert.Equal(2, state.Defused);
     });
 
+    [Fact]
+    public Task Freeze_pickups_spawn_and_are_capped_at_two() => WithRun(state =>
+    {
+        state.Config.EnabledVariants = new List<string> { "bambifreeze" };
+        state.PrismChance = 0;
+        ChaosRunHost.SpawnTick();
+        ChaosRunHost.SpawnTick();
+        ChaosRunHost.SpawnTick();
+        Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsFreeze == true));
+        Assert.Equal(3, BubbleOverlay.ChaosCount);
+    });
+
+    [Fact]
+    public Task Pickup_refreshes_one_banner_and_holds_the_field_until_expiry() => WithRun(state =>
+    {
+        var live = Live();
+        double y = live.Y, fuse = live.FuseRemainingMs;
+        var pickup = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(
+            ChaosBubbleVariants.All.Single(v => v.Id == "bambifreeze"), 0));
+        double expectedScore = 140 * state.TotalMult;
+        int combo = state.Combo;
+        double heat = state.Heat;
+        BubbleOverlay.PopChaos(pickup);
+        Assert.True(BubbleOverlay.Field.FreezeChaos);
+        Assert.Equal(expectedScore, state.Score);
+        Assert.Equal(combo + 1, state.Combo);
+        Assert.Equal(Math.Min(1.0, heat + 0.05), state.Heat);
+        var strip = ChaosEffectBannerOverlay.Active!.Strip;
+        Assert.True(strip.IsLive("freeze"));
+        BubbleOverlay.Field.Step();
+        Assert.Equal(y, live.Y);
+        Assert.Equal(fuse, live.FuseRemainingMs);
+        for (int i = 0; i < 8; i++) ChaosRunHost.Tick();
+        var refresh = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(
+            ChaosBubbleVariants.All.Single(v => v.Id == "bambifreeze"), 0));
+        BubbleOverlay.PopChaos(refresh);
+        Assert.Single(strip.Row);
+        Assert.Equal(3.5, ChaosRunHost.FreezeRemainingSec);
+        ChaosRunHost.ToggleManualPause();
+        for (int i = 0; i < 14; i++) ChaosRunHost.Tick();
+        Assert.True(strip.IsLive("freeze"));
+        Assert.True(BubbleOverlay.Field.FreezeChaos);
+        ChaosRunHost.ToggleManualPause();
+        Expire();
+        Assert.False(BubbleOverlay.Field.FreezeChaos);
+        Assert.False(strip.IsLive("freeze"));
+        BubbleOverlay.Field.Step();
+        Assert.True(live.FuseRemainingMs < fuse);
+        Fire();
+        Assert.True(strip.IsLive("freeze"));
+        ChaosRunHost.ForceShutdown();
+        Assert.Null(ChaosEffectBannerOverlay.Active);
+        Assert.False(BubbleOverlay.Field.FreezeChaos);
+    });
+
     private static AmbientBubble Live() => BubbleOverlay.SpawnChaos(new EffectBubbleSpec
         { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
 
