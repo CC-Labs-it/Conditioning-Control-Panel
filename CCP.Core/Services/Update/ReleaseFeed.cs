@@ -332,7 +332,7 @@ namespace ConditioningControlPanel.Services
                 if (!File.Exists(attemptFile))
                     return null;
 
-                var version = File.ReadAllLines(attemptFile).FirstOrDefault()?.Trim() ?? "";
+                var lines = File.ReadAllLines(attemptFile); var version = lines.FirstOrDefault()?.Trim() ?? "";
                 var age = DateTime.Now - File.GetLastWriteTime(attemptFile);
 
                 var exitCode = UnknownExitCode;
@@ -357,15 +357,16 @@ namespace ConditioningControlPanel.Services
                 if (succeeded)
                 {
                     Log.Information("Previous update to {Version} completed (installer exit={Code})", version, exitCode);
-                    ClearSkippedUpdateVersion(userData);
+                    ClearPendingUpdateAttempt(userData); ClearSkippedUpdateVersion(userData); // only a failure is kept
                     return new PendingUpdateOutcome { Version = version, ExitCode = exitCode, Succeeded = true };
                 }
 
                 Log.Error("Update to {Version} did not install (installer exit={Code}, still running {Current})",
                     version, exitCode, currentVersion);
 
-                // Stop the silent retry loop: don't re-offer this version for 24h.
-                SetSkippedUpdateVersion(userData, version);
+                // Stop the silent retry loop once: a kept attempt re-read must not undo a newer manual Later.
+                if (lines.Length < 2) SetSkippedUpdateVersion(userData, version);
+                if (!consume && lines.Length < 2) { File.AppendAllText(attemptFile, "\nskipped"); File.SetLastWriteTime(attemptFile, DateTime.Now - age); }
 
                 if (age.TotalDays > AttemptMarkerReportWindowDays)
                 {

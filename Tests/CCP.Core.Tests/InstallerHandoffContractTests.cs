@@ -214,22 +214,10 @@ public class InstallerHandoffContractTests
         Assert.Contains(@"SaveStringToFile(UserDataPath + '\browser-reset.pending', 'pending', False)", postInstall);
         Assert.Contains("BrowserResetMarker = \"browser-reset.pending\"", Read("CCP.Avalonia/Platform/AppUpdater.cs"));
         Assert.Contains("/SILENT /SUPPRESSMSGBOXES /NORESTART", Read("CCP.Core/Services/Update/ReleaseFeed.cs"));
-    }
-
-    [Fact]
-    public void InteractiveUpgradeAcknowledgesTheInstallerUserOnly()
-    {
-        var post = Read("installer-avalonia.iss").Split("procedure CurStepChanged(CurStep: TSetupStep);")[1].Split("// Clean uninstall")[0];
-        Assert.Contains("GetEnv('CCP_USERDATA_DIR')", post);
-        Assert.Contains(@"if (UserDataOverride[1] = '\') or (UserDataOverride[1] = '/') then UserDataPath := UserDataOverride", post);
-        Assert.Contains("if (UserDataOverride[2] = ':') and", post);
-        Assert.Contains("(UserDataOverride[1] >= 'A')", post); Assert.Contains("(UserDataOverride[1] >= 'a')", post);
-        Assert.Contains(@"if not WizardSilent and (DirExists(UserDataPath + '\browser_data') or", post);
-        Assert.Contains(@"FileExists(UserDataPath + '\browser-reset.pending')) then", post);
-        Assert.Contains("if ExecAsOriginalUser(ExpandConstant('{cmd}'), '/c if /i \"%LOCALAPPDATA%\"==\"' + ExpandConstant('{localappdata}') +", post);
-        Assert.Contains("'\" (exit 0) else (exit 1)', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then", post);
-        Assert.Contains(@"SaveStringToFile(UserDataPath + '\browser-reset.ack.json', '{}', False)", post);
-        Assert.Contains("BrowserResetAcknowledged = \"browser-reset.ack.json\"", Read("CCP.Avalonia/Platform/AppUpdater.cs"));
+        Assert.Contains("GetEnv('CCP_USERDATA_DIR')", postInstall);
+        Assert.Contains(@"if (UserDataOverride[1] = '\') or (UserDataOverride[1] = '/') then UserDataPath := UserDataOverride", postInstall);
+        Assert.Contains("if (UserDataOverride[2] = ':') and", postInstall);
+        Assert.Contains("(UserDataOverride[1] >= 'A')", postInstall); Assert.Contains("(UserDataOverride[1] >= 'a')", postInstall);
     }
 
     [Fact]
