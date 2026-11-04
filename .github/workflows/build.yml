@@ -568,6 +568,8 @@ jobs:
           } finally {
             [IO.File]::WriteAllText($path, $original)
           }
+          # The verified failing native command leaves LASTEXITCODE=1; the Actions pwsh wrapper exits with it.
+          $global:LASTEXITCODE = 0
 
   # The coverage guarantee the sequential script used to give: the shards' Total: counts must add up to
   # the suite's own --list-tests count, so a test can never fall between shards (or a shard go missing).
