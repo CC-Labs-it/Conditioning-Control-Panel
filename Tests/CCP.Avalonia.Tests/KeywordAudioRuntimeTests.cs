@@ -32,7 +32,8 @@ public sealed class KeywordAudioRuntimeTests
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
+            CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider);
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -45,6 +46,8 @@ public sealed class KeywordAudioRuntimeTests
             s.KeywordGlobalCooldownSeconds = 0; s.KeywordPerKeywordCooldownSeconds = 0; s.MasterVolume = 50;
             CoreEntitlement.HasPremiumProvider = () => true;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
+            CoreSession.IsEngineRunningProvider = () => true;
+            CoreSession.IsSessionRunningProvider = () => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
             engine.Start();
@@ -55,7 +58,8 @@ public sealed class KeywordAudioRuntimeTests
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
+                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
+                CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider) = saved;
         }
     });
 
@@ -180,6 +184,79 @@ public sealed class KeywordAudioRuntimeTests
         engine.Stop();
         Assert.Equal("stopped", played.Last().Path);
         Type(engine, "sit"); Assert.Equal(2, played.Count);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task IdleHoldsKeywordAudioButNotVisualsAndEngineOrSessionAllowsIt(bool legacy) => RunAsync(async (engine, s, played) =>
+    {
+        var old = (CoreFlash.ShowProvider, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+            s.AudioDuckingEnabled, s.AwarenessLoopProtectionEnabled);
+        var flashes = 0; var ducks = 0; var unducks = new List<long>();
+        var idleGap = new TaskCompletionSource(); var gaps = new List<int>();
+        var running = false; var session = false;
+        try
+        {
+            CoreSession.IsEngineRunningProvider = () => running;
+            CoreSession.IsSessionRunningProvider = () => session;
+            CoreFlash.ShowProvider = () => flashes++;
+            CoreAudio.DuckProvider = _ => ducks++;
+            CoreAudio.DuckGenerationProvider = () => 41;
+            CoreAudio.UnduckProvider = unducks.Add;
+            engine.Delay = (ms, _) => { gaps.Add(ms); return idleGap.Task; };
+            s.AudioDuckingEnabled = true;
+            s.AwarenessLoopProtectionEnabled = false;
+            var t = s.KeywordTriggers[0];
+            var audio = (PlayAudioAction)t.Actions[0];
+            audio.DuckSystemAudio = true;
+            if (legacy)
+            {
+                t.AudioFilePath = audio.FilePath; t.DuckAudio = true;
+                t.VisualEffect = KeywordVisualEffect.ImageFlash; t.Actions.Clear();
+            }
+            else t.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash });
+            var now = engine.Now();
+            Type(engine, "sit");
+            Assert.Empty(played); Assert.Equal(legacy ? 1 : 0, ducks); Assert.Equal(1, flashes);
+            if (legacy)
+            {
+                Assert.Equal(new[] { 500 }, gaps); Assert.Empty(unducks);
+                idleGap.SetResult(); await Task.Yield();
+                Assert.Equal(new long[] { 41 }, unducks);
+            }
+            running = true; now = now.AddMinutes(1); engine.Now = () => now;
+            Type(engine, "sit");
+            Assert.Single(played, p => p.Path != "stopped"); Assert.Equal(legacy ? 2 : 1, ducks); Assert.Equal(2, flashes);
+            engine.StopAudio();
+            running = false; session = true; now = now.AddMinutes(1);
+            Type(engine, "sit");
+            Assert.Equal(2, played.Count(p => p.Path != "stopped")); Assert.Equal(legacy ? 3 : 2, ducks); Assert.Equal(3, flashes);
+        }
+        finally
+        {
+            engine.StopAudio();
+            (CoreFlash.ShowProvider, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+                s.AudioDuckingEnabled, s.AwarenessLoopProtectionEnabled) = old;
+        }
+    });
+
+    [Fact]
+    public void LegacyHighlightOnlyDoesNotPlayOrDuckEvenWhenEngineIsRunning() => Run((engine, s, played) =>
+    {
+        var old = (CoreAudio.DuckProvider, s.AudioDuckingEnabled);
+        var ducks = 0;
+        try
+        {
+            CoreAudio.DuckProvider = _ => ducks++;
+            s.AudioDuckingEnabled = true;
+            var t = s.KeywordTriggers[0];
+            t.AudioFilePath = ((PlayAudioAction)t.Actions[0]).FilePath;
+            t.Actions.Clear(); t.DuckAudio = true; t.VisualEffect = KeywordVisualEffect.HighlightOnly;
+            Type(engine, "sit");
+            Assert.Empty(played); Assert.Equal(0, ducks);
+        }
+        finally { (CoreAudio.DuckProvider, s.AudioDuckingEnabled) = old; }
     });
 
     [Fact]

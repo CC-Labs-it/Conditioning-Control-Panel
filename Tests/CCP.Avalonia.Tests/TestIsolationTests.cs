@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -35,6 +36,38 @@ public class TestIsolationTests
 
     [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
+
+    [Fact]
+    public void RestorePutsPanicQuietRestartHoldAndCountBack()
+    {
+        var original = ProcessStateSnapshot.Take();
+        try
+        {
+            PanicAftermath.EndQuiet();
+            var before = PanicAftermath.PanicCount;
+            var clean = ProcessStateSnapshot.Take();
+            PanicAftermath.ArmQuiet();
+            Assert.True(PanicAftermath.TriggersSilenced());
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+            clean.Restore();
+            Assert.False(PanicAftermath.TriggersSilenced());
+            Assert.False(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(before, PanicAftermath.PanicCount);
+
+            var start = System.Environment.TickCount64;
+            PanicAftermath.ArmQuiet(start);
+            var count = PanicAftermath.PanicCount;
+            var armed = ProcessStateSnapshot.Take();
+            PanicAftermath.EndQuiet();
+            PanicAftermath.ArmQuiet(start + 1000);
+            armed.Restore();
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+            Assert.True(PanicAftermath.TriggersSilenced(start + 299999));
+            Assert.False(PanicAftermath.TriggersSilenced(start + 300000));
+            Assert.Equal(count, PanicAftermath.PanicCount);
+        }
+        finally { original.Restore(); }
+    }
 
     [Theory]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]

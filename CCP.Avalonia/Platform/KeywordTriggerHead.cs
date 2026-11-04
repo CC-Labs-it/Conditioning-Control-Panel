@@ -164,21 +164,38 @@ internal sealed class KeywordAudioRuntime
         }
         // WPF KeywordTriggerService.cs:1263-1269 holds dispatch during panic quiet.
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        var legacy = fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0);
+        // WPF :1681-1689: legacy HighlightOnly returns before audio or ducking.
+        if (legacy && fired[0].VisualEffect == KeywordVisualEffect.HighlightOnly) return;
         // WPF :1286-1300 merges enabled effects by variant, in preset priority order.
         var effects = fired.SelectMany(t => t.Actions ?? new()).OfType<VisualEffectAction>()
             .Where(a => a.Enabled).Select(a => a.Effect).Distinct().ToList();
-        if (fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+        if (legacy)
             effects.Add(fired[0].VisualEffect); // WPF :1236-1239 legacy fallback
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
-        if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+        if (audio == null && legacy)
         {
             var t = fired[0];
             audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
-        if (audio != null) Play(audio);
+        // WPF :1351-1354,1397-1399,1698-1700 holds audio while idle; visual responses still fire.
+        var running = CoreSession.IsEngineRunning || CoreSession.IsSessionRunning;
+        if (audio != null && running) Play(audio);
+        else if (!running && legacy && fired[0].DuckAudio && s.AudioDuckingEnabled)
+        {
+            // WPF :1692-1695,1742-1745: legacy ducking still lasts 500ms with no audio.
+            CoreAudio.Duck(s.DuckingLevel);
+            _ = ReleaseLegacyDuck(CoreAudio.DuckGeneration);
+        }
         foreach (var effect in effects) FireVisual(effect, fired[0].Keyword);
+    }
+
+    private async Task ReleaseLegacyDuck(long generation)
+    {
+        try { await Delay(500, CancellationToken.None); CoreAudio.Unduck(generation); }
+        catch (Exception ex) { Log.Debug(ex, "Keyword legacy unduck failed"); }
     }
 
     private void FireVisual(KeywordVisualEffect effect, string keyword)
