@@ -23,6 +23,23 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    [Fact]
+    public async Task MenuBrushesAreUsableOnUiAfterTypeInitializationOnWorker()
+    {
+        // Pure static tube helpers can run before a window is created.
+        await Task.Run(() => System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(AvatarTubeWindow).TypeHandle));
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            foreach (var name in new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" })
+            {
+                var field = typeof(AvatarTubeWindow).GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+                var brush = Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableSolidColorBrush>(field.GetValue(null));
+                Assert.True(brush is not AvaloniaObject owned || owned.CheckAccess(), $"{name} belongs to another thread");
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
