@@ -162,32 +162,62 @@ public sealed partial class GameWindowTests
 
     // ---- the window ----
 
-    /// <summary>Door shut: the page cannot be opened and the race tile stays hidden without a track. Door open: the
-    /// Racing Thoughts tile shows, Play opens Glassroad (not dtrh/race.html), and panic closes it.</summary>
-    [Fact]
-    public void Glassroad_DoorHidesIt_TheRaceTileOpensIt_PanicClosesIt()
+    /// <summary>WPF always shows the Prime race and routes it to Glassroad in both switch states.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("1")]
+    public void Glassroad_RaceDoorRequiresPrimeAndOpens3D(string? door) => RunGlassroad(door, (shell, launcher, _) =>
     {
-        RunGlassroad(null, (_, _, _) =>
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        int denied = 0;
+        try
         {
-            Assert.Equal("race", GameWindow.ResolveDoor("race"));
-            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
-            Assert.False(GameWindow.IsAnyOpen());
-        });
-        RunGlassroad("1", (shell, launcher, _) =>
-        {
+            CoreEntitlement.ShowDeniedHandler = _ => denied++;
+            CoreEntitlement.HasLabProvider = () => false;
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+            Assert.True(LauncherWindow.Destinations["race"].Locked());
+            launcher.Play(LauncherCards.Find("race")!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, denied);
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Null(GameWindow.Launch("race"));
+            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
+            Assert.Equal(3, denied);
+            CoreEntitlement.HasLabProvider = () => true;
+            Assert.False(LauncherWindow.Destinations["race"].Locked());
             launcher.Play(LauncherCards.Find("race")!);
             Dispatcher.UIThread.RunJobs();
             var w = Assert.Single(GameWindow.OpenWindowsForTests());
             Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
             Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
-            Assert.Same(w, GameWindow.Launch("race"));                 // one live window, focused
+            Assert.Same(w, GameWindow.Launch("race"));
             PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());
-        });
-    }
+        }
+        finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+    });
+
+    [Fact]
+    public void Glassroad_LaunchChecksPrimeBeforeFocusingLiveWindow() => RunGlassroad(null, (_, _, _) =>
+    {
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        int denied = 0;
+        try
+        {
+            CoreEntitlement.ShowDeniedHandler = _ => denied++;
+            var w = GameWindow.Launch("race")!;
+            Assert.NotNull(w);
+            CoreEntitlement.HasLabProvider = () => false;
+            Assert.Null(GameWindow.Launch("race"));
+            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
+            Assert.Equal(2, denied);
+            Assert.Same(w, Assert.Single(GameWindow.OpenWindowsForTests()));
+            CoreEntitlement.HasLabProvider = () => true;
+            Assert.Same(w, GameWindow.Launch("race"));
+        }
+        finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+    });
 
     /// <summary>Init goes out at load, on the first message and at ready; the relay signs as the host's player, sends
     /// only /v2/race/ (judged signed), never the room-signed result; exit and menu-back close; a silent page is pinged
