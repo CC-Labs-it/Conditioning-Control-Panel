@@ -102,6 +102,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// PanicHookIsInstalled). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
 
+        // WPF VideoService.BringTargetsToFront: wait for video activation to settle.
+        internal static Action<Action, TimeSpan> ScheduleRestack = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+
         internal IReadOnlyList<Window> Windows => _surfaces.Select(s => s.Window).ToList();
         internal IReadOnlyList<Surface> Surfaces => _surfaces;
         internal IReadOnlyList<Window> Messages => _messages;
@@ -315,7 +318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     case VideoKeyAction.Swallow: e.Handled = true; break;
                 }
             }
-            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => ChaosRunHost.RaiseSparklesAboveVideo(),
+            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => ScheduleRestack(ChaosRunHost.RaiseSparklesAboveVideo, TimeSpan.FromMilliseconds(50)),
                 global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
             w.KeyDown += (_, e) => OnKey(e);
             // The panic key always wins: tunnel it so a focused Resume button cannot take it as a click
@@ -337,7 +340,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Activate();
             }
             ChaosRunHost.RaiseSparklesAboveVideo();
-            DispatcherTimer.RunOnce(ChaosRunHost.RaiseSparklesAboveVideo, TimeSpan.FromMilliseconds(50));
+            ScheduleRestack(ChaosRunHost.RaiseSparklesAboveVideo, TimeSpan.FromMilliseconds(50));
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 
