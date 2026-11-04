@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// does when it lands. Core's <see cref="FriendsLandingRouter"/> decides (hold, Inbox, knock); this sink
 /// knocks an invite with a <see cref="KnockCard"/>, files Inbox rows, and throws the words a delivery or a send
 /// leaves through <see cref="FloatingWord"/> (poke received with Emi's line, the sent beat, Say/Tell from outside
-/// the drawer). Nothing here plays or joins by itself. A light timer re-attaches to <see cref="FriendsHead.Service"/>
+/// the drawer). Ramp and valid race invitations can be joined. A light timer re-attaches to <see cref="FriendsHead.Service"/>
 /// and releases the held queue (WPF :28-82).
 /// ponytail: the corner notices (FriendNotices: poke toast, watch toast, request toast) are not on this head
 /// (row feat-friends-open-tables), so a watch, and a poke that cannot throw its word (over a game, or nothing of
@@ -142,6 +142,7 @@ internal static class FriendsLanding
 
     private static string DestinationName(string? dest) => dest switch
     {
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
@@ -257,14 +258,20 @@ internal static class FriendsLanding
         if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
+        if (item.Destination == InviteDestination.Race && !TierGate.DemandLab(Loc.Get("launcher_game_race_title")))
+        {
+            FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Declined));
+            return;
+        }
         FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
         Sfx("chaos/reveal_chime.mp3", 0.20f, "friends-join");   // WPF FriendsSfx.Join
         Join(item);
     }
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
-    /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    /// so their cards carry Not now and the x only.</summary>
+    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp
+        || (item.Destination == InviteDestination.Race && InviteDestination.IsRoomId(item.Room) && GameWindow.GlassroadDoorOpen());
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -280,6 +287,7 @@ internal static class FriendsLanding
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        else if (item.Destination == InviteDestination.Race) GameWindow.Launch(GameWindow.GlassroadId, item.Room);
     }
 
     private static readonly FriendsSfxGate SfxGate = new();

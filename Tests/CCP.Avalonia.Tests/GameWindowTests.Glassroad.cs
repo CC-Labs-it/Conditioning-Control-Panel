@@ -7,6 +7,9 @@ using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Race;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -63,6 +66,46 @@ public sealed partial class GameWindowTests
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
+    });
+
+    [Fact]
+    public void RaceInvite_JoinsClosedAndOpenHost_RejectsBadRoom() => RunGlassroad("1", (_, _, _) =>
+    {
+        var now = DateTimeOffset.UtcNow;
+        var invite = new InboxItem("race1", SendKind.Invite, "u", "Name", null, null,
+            InviteDestination.Race, null, null, now, now.AddMinutes(5)) { Room = "abc123def456" };
+        Assert.True(FriendsLanding.CanJoin(invite));
+        Assert.False(FriendsLanding.CanJoin(invite with { Room = "bad" }));
+        var oldLab = CoreEntitlement.HasLabProvider;
+        CoreEntitlement.HasLabProvider = () => true;
+        try { FriendsLanding.OnKnockDone(invite, KnockOutcome.Go); }
+        finally { CoreEntitlement.HasLabProvider = oldLab; }
+        var w = GameWindow.OpenForTests(GameWindow.GlassroadId)!;
+        Assert.NotNull(w);
+        Assert.Contains("&join=abc123def456", w.PageUrl!.Query);
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        Assert.Same(w, GameWindow.Launch(GameWindow.GlassroadId, invite.Room));
+        Assert.DoesNotContain(sent, f => (string?)f["type"] == "join-room");
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Contains(sent, f => (string?)f["type"] == "join-room" && (string?)f["roomId"] == invite.Room);
+        sent.Clear();
+        GameWindow.Launch(GameWindow.GlassroadId, "def456abc123");
+        Assert.Contains(sent, f => (string?)f["type"] == "join-room" && (string?)f["roomId"] == "def456abc123");
+        sent.Clear();
+        GameWindow.Launch(GameWindow.GlassroadId, "bad");
+        Assert.Empty(sent);
+    });
+
+    [Fact]
+    public void RaceInvite_LinuxCardRetainsRoomForSlowerHost() => RunGlassroad("1", (_, _, _) =>
+    {
+        GameWindow.UseLinuxRaceCard = () => true;
+        var w = GameWindow.Launch(GameWindow.GlassroadId, "abc123def456")!;
+        Assert.Null(w.PageUrl);
+        GameWindow.Launch(GameWindow.GlassroadId, "def456abc123");
+        w.RaceSlower.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        Assert.Contains("&join=def456abc123", w.PageUrl!.Query);
     });
 
     // ---- pure rules ----

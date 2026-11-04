@@ -48,6 +48,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
+        private string? _glassroadJoinRoom, _pendingGlassroadJoin;
+
+        internal void JoinGlassroad(string? room)
+        {
+            if (!ConditioningControlPanel.Services.Lobby.RaceJoinLink.IsRoomId(room)) return;
+            if (_raceCard) _glassroadJoinRoom = room;
+            else if (!IsReady) _pendingGlassroadJoin = room;
+            else Post(new { type = "join-room", roomId = room });
+        }
+
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;
         private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
@@ -144,6 +154,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
                         PostGlassroadInit();
+                        if (_pendingGlassroadJoin is { } room)
+                        {
+                            _pendingGlassroadJoin = null;
+                            Post(new { type = "join-room", roomId = room });
+                        }
                         try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
                         return true;
                     case "heartbeat":

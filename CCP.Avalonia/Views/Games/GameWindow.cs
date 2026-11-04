@@ -71,16 +71,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, string? joinRoom = null)
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
+            if (live != null) { if (spec.Id == GlassroadId) live.JoinGlassroad(joinRoom); live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
+            if (spec.Id == GlassroadId && ConditioningControlPanel.Services.Lobby.RaceJoinLink.IsRoomId(joinRoom)) window._glassroadJoinRoom = joinRoom;
             if (spec.Id == GlassroadId && UseLinuxRaceCard()) window.ShowRaceCard();
             else window.Load(Server());
             window.Show();
@@ -122,7 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
             if (Spec.Id == "loom") DirectoryForLoom();
-            PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
+            var query = IsGlassroad && _glassroadJoinRoom != null ? "join=" + _glassroadJoinRoom : Spec.Query;
+            PageUrl = new Uri(server.Url(Spec.Page, query));
             Web.Navigate(PageUrl);
         }
 
