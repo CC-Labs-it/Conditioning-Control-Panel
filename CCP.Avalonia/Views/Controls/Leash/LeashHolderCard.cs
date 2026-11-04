@@ -141,7 +141,7 @@ public sealed class LeashHolderCard : Border
             release.Click += (_, _) => LeashCutConfirmWindow.Confirm(
                 Loc.GetF("leash_release_confirm_title", h.Who.Name), Loc.GetF("leash_release_confirm_body", h.Who.Name),
                 Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-release-confirm", () => _ = Release(h.Who));
-            var menu = new ContextMenu();
+            var menu = new ContextMenu { Placement = PlacementMode.Bottom }; // WPF LeashHolderCard.cs:277
             menu.Items.Add(replay);
             menu.Items.Add(release);
             var more = LeashCardUi.Action("…", "leash-holder-more", () => Task.CompletedTask);

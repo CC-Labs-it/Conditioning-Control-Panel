@@ -141,7 +141,7 @@ internal sealed class LeashSnapCard : Border
             {
                 var (dot, x, y, duration) = _particles[i];
                 var p = Math.Clamp((ms - 340) / duration, 0, 1); var q = 1 - (1 - p) * (1 - p);
-                dot.RenderTransform = new TranslateTransform(x * q, y * q + 10 * p); dot.Opacity = 1 - p;
+                dot.RenderTransform = new TranslateTransform(x * q, (y + 10) * q); dot.Opacity = 1 - p;
                 if (p >= 1) { _sparks.Children.Remove(dot); _particles.RemoveAt(i); }
             }
         }

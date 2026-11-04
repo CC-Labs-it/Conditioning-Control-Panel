@@ -63,6 +63,7 @@ Controls/ChasterRailChip.cs :: * :: path: D6 art - Chaster rail chip lock drawin
 Controls/DescentFuseRailChip.cs :: * :: path: D6 art - descent fuse rail chip drawing
 Views/Controls/SeasonRecapCard. :: * :: path: D6 art - season recap card illustration
 Views/Controls/Leash/LeashHelpSlip.cs :: * :: path: D6 art - leash ink-slip pictograms (WPF owner-approved mockup drawings)
+Views/Controls/Leash/LeashSnapCard.cs :: * :: path: D6 art - snap card heart tag drawing, WPF LeashLook.cs:258-262
 Helpers/BreakoutCardArt.cs :: * :: path: D6 art - breakout card art
 Views/Features/SplitFeatureCard. :: * :: path: D6 art - split feature card illustration
 Views/Windows/TutorialOverlay. :: * :: path: D6 art - tutorial overlay spotlight/arrows
