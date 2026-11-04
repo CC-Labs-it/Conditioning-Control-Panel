@@ -16,6 +16,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class SheListeningCommandRowsTests
 {
     [Theory]
+    [InlineData("Quick toys", "shake_once", "“shake the screen”", "“freeze me”")]
     [InlineData("Video", "video_pause", "“pause the video”", "“resume the video”")]
     [InlineData("Video", "video_resume", "“resume the video”", "“pause the video”")]
     public void MixedRowsOnlyOfferRunnablePhrases(string row, string intent, string offered, string unavailable)
