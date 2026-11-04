@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
         private SKBitmap? _strip;
         private SKImageInfo _info;
         private int[] _durations = Array.Empty<int>(), _required = Array.Empty<int>();
-        private long _frameStartMs;
+        private long _frameStartMs; private long? _pausedAtMs;
         private WriteableBitmap? _bitmap;
         public RainClipPlayer(Image target) {
             _target = target ?? throw new ArgumentNullException(nameof(target));
@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
         public int FrameIndex => _index;
         public event Action<RainClipPlayer>? Completed;
         public Func<long> Now { get; set; } = static () => Environment.TickCount64;
-        internal bool ManualClock { get; set; }
+        internal bool ManualClock { get; set; } internal bool TimerRunning => _timer.IsEnabled; internal long FrameStarted => _frameStartMs;
         public async Task Load(Uri source) {
             int gen = ++_generation;
             IsReady = false; IsComplete = false; _timer.Stop(); ReleaseCodec();
@@ -50,8 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
             Adopt(d);
         }
         public async Task LoadStrip(string path, int frames, int fps) {
-            int gen = ++_generation;
-            IsReady = false; IsComplete = false; _timer.Stop(); ReleaseCodec();
+            int gen = ++_generation; IsReady = false; IsComplete = false; _timer.Stop(); ReleaseCodec();
             SKBitmap? strip = null; string? error = null;
             try { strip = await Task.Run(() => DecodeStrip(path, frames, fps)); }
             catch (Exception ex) { error = ex.Message; }
@@ -60,14 +59,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
             _strip = strip;
             _info = new SKImageInfo(strip.Width, strip.Height / frames, SKColorType.Bgra8888, SKAlphaType.Premul);
             _durations = new int[frames]; Array.Fill(_durations, Math.Max(MinFrameMs, (int)Math.Round(1000.0 / fps)));
-            _index = 0; _frameStartMs = Now(); EnsureBitmap(); CopyStripFrame(0); Show();
+            _index = 0; _frameStartMs = Now(); if (_pausedAtMs != null) _pausedAtMs = _frameStartMs; EnsureBitmap(); CopyStripFrame(0); Show();
             IsReady = true; IsComplete = false;
-            if (!ManualClock) _timer.Start();
+            if (!ManualClock && _pausedAtMs == null) _timer.Start();
         }
         internal static SKBitmap? DecodeStrip(string path, int frames, int fps) {
             if (frames <= 0 || fps <= 0) return null;
-            using var stream = File.OpenRead(path);
-            using var codec = SKCodec.Create(stream);
+            using var stream = File.OpenRead(path); using var codec = SKCodec.Create(stream);
             if (codec == null || codec.Info.Height % frames != 0) return null;
             var bitmap = new SKBitmap(new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
             if (codec.GetPixels(bitmap.Info, bitmap.GetPixels()) == SKCodecResult.Success) return bitmap;
@@ -80,13 +78,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
         }
         internal static Decoded? Decode(byte[]? bytes) {
             if (bytes == null || bytes.Length == 0) return null;
-            var data = SKData.CreateCopy(bytes);
-            var codec = SKCodec.Create(data);
+            var data = SKData.CreateCopy(bytes); var codec = SKCodec.Create(data);
             if (codec == null) { data.Dispose(); return null; }
-            var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
-            var canvas = new SKBitmap(info);
-            var frames = codec.FrameInfo;
-            int count = Math.Max(1, codec.FrameCount);
+            var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul); var canvas = new SKBitmap(info);
+            var frames = codec.FrameInfo; int count = Math.Max(1, codec.FrameCount);
             int[] durations = new int[count], required = new int[count];
             for (int i = 0; i < count; i++) {
                 int ms = i < frames.Length ? frames[i].Duration : 0;
@@ -100,17 +95,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
         }
         private void Adopt(Decoded d) {
             _codec = d.Codec; _data = d.Data; _info = d.Canvas.Info; _durations = d.Durations; _required = d.Required;
-            _index = 0; _frameStartMs = Now();
+            _index = 0; _frameStartMs = Now(); if (_pausedAtMs != null) _pausedAtMs = _frameStartMs;
             var bmp = EnsureBitmap();
             using (var fb = bmp.Lock())
             using (var pm = d.Canvas.PeekPixels())
                 pm.ReadPixels(_info, fb.Address, fb.RowBytes);
             d.Canvas.Dispose(); Show();
             IsReady = true; IsComplete = false;
-            if (!ManualClock) _timer.Start();
+            if (!ManualClock && _pausedAtMs == null) _timer.Start();
         }
         public void Tick(long nowMs) {
-            if (!IsReady || IsComplete || (_codec == null && _strip == null)) return;
+            if (!IsReady || IsComplete || _pausedAtMs != null || (_codec == null && _strip == null)) return;
             bool moved = false;
             while (nowMs - _frameStartMs >= _durations[_index]) {
                 if (_index >= _durations.Length - 1) { Finish(moved); return; }
@@ -137,8 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
         }
         private bool CopyStripFrame(int frame) {
             if (_strip == null || _bitmap == null) return false;
-            using var fb = _bitmap.Lock();
-            using var pixels = _strip.PeekPixels();
+            using var fb = _bitmap.Lock(); using var pixels = _strip.PeekPixels();
             return pixels.ReadPixels(_info, fb.Address, fb.RowBytes, 0, frame * _info.Height);
         }
         private WriteableBitmap EnsureBitmap() {
@@ -147,8 +141,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
             return _bitmap;
         }
         private void Show() { if (_bitmap != null) _target.Source = _bitmap; _target.InvalidateVisual(); }
+        public void Pause() { if (_pausedAtMs != null) return; _pausedAtMs = Now(); _timer.Stop(); } public void Resume() { if (_pausedAtMs is not long paused) return; _frameStartMs += Now() - paused; _pausedAtMs = null; if (IsReady && !IsComplete && !ManualClock) _timer.Start(); }
         public void Stop() {
-            _generation++; _timer.Stop(); IsReady = false; IsComplete = false; ReleaseCodec();
+            _generation++; _timer.Stop(); _pausedAtMs = null; IsReady = false; IsComplete = false; ReleaseCodec();
             if (_bitmap != null && ReferenceEquals(_target.Source, _bitmap)) _target.Source = null;
             _bitmap?.Dispose(); _bitmap = null;
         }

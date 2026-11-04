@@ -13,17 +13,14 @@ internal sealed record RainClipInfo(string File, int Frames, int Fps);
 internal sealed record RainPackReader(string Folder, IReadOnlyDictionary<string, RainClipInfo> Clips)
 {
     public static bool IsValidClip(string name) => name.Length is >= 1 and <= 40 && name.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '_');
-    public static RainPackReader? TryRead(string root, string? hash)
-    {
+    public static RainPackReader? TryRead(string root, string? hash) {
         if (hash == null || hash.Length != 64 || !hash.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f')) return null;
         var folder = Path.Combine(root, hash);
-        try
-        {
+        try {
             var json = JObject.Parse(File.ReadAllText(Path.Combine(folder, "manifest.json")));
             if ((int?)json["rev"] != 1 || (string?)json["lookHash"] != hash || json["clips"] is not JObject entries || !entries.HasValues) return null;
             var clips = new Dictionary<string, RainClipInfo>(StringComparer.Ordinal);
-            foreach (var entry in entries.Properties())
-            {
+            foreach (var entry in entries.Properties()) {
                 if (!IsValidClip(entry.Name) || entry.Value is not JObject value) return null;
                 var file = (string?)value["file"] ?? "";
                 var frames = (int?)value["frames"] ?? 0;
@@ -36,7 +33,6 @@ internal sealed record RainPackReader(string Folder, IReadOnlyDictionary<string,
             try { Directory.SetLastWriteTimeUtc(folder, DateTime.UtcNow); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             return new RainPackReader(folder, clips);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or InvalidCastException or ArgumentException or OverflowException)
-        { return null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or InvalidCastException or ArgumentException or OverflowException) { return null; }
     }
 }
