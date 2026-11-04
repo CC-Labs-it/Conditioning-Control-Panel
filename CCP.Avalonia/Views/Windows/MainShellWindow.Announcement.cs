@@ -17,6 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The Core client; seeded by the app at startup only. Unseeded (every test that does not set it) = no check.</summary>
         internal static Func<V2AuthService>? AnnouncementClient;
 
+        // WPF MainWindow.Marquee.cs:708-715: one check seven seconds after opening.
+        internal static Action<Action, TimeSpan> ScheduleAnnouncementCheck = (action, delay) => DispatcherTimer.RunOnce(action, delay);
         private bool _announcementArmed;
 
         private void InitializeServerAnnouncement()
@@ -25,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                ScheduleAnnouncementCheck(() => { if (!_windowClosed) _ = CheckServerAnnouncementAsync(); }, TimeSpan.FromSeconds(7));
             };
         }
 
@@ -37,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var make = AnnouncementClient;
                 if (make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
-                if (a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
+                if (_windowClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";

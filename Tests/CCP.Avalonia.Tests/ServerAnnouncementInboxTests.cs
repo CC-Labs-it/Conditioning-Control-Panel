@@ -29,10 +29,12 @@ public sealed class ServerAnnouncementInboxTests
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
+        public TaskCompletionSource<HttpResponseMessage>? PendingAnnouncement;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             lock (Calls) Calls.Add(r.Method + " " + path + r.RequestUri.Query + " " + r.Content?.ReadAsStringAsync().Result);
+            if (path == "/config/announcement" && PendingAnnouncement is { } pending) return pending.Task;
             var body = path == "/config/announcement"
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
@@ -133,6 +135,62 @@ public sealed class ServerAnnouncementInboxTests
             Assert.Empty(StartupLadder.Inbox.Items);
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task ScheduledCheckUsesSevenSecondsAndDoesNotRunAfterItsShellCloses() => Run(async fake =>
+    {
+        var callbacks = new List<Action>();
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
+        MainShellWindow.ScheduleAnnouncementCheck = (action, delay) =>
+        {
+            Assert.Equal(TimeSpan.FromSeconds(7), delay);
+            callbacks.Add(action);
+        };
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var oldShell = new MainShellWindow();
+        oldShell.Show();
+        Assert.Single(callbacks);
+        oldShell.Close();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Assert.Equal(2, callbacks.Count);
+            callbacks[1]();
+            await Until(() => StartupLadder.Inbox.UnreadCount == 1);
+            var row = Assert.Single(StartupLadder.Inbox.Items);
+            StartupLadder.Inbox.Open(row);
+            callbacks[0](); // the previous shell's timer must not re-file the row
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement")));
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally
+        {
+            shell.Close();
+            foreach (var popup in opened) popup.Close();
+        }
+    });
+
+    [Fact]
+    public Task InFlightCheckDoesNotPresentAfterTheShellCloses() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        fake.PendingAnnouncement = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shell = new MainShellWindow();
+        shell.Show();
+        var check = shell.CheckServerAnnouncementAsync();
+        Assert.Contains(fake.Calls, c => c.StartsWith("GET /config/announcement"));
+        shell.Close();
+        fake.PendingAnnouncement.SetResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"enabled\":true,\"id\":\"a1\",\"title\":\"News\",\"message\":\"Body\"}")
+        });
+        await check;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(StartupLadder.Inbox.Items);
     });
 
     [Fact]
