@@ -199,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Uri? _pendingBrowserAutoplay;
         private int _browserAutoplayGeneration;
         private volatile bool _avatarBrowserPlaying, _avatarBrowserSessionActive, _avatarBrowserTakeover;
+        private bool _avatarBrowserPaused;
         private DateTime _avatarBrowserHeartbeat;
         private DispatcherTimer? _avatarBrowserWatchdog, _avatarBrowserHardStop;
         internal bool AvatarBrowserSessionActive { get => _avatarBrowserSessionActive; private set => _avatarBrowserSessionActive = value; }
@@ -211,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ++_browserAutoplayGeneration;
             _pendingBrowserAutoplay = null;
             AvatarBrowserSessionActive = AvatarBrowserTakeover = true;
-            _avatarBrowserPlaying = false; _avatarBrowserHardStop?.Stop(); _avatarBrowserHardStop = null;
+            _avatarBrowserPaused = _avatarBrowserPlaying = false; _avatarBrowserHardStop?.Stop(); _avatarBrowserHardStop = null;
             _avatarBrowserHeartbeat = DateTime.UtcNow;
             _avatarBrowserWatchdog ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _avatarBrowserWatchdog.Tick -= BrowserWatchdogTick;
@@ -223,7 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             ++_browserAutoplayGeneration;
             _pendingBrowserAutoplay = null;
-            AvatarBrowserSessionActive = AvatarBrowserTakeover = _avatarBrowserPlaying = false;
+            AvatarBrowserSessionActive = AvatarBrowserTakeover = _avatarBrowserPaused = _avatarBrowserPlaying = false;
             _avatarBrowserWatchdog?.Stop(); _avatarBrowserHardStop?.Stop(); _avatarBrowserHardStop = null;
         }
 
@@ -281,7 +282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnAvatarBrowserMessage(string message)
         {
-            if (!AvatarBrowserSessionActive) return;
+            if (!AvatarBrowserSessionActive && !_avatarBrowserPaused) return;
             try
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(message);
@@ -291,9 +292,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     !root.TryGetProperty("state", out var state)) return;
                 switch (state.GetString())
                 {
-                    case "playing": _avatarBrowserPlaying = true; _avatarBrowserHeartbeat = DateTime.UtcNow; break;
+                    case "playing":
+                        if (_avatarBrowserPaused) { _avatarBrowserPaused = false; AvatarBrowserSessionActive = true; _avatarBrowserWatchdog?.Start(); }
+                        _avatarBrowserPlaying = true; _avatarBrowserHeartbeat = DateTime.UtcNow; break;
+                    case "paused":
+                        if (!_avatarBrowserPlaying) break;
+                        AvatarBrowserSessionActive = AvatarBrowserTakeover = _avatarBrowserPlaying = false; _avatarBrowserPaused = true;
+                        _avatarBrowserWatchdog?.Stop(); _avatarBrowserHardStop?.Stop(); _avatarBrowserHardStop = null; break;
                     case "progress": if (_avatarBrowserPlaying) _avatarBrowserHeartbeat = DateTime.UtcNow; break;
-                    case "navigated" when !_avatarBrowserPlaying: break;
+                    case "navigated" when !_avatarBrowserPlaying && !_avatarBrowserPaused: break;
                     case "navigated": case "ended": EndAvatarBrowserSession(); break;
                     case "fsExit": AvatarBrowserTakeover = false; break;
                 }
@@ -317,7 +324,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             window._ccpTakeoverStopped=false;let v=document.querySelector('video');window.addEventListener('pagehide',()=>send('navigated'),{once:true});
             for(let i=0;i<20&&!v;i++){await new Promise(r=>setTimeout(r,500));if(window._ccpTakeoverStopped)return;v=document.querySelector('video');}
             if(!v){send('fsExit');return;}let timer;const beat=()=>{if(!v.paused&&!v.ended)send('progress');};
-            v.addEventListener('playing',()=>{send('playing');clearInterval(timer);timer=setInterval(beat,1000);});
+            let pauseTimer;v.addEventListener('playing',()=>{clearTimeout(pauseTimer);send('playing');clearInterval(timer);timer=setInterval(beat,1000);});
+            v.addEventListener('pause',()=>{clearTimeout(pauseTimer);pauseTimer=setTimeout(()=>{if(v.paused&&!v.ended)send('paused');},2000);});
             v.addEventListener('ended',()=>{clearInterval(timer);if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});send('ended');},{once:true});
             let entered=false;document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement||document.webkitFullscreenElement)entered=true;else if(entered)send('fsExit');});
             const fs=()=>{if(window._ccpTakeoverStopped)return;try{const p=v.requestFullscreen?v.requestFullscreen():v.webkitRequestFullscreen?.();if(p?.catch)p.catch(()=>{});}catch(e){}};
@@ -328,8 +336,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             (async function(){const gen=__GEN__;const send=(s,a)=>{const m=JSON.stringify({type:'ccpAvatarMedia',generation:gen,state:s,duration:a?.duration});if(window.chrome?.webview?.postMessage)window.chrome.webview.postMessage(m);else if(window.invokeCSharpAction)window.invokeCSharpAction(m);};
             window._ccpTakeoverStopped=false;let b=document.querySelector('button.play-action');window.addEventListener('pagehide',()=>send('navigated'),{once:true});
             for(let i=0;i<20&&!b;i++){await new Promise(r=>setTimeout(r,250));if(window._ccpTakeoverStopped)return;b=document.querySelector('button.play-action');}if(!b){send('ended');return;}
-            const bind=a=>{if(a.__ccpAvatarBound)return;a.__ccpAvatarBound=true;let timer;a.addEventListener('playing',()=>{send('playing',a);clearInterval(timer);timer=setInterval(()=>{if(!a.paused&&!a.ended)send('progress',a);},1000);});a.addEventListener('ended',()=>{clearInterval(timer);send('ended');});};
-            const scan=()=>document.querySelectorAll('audio').forEach(bind);scan();new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});b.click();setTimeout(()=>{if(!window._ccpTakeoverStopped)send('playing');},3000);
+            let active;const bind=a=>{if(a.__ccpAvatarBound)return;a.__ccpAvatarBound=true;let timer,pauseTimer;a.addEventListener('pause',()=>{clearTimeout(pauseTimer);pauseTimer=setTimeout(()=>{if(active===a&&a.paused&&!a.ended)send('paused',a);},2000);});a.addEventListener('playing',()=>{clearTimeout(pauseTimer);active=a;send('playing',a);clearInterval(timer);timer=setInterval(()=>{if(!a.paused&&!a.ended)send('progress',a);},1000);});a.addEventListener('ended',()=>{clearInterval(timer);send('ended');});};
+            const scan=()=>document.querySelectorAll('audio').forEach(bind);scan();new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});b.click();setTimeout(()=>{if(!window._ccpTakeoverStopped&&!document.querySelector('audio'))send('playing');},3000);
             })();
             """;
 
