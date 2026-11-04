@@ -43,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Shell-open <paramref name="target"/> (WPF Process.Start with UseShellExecute). False when refused or failed.</summary>
         public static bool Open(string? target)
         {
+            CheckoutWatch.NoteOpened(target); // WPF BrowserLauncher.TryOpenUrl: watch even if launch fails.
             if (!Allowed(target)) return false;
             try { return Shell(target!); }
             catch (Exception ex) { Log.Warning("Could not open {Target}: {Error}", Path.IsPathRooted(target!) ? target : "link", ex.Message); return false; }

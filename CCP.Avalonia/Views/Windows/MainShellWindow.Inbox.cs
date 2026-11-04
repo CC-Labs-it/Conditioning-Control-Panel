@@ -115,18 +115,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return tier < 2 && (substar?.CurrentTier >= PatreonTier.Level1 || substar?.IsWhitelisted == true);
         }
 
-        private sealed class LapseNotice(string title, string body, string primary, string? secondary)
-            : Dialogs.MessageDialog(title, body, secondary != null, okText: primary, cancelText: secondary), IPassiveStartupSurface;
-
         private void ShowLapseNotice(string title, string body, string primary, string? secondary, bool reconnect, int tier)
         {
-            var dialog = new LapseNotice(title, body, primary, secondary);
-            dialog.FindControl<Button>("BtnOk")!.Click += (_, _) =>
+            Dialogs.InboxNoticeCard.Present(this, title, body, primary, secondary, () =>
             {
                 if (reconnect) _ = ReconnectFromGate();
                 else ExternalOpener.Open(ConversionRules.PlanUrl(tier));
-            };
-            dialog.Show(this);
+            });
         }
 
         private void OnInboxCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
