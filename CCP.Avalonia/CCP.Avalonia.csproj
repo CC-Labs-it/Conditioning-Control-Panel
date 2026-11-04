@@ -111,6 +111,10 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\bubbles\glitch.png" Link="assets\Chaos\bubbles\glitch.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
     <!-- WPF CornerGifMedia's built-in corner asset (pre-scaled), CornerGifOverlay's fallback. -->
     <Content Include="..\Assets\spiral_corner.gif" Link="Resources\spiral_corner.gif">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

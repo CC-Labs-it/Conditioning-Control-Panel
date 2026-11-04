@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -35,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
     /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
-    /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
+    /// detonation), the dashboard's other trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
     /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
     /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
     /// (no AchievementService on this head; quests are credited).</para>
@@ -50,11 +51,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
+        internal static Bitmap? GlitchImage;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
         /// cache kept the first mod's art for the life of the process).</summary>
-        internal static void LoadBubbleImage() => Image = Helpers.ModArt.TryLoad("bubble.png");
+        internal static void LoadBubbleImage()
+        {
+            Image = Helpers.ModArt.TryLoad("bubble.png");
+            GlitchImage?.Dispose();
+            GlitchImage = null;
+            foreach (var path in new[] { Path.Combine(CorePaths.EffectiveAssets, "Chaos", "bubbles", "glitch.png"),
+                Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "bubbles", "glitch.png") })
+            {
+                try { if (File.Exists(path)) { GlitchImage = new Bitmap(path); break; } }
+                catch (Exception ex) { Log.Debug("Glitch bubble art: {E}", ex.Message); }
+            }
+        }
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
@@ -132,7 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // The ambient game stops mid-run: its bubbles go, the run keeps the windows.
                 _spawnTimer?.Stop();
                 _spawnTimer = null;
-                Field.Bubbles.RemoveAll(b => b.Spec == null);
+                Field.Bubbles.RemoveAll(b => b.Spec == null || b.AmbientTrigger);
                 _chaosOpenedWindows = true;
                 foreach (var w in Windows) w.Sync();
                 if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:853
@@ -166,8 +179,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable));
+            var spec = RollGlitch(s, Field.Random, Field.Bubbles.Count(b => !b.Popping && (b.AmbientTrigger || b.Spec is { IsLive: false, IsDarter: false, IsFreeze: false })));
+            var bubble = spec == null
+                ? AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable)
+                : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+            if (spec != null) { bubble.AmbientTrigger = true; bubble.Clickable = clickable; }
+            Field.Bubbles.Add(bubble);
             RequestFrame();
+        }
+
+        // WPF BubbleService.cs:1150-1200, :1256: unsupported selected variants still
+        // occupy their place in the pool; only glitch is implemented on this head.
+        internal static EffectBubbleSpec? RollGlitch(AppSettings s, Random random, int effectCount)
+        {
+            if (!s.BubbleTriggersEnabled || effectCount >= 4) return null;
+            var ids = s.BubbleTriggerVariants.Where(id => id != "magnet").ToArray();
+            if (ids.Length == 0 || random.Next(100) >= Math.Clamp(s.BubbleTriggerChance, 0, 100)) return null;
+            if (ids[random.Next(ids.Length)] != "glitch") return null;
+            return new EffectBubbleSpec { VariantId = "glitch", SizePx = 200, Tint = 0xFF9A40FFu,
+                Label = "GLITCH", TreatLifeMs = 7000,
+                Payload = new OverlayPayload("braindrain", braindrainOpacity: 0.30) { Strength = 60, DurationMult = 1.2 } };
         }
 
         /// <summary>WPF StartAnimationDriver/StopAnimationTimerIfIdle: one chain, parked while empty.</summary>
@@ -207,7 +238,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Live (not popping) chaos bubbles: WPF ActiveBubbles during a run.</summary>
         internal static int ChaosCount
         {
-            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.Popping) n++; return n; }
+            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.AmbientTrigger && !b.Popping) n++; return n; }
         }
 
         /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
@@ -248,7 +279,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
-            Field.Bubbles.RemoveAll(b => b.Spec != null);
+            Field.Bubbles.RemoveAll(b => b.Spec != null && !b.AmbientTrigger);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
@@ -301,7 +332,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
-            if (b.Spec != null) { PopChaos(b); return; }
+            if (b.Popping) return;
+            if (b.Spec != null && !b.AmbientTrigger) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
@@ -318,6 +350,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+            if (b.AmbientTrigger) b.Spec?.Payload.Fire();
         }
 
         internal static void OnFrame(TimeSpan now)
@@ -497,7 +530,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             var (fill, pen) = TintPaint(b.Spec.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         }
-                        if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                        var sprite = b.AmbientTrigger ? BubbleOverlay.GlitchImage : img;
+                        if (sprite != null) dc.DrawImage(sprite, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
