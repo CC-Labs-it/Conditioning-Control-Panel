@@ -40,10 +40,21 @@ public class Win32AwarenessForegroundProbeTests
         if (!OperatingSystem.IsWindows()) Assert.Null(new Win32AwarenessForegroundProbe().Read());
     }
 
+    [Theory]
+    [InlineData(true, null, false)]
+    [InlineData(true, "0", false)]
+    [InlineData(true, "true", false)]
+    [InlineData(true, "1", true)]
+    [InlineData(false, "1", false)]
+    public void NativeDesktopRequiresWindowsAndExplicitOptIn(bool windows, string? optIn, bool expected) =>
+        Assert.Equal(expected, NativeDesktopEnabled(windows, optIn));
+
+    private static bool NativeDesktopEnabled(bool windows, string? optIn) => windows && optIn == "1";
+
     [Fact]
     public void NativeReadReportsControlledForegroundWindow()
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!NativeDesktopEnabled(OperatingSystem.IsWindows(), Environment.GetEnvironmentVariable("CCP_NATIVE_DESKTOP_TEST"))) return;
 
         const string title = "CCP foreground probe test";
         var previous = GetForegroundWindow();
