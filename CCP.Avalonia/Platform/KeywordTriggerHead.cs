@@ -119,8 +119,6 @@ internal sealed class KeywordAudioRuntime
     private readonly KeywordCooldowns _cooldowns = new();
     private readonly SemaphoreSlim _durationGate = new(1, 1);
     private readonly SemaphoreSlim _clipGate = new(1, 1);
-    private VideoMetadataCache? _lengths;
-    private Task _clipReady = Task.CompletedTask;
     private CancellationTokenSource _audio = new();
     private Action? _stop;
     internal Func<DateTime> Now = () => DateTime.Now;
@@ -307,7 +305,6 @@ internal sealed class KeywordAudioRuntime
     {
         var cancellation = _audio; _audio = new CancellationTokenSource();
         cancellation.Cancel(); cancellation.Dispose();
-        _clipReady = Task.CompletedTask;
         StopClip();
     }
 
@@ -322,8 +319,8 @@ internal sealed class KeywordAudioRuntime
         try
         {
             if (DurationProbe is { } probe) return await probe(path, cancellation).WaitAsync(cancellation);
-            if (LibVlcAudio.Shared is not { } vlc) return null;
-            var lengths = _lengths ??= new VideoMetadataCache(vlc);
+            var lengths = Views.Overlays.MandatoryVideoOverlay.Lengths;
+            if (lengths == null) return null;
             await _durationGate.WaitAsync(cancellation);
             try { return await lengths.GetOrComputeDurationAsync(path).WaitAsync(cancellation); }
             finally { _durationGate.Release(); }
@@ -354,14 +351,12 @@ internal sealed class KeywordAudioRuntime
             await _clipGate.WaitAsync(cancellation);
             try
             {
-                // Without metadata, let the previous clip report its length (or finish) before replacing it.
-                await _clipReady.WaitAsync(cancellation);
                 cancellation.ThrowIfCancellationRequested();
                 // WPF :1863-1865 replaces only the clip, not another dispatch's pending actions.
                 StopClip();
                 timing = new TaskCompletionSource<TimeSpan>(TaskCreationOptions.RunContinuationsAsynchronously);
                 var clip = timing;
-                _clipReady = ducked && known == null ? clip.Task : Task.CompletedTask;
+                if (known is { } knownDuration) clip.TrySetResult(knownDuration);
                 _stop = CoreAudio.PlayStoppable(path,
                     KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                     onStarted: duration => { if (duration > TimeSpan.Zero) clip.TrySetResult(duration); },

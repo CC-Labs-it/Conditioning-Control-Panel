@@ -358,7 +358,7 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
-    public Task ReplacedClipKeepsItsDurationWhenStartupIsAsynchronous() => RunAsync(async (engine, s, _) =>
+    public Task UnknownDurationDoesNotBlockReplacement() => RunAsync(async (engine, s, _) =>
     {
         var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
             CoreAudio.PlayStoppableProvider, s.AudioDuckingEnabled);
@@ -372,18 +372,19 @@ public sealed class KeywordAudioRuntimeTests
             CoreAudio.UnduckProvider = _ => unducked.TrySetResult();
             CoreAudio.PlayStoppableProvider = (_, _, _, started, finished) =>
             {
-                if (++play == 1) firstStarted = started;
+                if (++play == 1) { firstStarted = started; started?.Invoke(TimeSpan.Zero); }
                 else started?.Invoke(TimeSpan.FromMilliseconds(400));
                 return () => finished?.Invoke();
             };
             engine.Delay = (ms, _) => { delayed.TrySetResult(ms); return release.Task; };
             var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
             audio.DuckSystemAudio = true;
-            s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false });
-            Type(engine, "sit");
+            s.AwarenessLoopProtectionEnabled = false;
+            Type(engine, "sit"); var now = engine.Now(); engine.Now = () => now.AddSeconds(2); Type(engine, "sit");
             Assert.NotNull(firstStarted);
+            Assert.Equal(2, play);
             firstStarted!(TimeSpan.FromSeconds(10));
-            Assert.Equal(10500, await delayed.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Contains(await delayed.Task.WaitAsync(TimeSpan.FromSeconds(5)), new[] { 500, 900 });
             Assert.False(unducked.Task.IsCompleted);
             release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
@@ -395,8 +396,10 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
-    [Fact]
-    public Task ParsedDurationSurvivesReplacementBeforePlaybackStarts() => RunAsync(async (engine, s, _) =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ParsedDurationSurvivesReplacementBeforePlaybackStarts(bool replace) => RunAsync(async (engine, s, _) =>
     {
         var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
             CoreAudio.PlayStoppableProvider, s.AudioDuckingEnabled);
@@ -416,11 +419,11 @@ public sealed class KeywordAudioRuntimeTests
             engine.Delay = (ms, _) => { delay.TrySetResult(ms); return release.Task; };
             var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
             audio.DuckSystemAudio = true;
-            s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false });
+            if (replace) s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false });
             Type(engine, "sit"); Assert.Equal(0, plays);
             firstProbe.SetResult(10);
             Assert.Equal(10500, await delay.Task.WaitAsync(TimeSpan.FromSeconds(5)));
-            Assert.Equal(2, plays); Assert.False(unducked.Task.IsCompleted);
+            Assert.Equal(replace ? 2 : 1, plays); Assert.False(unducked.Task.IsCompleted);
             release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
         finally
