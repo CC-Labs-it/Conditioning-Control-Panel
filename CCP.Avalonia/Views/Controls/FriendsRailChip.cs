@@ -109,6 +109,12 @@ public sealed class FriendsRailChip : Grid
         _popup.IsOpen = true;
     }
 
+    internal void OpenFriend(string id)
+    {
+        if (!_popup.IsOpen) { Rebind(); _popup.IsOpen = true; }
+        Drawer.OpenFromFeed(id);
+    }
+
     private void Rebind()
     {
         var next = Drawer.Service ?? Platform.FriendsHead.Service;
