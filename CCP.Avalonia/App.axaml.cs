@@ -945,6 +945,8 @@ namespace ConditioningControlPanel.Avalonia
                 if (global::Avalonia.Controls.ControlExtensions.FindControl<global::Avalonia.Controls.Panel>(desktop.MainWindow, "NotificationHost") is { } toastHost)
                     Notifications.AttachHost(toastHost);
 
+                Platform.LeashHead.AttachPanel(desktop.MainWindow);
+
                 // The two toast seams, as WPF App.xaml.cs:390 and :453 seed them.
                 CoreProgram.NotifyProvider = (message, kind, duration) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     Notifications.Show(message,

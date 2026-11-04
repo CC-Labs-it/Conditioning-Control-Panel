@@ -5,6 +5,10 @@
 // ponytail: the explainer/drawer UI lands with the Drawer unit.
 using System;
 using System.IO;
+using Avalonia.Controls;
+using ConditioningControlPanel.Controls.Leash;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
@@ -19,6 +23,8 @@ internal static class LeashHead
     internal static ILeashService? Service { get; set; }
     private static ILeashService? _soundService;
     private static bool _iCut;
+    private static LeashEventNotices? _notices;
+    private static Window? _panel;
 
     /// <summary>WPF App.LeashedChanged: the account went on or off a leash.</summary>
     internal static event Action<bool>? LeashedChanged;
@@ -67,12 +73,48 @@ internal static class LeashHead
     /// panel's gate card presents it.</summary>
     internal static void Publish(ILeashService svc)
     {
-        if (_soundService != null) _soundService.EventArrived -= OnSoundEvent;
+        if (_soundService != null) { _soundService.EventArrived -= OnSoundEvent; _soundService.EventArrived -= OnNoticeEvent; }
+        _notices = new LeashEventNotices(ShowNotice, svc.NoteShown);
         _soundService = svc;
         _soundService.EventArrived += OnSoundEvent;
+        _soundService.EventArrived += OnNoticeEvent;
         Service = svc;
         Views.Windows.MainShellWindow.LeashGateDueProvider = () => Service?.GateDue != null;
         Views.Windows.MainShellWindow.PresentLeashGateProvider = shell => shell.PresentLeashGate();
+    }
+
+    internal static void AttachPanel(Window panel)
+    {
+        if (_panel != null) _panel.PropertyChanged -= OnPanelChanged;
+        _panel = panel;
+        _panel.PropertyChanged += OnPanelChanged;
+        _notices?.Flush(PanelShowing());
+    }
+
+    private static bool PanelShowing() => _panel is { IsVisible: true, WindowState: not WindowState.Minimized };
+
+    private static void OnPanelChanged(object? sender, global::Avalonia.AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == Window.IsVisibleProperty || e.Property == Window.WindowStateProperty)
+            _notices?.Flush(PanelShowing());
+    }
+
+    private static void OnNoticeEvent(LeashEvent e)
+    {
+        var notices = _notices;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(notices, _notices)) return;
+            try { notices?.Arrived(e, PanelShowing()); }
+            catch (Exception ex) { Serilog.Log.Debug("Leash notice failed: {E}", ex.Message); }
+        });
+    }
+
+    private static void ShowNotice(LeashEvent e)
+    {
+        var key = LeashUiRules.EventKey(e)!;
+        App.Notifications.Show(Loc.GetF(key, e.From.Name),
+            e.Kind is LeashEventKind.Punish or LeashEventKind.AssignMissed ? NotificationType.Warning : NotificationType.Info);
     }
 
     // WPF LeashSurfaces.cs:145-150, 267-272: the local cut already sounded.
@@ -118,7 +160,10 @@ internal static class LeashHead
     /// <summary>WPF App.OnExit:6289-6292: the leash goes with the app.</summary>
     internal static void Stop()
     {
-        if (_soundService != null) _soundService.EventArrived -= OnSoundEvent;
+        if (_soundService != null) { _soundService.EventArrived -= OnSoundEvent; _soundService.EventArrived -= OnNoticeEvent; }
+        if (_panel != null) _panel.PropertyChanged -= OnPanelChanged;
+        _panel = null;
+        _notices = null;
         _soundService = null;
         _iCut = false;
         Service = null;
