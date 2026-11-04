@@ -115,6 +115,7 @@ internal static class KeywordTriggerHead
 internal sealed class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
+    private readonly KeywordOcrMatcher _ocr = new();
     private readonly KeywordCooldowns _cooldowns = new();
     private CancellationTokenSource? _audio;
     private Action? _stop;
@@ -123,8 +124,8 @@ internal sealed class KeywordAudioRuntime
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
-    internal void Start() { IsActive = true; _input.Clear(); }
-    internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
+    internal void Start() { IsActive = true; _input.Clear(); _ocr.Reset(); }
+    internal void Stop() { IsActive = false; _input.Clear(); _ocr.Reset(); StopAudio(); }
 
     private bool Accept(string? process, bool own)
     {
@@ -148,6 +149,18 @@ internal sealed class KeywordAudioRuntime
         if (Accept(process, own) && _input.Key(key, Now(), CoreSettings.Current.KeywordBufferTimeoutMs)) Check();
     }
 
+    internal bool NeedsOcrConfirmation => _ocr.NeedsConfirmation;
+
+    // The capture lane supplies the foreground process captured with the scan.
+    internal IReadOnlyList<KeywordOcrHit> CheckOcrWords(IReadOnlyList<KeywordOcrHit> hits, string? process = null, bool own = false)
+    {
+        if (!Accept(process, own)) { _ocr.Reset(); return Array.Empty<KeywordOcrHit>(); }
+        var now = Now();
+        var (fired, words) = _ocr.Scan(hits, CoreSettings.Current, _cooldowns, now);
+        if (fired.Count > 0) Fire(fired, "OCR", now);
+        return words;
+    }
+
     private void Check()
     {
         var s = CoreSettings.Current;
@@ -157,12 +170,18 @@ internal sealed class KeywordAudioRuntime
             word => _cooldowns.IsMuted(word, now.ToUniversalTime()));
         if (fired.Count == 0) return;
         _input.Clear();
+        Fire(fired, "Keyboard", now);
+    }
+
+    private void Fire(List<KeywordTrigger> fired, string source, DateTime now)
+    {
+        var s = CoreSettings.Current;
         _cooldowns.LastGlobal = now;
         foreach (var t in fired)
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
-            RecordFire(t, "Keyboard", now);   // WPF KeywordTriggerService.cs:1191-1200
+            RecordFire(t, source, now);   // WPF KeywordTriggerService.cs:1191-1200
             try { TriggerFired?.Invoke(t); } catch (Exception ex) { Log.Warning(ex, "Keyword fired handler failed"); }
         }
         LastDispatch = DispatchAsync(fired);
