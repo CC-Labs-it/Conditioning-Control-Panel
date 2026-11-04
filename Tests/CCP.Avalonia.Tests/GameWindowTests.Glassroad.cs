@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Threading;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using ConditioningControlPanel.Services.Lobby;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -60,6 +63,51 @@ public sealed partial class GameWindowTests
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
+    });
+
+    [Fact]
+    public void LobbyRaceJoinOpensRoomAndRejectsBadIds() => RunGlassroad("1", (_, launcher, _) =>
+    {
+        var oldLab = CoreEntitlement.HasLabProvider; var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        var denied = 0;
+        var settings = CoreSettings.Current;
+        var oldId = settings.UnifiedId;
+        try
+        {
+            CoreEntitlement.HasLabProvider = () => false; CoreEntitlement.ShowDeniedHandler = _ => denied++;
+            settings.UnifiedId = "account";
+            var row = new LobbyRow { Game = LobbyGame.Race, State = LobbyRowState.Open, Key = "abcdef123456", HostName = "Host" };
+            launcher.PaintLobby(new LobbySnapshot(new[] { row }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true));
+            var grid = Assert.IsType<Grid>(launcher.FindControl<StackPanel>("LobbyDropRows")!.Children[0]);
+            var join = Assert.IsType<Button>(grid.Children[1]);
+            Assert.True(join.IsEnabled);
+            join.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, denied); Assert.Empty(GameWindow.OpenWindowsForTests());
+            CoreEntitlement.HasLabProvider = () => true;
+            join.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var game = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.Contains("join=abcdef123456", game.PageUrl!.Query);
+            var sent = new List<JObject>(); game.Posted += json => sent.Add(JObject.Parse(json));
+            Assert.Same(game, GameWindow.Launch(GameWindow.GlassroadId, "987654abcdef"));
+            Assert.Contains(sent, frame => (string?)frame["type"] == "join-room" && (string?)frame["roomId"] == "987654abcdef");
+            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId, "bad"));
+        }
+        finally { CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.ShowDeniedHandler = oldDenied; settings.UnifiedId = oldId; }
+    });
+
+    [Fact]
+    public void LobbyRaceSignedOutRequestsLogin() => RunGlassroad("1", (shell, launcher, _) =>
+    {
+        var settings = CoreSettings.Current; var old = settings.UnifiedId;
+        try
+        {
+            settings.UnifiedId = null;
+            launcher.JoinLobbyRow(new LobbyRow { Game = LobbyGame.Race, Key = "abcdef123456", HostName = "Host" });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(shell.OwnedWindows, w => w is ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog);
+            Assert.Empty(GameWindow.OpenWindowsForTests());
+        }
+        finally { foreach (var child in shell.OwnedWindows.ToArray()) child.Close(); settings.UnifiedId = old; }
     });
 
     // ---- pure rules ----

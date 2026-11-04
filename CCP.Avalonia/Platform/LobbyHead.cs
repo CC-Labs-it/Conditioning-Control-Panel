@@ -14,9 +14,10 @@ internal static class LobbyHead
     private static LobbyPoll Create()
     {
         var remote = new RemoteLobbyApi();
-        return new LobbyPoll(new FriendsHead.Timer(), () => FriendsHead.Identity() != null,
-            () => FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>(),
-            () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(),
+        return new LobbyPoll(new FriendsHead.Timer(), () => FriendsHead.Identity()?.UnifiedId,
+            () => FriendsHead.Service is FriendsService f && f.SnapshotAccount == FriendsHead.Identity()?.UnifiedId
+                ? f.Snapshot.Friends : Array.Empty<Friend>(),
+            () => new PbpLobbyApi().FetchAsync(), () => new GoonOpenTablesApi().FetchAsync(),
             () => remote.FetchAsync(), () =>
             {
                 var url = LobbyWire.DefaultBaseUrl();

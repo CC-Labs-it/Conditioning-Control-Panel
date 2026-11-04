@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Services.Lobby;
 public sealed class LobbyPoll : IDisposable
 {
     private readonly IUiTimer _timer;
-    private readonly Func<bool> _signedIn;
+    private readonly Func<string?> _account;
     private readonly Func<Task<PbpLobbyReply>> _chess;
     private readonly Func<Task<OpenTablesReply>> _goon;
     private readonly Func<Task<RaceOpenReply>> _race;
@@ -23,11 +23,11 @@ public sealed class LobbyPoll : IDisposable
     public LobbySnapshot Snapshot { get; private set; } = LobbySnapshot.Empty;
     public bool LastRoundOk { get; private set; } = true;
     public event Action<LobbySnapshot>? Changed;
-    public LobbyPoll(IUiTimer timer, Func<bool> signedIn, Func<IReadOnlyList<Friend>> friends,
+    public LobbyPoll(IUiTimer timer, Func<string?> account, Func<IReadOnlyList<Friend>> friends,
         Func<Task<PbpLobbyReply>> chess, Func<Task<OpenTablesReply>> goon,
         Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> remote, Func<Task<RaceOpenReply>> race)
     {
-        _timer = timer; _signedIn = signedIn; _friends = friends;
+        _timer = timer; _account = account; _friends = friends;
         _chess = chess; _goon = goon; _remote = remote; _race = race;
         _timer.Interval = LobbyPollPlan.Base;
         _timer.Tick += OnTick;
@@ -62,11 +62,12 @@ public sealed class LobbyPoll : IDisposable
     }
     private async Task RunAsync(TaskCompletionSource completion)
     {
+        var account = _account();
         var snapshot = Snapshot;
         var ok = true;
         try
         {
-            if (!_signedIn()) snapshot = LobbySnapshot.Empty;
+            if (account == null) snapshot = LobbySnapshot.Empty;
             else
             {
                 var chess = Safe(_chess, PbpLobbyReply.Empty);
@@ -79,7 +80,6 @@ public sealed class LobbyPoll : IDisposable
                 try { friends = _friends(); } catch { friends = Array.Empty<Friend>(); }
                 snapshot = LobbyMerge.Build(chess.Result, goon.Result, remote.Result.Item1, friends, true,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), race.Result);
-                if (!_signedIn()) snapshot = LobbySnapshot.Empty;
             }
         }
         catch { ok = false; }
@@ -87,9 +87,12 @@ public sealed class LobbyPoll : IDisposable
         var success = ok;
         _timer.OnUiThread(() =>
         {
+            var switched = false;
             try
             {
                 if (_disposed) return;
+                switched = !string.Equals(account, _account(), StringComparison.Ordinal);
+                if (switched) result = LobbySnapshot.Empty;
                 Snapshot = result; LastRoundOk = success;
                 _timer.Interval = LobbyPollPlan.Next(_timer.Interval, success);
                 try { Changed?.Invoke(result); } catch { /* WPF isolates subscriber failures. */ }
@@ -98,6 +101,7 @@ public sealed class LobbyPoll : IDisposable
             {
                 lock (_gate) _inflight = null;
                 completion.TrySetResult();
+                if (switched && !_disposed && _account() != null) _ = RefreshAsync();
             }
         });
     }

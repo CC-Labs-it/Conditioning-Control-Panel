@@ -7,6 +7,9 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -14,6 +17,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.UI;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -36,7 +40,7 @@ public sealed class LauncherLobbyTests
     {
         var timer = new Timer();
         var calls = 0;
-        using var poll = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
+        using var poll = new LobbyPoll(timer, () => "account", () => Array.Empty<Friend>(),
             () => { calls++; return Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_1", "Chess", 0, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)); },
             () => Task.FromResult(OpenTablesReply.Empty),
             () => Task.FromResult(((IReadOnlyList<RemoteSeat>)new[] { new RemoteSeat("r", "Remote", 1, "light", Array.Empty<string>(), false) }, true)),
@@ -66,7 +70,7 @@ public sealed class LauncherLobbyTests
             var timer = new Timer();
             var calls = 0;
             var seats = 1;
-            using var poll = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
+            using var poll = new LobbyPoll(timer, () => "account", () => Array.Empty<Friend>(),
                 () => { calls++; return Task.FromResult(new PbpLobbyReply(Enumerable.Range(0, seats).Select(i => new PbpOpenSeat("p_" + i, "Host", 0, 0, 0)).ToArray(), Array.Empty<PbpPlayingGame>(), true)); },
                 () => Task.FromResult(OpenTablesReply.Empty),
                 () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)),
@@ -83,9 +87,13 @@ public sealed class LauncherLobbyTests
                 window.RefreshLobbyTick();
                 Assert.Equal(2, calls);
                 Assert.Contains("1", window.FindControl<TextBlock>("LobbyChipText")!.Text);
+                NavBadges.Set(NavSections.Social, 0);
+                window.PaintLobby(poll.Snapshot);
+                Assert.Equal(1, window.FindControl<Button>("LobbyChip")!.Opacity);
                 var chip = window.FindControl<Button>("LobbyChip")!;
                 chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.True(window.FindControl<Popup>("LobbyDrop")!.IsOpen);
+                Assert.Equal(0.60, chip.Opacity);
                 Assert.True(timer.Running);
                 Assert.Equal(3, calls);
                 timer.Fire();
@@ -149,6 +157,15 @@ public sealed class LauncherLobbyTests
                 Assert.Equal(7, panel.Children.Count);
                 var first = Assert.IsType<Grid>(panel.Children[0]);
                 Assert.Equal("Friend", Assert.IsType<TextBlock>(Assert.IsType<StackPanel>(first.Children[0]).Children[0]).Text);
+                Assert.NotNull(Assert.IsType<Image>(Assert.IsType<Border>(first.Children[2]).Child).Source);
+                Assert.NotNull(Assert.IsType<Border>(first.Children[3]).Background);
+                var lift = Assert.IsType<global::Avalonia.Media.TranslateTransform>(first.RenderTransform);
+                CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                first.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, first, new Pointer(1, PointerType.Mouse, true), window, default, 0, PointerPointProperties.None, KeyModifiers.None));
+                Assert.Equal(-2, lift.GetBaseValue(global::Avalonia.Media.TranslateTransform.YProperty).Value);
+                first.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, first, new Pointer(1, PointerType.Mouse, true), window, default, 0, PointerPointProperties.None, KeyModifiers.None));
+                Assert.Equal(0, lift.GetBaseValue(global::Avalonia.Media.TranslateTransform.YProperty).Value);
+                Assert.NotNull(Assert.IsType<Button>(first.Children[1]).Background);
                 window.PaintLobby(LobbySnapshot.Empty);
                 Assert.Equal(Loc.Get("lobby_signed_out"), Assert.IsType<TextBlock>(panel.Children[0]).Text);
             }
