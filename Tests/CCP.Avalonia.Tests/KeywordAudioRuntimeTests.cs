@@ -136,6 +136,25 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Empty(played);
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:393-428,1222-1225
+    public void TutorialDemoCreditsQuestWithoutStartingTheEngineOrMutingTypedMatches() => Run((engine, s, played) =>
+    {
+        var credits = 0;
+        engine.QuestCredit = () => credits++;
+        engine.Stop();
+        CoreEntitlement.HasPremiumProvider = () => false;
+        engine.FireDemo("sit", "Tutorial");
+        Assert.Equal(0, credits);
+        CoreEntitlement.HasPremiumProvider = () => true;
+        engine.FireDemo("sit", "Tutorial");
+        Assert.Equal(1, credits);
+        engine.Start();
+        s.AwarenessLoopProtectionEnabled = true;
+        Type(engine, "sit");
+        Assert.Equal(2, credits);
+        Assert.Single(played);
+    });
+
     [Fact]
     public void StopCancelsPendingAudioRepeats() => Run((engine, s, played) =>
     {

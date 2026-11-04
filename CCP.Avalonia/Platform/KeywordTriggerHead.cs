@@ -200,7 +200,7 @@ internal sealed class KeywordAudioRuntime
             _ => null,
         }).OfType<string>().ToList();
     internal Task LastDispatch { get; private set; } = Task.CompletedTask;
-    private async Task DispatchAsync(List<KeywordTrigger> fired)
+    private async Task DispatchAsync(List<KeywordTrigger> fired, bool demo = false)
     {
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
         foreach (var _ in fired)
@@ -225,7 +225,7 @@ internal sealed class KeywordAudioRuntime
         }
         foreach (var action in actions)
         {
-            if (!IsActive || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+            if ((!IsActive && !demo) || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
             try
             {
                 switch (action)
@@ -264,7 +264,7 @@ internal sealed class KeywordAudioRuntime
             Actions = [new HighlightAction(), new AvatarCommentAction { FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false }] };
         RecordFire(demo, source, Now());
         try { TriggerFired?.Invoke(demo); } catch (Exception ex) { Log.Debug(ex, "Keyword demo handler failed"); }
-        // ponytail: Highlight/AvatarComment dispatch remains wire-shell-keyword-triggers-b-next (WPF KeywordTriggerService.cs:428).
+        LastDispatch = DispatchAsync([demo], demo: true); // WPF KeywordTriggerService.cs:428
     }
 
     internal void StopAudio()
