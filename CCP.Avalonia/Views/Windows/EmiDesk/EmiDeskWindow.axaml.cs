@@ -1632,6 +1632,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     _petCooldownUntil = PatClock.GetUtcNow().UtcDateTime.AddMilliseconds(PetCooldownMs);
                     StartPatFeedback(EmiPatFeedback.Pet);
+                    RunBodyMove("bounce"); // WPF xaml.cs:1841, EmiChains.cs pet
                     CountPat();
                 }
                 FireDeskEvent("petted");
@@ -2603,12 +2604,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
                     EmiSfx.Chime();
                     StartPatFeedback(EmiPatFeedback.Glee);
+                    RunBodyMove("bounce"); // WPF Alive.cs:771-774, petStreak
                     return;
                 }
                 if (now < _petCooldownUntil)
                 {
                     StartPatFeedback(step == EmiPokeStep.Rage ? EmiPatFeedback.Rage
                         : step == EmiPokeStep.Annoyed ? EmiPatFeedback.Annoyed : EmiPatFeedback.Flick);
+                    if (step == EmiPokeStep.Rage) RunBodyMove("shiver");
+                    else if (step != EmiPokeStep.Annoyed) RunBodyMove("bounce"); // WPF Alive.cs:115-128, 761-776
                     return;
                 }
                 _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
