@@ -18,6 +18,8 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Commands;
+using ConditioningControlPanel.Avalonia;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -122,6 +124,41 @@ public sealed class VideoFeedDeferTests
         {
             shell.Autonomy.Stop(); video.Stop(); CoreEngine.Video = old; shell.Close();
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.MandatoryVideosEnabled, CoreEntitlement.HasPremiumProvider) = saved;
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF App.AiEffects.cs:75 calls TriggerVideo with its non-earned default (:2164).
+    [Fact]
+    public Task AiRandomVideoWaitsForFeed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var oldVideo = CoreEngine.Video;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
+        var oldSurface = MediaCommand.VideoSurface;
+        var oldStart = CompanionEffects.StartEffect;
+        var settings = new SettingsService();
+        var host = new Host(); var clock = new Clock();
+        var video = new MandatoryVideoScheduler(host, clock, () => new[] { "/v/test.mp4" })
+            { FeedOwnsTheScreen = () => true };
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.CompanionPrompt.AllowAiToControlEffects = true;
+            settings.Current.MandatoryVideosEnabled = true;
+            CoreAccount.HasLabAccessProvider = () => true;
+            CompanionEffects.StartEffect = action => action();
+            CoreEngine.Video = video; video.Start(); CompanionEffects.Seed();
+            Assert.True(MediaCommand.VideoSurface!(null));
+            Assert.False(video.IsPlaying);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            Assert.Empty(host.Shown);
+        }
+        finally
+        {
+            video.Stop(); CoreEngine.Video = oldVideo; CoreSettings.ServiceProvider = oldProvider;
+            CoreAccount.HasLabAccessProvider = oldLab; MediaCommand.VideoSurface = oldSurface;
+            CompanionEffects.StartEffect = oldStart;
         }
         return Task.CompletedTask;
     });
