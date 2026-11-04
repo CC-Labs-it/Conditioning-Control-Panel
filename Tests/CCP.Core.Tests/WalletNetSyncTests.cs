@@ -92,14 +92,45 @@ public sealed class WalletNetSyncTests
     {
         var s = Wallet();
         Assert.False(Apply(s, "{\"skill_points\":500,\"wallet_net\":-130}", "other"));
-        Assert.False(Apply(s, "{\"skill_points\":70,\"wallet_net\":-130,\"force_skills_reset\":true}"));
-        s.PendingSkillsResetAck = true;
+        s.UnlockedSkills = new() { "skill" };
+        Assert.True(Apply(s, "{\"skill_points\":100,\"wallet_net\":-130,\"force_skills_reset\":true}"));
+        Assert.Empty(s.UnlockedSkills);
+        Assert.True(s.PendingSkillsResetAck);
         Assert.True(Apply(s, "{\"skill_points\":70,\"wallet_net\":-130}"));
         Assert.False(s.PendingSkillsResetAck);
         Assert.Equal(100, s.SkillPoints);
         Assert.Equal(-100, s.WalletNetSeen[A]);
         Assert.True(Apply(s, "{\"skill_points\":70,\"wallet_net\":-130}"));
         Assert.Equal(70, s.SkillPoints);
+    }
+
+    [Fact]
+    public void ResetFallbackAndAcknowledgementSurviveUntilServerClearsFlag()
+    {
+        var s = Wallet();
+        s.PlayerLevel = 25;
+        s.UnlockedSkills = new() { "skill" };
+        Assert.Null(JObject.FromObject(SyncPush.Body(s, null))["force_skills_reset"]);
+        Assert.True(Apply(s, "{\"force_skills_reset\":true}"));
+        Assert.Equal(25, s.SkillPoints);
+        Assert.Empty(s.UnlockedSkills);
+        Assert.True(s.PendingSkillsResetAck);
+        var reloaded = Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(Newtonsoft.Json.JsonConvert.SerializeObject(s))!;
+        Assert.True(reloaded.PendingSkillsResetAck);
+        Assert.False(JObject.FromObject(SyncPush.Body(reloaded, null)).Value<bool>("force_skills_reset"));
+        var body = JObject.FromObject(SyncPush.Body(s, null));
+        Assert.Equal(JTokenType.Boolean, body["force_skills_reset"]!.Type);
+        Assert.False(body.Value<bool>("force_skills_reset"));
+        s.SkillPoints = 60;
+        Assert.False(Apply(s, "{\"force_skills_reset\":true,\"skill_points\":60,\"wallet_net\":-100}"));
+        Assert.True(s.PendingSkillsResetAck);
+        Assert.True(Apply(s, "{\"force_skills_reset\":false,\"skill_points\":50,\"wallet_net\":-130}"));
+        Assert.False(s.PendingSkillsResetAck);
+        Assert.Equal(60, s.SkillPoints);
+        Assert.True(Apply(s, "{\"skill_points\":50,\"wallet_net\":-130}"));
+        Assert.Equal(50, s.SkillPoints);
+        Assert.Equal(-130, s.WalletNetSeen[A]);
+        Assert.Null(JObject.FromObject(SyncPush.Body(s, null))["force_skills_reset"]);
     }
 
     [Fact]
@@ -181,6 +212,65 @@ public sealed class WalletNetSyncTests
             SettingsService.DisarmAllPendingSaves();
             CoreSettings.ServiceProvider = oldProvider;
             CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    }
+
+    [Fact]
+    public async Task ResetReplyIsAcknowledgedOnNextPushAndWalletRecovers()
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var s = settings.Current;
+        s.UnifiedId = A; s.OfflineMode = false; s.LastConfirmedServerXp = 0;
+        s.SkillPoints = 100; s.UnlockedSkills = new() { "skill" }; s.WalletNetSeen = new() { [A] = -100 };
+        var handler = new ResetReplies();
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler);
+        var now = DateTime.UtcNow;
+        sync.UtcNow = () => now;
+        sync.MarkLoaded(null);
+        try
+        {
+            Assert.True(await sync.PushAsync("reset"));
+            Assert.Empty(s.UnlockedSkills);
+            Assert.Equal(80, s.SkillPoints);
+            Assert.True(s.PendingSkillsResetAck);
+            Assert.Null(handler.Bodies[0]["force_skills_reset"]);
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            Assert.True(await sync.PushAsync("ack"));
+            Assert.Equal(JTokenType.Boolean, handler.Bodies[1]["force_skills_reset"]!.Type);
+            Assert.False(handler.Bodies[1].Value<bool>("force_skills_reset"));
+            Assert.False(s.PendingSkillsResetAck);
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            Assert.True(await sync.PushAsync("wallet"));
+            Assert.Null(handler.Bodies[2]["force_skills_reset"]);
+            Assert.Equal(50, s.SkillPoints);
+            Assert.Equal(-130, s.WalletNetSeen[A]);
+        }
+        finally
+        {
+            sync.Reset();
+            SettingsService.DisarmAllPendingSaves();
+            CoreSettings.ServiceProvider = oldProvider;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    }
+
+    private sealed class ResetReplies : HttpMessageHandler
+    {
+        internal readonly List<JObject> Bodies = new();
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Bodies.Add(JObject.Parse(await request.Content!.ReadAsStringAsync(ct)));
+            var json = Bodies.Count switch
+            {
+                1 => "{\"force_skills_reset\":true,\"skill_points\":80}",
+                2 => "{\"force_skills_reset\":false,\"skill_points\":50,\"wallet_net\":-130}",
+                _ => "{\"skill_points\":50,\"wallet_net\":-130}"
+            };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) };
         }
     }
 

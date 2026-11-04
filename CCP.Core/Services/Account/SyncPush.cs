@@ -171,8 +171,10 @@ namespace ConditioningControlPanel.Services
         public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null, SyncBody.Field consent = SyncBody.Field.None) => new()
         {
             Known = (achievements == null ? Sent & ~SyncBody.Field.Achievements : Sent)
-                    | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics) | (consent & Privacy),
+                    | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics) | (consent & Privacy)
+                    | (s.PendingSkillsResetAck ? SyncBody.Field.ForceSkillsReset : SyncBody.Field.None),
             UnifiedId = s.UnifiedId,
+            ForceSkillsReset = s.PendingSkillsResetAck ? false : null,
             Xp = (int)ProfileAdopt.TotalXp(s),
             Level = s.PlayerLevel,
             DescentEpoch = Descent.DescentEpochs.ClientEpoch,
@@ -215,10 +217,18 @@ namespace ConditioningControlPanel.Services
         internal static bool ApplySyncWallet(AppSettings live, string syncAccount, JObject reply)
         {
             if (!string.Equals(live.UnifiedId, syncAccount, StringComparison.Ordinal)) return false;
-            // WPF handles a skills reset before the wallet, or clears its pending acknowledgement.
-            // This head cannot handle a new reset yet, so do not consume its wallet or net.
+            // WPF ApplyForceSkillsReset: clear skills and refund, then acknowledge on the next push.
             var reset = reply["force_skills_reset"]?.Type == JTokenType.Boolean && reply.Value<bool>("force_skills_reset");
-            if (reset && !live.PendingSkillsResetAck) return false;
+            if (reset && !live.PendingSkillsResetAck)
+            {
+                int? refund;
+                try { refund = reply["skill_points"]?.ToObject<int?>(); }
+                catch (Exception ex) when (ex is JsonException or FormatException or OverflowException or InvalidCastException or ArgumentException) { return false; }
+                live.UnlockedSkills = new List<string>();
+                live.SkillPoints = refund ?? live.PlayerLevel; // WPF SkillTreeService.PointsPerLevel = 1
+                live.PendingSkillsResetAck = true;
+                return true;
+            }
             if (!reset && live.PendingSkillsResetAck)
             {
                 live.PendingSkillsResetAck = false;
