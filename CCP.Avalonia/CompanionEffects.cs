@@ -129,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static async Task<bool> PlayAudio(string path)
         {
             var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            CoreAudio.PlayOneShot(path, 1f, "ai", _ => started.TrySetResult(true), () => started.TrySetResult(false));
+            CoreAudio.PlaySound(path, 1f, "ai", _ => started.TrySetResult(true), () => started.TrySetResult(false));
             return await Task.WhenAny(started.Task, Task.Delay(10_000)) == started.Task && started.Task.Result;
         }
 

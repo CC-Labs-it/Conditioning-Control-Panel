@@ -398,7 +398,7 @@ namespace ConditioningControlPanel
                 _droneOutput.Init(_droneMixer);
                 _droneOutput.Play();
 
-                var watch = Services.Audio.MasterVolumeWatch.Shared;
+                var watch = Services.Audio.CoreMasterVolumeWatch.Shared;
                 watch.EnsureHooked();
                 watch.Changed -= OnMasterVolumeChanged;
                 watch.Changed += OnMasterVolumeChanged;
@@ -411,7 +411,7 @@ namespace ConditioningControlPanel
 
         private void StopDrone()
         {
-            try { Services.Audio.MasterVolumeWatch.Shared.Changed -= OnMasterVolumeChanged; } catch { }
+            try { Services.Audio.CoreMasterVolumeWatch.Shared.Changed -= OnMasterVolumeChanged; } catch { }
             try
             {
                 _droneOutput?.Stop();

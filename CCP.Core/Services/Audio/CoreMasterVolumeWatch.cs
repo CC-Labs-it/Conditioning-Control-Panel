@@ -17,11 +17,11 @@ namespace ConditioningControlPanel.Services.Audio
     /// <para>Handlers run on whatever thread wrote the setting and must stay cheap (set a gain on
     /// a reader, nothing else).</para>
     /// </summary>
-    public sealed class MasterVolumeWatch
+    public sealed class CoreMasterVolumeWatch
     {
         /// <summary>The app-wide watch. Players subscribe here; it hooks the live settings object
         /// the first time anyone asks and follows it when the settings object is swapped.</summary>
-        public static MasterVolumeWatch Shared { get; } = new MasterVolumeWatch();
+        public static CoreMasterVolumeWatch Shared { get; } = new CoreMasterVolumeWatch();
 
         private readonly object _gate = new();
         private AppSettings? _hooked;
@@ -36,8 +36,8 @@ namespace ConditioningControlPanel.Services.Audio
         {
             try
             {
-                var service = App.Settings;
-                if (service == null) return;
+                var service = CoreSettings.Service;
+                if (service == null) { Hook(CoreSettings.Current); return; }
                 lock (_gate)
                 {
                     if (!_hookedReplace)
@@ -67,7 +67,7 @@ namespace ConditioningControlPanel.Services.Audio
         {
             try
             {
-                var current = App.Settings?.Current;
+                var current = CoreSettings.Service?.Current;
                 Hook(current);
                 // A swapped settings object can carry a different level without any change event.
                 if (current != null) Raise(current.MasterVolume);

@@ -36,7 +36,7 @@ public class MasterVolumeObeyedTests
         // live update).
         var source = File.ReadAllText(Path.Combine(AppDir(), "Services", "LockCard", "MindWipeService.cs"));
         Assert.DoesNotContain("(float)_volume", source);
-        Assert.Contains("MasterVolumeWatch.Shared.Changed += OnMasterVolumeChanged", source);
+        Assert.Contains("CoreMasterVolumeWatch.Shared.Changed += OnMasterVolumeChanged", source);
     }
 
     // ---- Mantra drone ------------------------------------------------------------------------
@@ -86,7 +86,7 @@ public class MasterVolumeObeyedTests
     [Fact]
     public void A_master_volume_change_reaches_listeners_whoever_wrote_it()
     {
-        var watch = new MasterVolumeWatch();
+        var watch = new CoreMasterVolumeWatch();
         var settings = new AppSettings { MasterVolume = 80 };
         var heard = new List<int>();
         watch.Changed += heard.Add;
@@ -102,7 +102,7 @@ public class MasterVolumeObeyedTests
     [Fact]
     public void The_watch_follows_a_replaced_settings_object_and_drops_the_old_one()
     {
-        var watch = new MasterVolumeWatch();
+        var watch = new CoreMasterVolumeWatch();
         var before = new AppSettings();
         var after = new AppSettings();
         var heard = new List<int>();
@@ -119,7 +119,7 @@ public class MasterVolumeObeyedTests
     [Fact]
     public void One_listener_throwing_does_not_stop_the_others()
     {
-        var watch = new MasterVolumeWatch();
+        var watch = new CoreMasterVolumeWatch();
         var settings = new AppSettings();
         var heard = new List<int>();
         watch.Changed += _ => throw new System.InvalidOperationException("disposed reader");

@@ -116,10 +116,7 @@ namespace ConditioningControlPanel.Services
         /// control in the app could reach it. Same linear product as Brain Drain's.
         /// </summary>
         public static float EffectiveVolume(int masterVolume, double ownVolume)
-        {
-            if (double.IsNaN(ownVolume)) return 0f;
-            return Math.Clamp(masterVolume, 0, 100) / 100f * (float)Math.Clamp(ownVolume, 0, 1);
-        }
+        => Audio.AudioGain.MindWipe(masterVolume, ownVolume);
 
         /// <summary>Where the master level comes from. A seam for tests; the app reads settings.</summary>
         internal Func<int> MasterVolumeSource { get; set; } = ReadMasterVolume;
@@ -144,7 +141,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Pushes the current gain to whatever is sounding: the one-shot and both loop players.
         /// Called when Mind Wipe's own level moves and when the master dial moves
-        /// (<see cref="Audio.MasterVolumeWatch"/>). Try/catch per reader: PlaybackStopped nulls and
+        /// (<see cref="Audio.CoreMasterVolumeWatch"/>). Try/catch per reader: PlaybackStopped nulls and
         /// disposes them from the playback thread, so one can go away between test and assignment.
         /// </summary>
         internal void ApplyGainToLivePlayers()
@@ -173,8 +170,8 @@ namespace ConditioningControlPanel.Services
             _timer.Tick += Timer_Tick;
 
             // Follow the master dial live, whoever moves it (#1432).
-            Audio.MasterVolumeWatch.Shared.Changed += OnMasterVolumeChanged;
-            Audio.MasterVolumeWatch.Shared.EnsureHooked();
+            Audio.CoreMasterVolumeWatch.Shared.Changed += OnMasterVolumeChanged;
+            Audio.CoreMasterVolumeWatch.Shared.EnsureHooked();
 
             LoadAudioFiles();
         }
@@ -340,7 +337,7 @@ namespace ConditioningControlPanel.Services
             
             // The log names the level that is HEARD. It used to print the feature's own level, which
             // read "at 100% volume" in a report from a player whose master dial was at 0% (#1432).
-            Audio.MasterVolumeWatch.Shared.EnsureHooked();
+            Audio.CoreMasterVolumeWatch.Shared.EnsureHooked();
             App.Logger?.Information("MindWipe: Loop started with {File} at {Vol}% volume, {Heard}% after master (crossfade: {Overlap}s)",
                 Path.GetFileName(_loopFilePath), volume * 100, Math.Round(CurrentGain * 100), CROSSFADE_OVERLAP_SECONDS);
         }
@@ -903,7 +900,7 @@ namespace ConditioningControlPanel.Services
             StopCurrentAudio();
             StopLoop();
             _timer.Tick -= Timer_Tick;
-            Audio.MasterVolumeWatch.Shared.Changed -= OnMasterVolumeChanged;
+            Audio.CoreMasterVolumeWatch.Shared.Changed -= OnMasterVolumeChanged;
         }
     }
 }
