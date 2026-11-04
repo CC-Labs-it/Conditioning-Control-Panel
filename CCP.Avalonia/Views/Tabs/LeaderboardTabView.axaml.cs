@@ -126,6 +126,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // behind a Core seam.
             ShowTrophyStats = true;
 
+            AttachedToVisualTree += (_, _) => { CoreMods.ModChanged += OnLeaderboardModChanged; UpdateLeaderboardTheme(); };
+            DetachedFromVisualTree += (_, _) => CoreMods.ModChanged -= OnLeaderboardModChanged;
+            UpdateLeaderboardTheme();
             InitializeLeaderboardFx();
             Loaded += OnLeaderboardTabLoaded;
             PropertyChanged += OnLeaderboardTabPropertyChanged;
@@ -165,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             foreach (var row in _ranked) row.IsAllTimeView = isAllTime;
             _sortKey = "rank";
             UpdateModeButtons();
+            UpdateLeaderboardTheme();
             RefreshSeasonHeader();
             ApplyModeLabels();
             RebuildLeaderboardView();
@@ -175,11 +179,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// Repaints the segmented Monthly/All-Time pill, as UpdateLeaderboardModeButtons does.
         /// Gold for the active All-Time half is a literal there too.
         ///
-        /// ponytail: the mod accent IS on the seam - <c>CoreMods.AccentColorHex</c> plus
-        /// <c>CoreMods.TryParseHexColor</c> is what WPF's <c>App.Mods.GetAccentColorHex</c>
-        /// reduces to, and this method just has not been switched over. The theme resource used
-        /// here is the same colour until a mod repaints it, so nothing reads wrong meanwhile; the
-        /// change is two lines plus a <c>CoreMods.ModChanged</c> repaint.
         /// </summary>
         private void UpdateModeButtons()
         {
@@ -203,6 +202,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
 
             IBrush? Res(string key) => this.TryFindResource(key, out var v) ? v as IBrush : null;
+        }
+
+        private void OnLeaderboardModChanged(object? sender, ConditioningControlPanel.Models.ModPackage mod) =>
+            Dispatcher.UIThread.Post(UpdateLeaderboardTheme);
+
+        // WPF MainWindow.Leaderboard.cs:858: repaint existing containers without fetching data.
+        private void UpdateLeaderboardTheme()
+        {
+            var accent = IsAllTimeMode ? Color.FromRgb(255, 215, 0)
+                : Color.TryParse(CoreMods.AccentColorHex, out var color) ? color : Color.Parse("#FF69B4");
+            Resources["LbAccentBrush"] = new SolidColorBrush(accent);
+            Resources["LbTint20Brush"] = Tint(0x20);
+            Resources["LbTint40Brush"] = Tint(0x40);
+            Resources["LbHoverBrush"] = Tint(0x22);
+            Resources["LbSelectedBrush"] = Tint(0x3C);
+            SolidColorBrush Tint(byte alpha) => new(Color.FromArgb(alpha, accent.R, accent.G, accent.B));
         }
 
         /// <summary>
