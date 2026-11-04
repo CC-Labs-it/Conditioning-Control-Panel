@@ -150,7 +150,7 @@ internal static class AccountSeed
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
     internal static SyncPush? Sync;
 
-    /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
+    /// <summary>WPF ProfileSyncService.ProfileLoaded: progression changed or a load succeeded (the welcome-back sheet's second look).</summary>
     internal static event Action? ProfileLoaded;
 
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
@@ -171,8 +171,15 @@ internal static class AccountSeed
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
         if (!string.IsNullOrEmpty(s.AuthToken))
             EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
+        var (preLevel, preLevelXp) = (s.PlayerLevel, s.PlayerXP);
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
+        // WPF ProfileSyncService.cs:1107-1124: notify on a changed read before pushing.
+        if (s.PlayerLevel != preLevel || Math.Abs(s.PlayerXP - preLevelXp) > 0.01)
+        {
+            try { ProfileLoaded?.Invoke(); }
+            catch (Exception ex) { Log.Warning(ex, "Profile read notification failed"); }
+        }
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
         {
@@ -184,7 +191,10 @@ internal static class AccountSeed
                 && ReferenceEquals(CoreSettings.Current, s) && !s.OfflineMode && CoreAccount.IsLoggedIn
                 && string.Equals(s.UnifiedId, id, StringComparison.Ordinal)
                 && (s.PlayerLevel > 1 || ProfileAdopt.TotalXp(s) >= ProfileAdopt.MeaningfulProgressXp))
+            {
                 sync.NoteProfileLoadFailure();
+                return false;
+            }
         }
         return true;
     }

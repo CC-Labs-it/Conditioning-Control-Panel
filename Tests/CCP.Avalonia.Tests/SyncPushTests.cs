@@ -170,7 +170,7 @@ public sealed partial class AccountSeedTests
     {
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
         wire.SyncStatus = (HttpStatusCode)429;
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.False(await AccountSeed.LoadProfileAsync());
         Assert.Single(wire.Syncs);
 
         wire.SyncStatus = HttpStatusCode.OK;
@@ -285,6 +285,41 @@ public sealed partial class AccountSeedTests
         Assert.Null(Assert.Single(wire.Syncs)["achievements"]);
     });
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void ReadProgressNotification_PrecedesFailedPushOnlyWhenProgressChanged(bool changed, bool throwing) => WithFreshInstall(async () =>
+    {
+        // WPF ProfileSyncService.cs:1107-1124 raises on changed progression before the push.
+        var profile = changed ? L40Profile("u1")
+            : """{"user":{"unified_id":"u1","level":1,"xp":0,"current_season":"2026-08"}}""";
+        var (wire, _, _) = SignIn("u1", profile);
+        wire.SyncStatus = (HttpStatusCode)429;
+        var hold = wire.Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int notifications = 0;
+        void OnLoaded()
+        {
+            notifications++;
+            if (throwing) throw new InvalidOperationException("listener failed");
+        }
+        AccountSeed.ProfileLoaded += OnLoaded;
+        try
+        {
+            var loading = AccountSeed.LoadProfileAsync();
+            await wire.SyncSeen.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Equal(changed ? 1 : 0, notifications);
+            hold.SetResult();
+            Assert.Equal(!changed, await loading);
+            Assert.Equal(1, notifications); // Changed read, or successful default load.
+        }
+        finally
+        {
+            hold.TrySetResult();
+            AccountSeed.ProfileLoaded -= OnLoaded;
+        }
+    });
+
     [Fact]
     public void AProgressedLoadWithARateLimitedPushSeedsOnlyLaterFailures() => WithFreshInstall(async () =>
     {
@@ -295,7 +330,7 @@ public sealed partial class AccountSeedTests
         wire.SyncStatus = (HttpStatusCode)429;
         var counts = new List<int>();
         sync.SyncHealthChanged += (_, count) => counts.Add(count);
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.False(await AccountSeed.LoadProfileAsync());
         Assert.Equal(40, CoreSettings.Current.PlayerLevel);
         Assert.Single(wire.Syncs);
         Assert.Equal(0, sync.ConsecutiveSyncFailures);
@@ -373,7 +408,7 @@ public sealed partial class AccountSeedTests
         // leaves the door open for every trigger; 30 s first, reopened at once by a new token.
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
         wire.SyncStatus = HttpStatusCode.InternalServerError;
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.False(await AccountSeed.LoadProfileAsync());
         Assert.Single(wire.Syncs);
         wire.SyncStatus = HttpStatusCode.OK;
         sync.UtcNow = () => T0.AddSeconds(10);
@@ -405,7 +440,7 @@ public sealed partial class AccountSeedTests
     {
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
         wire.SyncStatus = HttpStatusCode.Conflict;
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.False(await AccountSeed.LoadProfileAsync());
         sync.UtcNow = () => T0.AddSeconds(10);
         Assert.False(await sync.PushAsync("level-up"));
         Assert.Single(wire.Syncs);
