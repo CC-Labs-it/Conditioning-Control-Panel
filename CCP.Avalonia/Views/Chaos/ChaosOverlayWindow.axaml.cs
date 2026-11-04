@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using IOPath = System.IO.Path;
 using Avalonia;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
@@ -68,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// those arcs read a little looser than WPF's.</para>
     ///
     /// <para>The portrait slide-in is written and guarded exactly as WPF guards it, on a non-null
-    /// portrait; with no <c>ChaosArt</c> here that resolves null and nothing slides, which is the
+    /// portrait; when no portrait is present nothing slides, which is the
     /// same branch the original takes for an unbacked portrait id. The ken-burns drift runs off the
     /// backdrop the CALLER passes, not <c>ChaosArt</c>, so it is motion over real content whenever
     /// there is any.</para>
@@ -82,8 +84,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// CoreAudio + the master-volume curve), <c>ChaosTips</c> (40 lines of control composition),
     /// <c>ChaosBoonColors</c> (an id table, now ChaosBoonColors.cs beside this file),
     /// <c>ChaosRanks</c>/<c>ChaosRank</c>/<c>ChaosGlyphs</c> (Core, Services/Chaos/ChaosRanks.cs)
-    /// and <c>ChaosWindowZ.BornTopmost</c> (<c>AppSettings.ChaosPinOnTop</c>). <c>ChaosArt</c> and
-    /// <c>ChaosNarrator</c> still live in the WPF head and are stubbed in the Stubs region below;
+    /// and <c>ChaosWindowZ.BornTopmost</c> (<c>AppSettings.ChaosPinOnTop</c>). <c>ChaosArt</c> resolves optional images below;
+    /// <c>ChaosNarrator</c> is still stubbed;
     /// <c>ChaosAnnouncerOverlay</c> is the head's real overlay (ChaosAnnouncerOverlay.cs). <c>ChaosBoon</c>, <c>ChaosRunState</c>, <c>ChaosMeta</c>,
     /// <c>ChaosLessons</c>, <c>RevealService</c> and <c>ChaosConversation</c> are the real Core
     /// types; <see cref="ChaosRunHost"/> (the run-lifecycle slice of WPF ChaosModeService) drives
@@ -1162,10 +1164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             StartTween("story:fade", 180, t => _storyCardPanel.Opacity = t);
             BringToFront();
 
-            // Portrait slide-in (snappy, settles). Guarded exactly as WPF guards it: with no
-            // ChaosArt on this head the portrait resolves null and is hidden, so nothing slides -
-            // the same branch the original takes when a portrait id has no art behind it. When
-            // ChaosArt lands, this runs with no further edit.
+            // Portrait slide-in runs only when the optional art is present, as in WPF.
             if (portrait != null)
             {
                 double fromX = convo.PortraitOnLeft ? -260 : 260;
@@ -1542,12 +1541,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        private static class ChaosArt
+        internal static class ChaosArt
         {
-            // Bitmap, not IImage: an Image wants IImage and an ImageBrush wants
-            // IImageBrushSource, and Bitmap is both - which is what the real ChaosArt hands back.
-            public static Bitmap? Resolve(string folder, string id) => null;
-            public static Bitmap? ResolveRecap() => null;
+            private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Bitmap> Cache = new();
+
+            public static Bitmap? Resolve(string folder, string id) => ResolvePath(IOPath.Combine(folder, id + ".png"));
+            public static Bitmap? ResolveRecap() => ResolvePath("recap.png");
+
+            private static Bitmap? ResolvePath(string relative) => ResolvePath(relative,
+                IOPath.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory);
+
+            internal static Bitmap? ResolvePath(string relative, params string[] roots)
+            {
+                foreach (var root in roots)
+                {
+                    var path = IOPath.Combine(root, "assets", "Chaos", relative);
+                    try
+                    {
+                        if (Cache.TryGetValue(path, out var cached)) return cached;
+                        if (!File.Exists(path)) continue;
+                        var bitmap = new Bitmap(path);
+                        return Cache.GetOrAdd(path, bitmap);
+                    }
+                    catch { /* Optional art must not prevent the overlay from opening. */ }
+                }
+                return null;
+            }
         }
 
         /// <summary>Real now. <c>Services/Chaos/ChaosTips.cs</c> is 40 lines of WPF control
