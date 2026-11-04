@@ -241,6 +241,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: false, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
+            // WPF ChaosLessonHooks.cs:161, 250: live rain remains busy after its spawn window.
+            if (ChaosGifCascadeOverlay.IsRaining) ChaosLessons.Tick("blindfold");
             ShowPopScore(pts);
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
