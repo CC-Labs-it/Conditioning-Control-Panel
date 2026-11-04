@@ -95,7 +95,8 @@ public sealed class LocalProvidersTests
         p.OpenAiCompatibleApiKey = "STORED-DPAPI-BLOB";
         var dir = Directory.CreateTempSubdirectory("ccp-local-").FullName;
         var strategy = new AiServiceStrategy();
-        var brain = new CompanionBrain(strategy, memory: new MemoryStore(Path.Combine(dir, "memory.json")),
+        var memory = new MemoryStore(Path.Combine(dir, "memory.json"));
+        var brain = new CompanionBrain(strategy, memory: memory,
             store: new CompanionSessionStore(Path.Combine(dir, "session.json"), Path.Combine(dir, "legacy.json")));
         try
         {
@@ -124,16 +125,22 @@ public sealed class LocalProvidersTests
                 Assert.Equal("hi from openai", reply.Text);
             }
             Assert.Contains("hello there", hit.Body);
+            memory.RequestSave(); // Leave a pending debounce for teardown to drain.
         }
         finally
         {
             OpenAiCompatibleService.ApiKeyUnprotect = null;
             listener.Stop();
             brain.Dispose();
+            memory.Dispose(); // Injected memory is owned by this test, not by the brain.
             strategy.Dispose();
             CoreSettings.ServiceProvider = null;
             Directory.Delete(dir, true);
         }
+        memory.RequestSave(); // A disposed injected store must not recreate the deleted directory.
+        await Task.Delay(MemoryStore.SaveDebounce + System.TimeSpan.FromMilliseconds(500));
+        try { Assert.False(Directory.Exists(dir)); }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
     }
 
     [Fact]
@@ -240,6 +247,7 @@ public sealed class LocalProvidersTests
             Dispatcher.UIThread.RunJobs();
             listener.Stop();
             AvApp.Brain?.Dispose();
+            memory.Dispose(); // The injected store must stop its debounce before deleting dir.
             AvApp.Ai?.Dispose();
             (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
             service.SaveImmediate();

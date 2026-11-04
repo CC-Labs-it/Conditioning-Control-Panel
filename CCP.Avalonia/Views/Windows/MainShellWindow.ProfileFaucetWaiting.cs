@@ -28,7 +28,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             if (_faucetWaitingBeat?.IsRunning == true) return;
-            tap.RenderTransform = _faucetWaitingTilt;
             if (Vat<Border>("ProfileVatChip") is { } chip) chip.RenderTransform = _faucetChipScale;
             if (Vat<Ellipse>("ProfileVatFaucetDrop") is { } drop) drop.RenderTransform = _faucetDropFall;
             _faucetNextTick = 3.8;
@@ -41,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Sine easing and auto-reverse, matching the 550 ms rock and 2.8 s breath.
             _faucetWaitingTilt.Angle = -2.2 + 4.4 * BeatLoop.Breath(seconds, .55);
             _faucetChipScale.ScaleX = _faucetChipScale.ScaleY = 1 + .05 * BeatLoop.Breath(seconds, 2.8);
-            if (Vat<Ellipse>("ProfileVatFaucetDrop") is { } drop)
+            if ((!_faucetFeedbackActive || _faucetFeedbackPour) && Vat<Ellipse>("ProfileVatFaucetDrop") is { } drop)
             {
                 double p = seconds % 1.8 / 1.8;
                 drop.Opacity = AmbientFxCanvas.Env.AllowGlow(AmbientFxCanvas.Env.CurrentTier)

@@ -232,8 +232,7 @@
                                                  the whole held delta into the glass. Drawn in
                                                  XAML (no bitmap): metallic grays with the app's
                                                  pink accent on the handle.
-                                                 Waiting-state transforms are attached by the
-                                                 faucet host; gesture feedback remains follow-up. -->
+                                                 Waiting and gesture transforms are attached by the faucet host. -->
                                             <Grid x:Name="ProfileVatFaucet"
                                                   ZIndex="3" Focusable="True"
                                                   Width="40" Height="42" HorizontalAlignment="Left"
