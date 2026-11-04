@@ -3,7 +3,7 @@
 // the live hero clock (:301), the ends line (:277), the pills (:372), the account chip (:871),
 // the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
 // Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
-// ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
+// ponytail: the ground (spiral/glow/ambient), hero art drift, paper tag,
 // LockTitle letters, the row trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
 // menu (Menu.cs), how-it-works/hint/reset (Help.cs), the price box (PriceEdit.cs) and the limits (Limits.cs) are partials.
 // The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
