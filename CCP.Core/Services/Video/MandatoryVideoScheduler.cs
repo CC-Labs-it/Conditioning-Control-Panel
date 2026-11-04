@@ -473,7 +473,8 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF RefillVideoQueues' duration filter: drop clips shorter than <paramref name="min"/> or
         /// longer than <paramref name="max"/> seconds (0 = unset). A clip with no cached length is kept
-        /// (fall open; <paramref name="durationOf"/> starts its parse for the next refill).</summary>
+        /// (fall open; <paramref name="durationOf"/> starts its parse for the next refill). WPF and
+        /// the local scheduler pass 0 for max, so only the minimum filters selection.</summary>
         public static List<string> KeepByLength(IReadOnlyList<string> files, int min, int max, Func<string, double?>? durationOf)
         {
             if ((min <= 0 && max <= 0) || durationOf == null) return files.ToList();
