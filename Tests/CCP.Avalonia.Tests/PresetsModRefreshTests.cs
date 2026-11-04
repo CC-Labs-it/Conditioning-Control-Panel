@@ -17,10 +17,37 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class PresetsModRefreshTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void ModRefreshTestsRestoreProviders(int test)
+    {
+        var (oldMod, oldText) = (CoreMods.ActiveModIdProvider, CoreMods.MakeModAwareProvider);
+        Func<string?> mod = () => BuiltInMods.BambiSleepId;
+        Func<string, string?> text = value => value;
+        CoreMods.ActiveModIdProvider = mod;
+        CoreMods.MakeModAwareProvider = text;
+        try
+        {
+            if (test == 0) VisibleModChangesCoalesceAndRefreshTheSelectedPresetAndRack();
+            else if (test == 1) HiddenModChangeWaitsForShowAndKeepsTheSessionDetail();
+            else AncestorHideDefersUntilItIsVisibleAgain();
+            Assert.Same(mod, CoreMods.ActiveModIdProvider);
+            Assert.Same(text, CoreMods.MakeModAwareProvider);
+        }
+        finally
+        {
+            CoreMods.ActiveModIdProvider = oldMod;
+            CoreMods.MakeModAwareProvider = oldText;
+        }
+    }
+
     [Fact]
     public void VisibleModChangesCoalesceAndRefreshTheSelectedPresetAndRack() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
+        var (oldMod, oldText) = (CoreMods.ActiveModIdProvider, CoreMods.MakeModAwareProvider);
         var preset = new Preset { Id = "mod-refresh-test", Name = "My preset", Description = "My description" };
         CoreSettings.Current.UserPresets.Add(preset);
         string prefix = "Old";
@@ -66,18 +93,18 @@ public sealed class PresetsModRefreshTests
             Settle();
             Assert.Equal(PresetNaming.DisplayName(builtIn), Text(view, "TxtDetailTitle"));
         }
-        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); }
+        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); CoreMods.ActiveModIdProvider = oldMod; CoreMods.MakeModAwareProvider = oldText; }
     });
 
     [Fact]
     public void HiddenModChangeWaitsForShowAndKeepsTheSessionDetail() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
+        var (oldMod, oldText) = (CoreMods.ActiveModIdProvider, CoreMods.MakeModAwareProvider);
         var preset = new Preset { Id = "mod-refresh-hidden", Name = "My preset", Description = "Description" };
         CoreSettings.Current.UserPresets.Add(preset);
         string prefix = "Old";
         string modId = BuiltInMods.BambiSleepId;
-        var oldMod = CoreMods.ActiveModIdProvider;
         CoreMods.ActiveModIdProvider = () => modId;
         CoreMods.MakeModAwareProvider = text => prefix + " " + text;
         var view = new PresetsTabView();
@@ -106,7 +133,7 @@ public sealed class PresetsModRefreshTests
             Assert.True(view.FindControl<Control>("SessionSpoilerPanel")!.IsVisible);
             Assert.Equal(title, Text(view, "TxtDetailTitle"));
         }
-        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); CoreMods.ActiveModIdProvider = oldMod; }
+        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); CoreMods.ActiveModIdProvider = oldMod; CoreMods.MakeModAwareProvider = oldText; }
     });
 
     [Theory]
@@ -241,6 +268,7 @@ public sealed class PresetsModRefreshTests
     public void AncestorHideDefersUntilItIsVisibleAgain() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
+        var (oldMod, oldText) = (CoreMods.ActiveModIdProvider, CoreMods.MakeModAwareProvider);
         var preset = new Preset { Id = "mod-refresh-parent", Name = "My preset" };
         CoreSettings.Current.UserPresets.Add(preset);
         string prefix = "Old";
@@ -259,7 +287,7 @@ public sealed class PresetsModRefreshTests
             Assert.NotSame(oldChip, Chip(view, preset.Id));
             Assert.Equal("New My preset", ChipName(view, preset.Id));
         }
-        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); }
+        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); CoreMods.ActiveModIdProvider = oldMod; CoreMods.MakeModAwareProvider = oldText; }
     });
 
     [Fact]
