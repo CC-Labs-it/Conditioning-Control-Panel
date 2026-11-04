@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Models.Program;
@@ -23,8 +24,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Ritual tasks: SubmitRitualTask + the seeded roadmap (programs 3b). Tests flip it to prove the gate.</summary>
         internal static bool RitualsAvailable = true;
 
+        /// <summary>Keyword tasks need a key source; the only one is the Windows hook (KeywordTriggerHead.Sync). Tests flip it.</summary>
+        internal static bool KeywordInputAvailable = OperatingSystem.IsWindows();
+
         internal static bool IsAvailable(ProgramTask task) =>
             task.Kind == ProgramTaskKind.Ritual ? RitualsAvailable
-            : task.Verifier is { } category && Raised.Contains(category);
+            : task.Verifier is { } category && Raised.Contains(category)
+              && (category != QuestCategory.KeywordTrigger || KeywordInputAvailable);
     }
 }

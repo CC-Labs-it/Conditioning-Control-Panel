@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Program;
@@ -30,6 +31,14 @@ public sealed class ProgramCapabilitiesTests
     [Fact]
     public void EveryBuiltInProgramIsClassifiedAndOnlyTheFinishableOnesAreEnrollable()
     {
+        var oldKeyword = ProgramCapabilities.KeywordInputAvailable;
+        ProgramCapabilities.KeywordInputAvailable = true;   // a head with a key source (Windows hook)
+        try { AssertClassified(); }
+        finally { ProgramCapabilities.KeywordInputAvailable = oldKeyword; }
+    }
+
+    private static void AssertClassified()
+    {
         var all = BuiltInPrograms.All();
         Assert.Equal(Needs.Keys.OrderBy(k => k), all.Select(p => p.Id).OrderBy(k => k));
         foreach (var p in all)
@@ -41,6 +50,34 @@ public sealed class ProgramCapabilitiesTests
         }
         Assert.Equal(new[] { "first_week", "presentation", "firmware_install", "the_takeover", "kept" },
             all.Where(p => ProgramService.UnavailableTasks(p, ProgramCapabilities.IsAvailable).Count == 0).Select(p => p.Id));
+    }
+
+    /// <summary>No key source (Linux, VR): keyword programs stay refused, or the run lapses on tasks nobody can credit.</summary>
+    [Fact]
+    public void KeywordProgramsAreRefusedWithoutAKeySource()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-programs-keyword-").FullName;
+        var (oldKeyword, oldTask, oldPremium) =
+            (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider);
+        try
+        {
+            ProgramCapabilities.KeywordInputAvailable = false;
+            CoreProgram.TaskAvailableProvider = ProgramCapabilities.IsAvailable;
+            CoreProgram.HasPremiumProvider = () => true;
+            using var svc = new ProgramService(Path.Combine(dir, "programs.json"), readOnly: true);
+            foreach (var p in svc.Library)
+            {
+                var keyword = p.Id is "kept" or "firmware_install";
+                Assert.Equal(!keyword, svc.CanEnroll(p, out var reason));
+                if (keyword) Assert.Equal(ProgramService.UnavailableReason(p, ProgramCapabilities.IsAvailable), reason);
+            }
+        }
+        finally
+        {
+            (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider) =
+                (oldKeyword, oldTask, oldPremium);
+            Directory.Delete(dir, true);
+        }
     }
 
     /// <summary>The QuestService call that raises each category.</summary>
