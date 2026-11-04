@@ -209,6 +209,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            if (spec.IsDarter) { _state.Score += ChaosBubbleVariants.DARTER_BASE_POINTS * _state.TotalMult;
+                _state.Focus += ChaosTuning.FOCUS_PER_RABBIT; _state.Combo++; _state.Heat += 0.05; return;
+            }
             EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
             if (spec.IsPrism)
             {

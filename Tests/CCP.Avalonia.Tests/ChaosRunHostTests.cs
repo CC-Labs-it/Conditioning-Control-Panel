@@ -69,7 +69,8 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.UseToyById("freeze_trigger"); Assert.Equal(charges, toy.ChargesLeft);
                 Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper)); Assert.Equal(1, ChaosLessons.Progress("draft4"));
                 overlay.FinishCountdown(); Ticks(130); // 88%: the rabbit arrives
-                Assert.Contains(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
+                var rabbit = Assert.Single(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true); state.Score = 0; state.Focus = 0; state.Combo = 0; var reward = ChaosBubbleVariants.DARTER_BASE_POINTS * state.TotalMult;
+                BubbleOverlay.PopChaos(rabbit); Assert.Equal(reward, state.Score, 3); Assert.Equal(15, state.Focus); Assert.Equal(1, state.Combo);
                 Ticks(86); Assert.False(ChaosRunHost.IsDescending); Assert.Equal(1, ChaosMeta.State.RunsCompleted); ChaosMeta.Init(); Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
                 Assert.Equal(1, ChaosLessons.Progress("draft4")); Assert.Contains(state.RunPickTiles, tile => tile != null);
             } finally { LocalizationManager.Instance.SetLanguage(language); ChaosRunHost.ForceShutdown(); FreshMeta(); }

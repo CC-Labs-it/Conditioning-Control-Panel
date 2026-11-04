@@ -2,9 +2,7 @@ using System;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 public class ChaosFreezeFieldTests
 {
     [Fact]
@@ -82,7 +80,6 @@ public class ChaosFreezeFieldTests
         f.Step();
         Assert.Equal(0.54, first.FreezePulsePhase, 5);
     }
-
     /// <summary>WPF BubbleService.cs:3020-3024,4560-4563: shudder never moves the shared hit disc.</summary>
     [Fact]
     public void A_stationary_press_at_the_logical_edge_does_not_detonate_during_shudder()
@@ -108,5 +105,4 @@ public class ChaosFreezeFieldTests
         field.Step();
         Assert.Equal((0, 1), (detonated, defused));
     }
-
 }
