@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using Serilog;
 namespace ConditioningControlPanel;
 /// <summary>Engine-off audio diagnostics. File names only, one line per player per ten seconds.</summary>
@@ -9,6 +11,8 @@ public static class CoreAudioDiagnostics
     private static readonly Dictionary<string, DateTime> Last = new(StringComparer.Ordinal);
     private static readonly object Gate = new();
     private static readonly Queue<string> TailLines = new();
+    private static bool TailLoaded;
+    private static string TailPath => Path.Combine(CorePaths.UserData, "logs", "audio-diag.log");
     public static bool EngineRunning => IsRunning(CoreSession.IsEngineRunning, CoreSession.IsSessionRunning);
     public static bool IsRunning(bool engineRunning, bool sessionRunning) => engineRunning || sessionRunning;
     public static void Note(string player, string? path, bool asked = false)
@@ -34,14 +38,32 @@ public static class CoreAudioDiagnostics
         var entry = $"{DateTime.UtcNow:O} [VideoDiag] AUDIO {line}";
         lock (Gate)
         {
-            TailLines.Enqueue(entry.Length > 2048 ? entry[..2048] : entry);
+            LoadTail(); TailLines.Enqueue(entry.Length > 2048 ? entry[..2048] : entry);
             while (TailLines.Count > 200) TailLines.Dequeue();
+            try
+            {
+                var path = TailPath; Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllLines(path + ".tmp", TailLines); File.Move(path + ".tmp", path, true);
+            }
+            catch { /* The app log still receives the event. */ }
         }
         Log.Information("[VideoDiag] AUDIO {AudioEvent}", line);
     }
+    private static void LoadTail()
+    {
+        if (TailLoaded) return;
+        TailLoaded = true;
+        try
+        {
+            if (File.Exists(TailPath))
+                foreach (var line in File.ReadLines(TailPath).TakeLast(200))
+                    TailLines.Enqueue(line.Length > 2048 ? line[..2048] : line);
+        }
+        catch { /* A missing or unreadable trace does not block a report. */ }
+    }
     public static string Tail(int maxLines)
     {
-        lock (Gate) return string.Join(Environment.NewLine, System.Linq.Enumerable.TakeLast(TailLines, Math.Max(0, maxLines)));
+        lock (Gate) { LoadTail(); return string.Join(Environment.NewLine, TailLines.TakeLast(Math.Max(0, maxLines))); }
     }
     public static string? LineFor(string player, string? path, bool engineRunning, bool asked, DateTime nowUtc)
     {
@@ -66,8 +88,7 @@ public static class CoreAudioDiagnostics
     public static string NameOf(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return "?";
-        var trimmed = path.TrimEnd('/', '\\');
-        var at = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+        var trimmed = path.TrimEnd('/', '\\'); var at = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
         if (at < 0 && trimmed.Length >= 2 && char.IsAsciiLetter(trimmed[0]) && trimmed[1] == ':') at = 1;
         return at >= trimmed.Length - 1 ? "?" : trimmed[(at + 1)..];
     }

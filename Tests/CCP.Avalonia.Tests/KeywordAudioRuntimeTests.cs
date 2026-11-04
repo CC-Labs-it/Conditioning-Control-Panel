@@ -69,12 +69,10 @@ public sealed class KeywordAudioRuntimeTests
         var previous = (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider);
         try
         {
-            CoreSession.IsEngineRunningProvider = () => false;
-            CoreSession.IsSessionRunningProvider = () => false;
+            CoreSession.IsEngineRunningProvider = () => false; CoreSession.IsSessionRunningProvider = () => false;
             CaptureDiagnostics(lines =>
             {
-                LibVlcAudio.NoteOneShotStarted("/private/preview.wav", "keyword-preview");
-                Assert.Empty(lines);
+                LibVlcAudio.NoteOneShotStarted("/private/preview.wav", "keyword-preview"); Assert.Empty(lines);
                 Assert.NotNull(CoreAudioDiagnostics.LineFor("oneshot:keyword-preview", "preview.wav", false, false, DateTime.UtcNow));
                 LibVlcAudio.NoteOneShotStarted("/private/automatic.wav", "keyword-trigger");
                 Assert.Contains(lines, line => line.Contains("oneshot:keyword-trigger") && line.Contains("automatic.wav"));
@@ -84,29 +82,24 @@ public sealed class KeywordAudioRuntimeTests
     }
 
     [Theory]
-    [InlineData(false, "PlayAudio")]
-    [InlineData(true, "legacy audio")]
+    [InlineData(false, "PlayAudio"), InlineData(true, "legacy audio")]
     public void HeldKeywordDiagnosticNamesTheAudioPath(bool legacy, string what) => Run((engine, settings, played) =>
     {
-        CoreSession.IsEngineRunningProvider = () => false;
-        CoreSession.IsSessionRunningProvider = () => false;
+        CoreSession.IsEngineRunningProvider = () => false; CoreSession.IsSessionRunningProvider = () => false;
         if (legacy)
         {
-            settings.KeywordTriggers[0].AudioFilePath = ((PlayAudioAction)settings.KeywordTriggers[0].Actions[0]).FilePath;
-            settings.KeywordTriggers[0].Actions.Clear();
+            settings.KeywordTriggers[0].AudioFilePath = ((PlayAudioAction)settings.KeywordTriggers[0].Actions[0]).FilePath; settings.KeywordTriggers[0].Actions.Clear();
         }
         CaptureDiagnostics(lines =>
         {
-            Type(engine, "sit");
-            Assert.Empty(played);
+            Type(engine, "sit"); Assert.Empty(played);
             Assert.Contains(lines, line => line.Contains("held its " + what));
         });
     });
 
     private static void CaptureDiagnostics(Action<ConcurrentQueue<string>> check)
     {
-        var previous = Serilog.Log.Logger;
-        var sink = new AudioDiagnosticSink();
+        var previous = Serilog.Log.Logger; var sink = new AudioDiagnosticSink();
         using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
         CoreAudioDiagnostics.ResetForTests();
         try { Serilog.Log.Logger = logger; check(sink.Lines); }
@@ -124,35 +117,27 @@ public sealed class KeywordAudioRuntimeTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false), InlineData(true)]
     public void RuntimeFixtureRestoresAudioStateEvenWhenBodyThrows(bool throws)
     {
         var s = CoreSettings.Current;
         var original = (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider,
             CoreAudio.DuckProvider, s.AudioDuckingEnabled);
-        Func<bool> engine = () => false, session = () => false;
-        Action<int> duck = _ => { };
+        Func<bool> engine = () => false, session = () => false; Action<int> duck = _ => { };
         try
         {
-            CoreSession.IsEngineRunningProvider = engine;
-            CoreSession.IsSessionRunningProvider = session;
-            CoreAudio.DuckProvider = duck;
-            s.AudioDuckingEnabled = false;
+            CoreSession.IsEngineRunningProvider = engine; CoreSession.IsSessionRunningProvider = session;
+            CoreAudio.DuckProvider = duck; s.AudioDuckingEnabled = false;
             void Body(KeywordAudioRuntime runtime, AppSettings settings, List<(string Path, float Volume)> played)
             {
-                CoreSession.IsEngineRunningProvider = () => true;
-                CoreSession.IsSessionRunningProvider = () => true;
-                CoreAudio.DuckProvider = _ => { };
-                settings.AudioDuckingEnabled = true;
+                CoreSession.IsEngineRunningProvider = () => true; CoreSession.IsSessionRunningProvider = () => true;
+                CoreAudio.DuckProvider = _ => { }; settings.AudioDuckingEnabled = true;
                 if (throws) throw new InvalidOperationException("fixture cleanup probe");
             }
             if (throws) Assert.Throws<InvalidOperationException>(() => Run(Body));
             else Run(Body);
-            Assert.Same(engine, CoreSession.IsEngineRunningProvider);
-            Assert.Same(session, CoreSession.IsSessionRunningProvider);
-            Assert.Same(duck, CoreAudio.DuckProvider);
-            Assert.False(s.AudioDuckingEnabled);
+            Assert.Same(engine, CoreSession.IsEngineRunningProvider); Assert.Same(session, CoreSession.IsSessionRunningProvider);
+            Assert.Same(duck, CoreAudio.DuckProvider); Assert.False(s.AudioDuckingEnabled);
         }
         finally
         {
@@ -162,27 +147,18 @@ public sealed class KeywordAudioRuntimeTests
     }
 
     [Theory]
-    [InlineData(false, false, false)]
-    [InlineData(true, false, true)]
+    [InlineData(false, false, false), InlineData(true, false, true)]
     [InlineData(false, true, true)]
     public void AutomaticAudioRequiresEngineOrSession(bool engineOn, bool sessionOn, bool plays) => Run((engine, s, played) =>
     {
-        CoreSession.IsEngineRunningProvider = () => engineOn;
-        CoreSession.IsSessionRunningProvider = () => sessionOn;
-        var ducks = 0;
-        CoreAudio.DuckProvider = _ => ducks++;
-        s.AudioDuckingEnabled = true;
-        ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
-        Type(engine, "sit");
-        Assert.Equal(plays ? 1 : 0, played.Count);
-        Assert.Equal(plays ? 1 : 0, ducks);
-        engine.StopAudio();
-        s.KeywordTriggers[0].AudioFilePath = ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).FilePath;
-        s.KeywordTriggers[0].Actions.Clear();
-        played.Clear();
-        engine.Now = () => new DateTime(2026, 10, 15);
-        Type(engine, "sit");
-        Assert.Equal(plays ? 1 : 0, played.Count);
+        CoreSession.IsEngineRunningProvider = () => engineOn; CoreSession.IsSessionRunningProvider = () => sessionOn;
+        var ducks = 0; CoreAudio.DuckProvider = _ => ducks++;
+        s.AudioDuckingEnabled = true; ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
+        Type(engine, "sit"); Assert.Equal(plays ? 1 : 0, played.Count);
+        Assert.Equal(plays ? 1 : 0, ducks); engine.StopAudio();
+        s.KeywordTriggers[0].AudioFilePath = ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).FilePath; s.KeywordTriggers[0].Actions.Clear();
+        played.Clear(); engine.Now = () => new DateTime(2026, 10, 15);
+        Type(engine, "sit"); Assert.Equal(plays ? 1 : 0, played.Count);
     });
 
     [Fact]
