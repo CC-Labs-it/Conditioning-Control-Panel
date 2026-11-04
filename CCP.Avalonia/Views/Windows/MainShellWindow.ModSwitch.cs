@@ -42,14 +42,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// download finished while the app was closed. Also paints the saved mod's selector and palette.</summary>
         private void AttachModSwitch()
         {
+            CoreMods.ModChanged += OnModChangedFeatureImages;
+            Closed += (_, _) => CoreMods.ModChanged -= OnModChangedFeatureImages;
             if (AvApp.Mods is not { } mods) return;   // headless render: keep the sample chip
             _modSwitchHost = this;
             Closed += (_, _) => { if (_modSwitchHost == this) _modSwitchHost = null; };
             InitializeModSelector();
             RefreshThemeAwareElements();
             LoadFeatureImages();
-            CoreMods.ModChanged += OnModChangedFeatureImages;
-            Closed += (_, _) => CoreMods.ModChanged -= OnModChangedFeatureImages;
             if (_hookedMods != mods)
             {
                 _hookedMods = mods;

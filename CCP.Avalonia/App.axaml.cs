@@ -15,6 +15,7 @@ namespace ConditioningControlPanel.Avalonia
 {
     public partial class App : Application
     {
+        internal static DailyFreeService? DailyFree { get; private set; }
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -630,6 +631,7 @@ namespace ConditioningControlPanel.Avalonia
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
                 var dailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+                DailyFree = dailyFree;
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
                 // WPF App.xaml.cs:494: the weekly Graded Intake pass. Its TierChanged hooks are
@@ -981,7 +983,7 @@ namespace ConditioningControlPanel.Avalonia
                     shell.RefreshNavPremiumTags();
                     shell.RefreshProfileBubble();   // WPF OnPatreonTierChanged
                 });
-                dailyFree.TodayChanged += RepaintVeils;
+                shell.InitializeDailyFreeRefresh(dailyFree);
                 // WPF NavPremiumTags.cs:118 / Lab.cs:435: a spent or refunded pass moves the star and the vault.
                 // Not RepaintVeils: that persists the lapse pass, and sign-in/out raises this at startup.
                 IntakePass.PassStateChanged += (_, _) => Dispatcher.UIThread.Post(() =>
