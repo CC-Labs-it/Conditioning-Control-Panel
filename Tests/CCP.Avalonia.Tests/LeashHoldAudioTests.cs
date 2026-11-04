@@ -4,6 +4,8 @@ using System.IO;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Leash;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -93,6 +95,59 @@ public sealed class LeashHoldAudioTests
         }
         finally
         {
+            (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, CoreSettings.ServiceProvider)
+                = (oldAudio, oldArt, oldSuppressed, oldSettings);
+            File.Delete(cue);
+        }
+    }
+
+    [Fact]
+    public void EndedEventSoundsUnlessItEchoesALocalCutAndUnsubscribesOnStop()
+    {
+        var (oldAudio, oldArt, oldSuppressed, oldSettings) = (CoreAudio.PlayOneShotProvider,
+            CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, CoreSettings.ServiceProvider);
+        var (oldService, oldDue, oldPresent) = (LeashHead.Service,
+            ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.LeashGateDueProvider,
+            ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PresentLeashGateProvider);
+        var cue = Path.GetTempFileName();
+        var played = new List<string>();
+        var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+        var clock = new Clock();
+        JObject Block(string id) => new() {
+            ["holding"] = new JArray(), ["offers"] = new JArray(),
+            ["events"] = new JArray(new JObject { ["id"] = id, ["kind"] = "ended",
+                ["from"] = new JObject { ["id"] = "u_vex", ["name"] = "Vex" },
+                ["at"] = clock.Now.ToString("o") }) };
+        try
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            CoreSettings.Current.MasterVolume = 100;
+            CoreModArt.AudioOverridePathProvider = _ => cue;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => played.Add(tag);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            LeashSound.Time = clock;
+            LeashHead.Publish(svc);
+            svc.ApplyBlock(Block("remote"));
+            Assert.Equal("leash-cut", Assert.Single(played));
+            clock.Now = clock.Now.AddSeconds(4);
+            LeashHead.NoteCut();
+            Assert.Equal(2, played.Count);
+            clock.Now = clock.Now.AddSeconds(10); // echo stays silent beyond the sound gate
+            svc.ApplyBlock(Block("echo"));
+            Assert.Equal(2, played.Count);
+            svc.ApplyBlock(Block("remote2"));
+            Assert.Equal(3, played.Count);
+            LeashHead.Stop();
+            clock.Now = clock.Now.AddSeconds(4);
+            svc.ApplyBlock(Block("after-stop"));
+            Assert.Equal(3, played.Count);
+        }
+        finally
+        {
+            LeashHead.Stop();
+            (LeashHead.Service, ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.LeashGateDueProvider,
+                ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PresentLeashGateProvider) = (oldService, oldDue, oldPresent);
             (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, CoreSettings.ServiceProvider)
                 = (oldAudio, oldArt, oldSuppressed, oldSettings);
             File.Delete(cue);

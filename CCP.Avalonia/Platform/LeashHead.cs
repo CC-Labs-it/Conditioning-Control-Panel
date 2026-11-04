@@ -17,6 +17,8 @@ internal static class LeashHead
 {
     /// <summary>WPF App.Leash. Null until startup built it and after exit.</summary>
     internal static ILeashService? Service { get; set; }
+    private static ILeashService? _soundService;
+    private static bool _iCut;
 
     /// <summary>WPF App.LeashedChanged: the account went on or off a leash.</summary>
     internal static event Action<bool>? LeashedChanged;
@@ -63,11 +65,28 @@ internal static class LeashHead
 
     /// <summary>WPF MainWindow.Leash.cs:95 LeashBlocksGames: the launcher's gate asks the service, and the
     /// panel's gate card presents it.</summary>
-    private static void Publish(ILeashService svc)
+    internal static void Publish(ILeashService svc)
     {
+        if (_soundService != null) _soundService.EventArrived -= OnSoundEvent;
+        _soundService = svc;
+        _soundService.EventArrived += OnSoundEvent;
         Service = svc;
         Views.Windows.MainShellWindow.LeashGateDueProvider = () => Service?.GateDue != null;
         Views.Windows.MainShellWindow.PresentLeashGateProvider = shell => shell.PresentLeashGate();
+    }
+
+    // WPF LeashSurfaces.cs:145-150, 267-272: the local cut already sounded.
+    internal static void NoteCut()
+    {
+        _iCut = true;
+        LeashSound.Cut();
+    }
+
+    private static void OnSoundEvent(LeashEvent e)
+    {
+        if (e.Kind != LeashEventKind.Ended) return;
+        if (_iCut) { _iCut = false; return; }
+        LeashSound.Cut();
     }
 
     /// <summary>WPF LeashLocator's CCP_LEASH_DEMO: a Debug build in a sandbox (CCP_USERDATA_DIR) with
@@ -99,6 +118,9 @@ internal static class LeashHead
     /// <summary>WPF App.OnExit:6289-6292: the leash goes with the app.</summary>
     internal static void Stop()
     {
+        if (_soundService != null) _soundService.EventArrived -= OnSoundEvent;
+        _soundService = null;
+        _iCut = false;
         Service = null;
         Views.Windows.MainShellWindow.LeashGateDueProvider = null;
         Views.Windows.MainShellWindow.PresentLeashGateProvider = null;
