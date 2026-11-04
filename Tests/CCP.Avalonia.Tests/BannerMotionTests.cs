@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
@@ -74,9 +76,80 @@ public sealed class BannerMotionTests
         Assert.False(w.Named<Border>("BannerGlass")!.IsHitTestVisible);
         Assert.True(w.Named<Grid>("BannerDrum")!.ClipToBounds);
         foreach (var name in new[] { "TxtBannerPrimary", "TxtBannerSecondary", "TxtBannerWeb", "TxtBannerPool" })
-            Assert.IsType<global::Avalonia.Media.DropShadowEffect>(w.Named<TextBlock>(name)!.Effect);
+            Assert.Null(w.Named<TextBlock>(name)!.Effect);
+        Assert.NotNull(w.Named<Image>("BannerSecondaryGlow")!.Source);
         Assert.NotNull(w.Named<SafeLink>("BannerSupportLink"));
         Assert.NotNull(w.Named<SafeLink>("BannerWebLink"));
+    });
+
+    [Fact]
+    public Task BannerSheenStaysInsideCurvedEnds() => InShell(w =>
+    {
+        w.UpdateLayout();
+        var host = w.Named<Border>("HeaderBannerHost")!;
+        var sheen = w.Named<Grid>("BannerSheenHost")!;
+        Assert.Equal(new Thickness(14, 0), sheen.Margin);
+        Assert.True(sheen.ClipToBounds);
+        var start = sheen.TranslatePoint(new Point(0, 0), host)!.Value;
+        var end = sheen.TranslatePoint(new Point(sheen.Bounds.Width, 0), host)!.Value;
+        Assert.Equal(15, start.X, 1);
+        Assert.Equal(host.Bounds.Width - 15, end.X, 1);
+    });
+
+    [Fact]
+    public Task PlainBannerGlowsBakeOnTextAndAccentChangeAndFollowOpacity() => InShell(w =>
+    {
+        foreach (var (textName, imageName) in new[] { ("TxtBannerSecondary", "BannerSecondaryGlow"), ("TxtBannerPool", "BannerPoolGlow") })
+        {
+            var text = w.Named<TextBlock>(textName)!;
+            var image = w.Named<Image>(imageName)!;
+            text.Transitions = null;
+            text.Text = "A short line";
+            var first = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+            Assert.False(image.IsHitTestVisible);
+            var firstWidth = first.PixelSize.Width;
+            text.Text = "A longer banner line";
+            var second = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+            Assert.NotSame(first, second);
+            Assert.True(second.PixelSize.Width > firstWidth);
+            using var beforeAccent = new System.IO.MemoryStream();
+            second.Save(beforeAccent);
+            w.Resources["PinkBrush"] = new global::Avalonia.Media.SolidColorBrush(
+                textName == "TxtBannerSecondary" ? global::Avalonia.Media.Colors.Blue : global::Avalonia.Media.Colors.Red);
+            Dispatcher.UIThread.RunJobs();
+            var recolored = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+            Assert.NotSame(second, recolored);
+            using var afterAccent = new System.IO.MemoryStream();
+            recolored.Save(afterAccent);
+            Assert.False(beforeAccent.ToArray().SequenceEqual(afterAccent.ToArray()));
+            text.Opacity = 0.37;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0.37, image.Opacity, 2);
+            text.Text = "";
+            Assert.Null(image.Source);
+        }
+    });
+
+    [Fact]
+    public Task BannerLinksReceiveHitTestsThroughDecorations() => InShell(w =>
+    {
+        foreach (var (beatName, linkName) in new[] { ("TxtBannerPrimary", "BannerSupportLink"), ("TxtBannerWeb", "BannerWebLink") })
+        {
+            foreach (var name in new[] { "TxtBannerPrimary", "TxtBannerSecondary", "TxtBannerWeb", "TxtBannerPool" })
+            {
+                var beat = w.Named<TextBlock>(name)!;
+                beat.Transitions = null;
+                beat.Opacity = name == beatName ? 1 : 0;
+                beat.IsHitTestVisible = name == beatName;
+            }
+            w.UpdateLayout();
+            ContentHitTestTests.RenderLiveTree(w);
+            var link = w.Named<SafeLink>(linkName)!;
+            Assert.True(link.Bounds.Width > 2 && link.Bounds.Height > 2);
+            var point = link.TranslatePoint(new Point(link.Bounds.Width / 2, 2), w)!.Value;
+            var hit = w.InputHitTest(point) as Visual;
+            Assert.True(hit == link || (hit != null && link.IsVisualAncestorOf(hit)), $"{linkName}: hit {hit}");
+        }
     });
 
     [Fact]

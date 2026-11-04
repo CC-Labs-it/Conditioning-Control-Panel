@@ -968,7 +968,6 @@
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="1">
-                                <TextBlock.Effect><DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/></TextBlock.Effect>
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <DockPanel>
                                         <TextBlock DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
@@ -986,13 +985,14 @@
                                     </DockPanel>
                                 </InlineUIContainer>
                             </TextBlock>
+                            <Image x:Name="BannerSecondaryGlow" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsHitTestVisible="False" Opacity="{Binding #TxtBannerSecondary.Opacity}"/>
                             <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False"
                                        Text="{loc:Str login_welcome_back}">
-                                <TextBlock.Effect><DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/></TextBlock.Effect>
                             </TextBlock>
                             <!-- v6.8.0 One Account beat. In the rotation ONLY until acted on:
                                  InitializeBannerRotation includes it while SeenFeatureIntros lacks
@@ -1009,7 +1009,6 @@
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False">
-                                <TextBlock.Effect><DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/></TextBlock.Effect>
                                 <!-- WPF Hyperlink + RequestNavigate (MainWindow.xaml:1174) -> an inline
                                      SafeHyperlinkButton (ExternalOpener); Click retires the beat.
                                      WPF's CharacterEllipsis trims the whole line, Hyperlink included,
@@ -1037,12 +1036,13 @@
                                 </InlineUIContainer>
                             </TextBlock>
                             <!-- WPF's optional authored pool beat: no line means no rotation slot. -->
+                            <Image x:Name="BannerPoolGlow" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsHitTestVisible="False" Opacity="{Binding #TxtBannerPool.Opacity}"/>
                             <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False">
-                                <TextBlock.Effect><DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/></TextBlock.Effect>
                             </TextBlock>
                             </Grid>
                             </Grid>
@@ -1052,7 +1052,7 @@
                                  Grid, which would start clipping the banner text itself.
                                  Hit-test invisible so the hyperlinks underneath keep working.
                                  Driven from MainWindow.ChromeFx.cs. -->
-                            <Grid x:Name="BannerSheenHost" ClipToBounds="True" IsHitTestVisible="False">
+                            <Grid x:Name="BannerSheenHost" Margin="14,0" ClipToBounds="True" IsHitTestVisible="False">
                                 <Border x:Name="BannerSheen" Width="110" HorizontalAlignment="Left" Opacity="0"
                                         RenderTransformOrigin="0.5,0.5">
                                     <Border.Background>

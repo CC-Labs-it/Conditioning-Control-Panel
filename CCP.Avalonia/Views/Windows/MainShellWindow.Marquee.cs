@@ -94,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             base.OnLoaded(e);
             try
             {
+                InitializeBannerGlows();
                 InitializeBannerRotation();
                 UpdateQuickLoginUI();
                 RefreshSessionFeatureLock();
