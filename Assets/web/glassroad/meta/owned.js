@@ -58,7 +58,7 @@ export function createOwned({ storage = defaultStorage(), uid = null } = {}) {
       const next = cleanGrants(list);
       if (!next) return false;
       grants = next;
-      if (account) try { storage?.setItem(OWNED_KEY, JSON.stringify({ uid: account, grants })); } catch (e) { /* private window */ }
+      if (account) try { storage?.setItem(OWNED_KEY + '.' + account, JSON.stringify(grants)); storage?.setItem(OWNED_KEY, JSON.stringify({ uid: account, grants })); } catch (e) { /* private window */ }
       return true;
     },
   };

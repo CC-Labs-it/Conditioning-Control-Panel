@@ -49,6 +49,7 @@ export function scopedBus(parent, lifetime) {
 export function scopedBridge(parent, lifetime) {
   return {
     ...parent,
+    get accountVersion() { return parent.accountVersion; },
     on(type, fn) { const off = parent.on(type, (...args) => { if (lifetime.alive) fn(...args); }); lifetime.defer(off); return off; },
     dispose() {},
   };

@@ -216,6 +216,27 @@ public sealed partial class GameWindowTests
         }
     }
 
+    [Fact]
+    public void Glassroad_DelayedRelay_CannotReplaceNewAccount()
+    {
+        var s = CoreSettings.Current; var (oldId, oldOffline, oldAccount) = (s.UnifiedId, s.OfflineMode, CoreAccount.UnifiedUserId);
+        var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider); var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null; CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        var handler = new DelayedRaceReply(); using var http = new System.Net.Http.HttpClient(handler);
+        try {
+            (s.UnifiedId, s.AuthToken, s.OfflineMode, CoreAccount.UnifiedUserId) = ("a", "test", false, "a");
+            PrizeOwnership.ResetHeld(); var relay = new ConditioningControlPanel.Services.BackRoom.BackRoomApi(http, FriendsHead.Identity, null, PrizeOwnership.ApplySnapshot, "http://127.0.0.1:9", PrizeOwnership.CaptureSnapshot);
+            var late = relay.RelayAsync("counter", "state", null, null); Assert.True(handler.Started.Task.Wait(TimeSpan.FromSeconds(10)));
+            (s.UnifiedId, CoreAccount.UnifiedUserId) = ("b", "b"); PrizeOwnership.ApplySnapshot("b", 1, new[] { "cos.kart.body.b" });
+            (s.UnifiedId, CoreAccount.UnifiedUserId) = ("a", "a"); PrizeOwnership.ApplySnapshot("a", 1, new[] { "cos.kart.body.new" });
+            handler.Reply.SetResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent("{\"ok\":true,\"prizes\":{\"revision\":99,\"grants\":[\"cos.kart.body.a\"]}}") });
+            Assert.True(late.Wait(TimeSpan.FromSeconds(10))); Assert.Equal(new[] { "cos.kart.body.new" }, PrizeOwnership.Grants());
+        } finally {
+            PrizeOwnership.ResetHeld(); CoreAccount.UnifiedUserId = oldAccount;
+            (s.UnifiedId, s.OfflineMode) = (oldId, oldOffline); (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
+        }
+    }
+
     // WPF GlassroadHostService.cs:170-192: init sees the current account; changed snapshots push while open.
     [Fact]
     public void Glassroad_KartGrants_InitAndLiveOwnership()

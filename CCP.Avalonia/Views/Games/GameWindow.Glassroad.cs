@@ -94,8 +94,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var s = CoreSettings.Current;
                 var ownership = PrizeOwnership.Frame();
                 bool online = !string.IsNullOrEmpty(ownership.Account) && !string.IsNullOrEmpty(PbpAuthToken());
-                Post(GlassroadHostRules.InitFrame(online ? ownership.Account : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, ownership.Grants));
+                var frame = GlassroadHostRules.InitFrame(online ? ownership.Account : null, s.UserDisplayName, GlassroadTier(),
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, ownership.Grants);
+                frame["accountVersion"] = ownership.Version;
+                Post(frame);
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }

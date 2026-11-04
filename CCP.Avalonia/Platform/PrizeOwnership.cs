@@ -86,13 +86,22 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
         /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
         internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
+            => ApplySnapshot(accountId, revision, grants, IdentityVersion);
+
+        internal static Action<string, long, string[]> CaptureSnapshot()
+        {
+            var version = IdentityVersion;
+            return (account, revision, grants) => ApplySnapshot(account, revision, grants, version);
+        }
+
+        private static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants, long version)
         {
             if (string.IsNullOrEmpty(accountId) || grants is null) return;
             BeforeSnapshotLock?.Invoke(); // tests hold a delayed reply here
             bool changed;
             lock (Gate)
             {
-                if (CoreAccount.UnifiedUserId != accountId || FriendsHead.Identity()?.UnifiedId != accountId) return;
+                if (version != IdentityVersion || CoreAccount.UnifiedUserId != accountId || FriendsHead.Identity()?.UnifiedId != accountId) return;
                 bool sameAccount = _heldAccount == accountId && _heldVersion == IdentityVersion;
                 if (sameAccount && revision < _revision) return;
                 var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);

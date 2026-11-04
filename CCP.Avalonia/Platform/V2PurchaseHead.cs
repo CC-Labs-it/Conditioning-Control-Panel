@@ -23,7 +23,7 @@ internal static class V2PurchaseHead
         // adoptSp is null on the relay for WPF's reason: a state read must never lower the wallet.
         // ponytail: no Contract D hook on this head (WPF MergedAccountRecovery is head-only), as FriendsHead.
         return new V2PurchaseService(
-            new BackRoomApi(http, FriendsHead.Identity, adoptSp: null, PrizeOwnership.ApplySnapshot, url),
+            new BackRoomApi(http, FriendsHead.Identity, adoptSp: null, PrizeOwnership.ApplySnapshot, url, PrizeOwnership.CaptureSnapshot),
             () => FriendsHead.Identity()?.UnifiedId,
             id => V2PurchaseRule.OwnsPrize(id, PrizeOwnership.IsGranted),
             () => CoreSettings.Current.SkillPoints,

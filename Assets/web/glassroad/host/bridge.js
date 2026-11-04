@@ -127,7 +127,7 @@ export function createBridge({ win = globalThis.window } = {}) {
   function dispatch(m) {
     if (!m || typeof m.type !== 'string') return;
     if (m.type === 'ping') { send({ type: 'pong', t: m.t }); return; }
-    if (m.type === 'owned' && Number.isSafeInteger(m.accountVersion) && (accountVersion === null || m.accountVersion > accountVersion))
+    if ((m.type === 'owned' || m.type === 'init') && Number.isSafeInteger(m.accountVersion) && (accountVersion === null || m.accountVersion > accountVersion))
       accountVersion = m.accountVersion;
     if (m.type === 'init') { if (waitT) win.clearTimeout(waitT); resolveInit(mergeInit(base, m)); }
     const set = handlers.get(m.type);
