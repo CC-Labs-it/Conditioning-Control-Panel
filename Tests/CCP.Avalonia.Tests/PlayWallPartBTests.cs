@@ -49,7 +49,7 @@ public sealed class PlayWallPartBTests
             Assert.Equal(Loc.Get("pl6_play_subtitle"), Assert.IsType<TextBlock>(Assert.IsType<StackPanel>(scroll.Content).Children[0]).Text);
             foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
                 Assert.NotNull(play.FindControl<Border>("Play" + name + "HeroPlate")!.Background);
-            foreach (var name in new[] { "BackRoom", "Arcademy", "RacingThoughts" })
+            foreach (var name in new[] { "BackRoom", "Arcademy" })
             {
                 var button = play.FindControl<Button>("BtnPlay" + name)!;
                 Assert.False(button.IsEnabled);
@@ -120,6 +120,73 @@ public sealed class PlayWallPartBTests
             host?.Close();
             CoreModArt.OverridePathProvider = previous;
             directory.Delete(true);
+        }
+    });
+
+    // WPF PlayTabView.Cards.cs:65, MainWindow.Exclusives.cs:217-222 and GlassroadHostService.cs:57-82.
+    [Fact]
+    public void RacingThoughtsAsksForAccountThenChecksTierAndOpensGlassroad() => AvaloniaTestDispatcher.Run(() =>
+    {
+        LabWebcamStatusTests.Setup();
+        var oldAccount = CoreAccount.IsLoggedInProvider;
+        var oldLab = CoreEntitlement.HasLabProvider;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var oldFree = CoreEntitlement.IsFreeTodayProvider;
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        var oldServer = GameWindow.Server;
+        var oldDoor = GameWindow.GlassroadDoorEnv;
+        GameWindow.GlassroadDoorEnv = () => "0";
+        var oldLaunch = PlayTabView.LaunchGame;
+        bool signedIn = false, lab = false;
+        int denied = 0;
+        CoreAccount.IsLoggedInProvider = () => signedIn;
+        CoreEntitlement.HasLabProvider = () => lab;
+        CoreEntitlement.HasPremiumProvider = () => true; // Tier 1 alone must not unlock the base's Tier 2 door.
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        CoreEntitlement.ShowDeniedHandler = _ => denied++;
+        var root = Directory.CreateTempSubdirectory("play-glassroad-");
+        using var server = new WebAssetServer(root.FullName);
+        GameWindow.Server = () => server;
+        PlayTabView.LaunchGame = id => GameWindow.Launch(id);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("play");
+            Dispatcher.UIThread.RunJobs();
+            var play = shell.Named<PlayTabView>("PlayTab")!;
+            var button = play.FindControl<Button>("BtnPlayRacingThoughts")!;
+            Assert.True(button.IsEnabled);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(shell.OwnedWindows, w => w is LoginDialog { IsVisible: true });
+            Assert.Equal(0, denied);
+            Assert.Null(GameWindow.OpenForTests(GameWindow.GlassroadId));
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            Dispatcher.UIThread.RunJobs();
+            signedIn = true;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, denied);
+            Assert.Null(GameWindow.OpenForTests(GameWindow.GlassroadId));
+            lab = true;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var game = Assert.IsType<GameWindow>(GameWindow.OpenForTests(GameWindow.GlassroadId));
+            Assert.Equal("/glassroad/index.html", game.PageUrl!.AbsolutePath);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Same(game, GameWindow.OpenForTests(GameWindow.GlassroadId));
+            lab = false;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, denied); // the door checks access even when the game is already open
+            PanicSurfaces.All.Single(s => s.Id == "games").Stop(shell);
+            Assert.Null(GameWindow.OpenForTests(GameWindow.GlassroadId));
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic(); shell.Close();
+            CoreAccount.IsLoggedInProvider = oldAccount; CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.HasPremiumProvider = oldPremium;
+            CoreEntitlement.IsFreeTodayProvider = oldFree; CoreEntitlement.ShowDeniedHandler = oldDenied;
+            GameWindow.Server = oldServer; GameWindow.GlassroadDoorEnv = oldDoor; PlayTabView.LaunchGame = oldLaunch; root.Delete(true);
         }
     });
 

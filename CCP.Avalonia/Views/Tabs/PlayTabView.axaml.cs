@@ -271,6 +271,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (Games.GameWindow.DtrhGate()) LaunchGame(Games.GameWindow.DtrhId);
         }
 
+        // WPF MainWindow.Exclusives.cs:217 and GlassroadHostService.cs:79: account, then tier, including refocus.
+        private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e)
+        {
+            if (!CoreAccount.IsLoggedIn) { if (Owner is { } owner) _ = owner.OpenUnifiedLoginDialog(); return; }
+            if (Games.GameWindow.GlassroadPlayGate()) LaunchGame("play-race");
+        }
+
         private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
 
         // ---- TOGETHER --------------------------------------------------------------------
