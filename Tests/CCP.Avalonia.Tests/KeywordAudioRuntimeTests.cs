@@ -223,6 +223,64 @@ public sealed class KeywordAudioRuntimeTests
         finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
     });
 
+    [Fact] // A user Start ends quiet but cannot revive a pre-panic AI reply.
+    public Task PanicThenStartDropsPendingAiReplyButAllowsNewComment() => RunAsync(async (engine, s, _) =>
+    {
+        var reply = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lines = new List<string>();
+        engine.QuestCredit = () => { };
+        engine.AvatarActions.AiAvailable = () => true;
+        engine.AvatarActions.AiComment = (_, _) => { requested.TrySetResult(); return reply.Task; };
+        engine.AvatarActions.AvatarState = () => (true, false);
+        engine.AvatarActions.ShowLine = (line, _) => lines.Add(line);
+        s.KeywordTriggers[0].Actions = [new AvatarCommentAction()];
+        try
+        {
+            Type(engine, "sit");
+            await requested.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            engine.Stop();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); // user's Start
+            engine.Start();
+            reply.SetResult("old reply");
+            await engine.AvatarActions.LastComment;
+            Assert.Empty(lines);
+            engine.Now = () => new DateTime(2026, 10, 14, 13, 0, 0);
+            Type(engine, "sit");
+            await engine.AvatarActions.LastComment;
+            Assert.Equal("old reply", Assert.Single(lines));
+        }
+        finally { reply.TrySetResult(null); ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
+    [Fact] // The same guard applies after a busy retry is already scheduled.
+    public Task PanicThenStartDropsPendingBusyRetry() => RunAsync(async (engine, s, _) =>
+    {
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lines = new List<string>(); var busy = true;
+        engine.QuestCredit = () => { };
+        engine.AvatarActions.AiAvailable = () => false;
+        engine.AvatarActions.PickPhrase = _ => "old line";
+        engine.AvatarActions.AvatarState = () => (true, busy);
+        engine.AvatarActions.ShowLine = (line, _) => lines.Add(line);
+        engine.AvatarActions.Delay = _ => { waiting.TrySetResult(); return resume.Task; };
+        s.KeywordTriggers[0].Actions = [new AvatarCommentAction()];
+        try
+        {
+            Type(engine, "sit");
+            await waiting.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            engine.Stop();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); // user's Start
+            engine.Start(); busy = false; resume.SetResult();
+            await engine.AvatarActions.LastComment;
+            Assert.Empty(lines);
+        }
+        finally { resume.TrySetResult(); ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
     [Fact] // WPF KeywordTriggerService.cs:1552-1560,1582-1592
     public Task EmptyAiAndRequiredOfflineUseCannedFallback() => RunAsync(async (engine, s, _) =>
     {

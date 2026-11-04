@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Awareness;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Serilog;
@@ -29,6 +30,7 @@ internal sealed class KeywordAvatarActions
 
     internal void Dispatch(AvatarCommentAction action, string keyword)
     {
+        var panicCount = PanicAftermath.PanicCount;
         var available = AiAvailable();
         var prompt = action.PromptTemplate;
         var category = action.FallbackPhraseCategory;
@@ -39,7 +41,7 @@ internal sealed class KeywordAvatarActions
                 var line = available ? await AiComment(keyword, prompt) : null;
                 var fromAi = !string.IsNullOrEmpty(line);
                 if (!fromAi) line = PickPhrase(category);
-                if (!string.IsNullOrEmpty(line)) await DeliverAsync(line, fromAi);
+                if (!string.IsNullOrEmpty(line)) await DeliverAsync(line, fromAi, panicCount);
             }
             catch (Exception ex) { Log.Debug(ex, "Keyword avatar comment failed"); }
         });
@@ -54,13 +56,14 @@ internal sealed class KeywordAvatarActions
         return phrases.Length == 0 ? null : phrases[Random.Shared.Next(phrases.Length)];
     }
 
-    private async Task DeliverAsync(string line, bool fromAi)
+    private async Task DeliverAsync(string line, bool fromAi, long panicCount)
     {
         for (var attempt = 0; attempt <= 16; attempt++)
         {
             var state = await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return (Exists: false, Busy: false);
+                if (PanicAftermath.PanicCount != panicCount || PanicAftermath.TriggersSilenced())
+                    return (Exists: false, Busy: false);
                 var avatar = AvatarState();
                 if (avatar.Exists && !avatar.Busy) ShowLine(line, fromAi);
                 return avatar;
