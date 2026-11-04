@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -23,6 +25,27 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    [Fact]
+    public async Task SharedMenuBrushesRemainUsableAcrossThreads()
+    {
+        var expected = new[]
+        {
+            ("MenuRed", Color.FromRgb(255, 99, 71)),
+            ("MenuGreen", Color.FromRgb(144, 238, 144)),
+            ("MenuPatreon", Color.FromRgb(155, 89, 182)),
+            ("MenuLocked", Color.FromRgb(0x60, 0x60, 0x70))
+        };
+        var brushes = await Task.Run(() => expected.Select(pair =>
+            typeof(AvatarTubeWindow).GetField(pair.Item1, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(null)).ToArray());
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            for (var i = 0; i < brushes.Length; i++)
+                Assert.Equal(expected[i].Item2, Assert.IsType<ImmutableSolidColorBrush>(brushes[i]).Color);
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
@@ -33,6 +56,8 @@ public sealed class TubeQuickMenuTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;

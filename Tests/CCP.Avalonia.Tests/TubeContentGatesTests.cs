@@ -33,6 +33,8 @@ public sealed class TubeContentGatesTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
