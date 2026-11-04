@@ -296,6 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 BubbleOverlay.SnapHazards.Residue(center.X, center.Y, BubbleOverlay.Field.Clock());
                 ChaosFieldFxOverlay.Residue(center, ChaosSnapHazards.ResidueRadius, ChaosSnapHazards.ResidueLifeMs);
+                _state.PushEvent("⚡ aftermath: the air still crackles");
             }
             if (_state.RippleEnabled)
             {

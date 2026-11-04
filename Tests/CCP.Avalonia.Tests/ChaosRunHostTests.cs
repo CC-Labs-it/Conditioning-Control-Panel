@@ -620,6 +620,8 @@ public sealed class ChaosRunHostTests
                 var live = BubbleOverlay.SpawnChaos(LiveSpec());
                 treat.X = treat.Y = live.X = live.Y = 0;
                 Assert.True(source.Snap()); BubbleOverlay.Field.ChaosDefused!(source);
+                Assert.Equal(aftermath && fuse <= 1.5 ? 1 : 0,
+                    st.RecentEvents.Count(e => e == "⚡ aftermath: the air still crackles"));
                 Assert.Equal((ripple ? 1 : 0) + (aftermath && fuse <= 1.5 ? 1 : 0),
                     ChaosFieldFxOverlay.Active!.Model.TransientCount);
                 BubbleOverlay.HoldChaos(true); BubbleOverlay.TickSnapHazards();
