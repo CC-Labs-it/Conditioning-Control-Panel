@@ -95,6 +95,39 @@ public sealed class ShellTrayTests
     }
 
     [Fact]
+    public void FirstTrayMinimizeRequestsOnlyOneBalloon() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previous = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
+        var count = 0;
+        global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => count++;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.CreateTray();
+            shell.TrayHostPresent = () => true;
+            shell.Close();
+            Assert.False(shell.IsVisible);
+            Assert.Equal(1, count);
+            shell.ShowFromTray();
+            shell.Close();
+            Assert.False(shell.IsVisible);
+            Assert.Equal(1, count);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = previous;
+            shell.MarkExitRequestedForTest();
+            shell.Close();
+            shell.Tray?.Dispose();
+        }
+    });
+
+    [Fact]
     public async Task CloseWithoutATrayHostReallyCloses()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
