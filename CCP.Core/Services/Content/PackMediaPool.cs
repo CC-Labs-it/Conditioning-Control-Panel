@@ -105,13 +105,7 @@ namespace ConditioningControlPanel.Services
                 var packCount = remaining && list.Count > 0 && _bag.Remaining > 0 ? Math.Min(_bag.Remaining, list.Count) : list.Count;
                 if (!ShouldDrawPack(localCount, packCount, _rng) || !_bag.TryNext(list, out entry)) return null;
             }
-            var result = Decrypt(entry);
-            // With no local fallback, visit the rest of the bag before giving up.
-            for (var attempts = 1; result == null && localCount == 0 && attempts < list.Count * 2; attempts++) {
-                lock (_lock) { if (!_bag.TryNext(list, out entry)) break; }
-                result = Decrypt(entry);
-            }
-            return result;
+            return Decrypt(entry);
         }
 
         /// <summary>

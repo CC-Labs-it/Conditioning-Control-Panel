@@ -250,11 +250,8 @@ public class LockdownDoseEngineTests
             {
                 ld.Activate(TimeSpan.FromMinutes(20));
                 shell.EnforceLockdownDoseEngine(true);
-                Assert.True(CoreEngine.IsRunning);
-                Assert.Equal(2, StarterCount(s));
-                ld.Deactivate();
-                Assert.False(CoreEngine.IsRunning);
-                Assert.Equal(0, StarterCount(s));
+                Assert.True(CoreEngine.IsRunning); Assert.Equal(2, StarterCount(s));
+                ld.Deactivate(); Assert.False(CoreEngine.IsRunning); Assert.Equal(0, StarterCount(s));
                 s.FlashEnabled = true;
                 s.LockdownDoseKeeperEnabled = false;
                 Assert.DoesNotContain("starts or restarts the engine", LockdownTabView.LockdownWarning(20, s, false));
@@ -417,6 +414,8 @@ public class LockdownDoseEngineTests
                 Assert.True(Probed(true));
                 ld.Activate(TimeSpan.FromMinutes(20)); shell.EnforceLockdownDoseEngine(true);
                 Assert.True(CoreEngine.IsRunning); Assert.True(s.MandatoryVideosEnabled); // pack-only video
+                s.LockdownTripwiresEnabled = true; var starved = 0; ld.EscapeAttempted += _ => starved++; CoreEngine.Video.PackVideos!.InvalidateAvailability();
+                shell.EnforceLockdownDoseEngine(false); Assert.Equal(0, starved); // a playback error is not Starve (WPF DoseKeeper:107-116 reads raw flags)
                 ld.Deactivate();
             } finally {
                 ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit();
@@ -455,22 +454,22 @@ public class LockdownDoseEngineTests
         Assert.False(s.SpiralEnabled); Assert.False(System.IO.File.Exists(dosePath));
         Assert.False(System.IO.File.Exists(System.IO.Path.Combine(CorePaths.UserData, RemoteHoldings.FileName)));
         System.IO.File.WriteAllText(dosePath, "{"); MainShellWindow.RecoverLockdownDose();
-        Assert.True(System.IO.File.Exists(dosePath)); // unreadable debt remains for retry
-        System.IO.File.Delete(dosePath);
+        Assert.False(System.IO.File.Exists(dosePath)); // WPF DoseKeeper:572: a truncated journal can never succeed, so it goes
     }
     [Fact]
-    public async Task MalformedRecoveryBlocksActivationAndShowsError() {
+    public async Task UnsavedRecoveryBlocksActivationAndShowsError() {
         await AvaloniaTestDispatcher.RunAsync(() => {
-            EnsureApp(); var old = CoreEntitlement.HasPremiumProvider; CoreEntitlement.HasPremiumProvider = () => true;
+            EnsureApp(); var old = CoreEntitlement.HasPremiumProvider; CoreEntitlement.HasPremiumProvider = () => true; ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog? shown = null;
+            var oldSettings = CoreSettings.ServiceProvider; var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings; settings.SealForReset(); // the restore cannot reach disk
             var ld = LockdownService.Current = new LockdownService(); var shell = NewDoseShell(); var path = System.IO.Path.Combine(CorePaths.UserData, "lockdown-dose.json");
-            System.IO.File.WriteAllText(path, "{"); CoreSettings.Current.LockdownDoseKeeperEnabled = true;
-            ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog? shown = null;
+            const string journal = "{\"Flipped\":[\"spiral\"]}"; System.IO.File.WriteAllText(path, journal); settings.Current.LockdownDoseKeeperEnabled = true;
             using var hook = Window.WindowOpenedEvent.AddClassHandler<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>((w, _) => shown = w);
             try {
                 shell.Show(); var tab = shell.Named<LockdownTabView>("LockdownTab")!;
                 tab.CmbLockdownDuration.SelectedIndex = 0; tab.BtnActivateLockdown.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Dispatcher.UIThread.RunJobs(); Assert.NotNull(shown); Assert.False(ld.IsActive); Assert.Equal("{", System.IO.File.ReadAllText(path));
-            } finally { shown?.Close(); System.IO.File.Delete(path); ld.Dispose(); LockdownService.Current = null; shell.RequestExit(); CoreEntitlement.HasPremiumProvider = old; }
+                Dispatcher.UIThread.RunJobs(); Assert.NotNull(shown); Assert.False(ld.IsActive); Assert.Equal(journal, System.IO.File.ReadAllText(path));
+            } finally { shown?.Close(); System.IO.File.Delete(path); MainShellWindow.RecoverLockdownDose(); settings.UnsealAfterFailedReset(); CoreSettings.ServiceProvider = oldSettings;
+                ld.Dispose(); LockdownService.Current = null; shell.RequestExit(); CoreEntitlement.HasPremiumProvider = old; }
             return Task.CompletedTask;
         });
     }
