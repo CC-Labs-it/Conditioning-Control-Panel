@@ -91,10 +91,25 @@ public sealed class PackMediaPoolTests : IDisposable
         var bubble = new BubbleCountScheduler(null!, null, () => Array.Empty<string>())
             { PackVideos = new PackMediaPool(ContentPackStore.VideoType, new Random(1), () => store) };
 
-        Assert.Equal("p1/v.mp4", Plain(video.PickNext()!));
-        Assert.Equal("p1/v.mp4", Plain(bubble.PickNext()!));
-        video.PackVideos.CleanupTemps();
-        bubble.PackVideos.CleanupTemps();
+        var clips = new[] { video.PickNext()!, bubble.PickNext()! };
+        Assert.All(clips, c => Assert.Equal("p1/v.mp4", Plain(c)));
+        // A refused delete at Stop keeps the file and its identity on record; the next Stop retries it.
+        var dir = Path.GetDirectoryName(clips[0])!;
+        var held = OperatingSystem.IsWindows() ? clips.Select(c => File.Open(c, FileMode.Open, FileAccess.Read, FileShare.Read)).ToArray() : Array.Empty<FileStream>();
+        var mode = OperatingSystem.IsWindows() ? 0 : File.GetUnixFileMode(dir);
+        try
+        {
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            video.Stop(); bubble.Stop();
+            Assert.All(clips, c => Assert.True(File.Exists(c) && store.TryGetSourceKey(c, out _)));
+        }
+        finally
+        {
+            foreach (var h in held) h.Dispose();
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(dir, mode);
+        }
+        video.Stop(); bubble.Stop();
+        Assert.All(clips, c => Assert.False(File.Exists(c) || store.TryGetSourceKey(c, out _)));
 
         store.DeactivatePack("p1");
         Assert.Null(video.PickNext());

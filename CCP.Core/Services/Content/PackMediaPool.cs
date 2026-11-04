@@ -31,16 +31,10 @@ namespace ConditioningControlPanel.Services
         /// <param name="type"><see cref="ContentPackStore.ImageType"/> or <see cref="ContentPackStore.VideoType"/>.</param>
         public PackMediaPool(string type, Random? rng = null, Func<ContentPackStore?>? store = null)
         {
-            _store = store ?? (() => ContentPackStore.Current);
-            _temps = new MediaTempFileLedger(TempCap, path =>
-            {
-                var owner = _store();
-                if (owner != null) owner.DeleteTempFile(path);
-                else return MediaTempFileLedger.TryDeleteFile(path);
-                return !System.IO.File.Exists(path);
-            });
+            _temps = new MediaTempFileLedger(TempCap, path => { _store()?.DeleteTempFile(path); return MediaTempFileLedger.TryDeleteFile(path); });
             _type = type;
             _rng = rng ?? new Random();
+            _store = store ?? (() => ContentPackStore.Current);
             _bag = new ShuffleBag<(string PackId, PackFileEntry File)>(e => ContentPackStore.SourceKey(e.PackId, e.File), _rng);
         }
 

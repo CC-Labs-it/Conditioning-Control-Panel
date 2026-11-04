@@ -274,6 +274,7 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;   // WPF CancelPendingRetry: a verdict message must not replay after a stop
             Dispose(ref _scheduler);
             ForceCleanup();
+            PackVideos?.CleanupTemps();   // WPF VideoService.Dispose :8763, after the clip is closed
             Log.Debug("VideoService stopped");
         }
 
@@ -447,6 +448,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_queue.Count == 0)
             {
+                PackVideos?.CleanupTemps();   // WPF RefillVideoQueues :8403
                 var enabled = _library();
                 var kept = KeepByLength(enabled, CoreSettings.Current.VideoMinDurationSeconds,
                     CoreSettings.Current.VideoMaxDurationSeconds, DurationOf);

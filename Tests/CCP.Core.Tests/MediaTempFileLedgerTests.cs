@@ -20,13 +20,8 @@ public class MediaTempFileLedgerTests
     public void RefusedFilesStayOnRecordAndAreRetriedAtTheNextSweep()
     {
         var blocked = new HashSet<string> { "playing" };
-        var deleted = new List<string>();
-        var ledger = new MediaTempFileLedger(1, p =>
-        {
-            if (blocked.Contains(p)) return false;
-            deleted.Add(p);
-            return true;
-        });
+        var deleted = new HashSet<string>();
+        var ledger = new MediaTempFileLedger(1, p => !blocked.Contains(p) && deleted.Add(p));
         ledger.Track("playing");
         ledger.Track("next");
         Assert.Equal(1, ledger.HeldCount);
@@ -59,13 +54,8 @@ public class MediaTempFileLedgerTests
     public void HeldFilesAreRetriedBelowCapOnTrackOrAnotherRelease(bool release)
     {
         bool refused = true;
-        var deleted = new List<string>();
-        var ledger = new MediaTempFileLedger(10, path =>
-        {
-            if (path == "held" && refused) return false;
-            deleted.Add(path);
-            return true;
-        });
+        var deleted = new HashSet<string>();
+        var ledger = new MediaTempFileLedger(10, path => (path != "held" || !refused) && deleted.Add(path));
         ledger.Release("held");
         Assert.Equal(1, ledger.HeldCount);
         refused = false;

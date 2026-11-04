@@ -126,6 +126,7 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             Dispose(ref _feedDefer);
             _feedDeadline = null;
+            PackVideos?.CleanupTemps();   // WPF BubbleCountService.Stop :186
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
