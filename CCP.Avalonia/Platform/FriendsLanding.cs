@@ -22,10 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// leaves through <see cref="FloatingWord"/> (poke received with Emi's line, the sent beat, Say/Tell from outside
 /// the drawer). Nothing here plays or joins by itself. A light timer re-attaches to <see cref="FriendsHead.Service"/>
 /// and releases the held queue (WPF :28-82).
-/// ponytail: the corner notices (FriendNotices: poke toast, watch toast, request toast) are not on this head
-/// (row feat-friends-open-tables), so a watch, and a poke that cannot throw its word (over a game, or nothing of
-/// ours on screen), go to the Inbox as WPF does with the bell off (WPF :212); WPF's "Poke back" toast is dropped
-/// with them. Request rows/cues wait for row feat-friends-open-tables.
+/// Pokes also use the passive corner stack. Watch and request notices are still missing.
 /// </summary>
 internal static class FriendsLanding
 {
@@ -64,7 +61,7 @@ internal static class FriendsLanding
         _timer = null;
         _router?.Dispose();
         _router = null;
-        try { KnockCard.CloseAll(); } catch { /* shutting down */ }
+        try { KnockCard.CloseAll(); FriendNotices.CloseAll(); } catch { /* shutting down */ }
     }
 
     /// <summary>One timer tick (WPF Tick :48): follow the current service, release the held queue, and
@@ -81,7 +78,11 @@ internal static class FriendsLanding
                 _router = current == null ? null : new FriendsLandingRouter(current, () => World(), () => KnockCard.Clock(), TheSink);
             }
             _router?.Release();
-            if (KnockCard.AnyUp && World().Holding) KnockCard.FoldAll();
+            if (World().Holding)
+            {
+                if (KnockCard.AnyUp) KnockCard.FoldAll();
+                if (FriendNotices.AnyUp) FriendNotices.CloseAll(fold: true);
+            }
             // The server lists blocks now: carry this PC's old list over once (WPF FriendsLanding.cs:71).
             if (current != null) global::ConditioningControlPanel.Controls.Friends.FriendsBlockList.MigrateIfDue(current);
         }
@@ -164,14 +165,15 @@ internal static class FriendsLanding
     private sealed class Sink : ILandingSink
     {
         /// <summary>WPF Sink.Poke :229: Emi says it and the word floats over the panel, pink for a tease.
-        /// Bell off, over a game, or nothing on screen: the Inbox row (the corner toast is not on this head).</summary>
+        /// Bell off: the Inbox row. Otherwise the corner notice and, outside a game, the word.</summary>
         public void Poke(InboxItem item, bool inGame)
         {
             var game = inGame ? ActiveGameWindow() : null;
             var anchor = Anchor();
-            if (!LandingRules.PokeThrowsWord(NoticesOn, game != null) || anchor == null) { Inbox(item); return; }
+            if (!NoticesOn) { Inbox(item); return; }
+            ShowPoke(game ?? anchor, item);
+            if (!LandingRules.PokeThrowsWord(true, game != null) || anchor == null) return;
             var word = Str("friends_poke_" + item.PokeId, LandingRules.PokeFallback(item.PokeId));
-            FriendsSeen.Shared.Seen(Service(), item.Id);
             EmiSays(string.Format(Str("friends_land_emi_poke", "{0} says {1}"), item.FromName, word),
                 LandingRules.PokeFace(item.PokeId));
             FloatingWord.Throw(anchor, word, LandingRules.PokeIsPink(item.PokeId));
@@ -219,6 +221,28 @@ internal static class FriendsLanding
         public void RequestsWaiting(IReadOnlyList<FriendRequest> waiting, bool announce, bool inGame) { }
     }
 
+    private static void ShowPoke(Window? anchor, InboxItem item)
+    {
+        var notice = new FriendNotice(NoticeKind.Poke, item.FromId, item.FromName,
+            LandingRules.NoticeAt(item.At, DateTimeOffset.UtcNow), FriendNoticeRules.LifetimeMs(NoticeKind.Poke), item);
+        FriendNotices.ShowPoke(anchor, notice, p => { if (p is InboxItem i) PokeBack(i); },
+            p => { if (p is InboxItem i) TheSink.Inbox(i); });
+        FriendsSeen.Shared.Seen(Service(), item.Id);
+    }
+
+    private static async void PokeBack(InboxItem item)
+    {
+        try
+        {
+            var svc = Service();
+            if (svc == null || string.IsNullOrEmpty(item.FromId)) return;
+            var result = await svc.PokeAsync(item.FromId, string.IsNullOrEmpty(item.PokeId) ? "hi" : item.PokeId);
+            if (!global::ConditioningControlPanel.Controls.Friends.FriendsDrawerRules.IsGood(result))
+                Tell(Loc.Get(global::ConditioningControlPanel.Controls.Friends.FriendsDrawerRules.SendResultKey(result)), false);
+        }
+        catch (Exception ex) { Log.Debug("[Friends] poke back: {E}", ex.Message); }
+    }
+
     /// <summary>The drawer's bell (WPF NoticesOn :348). Off: Inbox rows only.</summary>
     private static bool NoticesOn => CoreSettings.Current.FriendNotificationsEnabled;
 
@@ -232,7 +256,8 @@ internal static class FriendsLanding
             if (Anchor() is { } anchor) ShowCard(anchor, item);
             else TheSink.Inbox(item);   // WPF :478 Knock -> no anchor -> the row again
         }
-        // ponytail: a poke/watch row reopens as its corner notice in WPF (FriendNotices, not on this head).
+        else if (item.Kind == SendKind.Poke) ShowPoke(ActiveGameWindow() ?? Anchor(), item);
+        // Watch rows still need their corner notice.
     }
 
     /// <summary>How a card ended (WPF OnKnockDone :487).</summary>
