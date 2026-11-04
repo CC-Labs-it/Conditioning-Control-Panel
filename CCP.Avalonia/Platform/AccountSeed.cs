@@ -119,7 +119,7 @@ internal static class AccountSeed
         {
             Log.Information("Validating restored session for {Id}...", id);
             var outcome = await v2.ValidateRestoredSessionAsync(id);
-            if (outcome == V2AuthService.RestoreOutcome.Cleared) { CoreAccount.UnifiedUserId = null; ClearMigration(CoreSettings.Current); CoreSettings.Save(); }
+            if (outcome == V2AuthService.RestoreOutcome.Cleared) { CoreAccount.UnifiedUserId = null; Sync?.Reset(); if (CoreSettings.Current.PendingDescentMigrationChoice == null) ClearMigration(CoreSettings.Current, preserveEpoch: true); CoreSettings.Save(); }
             if (outcome != V2AuthService.RestoreOutcome.Validated) return;
         }
         await LoadProfileAsync(v2);
@@ -196,9 +196,9 @@ internal static class AccountSeed
     }
 
     // Account-owned migration state must not follow a logout or a different sign-in.
-    internal static void ClearMigration(AppSettings s)
+    internal static void ClearMigration(AppSettings s, bool preserveEpoch = false)
     {
-        s.DescentEpoch = 0; s.DescentMigrationCompleted = false; s.DescentMigrationChoice = null;
+        if (!preserveEpoch) s.DescentEpoch = 0; s.DescentMigrationCompleted = false; s.DescentMigrationChoice = null;
         s.PendingDescentMigrationChoice = null; s.DescentMigrationOffered = false; s.DescentAnchorUtc = null;
         s.DescentCycle = 0; s.DescentCycleXpBonus = 1; s.DescentVeteranArchive = false;
         s.DescentPreMigrationLevel = 0; s.DescentPreMigrationLifetimeXp = 0;

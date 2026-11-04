@@ -189,9 +189,12 @@ public sealed partial class AccountSeedTests : IDisposable
             AccountSeed.RestoreSession();
             Assert.Equal("u-1", CoreAccount.UnifiedUserId);
 
+            s.PendingDescentMigrationChoice = "restore"; s.DescentEpoch = 1;
             await AccountSeed.ValidateRestoredSessionAsync(new V2AuthService(() => s, new Answer(HttpStatusCode.NotFound)));
             Assert.Null(CoreAccount.UnifiedUserId);  // server does not know the id: signed out
             Assert.Null(s.UnifiedId);
+            Assert.Equal("restore", s.PendingDescentMigrationChoice); Assert.Equal(1, s.DescentEpoch);
+            s.PendingDescentMigrationChoice = null; s.UnifiedId = "u-1"; CoreAccount.UnifiedUserId = "u-1"; await AccountSeed.ValidateRestoredSessionAsync(new V2AuthService(() => s, new Answer(HttpStatusCode.NotFound))); Assert.Equal(1, s.DescentEpoch);
         }
         finally { s.UnifiedId = oldId; s.AuthToken = null; }
     }

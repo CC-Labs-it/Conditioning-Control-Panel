@@ -794,9 +794,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 || s.PendingDescentMigrationChoice != null || s.DescentMigrationCompleted || s.DescentMigrationOffered))
             {
                 AccountSeed.Sync?.Reset();
-                ProgressionClear.Apply(CoreSettings.Current);
-                AccountSeed.ClearMigration(CoreSettings.Current);
-                App.Achievements?.Reset();
+                if (!string.IsNullOrEmpty(previousId) || s.PendingDescentMigrationChoice != null)
+                { ProgressionClear.Apply(s); App.Achievements?.Reset(); }
+                AccountSeed.ClearMigration(s, preserveEpoch: string.IsNullOrEmpty(previousId) && s.PendingDescentMigrationChoice == null);
             }
         }
 

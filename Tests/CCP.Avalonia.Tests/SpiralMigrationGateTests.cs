@@ -68,15 +68,13 @@ public sealed class SpiralMigrationGateTests
         Fog(view, false);
     });
 
-    [Fact]
-    public void LiveOfferWithholdsTheVisibleRoomUntilRestore() => Run((service, view, window) => {
+    [Fact] public void LiveOfferWithholdsTheVisibleRoomUntilRestore() => Run((service, view, window) => {
         var oldSync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync; var oldReader = AvApp.Descent;
         var oldLogin = CoreAccount.IsLoggedInProvider; var queued = new List<Action>(); var reader = new DescentService();
         var sync = new SyncPush(() => Array.Empty<string>(), () => false, new OfferResponse())
             { DescentReader = reader, PostMigration = queued.Add };
         try {
-            service.Current.UnifiedId = "room-offer-test"; service.Current.OfflineMode = false;
-            service.Current.LastConfirmedServerXp = 0; CoreAccount.IsLoggedInProvider = () => true;
+            service.Current.UnifiedId = "room-offer-test"; service.Current.OfflineMode = false; service.Current.LastConfirmedServerXp = 0; CoreAccount.IsLoggedInProvider = () => true;
             AvApp.Descent = reader; ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = sync;
             sync.MarkLoaded(null);
             window.Show();

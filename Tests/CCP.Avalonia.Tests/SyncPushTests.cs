@@ -250,6 +250,26 @@ public sealed partial class AccountSeedTests
         Assert.Equal(new[] { "b_only" }, body["achievements"]!.Values<string>());
     });
 
+    [Theory] [InlineData(true, false)] [InlineData(false, true)]
+    public void UnknownPreviousAccount_PreservesLocalProgressAndAchievements(bool completed, bool offered) => WithFreshInstall(async () => {
+        var s = CoreSettings.Current;
+        SignIn("u1", """{"user":{"unified_id":"u1","level":2,"xp":900,"current_season":"2026-08","curve_epoch":1}}""");
+        s.UnifiedId = null; s.PlayerLevel = 80; s.PlayerXP = 250; s.DescentEpoch = 1; s.PendingDescentMigrationChoice = null; s.DescentMigrationCompleted = completed; s.DescentMigrationOffered = offered; var beforeXp = ProfileAdopt.TotalXp(s);
+        var property = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var previous = property.GetValue(null); var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(TestUserDataProfile.Root, Guid.NewGuid() + ".json")));
+        engine.Progress.Unlock("first_steps"); property.SetValue(null, engine);
+        try {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                var dialog = new global::ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog();
+                dialog.Succeed(new V2AuthService.V2User { UnifiedId = "u1", Level = 2, Xp = 900 }, "tok", null, false);
+                await dialog.ProfileLoad;
+            });
+            Assert.Equal(80, s.PlayerLevel); Assert.Equal(250, s.PlayerXP); Assert.Equal(beforeXp, ProfileAdopt.TotalXp(s)); Assert.True(engine.Progress.IsUnlocked("first_steps")); Assert.False(s.DescentMigrationCompleted); Assert.False(s.DescentMigrationOffered);
+        }
+        finally { property.SetValue(null, previous); }
+    });
+
     [Fact]
     public void Logout_WaitsForAnInFlightPush_ThenClears() => WithFreshInstall(async () =>
     {

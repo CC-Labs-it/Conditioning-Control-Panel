@@ -10,9 +10,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Descent;
 using Newtonsoft.Json.Linq;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 [Collection(CoreSecretsStatics.Name)]
 public sealed class SpiralMigrationSyncTests
 {
@@ -34,7 +32,6 @@ public sealed class SpiralMigrationSyncTests
         var fallback = new AppSettings();
         Assert.True(DescentMigration.ApplyRestore(fallback, offer, new DescentStage { N = 3 }, now)); Assert.Equal(new[] { 1, 2, 3 }, fallback.DescentPendingStageCeremonies);
     }
-
     [Fact] public void StageQueueWaitsForAckAndReleasesOncePerLocalDay()
     {
         var s = new AppSettings { DescentPendingStageCeremonies = new List<int> { 1, 2 } }; var today = new DateTime(2026, 10, 20, 23, 59, 0);
@@ -44,7 +41,6 @@ public sealed class SpiralMigrationSyncTests
         Assert.Null(DescentMigration.ReleaseStageCeremony(s, today)); Assert.Equal(new[] { 2 }, s.DescentPendingStageCeremonies);
         Assert.Equal(2, DescentMigration.ReleaseStageCeremony(s, today.AddMinutes(1))); Assert.Null(DescentMigration.ReleaseStageCeremony(s, today.AddDays(1)));
     }
-
     [Fact] public void SubmitResponseHoldsLedgerAndWatermarkUntilAck()
     {
         var s = new AppSettings { UnifiedId = "a", PlayerLevel = 1, PlayerXP = 0, PendingDescentMigrationChoice = "restore", LastConfirmedServerXp = 42 };
@@ -69,8 +65,7 @@ public sealed class SpiralMigrationSyncTests
             s.PendingDescentMigrationChoice = null; s.DescentMigrationCompleted = false; s.DescentMigrationOffered = false; var notifications = 0;
             reader.BlockChanged += (_, _) => notifications++;
             sync.MarkLoaded(null);
-            Assert.True(await sync.PushAsync("offer")); Assert.True(handler.Bodies[0].Value<bool>("descent_auto"));
-            Assert.Null(handler.Bodies[0]["descent_migration"]); Assert.True(sync.HasLiveMigrationOffer(s));
+            Assert.True(await sync.PushAsync("offer")); Assert.True(handler.Bodies[0].Value<bool>("descent_auto")); Assert.Null(handler.Bodies[0]["descent_migration"]); Assert.True(sync.HasLiveMigrationOffer(s));
             Assert.True(SpiralRoom.SpiralWithheldFor(s, sync.HasLiveMigrationOffer(s), false)); Assert.Single(queued); Assert.Equal(1, notifications);
             queued[0]();
             Assert.Equal(2, notifications); Assert.Equal(DescentMigrationChoices.Restore, s.PendingDescentMigrationChoice);
@@ -81,15 +76,13 @@ public sealed class SpiralMigrationSyncTests
             ProfileAdopt.ApplyUserData(s, server, null, now, holdPendingMigration: true);
             ProfileAdopt.AdoptReadBeforeWrite(s, server, holdPendingMigration: true);
             Assert.Equal(restored, (s.PlayerLevel, s.PlayerXP, s.DescentAnchorUtc));
-            handler.Response = """{"user":{"level":90,"xp":9000000},"descent_migration":{"required":true}}""";
-            handler.Received = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            handler.Response = """{"user":{"level":90,"xp":9000000},"descent_migration":{"required":true}}"""; handler.Received = new(TaskCreationOptions.RunContinuationsAsynchronously);
             now += SyncPush.Cooldown + TimeSpan.FromSeconds(2);
             delay.SetResult();
             await handler.Received.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.False(await sync.PushAsync("settle", waitForGate: true)); // wait for the submit response
             now += SyncPush.Cooldown + TimeSpan.FromSeconds(1); Assert.True(await sync.PushAsync("submit"));
-            Assert.Equal("restore", (string?)handler.Bodies[1]["descent_migration"]?["choice"]); Assert.Equal(s.PlayerLevel, (int)handler.Bodies[1]["level"]!);
-            Assert.Equal((int)ProfileAdopt.TotalXp(s), (int)handler.Bodies[1]["xp"]!);
+            Assert.Equal("restore", (string?)handler.Bodies[1]["descent_migration"]?["choice"]); Assert.Equal(s.PlayerLevel, (int)handler.Bodies[1]["level"]!); Assert.Equal((int)ProfileAdopt.TotalXp(s), (int)handler.Bodies[1]["xp"]!);
             Assert.Single(queued); // repeated offer while pending is ignored
             Assert.Equal(restored, (s.PlayerLevel, s.PlayerXP, s.DescentAnchorUtc)); Assert.Equal(100000000, s.LastConfirmedServerXp);
             var stages = new List<int>(); sync.StageCeremonyDue = stages.Add; s.DescentPendingStageCeremonies = new List<int> { 2, 3 }; s.DescentLastStageDripDate = null;
@@ -109,11 +102,8 @@ public sealed class SpiralMigrationSyncTests
             (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreDispatch.PostProvider) = old;
         }
     }
-
-    [Theory] [InlineData("cleared")] [InlineData("zero")] [InlineData("late")]
-    public async Task ArmedFuseHoldsOfferUntilRelease(string release) {
-        var old = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreDispatch.PostProvider); var settings = new SettingsService();
-        var queued = new List<Action>();
+    [Theory] [InlineData("cleared")] [InlineData("zero")] [InlineData("late")] public async Task ArmedFuseHoldsOfferUntilRelease(string release) {
+        var old = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreDispatch.PostProvider); var settings = new SettingsService(); var queued = new List<Action>();
         using var fuse = new DescentCountdownService();
         var handler = new FakeSync();
         var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler)
@@ -144,14 +134,12 @@ public sealed class SpiralMigrationSyncTests
             (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreDispatch.PostProvider) = old;
         }
     }
-
     [Fact] public async Task QueuedOfferCannotRewriteAnotherAccountAfterResetOrSettingsReplacement()
     {
         var old = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider); var settings = new SettingsService();
         var queued = new List<Action>(); var sync = new SyncPush(() => Array.Empty<string>(), () => false, new FakeSync()) { PostMigration = queued.Add };
         try {
-            CoreSettings.ServiceProvider = () => settings; CoreAccount.IsLoggedInProvider = () => true;
-            settings.Current.UnifiedId = "first"; settings.Current.OfflineMode = false;
+            CoreSettings.ServiceProvider = () => settings; CoreAccount.IsLoggedInProvider = () => true; settings.Current.UnifiedId = "first"; settings.Current.OfflineMode = false;
             settings.Current.LastConfirmedServerXp = 0; settings.Current.PendingDescentMigrationChoice = null; settings.Current.DescentMigrationCompleted = false;
             sync.MarkLoaded(null);
             Assert.True(await sync.PushAsync("offer"));
@@ -174,19 +162,11 @@ public sealed class SpiralMigrationSyncTests
             (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider) = old;
         }
     }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ExistingNudgeSurvivesOfferAndRetriesGateOrCooldown(bool gateTimeout)
+    [Theory] [InlineData(false)] [InlineData(true)] public async Task ExistingNudgeSurvivesOfferAndRetriesGateOrCooldown(bool gateTimeout)
     {
-        var old = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreDispatch.PostProvider);
-        var settings = new SettingsService();
-        var handler = new FakeSync();
-        var posted = new List<Action>();
-        var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler) { PostMigration = posted.Add };
-        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var old = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreDispatch.PostProvider); var settings = new SettingsService();
+        var handler = new FakeSync(); var posted = new List<Action>(); var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler) { PostMigration = posted.Add };
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var rescheduled = new TaskCompletionSource<TimeSpan>(TaskCreationOptions.RunContinuationsAsynchronously);
         var clockRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var resumeClock = new ManualResetEventSlim();
@@ -199,16 +179,13 @@ public sealed class SpiralMigrationSyncTests
             if (Interlocked.Increment(ref delayCount) == 1) return first.Task;
             rescheduled.TrySetResult(wait); return second.Task;
         };
-        try
-        {
+        try {
             CoreSettings.ServiceProvider = () => settings; CoreAccount.IsLoggedInProvider = () => true; CoreDispatch.PostProvider = null;
-            var s = settings.Current; s.UnifiedId = "nudge-race"; s.OfflineMode = false; s.LastConfirmedServerXp = 0;
-            s.PendingDescentMigrationChoice = null; s.DescentMigrationCompleted = false;
+            var s = settings.Current; s.UnifiedId = "nudge-race"; s.OfflineMode = false; s.LastConfirmedServerXp = 0; s.PendingDescentMigrationChoice = null; s.DescentMigrationCompleted = false;
             sync.MarkLoaded(null); sync.Nudge("xp");
             Assert.True(await sync.PushAsync("offer")); Assert.Single(posted)(); Assert.Equal(DescentMigrationChoices.Restore, s.PendingDescentMigrationChoice);
             now += SyncPush.Cooldown + TimeSpan.FromSeconds(2);
-            handler.Response = "{}"; handler.Hold = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            handler.Received = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            handler.Response = "{}"; handler.Hold = new(TaskCreationOptions.RunContinuationsAsynchronously); handler.Received = new(TaskCreationOptions.RunContinuationsAsynchronously);
             competing = sync.PushAsync("competing"); await handler.Received.Task.WaitAsync(TimeSpan.FromSeconds(10));
             if (!gateTimeout) intercept = 1;
             first.SetResult();
@@ -224,8 +201,7 @@ public sealed class SpiralMigrationSyncTests
             second.SetResult(); await handler.Received.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.False(await sync.PushAsync("settle", waitForGate: true)); Assert.Equal("restore", (string?)handler.Bodies[^1]["descent_migration"]?["choice"]);
         }
-        finally
-        {
+        finally {
             sync.Reset(); resumeClock.Set(); handler.Hold?.TrySetResult(); first.TrySetResult(); second.TrySetResult();
             if (competing != null) await competing.WaitAsync(TimeSpan.FromSeconds(10));
             settings.SealForReset(); (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreDispatch.PostProvider) = old;
