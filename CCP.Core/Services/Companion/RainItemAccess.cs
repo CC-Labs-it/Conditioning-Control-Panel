@@ -125,25 +125,6 @@ namespace ConditioningControlPanel.Services.Companion
         public bool IsGranted(string grant) => Prizes.PrizeGrants.IsGranted(grant);
     }
 
-    /// <summary>
-    /// The live app: the higher of the current and the highest-ever level (a re-priced curve never takes an
-    /// earned piece back off Rain) and <c>App.Achievements</c>.
-    /// </summary>
-    public sealed class AppRainProgressSource : IRainProgressSource
-    {
-        public int Level
-        {
-            get
-            {
-                var s = App.Settings?.Current;
-                return s == null ? 0 : Math.Max(s.PlayerLevel, s.HighestLevelEver);
-            }
-        }
-
-        public IReadOnlyCollection<string> UnlockedAchievements
-            => (IReadOnlyCollection<string>?)App.Achievements?.Progress?.UnlockedAchievements?.ToArray() ?? Array.Empty<string>();
-    }
-
     /// <summary>What one item is for this account right now.</summary>
     public enum RainItemState
     {
@@ -182,10 +163,6 @@ namespace ConditioningControlPanel.Services.Companion
             _grants = grants ?? throw new ArgumentNullException(nameof(grants));
             _progress = progress ?? throw new ArgumentNullException(nameof(progress));
         }
-
-        /// <summary>The live app's view: the shipped manifest, PrizeGrants, level and achievements.</summary>
-        public static RainItemAccess ForApp()
-            => new(RainItemManifest.Shipped, new AppRainGrantSource(), new AppRainProgressSource());
 
         public RainItemManifest Manifest => _manifest;
 

@@ -156,7 +156,7 @@ public class RainV2GateTests
             Src("Views", "Controls", "Companion", "Runtime", "CompanionHeroRuntimeVm.cs"));
         Assert.Contains("if (!Services.Companion.RainV2Gate.On) HelpRainRow.Visibility = Visibility.Collapsed;",
             Src("MainWindow", "MainWindow.Presets.cs"));
-        Assert.Contains("if (RainV2Gate.On && RebakeOwed(", Src("Services", "Companion", "RainLookSync.cs"));
+        Assert.Contains("if (RainV2Gate.On && RebakeOwed(", Src("Services", "Companion", "RainLookSyncHead.cs"));
     }
 
     [Fact]

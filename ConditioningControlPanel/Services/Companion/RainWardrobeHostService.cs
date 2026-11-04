@@ -225,7 +225,7 @@ internal static class RainWardrobeHostService
         {
             var host = _host;
             if (host == null) return;
-            Route(o, _apply, host.Post, BuildLiveInit, ShowCounterSoon, RainLookSync.LookOwingABake);
+            Route(o, _apply, host.Post, BuildLiveInit, ShowCounterSoon, RainLookSyncHead.LookOwingABake);
         }
         catch (Exception ex) { App.Logger?.Warning("RainWardrobe: message handler threw: {E}", ex.Message); }
     }
@@ -380,7 +380,7 @@ internal static class RainWardrobeHostService
     {
         Post = msg => host.Post(msg),
         Store = RainPackStore.CreateDefault,
-        Access = RainItemAccess.ForApp,
+        Access = AppRainProgressSource.AccessForApp,
         Clips = () => _clips ??= RainApplyController.ClipsFromEmotes(ReadEmbeddedEmotes()),
         Commit = CommitLook,
         Background = BakeQueue.Enqueue,
@@ -401,7 +401,7 @@ internal static class RainWardrobeHostService
         App.AvatarWindow?.RefreshRainLook();
         App.Logger?.Information("RainWardrobe: applied look {Hash}", packHash.Length > 0 ? packHash[..12] : "default");
         // The look follows the account (/v2/equip family rain); the pack stays on this PC.
-        RainLookSync.NoteLocalChange();
+        RainLookSyncHead.NoteLocalChange();
     }
 
     private static string? ReadEmbeddedEmotes()
