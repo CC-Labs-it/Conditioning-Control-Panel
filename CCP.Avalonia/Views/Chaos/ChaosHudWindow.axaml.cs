@@ -20,6 +20,7 @@ using Avalonia.Threading;
 using Serilog;
 
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Chaos;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -64,8 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///  - <b>Settings.</b> The persisted edge (<c>ChaosHudOnRight</c>) and the panic-key hint
     ///    read and write <c>CoreSettings.Current</c>, one for one with the <c>App.Settings</c>
     ///    pair WPF used, so the side switch survives a restart again.
-    ///  - <c>Mouse.GetPosition</c> has no Avalonia twin (there is no global cursor query), so the
-    ///    collapse grace tests the LAST SEEN pointer position instead; see CursorInHudGrace.
+    ///  - The X11 pointer probe supplies desktop coordinates for the collapse grace on Linux.
     ///  - <c>SystemParameters.WorkArea</c> -> <c>Screens</c>; <c>Left</c>/<c>Top</c> ->
     ///    <c>Position</c> (physical pixels, so the DIP sizes are scaled by <c>screen.Scaling</c>).
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>IsMouseOver</c> -> <c>IsPointerOver</c>;
@@ -239,8 +239,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             OnMultiplierChanged();                             // seed the multiplier size/heat
             StartLustShimmer();                                // sweeping sheen on the heat bar
 
-            // The pointer position the grace test reads. Avalonia cannot ask the platform where
-            // the cursor is, so the window has to remember where it last saw it.
+            // Remember the last local position for diagnostics.
             PointerMoved += (_, e) => _lastPointer = e.GetPosition(this);
 
             // Never outlive the window. The collapse re-check RE-ARMS itself while the cursor sits in
@@ -410,6 +409,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private DispatcherTimer? _collapseRecheck;
         private DispatcherTimer? _openDwell;
         private Point _lastPointer;
+        internal Func<PixelPoint?> ReadPointer = () => X11Pointer.Read()?.At;
 
         // Opening is intent-gated: a brush-past on the way to a bubble near the edge shouldn't fling
         // the panel open. Hovering the strip ARMS a ~1s dwell; it expands only if the cursor is still
@@ -527,24 +527,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// laid-out bounds, grown by a hysteresis margin - which no popup, transform or visibility
         /// flip can answer wrongly.</para>
         ///
-        /// <para>ponytail: WPF asked <c>Mouse.GetPosition(this)</c>, which answers even while the
-        /// pointer is outside the window. Avalonia has no global cursor query, so this reads the
-        /// LAST SEEN pointer position instead. Inside the window they agree; once the pointer has
-        /// left, the halo test is answered against where it crossed the edge rather than where it
-        /// is now, so a cursor that leaves and stops dead just outside can hold the panel open for
-        /// one extra re-check tick. Needs a platform cursor probe to close.</para>
+        /// <para>Use the current desktop pointer where available. Without it, trust the panel's
+        /// hit test rather than polling a stale exit position forever.</para>
         /// </summary>
-        private bool CursorInHudGrace()
+        internal bool CursorInHudGrace()
         {
             try
             {
+                var screen = ReadPointer();
+                Point? cursor = screen is { } position ? this.PointToClient(position) : null;
+                if (cursor is { } current) _lastPointer = current;
                 return CursorInGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
-                                     _lastPointer, LEAVE_GRACE_MARGIN_DIP);
+                                     cursor, LEAVE_GRACE_MARGIN_DIP, _panel.IsPointerOver);
             }
             catch
             {
-                // Never collapse on a transform/layout hiccup: the pinned-open and dwell paths can
-                // reopen it, but a spurious collapse mid-run is what was reported.
                 return true;
             }
         }
@@ -569,13 +566,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// union of two (possibly empty) rects grown by <paramref name="margin"/> on every side? Empty
         /// rects contribute nothing, and two empty rects answer false. Avalonia's Rect is a struct with
         /// no Rect.Empty sentinel, so "empty" is a zero-or-negative extent here.</summary>
-        internal static bool CursorInGrace(Rect a, Rect b, Point cursor, double margin)
+        internal static bool CursorInGrace(Rect a, Rect b, Point? cursor, double margin, bool over = false)
         {
+            if (cursor is null) return over;
             if (margin < 0) margin = 0;
             static bool Empty(Rect r) => r.Width <= 0 || r.Height <= 0;
             var union = Empty(a) ? b : (Empty(b) ? a : a.Union(b));
             if (Empty(union)) return false;
-            return union.Inflate(margin).Contains(cursor);
+            return union.Inflate(margin).Contains(cursor.Value);
         }
 
         private void Collapse()
