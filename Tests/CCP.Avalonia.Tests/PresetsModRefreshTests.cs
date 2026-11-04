@@ -24,14 +24,17 @@ public sealed class PresetsModRefreshTests
         var preset = new Preset { Id = "mod-refresh-test", Name = "My preset", Description = "My description" };
         CoreSettings.Current.UserPresets.Add(preset);
         string prefix = "Old";
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldAware = CoreMods.MakeModAwareProvider;
         string modId = BuiltInMods.CCPDefaultId;
         int nameReads = 0;
         CoreMods.ActiveModIdProvider = () => modId;
         CoreMods.MakeModAwareProvider = text => { if (text == preset.Name) nameReads++; return prefix + " " + text; };
-        var view = new PresetsTabView();
-        var host = new Window { Width = 1200, Height = 900, Content = view };
+        Window? host = null;
         try
         {
+            var view = new PresetsTabView();
+            host = new Window { Width = 1200, Height = 900, Content = view };
             host.Show(); Settle();
             var chip = Chip(view, preset.Id);
             var p = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), host)!.Value;
@@ -66,7 +69,7 @@ public sealed class PresetsModRefreshTests
             Settle();
             Assert.Equal(PresetNaming.DisplayName(builtIn), Text(view, "TxtDetailTitle"));
         }
-        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); }
+        finally { host?.Close(); CoreSettings.Current.UserPresets.Remove(preset); CoreMods.ActiveModIdProvider = oldId; CoreMods.MakeModAwareProvider = oldAware; }
     });
 
     [Fact]
@@ -75,12 +78,17 @@ public sealed class PresetsModRefreshTests
         Setup();
         var preset = new Preset { Id = "mod-refresh-hidden", Name = "My preset", Description = "Description" };
         CoreSettings.Current.UserPresets.Add(preset);
+        var oldAware = CoreMods.MakeModAwareProvider;
+        var oldId = CoreMods.ActiveModIdProvider;
+        string modId = BuiltInMods.CCPDefaultId;
+        CoreMods.ActiveModIdProvider = () => modId;
         string prefix = "Old";
         CoreMods.MakeModAwareProvider = text => prefix + " " + text;
-        var view = new PresetsTabView();
-        var host = new Window { Width = 1200, Height = 900, Content = view };
+        Window? host = null;
         try
         {
+            var view = new PresetsTabView();
+            host = new Window { Width = 1200, Height = 900, Content = view };
             host.Show(); Settle();
             var row = FirstRow(view);
             row.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
@@ -90,7 +98,7 @@ public sealed class PresetsModRefreshTests
             view.FindControl<Control>("SessionSpoilerPanel")!.IsVisible = true;
             view.IsVisible = false; Settle();
             var oldChip = Chip(view, preset.Id);
-            prefix = "New"; RaiseMod(); Settle();
+            modId = BuiltInMods.DronificationId; prefix = "New"; RaiseMod(); Settle();
             Assert.Same(oldChip, Chip(view, preset.Id));
             Assert.Equal("Old My preset", ChipName(view, preset.Id));
             view.IsVisible = true; Settle();
@@ -102,7 +110,7 @@ public sealed class PresetsModRefreshTests
             Assert.True(view.FindControl<Control>("SessionSpoilerPanel")!.IsVisible);
             Assert.Equal(title, Text(view, "TxtDetailTitle"));
         }
-        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); }
+        finally { host?.Close(); CoreSettings.Current.UserPresets.Remove(preset); CoreMods.MakeModAwareProvider = oldAware; CoreMods.ActiveModIdProvider = oldId; }
     });
 
     [Fact]
@@ -111,13 +119,15 @@ public sealed class PresetsModRefreshTests
         Setup();
         var preset = new Preset { Id = "mod-refresh-parent", Name = "My preset" };
         CoreSettings.Current.UserPresets.Add(preset);
+        var oldAware = CoreMods.MakeModAwareProvider;
         string prefix = "Old";
         CoreMods.MakeModAwareProvider = text => prefix + " " + text;
-        var view = new PresetsTabView();
-        var parent = new Grid { Children = { view } };
-        var host = new Window { Width = 1200, Height = 900, Content = parent };
+        Window? host = null;
         try
         {
+            var view = new PresetsTabView();
+            var parent = new Grid { Children = { view } };
+            host = new Window { Width = 1200, Height = 900, Content = parent };
             host.Show(); Settle();
             parent.IsVisible = false; Settle();
             var oldChip = Chip(view, preset.Id);
@@ -127,7 +137,7 @@ public sealed class PresetsModRefreshTests
             Assert.NotSame(oldChip, Chip(view, preset.Id));
             Assert.Equal("New My preset", ChipName(view, preset.Id));
         }
-        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); }
+        finally { host?.Close(); CoreSettings.Current.UserPresets.Remove(preset); CoreMods.MakeModAwareProvider = oldAware; }
     });
 
     [Fact]
@@ -149,10 +159,69 @@ public sealed class PresetsModRefreshTests
         finally { host.Close(); LocalizationManager.Instance.SetLanguage("en"); }
     });
 
+    [Fact]
+    public void LanguageRefreshReconcilesSearchAndModeAwareRows() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var view = new PresetsTabView();
+        var host = new Window { Width = 1200, Height = 900, Content = view };
+        try
+        {
+            host.Show(); Settle();
+            var all = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().Select(r => (Session)r.Tag!).ToArray();
+            var row = FirstRow(view);
+            var session = (Session)row.Tag!;
+            Assert.Equal(session.GetModeAwareName(), RowTitle(row));
+            var description = Assert.IsType<Grid>(row.Child).Children.OfType<TextBlock>().Single(t => Grid.GetColumn(t) == 3);
+            Assert.Equal(session.GetModeAwareDescription().Split('\n')[0].Trim(), description.Text);
+            var search = view.FindControl<TextBox>("TxtRackSearch")!;
+            search.Text = session.GetModeAwareName(); Settle();
+            Assert.Contains(view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>(), r => ReferenceEquals(r.Tag, session));
+            LocalizationManager.Instance.SetLanguage("zh-CN"); Settle();
+            var actual = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().Select(r => (Session)r.Tag!).ToArray();
+            var expected = all.Where(item => item.GetModeAwareName().Contains(search.Text!, StringComparison.OrdinalIgnoreCase) || item.GetModeAwareDescription().Contains(search.Text!, StringComparison.OrdinalIgnoreCase)).ToArray();
+            Assert.Equal(expected.OrderBy(x => x.Id), actual.OrderBy(x => x.Id));
+            search.Text = ""; Settle();
+            var sort = view.FindControl<ComboBox>("CmbRackSort")!;
+            sort.SelectedItem = sort.Items.OfType<ComboBoxItem>().Single(i => (string?)i.Tag == "name");
+            Settle();
+            LocalizationManager.Instance.SetLanguage("de"); Settle();
+            var names = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().Select(r => ((Session)r.Tag!).GetModeAwareName()).ToArray();
+            Assert.Equal(names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase), names);
+        }
+        finally { host.Close(); LocalizationManager.Instance.SetLanguage("en"); }
+    });
+
+    [Fact]
+    public void LanguageChangeReappliesRackSearch() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var view = new PresetsTabView();
+        var host = new Window { Width = 1200, Height = 900, Content = view };
+        try
+        {
+            host.Show(); Settle();
+            var row = FirstRow(view);
+            var session = (Session)row.Tag!;
+            var search = view.FindControl<TextBox>("TxtRackSearch")!;
+            search.Text = session.GetModeAwareName(); Settle();
+            Assert.Contains(view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>(), r => ReferenceEquals(r.Tag, session));
+            LocalizationManager.Instance.SetLanguage("zh-CN"); Settle();
+            Assert.DoesNotContain(view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>(), r =>
+            {
+                var item = (Session)r.Tag!;
+                return !item.GetModeAwareName().Contains(search.Text!, StringComparison.OrdinalIgnoreCase) && !item.GetModeAwareDescription().Contains(search.Text!, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+        finally { host.Close(); LocalizationManager.Instance.SetLanguage("en"); }
+    });
+
     private static void Setup()
     {
         if (Application.Current is null)
-            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
     }

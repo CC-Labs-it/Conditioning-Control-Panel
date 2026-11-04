@@ -236,6 +236,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
             }
 
+            // Reconcile the live query after names change while retaining matching row controls.
+            var shown = SessionRackQuery.SortRackSessions(_availableSessions.Where(RackAccepts).ToArray(), _availableSessions, _rackSort);
+            var rows = SessionRackPanel.Children.OfType<Border>().Where(r => r.Tag is Session).ToDictionary(r => (Session)r.Tag!);
+            if (!shown.SequenceEqual(SessionRackPanel.Children.OfType<Border>().Select(r => r.Tag).OfType<Session>()))
+            {
+                DetachCardSheen();
+                DetachRowSweep();
+                SessionRackPanel.Children.Clear();
+                foreach (var session in shown)
+                    SessionRackPanel.Children.Add(rows.TryGetValue(session, out var row) ? row : RackRow(session));
+                if (shown.Count == 0)
+                    SessionRackPanel.Children.Add(new TextBlock { Theme = TabTheme("SdRackEmpty"), Text = Loc.Get("rack_empty") });
+                RefreshSessionRackSelection();
+                RefreshCardSheen();
+            }
+
             for (var i = 0; i < RackSourceChips.Children.Count; i++)
             {
                 if (RackSourceChips.Children[i] is not ToggleButton chip) continue;
@@ -1068,11 +1084,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _ => ("rack_src_builtin", "SessionSrcBuiltInBrush", "SessionSrcBuiltInWashBrush")
             };
 
-        private static string SessionName(Session session) =>
-            LocalizedOrFallback(session.LocalizedName, $"session_{session.Id}_name", session.GetModeAwareName());
+        private static string SessionName(Session session) => session.GetModeAwareName();
 
-        private static string SessionDescription(Session session) =>
-            LocalizedOrFallback(session.LocalizedDescription, $"session_{session.Id}_desc", session.GetModeAwareDescription());
+        private static string SessionDescription(Session session) => session.GetModeAwareDescription();
 
         private static string LocalizedOrFallback(string localized, string key, string fallback) =>
             string.IsNullOrWhiteSpace(localized) || string.Equals(localized, key, StringComparison.Ordinal)

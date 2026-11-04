@@ -184,7 +184,7 @@ public sealed class PresetsSessionCatalogueTests
                 Click(host, builtInRow);
                 builtInRow.Focus();
                 Assert.True(builtInRow.IsFocused);
-                Assert.Equal("Morning Drift", RowText(builtInRow, 2));
+                Assert.Equal(builtIn.GetModeAwareName(), RowText(builtInRow, 2));
                 Assert.Equal("BUILT-IN", SourceText(builtInRow));
                 Assert.Equal("⭐ Easy", PillText(builtInRow, 4));
                 Assert.Equal("30 min", RowText(builtInRow, 5));
@@ -197,8 +197,8 @@ public sealed class PresetsSessionCatalogueTests
                 Assert.True(builtInRow.IsFocused);
                 Assert.Same(builtInRow, panel.Children.Single(row => row.Tag is Session session && session.Id == builtIn.Id));
                 Assert.Same(builtIn, builtInRow.Tag);
-                Assert.Equal("晨曦漫游", RowText(builtInRow, 2));
-                Assert.StartsWith("让清晨轻轻带你进入", RowText(builtInRow, 3));
+                Assert.Equal(builtIn.GetModeAwareName(), RowText(builtInRow, 2));
+                Assert.Equal(builtIn.GetModeAwareDescription().Split('\n')[0].Trim(), RowText(builtInRow, 3));
                 Assert.Equal("⭐ 简单", PillText(builtInRow, 4));
                 Assert.Equal("30 分钟", RowText(builtInRow, 5));
                 Assert.Equal("+400 XP", RowText(builtInRow, 6));
@@ -220,15 +220,16 @@ public sealed class PresetsSessionCatalogueTests
                 // the language changes, then the attach refresh reads the current language once.
                 host.Content = null;
                 Dispatcher.UIThread.RunJobs();
+                var detachedTitle = RowText(builtInRow, 2);
                 LocalizationManager.Instance.SetLanguage("de");
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal("晨曦漫游", RowText(builtInRow, 2));
+                Assert.Equal(detachedTitle, RowText(builtInRow, 2));
 
                 reattachedHost = new Window { Width = 1100, Height = 760, Content = view };
                 reattachedHost.Show();
                 Dispatcher.UIThread.RunJobs();
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(builtIn.LocalizedName, RowText(builtInRow, 2));
+                Assert.Equal(builtIn.GetModeAwareName(), RowText(builtInRow, 2));
                 Assert.Equal(custom.Name, RowText(customRow, 2));
                 Assert.Equal(Loc.Get("rack_src_builtin"), SourceText(builtInRow));
                 Assert.Equal(Loc.GetF("rack_duration", builtIn.DurationMinutes), RowText(builtInRow, 5));
@@ -240,7 +241,7 @@ public sealed class PresetsSessionCatalogueTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(builtInRow.IsFocused);
                 Assert.Same(builtIn, builtInRow.Tag);
-                Assert.Equal("Morning Drift", RowText(builtInRow, 2));
+                Assert.Equal(builtIn.GetModeAwareName(), RowText(builtInRow, 2));
                 Assert.Equal("BUILT-IN", SourceText(builtInRow));
                 Assert.Equal("30 min", RowText(builtInRow, 5));
                 Assert.Equal("2 sessions", view.FindControl<TextBlock>("TxtRackCount")!.Text);
@@ -948,7 +949,7 @@ public sealed class PresetsSessionCatalogueTests
 
     private static void AssertDetails(PresetsTabView view, Session expected)
     {
-        Assert.Equal($"{expected.Icon} {expected.LocalizedName}",
+        Assert.Equal($"{expected.Icon} {expected.GetModeAwareName()}",
             view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
         Assert.Equal(Loc.GetF("label_0_minutes", expected.DurationMinutes),
             view.FindControl<TextBlock>("TxtSessionDuration")!.Text);
@@ -956,7 +957,7 @@ public sealed class PresetsSessionCatalogueTests
             view.FindControl<TextBlock>("TxtSessionXP")!.Text);
         Assert.Equal(expected.GetDifficultyText(),
             view.FindControl<TextBlock>("TxtSessionDifficulty")!.Text);
-        Assert.Contains(expected.LocalizedDescription,
+        Assert.Contains(expected.GetModeAwareDescription(),
             view.FindControl<TextBlock>("TxtSessionDescription")!.Text);
         Assert.False(view.FindControl<StackPanel>("SessionSpoilerPanel")!.IsVisible);
         Assert.True(view.FindControl<ScrollViewer>("SessionDetailScroller")!.IsVisible);
