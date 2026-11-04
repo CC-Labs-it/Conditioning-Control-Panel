@@ -68,7 +68,7 @@ public partial class MainShellWindow : IPossessionHost
         if (lockdown.IsActive) PossessionDirector.OnLockdownActivated();
         LayoutUpdated += (_, _) => _possessionDirty = true; // only flag; rebuild floor is 750 ms
         PointerMoved += (_, e) => _possessionPointer = e.GetPosition(this);
-        AddHandler(InputElement.PointerPressedEvent, OnPossessionPressed, RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(InputElement.PointerPressedEvent, OnPossessionPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         Closed += (_, _) =>
         {
             _possessionClosed = true;

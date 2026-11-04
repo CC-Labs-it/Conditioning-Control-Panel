@@ -210,6 +210,49 @@ public sealed class PossessionShellTests
         return Task.CompletedTask;
     });
     [Fact]
+    public Task PressIsObservedBeforeControlRemovesCard() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = LockdownService.Current;
+        using var lockdown = new LockdownService();
+        LockdownService.Current = lockdown;
+        var settings = CoreSettings.Current;
+        var saved = (settings.LockdownPossessionEnabled, settings.LockdownPossessionIntensity);
+        settings.LockdownPossessionEnabled = true;
+        settings.LockdownPossessionIntensity = (int)PossessionIntensity.FullDoki;
+        var button = Button("Victim");
+        var card = new Border { Name = "Card", Width = 180, Height = 80, Background = Brushes.Gray,
+            CornerRadius = new CornerRadius(5), Child = button };
+        var shell = new MainShellWindow { Content = card };
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            var director = Assert.IsType<PossessionDirector>(shell.PossessionDirector);
+            string? started = null;
+            string? beforeRemoval = null;
+            bool removed = false;
+            director.EffectStarted += (id, _, _) => started = id;
+            button.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+            {
+                beforeRemoval = started;
+                shell.Content = null;
+                removed = true;
+                e.Handled = true;
+            }, RoutingStrategies.Bubble, handledEventsToo: true);
+            lockdown.Activate(TimeSpan.FromMinutes(10)); Dispatcher.UIThread.RunJobs();
+            var point = button.TranslatePoint(new Point(10, 10), shell)!.Value;
+            shell.MouseDown(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            Assert.True(removed);
+            Assert.Equal("breathe", beforeRemoval);
+        }
+        finally
+        {
+            lockdown.Deactivate(); shell.Close(); LockdownService.Current = previous;
+            (settings.LockdownPossessionEnabled, settings.LockdownPossessionIntensity) = saved;
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
     public Task ChargeCompletesWhenFramesStop() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
