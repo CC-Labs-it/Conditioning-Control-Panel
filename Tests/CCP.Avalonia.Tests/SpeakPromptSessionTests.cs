@@ -142,4 +142,19 @@ public class SpeakPromptSessionTests
         Assert.Equal(0, listens);
     }
 
+    [Fact]
+    public async Task BusyRecognitionRetriesPastEightUntilMatched()
+    {
+        int listens = 0, hides = 0;
+        var session = new SpeakPromptSession(new TriggerEffectAction
+        {
+            SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Persistent
+        }, null, () => true, () => Task.FromResult(true), () => false, () => { },
+        (_, _) => Task.FromResult(++listens <= 9 ? PhraseResult.NotAvailable : new PhraseResult { Matched = true }),
+        _ => { }, () => hides++);
+        await session.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(10, listens);
+        Assert.Equal(1, hides);
+    }
+
 }

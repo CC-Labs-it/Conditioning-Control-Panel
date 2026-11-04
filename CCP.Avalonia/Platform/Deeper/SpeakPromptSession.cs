@@ -71,13 +71,18 @@ internal sealed class SpeakPromptSession
             while (!ct.IsCancellationRequested && reps < _plan.RequiredReps &&
                    (!_plan.HardDeadline.HasValue || DateTime.UtcNow < _plan.HardDeadline.Value))
             {
+                if (!_available())
+                {
+                    if (++unavailable > 8) return;
+                    await Task.Delay(400, ct);
+                    continue;
+                }
                 var result = await _listen(_plan.Target, ct);
                 ct.ThrowIfCancellationRequested();
                 switch (SpeakPromptPlan.Classify(result))
                 {
                     case SpeakHeard.Correct: reps++; unavailable = 0; break;
                     case SpeakHeard.Retry:
-                        if (++unavailable > 8) return;
                         await Task.Delay(200, ct);
                         break;
                     default: unavailable = 0; break;
