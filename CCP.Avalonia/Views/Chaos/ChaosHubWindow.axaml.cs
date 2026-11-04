@@ -15,6 +15,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
@@ -60,6 +61,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     public partial class ChaosHubWindow : Window
     {
         private static readonly Random _rng = new();
+
+        // WPF ChaosHubWindow.xaml.cs:29-45, DtrhHostService.cs:943-952 and
+        // ChaosOverlayWindow.xaml.cs:866-883: one hub, and never over an active run.
+        internal static ChaosHubWindow? Current { get; private set; }
+
+        internal static void OpenAt(string? tab = null)
+        {
+            if (ChaosRunHost.IsActive) return;
+            if (Current is { } live)
+            {
+                if (tab != null) live.NavigateTo(tab);
+                else live.Activate();
+                return;
+            }
+            var hub = new ChaosHubWindow();
+            var owner = MainShellWindow.Current;
+            if (owner is { IsVisible: true }) hub.Show(owner);
+            else hub.Show();
+            if (tab != null) hub.NavigateTo(tab);
+        }
         private int _waves = 5;
 
         // ---- palette (the same literals the WPF code-behind builds brushes from) ----
@@ -115,7 +136,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => UnlockCards.Stop();
+            Opened += (_, _) => Current = this;
+            Closed += (_, _) =>
+            {
+                if (Current == this) Current = null;
+                UnlockCards.Stop();
+            };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");

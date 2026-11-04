@@ -4,8 +4,8 @@
 // DtrhRunWire), run-started / run-progress / run-ended with the one-payout latch (:360, :583) and the
 // close-mid-run booking (:1002 DtrhRunCloseRule). The kept Escape (:119) is posted by the panic key's pause
 // claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh); a full panic closes it with
-// every other game (PanicSurfaces "games"). Shell frames (boot-error, exit's 1200 ms close, exit-done)
-// stay in GameWindow.HandleMessage.
+// every other game (PanicSurfaces "games"). The boot-error fallback is below; exit's 1200 ms
+// close and exit-done stay in GameWindow.HandleMessage.
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
@@ -19,6 +19,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -46,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
-        private bool _dtrhRunActive, _dtrhExiting;
+        private bool _dtrhRunActive, _dtrhExiting, _dtrhBootFailed;
         private JObject? _dtrhLastProgress;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
 
@@ -68,6 +69,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "boot-error":
+                    // WPF DtrhHostService.cs:919-952: dispose the failed web host, then
+                    // start the first classroom or open the hub for a returning player.
+                    if (_dtrhBootFailed || _closing) return true;
+                    _dtrhBootFailed = true;
+                    Log.Warning("DtrhHost: page boot-error: {Msg}; falling back to the classic game", (string?)o["msg"]);
+                    Close();
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        try
+                        {
+                            if (ChaosRunHost.IsActive) return;
+                            // WPF initializes at App.xaml.cs:2746; this head loads on entry.
+                            ChaosMeta.Init();
+                            if (ChaosMeta.State.RunsCompleted == 0)
+                                ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                            else
+                                ChaosHubWindow.OpenAt();
+                        }
+                        catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
+                    });
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();
