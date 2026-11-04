@@ -86,17 +86,12 @@ not measured here. Both median and p95 must satisfy WPF x 1.10 + 20 ms under
 Prior trace-output review: console/file sinks are best-effort and disabled after failure.
 `TabTraceFailureTests` failed 2/2 on 3ac8b507b with DirectoryNotFoundException; the fixed pre-scope suite passed 19/19 (22.7113 seconds). WPF reference: `MainWindow.TabNavigation.cs:213` has no diagnostic-file dependency.
 
-Final scope correction: restored the complete `74ac6ce3d` snapshot outside this
-focused lane, including WPF V1/V2/Rain behavior, its original tests/assets/settings,
-and all 19 keys in each of ten languages. This is a corrective commit on top of
-8a44247de, with no history rewrite. The earlier inherited-diff exemption was wrong.
-The table above is historical evidence from the 7a78d535 measurement tree; Windows
-acceptance and final-tree performance remain unverified. Base 74ac6ce3d does not
-contain the later perf-bench-windows workflow; obtain that artifact from the
-Windows bench integration rather than restoring unrelated CI/WPF benchmark edits.
+Merge-up onto port/7.2 (via #3167): the earlier scope-restore commit d19a10df7 is superseded; every file
+outside this lane (WPF, Rain, Core, languages, assets, base perf bench) now equals the base
+#3179 + #3167 tree, so this PR changes only its own perf files. The table above is historical evidence from the
+7a78d535 measurement tree; Windows acceptance and final-tree performance remain unverified.
 
-Final checks: `git diff --quiet 74ac6ce3d 8a44247de -- ConditioningControlPanel Tests/ConditioningControlPanel.Tests CCP.Core Assets .github` exits 1 (fail-proof); the same command without 8a44247de exits 0 on the corrected tree.
-Budget guard: reviewed +1277/-6862 = 8139 (FAIL); corrected cumulative +577/-22 = 599 (PASS). All ten language JSON files parse and match base bytes; each regains 19 keys.
+Earlier checks (pre-merge-up tree):
 `/tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --filter 'FullyQualifiedName~TabTraceFailureTests|FullyQualifiedName~TabVisualReuseTests|FullyQualifiedName~ProgramsBrowseTests|FullyQualifiedName~BlinkTrainerTabLiveTests|FullyQualifiedName~SectionTabStripShellTests'` → 15 passed, exit 0, 17.8984 seconds.
 `node --test Assets/web/rain-wardrobe/tests/*.test.mjs` → 21 passed, 0 failed; `bash .github/scripts/core-guards.sh` → All Core guards passed.
 `/tmp/ccp-dotnet/dotnet build Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false` → exit 0, 571 warnings, 0 errors; WPF suites compiled, not executed on Linux.
