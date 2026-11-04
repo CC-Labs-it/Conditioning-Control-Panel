@@ -207,7 +207,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RbBambiCloud.Click += BrowserSiteToggle_Click;
             RbHypnoTube.Click += BrowserSiteToggle_Click;
             BtnReloadBrowser.Click += BtnReloadBrowser_Click;
-            BrowserWebHost.NavigationCompleted += url => Shell?.OnBrowserNavigationCompleted(url);
+            BrowserWebHost.NavigationCompleted += url => { Shell?.OnBrowserNavigationCompleted(url); Shell?.BrowserFullscreenNavigation(); };
+            BrowserWebHost.WebMessage += message => Shell?.BrowserFullscreenMessage(message);
             BtnWebcamTracking.Click += BtnWebcamTracking_Click;
             BtnMuteBrowser.Click += BtnMuteBrowser_Click;
             BtnPopOutBrowser.Click += BtnPopOutBrowser_Click;
