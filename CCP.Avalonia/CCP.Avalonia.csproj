@@ -35,6 +35,16 @@
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
+    <!-- WinRT projection for the Windows SMTC backend. Keep the head portable for Linux. -->
+    <PackageDownload Include="Microsoft.Windows.SDK.NET.Ref" Version="[10.0.19041.57]" />
+    <Reference Include="Microsoft.Windows.SDK.NET">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.19041.57/lib/net8.0/Microsoft.Windows.SDK.NET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="WinRT.Runtime">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.19041.57/lib/net8.0/WinRT.Runtime.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
     <PackageReference Include="Avalonia" Version="12.1.2" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
