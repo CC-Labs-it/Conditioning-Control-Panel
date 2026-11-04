@@ -34,11 +34,11 @@ internal sealed class PortalQuickRecalHotkey : IDisposable
     internal static bool IsSafeTrigger(string? trigger)
     {
         if (string.IsNullOrWhiteSpace(trigger)) return false;
-        var parts = trigger.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var parts = string.Concat(System.Linq.Enumerable.Where(trigger, c => c is not ('\u061c' or '\u200e' or '\u200f') && c is not (>= '\u202a' and <= '\u202e') && c is not (>= '\u2066' and <= '\u2069'))).Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 3) return false;
         var set = new HashSet<string>(parts, StringComparer.OrdinalIgnoreCase);
-        return set.Count == 3 && set.Contains("G") && (set.Contains("Alt") || set.Contains("Seçenek"))
-            && (set.Contains("Ctrl") || set.Contains("Control") || set.Contains("Kontrol") || set.Contains("Strg") || set.Contains("Steuerung"));
+        return set.Count == 3 && set.Contains("G") && (set.Contains("Alt") || set.Contains("Seçenek") || set.Contains("دگرساز"))
+            && (set.Contains("Ctrl") || set.Contains("Control") || set.Contains("Kontrol") || set.Contains("کنترل") || set.Contains("Strg") || set.Contains("Steuerung"));
     }
 
     internal static async Task<IDisposable?> BindAsync(Action pressed, Action closed, CancellationToken cancellation)
