@@ -967,6 +967,8 @@
                             Margin="12,0,12,0"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid>
+                            <Border x:Name="BannerDrumShade" CornerRadius="13" IsHitTestVisible="False" />
+                            <Border x:Name="BannerDrumLip" CornerRadius="13" IsHitTestVisible="False" />
                             <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="12" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
