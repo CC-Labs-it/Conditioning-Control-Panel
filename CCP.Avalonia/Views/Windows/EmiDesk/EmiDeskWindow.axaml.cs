@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -254,6 +255,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private bool _transiting;
         private bool _closingForGood;
         private string? _outfit;
+        private string? _bodySkin, _overPose;
+        private readonly Dictionary<string, Bitmap> _bodyCache = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Bitmap> _overCache = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _overArmed = new(StringComparer.Ordinal);
 
         private PixelPoint _dragStartScreen;
         private PixelPoint _dragStartPosition;
@@ -819,68 +824,117 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// EmiDock.MiniFace onto EmiFace.Face; Avalonia has no such property, so this is the feed).</summary>
         public event EventHandler<string>? FaceChanged;
 
-        /// <summary>Swap the body pose PNG. A no-op when that pose is already up (this runs per sway step).</summary>
-        // ponytail: needs EmiChains.FrameKey / EmiChains.BodyPath (Services/EmiDesk/EmiChains.cs) to
-        // resolve a pose name to a file on disk, plus the BitmapImage cache that went with it.
-        // Nothing here can put art on BodyImage, so BodyPlaceholder stays up; the pose name is still
-        // tracked because the outfit overlay keys off it.
+        // WPF EmiDeskWindow.xaml.cs:820-855: retain the last image if art is missing.
         public void SetPose(string? frame)
         {
             try
             {
-                var key = string.IsNullOrWhiteSpace(frame) ? "idle" : frame!.Trim();
-                if (key == _pose) return;
+                var key = EmiChains.FrameKey(frame) ?? "idle";
+                if (key == _pose && _bodyImage.Source != null &&
+                    string.Equals(_bodySkin, _outfit, StringComparison.Ordinal)) return;
                 _pose = key;
-                // The stand-in stands down the moment real art lands, whichever road brings it.
-                _bodyPlaceholder.IsVisible = _bodyImage.Source is null;
+                if (!_bodyCache.TryGetValue(key, out var img))
+                {
+                    var path = EmiChains.BodyPath(key, _outfit);
+                    if (path == null) return;
+                    img = new Bitmap(path);
+                    _bodyCache[key] = img;
+                }
+                ReplaceArt(_bodyImage, img, _bodyCache);
+                _bodySkin = _outfit;
+                _bodyPlaceholder.IsVisible = false;
                 PaintOutfitOver();
             }
-            catch (Exception ex)
-            {
-                Log.Debug(ex, "[EmiDesk] SetPose failed for {Frame}", frame);
-            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] SetPose failed for {Frame}", frame); }
         }
 
-        /// <summary>
-        /// Put a wardrobe sheet's OVERLAY on her, or take it off with null. THE SKIN LAW's one seam.
-        ///
-        /// <para>Deliberately not wired to anything: the desk has no outfit picker, no wardrobe and
-        /// no outfit BODY sheets, and this method invents none of them. What it guarantees is that
-        /// when a sheet does arrive, the part of it that crosses her glass lands in
-        /// <c>OutfitOverImage</c> - which the markup authors ABOVE the face and the glass, so the
-        /// garment is on top and stays there.</para>
-        /// </summary>
+        // WPF EmiDeskWindow.xaml.cs:885-902: repaint both sheets when the outfit changes.
         public void SetOutfit(string? outfit)
         {
             try
             {
-                var want = string.IsNullOrWhiteSpace(outfit) ? null : outfit!.Trim();
+                var want = EmiChains.OutfitName(outfit);
                 if (string.Equals(want, _outfit, StringComparison.Ordinal)) return;
                 _outfit = want;
+                _overPose = null;
+                RetireArtCache(_bodyImage, _bodyCache);
+                RetireArtCache(_outfitOverImage, _overCache);
+                SetPose(_pose);
                 PaintOutfitOver();
             }
-            catch (Exception ex)
-            {
-                Log.Debug(ex, "[EmiDesk] SetOutfit failed for {Outfit}", outfit);
-            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] SetOutfit failed for {Outfit}", outfit); }
         }
 
-        /// <summary>
-        /// Lay the overlay for the pose that is up, or take it off. The body's shadow: no timer, no
-        /// pose logic and no geometry of its own - it is repainted from <see cref="SetPose"/>, which
-        /// is the one place the body PNG changes.
-        /// </summary>
-        // ponytail: needs EmiChains.OverPath (Services/EmiDesk/EmiChains.cs) for the one-probe-per-
-        // outfit file lookup and its cache. Without it there is no sheet to find, so the layer stays
-        // down - which is exactly its resting state on the WPF head today, where nothing picks an
-        // outfit either.
+        // WPF EmiDeskWindow.xaml.cs:938-1010: probe idle once and stand down an incomplete overlay.
         private void PaintOutfitOver()
         {
             try
             {
-                _outfitOverImage.IsVisible = _outfitOverImage.Source is not null;
+                var outfit = _outfit;
+                if (outfit == null || !ArmOutfitOver(outfit))
+                {
+                    _outfitOverImage.IsVisible = false;
+                    ReplaceArt(_outfitOverImage, null, _overCache);
+                    _overPose = null;
+                    return;
+                }
+                var key = outfit + "/" + _pose;
+                if (key == _overPose && _outfitOverImage.Source != null) return;
+                if (!_overCache.TryGetValue(key, out var img))
+                {
+                    var path = EmiChains.OverPath(outfit, _pose);
+                    if (path == null)
+                    {
+                        _overArmed[outfit] = false;
+                        _outfitOverImage.IsVisible = false;
+                        ReplaceArt(_outfitOverImage, null, _overCache);
+                        _overPose = null;
+                        return;
+                    }
+                    img = new Bitmap(path);
+                    _overCache[key] = img;
+                }
+                _overPose = key;
+                ReplaceArt(_outfitOverImage, img, _overCache);
+                _outfitOverImage.IsVisible = true;
             }
-            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] outfit overlay paint failed"); }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "[EmiDesk] outfit overlay paint failed");
+                _outfitOverImage.IsVisible = false;
+                ReplaceArt(_outfitOverImage, null, _overCache);
+            }
+        }
+
+        // Keep a displayed fallback alive after an outfit change until its replacement is set.
+        private static void ReplaceArt(Image image, Bitmap? next, Dictionary<string, Bitmap> cache)
+        {
+            var old = image.Source as Bitmap;
+            image.Source = next;
+            if (old != null && !ReferenceEquals(old, next) && !cache.ContainsValue(old)) old.Dispose();
+        }
+
+        private static void RetireArtCache(Image image, Dictionary<string, Bitmap> cache)
+        {
+            foreach (var bitmap in cache.Values)
+                if (!ReferenceEquals(bitmap, image.Source)) bitmap.Dispose();
+            cache.Clear();
+        }
+
+        private void ReleaseArt()
+        {
+            ReplaceArt(_bodyImage, null, _bodyCache);
+            ReplaceArt(_outfitOverImage, null, _overCache);
+            RetireArtCache(_bodyImage, _bodyCache);
+            RetireArtCache(_outfitOverImage, _overCache);
+        }
+
+        private bool ArmOutfitOver(string outfit)
+        {
+            if (_overArmed.TryGetValue(outfit, out var armed)) return armed;
+            armed = EmiChains.OverPath(outfit, "idle") != null;
+            _overArmed[outfit] = armed;
+            return armed;
         }
 
         // ---------------------------------------------------------------- chains
@@ -890,7 +944,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
         {
             // WPF EmiDeskWindow.xaml.cs:1042 and EmiChainPlayer.cs:77-133.
-            // Part B retains the remaining chains, voice, bubble, body art and moves.
+            // Part B retains the remaining chains, voice, bubble and body moves.
             if (chainId == "wake") { StartWakeFeedback(done); return; }
             done?.Invoke();
         }
@@ -2659,6 +2713,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 Log.Debug(ex, "[EmiDesk] ShutDown failed");
             }
+            finally { ReleaseArt(); }
         }
 
         private void OnClosedCleanup(object? sender, EventArgs e)
@@ -2679,6 +2734,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 Log.Debug(ex, "[EmiDesk] close cleanup failed");
             }
+            finally { ReleaseArt(); }
         }
     }
 }

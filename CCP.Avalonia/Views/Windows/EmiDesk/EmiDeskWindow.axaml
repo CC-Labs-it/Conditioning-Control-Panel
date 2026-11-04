@@ -91,12 +91,7 @@
                  The rotate sits above the scales on purpose: a squash applied after a rotation
                  would shear her rather than squash her. -->
 
-            <!-- THE STAND-IN SILHOUETTE. Her body art is resolved at runtime by
-                 EmiChains.BodyPath, which is a WPF-head service and has not moved to Core, so on
-                 this head BodyImage has no Source and BodyRoot would draw nothing at all - a
-                 transparent window rendering an empty PNG and passing.
-                 ponytail: placeholder art, needs EmiChains (Services/EmiDesk/EmiChains.cs); SetPose
-                 hides this the moment a real pose bitmap lands. -->
+            <!-- Stand-in when the body art is unavailable. SetPose hides it when art loads. -->
             <Border x:Name="BodyPlaceholder"
                     Background="#E60E0E1C"
                     BorderBrush="#FF69B4"

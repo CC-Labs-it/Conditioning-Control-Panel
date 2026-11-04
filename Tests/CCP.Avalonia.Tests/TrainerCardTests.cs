@@ -3,12 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Platform;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -137,8 +142,10 @@ public sealed partial class AccountSeedTests
         }
     }
 
-    [Fact]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(bool delayedProcessing)
     {
         var s = CoreSettings.Current;
         var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
@@ -151,6 +158,8 @@ public sealed partial class AccountSeedTests
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                        .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -163,12 +172,36 @@ public sealed partial class AccountSeedTests
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
+                list.ScrollIntoView(row.DataContext!);
+                w.CompleteTabTransition(); // the hit target must stop moving before we sample it
+                w.UpdateLayout();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
-                {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                }
+                Assert.Same(row, (w.InputHitTest(at) as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true));
+
+                // Headless MouseDown/Up pumps and renders before and after every call and stamps
+                // events with wall time. A busy CI runner can make a double-click two single clicks.
+                // Send the actual raw input through Avalonia with the original event timestamps.
+                // Avalonia 12 hides the platform callback and raw event constructor in its ref assembly.
+                var platform = w.PlatformImpl!;
+                var mouse = platform.GetType().GetProperty("MouseDevice")!.GetValue(platform)!;
+                var inputRoot = platform.GetType().GetProperty("InputRoot")!.GetValue(platform)!;
+                var input = (Action<RawInputEventArgs>)typeof(ITopLevelImpl)
+                    .GetProperty("Input", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+                    .GetValue(platform)!;
+                void Send(RawPointerEventType type, ulong timestamp) => input((RawInputEventArgs)
+                    Activator.CreateInstance(typeof(RawPointerEventArgs), mouse, timestamp,
+                        inputRoot, type, at, RawInputModifiers.None)!);
+                Send(RawPointerEventType.LeftButtonDown, 1000);
+                Send(RawPointerEventType.LeftButtonUp, 1010);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible); // one click does not open a card
+                if (delayedProcessing) Thread.Sleep(800); // queued input retains its timestamps
+                Dispatcher.UIThread.RunJobs();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Send(RawPointerEventType.LeftButtonDown, 1040);
+                Send(RawPointerEventType.LeftButtonUp, 1050);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
