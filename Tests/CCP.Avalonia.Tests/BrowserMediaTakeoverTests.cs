@@ -215,6 +215,174 @@ public sealed class BrowserMediaTakeoverTests
         }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void BrowserDeferredGameAndVideoKeepTheirOrder(bool gameFirst) => WithDesktopBrowser(host =>
+    {
+        var clock = new BubbleCountQueueTests.Clock();
+        var game = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => new[] { "/v/game.mp4" });
+        var video = new MandatoryVideoScheduler(MandatoryVideoOverlay.Instance, clock, () => new[] { "/v/video.mp4" });
+        var (oldGame, oldVideo) = (CoreEngine.BubbleCount, CoreEngine.Video);
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        tab.ScheduleBrowserVideoRetry = (action, delay) =>
+            clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        CoreEngine.BubbleCount = game;
+        CoreEngine.Video = video;
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            if (gameFirst) game.Trigger(forceTest: true);
+            Assert.True(video.Trigger(path: "/v/video.mp4"));
+            if (!gameFirst) game.Trigger(forceTest: true);
+            Assert.True(game.IsQueued);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            Assert.Equal(!gameFirst, video.IsPlaying);
+            clock.Advance(BubbleCountScheduler.QueuePoll);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(gameFirst, game.IsBusy);
+            Assert.Equal(!gameFirst, game.IsQueued);
+            if (gameFirst)
+            {
+                game.ForceCleanup();
+                clock.Advance(SettingsTabView.BrowserVideoRetryPeriod);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(video.IsPlaying);
+            }
+            else
+            {
+                video.ForceCleanup();
+                clock.Advance(BubbleCountScheduler.QueuePoll);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(game.IsBusy);
+            }
+        }
+        finally
+        {
+            tab.ClearBrowserMediaClaim();
+            video.ForceCleanup();
+            game.ForceCleanup();
+            (CoreEngine.BubbleCount, CoreEngine.Video) = (oldGame, oldVideo);
+        }
+    });
+
+    [Fact]
+    public void PostedBrowserVideoReplayWaitsForGameThatStartsFirst() => WithDesktopBrowser(host =>
+    {
+        var clock = new BubbleCountQueueTests.Clock();
+        var game = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => new[] { "/v/game.mp4" });
+        var video = new MandatoryVideoScheduler(MandatoryVideoOverlay.Instance, clock, () => new[] { "/v/video.mp4" });
+        var (oldGame, oldVideo) = (CoreEngine.BubbleCount, CoreEngine.Video);
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        tab.ScheduleBrowserVideoRetry = (action, delay) =>
+            clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        CoreEngine.BubbleCount = game;
+        CoreEngine.Video = video;
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            game.Trigger(forceTest: true);
+            Assert.True(game.IsQueued);
+            Assert.True(video.Trigger(path: "/v/video.mp4"));
+            LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            LockCardWindow.ForceCloseAll();
+            game.Trigger(forceTest: true); // before the posted card-close replay
+            Assert.True(game.IsBusy);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(video.IsPlaying);
+            game.ForceCleanup();
+            clock.Advance(SettingsTabView.BrowserVideoRetryPeriod);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(video.IsPlaying);
+        }
+        finally
+        {
+            tab.ClearBrowserMediaClaim();
+            LockCardWindow.ForceCloseAll();
+            video.ForceCleanup();
+            game.ForceCleanup();
+            (CoreEngine.BubbleCount, CoreEngine.Video) = (oldGame, oldVideo);
+        }
+    });
+
+    [Fact]
+    public void CancelledOlderGameDoesNotGiveANewerGameTheVideosTurn() => WithDesktopBrowser(host =>
+    {
+        var clock = new BubbleCountQueueTests.Clock();
+        var game = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => new[] { "/v/game.mp4" });
+        var video = new MandatoryVideoScheduler(MandatoryVideoOverlay.Instance, clock, () => new[] { "/v/video.mp4" });
+        var (oldGame, oldVideo) = (CoreEngine.BubbleCount, CoreEngine.Video);
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        CoreEngine.BubbleCount = game;
+        CoreEngine.Video = video;
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            game.Trigger(forceTest: true);
+            Assert.True(game.IsQueued);
+            Assert.True(video.Trigger(path: "/v/video.mp4"));
+            game.ForceCleanup();
+            game.Trigger(forceTest: true);
+            Assert.True(game.IsQueued);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            Assert.True(video.IsPlaying);
+            clock.Advance(BubbleCountScheduler.QueuePoll);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(game.IsQueued);
+            Assert.False(game.IsBusy);
+        }
+        finally
+        {
+            tab.ClearBrowserMediaClaim();
+            video.ForceCleanup();
+            game.ForceCleanup();
+            (CoreEngine.BubbleCount, CoreEngine.Video) = (oldGame, oldVideo);
+        }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void BubbleWaitRetryCannotRestartVideoAfterCancellation(bool panic) => WithDesktopBrowser(host =>
+    {
+        var clock = new BubbleCountQueueTests.Clock();
+        var game = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => new[] { "/v/game.mp4" });
+        var video = new MandatoryVideoScheduler(MandatoryVideoOverlay.Instance, clock, () => new[] { "/v/video.mp4" });
+        var (oldGame, oldVideo) = (CoreEngine.BubbleCount, CoreEngine.Video);
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        Action? staleRetry = null;
+        tab.ScheduleBrowserVideoRetry = (action, delay) =>
+        {
+            staleRetry = action;
+            return clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        };
+        CoreEngine.BubbleCount = game;
+        CoreEngine.Video = video;
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            game.Trigger(forceTest: true);
+            Assert.True(video.Trigger(path: "/v/video.mp4"));
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            Assert.NotNull(staleRetry);
+            if (panic) tab.StopBrowserMediaForPanic();
+            else tab.ClearBrowserMediaClaim();
+            game.ForceCleanup();
+            staleRetry!();
+            clock.Advance(BubbleCountScheduler.QueuePoll);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(video.IsPlaying);
+        }
+        finally
+        {
+            tab.ClearBrowserMediaClaim();
+            video.ForceCleanup();
+            game.ForceCleanup();
+            (CoreEngine.BubbleCount, CoreEngine.Video) = (oldGame, oldVideo);
+        }
+    });
+
     [Fact]
     public void BrowserPlaybackReachesScheduledVideoHost() => WithDesktopBrowser(host =>
     {

@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json;
 using Avalonia.Threading;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
@@ -20,17 +21,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private int _browserMediaRecoveryGeneration;
         private Action? _browserDeferredVideo;
         private bool _waitingForInteractionWindows;
+        private BubbleCountScheduler? _earlierBubbleGame;
+        private long _earlierBubbleGeneration;
+        private IDisposable? _browserVideoRetry;
+        private int _browserVideoRetryGeneration;
+        internal static readonly TimeSpan BrowserVideoRetryPeriod = TimeSpan.FromMilliseconds(250);
+        internal Func<Action, TimeSpan, IDisposable> ScheduleBrowserVideoRetry =
+            (action, delay) => DispatcherTimer.RunOnce(action, delay);
+
+        private bool EarlierBubbleIsQueued => _earlierBubbleGame is { } game
+            && ReferenceEquals(game, CoreEngine.BubbleCount) && game.IsQueuedOrReplaying
+            && game.QueuedGeneration == _earlierBubbleGeneration;
+
+        internal bool BrowserVideoBlocksBubbleCount => _browserDeferredVideo != null && !EarlierBubbleIsQueued;
 
         internal bool DeferVideoForBrowser(Action replay)
         {
             if (!BrowserMediaOwnsSlot && _browserDeferredVideo == null) return false;
-            _browserDeferredVideo ??= replay;
+            if (_browserDeferredVideo == null)
+            {
+                _browserDeferredVideo = replay;
+                if (CoreEngine.BubbleCount is { IsQueued: true } game)
+                {
+                    _earlierBubbleGame = game;
+                    _earlierBubbleGeneration = game.QueuedGeneration;
+                }
+            }
             return true;
         }
 
         internal void CancelBrowserDeferredVideo()
         {
             _browserDeferredVideo = null;
+            _earlierBubbleGame = null;
+            _browserVideoRetryGeneration++;
+            _browserVideoRetry?.Dispose();
+            _browserVideoRetry = null;
             if (!_waitingForInteractionWindows) return;
             _waitingForInteractionWindows = false;
             Windows.LockCardWindow.AllClosed -= OnInteractionWindowsClosed;
@@ -50,6 +76,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _waitingForInteractionWindows = true;
                     Windows.LockCardWindow.AllClosed += OnInteractionWindowsClosed;
                     Windows.PopQuizWindow.AllClosed += OnInteractionWindowsClosed;
+                }
+                return;
+            }
+            if (EarlierBubbleIsQueued || CoreEngine.BubbleCount?.IsBusy == true
+                || Windows.BubbleCountWindow.IsAnyOpen() || Windows.BubbleCountResultWindow.OpenWindows.Count > 0)
+            {
+                if (_browserVideoRetry == null)
+                {
+                    var generation = _browserVideoRetryGeneration;
+                    _browserVideoRetry = ScheduleBrowserVideoRetry(() =>
+                    {
+                        if (generation != _browserVideoRetryGeneration) return;
+                        _browserVideoRetry = null;
+                        TryReplayBrowserVideo();
+                    }, BrowserVideoRetryPeriod);
                 }
                 return;
             }
