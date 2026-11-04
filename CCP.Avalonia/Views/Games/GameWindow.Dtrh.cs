@@ -9,7 +9,7 @@
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.content / ccp.mod origins, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
-// fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
+// fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray, and SeasonRecap TrackFeature.
 using System;
@@ -68,6 +68,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
 
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
+        private bool _dtrhFullscreen;
+        private global::Avalonia.Controls.WindowState _dtrhWindowedState;
+
         private bool HandleDtrh(JObject o)
         {
             switch ((string?)o["type"])
@@ -88,6 +91,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     // WPF DtrhHostService.cs:400-404: deltas are additive, best-effort telemetry.
                     try { DtrhMergeAssetStats(o); }
                     catch (Exception ex) { Log.Debug("DtrhHost: asset stats failed: {E}", ex.Message); }
+                    return true;
+                case "fullscreen-set":
+                    // WPF DtrhHostService.cs:441,488-502: host owns the mode and echoes it.
+                    try
+                    {
+                        bool on = (bool?)o["on"] ?? false;
+                        if (on != _dtrhFullscreen)
+                        {
+                            if (on) _dtrhWindowedState = WindowState;
+                            WindowState = on ? global::Avalonia.Controls.WindowState.FullScreen : _dtrhWindowedState;
+                            _dtrhFullscreen = on;
+                        }
+                        Post(new { type = "fullscreen", on = _dtrhFullscreen });
+                    }
+                    catch (Exception ex) { Log.Debug("DtrhHost: fullscreen: {E}", ex.Message); }
                     return true;
                 case "request-run":
                     OnDtrhRequestRun(o);

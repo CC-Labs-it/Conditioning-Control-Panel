@@ -999,6 +999,26 @@ public sealed partial class GameWindowTests
         });
     }
 
+    [Fact]
+    public void Dtrh_Fullscreen_EchoesHostState() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.WindowState = global::Avalonia.Controls.WindowState.Maximized;
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        Assert.Equal("fullscreen", (string?)sent[0]["type"]);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\"}");
+        Assert.Equal(global::Avalonia.Controls.WindowState.Maximized, w.WindowState);
+        Assert.False((bool)Assert.Single(sent)["on"]!);
+    });
+
     /// <summary>WPF DtrhHostService.cs:309,405-433,462-479: seed the saved spiral pool,
     /// answer Loom commands and refresh only after successful changes.</summary>
     [Fact]
