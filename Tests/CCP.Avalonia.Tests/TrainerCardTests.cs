@@ -164,11 +164,18 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
-                {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                }
+                // The headless helpers render between each event, which can exceed the OS
+                // double-click interval on a loaded runner. Send the four events to the same
+                // headless window without interleaving renders; the normal pointer pipeline runs.
+                var headless = typeof(global::Avalonia.Headless.AvaloniaHeadlessPlatform).Assembly
+                    .GetType("Avalonia.Headless.IHeadlessWindow")!;
+                var down = headless.GetMethod("MouseDown")!;
+                var up = headless.GetMethod("MouseUp")!;
+                var args = new object[] { at, global::Avalonia.Input.MouseButton.Left, global::Avalonia.Input.RawInputModifiers.None };
+                down.Invoke(w.PlatformImpl, args);
+                up.Invoke(w.PlatformImpl, args);
+                down.Invoke(w.PlatformImpl, args);
+                up.Invoke(w.PlatformImpl, args);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
