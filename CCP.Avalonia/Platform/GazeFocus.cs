@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -49,6 +50,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private MandatoryVideoOverlay.Target? _currentVideo;
         private DateTimeOffset _lastLingerBoost = DateTimeOffset.MinValue;
         private AppSettings? _settings;
+
+        // WPF GazeFocusService.cs:1004-1010: base-score choices for a future refine panel.
+        // These are recomputed on every target scan and never activate a target themselves.
+        internal List<object> RefineCandidates { get; } = new();
+        private readonly List<(object Target, GazeScore Score)> _scored = new();
 
         public bool IsActive { get; private set; }
         public int DwellMs { get; set; } = DefaultDwellMs;
@@ -143,6 +149,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (!IsActive) return;
             Unsubscribe();
             if (_timer != null) { _timer.Stop(); _timer.Tick -= OnTimerTick; _timer = null; }
+            RefineCandidates.Clear();
+            _scored.Clear();
             ClearTarget();
             SetCursorLock(null); // WPF GazeFocusService.cs:290
             _lastGazePoint = null;
@@ -212,7 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             try
             {
-                if (Clock.GetUtcNow() < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) { ClearTarget(); SetCursorLock(null); return; }
+                if (Clock.GetUtcNow() < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) { RefineCandidates.Clear(); _scored.Clear(); ClearTarget(); SetCursorLock(null); return; }
                 var target = FindBestTarget(p);
                 if (target == null) { ClearTarget(); SetCursorLock(null); return; }
                 SetCursorLock(TargetBounds(target));
@@ -256,11 +264,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             object? best = null;
             double bestScore = ScoreThreshold;
+            var scored = _scored;
+            scored.Clear();
+            RefineCandidates.Clear();
             void Consider(object target, Rect r, bool flash, bool sticky)
             {
                 if (r.Width <= 0 || r.Height <= 0 || !TargetOnCalibratedScreen(r)) return;
                 var d = DistanceFromRectEdge(r.X, r.Y, r.Width, r.Height, p.X, p.Y);
-                var score = (flash ? FlashBaseScore(d) : BubbleBaseScore(d)) + (sticky ? StickyBonus : 0);
+                var baseScore = flash ? FlashBaseScore(d) : BubbleBaseScore(d);
+                scored.Add((target, new GazeScore(baseScore, r.X, r.Y, r.Width, r.Height)));
+                var score = baseScore + (sticky ? StickyBonus : 0);
                 if (score > bestScore) { bestScore = score; best = target; }
             }
             var s = CoreSettings.Current;
@@ -281,6 +294,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (s.VideoGazeClickEnabled)
                 foreach (var t in MandatoryVideoOverlay.Instance.GazeTargets)
                     Consider(t, t.GazeBounds, false, ReferenceEquals(_currentVideo, t));
+            var lead = AmbiguousLeader(scored, x => x.Score);
+            if (lead >= 0 && ReferenceEquals(scored[lead].Target, best))
+            {
+                foreach (var choice in RefineChoices(scored, x => x.Score))
+                {
+                    // A linger-only flash must never be offered as a pop choice (WPF :687-691).
+                    if (choice.Target is FlashOverlayWindow && !s.FlashGazePopEnabled) continue;
+                    RefineCandidates.Add(choice.Target);
+                    if (RefineCandidates.Count == MaxRefineCandidates) break;
+                }
+                if (RefineCandidates.Count < 2) RefineCandidates.Clear();
+            }
             return best;
         }
 
