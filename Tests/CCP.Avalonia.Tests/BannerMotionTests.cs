@@ -328,7 +328,16 @@ public sealed class BannerMotionTests
             {
                 var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(next.RenderTransform);
                 Assert.Equal(.96, scale.ScaleX, 3);
-                clock.Now += TimeSpan.FromMilliseconds(260).Ticks;
+                Assert.Equal(.96, scale.ScaleY, 3);
+                clock.Now += TimeSpan.FromMilliseconds(130).Ticks;
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+                Assert.Equal(1.007, scale.ScaleX, 3);
+                Assert.Equal(1.007, scale.ScaleY, 3);
+                clock.Now += TimeSpan.FromMilliseconds(129.999).Ticks;
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+                Assert.Equal(1, scale.ScaleX, 3);
+                Assert.Equal(1, scale.ScaleY, 3);
+                clock.Now += TimeSpan.FromMilliseconds(.001).Ticks;
                 ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
                 Assert.Null(next.RenderTransform);
                 Tick(w);

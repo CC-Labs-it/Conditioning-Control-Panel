@@ -30,8 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     return;
                 }
                 // BackEase Out, amplitude 0.6, from 0.96 to 1 over 260 ms.
-                double t = Math.Clamp(seconds / .26, 0, 1) - 1;
-                double eased = 1 + 1.6 * t * t * t + .6 * t * t;
+                double remaining = 1 - Math.Clamp(seconds / .26, 0, 1);
+                double eased = 1 - (remaining * remaining * remaining - .6 * remaining * Math.Sin(Math.PI * remaining));
                 scale.ScaleX = scale.ScaleY = .96 + .04 * eased;
             }) { OnParked = ParkBannerPop };
             _bannerPop.Start();
