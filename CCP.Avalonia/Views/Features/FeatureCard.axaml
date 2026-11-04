@@ -14,6 +14,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.FeatureCard"
              Cursor="Hand">
 
@@ -131,9 +132,11 @@
             <!-- Tier badge (top-left). A price tag, NOT the LockedOverlay veil above: the art
                  stays bright and the badge names the price. IsHitTestVisible=False on purpose,
                  so a locked click still lands on the real handler. -->
+            <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"
+                        IsHitTestVisible="False" ZIndex="11">
             <Border x:Name="TierBadgeHost"
-                    HorizontalAlignment="Left" VerticalAlignment="Top"
-                    Margin="8,8,0,0" Padding="6,2,7,3"
+                    HorizontalAlignment="Left"
+                    Margin="0,0,0,4" Padding="6,2,7,3"
                     CornerRadius="7"
                     Background="#D91A1A2E"
                     BorderBrush="{DynamicResource PinkBrush}"
@@ -147,6 +150,13 @@
                            FontSize="9"
                            FontWeight="Bold"/>
             </Border>
+
+            <Border x:Name="V2BadgeHost" HorizontalAlignment="Left" Padding="6,2,7,3"
+                    CornerRadius="7" Background="#D91A1A2E" BorderBrush="#FFE08A"
+                    BorderThickness="1" IsHitTestVisible="False" IsVisible="False">
+                <TextBlock Text="{loc:Str badge_v2}" Foreground="#FFE08A" FontSize="9" FontWeight="Bold"/>
+            </Border>
+            </StackPanel>
 
             <!-- Help icon overlay (top-right corner) -->
             <Button x:Name="BtnHelp"

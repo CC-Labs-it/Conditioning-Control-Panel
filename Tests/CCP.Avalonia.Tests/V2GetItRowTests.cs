@@ -25,7 +25,7 @@ public sealed class V2GetItRowTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -118,7 +118,7 @@ public sealed class V2GetItRowTests
         {
             EnsureApp();
             var s = CoreSettings.Current;
-            var (id, token, offline, sp, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted);
+            var (id, offline, sp, seam, account) = (s.UnifiedId, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted, CoreAccount.UnifiedUserId);
             var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
             var secrets = new System.Collections.Generic.Dictionary<string, string?>();
             CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
@@ -128,6 +128,7 @@ public sealed class V2GetItRowTests
             try
             {
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints) = ("u-buy", "t-buy", false, 50);
+                CoreAccount.UnifiedUserId = "u-buy";
                 PrizeOwnership.IsGranted = g => PrizeOwnership.Held(g);
                 PrizeOwnership.ResetHeld();
                 var svc = V2PurchaseHead.Create(null, "http://127.0.0.1:9", new System.Net.Http.HttpClient(h))!;
@@ -190,7 +191,7 @@ public sealed class V2GetItRowTests
                 host?.Close();
                 V2PurchaseHead.Service = null;
                 PrizeOwnership.ResetHeld();
-                (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted) = (id, token, offline, sp, seam);
+                (s.UnifiedId, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted, CoreAccount.UnifiedUserId) = (id, offline, sp, seam, account);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
             }
         });

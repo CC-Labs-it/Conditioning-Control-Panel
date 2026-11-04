@@ -413,6 +413,154 @@ public sealed class TabTransitionsTests
         Assert.False(badge.FreeToday);
     });
 
+    [Fact]
+    public Task HomeAndFavoriteShowOwnedV2PrizesAndRefreshOnSnapshot() => Run(shell =>
+    {
+        // WPF TabNavigation.cs:389, Presets.cs:1144-1147, FavoritesRail.cs:91-92,256-263.
+        var s = CoreSettings.Current;
+        var (offline, user, account) = (s.OfflineMode, s.UnifiedId, CoreAccount.UnifiedUserId);
+        var secretProvider = CoreSecrets.RetrieveProvider;
+        var favorites = s.RailFavorites.ToArray();
+        var recent = s.RailRecent.ToArray();
+        var grants = ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted;
+        try
+        {
+            s.OfflineMode = false; s.UnifiedId = "badge-test";
+            CoreAccount.UnifiedUserId = "badge-test";
+            CoreSecrets.RetrieveProvider = name => name == CoreSecrets.AuthToken ? "fake-token" : null;
+            s.RailFavorites.Clear(); s.RailFavorites.Add("door.studio");
+            s.RailRecent.Clear();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted = ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Held;
+            shell.ShowTab("quests"); shell.ShowTab("settings");
+            var dash = shell.SettingsPage!;
+            Border CardBadge(Control card) => card.FindControl<Border>("V2BadgeHost")!;
+            Border? ChipBadge() => ((Grid)((Button)Assert.Single(dash.FavoritesList.Children)).Content!).Children
+                .OfType<Border>().FirstOrDefault(b => b.Child is TextBlock t && t.Text == ConditioningControlPanel.Localization.Loc.Get("badge_v2"));
+            Assert.False(CardBadge(dash.CardFlash).IsVisible);
+            Assert.False(CardBadge(dash.CardBubblePop).IsVisible);
+            Assert.Null(ChipBadge());
+
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("badge-test", 2,
+                new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.JackpotRemix });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(CardBadge(dash.CardFlash).IsVisible);
+            Assert.False(CardBadge(dash.CardBubblePop).IsVisible);
+            var pill = Assert.IsType<Border>(ChipBadge());
+            Assert.False(pill.IsHitTestVisible);
+            Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Right, pill.HorizontalAlignment);
+
+            // Older or another account's snapshot cannot revoke the current account's badge.
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("badge-test", 1, Array.Empty<string>());
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("other", 9, Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(CardBadge(dash.CardFlash).IsVisible);
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("badge-test", 3,
+                new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.BubbleRain });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(CardBadge(dash.CardFlash).IsVisible);
+            Assert.True(CardBadge(dash.CardBubblePop).IsVisible);
+            Assert.NotNull(ChipBadge());
+
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("badge-test", 4, Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(CardBadge(dash.CardBubblePop).IsVisible);
+            Assert.Null(ChipBadge());
+
+            // Home entry re-reads ownership even if it changed while another page was showing.
+            shell.ShowTab("quests");
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted = id =>
+                id == ConditioningControlPanel.Services.Prizes.PrizeGrants.FlashPendulum;
+            shell.ShowTab("settings");
+            Assert.True(CardBadge(dash.CardFlash).IsVisible);
+            Assert.NotNull(ChipBadge());
+            dash.CardFlash.TierBadge = "TIER";
+            var tier = dash.CardFlash.FindControl<Border>("TierBadgeHost")!;
+            Assert.Same(tier.Parent, CardBadge(dash.CardFlash).Parent);
+            Assert.Equal(4, tier.Margin.Bottom);
+            Assert.False(CardBadge(dash.CardFlash).IsHitTestVisible);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted = grants;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            (s.OfflineMode, s.UnifiedId, CoreAccount.UnifiedUserId) = (offline, user, account);
+            CoreSecrets.RetrieveProvider = secretProvider;
+            s.RailFavorites.Clear(); s.RailFavorites.AddRange(favorites);
+            s.RailRecent.Clear(); s.RailRecent.AddRange(recent);
+        }
+    });
+
+    [Fact]
+    public Task HomeRetainsAccountPrizeBadgesOfflineWithoutSharingThem() => Run(shell =>
+    {
+        // WPF OwnershipService.cs:60,77-82,99-107,155-157; TabNavigation.cs:389.
+        var s = CoreSettings.Current;
+        var (offline, storedId, account) = (s.OfflineMode, s.UnifiedId, CoreAccount.UnifiedUserId);
+        var secretProvider = CoreSecrets.RetrieveProvider;
+        var favorites = s.RailFavorites.ToArray();
+        var recent = s.RailRecent.ToArray();
+        var owned = ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted;
+        try
+        {
+            s.OfflineMode = false; s.UnifiedId = "offline-owner";
+            CoreAccount.UnifiedUserId = "offline-owner";
+            CoreSecrets.RetrieveProvider = name => name == CoreSecrets.AuthToken ? "fake-token" : null;
+            s.RailFavorites.Clear(); s.RailFavorites.Add("door.studio");
+            s.RailRecent.Clear(); s.RailRecent.Add("tab.studio");
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted = ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Held;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("offline-owner", 1,
+                new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.FlashPendulum, ConditioningControlPanel.Services.Prizes.PrizeGrants.BubbleRain });
+            Dispatcher.UIThread.RunJobs();
+            shell.ShowTab("quests");
+            s.OfflineMode = true;
+            shell.ShowTab("settings");
+            var dash = shell.SettingsPage!;
+            bool Wears(Control card) => card.FindControl<Border>("V2BadgeHost")!.IsVisible;
+            bool ChipWears(Panel list, string id) => ((Grid)list.Children.OfType<Button>().Single(b => Equals(b.Tag, id)).Content!).Children
+                .OfType<Border>().Any(b => b.Child is TextBlock t && t.Text == ConditioningControlPanel.Localization.Loc.Get("badge_v2"));
+            Assert.Null(ConditioningControlPanel.Avalonia.Platform.FriendsHead.Identity());
+            Assert.True(Wears(dash.CardFlash));
+            Assert.True(Wears(dash.CardBubblePop));
+            Assert.True(ChipWears(dash.FavoritesList, "door.studio"));
+            Assert.True(ChipWears(dash.RecentList, "tab.studio"));
+
+            // A response already in flight may land after going offline; the account still owns it.
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("offline-owner", 2,
+                new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.FlashPendulum });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(Wears(dash.CardFlash));
+            Assert.False(Wears(dash.CardBubblePop));
+            Assert.True(ChipWears(dash.FavoritesList, "door.studio"));
+            Assert.True(ChipWears(dash.RecentList, "tab.studio"));
+
+            // A stale persisted id must not expose the first account's grants after switching or logout.
+            CoreAccount.UnifiedUserId = "another-account";
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("offline-owner", 3,
+                new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.BubbleRain });
+            shell.ShowTab("quests"); shell.ShowTab("settings");
+            Assert.False(Wears(dash.CardFlash)); Assert.False(Wears(dash.CardBubblePop));
+            Assert.False(ChipWears(dash.FavoritesList, "door.studio"));
+            Assert.False(ChipWears(dash.RecentList, "tab.studio"));
+            CoreAccount.UnifiedUserId = null;
+            shell.ShowTab("quests"); shell.ShowTab("settings");
+            Assert.False(Wears(dash.CardFlash)); Assert.False(ChipWears(dash.FavoritesList, "door.studio"));
+            CoreAccount.UnifiedUserId = "offline-owner";
+            shell.ShowTab("quests"); shell.ShowTab("settings");
+            Assert.True(Wears(dash.CardFlash)); Assert.False(Wears(dash.CardBubblePop));
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted = owned;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            (s.OfflineMode, s.UnifiedId, CoreAccount.UnifiedUserId) = (offline, storedId, account);
+            CoreSecrets.RetrieveProvider = secretProvider;
+            s.RailFavorites.Clear(); s.RailFavorites.AddRange(favorites);
+            s.RailRecent.Clear(); s.RailRecent.AddRange(recent);
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

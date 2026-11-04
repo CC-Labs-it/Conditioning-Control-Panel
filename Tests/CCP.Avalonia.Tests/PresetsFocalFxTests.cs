@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -86,6 +87,35 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(0.97, press.ScaleX);
         host.MouseMove(new Point(1, 1)); host.MouseUp(new Point(1, 1), MouseButton.Left, RawInputModifiers.None); Settle();
         Assert.Equal(1, press.ScaleX);
+    });
+
+    [Fact]
+    public Task DisablingMotionDuringArrivalSettlesRowsBeforeHover() => WithPresets((host, view) =>
+    {
+        view.IsVisible = false; Settle();
+        view.IsVisible = true;
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        var clock = new StepClock();
+        row.SetValue(StepClock.Property, clock.Instance);
+        view.StaggerZones();
+        clock.Step(0); clock.Step(60);
+        Assert.InRange(row.Opacity, 0.01, 0.99); // the controlled arrival is active
+        Assert.InRange(slide.Y, 0.01, 10);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        clock.Step(80);
+        Assert.InRange(row.Opacity, 0.01, 0.99); // Reduced retains interaction motion
+
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Settle();
+        Assert.Equal(1, row.Opacity);
+        Assert.Equal(0, slide.Y);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y);
+        host.MouseMove(new Point(1, 1)); Settle();
+        Assert.Equal(0, slide.Y);
     });
 
     [Fact]
@@ -210,5 +240,15 @@ public sealed class PresetsFocalFxTests
     private static Point Center(Window host, Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), host)!.Value;
     private static void Click(Window host, Control c) { var p = Center(host, c); host.MouseDown(p, MouseButton.Left, RawInputModifiers.None); host.MouseUp(p, MouseButton.Left, RawInputModifiers.None); }
     private static void Settle() { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
+    // Avalonia 12 keeps its animation clock internal; step it without wall-clock sleeps.
+    private sealed class StepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(Animatable).GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
     private sealed class Clock : TimeProvider { public long Now; public override long TimestampFrequency => TimeSpan.TicksPerSecond; public override long GetTimestamp() => Now; }
 }
