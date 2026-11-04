@@ -75,6 +75,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         internal event Action? BrowserNavigationStarting;
+        internal event Action<Uri?>? BrowserNativeNavigationStarting;
+        internal void OnBrowserNativeNavigationStarting(Uri? url) => BrowserNativeNavigationStarting?.Invoke(url);
 
         /// <summary>
         /// Raised on the UI thread with <see cref="CurrentUrl"/> after every top-level navigation
@@ -378,30 +380,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
-            BrowserNavigationStarting?.Invoke();
             var target = e.Request;
-            if (RefusesScrolller(target)) { e.Cancel = true; return; }
-            // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
-            if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
-            // No Scrolller gate on this engine (yet, or at all): nothing but this head's own pages loads.
-            if (!ScrolllerGateAllows(_scrolllerGate, target))
+            try
             {
+                if (RefusesScrolller(target)) { e.Cancel = true; return; }
+                // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
+                if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
+                // No Scrolller gate on this engine (yet, or at all): nothing but this head's own pages loads.
+                if (!ScrolllerGateAllows(_scrolllerGate, target))
+                {
+                    e.Cancel = true;
+                    Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
+                    return;
+                }
+                if (target?.Scheme != "about") _loadedOnThisEngine = true;
+                // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
+                if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
+                var gate = AllowNavigation;
+                if (gate is null) return;
+                // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
+                // hostile page would use to slip past it.
+                if (target is null) { e.Cancel = true; return; }
+                if (gate(target)) return;
                 e.Cancel = true;
-                Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
-                return;
+                // Host + path only: a signed media URL's query string must not reach the log.
+                Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
             }
-            if (target?.Scheme != "about") _loadedOnThisEngine = true;
-            // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
-            if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
-            var gate = AllowNavigation;
-            if (gate is null) return;
-            // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
-            // hostile page would use to slip past it.
-            if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) return;
-            e.Cancel = true;
-            // Host + path only: a signed media URL's query string must not reach the log.
-            Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
+            finally { if (!e.Cancel) OnBrowserNativeNavigationStarting(target); }
         }
 
         /// <summary>

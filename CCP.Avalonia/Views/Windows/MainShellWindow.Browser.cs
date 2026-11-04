@@ -120,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void BtnReloadBrowser_Click(object? sender, RoutedEventArgs e)
         {
             if (BrowserBlockedOffline()) return;
+            if (BrowserPage?.DeferBrowserReload() == true) return;
             NavigateBrowserToCurrentSiteHome();
         }
 

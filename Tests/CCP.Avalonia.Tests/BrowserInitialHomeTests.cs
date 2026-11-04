@@ -168,6 +168,44 @@ public sealed class BrowserInitialHomeTests
     });
 
     [Fact]
+    public Task ReloadWaitsForPendingSiteSelection() => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        host.Navigate(new Uri("https://example.com/old"));
+        page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+        var pending = new TaskCompletionSource<string?>();
+        host.DocumentUrlReader = () => pending.Task;
+        page.SyncBrowserCard();
+        int requests = host.NavigationRequests;
+        shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.Equal(requests, host.NavigationRequests);
+        pending.SetResult("https://example.com/old");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("https://hypnotube.com/", host.Source!.AbsoluteUri);
+    });
+
+    [Fact]
+    public Task InPageNavigationReconcilesPendingSiteSelection() => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        host.Navigate(new Uri("https://example.com/old"));
+        page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+        var pending = new TaskCompletionSource<string?>();
+        host.DocumentUrlReader = () => pending.Task;
+        page.SyncBrowserCard();
+        host.NewScrolllerEngine()(true);
+        var navigation = new WebViewNavigationStartingEventArgs { Request = new Uri("http://127.0.0.1/new") };
+        host.OnNavigationStarted(null, navigation);
+        Assert.False(navigation.Cancel);
+        host.OnNavigationCompleted(navigation.Request);
+        pending.SetResult("https://example.com/old");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+    });
+
+    [Fact]
     public Task EqualUrlRequestInvalidatesAPendingNativeRead() => Run((shell, page, host, mod) =>
     {
         const string url = "https://bambicloud.com/video";
