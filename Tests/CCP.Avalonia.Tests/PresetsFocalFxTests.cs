@@ -89,6 +89,25 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task MotionOffHoverStopsTheRowsInFlightRiseWithoutCancellingItsFade() => WithPresets((host, view) =>
+    {
+        // Hold the real entrance long enough to reproduce a slow runner without sleeping.
+        view.EntranceDurationForTests = 60_000;
+        host.MouseMove(new Point(1, 1)); Settle();
+        view.IsVisible = false; Settle();
+        view.IsVisible = true; Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.True(slide.Y > 0.1, $"rise had already finished: {slide.Y}");
+        Assert.True(row.Opacity < 1, $"fade had already finished: {row.Opacity}");
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y); // WPF LiftSessionRow removes the running Y animation first.
+        Assert.True(row.Opacity < 1); // WPF does not cancel the separate opacity animation.
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
