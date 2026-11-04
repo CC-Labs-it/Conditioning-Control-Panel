@@ -293,7 +293,7 @@ internal sealed class KeywordAudioRuntime
                     token.ThrowIfCancellationRequested();
                     // Stricter than WPF: recheck the engine-off audio hold after every repeat gap. It holds only
                     // audio (WPF KeywordTriggerService.cs:1841-1846), so the following visual still fires.
-                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return true; }
+                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopClip(); return true; }
                     _stop?.Invoke();
                     var generation = ++_clipGeneration;
                     var last = i == count - 1;

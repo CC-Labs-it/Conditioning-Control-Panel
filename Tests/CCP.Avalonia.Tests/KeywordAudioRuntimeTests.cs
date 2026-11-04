@@ -311,6 +311,35 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(new[] { "SIT", "SIT" }, shown);
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:1393-1403,1511-1517,1841-1846.
+    public void EngineOffDuringOverlappingRepeatGapsPreservesBothVisuals() => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        s.AwarenessLoopProtectionEnabled = false;
+        var first = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)first.Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 5000;
+        first.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stand", CooldownSeconds = 0,
+            Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = audio.FilePath, PlayCount = 2, DelayBetweenMs = 5000, DuckSystemAudio = false },
+                new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } } });
+        var gaps = new Queue<TaskCompletionSource>();
+        engine.Delay = (_, _) => { var gap = new TaskCompletionSource(); gaps.Enqueue(gap); return gap.Task; };
+        var clock = engine.Now(); engine.Now = () => clock;
+        Type(engine, "sit"); clock = clock.AddSeconds(2); Type(engine, "stand");
+        Assert.Equal(2, gaps.Count);
+        Assert.Equal(2, played.Count(x => x.Path != "stopped"));
+        Assert.Empty(shown);
+        CoreSession.IsEngineRunningProvider = () => false;
+        gaps.Dequeue().SetResult(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "SIT" }, shown);
+        gaps.Dequeue().SetResult(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "SIT", "STAND" }, shown);
+        Assert.Equal(2, played.Count(x => x.Path != "stopped"));
+        Assert.Equal("stopped", played.Last().Path);
+    });
+
     [Fact] // WPF KeywordTriggerService.cs:1511-1517,1859-1865.
     public void OverlappingAudioReplacesClipButBothResponsesFinish() => Run((engine, s, played) =>
     {
