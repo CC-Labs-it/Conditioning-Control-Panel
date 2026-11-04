@@ -108,25 +108,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF MainWindow.DeeperTab.cs:602-608,649-675, used by file-open handoffs.
         internal void OpenMediaRequest(string action, string path)
         {
+            if (action != "play" && action != "edit") return;
+            var player = action == "play";
             try
             {
                 ShowFromTray();
-                if (action == "play") ShowOrActivateDeeperPlayer().OpenLocalMediaFile(path);
-                else if (action == "edit")
+                MediaOpenFault?.Invoke(action);
+                if (player) ShowOrActivateDeeperPlayer().OpenLocalMediaFile(path);
+                else
                 {
                     var type = DeeperPreview.IsLocalVideoFile(path) ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio;
                     var enhancement = new Services.Deeper.EnhancementLibrary().CreateBlank(type, path);
                     OpenDeeperEditor(enhancement, null);
                 }
             }
-            catch (Exception ex) { ShowMediaOpenError(ex); }
+            catch (Exception ex)
+            {
+                // WPF :612-615 / :663-666: which window failed, plus the exception type.
+                Log.Error(ex, player ? "Failed to open Deeper player for {Path}" : "Failed to open Deeper editor for media {Path}", path);
+                _ = MessageDialog.ShowAsync(this,
+                    Loc.Get(player ? "deeper_open_player_failed_title" : "deeper_open_editor_failed_title"),
+                    Loc.GetF(player ? "deeper_open_player_failed_fmt" : "deeper_open_editor_failed_fmt", ex.GetType().Name, ex.Message));
+            }
         }
 
-        internal void ShowMediaOpenError(Exception ex)
-        {
-            Log.Error(ex, "Failed to open media request");
-            _ = MessageDialog.ShowAsync(this, Loc.Get("title_error"), ex.Message);
-        }
+        /// <summary>Test seam: throws inside the dispatch's try, so a test reaches the real catch and dialog.</summary>
+        internal static Action<string>? MediaOpenFault;
 
         /// <summary>WPF BtnDeeperOpenPlayer_Click (MainWindow.DeeperTab.cs:202).</summary>
         internal void BtnDeeperOpenPlayer_Click()
