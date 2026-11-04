@@ -560,6 +560,29 @@ public sealed partial class FriendsDrawer : Border
             buttons.Children.Add(accept);
             buttons.Children.Add(decline);
             buttons.Children.Add(more);
+            // WPF FriendsDrawer.cs:824: reserve room for the widest minute age and its ellipsis.
+            if (agoKey != null)
+            {
+                var any = new Size(double.PositiveInfinity, double.PositiveInfinity);
+                var need = Label(Loc.GetF("friends_notice_minutes", 59) + "…", 11.5, Muted);
+                need.Measure(any);
+                var acceptText = (TextBlock)accept.Content!;
+                var declineText = (TextBlock)decline.Content!;
+                acceptText.Measure(any);
+                declineText.Measure(any);
+                // Two pill borders and padding, their gaps, and the 11px more icon pill.
+                var actionsWidth = acceptText.DesiredSize.Width + declineText.DesiredSize.Width
+                    + 2 * (18 + 2) + 6 + 2 + 11 + 10 + 2;
+                var room = DrawerWidth - BorderThickness.Left - BorderThickness.Right
+                    - 12 - 16 - 16 - 38 - mid.Margin.Left - mid.Margin.Right;
+                if (actionsWidth + need.DesiredSize.Width > room)
+                {
+                    accept.Padding = decline.Padding = new Thickness(5, 3, 5, 3);
+                    accept.InvalidateMeasure();
+                    decline.InvalidateMeasure();
+                    buttons.InvalidateMeasure();
+                }
+            }
         }
         else
         {
