@@ -1,11 +1,13 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Tours;
@@ -126,6 +128,77 @@ public sealed class DeeperGuideEventsTests
         {
             overlay?.Close();
             TutorialHead.ResetForTests();
+            editor.Close();
+            CoreTutorialEvents.LastSavedEnhancementPath = oldPath;
+            Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("DeeperEditorInteractiveHTPart2", "iht", "15", true)]
+    [InlineData("DeeperEditorInteractiveLocalAudioPart2", "iaud", "8", false)]
+    [InlineData("DeeperEditorInteractiveLocalVideoPart2", "ivid", null, true)]
+    public Task RuleFieldsAdvanceGuideThroughSave(string tour, string prefix, string? time, bool shake) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current == null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        TutorialHead.Seed();
+        TutorialHead.ResetForTests();
+        var oldPath = CoreTutorialEvents.LastSavedEnhancementPath;
+        var dir = Directory.CreateTempSubdirectory("ccp-guide-rule-").FullName;
+        var path = Path.Combine(dir, "guide.ccpenh.json");
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = time == "8" ? MediaTypes.Audio : MediaTypes.Video, MediaSource = "*" }, path);
+        TutorialOverlay? overlay = null;
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            TutorialHead.Service.Start(Enum.Parse<TutorialType>(tour));
+            overlay = new TutorialOverlay(editor);
+            overlay.Show();
+            while (TutorialHead.Service.CurrentStep?.Id != prefix + "_addrule")
+            {
+                Assert.True(TutorialHead.Service.IsActive);
+                TutorialHead.Service.Next();
+            }
+            editor.BtnAddRuleHero.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            if (time != null)
+            {
+                Assert.Equal(prefix + "_ruletime", TutorialHead.Service.CurrentStep?.Id);
+                var field = editor.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "TutorialTriggerTimeField");
+                field.Text = time;
+                Dispatcher.UIThread.RunJobs();
+            }
+            else
+            {
+                Assert.Equal(prefix + "_ruletrigger", TutorialHead.Service.CurrentStep?.Id);
+                editor.CmbTriggerType.SelectedItem = editor.CmbTriggerType.Items.OfType<ComboBoxItem>().Single(x => (string?)x.Tag == "attention_lost");
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.Equal(prefix + "_ruleaction", TutorialHead.Service.CurrentStep?.Id);
+            editor.CmbActionType.SelectedItem = editor.CmbActionType.Items.OfType<ComboBoxItem>().Single(x => (string?)x.Tag == (shake ? "screen_shake" : "pause"));
+            Dispatcher.UIThread.RunJobs();
+            if (shake)
+            {
+                Assert.Equal(prefix + "_actionintensity", TutorialHead.Service.CurrentStep?.Id);
+                var field = editor.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "TutorialActionIntensityField");
+                field.Text = "0.7";
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.Equal(prefix + "_save", TutorialHead.Service.CurrentStep?.Id);
+            editor.BtnEditorSave.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(prefix + "_done", TutorialHead.Service.CurrentStep?.Id);
+            Assert.True(File.Exists(path));
+        }
+        finally
+        {
+            overlay?.Close();
+            TutorialHead.ResetForTests();
+            typeof(DeeperEditorWindow).GetField("_isDirty", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(editor, false);
             editor.Close();
             CoreTutorialEvents.LastSavedEnhancementPath = oldPath;
             Directory.Delete(dir, true);
