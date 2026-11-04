@@ -386,6 +386,7 @@ jobs:
           $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
           & "$dir/Install/helpers/devcon.exe" install "$dir/Install/driver/Scream.inf" '*Scream'
           if ($LASTEXITCODE -ne 0) { throw "Scream installation failed: $LASTEXITCODE" }
+          'CCP_TEST_AUDIO_FIXTURE=1' >> $env:GITHUB_ENV
       - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
       - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
         shell: bash

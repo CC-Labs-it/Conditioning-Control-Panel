@@ -6,6 +6,7 @@ marker=$(mktemp)
 trap 'rm -f "$marker"' EXIT
 bash .github/scripts/with-test-pulse.sh bash -c '
   set -euo pipefail
+  test "$CCP_TEST_AUDIO_FIXTURE" = 1
   printf "%s" "$PULSE_SERVER" > "$1"
   pactl list short sinks | grep -q ccp_default
   pactl list short sinks | grep -q ccp_headphones

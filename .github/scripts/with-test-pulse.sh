@@ -24,4 +24,5 @@ for _ in {1..100}; do
   sleep .1
 done
 pactl set-default-sink ccp_default
+export CCP_TEST_AUDIO_FIXTURE=1
 "$@"

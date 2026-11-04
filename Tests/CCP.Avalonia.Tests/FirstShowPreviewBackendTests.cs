@@ -119,9 +119,10 @@ public sealed class FirstShowPreviewBackendTests
     [Fact]
     public void NativeCueSelectsTheSavedDeviceBeforePlayingAndFallsBackForStaleIds()
     {
+        if (Environment.GetEnvironmentVariable("CCP_TEST_AUDIO_FIXTURE") != "1") Assert.Skip("Native routing requires an isolated audio fixture");
         RequireNativeVlc();
         var path = Path.Combine(Path.GetTempPath(), "ccp-cue-route-" + Guid.NewGuid().ToString("N") + ".wav");
-        WriteConstantWav(path);
+        WriteConstantWav(path, 0);
         var oldSettings = CoreSettings.ServiceProvider;
         try
         {
@@ -185,13 +186,13 @@ public sealed class FirstShowPreviewBackendTests
         NativeLibrary.Free(handle);
     }
 
-    private static void WriteConstantWav(string path)
+    private static void WriteConstantWav(string path, short amplitude = 16000)
     {
         const int rate = 44100, samples = rate;
         using var w = new BinaryWriter(File.Create(path));
         w.Write("RIFF"u8.ToArray()); w.Write(36 + samples * 2); w.Write("WAVE"u8.ToArray());
         w.Write("fmt "u8.ToArray()); w.Write(16); w.Write((short)1); w.Write((short)1); w.Write(rate);
         w.Write(rate * 2); w.Write((short)2); w.Write((short)16); w.Write("data"u8.ToArray()); w.Write(samples * 2);
-        for (int i = 0; i < samples; i++) w.Write((short)16000);
+        for (int i = 0; i < samples; i++) w.Write(amplitude);
     }
 }
