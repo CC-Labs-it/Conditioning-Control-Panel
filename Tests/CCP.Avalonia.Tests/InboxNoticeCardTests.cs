@@ -30,7 +30,9 @@ public sealed class InboxNoticeCardTests
                 .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        body(); // assembly-wide isolation closes head windows and restores settings and statics
+        StartupLadder.ResetForTests();
+        try { body(); }
+        finally { InboxNoticeCard.CloseForPanic(); StartupLadder.ResetForTests(); }
     });
     private static Button FindButton(string name) => InboxNoticeCard.Current!.GetVisualDescendants()
         .OfType<Button>().Single(b => b.Name == name);
@@ -41,6 +43,55 @@ public sealed class InboxNoticeCardTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
             Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
     }
+
+    [Fact]
+    public void HeartbeatRiseAppliesAndPostsRepeatNotice() => Run(() =>
+    {
+        var s = CoreSettings.Current;
+        string? token = "old-token";
+        CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? token : null;
+        CoreSecrets.StoreProvider = (key, value) => { if (key == CoreSecrets.AuthToken) token = value; };
+        s.UnifiedId = Guid.NewGuid().ToString();
+        s.OfflineMode = false;
+        s.PatreonTier = 0;
+        s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
+        s.LastKnownEffectiveTier = 0;
+        s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+        Assert.True(AccountSeed.Seed());
+        CoreAccount.UnifiedUserId = s.UnifiedId;
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        var notifications = 0;
+        var onUi = false;
+        AccountSeed.Patreon!.TierChanged += (_, _) =>
+        {
+            notifications++;
+            onUi = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess();
+        };
+        try
+        {
+            shell.Show();
+            void Heartbeat() => Assert.True(new SyncPush(() => null, () => false, new TierReply("{\"effective_tier\":2}", HttpStatusCode.OK))
+                { TierReceived = AccountSeed.OfferHeartbeatTier }.HeartbeatAsync().GetAwaiter().GetResult());
+            Heartbeat();
+            token = "new-token"; // the queued response belongs to the previous session
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, s.PatreonTier);
+            Assert.Equal(0, notifications);
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
+            Heartbeat();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(onUi);
+            Assert.Equal(1, notifications);
+            Assert.Equal(2, s.PatreonTier);
+            Assert.True(CoreAccount.HasLabAccess);
+            Assert.True(s.PatreonLabValidUntil > DateTime.UtcNow);
+            Assert.Equal(2, s.LastKnownEffectiveTier);
+            Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
+        }
+        finally { shell.Close(); }
+    });
 
     [Theory]
     [InlineData(false)]
@@ -202,6 +253,10 @@ public sealed class InboxNoticeCardTests
     [Fact]
     public void RepeatTierRiseOpensNoticeFromRealInbox() => Run(() =>
     {
+        var oldPremium = CoreAccount.HasPremiumAccessProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
+        var saved = CoreSettings.Current.LastKnownEffectiveTier;
+        var seen = CoreSettings.Current.SeenFeatureIntros.ToArray();
         MainShellWindow? shell = null;
         Window? host = null;
         try
@@ -233,13 +288,22 @@ public sealed class InboxNoticeCardTests
         finally
         {
             host?.Close(); shell?.Close();
+            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
+            CoreSettings.Current.LastKnownEffectiveTier = saved;
+            CoreSettings.Current.SeenFeatureIntros.Clear(); CoreSettings.Current.SeenFeatureIntros.AddRange(seen);
         }
     });
 
     [Fact]
     public void InviteWeekIsNotARiseOnFocus() => Run(() =>
     {
+        var oldPremium = CoreAccount.HasPremiumAccessProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
         var s = CoreSettings.Current;
+        var saved = s.LastKnownEffectiveTier;
+        var grant = s.InviteGrantUntil;
+        var cached = s.PatreonPremiumValidUntil;
+        var seen = s.SeenFeatureIntros.ToArray();
         MainShellWindow? shell = null;
         try
         {
@@ -259,12 +323,16 @@ public sealed class InboxNoticeCardTests
         finally
         {
             shell?.Close();
+            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
+            s.LastKnownEffectiveTier = saved; s.InviteGrantUntil = grant; s.PatreonPremiumValidUntil = cached;
+            s.SeenFeatureIntros.Clear(); s.SeenFeatureIntros.AddRange(seen);
         }
     });
 
     [Fact]
     public void FirstTierBaselineAndRiseSurviveReloadWithoutClosingTheShell() => Run(() =>
     {
+        var (oldPremium, oldLab, oldSettings) = (CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider, CoreSettings.ServiceProvider);
         MainShellWindow? shell = null;
         Window? other = null;
         try
@@ -313,6 +381,8 @@ public sealed class InboxNoticeCardTests
         {
             other?.Close(); shell?.Close();
             SettingsService.DisarmAllPendingSaves();
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
         }
     });
 }

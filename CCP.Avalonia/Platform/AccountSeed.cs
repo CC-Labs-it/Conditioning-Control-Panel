@@ -170,6 +170,27 @@ internal static class AccountSeed
         (_tierAnsweredAccount, _tierAnsweredToken) = (account, token);
     }
 
+    // WPF EntitlementTierSync.cs:43-53,60-94: apply a live rise on the UI thread.
+    internal static void OfferHeartbeatTier(int tier, string account, string? token)
+    {
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (s.OfflineMode || tier < 0 || tier > EntitlementTierRule.MaxTier
+                    || string.IsNullOrEmpty(account) || string.IsNullOrEmpty(token)
+                    || account != s.UnifiedId || token != s.AuthToken) return;
+                NoteTierReading(tier, account, token);
+                if (!EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow)) return;
+                CoreSettings.Save();
+                Patreon?.NotifyEntitlementRaised(tier >= 2
+                    ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Heartbeat tier apply failed"); }
+        });
+    }
+
     private static async Task<bool> LoadProfileCoreAsync(V2AuthService v2)
     {
         var s = CoreSettings.Current;
