@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static IFrameSource? _source;
         private static TimeSpan? _last;
         private static Point _origin;
-        private static Point _canvasOffset;
+        private static PixelPoint _stageOrigin;
         private static readonly Dictionary<ChaosDvdLogo, OutlinedTextBlock> Labels = new();
         private static readonly Action<TimeSpan> OnFrameAction = OnFrame;
 
@@ -102,7 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var stage = primary.Bounds;
             if (CoreSettings.Current.DualMonitorEnabled)
                 foreach (var screen in screens) stage = stage.Union(screen.Bounds);
-            _canvasOffset = new Point((wa.X - stage.X) / k, (wa.Y - stage.Y) / k);
+            _stageOrigin = stage.Position;
             _canvas = new Canvas { IsHitTestVisible = false };
             if (!_shared) return true;
             var w = new Window
@@ -154,10 +154,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var t = Label(l.Text, ChaosDvdFlock.BaseFont * l.FontScale);
             Recolor(t, l);
             t.Opacity = l.Opacity;
-            Canvas.SetLeft(t, l.X + _canvasOffset.X);
-            Canvas.SetTop(t, l.Y + _canvasOffset.Y);
             bool clickable = SpankerRedirect(); // WPF samples the gate per launch, not per click.
-            if (_shared && !clickable) _canvas.Children.Add(t);
+            if (_shared && !clickable)
+            {
+                PlaceHostedLabel(t, l);
+                _canvas.Children.Add(t);
+            }
             else
             {
                 var panel = new Border { Child = t, Background = clickable
@@ -189,6 +191,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 w.Show();
             }
             Labels[l] = t;
+        }
+
+        // WPF ChaosDvdHostOverlay.Place: global logo coordinates become host-local coordinates.
+        // Flock positions and sizes use primary-screen DIPs; the host may use a different scale.
+        private static void PlaceHostedLabel(OutlinedTextBlock t, ChaosDvdLogo l)
+        {
+            double hostScale = _window?.DesktopScaling is > 0 and var s ? s : 1;
+            double ratio = _scaling / hostScale;
+            Canvas.SetLeft(t, ((_origin.X + l.X) * _scaling - _stageOrigin.X) / hostScale);
+            Canvas.SetTop(t, ((_origin.Y + l.Y) * _scaling - _stageOrigin.Y) / hostScale);
+            if (t.RenderTransform is not ScaleTransform transform)
+            {
+                t.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
+                t.RenderTransform = transform = new ScaleTransform();
+            }
+            transform.ScaleX = ratio;
+            transform.ScaleY = ratio;
         }
 
         private static void Recolor(OutlinedTextBlock t, ChaosDvdLogo l)
@@ -224,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (Windows.TryGetValue(l, out var w))
                     w.Position = new PixelPoint((int)Math.Round((_origin.X + l.X) * _scaling),
                         (int)Math.Round((_origin.Y + l.Y) * _scaling));
-                else { Canvas.SetLeft(t, l.X + _canvasOffset.X); Canvas.SetTop(t, l.Y + _canvasOffset.Y); }
+                else PlaceHostedLabel(t, l);
                 t.Opacity = l.Opacity;
                 // WPF ChaosDvdOverlay.cs:388-390: collide after moving, never while retiring.
                 if (l.FadeOutSec < 0 && !f.Spawned.Contains(l))
