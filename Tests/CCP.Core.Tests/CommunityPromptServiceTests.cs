@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Companion;
 using Newtonsoft.Json;
 using Xunit;
 
@@ -84,6 +85,68 @@ public sealed class CommunityPromptServiceTests : IDisposable
         Assert.True(service.ActivatePrompt(prompt.Id)); Assert.Equal(prompt.Id, _settings.Current.ActiveCommunityPromptId);
         Assert.True(_settings.Current.CompanionPrompt.UseCustomPrompt); Assert.Equal("fixture", _settings.Current.CompanionPrompt.Personality);
     }
+    [Fact]
+    public void SwitchingCompanionsAppliesAssignedPromptBeforeTheSwitchEvent()
+    {
+        var settings = _settings.Current;
+        var id = "switch-" + Guid.NewGuid().ToString("N");
+        var folder = Path.Combine(CorePaths.UserData, "community-prompts");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, id + ".json");
+        File.WriteAllText(path, JsonConvert.SerializeObject(new CommunityPrompt
+        {
+            Id = id, Name = "Switch fixture", PromptSettings = new() { Personality = "switch fixture" }
+        }));
+        settings.ActiveCompanionId = (int)CompanionId.OGBambiSprite;
+        settings.SetCompanionPromptId((int)CompanionId.BrainParasite, id);
+        string? activeAtEvent = null;
+        Action<CompanionId> onSwitch = _ => activeAtEvent = settings.ActiveCommunityPromptId;
+        CompanionCore.Switched += onSwitch;
+        try
+        {
+            CompanionCore.SwitchCompanion(CompanionId.BrainParasite);
+            Assert.Equal(id, settings.ActiveCommunityPromptId);
+            Assert.Equal(id, activeAtEvent);
+            Assert.Equal("switch fixture", settings.CompanionPrompt.Personality);
+            settings.CompanionPrompt.Personality = "edited";
+            CompanionCore.SwitchCompanion(CompanionId.BrainParasite);
+            Assert.Equal("edited", settings.CompanionPrompt.Personality); // same companion is a no-op
+            CompanionCore.SwitchCompanion(CompanionId.OGBambiSprite);
+            Assert.Equal(id, settings.ActiveCommunityPromptId); // no assignment leaves prompt active
+            Assert.Equal("edited", settings.CompanionPrompt.Personality);
+        }
+        finally
+        {
+            CompanionCore.Switched -= onSwitch;
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void SwitchingCompanionsRespectsTheExistingExplicitContentGate()
+    {
+        var settings = _settings.Current;
+        var id = "switch-gated-" + Guid.NewGuid().ToString("N");
+        var folder = Path.Combine(CorePaths.UserData, "community-prompts");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, id + ".json");
+        File.WriteAllText(path, JsonConvert.SerializeObject(new CommunityPrompt
+        {
+            Id = id, Name = "Gated fixture", PromptSettings = new() { Personality = "fixture", SlutModePersonality = "fixture explicit persona" }
+        }));
+        settings.ActiveCompanionId = (int)CompanionId.OGBambiSprite;
+        settings.SlutModeEnabled = true;
+        settings.CompanionPrompt.ExplicitContentAcknowledged = false;
+        settings.SetCompanionPromptId((int)CompanionId.BrainParasite, id);
+        try
+        {
+            CompanionCore.SwitchCompanion(CompanionId.BrainParasite);
+            Assert.Null(settings.ActiveCommunityPromptId);
+            Assert.Equal((int)CompanionId.BrainParasite, settings.ActiveCompanionId);
+        }
+        finally { File.Delete(path); }
+    }
+
     [Theory]
     [InlineData("../outside")]
     [InlineData("..\\outside")]
