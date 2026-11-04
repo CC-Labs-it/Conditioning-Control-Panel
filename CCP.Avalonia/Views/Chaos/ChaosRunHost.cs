@@ -218,6 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.Score += 140 * _state.TotalMult;
                 _state.Combo++;
                 _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
+                ChaosLessons.Tick("freeze_trigger");   // WPF OnFreezeCaught :2389
                 ActivateFreeze();
                 return;
             }

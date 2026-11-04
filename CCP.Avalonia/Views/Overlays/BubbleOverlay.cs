@@ -361,7 +361,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
-            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
+            if (b.Spec.IsFreeze) PlayChaosCue("freeze_catch", 0.6f);   // WPF BubbleService.cs:1611
+            else PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }

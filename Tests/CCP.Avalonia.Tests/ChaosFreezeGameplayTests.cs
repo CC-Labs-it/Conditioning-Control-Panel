@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -155,6 +157,65 @@ public sealed class ChaosFreezeGameplayTests
         Assert.Null(ChaosEffectBannerOverlay.Active);
         Assert.False(BubbleOverlay.Field.FreezeChaos);
     });
+
+    [Fact]
+    public Task Only_pickup_catches_advance_the_freeze_lesson() => WithRun(state =>
+    {
+        var meta = ChaosMeta.State;
+        bool complete = meta.LessonsComplete.Contains("freeze_trigger");
+        bool hadProgress = meta.LessonProgress.TryGetValue("freeze_trigger", out long progress);
+        try
+        {
+            meta.LessonsComplete.Remove("freeze_trigger");
+            meta.LessonProgress["freeze_trigger"] = 0;
+            Fire();
+            Assert.Equal(0, ChaosLessons.Progress("freeze_trigger"));
+            BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                { VariantId = "flash", SizePx = 200, Payload = new FlashPayload() }));
+            Assert.Equal(0, ChaosLessons.Progress("freeze_trigger"));
+            BubbleOverlay.PopChaos(FreezePickup());
+            Assert.Equal(1, ChaosLessons.Progress("freeze_trigger"));
+            BubbleOverlay.PopChaos(FreezePickup());
+            Assert.Equal(2, ChaosLessons.Progress("freeze_trigger"));
+        }
+        finally
+        {
+            if (complete) meta.LessonsComplete.Add("freeze_trigger");
+            else meta.LessonsComplete.Remove("freeze_trigger");
+            if (hadProgress) meta.LessonProgress["freeze_trigger"] = progress;
+            else meta.LessonProgress.Remove("freeze_trigger");
+        }
+    });
+
+    [Fact]
+    public Task Pickup_plays_freeze_catch_while_a_treat_uses_the_normal_pop() => WithRun(state =>
+    {
+        var oldPlay = CoreAudio.PlayOneShotProvider;
+        var settings = CoreSettings.Current;
+        int master = settings.MasterVolume, bubbles = settings.BubblesVolume;
+        var played = new List<(string Path, float Volume, string Tag)>();
+        try
+        {
+            settings.MasterVolume = settings.BubblesVolume = 100;
+            CoreAudio.PlayOneShotProvider = (path, volume, tag, _, _) => played.Add((path, volume, tag));
+            BubbleOverlay.PopChaos(FreezePickup());
+            Assert.Contains(played, p => Path.GetFileName(p.Path) == "freeze_catch.mp3"
+                && p.Tag == "chaos-cue" && Math.Abs(p.Volume - 0.6f) < 0.001f);
+            played.Clear();
+            BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                { VariantId = "flash", SizePx = 200, Payload = new FlashPayload() }));
+            Assert.Contains(played, p => p.Tag == "bubble-pop" && Math.Abs(p.Volume - 1f) < 0.001f);
+        }
+        finally
+        {
+            CoreAudio.PlayOneShotProvider = oldPlay;
+            settings.MasterVolume = master;
+            settings.BubblesVolume = bubbles;
+        }
+    });
+
+    private static AmbientBubble FreezePickup() => BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(
+        ChaosBubbleVariants.All.Single(v => v.Id == "bambifreeze"), 0));
 
     private static AmbientBubble Live() => BubbleOverlay.SpawnChaos(new EffectBubbleSpec
         { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
