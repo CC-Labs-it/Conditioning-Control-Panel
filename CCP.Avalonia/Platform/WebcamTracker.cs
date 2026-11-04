@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using OpenCvSharp;
@@ -50,27 +52,84 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
     }
 
-    /// <summary>V4L2 capture through OpenCV. <c>CCP_WEBCAM_DEVICE</c> (an index) overrides the saved camera
-    /// index; live checks point it at one with no /dev/videoN so no real camera is opened.</summary>
+    /// <summary>Capture with WPF's default-format then MJPG probe (WebcamTrackingService.cs:1269-1326,
+    /// 1357-1465). Linux uses V4L2 for both attempts; Windows uses DSHOW then MSMF.</summary>
     internal sealed class OpenCvFrameSource : IFrameSource
     {
-        private VideoCapture? _cap;
+        private IFrameSource? _capture;
+        private readonly Func<int, VideoCaptureAPIs, bool, IFrameSource> _attempt;
+        private readonly int _warmupMs, _intervalMs;
+        internal Func<bool> Cancelled = () => false;
+        internal Action<int, int>? Retrying;
+        internal bool AnyOpened { get; private set; }
+
+        internal OpenCvFrameSource(Func<int, VideoCaptureAPIs, bool, IFrameSource>? attempt = null,
+            int warmupMs = 3000, int intervalMs = 200)
+        {
+            _attempt = attempt ?? ((index, api, mjpg) => new CaptureAttempt(index, api, mjpg));
+            _warmupMs = warmupMs;
+            _intervalMs = intervalMs;
+        }
 
         public bool Open()
         {
             int index = int.TryParse(Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"), out var i)
-                ? Math.Max(0, i) : ResolveSavedIndex();
-            _cap = new VideoCapture(index, OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY);
-            if (!_cap.IsOpened()) return false;
-            // WPF's default mode (WebcamTrackingService CaptureWidth/Height/TargetFps).
-            _cap.Set(VideoCaptureProperties.FrameWidth, 640);
-            _cap.Set(VideoCaptureProperties.FrameHeight, 480);
-            _cap.Set(VideoCaptureProperties.Fps, 30);
-            return true;
+                ? Math.Max(0, i) : ResolveSavedIndex(); // WPF WebcamTrackingService.cs:1236-1237,1296
+            var apis = OperatingSystem.IsWindows()
+                ? new[] { VideoCaptureAPIs.DSHOW, VideoCaptureAPIs.MSMF }
+                : new[] { OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY };
+            int attempt = 0, total = apis.Length * 2;
+            foreach (var api in apis)
+                foreach (bool mjpg in new[] { false, true })
+                {
+                    if (Cancelled()) return false;
+                    if (++attempt > 1) Retrying?.Invoke(attempt, total);
+                    IFrameSource? source = null;
+                    try
+                    {
+                        source = _attempt(index, api, mjpg);
+                        if (!source.Open()) continue;
+                        if (Cancelled()) return false;
+                        AnyOpened = true;
+                        if (Probe(source)) { _capture = source; source = null; return true; }
+                    }
+                    catch (Exception ex) { Log.Warning(ex, "Webcam: capture attempt {Api} MJPG={Mjpg} failed", api, mjpg); }
+                    finally { source?.Dispose(); }
+                }
+            return false;
         }
 
-        /// <summary>The saved /dev/videoN when it is listed, else the first listed camera - the one the
-        /// Settings picker shows in that case (V4L2 numbers have gaps, so "0" may not exist).</summary>
+        // A dark but changing feed is valid even when its spatial contrast is low.
+        private bool Probe(IFrameSource source)
+        {
+            using var frame = new Mat();
+            using var previous = new Mat();
+            using var diff = new Mat();
+            var timer = Stopwatch.StartNew();
+            while (timer.ElapsedMilliseconds < _warmupMs && !Cancelled())
+            {
+                bool read = source.Read(frame);
+                if (Cancelled()) return false;
+                if (read && !frame.Empty())
+                {
+                    Cv2.MeanStdDev(frame, out _, out var std);
+                    double spatial = Math.Max(std.Val0, Math.Max(std.Val1, std.Val2));
+                    double temporal = 0;
+                    if (!previous.Empty() && previous.Size() == frame.Size() && previous.Type() == frame.Type())
+                    {
+                        Cv2.Absdiff(frame, previous, diff);
+                        var mean = Cv2.Mean(diff);
+                        temporal = Math.Max(mean.Val0, Math.Max(mean.Val1, mean.Val2));
+                    }
+                    if (spatial >= 3.0 || temporal >= 2.0) return true;
+                    frame.CopyTo(previous);
+                }
+                if (_intervalMs > 0) Thread.Sleep(_intervalMs);
+            }
+            return false;
+        }
+
+        /// <summary>The saved /dev/videoN when listed, else the first listed camera.</summary>
         internal static int ResolveSavedIndex()
         {
             int saved = CoreSettings.Current.WebcamDeviceIndex;
@@ -79,9 +138,26 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return cams.Count > 0 ? cams[0].Index : Math.Max(0, saved);
         }
 
-        public bool Read(Mat bgr) => _cap != null && _cap.Read(bgr) && !bgr.Empty();
+        public bool Read(Mat bgr) => _capture?.Read(bgr) == true;
+        public void Dispose() { _capture?.Dispose(); _capture = null; }
 
-        public void Dispose() { _cap?.Release(); _cap?.Dispose(); _cap = null; }
+        private sealed class CaptureAttempt(int index, VideoCaptureAPIs api, bool mjpg) : IFrameSource
+        {
+            private VideoCapture? _cap;
+            public bool Open()
+            {
+                _cap = new VideoCapture(index, api);
+                if (!_cap.IsOpened()) return false;
+                if (mjpg) _cap.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M', 'J', 'P', 'G'));
+                _cap.Set(VideoCaptureProperties.FrameWidth, 640);
+                _cap.Set(VideoCaptureProperties.FrameHeight, 480);
+                _cap.Set(VideoCaptureProperties.Fps, 30);
+                _cap.Set(VideoCaptureProperties.BufferSize, 1);
+                return true;
+            }
+            public bool Read(Mat bgr) => _cap != null && _cap.Read(bgr) && !bgr.Empty();
+            public void Dispose() { _cap?.Release(); _cap?.Dispose(); _cap = null; }
+        }
     }
 
     /// <summary>
@@ -190,8 +266,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private Run? _run;
         private Thread? _wedged;
-        /// <summary>A loop a timed-out Stop abandoned still holds the camera; Start refuses until it exits.</summary>
-        internal bool IsClosing => _wedged is { IsAlive: true };
+        private volatile Task? _openCleanup;
+        internal TimeSpan CameraOpenTimeout = TimeSpan.FromSeconds(90); // WPF WebcamTrackingService.cs:520,1188
+        /// <summary>An abandoned capture or open still owns the camera until its cleanup finishes.</summary>
+        internal bool IsClosing => _wedged is { IsAlive: true } || _openCleanup is { IsCompleted: false };
         private readonly BlinkDetector _blink = new();
         private readonly MouthOpenDetector _mouth = new();
         // WPF WebcamTrackingService.cs:265-290,2087-2150; capture thread only.
@@ -272,11 +350,41 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Progress(0.55, "Opening camera…");
                 run.Source = SourceFactory();
+                int abandoned = 0; // separate from Stop: timeout must not set StartWasStopped
+                if (run.Source is OpenCvFrameSource capture)
+                {
+                    capture.Cancelled = () => gen != Volatile.Read(ref _gen) || Volatile.Read(ref abandoned) != 0;
+                    capture.Retrying = (attempt, total) => Dispatcher.UIThread.Post(() =>
+                    {
+                        if (!capture.Cancelled()) OnStartupProgress?.Invoke(
+                            0.55 + 0.37 * (attempt - 1) / total, Loc.GetF("webcam_capture_retry_fmt", attempt, total));
+                    });
+                }
                 bool opened;
                 try
                 {
-                    opened = run.Source.Open();
-                    if (!opened) failureState = WebcamTrackingState.CameraDenied; // WPF Open returned false on every backend
+                    // WPF :1164-1205: native Open/Read can wedge. The worker owns its source
+                    // after timeout and closes it only after the driver returns, never during Read.
+                    var source = run.Source;
+                    var opening = Task.Run(source.Open);
+                    if (Task.WaitAny(new Task[] { opening }, CameraOpenTimeout) < 0)
+                    {
+                        Interlocked.Exchange(ref abandoned, 1); // WPF invalidates the open generation on timeout
+                        run.Source = null;
+                        _openCleanup = opening.ContinueWith(t =>
+                        {
+                            _ = t.Exception; // observe a late fault
+                            try { source.Dispose(); } catch (Exception ex) { Log.Warning(ex, "[Webcam] late open cleanup failed"); }
+                        }, TaskScheduler.Default);
+                        failureState = WebcamTrackingState.CameraInUse;
+                        opened = false;
+                    }
+                    else
+                    {
+                        opened = opening.GetAwaiter().GetResult();
+                        if (!opened) failureState = source is OpenCvFrameSource { AnyOpened: true }
+                            ? WebcamTrackingState.CameraInUse : WebcamTrackingState.CameraDenied;
+                    }
                 }
                 catch (UnauthorizedAccessException ex)
                 {
@@ -287,7 +395,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
                 if (!opened)
                 {
-                    LastError = "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
+                    if (gen != Volatile.Read(ref _gen)) StartWasStopped = true;
+                    LastError = failureState == WebcamTrackingState.CameraInUse
+                        ? Loc.Get("webcam_camera_unavailable_detail")
+                        : "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
                     run.Release();
                     return false;
                 }
@@ -558,7 +669,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private void ProcessTongueLandmarks(Mat bgr, float[][] landmarks, DateTime now, Run run)
         {
             if (ProcessTongueFrame(bgr, landmarks, _mouth.IsOpen, now))
-                Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_run, run)) OnTongueOut?.Invoke(); });
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!ReferenceEquals(_run, run)) return;
+                    BarkHead.Engine?.Raise("TongueOut"); // WPF BarkService.cs:662-663
+                    OnTongueOut?.Invoke();
+                });
         }
 
         // WPF WebcamTrackingService.cs:2153-2222: only pixels inside the clipped inner-lip polygon;

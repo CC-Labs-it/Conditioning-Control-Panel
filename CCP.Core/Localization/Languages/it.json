@@ -8708,6 +8708,8 @@
   "online_official_nice": "Bello",
   "online_official_stamped_line": "I media online arrivano da Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\".",
   "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati.",
+  "webcam_camera_unavailable_detail": "Fotocamera non disponibile. Potrebbe essere usata da un’altra app o bloccata dalle impostazioni di privacy.",
+  "webcam_capture_retry_fmt": "La fotocamera risponde lentamente. Provo un altro metodo ({0}/{1}).",
   "webcam_debug_tongue_out_fmt": "Lingua fuori #{0}",
   "webcam_debug_mouth_open_fmt": "Bocca aperta #{0}"
 }

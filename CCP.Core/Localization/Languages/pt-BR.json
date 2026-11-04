@@ -7960,6 +7960,8 @@
   "online_official_nice": "Legal",
   "online_official_stamped_line": "A mídia online vem do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\".",
   "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada.",
+  "webcam_camera_unavailable_detail": "Câmera indisponível. Outro aplicativo pode estar usando a câmera ou as configurações de privacidade podem estar bloqueando o acesso.",
+  "webcam_capture_retry_fmt": "A câmera está demorando para responder. Tentando outro método ({0}/{1}).",
   "webcam_debug_tongue_out_fmt": "Língua para fora #{0}",
   "webcam_debug_mouth_open_fmt": "Boca aberta #{0}"
 }
