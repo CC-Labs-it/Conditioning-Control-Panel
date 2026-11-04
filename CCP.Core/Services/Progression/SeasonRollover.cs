@@ -5,7 +5,7 @@ using ConditioningControlPanel.Models;
 namespace ConditioningControlPanel.Services;
 
 /// <summary>Captures the completed local bucket before advancing to a confirmed server season.</summary>
-public static class SeasonRecapService
+public static class SeasonRollover
 {
     public static SeasonRecapSnapshot? CaptureAndRollover(AppSettings s, string? serverSeason,
         Func<SeasonRecapSnapshot, bool>? save = null)
