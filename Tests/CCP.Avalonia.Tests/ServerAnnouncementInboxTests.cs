@@ -175,7 +175,9 @@ public sealed class ServerAnnouncementInboxTests
         var clock = Assert.IsType<StartupLadder.TestClock>(StartupLadder.Time);
         var shell = new MainShellWindow();
         shell.Show();
+        Assert.Single(clock.Timers);
         shell.Close();
+        Assert.Empty(clock.Timers);
         clock.Advance(TimeSpan.FromSeconds(7));
         Dispatcher.UIThread.RunJobs();
         await shell.CheckServerAnnouncementAsync();
