@@ -1,12 +1,14 @@
 /* host/bridge.js - the page side of host protocol v2 (plan 3.4).
  *
- * Hosted (WebView2, window.chrome.webview): the host queues everything until the page
+ * Hosted (WebView2 or the Avalonia string carrier): the host queues everything until the page
  * says ready, and the page buffers any message that lands before its handler, so neither
  * side races the other's boot. The bridge answers ping with pong and sends heartbeat
  * every 2 s itself. Unhosted (a plain browser): init resolves at once with the browser
  * defaults (?gentle=1, ?renderer=webgl2|webgpu, coarse pointer = touch) so the page runs
  * standalone. Escape never sends exit: it only pauses (host/hostEscape.js).
  */
+
+import { carrier } from '../../shared/carrier.js';
 
 export const PROTOCOL = 2;
 const HEARTBEAT_MS = 2000;
@@ -110,7 +112,7 @@ export function mergeInit(base, m = {}) {
 }
 
 export function createBridge({ win = globalThis.window } = {}) {
-  const webview = win?.chrome?.webview || null;
+  const webview = carrier(win);
   const handlers = new Map();   // type -> Set(fn)
   const early = [];             // messages that came before any handler of their type
   const base = defaultInit({

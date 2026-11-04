@@ -219,6 +219,56 @@ public sealed partial class GameWindowTests
         finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
     });
 
+    // The Node fixture executes the real page bridge, while the host half is the headless GameWindow.
+    [Fact]
+    public void Glassroad_WebKitPageExchangesInitReadyAndHeartbeatWithHost() => RunGlassroad(null, (_, _, _) =>
+    {
+        var w = GameWindow.Launch("race")!;
+        var start = new System.Diagnostics.ProcessStartInfo("node")
+        {
+            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.ArgumentList.Add(GlassroadCarrierFixture());
+        using var page = System.Diagnostics.Process.Start(start)!;
+        page.StandardInput.AutoFlush = true;
+        JObject Next()
+        {
+            var line = page.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(15)).GetAwaiter().GetResult();
+            Assert.True(line != null, line == null ? page.StandardError.ReadToEnd() : "");
+            return JObject.Parse(line!);
+        }
+        try
+        {
+            var boot = Next();
+            Assert.Equal("bridge", (string?)boot["event"]);
+            Assert.True((bool)boot["hosted"]!);
+            int hostInit = 0;
+            w.Posted += json => { hostInit++; page.StandardInput.WriteLine(json); };
+            w.Web.OnNavigationCompleted(w.PageUrl);
+            var received = Next();
+            Assert.Equal("init", (string?)received["event"]);
+            Assert.Equal("desktop", (string?)received["init"]!["caps"]!["platform"]);
+            Assert.Equal("discord:12", (string?)received["init"]!["identity"]!["unifiedId"]);
+            var ready = Next();
+            Assert.Equal("ready", (string?)JObject.Parse((string)ready["json"]!)["type"]);
+            w.Web.OnWebMessage((string)ready["json"]!);
+            Assert.True(w.IsReady);
+            Assert.Equal(2, hostInit);
+            Assert.Equal("second-init", (string?)Next()["event"]);
+            page.StandardInput.WriteLine("tick");
+            var beat = Next();
+            Assert.Equal("heartbeat", (string?)JObject.Parse((string)beat["json"]!)["type"]);
+            w.Web.OnWebMessage((string)beat["json"]!);
+            Assert.True(w.IsReady);
+        }
+        finally { if (!page.HasExited) page.Kill(entireProcessTree: true); }
+    });
+
+    private static string GlassroadCarrierFixture([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+        System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(here)!, "..", "..",
+            "Assets", "web", "glassroad", "tests", "avalonia-carrier-fixture.mjs"));
+
     /// <summary>Init goes out at load, on the first message and at ready; the relay signs as the host's player, sends
     /// only /v2/race/ (judged signed), never the room-signed result; exit and menu-back close; a silent page is pinged
     /// then closed.</summary>
