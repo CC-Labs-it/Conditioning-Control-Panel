@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: pink filter, spiral, opacity, HypnoTube, autonomy, mind wipe, Melt (start/stop_brain_drain),
+    /// ponytail: pink filter, spiral, opacity, HypnoTube, mind wipe, Melt (start/stop_brain_drain),
     /// wallpaper and the session verbs have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
@@ -41,6 +41,10 @@ namespace ConditioningControlPanel.Services
         /// <summary>The remote haptic player (WPF RemoteControlService.RemoteHaptics). Easy is not on this head
         /// (no HUD), so the scale stays 1.</summary>
         internal static Remote.CoreRemoteHapticDriver RemoteHaptics = new(() => 1.0);   // tests swap in a stepped clock
+
+        // The head owns the scheduler and cancels remote-started work on session teardown.
+        public static Func<bool, bool>? AutonomyCommand;
+        public static Action? StopRemoteAutonomy;
 
         private static int _panicGeneration;
         /// <summary>Moves on every panic: a command fetched before it never runs after it (RemoteRelay).</summary>
@@ -85,6 +89,9 @@ namespace ConditioningControlPanel.Services
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
                 case "start_lock_card": s.LockCardEnabled = true; LockCardScheduler.Instance.Start(); return null;
                 case "stop_lock_card": LockCardScheduler.Instance.Stop(); return null;
+                case "start_autonomy":
+                case "stop_autonomy":
+                    return AutonomyCommand?.Invoke(action == "start_autonomy") == true ? null : NotOnThisBuild;
                 case "trigger_haptic":
                     if (CoreHaptics.Service?.IsConnected != true) return "no_device";   // WPF 7b22ece8c (ccp-bugs #1065): never a silent "ok"
                     _ = CoreHaptics.Service!.TriggerAsync("remote_control", 0.7, 2000); return null;
@@ -112,6 +119,7 @@ namespace ConditioningControlPanel.Services
         /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
         public static void StopEffects(bool force)
         {
+            try { StopRemoteAutonomy?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy stop failed"); }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             // A controller's panic is a way out like the key: Circe's Tab opens its safety hold (PanicChasterHold).
             if (force) Safety.PanicChasterHold.Open("remote panic");

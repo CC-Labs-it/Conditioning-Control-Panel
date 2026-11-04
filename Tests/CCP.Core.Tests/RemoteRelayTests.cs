@@ -16,6 +16,31 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class RemoteRelayTests
 {
+    [Fact]
+    public void RemoteAutonomyRoutesCommandsAndTeardownAndRefusesWithoutHost()
+    {
+        var previous = RemoteCommands.AutonomyCommand;
+        var previousStop = RemoteCommands.StopRemoteAutonomy;
+        try
+        {
+            RemoteCommands.AutonomyCommand = null;
+            Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("start_autonomy", null));
+            Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("stop_autonomy", null));
+            var calls = new List<bool>();
+            bool stopped = false;
+            RemoteCommands.AutonomyCommand = on => { calls.Add(on); return true; };
+            RemoteCommands.StopRemoteAutonomy = () => stopped = true;
+            Assert.Null(RemoteCommands.Execute("start_autonomy", null));
+            Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
+            Assert.Equal(new[] { true, false }, calls);
+            RemoteCommands.StopEffects(false);
+            Assert.True(stopped);
+            RemoteCommands.AutonomyCommand = _ => false;
+            Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("start_autonomy", null));
+        }
+        finally { RemoteCommands.AutonomyCommand = previous; RemoteCommands.StopRemoteAutonomy = previousStop; }
+    }
+
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<(string Path, JObject Body)> Seen = new();

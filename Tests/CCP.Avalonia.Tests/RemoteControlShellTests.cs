@@ -27,6 +27,37 @@ namespace CCP.Avalonia.Tests;
 /// MainWindow.RemoteControl.cs overlay, toast, Start lock, big emotes and End Session.</summary>
 public sealed class RemoteControlShellTests
 {
+    [Fact]
+    public void RemoteAutonomyReachesShellAndTeardownStopsIt() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var old = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, CoreEntitlement.HasPremiumProvider);
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell = new MainShellWindow();
+            shell.Show();
+            s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
+            Assert.Null(RemoteCommands.Execute("start_autonomy", null));
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
+            Assert.False(shell.Autonomy.IsEnabled);
+            Assert.Null(RemoteCommands.Execute("start_autonomy", null));
+            RemoteCommands.StopEffects(false);
+            Assert.False(shell.Autonomy.IsEnabled);
+        }
+        finally
+        {
+            shell?.Close();
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven, CoreEntitlement.HasPremiumProvider) = old;
+        }
+    });
+
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<string> Paths = new();
