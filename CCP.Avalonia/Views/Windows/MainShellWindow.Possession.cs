@@ -1,4 +1,4 @@
-// WPF MainWindow.Possession.cs:52-142, 207-575, 658. Scenes and readout remain part B.
+// WPF MainWindow.Possession.cs:52-142, 207-575, 658. Scenes remain part B.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -61,12 +61,15 @@ public partial class MainShellWindow : IPossessionHost
                         || global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != global::ConditioningControlPanel.Models.MotionLevel.Full),
         });
         PossessionDirector.AttachHost(this);
+        var lockdownTab = Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView>("LockdownTab");
+        lockdownTab?.SetPossessionReadoutDirector(PossessionDirector);
         if (lockdown.IsActive) PossessionDirector.OnLockdownActivated();
         LayoutUpdated += (_, _) => _possessionDirty = true; // only flag; rebuild floor is 750 ms
         PointerMoved += (_, e) => _possessionPointer = e.GetPosition(this);
         Closed += (_, _) =>
         {
             _possessionClosed = true;
+            lockdownTab?.SetPossessionReadoutDirector(null);
             PossessionDirector.Dispose();
             runtime.UndoAll();
         };
