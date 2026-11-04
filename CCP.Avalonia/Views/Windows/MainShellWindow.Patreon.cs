@@ -236,7 +236,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Opened += (_, _) => MaybeShowInviteEnding();
             Activated += (_, _) => MaybeShowInviteEnding();
-            Activated += (_, _) => Platform.FunnelPageMessage.OnAppActivated();   // WPF MainWindow.Patreon.cs:1275
         }
 
         private string? _inviteEndingPosted;

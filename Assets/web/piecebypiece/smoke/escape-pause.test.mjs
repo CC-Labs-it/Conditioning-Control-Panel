@@ -33,7 +33,6 @@ function page(mode = 'local') {
     createPauseHush: () => ({ set: p => transitions.push(p), returning: () => false }),
     pictureChoice: { available: () => false }, presentation: () => ({}),
     drag: { isDragging: () => dragging, drop: () => { dragging = false; } },
-    showSlip: () => {},
   });
   return { window, card, transitions, clock, exits, events,
     real: repeat => dispatchEvent(event(repeat)), kept: () => message({ type: HOST_ESCAPE }),

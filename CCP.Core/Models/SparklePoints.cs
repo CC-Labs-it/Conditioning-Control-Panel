@@ -20,9 +20,8 @@ namespace ConditioningControlPanel.Models
         public static int Clamp(int value) => Math.Clamp(value, 0, Cap);
 
         /// <summary>
-        /// Raise-only merge: the higher of server and local wins, clamped to the cap. A read may be
-        /// behind a local credit. Only a purchase, an admin reset or a sync whose
-        /// <c>wallet_net</c> dropped (<see cref="Services.Prizes.V2WalletNet"/>) lowers a balance.
+        /// Sync merge rule: the balance only rises outside a purchase or an admin reset, so the
+        /// higher of server and local wins, clamped to the cap.
         /// </summary>
         public static int MergeMax(int server, int local) => Clamp(Math.Max(server, local));
 

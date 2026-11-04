@@ -26,7 +26,7 @@ internal static class GlassroadRules
     /// them to sign in. <c>songs</c> stays empty: the private race song never ships in the app.
     /// </summary>
     public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null, bool toysConnected = false, bool picturesOn = false)
+        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null)
     {
         bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
         return new JObject
@@ -41,12 +41,6 @@ internal static class GlassroadRules
                 ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
                 // the pre-race room's "Invite a friend" asks this host (host/friendInvite.js)
                 ["friendInvite"] = true,
-                // the garage's Prize Counter row opens the counter window (host/prizeCounter.js)
-                ["prizeCounter"] = true,
-                // the race sends its toy plan here (host/raceToys.js); the Options row shows only with a toy connected
-                ["toys"] = true, ["toysConnected"] = toysConnected,
-                // Scrolller stills as real textures, cached here and served from the media host (host/devicePictures.js)
-                ["scrolller"] = new JObject { ["consent"] = picturesOn, ["origin"] = "device", ["clips"] = true, ["mediaOrigin"] = PicturesMediaOrigin },
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
@@ -57,80 +51,22 @@ internal static class GlassroadRules
         };
     }
 
-    public const string PicturesMediaOrigin = "https://ccp.assets";
-    public const string PicturesSettingKey = "media.remoteConsent";
-    /// <summary>The page shows at most this many at once (host/scrolllerFeed.js MAX_FEED_ROWS).</summary>
-    public const int PicturesRows = 12;
-    /// <summary>How far the shown rows move along the pool on each turn.</summary>
-    public const int PicturesStep = 6;
-
-    /// <summary>The race's Scrolller gate. The app's consent always, and never offline. The player's own press in the race
-    /// (<paramref name="own"/>) decides; before any press it follows the app-wide online source.</summary>
-    public static bool PicturesOn(bool? own, string? mediaSource, bool consent, bool offline)
-        => consent && !offline && (own == true
-            || (own == null && !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase)));
-
-    /// <summary>Host -> page <c>scrolller-feed</c>: a window of the pool, wrapping, with no repeats. Clips take up to half
-    /// of it, first; stills fill the rest, so the page always has both when the pool does.</summary>
-    public static JObject PicturesFeed(IReadOnlyList<string> urls, int offset, IEnumerable<(string Id, string Label)> catalog, IReadOnlyList<string>? clips = null)
-    {
-        var rows = new JArray();
-        clips ??= Array.Empty<string>();
-        int clipRows = Math.Min(clips.Count, urls.Count == 0 ? PicturesRows : PicturesRows / 2);
-        int clipStart = clips.Count == 0 ? 0 : (((offset / 2) % clips.Count) + clips.Count) % clips.Count;   // half the clips stay through a turn
-        for (int i = 0; i < clipRows; i++)
-            rows.Add(new JObject { ["url"] = clips[(clipStart + i) % clips.Count], ["kind"] = "video" });
-        int n = Math.Min(urls.Count, PicturesRows - clipRows), start = urls.Count == 0 ? 0 : ((offset % urls.Count) + urls.Count) % urls.Count;
-        for (int i = 0; i < n; i++)
-            rows.Add(new JObject { ["url"] = urls[(start + i) % urls.Count], ["kind"] = "image" });
-        var list = new JArray();
-        foreach (var (id, label) in catalog) list.Add(new JObject { ["id"] = id, ["label"] = label });
-        return new JObject { ["type"] = "scrolller-feed", ["v"] = 1, ["rows"] = rows, ["catalog"] = list };
-    }
-
-    /// <summary>The Prize Counter grants the garage reads: <c>cos.kart.*</c> plus the two kart Prime families
-    /// (<c>cos.prime.paint.*</c>, <c>cos.prime.trail.*</c>), sorted, at most 64 (glassroad CONTRACT.md section 7
-    /// "Owned kart looks"). Everything else the account owns stays home.</summary>
+    /// <summary>The Prize Counter grants the garage reads: <c>cos.kart.*</c> only, sorted, at most 64
+    /// (glassroad CONTRACT.md section 7 "Owned kart bodies"). Everything else the account owns stays home.</summary>
     public static JArray KartGrants(IEnumerable<string>? grants)
     {
         var list = new SortedSet<string>(StringComparer.Ordinal);
         if (grants != null)
             foreach (var g in grants)
-                if (g is { Length: <= 64 } && IsKartGrant(g)) list.Add(g);
+                if (g is { Length: <= 64 } && g.StartsWith("cos.kart.", StringComparison.Ordinal)) list.Add(g);
         var rows = new JArray();
         foreach (var g in list) { if (rows.Count >= 64) break; rows.Add(g); }
         return rows;
     }
 
-    private static bool IsKartGrant(string g)
-        => g.StartsWith("cos.kart.", StringComparison.Ordinal)
-        || g.StartsWith("cos.prime.paint.", StringComparison.Ordinal)
-        || g.StartsWith("cos.prime.trail.", StringComparison.Ordinal);
-
-    /// <summary>The Prize Counter tab the garage row asks for (<c>open-prize-counter { tab, from }</c>, 7.2
-    /// contract 1): Glassroad only ever opens on <c>kart</c>, whatever the page says.</summary>
-    public const string CounterTab = "kart";
-    public const string CounterFrom = "glassroad";
-
-    /// <summary>What the garage does when the counter over it closes (<c>PrizeCounterHostService.Close*</c>
-    /// reasons): panic and app exit close this window too, so nothing is re-sent or focused; Rain's Wear hands
-    /// the keyboard to the dressing room; anything else re-sends <c>owned</c> and takes the keyboard back.</summary>
-    public static (bool Resend, bool Focus) CounterReturn(string? reason, bool kartWorn = false)
-    {
-        bool calm = reason != PrizeCounter.PrizeCounterHostService.ClosePanic
-            && reason != PrizeCounter.PrizeCounterHostService.CloseAppExit;
-        // A kart's Wear closes back to the garage (fix wave F1): the garage takes the keyboard again.
-        return (calm, calm && (reason != PrizeCounter.PrizeCounterHostService.CloseWear || kartWorn));
-    }
-
-    /// <summary>The host -> page push when the account's grants change while the window is up. After a
-    /// kart's Wear in the counter it also names that item (<c>wear</c>), and the garage selects it.</summary>
-    public static JObject OwnedFrame(IEnumerable<string>? grants, string? wear = null)
-    {
-        var o = new JObject { ["type"] = "owned", ["grants"] = KartGrants(grants) };
-        if (!string.IsNullOrEmpty(wear)) o["wear"] = wear;
-        return o;
-    }
+    /// <summary>The host -> page push when the account's grants change while the window is up.</summary>
+    public static JObject OwnedFrame(IEnumerable<string>? grants)
+        => new JObject { ["type"] = "owned", ["grants"] = KartGrants(grants) };
 
     /// <summary>The page's invite list (<c>friends-list-reply</c>): online friends with a name, as
     /// <c>{ uid, name }</c>, at most 50. Offline friends are left out: the server refuses them anyway.</summary>

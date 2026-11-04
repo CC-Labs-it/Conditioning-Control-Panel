@@ -155,8 +155,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
         foreach (var name in names.Concat(new[] { nameof(AppSettings.ConsentOwnedAccount), nameof(AppSettings.ConsentOwnedFields), "AudioPlaylistPaths" }))
             Assert.DoesNotContain(name, sentKeys, StringComparer.OrdinalIgnoreCase);
 
-        var current = new AppSettings { ScrolllerOfficialNoteSeen = true, ConsentOwnedFields = 3, ProfileEquipPushOwed = true };
-        current.WalletNetSeen = new Dictionary<string, int> { ["u_abc"] = 40 };
+        var current = new AppSettings { ScrolllerOfficialNoteSeen = true, ConsentOwnedFields = 3 };
         current.PostGrants["code1"] = "g";
         current.InboxStamps["welcome"] = "2026-10-01";
         var restored = new AppSettings();
@@ -165,8 +164,6 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.Equal("g", restored.PostGrants["code1"]);
         Assert.True(restored.ScrolllerOfficialNoteSeen);
         Assert.Equal(3, restored.ConsentOwnedFields);
-        Assert.True(restored.ProfileEquipPushOwed);
-        Assert.Equal(40, restored.WalletNetSeen["u_abc"]);
     }
 
     [Fact]

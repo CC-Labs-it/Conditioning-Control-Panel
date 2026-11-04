@@ -135,8 +135,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Dispatcher.UIThread.Post(RefreshHeroArt);
 
         /// <summary>
-        /// Paints each hero plate, mod override first (<see cref="ModArt.TryLoad"/>), this head's
-        /// shipped avares:// copy second. A null resolve LEAVES the plate as it is.
+        /// Paints each hero plate; the five pack-bound WPF cards use shipped art, while the
+        /// other plates keep their existing mod-aware lookup. A null resolve leaves the plate as it is.
         /// </summary>
         private void RefreshHeroArt()
         {
@@ -145,7 +145,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 try
                 {
                     if (this.FindControl<Border>(plateName) is not { } plate) continue;
-                    if (ModArt.TryLoad(art, decodeWidth) is not { } bmp) continue;
+                    // WPF PlayTabView.xaml:478,502,533,564,595 bind these five plates to pack resources.
+                    var bmp = art is "features/backroom.png" or "features/dtrh.png" or "features/arcademy.png"
+                        or "features/race.png" or "billboard/webapp.png"
+                        ? ModArt.TryLoadBuiltIn(art, decodeWidth) : ModArt.TryLoad(art, decodeWidth);
+                    if (bmp is null) continue;
                     plate.Background = new ImageBrush(bmp) { Stretch = fit };
                 }
                 catch (Exception ex)
@@ -198,6 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+                PlayLockDtrh.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh").Allowed;
                 PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
                 PlayLockRacingThoughts.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
@@ -206,13 +211,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 PlayLockLockdown.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_lockdown_mode")).Allowed;
                 PlayLockBlink.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_blink_trainer")).Allowed;
                 PlayLockFyp.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_fyp"), "fyp").Allowed;
-                PlayLockDtrh.IsVisible = Games.GameWindow.DtrhLocked();
 
                 // FREE TODAY (WPF :145): only on a door that is otherwise shut - an owner gets no gift.
                 bool premium = CoreEntitlement.HasPremium;
+                PlayBadgeDtrh.FreeToday = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
-                PlayBadgeDtrh.FreeToday = !premium && CoreEntitlement.IsFreeToday("dtrh");
 
                 RefreshPlayIntakeCard();
             }

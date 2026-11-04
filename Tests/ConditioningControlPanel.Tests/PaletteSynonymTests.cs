@@ -64,8 +64,6 @@ public class PaletteSynonymTests
     [InlineData("rabbit hole", "game.dtrh")]
     [InlineData("monitor", "section.monitors")]
     [InlineData("second monitor", "section.monitors")]
-    [InlineData("wallpaper", "rack.wallpaper")]
-    [InlineData("live wallpaper", "rack.wallpaper")]
     [InlineData("assets path", "tab.folders")]
     [InlineData("lock cards", "tab.permissions")]
     [InlineData("hypnotube", "tab.companionlinks")]
@@ -101,7 +99,7 @@ public class PaletteSynonymTests
     [Fact]
     public void Every_rack_module_is_reachable_from_search()
     {
-        var keys = new[] { "flash", "video", "subliminal", "spiral", "pinkfilter", "wallpaper", "visuals", "bubbles",
+        var keys = new[] { "flash", "video", "subliminal", "spiral", "pinkfilter", "visuals", "bubbles",
                            "bubblecount", "lockcard", "bouncingtext", "mindwipe", "braindrain" };
         foreach (var key in keys)
         {

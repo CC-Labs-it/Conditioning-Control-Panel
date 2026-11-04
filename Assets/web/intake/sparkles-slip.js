@@ -5,16 +5,9 @@
  * IN and OUT for every piece: the slip slides up, the PAID stamp lands, Sparkles fly to the wallet chip and
  * it bumps; the slip leaves after 6 s. Zero pay: lines only. Gentle: the amount counts up only (fades, no
  * flight, no slam, no shake); a tree whose own motion switch is calmer passes showSlip(m, { calm: true })
- * for the same. Reduced motion: static. Nothing takes the pointer: clicks reach the end card under it.
- * A tree may hold it longer: showSlip(m, { holdMs }) (Infinity = until the tree lets go), then
- * releaseSlip(minMs) lets it leave once it has been up minMs (desk run 2026-10-30, Glassroad). */
+ * for the same. Reduced motion: static. Nothing takes the pointer: clicks reach the end card under it. */
 
 const HOLD_MS = 6000;
-/** How long a slip stays before it leaves on its own: holdMs from the tree (ms, Infinity = no timer), else 6 s. */
-export function slipHold(opts) {
-  const h = opts && opts.holdMs != null ? Number(opts.holdMs) : HOLD_MS;
-  return h === Infinity ? null : Number.isFinite(h) ? Math.max(0, h) : HOLD_MS;
-}
 const SPARK = String.fromCharCode(0x2726); // the four-point spark, kept ASCII in source
 const CSS = `
 .sps-slip{position:fixed;left:50%;bottom:7vh;z-index:2147483000;width:min(300px,86vw);box-sizing:border-box;
@@ -84,16 +77,7 @@ export function hideSlip() {
     : [{ transform: 'translateY(0)' }, { transform: 'translateY(-160%)' }], 260, 220);
 }
 
-/** A held slip (holdMs) may leave now: at once when it has been up minMs, else when it has. */
-export function releaseSlip(minMs) {
-  const cur = live;
-  if (!cur) return;
-  clearTimeout(cur.timer);
-  cur.timer = setTimeout(hideSlip, Math.max(0, (Number(minMs) || 0) - (Date.now() - cur.at)));
-}
-
-/** Show one receipt. A newer receipt replaces the one on screen. opts.calm: the tree's motion is calmer;
- *  opts.holdMs: how long it stays (slipHold). */
+/** Show one receipt. A newer receipt replaces the one on screen. opts.calm: the tree's motion is calmer. */
 export function showSlip(m, opts) {
   if (!m || m.type !== 'sparkles-receipt' || typeof document === 'undefined') return;
   const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -121,8 +105,7 @@ export function showSlip(m, opts) {
     chipNum = el('b', null, String(m.sp - plan.amount)); chip.appendChild(chipNum);
     document.body.appendChild(chip);
   }
-  const hold = slipHold(opts);
-  live = { slip, chip, plan, at: Date.now(), timer: hold == null ? 0 : setTimeout(hideSlip, hold) };
+  live = { slip, chip, plan, timer: setTimeout(hideSlip, HOLD_MS) };
   if (plan.motion === 'static') {
     if (num) num.textContent = '+' + plan.amount;
     if (chipNum) chipNum.textContent = String(m.sp);

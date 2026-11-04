@@ -41,8 +41,7 @@ test('pickup boxes: neighbouring bubbles in a row never overlap on any course', 
     const rows = new Map();
     for (const it of JSON.parse(readFileSync(new URL(f, dir), 'utf8')).items || []) {
       if (it.kind !== 'box') continue;
-      { const key = it.node + ':' + (it.ds || 0);   // floating boxes stand in a line along a ramp arc (ds), not a row
-        (rows.get(key) || rows.set(key, []).get(key)).push(it.x); }
+      (rows.get(it.node) || rows.set(it.node, []).get(it.node)).push(it.x);
     }
     for (const xs of rows.values()) {
       xs.sort((a, b) => a - b);

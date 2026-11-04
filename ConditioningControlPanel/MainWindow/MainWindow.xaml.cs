@@ -355,7 +355,6 @@ namespace ConditioningControlPanel
             // the delta-and-provenance event that XPChanged deliberately is not.
             InitializeBankFx();
             InitializeSparkleWallet();
-            InitializeProfileEquip();
             App.Progression.XPChanged += OnXPChanged;
             App.Progression.LevelUp += OnLevelUp;
 
@@ -1528,9 +1527,6 @@ namespace ConditioningControlPanel
                 bool goonReady = Services.GoonGame.GoonHostService.IsReady;
                 bool roomReady = Services.BackRoom.BackRoomHostService.IsRoomReady;
                 bool intakeReady = Services.Quiz.IntakeHostService.IsReady;
-                // The Prize Counter keeps Escape as its back (its Esc ladder), never a close.
-                bool counterInFront = Services.PrizeCounter.PrizeCounterHostService.IsInFront;
-                bool counterReady = Services.PrizeCounter.PrizeCounterHostService.IsReady;
                 // Glassroad (3D race preview) pauses on Escape like every game here.
                 bool glassroadInFront = Services.Glassroad.GlassroadHostService.IsInFront;
                 bool glassroadReady = Services.Glassroad.GlassroadHostService.IsReady;
@@ -1538,12 +1534,12 @@ namespace ConditioningControlPanel
                 bool frontGameReady = Services.Safety.PanicPolicy.KeptEscapeGoesTo(true,
                     raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
                     dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
-                    roomInFront, roomReady, intakeInFront, intakeReady, counterInFront, counterReady,
+                    roomInFront, roomReady, intakeInFront, intakeReady,
                     glassroadInFront, glassroadReady) != Services.Safety.PanicPolicy.KeptEscapePage.None;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
                     gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront
-                        || arcademyInFront || goonInFront || roomInFront || intakeInFront || glassroadInFront || counterInFront,
+                        || arcademyInFront || goonInFront || roomInFront || intakeInFront || glassroadInFront,
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
                     lastClaimUtc: _lastRaceEscapeClaimUtc,
@@ -1555,7 +1551,7 @@ namespace ConditioningControlPanel
                 var gameName = raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece"
                     : breakoutInFront ? "Breakout" : dtrhInFront ? "Down the Rabbit Hole"
                     : arcademyInFront ? "Arcademy" : goonInFront ? "Goon"
-                    : roomInFront ? "Back Room" : intakeInFront ? "Intake" : counterInFront ? "Prize Counter" : "Glassroad";
+                    : roomInFront ? "Back Room" : intakeInFront ? "Intake" : "Glassroad";
                 VideoDiag.Log("PANIC", $"Escape kept by {gameName} as its pause (again within 2 s = full panic)");
                 // Each game pauses on its own keydown, which never comes while its WebView2 is out of
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
@@ -1563,11 +1559,9 @@ namespace ConditioningControlPanel
                 switch (Services.Safety.PanicPolicy.KeptEscapeGoesTo(claim,
                             raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
                             dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
-                            roomInFront, roomReady, intakeInFront, intakeReady, counterInFront, counterReady,
+                            roomInFront, roomReady, intakeInFront, intakeReady,
                             glassroadInFront, glassroadReady))
                 {
-                    case Services.Safety.PanicPolicy.KeptEscapePage.Counter:
-                        Services.PrizeCounter.PrizeCounterHostService.PostKeptEscape(); break;
                     case Services.Safety.PanicPolicy.KeptEscapePage.Race:
                         Services.Chaos.CaucusHostService.PostKeptEscape(); break;
                     case Services.Safety.PanicPolicy.KeptEscapePage.Board:
@@ -1711,21 +1705,6 @@ namespace ConditioningControlPanel
                 RunPanicStopTail(advanceExitLadder:
                     Services.Safety.PanicPolicy.AdvancesExitLadder(rung, gameOwnedTheScreen));
                 return;
-            }
-
-            // 7.2: a Prize Counter opened over a game whose own ladder takes the press below (the Back
-            // Room, the Arcademy, DtRH, the feed, a descent) closes first. Those rungs return, so the
-            // registry rung that would close the counter is never reached and the shop stayed on screen
-            // over the suspended game. Not returning: the game's own rung still takes the press.
-            if (Services.Safety.PanicPolicy.CounterClosesBeforeHandOff(
-                    Services.PrizeCounter.PrizeCounterHostService.IsActive,
-                    App.Chaos?.IsDescending == true || Services.Chaos.DtrhHostService.IsActive
-                    || Services.Arcademy.ArcademyHostService.IsActive || Services.BackRoom.BackRoomHostService.IsActive
-                    || Services.Fyp.FypHostService.IsActive))
-            {
-                VideoDiag.Log("PANIC", "closing the Prize Counter over the game first");
-                try { Services.PrizeCounter.PrizeCounterHostService.CloseFor(Services.PrizeCounter.PrizeCounterHostService.ClosePanic); }
-                catch (Exception ex) { App.Logger?.Warning("PANIC: closing the Prize Counter failed: {Error}", ex.Message); }
             }
 
             // A live Rabbit Hole descent owns the panic key: the chaos key hook pauses the
@@ -3802,13 +3781,6 @@ namespace ConditioningControlPanel
                 // Let the window fully render before minimizing to avoid black window artifacts
                 await Task.Delay(100);
                 _trayIcon?.MinimizeToTray();
-            }
-
-            // "Run with CCP": the wallpaper comes up with CCP, not with the engine (only after 18+ is accepted).
-            if (App.Settings.Current.CollageRunWithCcp && App.Settings.Current.HasAcceptedAgeVerification)
-            {
-                try { App.Wallpaper?.StartCollage(); }
-                catch (Exception ex) { App.Logger?.Warning("[Wallpaper] start with CCP failed: {E}", ex.Message); }
             }
 
             // Handle auto-start engine

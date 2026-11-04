@@ -1,9 +1,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -14,6 +17,7 @@ using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -29,9 +33,9 @@ public sealed class PlayWallPartBTests
         var oldLab = CoreEntitlement.HasLabProvider;
         var oldPremium = CoreEntitlement.HasPremiumProvider;
         var oldFree = CoreEntitlement.IsFreeTodayProvider;
-        bool lab = false, premium = false, free = false;
+        bool lab = false, free = false;
         CoreEntitlement.HasLabProvider = () => lab;
-        CoreEntitlement.HasPremiumProvider = () => premium;
+        CoreEntitlement.HasPremiumProvider = () => true; // Tier 1 alone must not unlock the base's Tier 2 door.
         CoreEntitlement.IsFreeTodayProvider = key => free && key == "dtrh";
         var play = new PlayTabView();
         var host = new Window { Content = play };
@@ -54,7 +58,7 @@ public sealed class PlayWallPartBTests
             foreach (var name in new[] { "Dtrh", "Arcademy" })
             {
                 var card = Assert.IsType<Border>(play.FindControl<Grid>("Slot" + name)!.Children[0]);
-                Assert.Equal(name == "Dtrh" ? 1 : 2, TierFxBorder.GetTier(card));
+                Assert.Equal(2, TierFxBorder.GetTier(card));
                 Assert.Equal(3, TierFxBorder.GetRimThickness(card));
             }
             var band = play.FindControl<Border>("PlayLockDtrh")!;
@@ -67,20 +71,56 @@ public sealed class PlayWallPartBTests
             play.RefreshPlayCards();
             Assert.False(band.IsVisible);
             Assert.True(badge.FreeToday);
-            free = false;
-            premium = true; // Tier 1 alone opens DtRH, without Lab or a free drop.
+            lab = true;
             play.RefreshPlayCards();
             Assert.False(band.IsVisible);
             Assert.False(badge.FreeToday);
-            free = true;
-            play.RefreshPlayCards();
-            Assert.False(badge.FreeToday); // an owner does not receive the free-today stamp
-            lab = true;
-            play.RefreshPlayCards();
             Assert.False(play.FindControl<Border>("PlayLockArcademy")!.IsVisible);
             Assert.False(play.FindControl<Border>("PlayLockRacingThoughts")!.IsVisible);
         }
         finally { host.Close(); CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.HasPremiumProvider = oldPremium; CoreEntitlement.IsFreeTodayProvider = oldFree; }
+    });
+
+    // WPF PlayTabView.xaml:478,502,533,564,595 use packaged resources rather than mod overrides.
+    [Fact]
+    public void PackBoundGameArtIgnoresModOverridesOnInitialPaintAndModChange() => AvaloniaTestDispatcher.Run(() =>
+    {
+        LabWebcamStatusTests.Setup();
+        var directory = Directory.CreateTempSubdirectory("play-fixed-art-");
+        var overridePath = Path.Combine(directory.FullName, "override.png");
+        using (var image = new WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96))) image.Save(overridePath);
+        var previous = CoreModArt.OverridePathProvider;
+        var requests = new System.Collections.Generic.List<string>();
+        CoreModArt.OverridePathProvider = path => { requests.Add(path); return overridePath; };
+        Window? host = null;
+        try
+        {
+            var play = new PlayTabView();
+            host = new Window { Content = play };
+            host.Show();
+            void Check()
+            {
+                foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
+                    Assert.IsType<Bitmap>(Assert.IsType<ImageBrush>(play.FindControl<Border>("Play" + name + "HeroPlate")!.Background).Source);
+                foreach (var path in new[] { "features/backroom.png", "features/dtrh.png", "features/arcademy.png", "features/race.png", "billboard/webapp.png" })
+                    Assert.DoesNotContain(path, requests);
+                Assert.Contains("features/goon_game_tile.png", requests); // existing mod-aware plate still resolves overrides
+                var goon = Assert.IsType<Bitmap>(Assert.IsType<ImageBrush>(play.FindControl<Border>("PlayGoonHeroPlate")!.Background).Source);
+                Assert.Equal(256, goon.PixelSize.Height);
+            }
+            Check();
+            var before = requests.Count;
+            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(requests.Count > before);
+            Check();
+        }
+        finally
+        {
+            host?.Close();
+            CoreModArt.OverridePathProvider = previous;
+            directory.Delete(true);
+        }
     });
 
     // WPF PlayTabView.Cards.cs:59-60, MainWindow.Exclusives.cs:217-222 and LauncherCatalogue.cs:240-249.
@@ -95,11 +135,11 @@ public sealed class PlayWallPartBTests
         var oldDenied = CoreEntitlement.ShowDeniedHandler;
         var oldServer = GameWindow.Server;
         var oldLaunch = PlayTabView.LaunchGame;
-        bool signedIn = false, premium = false;
+        bool signedIn = false, lab = false;
         int denied = 0;
         CoreAccount.IsLoggedInProvider = () => signedIn;
-        CoreEntitlement.HasLabProvider = () => false;
-        CoreEntitlement.HasPremiumProvider = () => premium;
+        CoreEntitlement.HasLabProvider = () => lab;
+        CoreEntitlement.HasPremiumProvider = () => true; // Tier 1 alone must not unlock the base's Tier 2 door.
         CoreEntitlement.IsFreeTodayProvider = _ => false;
         CoreEntitlement.ShowDeniedHandler = _ => denied++;
         var root = Directory.CreateTempSubdirectory("play-dtrh-");
@@ -125,14 +165,14 @@ public sealed class PlayWallPartBTests
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, denied);
             Assert.Null(GameWindow.OpenForTests("dtrh"));
-            premium = true;
+            lab = true;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             var game = Assert.IsType<GameWindow>(GameWindow.OpenForTests("dtrh"));
             Assert.Equal("/dtrh/index.html", game.PageUrl!.AbsolutePath);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Same(game, GameWindow.OpenForTests("dtrh"));
-            premium = false;
+            lab = false;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, denied); // the door checks access even when the game is already open
             PanicSurfaces.All.Single(s => s.Id == "games").Stop(shell);
@@ -201,6 +241,20 @@ public sealed class PlayWallPartBTests
                 if (!hadKey) seen.Remove(MainShellWindow.WebBannerSeenKey);
             }
         });
+    }
+
+
+    [Fact]
+    public void PlayLedgerHasOneStubRowWithRemainingWork()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "docs", "avalonia-parity.html"))) root = root.Parent;
+        Assert.NotNull(root);
+        var row = Assert.Single(File.ReadLines(Path.Combine(root!.FullName, "docs", "avalonia-parity.html"))
+            .Where(line => line.StartsWith("<tr><td>views-tab-play</td>", StringComparison.Ordinal)));
+        Assert.Contains("<td>stub</td>", row);
+        Assert.Contains("Remaining work is Goon", row);
+        Assert.Contains("outgoing fade", row);
     }
 
 }

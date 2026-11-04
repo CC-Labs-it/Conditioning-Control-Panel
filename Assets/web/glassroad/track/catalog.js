@@ -1,11 +1,10 @@
-/** Courses shipped in this build. All shipped courses have matching online room cards. `laps` = the course's own
- * count (tracks/<id>.json), the host form's default. */
+/** Courses shipped in this build. All shipped courses have matching online room cards. */
 export const COURSES = Object.freeze([
-  Object.freeze({ id: 'threshold', name: 'Threshold', online: true, laps: 3 }),
-  Object.freeze({ id: 'mainframe', name: 'Mainframe', online: true, laps: 3 }),
-  Object.freeze({ id: 'keep', name: 'The Keep', online: true, laps: 2 }),
-  Object.freeze({ id: 'boudoir', name: 'Boudoir', online: true, laps: 2 }),
-  Object.freeze({ id: 'goonworks', name: 'GOONWORKS', online: true, laps: 2 }),
+  Object.freeze({ id: 'threshold', name: 'Threshold', online: true }),
+  Object.freeze({ id: 'mainframe', name: 'Mainframe', online: true }),
+  Object.freeze({ id: 'keep', name: 'The Keep', online: true }),
+  Object.freeze({ id: 'boudoir', name: 'Boudoir', online: true }),
+  Object.freeze({ id: 'goonworks', name: 'GOONWORKS', online: true }),
 ]);
 export function selectedCourse(search = '') {
   const id = new URLSearchParams(search).get('track');

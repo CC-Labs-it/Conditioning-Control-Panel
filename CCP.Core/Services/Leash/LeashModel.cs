@@ -31,11 +31,7 @@ public enum LeashEventKind { Tug, Reward, Punish, Assign, Answered, Ended, Assig
 public enum LeashDnd { Off, OneHour, FourHours, Today }
 
 /// <summary>A person on the other end. Server-resolved; <see cref="AvatarUrl"/> may be null.</summary>
-public sealed record LeashPerson(string Id, string Name, string? AvatarUrl)
-{
-    /// <summary>Their avatar and Prize Counter frame, when the server sends <c>cosmetics</c>.</summary>
-    public Services.PlayerLook Look { get; init; } = Services.PlayerLook.None;
-}
+public sealed record LeashPerson(string Id, string Name, string? AvatarUrl);
 
 /// <summary>A video reference, the friends <c>watch</c> grammar (<c>catalogue</c> or <c>ht</c>).</summary>
 public sealed record LeashWatch(string Kind, string Id, string? Title);
