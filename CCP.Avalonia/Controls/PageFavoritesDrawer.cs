@@ -47,10 +47,8 @@ public sealed class PageFavoritesDrawer : Grid
         Handle.Bind(ToolTip.TipProperty, Text("tooltip_rail_favorites_drawer"));
         Handle.Bind(AutomationProperties.NameProperty, Text("rail_favorites_drawer"));
         Handle.Click += (_, _) => SetOpen(!IsOpen, true);
-        Handle.PointerEntered += (_, _) => Paint(_hue);
-        Handle.PointerExited += (_, _) => Paint(_hue);
-        Handle.GotFocus += (_, _) => Paint(_hue);
-        Handle.LostFocus += (_, _) => Paint(_hue);
+        Handle.PointerEntered += (_, _) => Paint(_hue); Handle.PointerExited += (_, _) => Paint(_hue);
+        Handle.GotFocus += (_, _) => Paint(_hue); Handle.LostFocus += (_, _) => Paint(_hue);
         Children.Add(Handle);
         var stack = new StackPanel { Width = 69, Margin = new Thickness(4,10), HorizontalAlignment = HorizontalAlignment.Center };
         foreach (var c in new Control[] { Caption("rail_favorites_caption"), FavoritesList, FavoritesEmpty,
