@@ -314,7 +314,7 @@ internal sealed class KeywordAudioRuntime
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
     }
 
-    private async Task<double?> ReadDuration(string path, CancellationToken cancellation)
+    internal async Task<double?> ReadDuration(string path, CancellationToken cancellation)
     {
         try
         {
@@ -340,9 +340,8 @@ internal sealed class KeywordAudioRuntime
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
         if (!File.Exists(path)) return null;
-        // WPF :1873-1890 reads TotalTime before returning from each play.
-        var seconds = ducked ? await ReadDuration(path, cancellation) : null;
-        var known = seconds is > 0 && seconds < TimeSpan.MaxValue.TotalSeconds ? TimeSpan.FromSeconds(seconds.Value) : (TimeSpan?)null;
+        // WPF :1873-1890 plays at once and takes TotalTime from the header; the parse runs beside playback.
+        var probe = ducked ? ReadDuration(path, cancellation) : Task.FromResult<double?>(null);
         TaskCompletionSource<TimeSpan>? timing = null;
         var count = Math.Max(1, audio.PlayCount);
         for (var i = 0; i < count; i++)
@@ -354,17 +353,27 @@ internal sealed class KeywordAudioRuntime
                 cancellation.ThrowIfCancellationRequested();
                 // WPF :1863-1865 replaces only the clip, not another dispatch's pending actions.
                 StopClip();
-                timing = new TaskCompletionSource<TimeSpan>(TaskCreationOptions.RunContinuationsAsynchronously);
-                var clip = timing;
-                if (known is { } knownDuration) clip.TrySetResult(knownDuration);
+                var clip = timing = new TaskCompletionSource<TimeSpan>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _ = Settle(clip, probe, finished.Task);
                 _stop = CoreAudio.PlayStoppable(path,
                     KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                     onStarted: duration => { if (duration > TimeSpan.Zero) clip.TrySetResult(duration); },
-                    // The player can finish on replacement before its Playing event reports a length.
-                    onFinished: () => clip.TrySetResult(known ?? TimeSpan.Zero));
+                    onFinished: () => finished.TrySetResult());
             }
             finally { _clipGate.Release(); }
         }
         return timing?.Task;
+    }
+
+    /// <summary>A replaced clip can stop before its Playing event reports a length, so the parsed length
+    /// still counts; zero only once the parse has failed and the clip has ended.</summary>
+    private static async Task Settle(TaskCompletionSource<TimeSpan> clip, Task<double?> probe, Task finished)
+    {
+        double? seconds = null;
+        try { seconds = await probe; } catch (OperationCanceledException) { }
+        if (seconds is > 0 && seconds < TimeSpan.MaxValue.TotalSeconds) clip.TrySetResult(TimeSpan.FromSeconds(seconds.Value));
+        await finished;
+        clip.TrySetResult(TimeSpan.Zero);
     }
 }

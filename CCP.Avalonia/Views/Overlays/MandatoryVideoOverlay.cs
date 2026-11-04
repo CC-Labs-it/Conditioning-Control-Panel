@@ -94,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             get { lock (LengthsLock) return _lengths ??= LibVlcAudio.Shared is { } vlc ? new VideoMetadataCache(vlc) : null; }
         }
-        private static double? LengthOf(string path)
+        internal static double? LengthOf(string path)
         {
             var lengths = Lengths;
             var d = lengths?.TryGetDuration(path);
