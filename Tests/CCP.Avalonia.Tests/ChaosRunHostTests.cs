@@ -91,6 +91,39 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Fact]
+    public async Task Ripple_charge_advances_only_during_a_live_unpaused_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                var state = ChaosRunHost.State!;
+                state.RippleCooldown = 0.5;
+                ChaosRunHost.Tick();
+                Assert.Equal(0.5, state.RippleCooldown);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Tick();
+                Assert.Equal(0.25, state.RippleCooldown);
+                ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.Tick();
+                Assert.Equal(0.25, state.RippleCooldown);
+                ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.Tick();
+                Assert.True(state.RippleReady);
+                ChaosRunHost.ForceShutdown();
+                state.RippleCooldown = 0.5;
+                ChaosRunHost.Tick();
+                Assert.Equal(0.5, state.RippleCooldown);
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     // WPF ChaosModeService.cs:417-435: the equipped mantra enters after the countdown.
     [Theory]
     [InlineData("size_queen")]

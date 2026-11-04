@@ -440,6 +440,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
             TickToys();
+            // WPF ChaosModeService.cs:984: recharge only while the run clock advances.
+            if (_state.RippleCooldown > 0)
+            {
+                _state.RippleCooldown -= ChaosRunEngine.TICK_SEC;
+                if (_state.RippleReady) ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.3f);
+            }
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
             if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
             {
