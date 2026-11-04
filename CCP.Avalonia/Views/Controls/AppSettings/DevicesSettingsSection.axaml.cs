@@ -145,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 // blink-recal seed at :296).
                 ChkBlinkRecalWebcamBar.IsChecked = s.BlinkRecalibrateShortcutEnabled;
                 ChkWebcamDriftCorrection.IsChecked = s.WebcamAutoDriftCorrection;
+                RefreshDriftAvailability();
                 ChkRestrictGazeToCalScreen.IsChecked = s.RestrictGazeContentToCalibratedScreen;
 
                 // Safety (MainWindow.Settings.cs:77/78). ChkNoPanic is the INVERSE of the enable.
@@ -284,8 +285,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             RefreshWebcamStatus();
         }
 
+        private void RefreshDriftAvailability()
+        {
+            ChkWebcamDriftCorrection.IsEnabled = Platform.GazeDriftMouseHook.Available();
+            TxtDriftUnavailable.IsVisible = !ChkWebcamDriftCorrection.IsEnabled;
+            if (!ChkWebcamDriftCorrection.IsEnabled) ToolTip.SetTip(DriftChip, null);
+        }
+
         internal void RefreshWebcamStatus()
         {
+            RefreshDriftAvailability();
             var state = Platform.WebcamTracker.Instance.State;
             Helpers.WebcamStatusPresentation.Paint(this, "LabTrackerDot", "TxtWebcamDebugStatus", state);
             var key = WebcamStatus.IsLive(state) ? "SuccessGreenBrush" : "PanelAccentBrush";
@@ -593,11 +602,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (_loading) return;
             bool v = ChkWebcamDriftCorrection.IsChecked == true;
             CoreSettings.Current.WebcamAutoDriftCorrection = v;
+            RefreshDriftAvailability();
             // WPF's handler has no Save because MainWindow's settings sweep picks the flag up
             // later; this head has no sweep, so the write would sit in memory. Same call the
             // Performance section makes for the same reason.
             CoreSettings.Save();
-            AppendWebcamDebugLog(v
+            AppendWebcamDebugLog(!ChkWebcamDriftCorrection.IsEnabled ? LocalizationManager.Instance.Get("webcam_drift_unavailable") : v
                 ? "Auto drift correction enabled — clicks near your gaze will fine-tune calibration."
                 : "Auto drift correction disabled.");
         }

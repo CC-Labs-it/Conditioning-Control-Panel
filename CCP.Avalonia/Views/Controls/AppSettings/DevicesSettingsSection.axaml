@@ -226,17 +226,17 @@
                                             </Grid>
                                         </Border>
 
-                                        <Border Grid.Row="0" Grid.Column="2" Theme="{StaticResource SettingChip}"
+                                        <Border x:Name="DriftChip" Grid.Row="0" Grid.Column="2" Theme="{StaticResource SettingChip}"
                                                 ToolTip.Tip="Keeps the calibration fresh automatically: when you click somewhere while looking at it, the gaze mapping gets a tiny nudge toward the click. Corrects the slow drift that used to need a Quick Recal.">
                                             <Grid MinHeight="22">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Auto drift correction"
-                                                           Foreground="{DynamicResource TextLightBrush}"
-                                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                                    <TextBlock Text="Auto drift correction" Foreground="{DynamicResource TextLightBrush}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                    <TextBlock x:Name="TxtDriftUnavailable" Text="{loc:Str webcam_drift_unavailable}" TextWrapping="Wrap" IsVisible="False"/>
+                                                </StackPanel>
                                                 <CheckBox Grid.Column="1" x:Name="ChkWebcamDriftCorrection"
                                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                                             </Grid>

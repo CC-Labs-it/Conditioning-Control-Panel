@@ -1,4 +1,5 @@
 {
+  "webcam_drift_unavailable": "Global clicks are unavailable on this desktop. Auto drift correction is off.",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",
