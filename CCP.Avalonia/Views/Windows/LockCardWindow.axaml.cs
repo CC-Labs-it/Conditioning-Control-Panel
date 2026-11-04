@@ -18,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Speech;
+using ConditioningControlPanel.Services.Safety;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -87,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _completedRepeats;
         private bool _isCompleted;
         private DispatcherTimer? _closeTimer;
+        private bool _fadingOut;
 
         // ── Anti-cheat: the phrase must actually be TYPED (#734) ───────────────
         // Blocking the clipboard keys alone was never enough, and undo was the bigger hole:
@@ -348,6 +350,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
 
             _closeTimer?.Stop();
+            _fadingOut = false;
             _voiceMode = false;
             StopVoiceSolve();   // the mic closes with the card, not 10 s later
             base.OnClosing(e);
@@ -608,7 +611,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _closeTimer.Tick += (_, _) =>
             {
                 _closeTimer?.Stop();
-                CloseAllWindows();
+                if (GentleVisuals.On) FadeOutThenDismiss();
+                else CloseAllWindows();
             };
             _closeTimer.Start();
         }
@@ -1040,6 +1044,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        private void FadeOutThenDismiss()
+        {
+            var windows = Fanout();
+            var duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds);
+            foreach (var window in windows)
+            {
+                window._fadingOut = true;
+                window.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = duration } };
+                window.Opacity = 0;
+            }
+            DispatcherTimer.RunOnce(() =>
+            {
+                // A closed or replaced card must never dismiss its successor.
+                foreach (var window in windows)
+                    if (window._fadingOut && window.IsVisible)
+                    {
+                        window._isCompleted = true;
+                        try { window.Close(); } catch { }
+                    }
+            }, duration);
+        }
+
+        private void ShowWithGentle()
+        {
+            if (GentleVisuals.On) Opacity = 0;
+            Show();
+            if (!GentleVisuals.On) return;
+            var duration = TimeSpan.FromMilliseconds(GentleVisuals.RiseMs(GentleVisuals.FadeMs(0)));
+            Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = duration } };
+            Opacity = 1;
+        }
+
         /// <summary>
         /// Put a lock card up: one cover on the primary, plus one per further monitor when
         /// <c>DualMonitorEnabled</c> is on, with the primary owning the keyboard and the rest
@@ -1066,7 +1102,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             // A card is already up. Reconfiguring live covers would drop the lock mid-solve, which
             // is also why the WPF original deferred a second show rather than reusing the set.
-            if (_allWindows.Count > 0) return;
+            if (_allWindows.Count > 0)
+            {
+                if (!_allWindows.All(w => w._fadingOut)) return;
+                ForceCloseAll();
+            }
 
             // #763 (WPF LockCardService.cs:157): a visible pop quiz blocks the card. Hold one
             // replay until the last quiz closes, as PopQuizHost does the other way round.
@@ -1080,7 +1120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var primary = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: true);
-                primary.Show();
+                primary.ShowWithGentle();
 
                 // One cover per monitor when the user asked for it. Avalonia has no screen list
                 // without a TopLevel, so the set is drawn off the primary once it exists.
@@ -1092,7 +1132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     foreach (var screen in all.Where(s => s != primaryScreen))
                     {
                         var mirror = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: false);
-                        mirror.Show();
+                        mirror.ShowWithGentle();
                         // Placement is the WM's call on X11/Wayland: best effort, not SetWindowPos.
                         mirror.CoverScreen(screen);
                     }
