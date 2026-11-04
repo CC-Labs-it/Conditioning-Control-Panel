@@ -185,13 +185,15 @@ public sealed class MandatoryVideoFloatingTests
                 Assert.True(stalled.Window.Height < 200, "the small floating window cannot hold the card");
                 Assert.Null(o.ReadyAgeOverrideMs); // a fresh clip gets a fresh budget
                 // A delayed media initialization does not consume the ready budget.
-                Thread.Sleep((int)FloatingRevealGate.ReadyBudgetMs + 100);
+                Thread.Sleep((int)ConditioningControlPanel.Services.MandatoryVideoScheduler.NoFrameSeconds * 1000 + 100);
+                o.VideoTrackCountOverride = -1;
                 o.GuardTick();
                 Assert.True(graceScheduler.IsPlaying && stalled.Window.IsVisible);
                 o.MarkFloatingReady();
                 o.ReadyAgeOverrideMs = 0;
                 o.GuardTick();
-                Assert.True(graceScheduler.IsPlaying);
+                Assert.True(graceScheduler.IsPlaying && stalled.Window.IsVisible);
+                o.VideoTrackCountOverride = null;
                 o.ReadyAgeOverrideMs = FloatingRevealGate.ReadyBudgetMs;
                 Assert.True(o.TryGracePause(fromPanicKey: true));
                 card = AssertCentredCard(stalled);
@@ -208,6 +210,13 @@ public sealed class MandatoryVideoFloatingTests
                 Assert.False(graceScheduler.IsPlaying);
                 Assert.Empty(o.Windows);
                 Assert.False(stalled.Window.IsVisible);
+
+                Assert.True(graceScheduler.Trigger(strictOverride: false, path: clip));
+                o.Show(clip, strict: false);
+                Assert.True(o.TryGracePause(fromPanicKey: true));
+                clock.Advance(TimeSpan.FromSeconds(25));
+                o.GuardTick();
+                Assert.False(graceScheduler.IsPlaying);
 
                 // Panic during the pause still closes everything, the separate card included.
                 clock.Advance(TimeSpan.FromSeconds(1));
@@ -249,6 +258,7 @@ public sealed class MandatoryVideoFloatingTests
             finally
             {
                 graceScheduler.ForceCleanup();
+                o.VideoTrackCountOverride = null;
                 MandatoryVideoOverlay.FloatingClickThrough = native;
                 (o.Scheduler, o.Time) = previous;
                 graceStamp.SetValue(o, previousStamp);
@@ -287,6 +297,8 @@ public sealed class MandatoryVideoFloatingTests
         private DateTimeOffset _now = new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
         public void Advance(TimeSpan by) => _now += by;
         public override DateTimeOffset GetUtcNow() => _now;
+        public override long GetTimestamp() => _now.UtcTicks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) => new HeldTimer();
         private sealed class HeldTimer : ITimer
         {

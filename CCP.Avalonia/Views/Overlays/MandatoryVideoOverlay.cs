@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal double PlayedSkew { get; set; }
         /// <summary>Test seam: fixed floating ready age; null uses the live clock. Reset per play.</summary>
         internal long? ReadyAgeOverrideMs { get; set; }
+        internal int? VideoTrackCountOverride { get; set; }   // tests simulate an unknown track count
         private DateTime _lastGraceUtc, _gracePausedAt;
         /// <summary>The grace pause's wall clock (dedup, countdown, auto-resume); tests step it.</summary>
         internal TimeProvider Time { get; set; } = TimeProvider.System;
@@ -91,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool _floatingRevealed, _readyArmed;
         internal static Func<Window, bool, bool> FloatingClickThrough = X11Overlay.SetClickThrough;
         private int _paintedFrames;
-        private long _firstPaintMedia, _firstPlayedMs;
+        private long _firstPaintMedia, _firstPlayedMs, _floatingStarted;
 
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
@@ -143,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
+            _floatingStarted = Time.GetTimestamp();
             _sinceFrame.Reset();
             PlayedSkew = 0;
             ReadyAgeOverrideMs = null;
@@ -535,12 +537,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// that shows no frame, stalls, overruns or passes the user's max ends like a dismiss.</summary>
         internal void GuardTick()
         {
-            if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
-            if (!CheckFloatingReveal(false)) return;
+            if (_surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            if (Floating && !_floatingRevealed)
+            {
+                if (Time.GetElapsedTime(_floatingStarted).TotalSeconds >= 25) Scheduler.End();   // WPF InstanceFirstFrameMs
+                else if (!_gracePaused) CheckFloatingReveal(false);
+                return;
+            }
+            if (_gracePaused) return;
             var framed = FirstFrameMs >= 0;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
-                (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
+                (VideoTrackCountOverride ?? _player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent);
             if (why == null) return;
             if (MandatoryVideoScheduler.GuardHeals(why, _healUsed))
