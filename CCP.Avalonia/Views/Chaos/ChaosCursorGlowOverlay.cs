@@ -35,7 +35,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static ChaosCursorGlowOverlay? Active => _active;
 
         /// <summary>Desktop-wide pointer in physical pixels. Test seam.</summary>
-        internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
+        internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = ReadDesktopPointer;
+
+        // XWayland cannot see the pointer over native Wayland surfaces.
+        internal static bool HasDesktopPointer(string? sessionType) =>
+            string.Equals(sessionType, "x11", StringComparison.OrdinalIgnoreCase);
+
+        private static (PixelPoint At, bool Pressed, bool Escape)? ReadDesktopPointer() =>
+            HasDesktopPointer(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")) ? X11Pointer.Read() : null;
 
         /// <summary>Makes a shown window click-through and confirms it is transparent. Test seam.</summary>
         internal static Func<Window, bool> MakeClickThrough = w =>
@@ -56,6 +63,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Show the halo and start following the cursor. Safe from any thread.</summary>
         public static void Arm() => OnUi(() =>
         {
+            // Refuse a stationary halo if the compositor cannot supply desktop coordinates.
+            (PixelPoint At, bool Pressed, bool Escape)? sample;
+            try { sample = ReadPointer(); }
+            catch (Exception ex) { Log.Debug("ChaosCursorGlow: pointer read failed: {E}", ex.Message); sample = null; }
+            if (sample is not { } pointer)
+            {
+                _active?.StopTracking();
+                return;
+            }
             if (_active == null)
             {
                 if (_refused) return;
@@ -71,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 }
                 _active = w;
             }
-            _active.StartTracking();
+            _active.StartTracking(pointer.At);
         });
 
         /// <summary>Hide the halo (the whistle was answered or cancelled) and stop tracking.</summary>
@@ -93,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // frame shows the gradient. Arm() parks and hides it before the first Show.
         public ChaosCursorGlowOverlay()
         {
+            _breathStart = Clock.GetTimestamp();
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
@@ -138,10 +155,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Position = new PixelPoint(x, y);
         }
 
-        private void StartTracking()
+        private void StartTracking(PixelPoint pointer)
         {
             _halo.IsVisible = true;
-            _breathStart = Clock.GetTimestamp();
+            MoveTo(pointer.X, pointer.Y);
             _timer ??= new DispatcherTimer(ChaosCursorGlowMath.FollowInterval, DispatcherPriority.Render, (_, _) => Tick());
             _timer.Start();
             Tick();
@@ -162,8 +179,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try
             {
                 if (ReadPointer() is { } p) MoveTo(p.At.X, p.At.Y);
+                else StopTracking();
             }
-            catch (Exception ex) { Log.Debug("ChaosCursorGlow: pointer read failed: {E}", ex.Message); }
+            catch (Exception ex) { StopTracking(); Log.Debug("ChaosCursorGlow: pointer read failed: {E}", ex.Message); }
         }
 
         private void MoveTo(int pxX, int pxY)
