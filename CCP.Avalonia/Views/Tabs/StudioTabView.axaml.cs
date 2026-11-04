@@ -50,9 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// panel's own master checkbox, which is what WPF does and what keeps the write and the Save
     /// in one place.</para>
     ///
-    /// <para><b>Shortcuts.</b> The v2 pills are read once on Loaded (no prize-grant event on this
-    /// head); marked <c>ponytail:</c> at <see cref="RefreshV2Pills"/>. The FeatureOpened bark
-    /// crosses on <see cref="CoreBark"/>.</para>
+    /// <para>The v2 pills follow live prize ownership. FeatureOpened crosses on <see cref="CoreBark"/>.</para>
     ///
     /// <para><b>The art is real.</b> The rack's feature plates and the door medallion resolve
     /// through <see cref="ModArt.TryLoad"/> over <see cref="CoreModArt"/> against the
@@ -781,9 +779,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>
         /// WPF RefreshV2Pills: lights or hides the v2 pill on the flash and bubbles rows from
         /// ownership (<see cref="Platform.PrizeOwnership"/>, WPF V2Badges).
-        /// <para>ponytail: run on Loaded only. WPF re-runs it on <c>PrizeGrants.GrantsChanged</c>;
-        /// ownership cannot change at runtime on this head (no OwnershipService yet, parity row
-        /// svc-prize-ownership), so there is no event to hook.</para>
+        /// WPF StudioTabView.xaml.cs:1501-1528 repaints on grant changes.
         /// </summary>
         internal void RefreshV2Pills()
         {
@@ -1489,6 +1485,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // the discarded one for the rest of it.
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnSettingsCurrentReplaced;
             BindDotListener();
+            Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged += OnPrizeIdentityChanged;
 
             if (!_modHooked)
             {
@@ -1501,12 +1499,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnSettingsCurrentReplaced;
             UnbindDotListener();
+            Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged -= OnPrizeIdentityChanged;
 
             if (_modHooked) CoreMods.ModChanged -= OnModChanged;
             _modHooked = false;
 
             base.OnDetachedFromVisualTree(e);
         }
+
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() => { if (VisualRoot != null) RefreshV2Pills(); });
+        private void OnPrizeIdentityChanged(object? sender, EventArgs e) => OnGrantsChanged();
 
         private void BindDotListener()
         {

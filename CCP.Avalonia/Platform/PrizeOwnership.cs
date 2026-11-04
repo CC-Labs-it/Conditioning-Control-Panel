@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Prizes;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
     /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi. Here only the snapshots a counter reply carries
-    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held, for this run;
-    /// the profile-sync feed is parity row svc-prize-ownership. The other source is WPF's DEBUG-only
+    /// OwnershipService snapshots from sync, provider validation and BackRoomApi, held for this run.
+    /// The other source is WPF's DEBUG-only
     /// <c>CCP_PRIZE_GRANTS</c> override (Core OwnershipService.ReadDebugOverride): same variable,
     /// same patterns (exact id, <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
     /// Parsing is Core's, so an empty id never matches and a pattern holding whitespace or a
@@ -32,34 +32,60 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
         private static readonly object Gate = new();
-        private static string? _heldAccount;
+        private static Tuple<string?>? _heldIdentity;
         private static long _revision;
         private static HashSet<string> _grants = new(StringComparer.Ordinal);
 
-        /// <summary>WPF OwnershipService.IsGranted over the snapshots counter replies carry (row
-        /// feat-backroom-counter-buy). Per run only: no profile-sync feed yet (svc-prize-ownership).</summary>
+        /// <summary>WPF OwnershipService.IsGranted over the current account's in-memory snapshot.</summary>
         internal static bool Held(string id)
         {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            lock (Gate) return current != null && current == _heldAccount && _grants.Contains(id);
+            lock (Gate) return ReferenceEquals(_heldIdentity, CoreAccount.UnifiedIdentity) && _grants.Contains(id);
         }
 
         /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
         /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
         internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
         {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            if (string.IsNullOrEmpty(accountId) || grants is null || current != accountId) return;
+            if (string.IsNullOrEmpty(accountId) || grants is null) return;
+            bool changed;
             lock (Gate)
             {
-                if (_heldAccount == accountId && revision < _revision) return;
-                (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                var identity = CoreAccount.UnifiedIdentity;
+                if (identity.Item1 != accountId) return;
+                bool same = ReferenceEquals(_heldIdentity, identity);
+                if (same && revision < _revision) return;
+                var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                changed = same ? !_grants.SetEquals(next) : _grants.Count != 0 || next.Count != 0;
+                (_heldIdentity, _revision, _grants) = (identity, revision, next);
             }
+            // WPF OwnershipService.cs:129-136: only a changed set raises the repaint event.
+            if (changed) PrizeGrants.RaiseGrantsChanged();
         }
 
-        /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
-        internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
+        // WPF ProfileSyncService.cs:570,670: clear on identity change; accept only matching replies.
+        internal static void Seed()
+        {
+            CoreAccount.UnifiedIdentityChanged -= ClearOnIdentity;
+            CoreAccount.UnifiedIdentityChanged += ClearOnIdentity;
+            ProviderSubscription.PrizesSink = ApplyValidated;
+        }
+        private static void ClearOnIdentity(object? sender, EventArgs e) => ResetHeld(keepCurrent: true);
+        private static void ApplyValidated(string? requested, string? answered, Models.PrizesBlock? prizes, string source)
+        {
+            if (requested != null && requested == answered && prizes?.Grants is { } grants)
+                ApplySnapshot(requested, prizes.Revision, grants);
+        }
+        internal static void ResetHeld(bool keepCurrent = false)
+        {
+            bool changed;
+            lock (Gate)
+            {
+                if (keepCurrent && ReferenceEquals(_heldIdentity, CoreAccount.UnifiedIdentity)) return;
+                changed = _grants.Count != 0;
+                (_heldIdentity, _revision, _grants) = (null, 0, new(StringComparer.Ordinal));
+            }
+            if (changed) PrizeGrants.RaiseGrantsChanged();
+        }
 
         /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
         internal static bool FlashV2Owned() =>

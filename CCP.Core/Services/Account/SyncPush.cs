@@ -291,6 +291,12 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    try
+                    {
+                        if (reply["prizes"] is JObject prizes)
+                            ProviderSubscription.PrizesSink?.Invoke(id, id, prizes.ToObject<PrizesBlock>(), "V2 sync");
+                    }
+                    catch (Exception ex) { Log.Debug("V2 Sync: Could not adopt prizes: {Error}", ex.Message); }
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.

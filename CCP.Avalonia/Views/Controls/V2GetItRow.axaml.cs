@@ -73,6 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             base.OnAttachedToVisualTree(e);
             // WPF repaints on V2PurchaseService.Changed and PrizeGrants.GrantsChanged; a sign-in or
             // sign-out moves the row too (P41: subscribed on attach, dropped on detach).
+            PrizeGrants.GrantsChanged += OnGrantsChanged;
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
             if ((_wired = V2PurchaseHead.Service) is { } svc)
             {
@@ -86,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            PrizeGrants.GrantsChanged -= OnGrantsChanged;
             CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
             if (_wired is { } svc)
             {
@@ -97,6 +99,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             }
             base.OnDetachedFromVisualTree(e);
         }
+
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() => { if (VisualRoot != null) Apply(); });
 
         private void OnIdentityChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(Apply);
 
