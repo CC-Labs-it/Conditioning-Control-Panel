@@ -76,10 +76,10 @@ internal static class FlashVoice
 
     internal static void Play(AppSettings s, IReadOnlyList<string> files, Action<double?> ready)
     {
-        Stop();   // WPF PlaySound: StopCurrentSound first
         string? path = null;
         if (Allowed(s)) lock (Bag) path = Bag.TryNext(files, out var p) ? p : null;
         if (path == null) { ready(null); return; }
+        Stop();   // WPF PlaySound: StopCurrentSound first, only once a line will play (FlashService.cs:4684)
 
         long? duckGen = null;
         if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); duckGen = CoreAudio.DuckGeneration; }
@@ -94,6 +94,7 @@ internal static class FlashVoice
         var master = s.MasterVolume / 100f;
         var gain = CompanionVoiceGain.ApplyLevel(Math.Max(0.05f, (float)Math.Pow(master, 1.5))
             * CompanionVoiceGain.BarkTrim, s.CompanionVoiceLevel);
+        gain = Math.Max(gain, 1e-7f);   // level 0 runs the clip silent so it keeps its length (WPF :4702); VlcVolume rounds it to 0
         Later(StartTimeoutMs, () => Settle(FailedSeconds));
         _stop = CoreAudio.PlayStoppable(path, gain, "flash-voice",
             onStarted: len => Settle(len > TimeSpan.Zero ? len.TotalSeconds : FailedSeconds),

@@ -49,6 +49,7 @@ public sealed class FlashVoiceTests
         private readonly Func<long>? _gen = CoreAudio.DuckGenerationProvider;
         private readonly Action<int, Action> _later = FlashVoice.Later;
         internal readonly List<string> Played = new();
+        internal readonly List<float> Volumes = new();
         internal readonly List<(Action<TimeSpan>? Started, Action? Finished)> Clips = new();
         internal readonly List<int> Ducks = new();
         internal readonly List<long> Unducks = new();
@@ -59,9 +60,9 @@ public sealed class FlashVoiceTests
         internal Rig()
         {
             FlashVoice.Bag.Reset();
-            CoreAudio.PlayStoppableProvider = (path, _, _, started, finished) =>
+            CoreAudio.PlayStoppableProvider = (path, volume, _, started, finished) =>
             {
-                Played.Add(path); Clips.Add((started, finished));
+                Played.Add(path); Volumes.Add(volume); Clips.Add((started, finished));
                 return () => { Stops++; finished?.Invoke(); };
             };
             CoreAudio.DuckProvider = Ducks.Add;
@@ -96,6 +97,29 @@ public sealed class FlashVoiceTests
         FlashVoice.Stop();
         FlashVoice.Stop();
         Assert.Equal(1, rig.Stops);
+    }
+
+    [Fact]
+    public void VoiceLevelZeroStillRunsTheClipSilentlyForItsLength()
+    {
+        using var rig = new Rig();
+        var s = Voiced(false);
+        s.CompanionVoiceLevel = 0;
+        rig.Play(s, "a.mp3");
+        Assert.Single(rig.Played);
+        Assert.True(rig.Volumes[0] > 0);   // LibVLC refuses a zero volume as a failed clip
+        Assert.Equal(0, LibVlcAudio.VlcVolume(rig.Volumes[0]));
+        rig.Clips[0].Started!(TimeSpan.FromSeconds(3));
+        Assert.Equal(new double?[] { 3.0 }, rig.Ready);
+    }
+
+    [Fact]
+    public void NoLineLeavesThePreviousClipPlaying()
+    {
+        using var rig = new Rig();
+        rig.Play(Voiced(false), "a.mp3");
+        rig.Play(new AppSettings { FlashAudioEnabled = false, MasterVolume = 100 }, "a.mp3");
+        Assert.Equal(0, rig.Stops);
     }
 
     [Fact]
@@ -167,11 +191,16 @@ public sealed class FlashVoiceTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var present = FlashOverlay.Present;
         var speak = FlashVoice.Speak;
+        var addXp = CoreProgression.AddXPProvider;
+        var skills = CoreSettings.Current.UnlockedSkills.ToList();
+        var xp = new List<double>();
         Action<double?>? ready = null;
         try
         {
             FlashOverlay.Present = (_, _, _) => true;
             FlashVoice.Speak = (_, r) => ready = r;
+            CoreProgression.AddXPProvider = (a, _) => xp.Add(a);
+            CoreSettings.Current.UnlockedSkills.Clear();   // no lucky x10 roll
             var screen = new Window().Screens.All[0];
             List<(Bitmap, PixelRect, string, Screen)> Burst() => new()
                 { (new Bitmap(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))), new PixelRect(100, 100, 100, 100), "a.png", screen) };
@@ -184,6 +213,7 @@ public sealed class FlashVoiceTests
             ready!(3.0);
             await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(TimeSpan.FromSeconds(4), Assert.Single(FlashOverlay.Active).Window.Lifetime);
+            Assert.Equal(new[] { 8.0 }, xp);   // WPF: 8 XP while the burst's line plays
 
             // Stop while the line is starting: its late settle spawns nothing.
             FlashOverlay.CloseAll(false);
@@ -203,7 +233,13 @@ public sealed class FlashVoiceTests
             ready!(null);
             await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(TimeSpan.FromSeconds(10), Assert.Single(FlashOverlay.Active).Window.Lifetime);
+            Assert.Equal(new[] { 8.0, 4.0 }, xp);
         }
-        finally { FlashOverlay.CloseAll(false); FlashOverlay.Present = present; FlashVoice.Speak = speak; }
+        finally
+        {
+            FlashOverlay.CloseAll(false); FlashOverlay.Present = present; FlashVoice.Speak = speak;
+            CoreProgression.AddXPProvider = addXp;
+            CoreSettings.Current.UnlockedSkills.Clear(); CoreSettings.Current.UnlockedSkills.AddRange(skills);
+        }
     });
 }
