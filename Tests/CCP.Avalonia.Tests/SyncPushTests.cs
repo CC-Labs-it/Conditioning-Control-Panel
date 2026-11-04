@@ -32,6 +32,7 @@ public sealed partial class AccountSeedTests
         public string? Profile;
         public HttpStatusCode SyncStatus = HttpStatusCode.OK;
         public string SyncReply = "{\"success\":true}";
+        public string ValidateReply = "{}";
         public TaskCompletionSource? Hold;   // a sync answer that waits until released
         public readonly Queue<(HttpStatusCode, string)> Next = new();   // one-shot sync answers, then SyncStatus
         // A snapshot under the lock: the heartbeat LoadProfile starts can still be adding while a test reads.
@@ -45,6 +46,8 @@ public sealed partial class AccountSeedTests
             if (path == "GET /v2/user/profile")
                 return Profile == null ? new(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") }
                     : new(HttpStatusCode.OK) { Content = new StringContent(Profile) };
+            if (path == "GET /patreon/validate")
+                return new(HttpStatusCode.OK) { Content = new StringContent(ValidateReply) };
             if (path == "POST /v2/user/sync")
             {
                 var (status, reply) = Next.Count > 0 ? Next.Dequeue() : (SyncStatus, SyncReply);
@@ -104,6 +107,95 @@ public sealed partial class AccountSeedTests
             CoreAccount.UnifiedUserId = null;
         }
     }
+
+    // WPF ProfileSyncService.cs:565-570,670-687,1874. The fake carries an owned
+    // prize on the normal restore -> profile load -> sync path, then logout while Home is detached.
+    [Fact]
+    public void RestoredHomeReadsSyncPrizes_AndSameAccountLogoutForgetsThem() => WithFreshInstall(async () =>
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var (wire, _, _) = SignIn("u1", L40Profile("u1"));
+            wire.SyncReply = """{"success":true,"prizes":{"revision":7,"grants":["fx.jackpot_remix"]}}""";
+            var previousCheck = PrizeOwnership.IsGranted;
+            PrizeOwnership.IsGranted = PrizeOwnership.Held;
+            CoreAccount.UnifiedUserId = null;
+            AccountSeed.RestoreSession();
+            var view = new global::ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView();
+            var window = new global::Avalonia.Controls.Window { Content = view };
+            try
+            {
+                window.Show();
+                Assert.False(view.CardFlash.ShowV2Badge);
+                await AccountSeed.ValidateRestoredSessionAsync();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(view.CardFlash.ShowV2Badge);
+                window.Content = null;
+                await AccountSeed.Logout();
+                Assert.False(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
+                var s = CoreSettings.Current;
+                (s.UnifiedId, s.AuthToken) = ("u1", "tok");
+                CoreAccount.UnifiedUserId = "u1";
+                window.Content = view;
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.False(view.CardFlash.ShowV2Badge);
+                // The cleared revision must not reject a new lower-revision snapshot.
+                ProviderSubscription.PrizesSink!("u1", "u1", new PrizesBlock { Revision = 1, Grants = new() { PrizeOwnership.BubbleRain } }, "validate");
+                Assert.True(view.CardBubblePop.ShowV2Badge);
+                Assert.False(view.CardFlash.ShowV2Badge);
+            }
+            finally { window.Close(); PrizeOwnership.IsGranted = previousCheck; PrizeOwnership.ResetHeld(); }
+        });
+    });
+
+    // WPF App.xaml.cs:439 and ProviderSubscription.cs:300. Read the real validate
+    // response through the seeded provider, including mismatched and absent blocks.
+    [Fact]
+    public void ProviderValidationFeedsOnlyTheRequestedAccount() => WithFreshInstall(async () =>
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var (wire, _, _) = SignIn("u1", L40Profile("u1"));
+            Assert.True(AccountSeed.Seed(p => new ProviderSubscription(p, () => CoreSettings.Current, wire)));
+            CoreSettings.Current.AuthToken = null; // provider validation can restore ownership before a token is reissued
+            _secrets["patreon_auth"] = Newtonsoft.Json.JsonConvert.SerializeObject(new PatreonTokenData
+                { AccessToken = "test", RefreshToken = "test", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+            wire.ValidateReply = """{"is_active":true,"tier":1,"unified_id":"u1","prizes":{"revision":3,"grants":["fx.flash.pendulum"]}}""";
+            await AccountSeed.Patreon!.ValidateSubscriptionAsync(forceRefresh: true);
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashPendulum));
+            wire.ValidateReply = """{"is_active":true,"tier":1,"unified_id":"other","prizes":{"revision":4,"grants":[]}}""";
+            await AccountSeed.Patreon.ValidateSubscriptionAsync(forceRefresh: true);
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashPendulum));
+            wire.ValidateReply = """{"is_active":true,"tier":1,"unified_id":"u1"}""";
+            await AccountSeed.Patreon.ValidateSubscriptionAsync(forceRefresh: true);
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashPendulum));
+            wire.ValidateReply = """{"is_active":true,"tier":1,"unified_id":"u1","prizes":{"revision":4,"grants":[]}}""";
+            await AccountSeed.Patreon.ValidateSubscriptionAsync(forceRefresh: true);
+            Assert.False(PrizeOwnership.Held(PrizeOwnership.FlashPendulum));
+        });
+    });
+
+    [Fact]
+    public void OldSyncResponseCannotApplyAfterSameAccountReload() => WithFreshInstall(async () =>
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+            Assert.True(await AccountSeed.LoadProfileAsync());
+            wire.Hold = new TaskCompletionSource();
+            wire.SyncReply = """{"success":true,"prizes":{"revision":9,"grants":["fx.flash.pendulum"]}}""";
+            sync.UtcNow = () => T0.AddSeconds(31);
+            var push = sync.PushAsync("level-up");
+            sync.Reset();
+            sync.MarkLoaded(Array.Empty<string>()); // same account signed in again while the old reply is held
+            wire.Hold.SetResult();
+            Assert.False(await push);
+            Assert.False(PrizeOwnership.Held(PrizeOwnership.FlashPendulum));
+        });
+    });
 
     [Fact]
     public void NoPush_BeforeASuccessfulLoad_NorAfterLogout_UntilTheNextLoad() => WithFreshInstall(async () =>

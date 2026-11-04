@@ -80,12 +80,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
             RebindToCurrentSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -147,18 +149,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        // WPF rebuilds on PrizeGrants.GrantsChanged. On this head ownership changes at runtime only
-        // when a Get it buy lands its grants (PrizeOwnership.ApplySnapshot), and that is exactly when
-        // the row turns Hidden: rebuild then, so the bought Drift & Bounce shows at once.
-        private void OnGetRowChanged()
+        // WPF FlashFeatureControl.xaml.cs:78-85,433-451: rebuild on grants and revocations
+        // without writing the temporary selection back to settings.
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() =>
         {
-            if (!RowGetFlashesV2.IsRowHidden || RowMotion.IsVisible
-                || !Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)) { RefreshV2Box(); return; }
             var wasLoading = _isLoading;
             _isLoading = true;
-            try { BuildMotionPicker(); }
+            try { BuildMotionPicker(); RefreshExitRow(); } // WPF FlashFeatureControl.xaml.cs:75,81-85
             finally { _isLoading = wasLoading; }
-        }
+        });
+
+        private void OnGetRowChanged() => RefreshV2Box();
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
         /// no motion, Shatter or Get it row is left.</summary>

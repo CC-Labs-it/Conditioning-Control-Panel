@@ -46,6 +46,10 @@ internal static class AccountSeed
             return false;
         }
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
+        // WPF App.xaml.cs:439 and ProfileSyncService.cs:565-570.
+        ProviderSubscription.PrizesSink = PrizeOwnership.ApplyProfilePrizes;
+        CoreAccount.UnifiedIdentityChanged -= PrizeOwnership.OnIdentityChanged;
+        CoreAccount.UnifiedIdentityChanged += PrizeOwnership.OnIdentityChanged;
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
         // WPF App.IsLoggedIn / UserDisplayName / the PatreonService gates.

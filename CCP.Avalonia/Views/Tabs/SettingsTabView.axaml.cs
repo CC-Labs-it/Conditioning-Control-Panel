@@ -57,12 +57,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Avalonia's twin for "the tree is up" is AttachedToVisualTree. Views stay
             // instantiated for the app's life, so the _fxComposed guard keeps this to once.
             AttachedToVisualTree += OnDashboardAttached;
+            // WPF SettingsTabView.xaml.cs:60 and MainWindow.Presets.cs:1131-1147.
+            AttachedToVisualTree += (_, _) =>
+            {
+                Services.Prizes.PrizeGrants.GrantsChanged += RefreshV2Badges;
+                CoreAccount.UnifiedIdentityChanged += OnV2IdentityChanged;
+                RefreshV2Badges();
+            };
+            DetachedFromVisualTree += (_, _) =>
+            {
+                Services.Prizes.PrizeGrants.GrantsChanged -= RefreshV2Badges;
+                CoreAccount.UnifiedIdentityChanged -= OnV2IdentityChanged;
+            };
             DetachedFromVisualTree += (_, _) => { _logoPulseReset?.Dispose(); _logoPulseReset = null; ImgLogo.Transitions = null; ImgLogo.RenderTransform = null; };
 
             // WPF IsVisibleChanged -> MainWindow.OnDashboardTabVisibilityChanged (the ? box and
             // One Account cards). Attach covers the launch: the app lands here with no IsVisible flip.
             AttachedToVisualTree += (_, _) => NotifyShellVisibility();
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { NotifyShellVisibility(); SyncFoldArrowBreath(); } };
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { NotifyShellVisibility(); SyncFoldArrowBreath(); if (IsVisible) RefreshV2Badges(); } };
 
             WireStubs();
             InitializeClickChoice();
@@ -79,6 +91,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             try { (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OnDashboardTabVisibilityChanged(IsVisible); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Dashboard visibility hook failed"); }
+        }
+
+        // AccountSeed.Logout clears the stored identity after raising UnifiedIdentityChanged.
+        private void OnV2IdentityChanged(object? sender, EventArgs e) =>
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshV2Badges);
+
+        private void RefreshV2Badges()
+        {
+            if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshV2Badges);
+                return;
+            }
+            CardFlash.ShowV2Badge = Platform.PrizeOwnership.FlashV2Owned();
+            CardBubblePop.ShowV2Badge = Platform.PrizeOwnership.BubbleV2Owned();
         }
 
         private void OnDashboardAttached(object? sender, EventArgs e)

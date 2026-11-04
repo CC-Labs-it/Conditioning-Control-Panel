@@ -92,10 +92,28 @@ public sealed class V2GetItRowTests
                 btn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(1, opened);
 
+                // WPF V2GetItRow.xaml.cs:59-85: ownership hides and revocation restores the row.
                 PrizeOwnership.IsGranted = g => g == PrizeOwnership.FlashDriftBounce;
+                PrizeGrants.RaiseGrantsChanged();
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(row.IsVisible);
                 row.Apply();
                 Assert.False(row.IsVisible);
                 Assert.True(row.IsRowHidden);
+                PrizeOwnership.IsGranted = _ => false;
+                PrizeGrants.RaiseGrantsChanged();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(row.IsVisible);
+                Assert.False(row.IsRowHidden);
+                Assert.Equal(V2PurchaseRowState.Unavailable, row.Row.State);
+                host.Content = null;
+                PrizeOwnership.IsGranted = g => g == PrizeOwnership.FlashDriftBounce;
+                PrizeGrants.RaiseGrantsChanged();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(row.IsVisible); // detached
+                host.Content = card;
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(row.IsVisible);
             }
             finally
             {
@@ -119,6 +137,7 @@ public sealed class V2GetItRowTests
             EnsureApp();
             var s = CoreSettings.Current;
             var (id, token, offline, sp, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted);
+            var oldAccount = CoreAccount.UnifiedUserId;
             var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
             var secrets = new System.Collections.Generic.Dictionary<string, string?>();
             CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
@@ -128,6 +147,7 @@ public sealed class V2GetItRowTests
             try
             {
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints) = ("u-buy", "t-buy", false, 50);
+                CoreAccount.UnifiedUserId = "u-buy";
                 PrizeOwnership.IsGranted = g => PrizeOwnership.Held(g);
                 PrizeOwnership.ResetHeld();
                 var svc = V2PurchaseHead.Create(null, "http://127.0.0.1:9", new System.Net.Http.HttpClient(h))!;
@@ -151,6 +171,16 @@ public sealed class V2GetItRowTests
                 Assert.Equal(30.ToString(System.Globalization.CultureInfo.CurrentCulture), row.FindControl<TextBlock>("TxtPrice")!.Text);
                 Assert.Equal(Loc.Get("v2_get_button"), row.FindControl<TextBlock>("TxtGet")!.Text);
                 Assert.True(btn.IsVisible && btn.IsEnabled);
+
+                // A profile grant and revocation repaint the already-priced offer without a purchase.
+                PrizeOwnership.ApplySnapshot("u-buy", 1, new[] { PrizeOwnership.FlashDriftBounce });
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(row.IsVisible);
+                PrizeOwnership.ApplySnapshot("u-buy", 2, Array.Empty<string>());
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(row.IsVisible);
+                Assert.Equal(V2PurchaseRowState.Offer, row.Row.State);
+                Assert.True(btn.IsEnabled);
 
                 // A refusal: insufficient -> WPF's key, the row stays and offers again.
                 string? asked = null;
@@ -192,6 +222,7 @@ public sealed class V2GetItRowTests
                 PrizeOwnership.ResetHeld();
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted) = (id, token, offline, sp, seam);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
+                CoreAccount.UnifiedUserId = oldAccount;
             }
         });
     }
