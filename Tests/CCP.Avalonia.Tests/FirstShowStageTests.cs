@@ -92,6 +92,30 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    // WPF Presentation.cs:25-27 stops the alive lifecycle and releases the active gesture.
+    [Fact]
+    public Task PresentationStopsAliveAndGestureHolds() => Run(stage =>
+    {
+        var emi = EmiDeskService.Instance.Window!;
+        Assert.True(FirstShowService.Stop());
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var type = typeof(EmiDeskWindow);
+        var ladder = (EmiPokeLadder)type.GetField("_patPokes", flags)!.GetValue(emi)!;
+        ladder.Note(DateTime.UtcNow);
+        var chrome = (EmiChromeHover)type.GetField("_chrome", flags)!.GetValue(emi)!;
+        chrome.Hold(EmiChromeHold.Drag, true, DateTime.UtcNow);
+        chrome.Hold(EmiChromeHold.Resize, true, DateTime.UtcNow);
+        type.GetField("_dragging", flags)!.SetValue(emi, true);
+        type.GetField("_resizing", flags)!.SetValue(emi, true);
+
+        Assert.True(FirstShowService.Open());
+        Assert.Equal(0, ladder.Count);
+        Assert.Equal(EmiChromeHold.None, chrome.Holds & (EmiChromeHold.Drag | EmiChromeHold.Resize));
+        Assert.False((bool)type.GetField("_dragging", flags)!.GetValue(emi)!);
+        Assert.False((bool)type.GetField("_resizing", flags)!.GetValue(emi)!);
+        return Task.CompletedTask;
+    });
+
     private sealed class PresentationPatClock : TimeProvider
     {
         private DateTimeOffset _now = DateTimeOffset.UtcNow;
