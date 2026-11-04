@@ -164,11 +164,26 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
-                {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                }
+                // Hit-test the first click normally. Carry its source and pointer into a second
+                // press with click count 2: headless mouse timestamps use wall time, so a busy
+                // runner can otherwise turn the intended double click into two single clicks.
+                global::Avalonia.Input.PointerPressedEventArgs? first = null;
+                void Capture(object? _, global::Avalonia.Input.PointerPressedEventArgs e) => first = e;
+                w.AddHandler(global::Avalonia.Input.InputElement.PointerPressedEvent, Capture,
+                    global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+                w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                w.RemoveHandler(global::Avalonia.Input.InputElement.PointerPressedEvent, Capture);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible); // one click alone opens nothing
+                var source = Assert.IsAssignableFrom<global::Avalonia.Input.InputElement>(first!.Source);
+                Assert.Same(source, global::Avalonia.Input.InputExtensions.InputHitTest(w, at));
+                source.RaiseEvent(new global::Avalonia.Input.PointerPressedEventArgs(source, first.Pointer, w, at, first.Timestamp + 100,
+                    new global::Avalonia.Input.PointerPointProperties(global::Avalonia.Input.RawInputModifiers.LeftMouseButton,
+                        global::Avalonia.Input.PointerUpdateKind.LeftButtonPressed), global::Avalonia.Input.KeyModifiers.None, 2));
+                source.RaiseEvent(new global::Avalonia.Input.PointerReleasedEventArgs(source, first.Pointer, w, at, first.Timestamp + 110,
+                    new global::Avalonia.Input.PointerPointProperties(global::Avalonia.Input.RawInputModifiers.None,
+                        global::Avalonia.Input.PointerUpdateKind.LeftButtonReleased), global::Avalonia.Input.KeyModifiers.None,
+                    global::Avalonia.Input.MouseButton.Left));
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
