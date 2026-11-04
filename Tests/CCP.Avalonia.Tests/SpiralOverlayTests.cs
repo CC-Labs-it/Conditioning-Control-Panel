@@ -103,6 +103,58 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Classic_gif_uses_gentle_delay_even_when_the_host_is_unavailable(bool hostEnabled)
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-spiral-classic-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            SubliminalSilentHintTests.EnsureAvalonia();
+            var configure = SharedOverlayHost.Configure;
+            var provider = CoreSettings.ServiceProvider;
+            var engine = CoreSession.IsEngineRunningProvider;
+            var settings = new SettingsService();
+            var s = settings.Current;
+            (s.SpiralEnabled, s.SpiralPath, s.SpiralTargetMonitor, s.UnifiedOverlayHost) = (true, gif, -1, hostEnabled);
+            (s.GentleVisuals, s.GentleSpeed) = (true, 0.5);
+            CoreSettings.ServiceProvider = () => settings;
+            CoreSession.IsEngineRunningProvider = () => true;
+            SharedOverlayHost.Configure = (_, _) => false;
+            SpiralOverlay.SkipPlatformChecksForTests = true;
+            var owner = new Window();
+            owner.Show();
+            try
+            {
+                SpiralOverlay.Refresh(owner);
+                await Settle();
+                Assert.NotEmpty(SpiralOverlay.Shown);
+                Assert.Equal(TimeSpan.FromMilliseconds(30), SpiralOverlay.FrameDelay);
+                Assert.Equal(TimeSpan.FromMilliseconds(60), SpiralOverlay.TimerInterval);
+                SpiralOverlay.CloseAll();
+                s.GentleVisuals = false;
+                SpiralOverlay.Refresh(owner);
+                Assert.NotEmpty(SpiralOverlay.Shown);
+                Assert.Equal(TimeSpan.FromMilliseconds(30), SpiralOverlay.TimerInterval);
+                SpiralOverlay.CloseAll();
+                Assert.Null(SpiralOverlay.TimerInterval);
+            }
+            finally
+            {
+                SpiralOverlay.CloseAll();
+                SpiralOverlay.SkipPlatformChecksForTests = false;
+                SharedOverlayHost.Configure = configure;
+                CoreSettings.ServiceProvider = provider;
+                CoreSession.IsEngineRunningProvider = engine;
+                owner.Close();
+                Directory.Delete(dir, true);
+            }
+        });
+    }
+
     [Fact]
     public async Task Hosted_gif_uses_live_gentle_speed() => await WithGentleHosted((root, settings, owner) =>
     {

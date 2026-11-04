@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsAnimating => _timer is { IsEnabled: true } && _frames.Count > 1 && IsShowing;
         internal static int FrameIndex => _index;
         internal static TimeSpan FrameDelay => _delay;
+        internal static TimeSpan? TimerInterval => _timer?.Interval;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
 
         private static readonly SpiralPool Pool = new();
@@ -188,7 +189,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Hosted.Count > 0 || (_frames.Count > 1 && IsShowing))
             {
                 _timer = new DispatcherTimer(DispatcherPriority.Render)
-                    { Interval = Hosted.Count > 0 ? TimeSpan.FromMilliseconds(16) : _delay };
+                    { Interval = Hosted.Count > 0 ? TimeSpan.FromMilliseconds(16)
+                        : TimeSpan.FromMilliseconds(GentleVisuals.ScaleDelayMs(_delay.TotalMilliseconds)) };
                 _lastTick = Stopwatch.GetTimestamp();
                 _timer.Tick += (_, _) =>
                 {
