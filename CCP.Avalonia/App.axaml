@@ -41,6 +41,9 @@
     <Style Selector="ContextMenu">
       <Setter Property="Theme" Value="{StaticResource InputContextMenuTheme}"/>
     </Style>
+    <Style Selector="Menu Separator">
+      <Setter Property="Theme" Value="{StaticResource InputSeparatorTheme}"/>
+    </Style>
     <Style Selector="ContextMenu Separator">
       <Setter Property="Theme" Value="{StaticResource InputSeparatorTheme}"/>
     </Style>

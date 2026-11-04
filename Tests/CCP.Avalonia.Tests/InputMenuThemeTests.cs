@@ -73,6 +73,25 @@ public sealed class InputMenuThemeTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task MenuBarSeparatorUsesTheKeyedWpfInset() => Run(window =>
+    {
+        var divider = new Separator();
+        var menu = new Menu { Items = { new MenuItem { Header = new Border(), Items = { divider } } } };
+        window.Content = menu;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var item = (MenuItem)menu.Items[0]!;
+        item.IsSubMenuOpen = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(Application.Current!.FindResource("InputSeparatorTheme"), divider.Theme);
+        Assert.Equal(new Thickness(6, 4), divider.Margin);
+        Assert.Equal(1, divider.Height);
+        Assert.Equal(Colour(window, "GlassBorderBrush"), ((ISolidColorBrush)divider.Background!).Color);
+        return Task.CompletedTask;
+    });
+
     private static Color Colour(Window window, string key) => ((ISolidColorBrush)window.FindResource(key)!).Color;
 
     private static Task Run(Func<Window, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
