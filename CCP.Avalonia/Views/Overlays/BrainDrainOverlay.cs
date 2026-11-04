@@ -34,6 +34,7 @@ internal static class BrainDrainOverlay
         ? X11Overlay.SetClickThrough(w, true) : X11Overlay.EnableDesktopBlur(w);
     internal static Func<IReadOnlyList<Window>, IReadOnlyList<BrainDrainKeepClear.BandEntry>> ReadBand = X11Overlay.VisibleOwnBand;
     internal static Action<Window, uint> Capture = Win32Overlay.SetCaptureAffinity;
+    internal static Action<Image> InvalidateFrame = image => image.InvalidateVisual();
     internal static Action<Window, double> Alpha = (w, a) => X11Overlay.SetOpacity(w, a);
     internal static Action<Window> Raise = w => X11Overlay.Raise(w);
     internal static Action<Window, Window> Below = (w, a) => X11Overlay.RestackBelow(w, a);
@@ -142,17 +143,22 @@ internal static class BrainDrainOverlay
         {
             var state = Frames[w]; var frame = state.Pump.Take();
             if (frame == null) continue;
-            var bitmap = state.Bitmap;
-            if (bitmap == null || bitmap.PixelSize.Width != frame.Width || bitmap.PixelSize.Height != frame.Height)
+            try
             {
-                var old = bitmap;
-                bitmap = new WriteableBitmap(new PixelSize(frame.Width, frame.Height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
-                state.Image.Source = bitmap; old?.Dispose();
+                var bitmap = state.Bitmap;
+                if (bitmap == null || bitmap.PixelSize.Width != frame.Width || bitmap.PixelSize.Height != frame.Height)
+                {
+                    var old = bitmap;
+                    bitmap = new WriteableBitmap(new PixelSize(frame.Width, frame.Height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
+                    state.Image.Source = bitmap; old?.Dispose();
+                }
+                using (var buffer = bitmap.Lock())
+                    for (int y = 0; y < frame.Height; y++)
+                        Marshal.Copy(frame.Pixels, y * frame.Width * 4, buffer.Address + y * buffer.RowBytes, frame.Width * 4);
+                Frames[w] = (state.Pump, state.Image, bitmap, state.Scale);
+                InvalidateFrame(state.Image); // WPF BrainDrainCapturePump.cs:529 publishes every frame.
             }
-            using (var buffer = bitmap.Lock())
-                for (int y = 0; y < frame.Height; y++)
-                    Marshal.Copy(frame.Pixels, y * frame.Width * 4, buffer.Address + y * buffer.RowBytes, frame.Width * 4);
-            Frames[w] = (state.Pump, state.Image, bitmap, state.Scale);
+            finally { frame.Dispose(); }
         }
     }
     private static void CloseHosts()

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Diagnostics;
@@ -187,6 +188,30 @@ public sealed class BrainDrainIntegrationTests
         Assert.Equal(14, Assert.IsType<BlurEffect>(image.Effect).Radius, 5);
         CoreSettings.Current.BrainDrainBlurStrength = 50;
         Assert.Equal(7, Assert.IsType<BlurEffect>(image.Effect).Radius, 5);
+    });
+
+    [Fact]
+    public Task EachCapturedFrameInvalidatesAfterCopyAndReturnsItsBuffer() => Run(async owner =>
+    {
+        var pending = new ConcurrentQueue<BrainDrainCapturePump.Frame>();
+        var pool = new BrainDrainCapturePumpTests.TrackingPool();
+        var painted = new List<byte>();
+        BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
+        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(() => pending.TryDequeue(out var f) ? f : null, TimeSpan.FromMilliseconds(10));
+        BrainDrainOverlay.InvalidateFrame = image => {
+            using var buffer = Assert.IsType<WriteableBitmap>(image.Source).Lock();
+            painted.Add(Marshal.ReadByte(buffer.Address)); image.InvalidateVisual();
+        };
+        BrainDrainOverlay.Start(owner);
+        var image = Assert.IsType<Image>(Assert.Single(BrainDrainOverlay.Active).Content);
+        void Queue(byte color) { var pixels = pool.Rent(16); Array.Fill(pixels, color); pending.Enqueue(new(2, 2, pixels, pool)); }
+        Queue(7);
+        for (int i = 0; i < 100 && pool.Returns < 1; i++) await Task.Delay(20);
+        Assert.Equal(new byte[] { 7 }, painted); Assert.Equal(1, pool.Returns);
+        var bitmap = image.Source;
+        Queue(42);
+        for (int i = 0; i < 100 && pool.Returns < 2; i++) await Task.Delay(20);
+        Assert.Same(bitmap, image.Source); Assert.Equal(new byte[] { 7, 42 }, painted); Assert.Equal(2, pool.Returns);
     });
 
     [Fact]
