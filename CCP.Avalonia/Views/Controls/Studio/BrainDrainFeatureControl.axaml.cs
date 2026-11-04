@@ -7,7 +7,7 @@ using ConditioningControlPanel.Localization;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 {
     /// <summary>Visual settings drive BrainDrainOverlay while the engine runs.
-    /// Audio, melt and clip-library actions still await the head's BrainDrainService.</summary>
+    /// Melt rendering and audio actions remain unported.</summary>
     public partial class BrainDrainFeatureControl : UserControl
     {
         public BrainDrainFeatureControl()
@@ -24,9 +24,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
             // WPF .xaml.cs:221-244,289-304,346-355: visual strength and capture visibility.
             this.FindControl<CheckBox>("ChkEnable")!.IsChecked = CoreSettings.Current.BrainDrainEnabled; this.FindControl<CheckBox>("ChkAllowCapture")!.IsChecked = CoreSettings.Current.AllowOverlayCapture;
-            this.FindControl<Slider>("SliderBlurStrength")!.Value = CoreSettings.Current.BrainDrainBlurStrength;
+            this.FindControl<Slider>("SliderBlurStrength")!.Value = CoreSettings.Current.BrainDrainBlurStrength; this.FindControl<CheckBox>("ChkMelt")!.IsChecked = CoreSettings.Current.BrainDrainMeltEnabled;
             this.FindControl<CheckBox>("ChkEnable")!.IsCheckedChanged += (_, _) => { if (!_loading) { CoreSettings.Current.BrainDrainEnabled = this.FindControl<CheckBox>("ChkEnable")!.IsChecked == true; CoreSettings.Save(); } };
-            this.FindControl<CheckBox>("ChkAllowCapture")!.IsCheckedChanged += (_, _) => { if (!_loading) { CoreSettings.Current.AllowOverlayCapture = this.FindControl<CheckBox>("ChkAllowCapture")!.IsChecked == true; CoreSettings.Save(); } };
+            this.FindControl<CheckBox>("ChkAllowCapture")!.IsCheckedChanged += (_, _) => { if (!_loading) { CoreSettings.Current.AllowOverlayCapture = this.FindControl<CheckBox>("ChkAllowCapture")!.IsChecked == true; CoreSettings.Save(); } }; this.FindControl<CheckBox>("ChkMelt")!.IsCheckedChanged += (_, _) => { if (!_loading) { CoreSettings.Current.BrainDrainMeltEnabled = this.FindControl<CheckBox>("ChkMelt")!.IsChecked == true; CoreSettings.Save(); } };
             this.FindControl<Slider>("SliderBlurStrength")!.PropertyChanged += (_, e) =>
             {
                 if (!_loading && e.Property == Slider.ValueProperty)
@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
         // WPF BrainDrainFeatureControl.xaml.cs:213-235: external writers repaint the live card.
         private void SettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-        { if (e.PropertyName is nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainKeepPicturesClear) or nameof(ConditioningControlPanel.Models.AppSettings.AllowOverlayCapture)) QueueLoad(); }
+        { if (e.PropertyName is nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainKeepPicturesClear) or nameof(ConditioningControlPanel.Models.AppSettings.AllowOverlayCapture) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainMeltEnabled)) QueueLoad(); }
         private void QueueLoad() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (TopLevel.GetTopLevel(this) != null) LoadKeepClear(); });
         private void LoadKeepClear()
         {
@@ -82,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             {
                 _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
                 this.FindControl<CheckBox>("ChkEnable")!.IsChecked = CoreSettings.Current.BrainDrainEnabled;
-                this.FindControl<Slider>("SliderBlurStrength")!.Value = CoreSettings.Current.BrainDrainBlurStrength; this.FindControl<CheckBox>("ChkAllowCapture")!.IsChecked = CoreSettings.Current.AllowOverlayCapture;
+                this.FindControl<Slider>("SliderBlurStrength")!.Value = CoreSettings.Current.BrainDrainBlurStrength; this.FindControl<CheckBox>("ChkAllowCapture")!.IsChecked = CoreSettings.Current.AllowOverlayCapture; this.FindControl<CheckBox>("ChkMelt")!.IsChecked = CoreSettings.Current.BrainDrainMeltEnabled;
             }
             finally { _loading = false; }
         }
