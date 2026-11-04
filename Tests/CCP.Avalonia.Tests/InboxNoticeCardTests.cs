@@ -38,29 +38,36 @@ public sealed class InboxNoticeCardTests
     private static Button FindButton(string name) => InboxNoticeCard.Current!.GetVisualDescendants()
         .OfType<Button>().Single(b => b.Name == name);
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-    private static MainShellWindow ShowAndFocusShell()
+    private static MainShellWindow NewShell()
     {
         StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
         var shell = new MainShellWindow(); // app windows are closed by the isolation hook (TestIsolation.cs)
         shell.Show();
-        shell.Activate();
         return shell;
+    }
+    private static MainShellWindow ShowAndFocusShell() { var shell = NewShell(); shell.Activate(); return shell; }
+
+    private static string? _token;
+    /// <summary>A signed-in tier-0 account whose first celebration is spent, with a swappable auth token.</summary>
+    private static ConditioningControlPanel.Models.AppSettings SignIn(string token)
+    {
+        _token = token;
+        CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? _token : null;
+        CoreSecrets.StoreProvider = (key, value) => { if (key == CoreSecrets.AuthToken) _token = value; };
+        var s = CoreSettings.Current;
+        (s.UnifiedId, s.OfflineMode, s.PatreonTier, s.LastKnownEffectiveTier) = (Guid.NewGuid().ToString(), false, 0, 0);
+        s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
+        s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+        return s;
     }
 
     private sealed class TierReply(string body, HttpStatusCode status) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
-            Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
-    }
-
-    private sealed class FocusReply : HttpMessageHandler
     {
         internal int Calls;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Interlocked.Increment(ref Calls);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            { Content = new StringContent("{\"user\":{\"effective_tier\":2}}") });
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
         }
     }
 
@@ -70,17 +77,9 @@ public sealed class InboxNoticeCardTests
         Run(() => { }); // Initialize the shared dispatcher and shipped fonts.
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
-            var s = CoreSettings.Current;
-            string? token = "focus-token";
-            CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? token : null;
-            CoreSecrets.StoreProvider = (key, value) => { if (key == CoreSecrets.AuthToken) token = value; };
+            var s = SignIn("focus-token");
             s.UnifiedId = null;
-            s.OfflineMode = false;
-            s.PatreonTier = 0;
-            s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
-            s.LastKnownEffectiveTier = 0;
-            s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
-            var wire = new FocusReply();
+            var wire = new TierReply("{\"user\":{\"effective_tier\":2}}", HttpStatusCode.OK);
             AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
             var now = DateTime.UtcNow;
             AccountSeed.FocusClock = () => now;
@@ -88,12 +87,10 @@ public sealed class InboxNoticeCardTests
             Assert.True(AccountSeed.Seed());
             var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             AccountSeed.Patreon!.TierChanged += (_, _) => changed.TrySetResult();
-            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-            var shell = new MainShellWindow();
+            var shell = NewShell();
             var other = new Window();
             try
             {
-                shell.Show();
                 other.Show();
                 s.UnifiedId = Guid.NewGuid().ToString();
                 CoreAccount.UnifiedUserId = s.UnifiedId;
@@ -108,7 +105,7 @@ public sealed class InboxNoticeCardTests
                 shell.Activate();
                 await Task.Delay(250);
                 Assert.Equal(1, Volatile.Read(ref wire.Calls)); // A second focus inside 20 seconds is suppressed.
-                token = "rotated-focus-token";
+                _token = "rotated-focus-token";
                 now = now.AddSeconds(21);
                 other.Activate();
                 shell.Activate();
@@ -124,20 +121,10 @@ public sealed class InboxNoticeCardTests
     [Fact]
     public void HeartbeatRiseAppliesAndPostsRepeatNotice() => Run(() =>
     {
-        var s = CoreSettings.Current;
-        string? token = "old-token";
-        CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? token : null;
-        CoreSecrets.StoreProvider = (key, value) => { if (key == CoreSecrets.AuthToken) token = value; };
-        s.UnifiedId = Guid.NewGuid().ToString();
-        s.OfflineMode = false;
-        s.PatreonTier = 0;
-        s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
-        s.LastKnownEffectiveTier = 0;
-        s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+        var s = SignIn("old-token");
         Assert.True(AccountSeed.Seed());
         CoreAccount.UnifiedUserId = s.UnifiedId;
-        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-        new MainShellWindow().Show();
+        NewShell();
         var (notifications, onUi) = (0, false);
         AccountSeed.Patreon!.TierChanged += (_, _) => (notifications, onUi) = (notifications + 1, Dispatcher.UIThread.CheckAccess());
         string? rawBody = null;
@@ -145,7 +132,7 @@ public sealed class InboxNoticeCardTests
             { TierReceived = (tier, account, token) => AccountSeed.OfferHeartbeatTier(tier, account, token), HeartbeatBody = body => rawBody = body }
             .HeartbeatAsync().GetAwaiter().GetResult());
         Heartbeat();
-        token = "new-token"; // the queued response belongs to the previous session
+        _token = "new-token"; // the queued response belongs to the previous session
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(0, s.PatreonTier);
         Assert.Equal(0, notifications);
@@ -168,12 +155,7 @@ public sealed class InboxNoticeCardTests
     [InlineData(true)]
     public void ConfirmedDropRearmsNoticeButCachedDropDoesNot(bool profile) => Run(() =>
     {
-        var s = CoreSettings.Current;
-        string? token = "notice-token";
-        CoreSecrets.RetrieveProvider = _ => token;
-        CoreSecrets.StoreProvider = (_, value) => token = value;
-        s.UnifiedId = Guid.NewGuid().ToString();
-        s.OfflineMode = false;
+        var s = SignIn("notice-token");
         AccountSeed.Sync = null;
         CoreAccount.IsLoggedInProvider = () => true;
         bool premium = false;
@@ -182,10 +164,7 @@ public sealed class InboxNoticeCardTests
         s.PatreonTier = 2;
         s.PatreonLabValidUntil = s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(-1);
         var grace = s.PatreonLabValidUntil;
-        s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
-        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-        var shell = new MainShellWindow();
-        shell.Show();
+        var shell = NewShell();
         shell.TierOnNoticePass(true);
         Assert.False(AccountSeed.ServerTierAnsweredThisRun);
         Assert.Equal(2, s.LastKnownEffectiveTier); // cached drop is not authoritative
@@ -202,13 +181,13 @@ public sealed class InboxNoticeCardTests
         shell.TierOnNoticePass(true);
         Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
         Assert.Equal(2, s.LastKnownEffectiveTier);
-        token = "rotated";
+        _token = "rotated";
         Assert.False(AccountSeed.ServerTierAnsweredThisRun);
         AccountSeed.NoteTierReading(0, s.UnifiedId, "notice-token"); // late response from old token
         Assert.False(AccountSeed.ServerTierAnsweredThisRun);
         s.UnifiedId = "another-account";
         Assert.False(AccountSeed.ServerTierAnsweredThisRun);
-        token = null;
+        _token = null;
         Assert.False(Answered("{\"effective_tier\":0}", HttpStatusCode.OK));
 
         bool Answered(string body, HttpStatusCode status)
@@ -353,9 +332,7 @@ public sealed class InboxNoticeCardTests
         service.Current.WhatMovedCardShown = 1;
         service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys.Except(service.Current.SeenFeatureIntros));
         CoreSettings.ServiceProvider = () => service; // restored, and its pending save disarmed, by the isolation hook
-        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-        var shell = new MainShellWindow();
-        shell.Show();
+        var shell = NewShell();
         var other = new Window();
         try
         {

@@ -200,18 +200,12 @@ internal static class AccountSeed
     }
 
     // WPF EntitlementTierSync.cs:43-53,60-94: apply a live rise on the UI thread.
-    internal static void OfferHeartbeatTier(int tier, string account, string? token, string source = "heartbeat")
-    {
+    internal static void OfferHeartbeatTier(int tier, string account, string? token, string source = "heartbeat") =>
         global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            try
-            {
-                if (!NoteTierReading(tier, account, token)) return;
-                ApplyTierReading(tier, source);
-            }
+            try { if (NoteTierReading(tier, account, token)) ApplyTierReading(tier, source); }
             catch (Exception ex) { Log.Warning(ex, "Heartbeat tier apply failed"); }
         });
-    }
 
     /// <summary>A confirmed reading ended a grace window: the same repaint as a tier change, with no
     /// celebration, which is why it is not TierChanged (WPF EntitlementTierSync.GraceClosed).</summary>
