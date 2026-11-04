@@ -70,4 +70,43 @@ public class GazeDriftCorrectionTests
         c.Reset();
         Assert.True(Click(c, cal, gaze, now: Now.AddSeconds(31))!.Value.Persist);
     }
+    [Fact]
+    public void SettledRepositionRaisesGainOnlyWhilePoseIsFresh()
+    {
+        var c = new GazeDriftCorrection(); var cal = Calibration();
+        for (int i = 0; i < 20; i++) c.Pose(0, 0, Now.AddMilliseconds(i * 50));
+        for (int i = 20; i < 40; i++) c.Pose(0.12, 0, Now.AddMilliseconds(i * 50));
+        var at = Now.AddMilliseconds(1950);
+        var gaze = Fixation().Select(s => (s.At.AddMilliseconds(1950), s.X, s.Y)).ToArray();
+        var fast = Click(c, cal, gaze, x: 1700, now: at)!.Value;
+        Assert.True(fast.Offset.Dx > 100); // residual 250, rejected at the normal 220 cap
+        at = at.AddSeconds(2);
+        gaze = Fixation().Select(s => (s.At.AddSeconds(3.95), s.X, s.Y)).ToArray();
+        Assert.Null(Click(c, cal, gaze, x: 1700, now: at));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FastModeStopsAfterConvergenceOrNudgeBudget(bool converge)
+    {
+        var c = new GazeDriftCorrection(); var cal = Calibration();
+        for (int i = 0; i < 20; i++) c.Pose(0, 0, Now.AddMilliseconds(i * 50));
+        for (int i = 20; i < 40; i++) c.Pose(0.12, 0, Now.AddMilliseconds(i * 50));
+        var initial = Fixation().Select(s => (s.At.AddMilliseconds(1950), s.X, s.Y)).ToArray();
+        Assert.NotNull(Click(c, cal, initial, x: 1700, now: Now.AddMilliseconds(1950)));
+        int count = converge ? 3 : 14;
+        for (int i = 0; i < count; i++)
+        {
+            var at = Now.AddMilliseconds(2450 + i * 500);
+            c.Pose(0.12, 0, at);
+            var gaze = Fixation().Select(s => (s.At.AddMilliseconds(2450 + i * 500), s.X, s.Y)).ToArray();
+            Assert.NotNull(Click(c, cal, gaze, x: converge ? 1240 : 1400, now: at));
+        }
+        var last = Now.AddMilliseconds(2450 + count * 500);
+        c.Pose(0.12, 0, last);
+        var samples = Fixation().Select(s => (s.At.AddMilliseconds(2450 + count * 500), s.X, s.Y)).ToArray();
+        Assert.Null(Click(c, cal, samples, x: 1700, now: last));
+    }
+
 }

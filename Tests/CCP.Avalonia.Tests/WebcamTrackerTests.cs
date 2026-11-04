@@ -68,6 +68,61 @@ public sealed class WebcamTrackerTests
         }
     });
 
+    private sealed class DriftHook : IDisposable
+    {
+        public bool Disposed;
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public void DriftHookTracksConsentCalibrationAndAppliesClicksUntilStopped()
+    {
+        WithConsent(true, () =>
+        {
+            var t = WebcamTracker.Instance;
+            var settings = ConditioningControlPanel.CoreSettings.Current;
+            var oldCal = t.Calibration;
+            var oldEnabled = settings.WebcamAutoDriftCorrection;
+            var hook = new DriftHook();
+            Action<int, int>? click = null;
+            int installs = 0;
+            try
+            {
+                WebcamTracker.SourceFactory = () => new FakeSource();
+                settings.WebcamAutoDriftCorrection = true;
+                t.SetCalibrationLive(null);
+                using var drift = new ConditioningControlPanel.Avalonia.Platform.GazeDriftCorrection(t, settings, cb =>
+                { installs++; click = cb; return hook; });
+                Assert.True(t.Start(), t.LastError);
+                drift.Refresh();
+                Assert.Equal(0, installs);
+                t.SetCalibrationLive(new WebcamCalibrationData());
+                drift.Refresh();
+                Assert.Equal(1, installs);
+                for (int i = 0; i < 5; i++) t.EmitProjectedGaze(100, 100, DateTime.UtcNow);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                click!(200, 100);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(15, t.Calibration!.RuntimeOffset!.Dx, 4);
+                click(200, 100); // queued before disable must not apply after it
+                settings.WebcamAutoDriftCorrection = false;
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(hook.Disposed);
+                Assert.Equal(15, t.Calibration!.RuntimeOffset!.Dx, 4);
+                drift.Dispose();
+                settings.WebcamAutoDriftCorrection = true;
+                drift.Refresh();
+                Assert.Equal(1, installs);
+            }
+            finally
+            {
+                t.Stop();
+                t.SetCalibrationLive(oldCal);
+                settings.WebcamAutoDriftCorrection = oldEnabled;
+            }
+        });
+    }
+
     [Fact]
     public void NoConsent_NeverOpensTheSource()
     {
