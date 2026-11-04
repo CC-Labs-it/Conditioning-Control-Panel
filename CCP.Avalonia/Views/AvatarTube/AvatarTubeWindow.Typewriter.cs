@@ -68,8 +68,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var url = match.Groups[2].Value;
                 if (CompanionLinkNavigation.TryBrowserUri(url, out _))
                     inlines.Add(new InlineUIContainer(new SafeHyperlinkButton
-                    { Content = label, Padding = new Thickness(0), FontFamily = _txtSpeech.FontFamily,
-                      FontSize = _txtSpeech.FontSize, FontWeight = _txtSpeech.FontWeight,
+                    { Content = new global::Avalonia.Controls.TextBlock { Text = label, FontFamily = _txtSpeech.FontFamily,
+                      FontSize = _txtSpeech.FontSize, FontWeight = _txtSpeech.FontWeight },
+                      Padding = new Thickness(0), FontFamily = _txtSpeech.FontFamily, FontSize = _txtSpeech.FontSize, FontWeight = _txtSpeech.FontWeight,
                       Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)), Command = CompanionLinkLauncher.CommandFor(url) }));
                 else inlines.Add(new Run(label));
                 end = match.Index + match.Length;

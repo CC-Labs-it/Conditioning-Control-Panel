@@ -213,13 +213,13 @@ public sealed class TubePresetSpeechParityTests
         try
         {
             tube.Show();
-            tube.Giggle("See [help](https://example.com) now");
+            tube.Giggle("See [my_playlist](https://example.com) now");
             var text = tube.FindControl<TextBlock>("TxtSpeech")!;
             tube.TypewriterFrame!();
             Assert.Equal("S", text.Text);
             while (tube.TypewriterFrame is { } frame) frame();
             var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
-            Assert.Equal("help", link.Content);
+            Assert.Equal("my_playlist", Assert.IsType<TextBlock>(link.Content).Text);
             Assert.Equal(text.FontSize, link.FontSize);
             ((global::Avalonia.Automation.Provider.IInvokeProvider)
                 global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(link)).Invoke();
