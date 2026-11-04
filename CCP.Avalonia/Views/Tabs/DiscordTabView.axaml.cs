@@ -304,7 +304,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!_achievementsDirty) return;
             _achievementsDirty = false;
-            var tiles = _achievementIds?.Select(id => Achievement.All.TryGetValue(id, out var a) ? a : null)
+            var tiles = _achievementIds?.Select(id => id != null && Achievement.All.TryGetValue(id, out var a) ? a : null)
                 .OfType<Achievement>()
                 .Select(a => new ProfileAchievementTile(a.Id, CoreMods.MakeModAware(a.Name))).ToList();
             var any = tiles is { Count: > 0 };

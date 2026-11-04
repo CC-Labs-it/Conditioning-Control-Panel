@@ -72,6 +72,12 @@ Avalonia ≤ WPF × 1.10 + 20 ms when measured on the same Windows runner (job <
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
+<li>2026-11-04, cloud Linux, Discord null-achievement-ID correction on parent
+<code>fc45e646</code>, compared against <code>e62cb9ecd005</code>: a headless regression
+reproduced the null-key exception before the guard; 20 affected headless tests passed
+after it. This is correctness evidence only; no real-window timing or new Windows benchmark
+measurement was taken. Windows median and
+p95 for this revision remain pending the CI <code>perf-bench-windows</code> artifact.</li>
 <li>2026-10-31, cloud Linux, Discord/Remote lane re-cut onto <code>74ac6ce3d</code> (one
 fast-forward merge commit following <code>613c4848b</code>): Release Core/Avalonia/test builds
 passed; Core tests 4636 passed / 5 existing skips, focused headless tests 19 passed, restored

@@ -55,6 +55,28 @@ public sealed class TabFirstShowWorkTests
         });
 
     [Fact]
+    public Task GallerySkipsNullAndUnknownIdsWithoutLosingValidAchievements() =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var view = new DiscordTabView();
+            var grid = view.FindControl<ItemsControl>("ProfileAchievementGrid")!;
+            var expander = view.FindControl<Expander>("ProfileAllAchievementsExpander")!;
+            var id = Achievement.All.Keys.First();
+            var ids = new[] { null!, id, "not-an-achievement" };
+
+            view.ShowAchievements(ids, "empty");
+            Assert.Null(grid.ItemsSource);
+            expander.IsExpanded = true;
+            Assert.Equal(id, Assert.IsType<ProfileAchievementTile>(Assert.Single(grid.Items)).Id);
+
+            // A lookup may also complete while the gallery is already expanded.
+            view.ShowAchievements(ids, "empty");
+            Assert.Equal(id, Assert.IsType<ProfileAchievementTile>(Assert.Single(grid.Items)).Id);
+            return Task.CompletedTask;
+        });
+
+    [Fact]
     public Task RemoteArtIsBoundedAndRetainedAcrossReattachment() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
