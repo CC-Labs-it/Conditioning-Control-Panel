@@ -106,8 +106,11 @@ public class CompanionBrainTests
         public List<IReadOnlyList<CompanionTurn>> Writes { get; } = new();
         public int WipeCount { get; private set; }
 
-        public IReadOnlyList<CompanionTurn> Saved =>
-            Writes.Count == 0 ? Array.Empty<CompanionTurn>() : Writes[^1];
+        // Locked: the brain saves from Task.Run, and List.Add bumps Count before storing the item.
+        public IReadOnlyList<CompanionTurn> Saved
+        {
+            get { lock (Writes) return Writes.Count == 0 ? Array.Empty<CompanionTurn>() : Writes[^1]; }
+        }
 
         public CompanionSessionSnapshot Load() => Snapshot;
         public void Save(IReadOnlyList<CompanionTurn> dialogueTurns) { lock (Writes) Writes.Add(dialogueTurns.ToList()); }
