@@ -1,6 +1,8 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
@@ -11,6 +13,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
     public partial class ExclusivesTabView
     {
+        internal Action<TimeSpan, Action> VaultClickDelay { get; set; } =
+            (delay, action) => DispatcherTimer.RunOnce(action, delay);
+
         // WPF MainWindow.Exclusives.Flair.cs:242: delay the door only when a burst is visible.
         internal void OnVaultCardClicked(Control card, ExclusiveFeature feature, Action open)
         {
@@ -29,7 +34,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _ => Color.FromRgb(0xB7, 0x9C, 0xFF),
             };
             _ambientFx.Burst(at.Value.X, at.Value.Y, color, 90);
-            DispatcherTimer.RunOnce(open, TimeSpan.FromMilliseconds(140));
+            var scale = card.RenderTransform as ScaleTransform;
+            if (scale == null && card.RenderTransform is TransformGroup group)
+                foreach (var transform in group.Children)
+                    if (transform is ScaleTransform existing) { scale = existing; break; }
+            if (scale == null && (card.RenderTransform == null || card.RenderTransform.Value.IsIdentity))
+            {
+                card.RenderTransformOrigin = RelativePoint.Center;
+                card.RenderTransform = scale = new ScaleTransform(1, 1);
+            }
+            if (scale != null)
+            {
+                var duration = TimeSpan.FromMilliseconds(InteractionPressMotion.DurationMs);
+                scale.Transitions ??= new Transitions
+                {
+                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = duration, Easing = new QuadraticEaseOut() },
+                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = duration, Easing = new QuadraticEaseOut() },
+                };
+                scale.ScaleX = scale.ScaleY = InteractionPressMotion.ScaleFor(true);
+            }
+            VaultClickDelay(TimeSpan.FromMilliseconds(140), () =>
+            {
+                if (scale != null) scale.ScaleX = scale.ScaleY = InteractionPressMotion.ScaleFor(false);
+                open();
+            });
         }
     }
 }
