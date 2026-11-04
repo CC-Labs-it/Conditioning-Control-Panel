@@ -1695,5 +1695,11 @@ padlock never covers a running lockdown, and an unreadable recovery file fails o
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
 const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
 </script>
+<h2 id="2026-11-01-sync12-grace-wallpaper-shop">2026-11-01: Grace readings, Wallpaper and the Prize Counter (main sync 12; owner)</h2>
+<ul>
+<li>The Linux head reads the server tier from the profile load and every heartbeat through <code>AccountSeed.ApplyTierReading</code> (Core <code>EntitlementReadings</code>). Rise-only is no longer enough: #4073 keeps the tier on a signed-in launch, so a launch no longer re-stamps a payer's grace.</li>
+<li>Wallpaper: door hidden on this head (<code>SettingsPaletteIndex.WallpaperDoorAvailableProvider</code>).</li>
+<li>Prize Counter on Linux: a lane is owed, <code>prize-counter-linux</code>. It replaces the B3 reason in the sync 10 and 11 ledgers.</li>
+</ul>
 </body>
 </html>

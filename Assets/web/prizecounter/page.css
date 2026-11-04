@@ -1,0 +1,228 @@
+/* page.css - the page frame and the HUD (lane B3-W4): paper and ink over the counter, stamps, near-zero text.
+ * One theme on purpose (the counter is always lit the same). Every effect has an IN and an OUT; Gentle keeps fades only. */
+:root {
+  --paper: #ece6d8; --ink: #23202b; --ink-soft: #5d5866; --pink: #e0457b; --gold: #c99a2e; --red: #a3262f; --chalk: #e9e4ef;
+  --type: "Special Elite", "Courier New", Courier, monospace;
+  --hand: "Gaegu", "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+}
+html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); font: 15px/1.35 var(--type); }
+.pc { position: relative; height: 100%; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+.pc-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pc-hud { position: absolute; inset: 0; pointer-events: none; }
+.pc-hud [hidden] { display: none !important; }
+.pc-hud button { font: inherit; color: var(--ink); cursor: pointer; pointer-events: auto; }
+.pc-hud button:focus-visible { outline: 3px dashed var(--pink); outline-offset: 3px; }
+.pc-star { display: inline-block; width: 15px; height: 15px; flex: none; background: var(--gold);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+.pc-ico { width: 30px; height: 30px; }
+.pc-ico .a, .pc-lock .a { fill: var(--pink); }
+.pc-lock { width: 16px; height: 16px; flex: none; }
+
+/* top line: back, week, wallet */
+.pc-top { position: absolute; left: 16px; right: 16px; top: 14px; display: flex; align-items: center; gap: 12px; }
+.pc-back { width: 40px; height: 40px; padding: 8px; border: 2.5px solid var(--ink); border-radius: 50%; background: var(--paper);
+  box-shadow: 2px 3px 0 rgba(0,0,0,.35); }
+.pc-back svg { width: 100%; height: 100%; }
+.pc-week { font-size: 14px; color: var(--chalk); border: 2px dashed rgba(233,228,239,.7); padding: 1px 8px; transform: rotate(-3deg);
+  letter-spacing: .05em; opacity: .85; }
+.pc-wallet { margin: 0 0 0 auto; display: flex; align-items: center; gap: 8px; font-size: 24px; background: var(--paper);
+  border: 2.5px solid var(--ink); padding: 2px 14px 2px 10px; box-shadow: 3px 4px 0 rgba(0,0,0,.35); transform: rotate(1deg);
+  transition: transform .2s cubic-bezier(.3,1.6,.5,1), color .2s; pointer-events: auto; }
+.pc-wallet .pc-star { width: 20px; height: 20px; }
+.pc-wallet-n { font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+.pc-wallet.pc-hit { transform: rotate(-2deg) scale(1.1); color: var(--pink); }
+
+/* tab stamps: paper tags, the current one inked and pressed in */
+.pc-tabs { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; }
+.pc-tab-row { display: flex; gap: 6px; }
+.pc-tab { width: 54px; height: 48px; padding: 0; display: grid; place-items: center; background: var(--paper);
+  border: 2.5px solid var(--ink); border-bottom-width: 4px; border-radius: 8px 8px 4px 4px;
+  box-shadow: 2px 3px 0 rgba(0,0,0,.35); transition: transform .15s, background-color .15s; }
+.pc-tab:nth-child(odd) { transform: rotate(-1.5deg); }
+.pc-tab:nth-child(even) { transform: rotate(1deg); }
+.pc-tab:hover { transform: translateY(-2px); }
+.pc-tab[aria-selected="true"] { background: var(--ink); color: var(--paper); transform: translateY(4px); box-shadow: none; }
+.pc-tab-prime { border-color: var(--pink); }
+.pc-hint { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.pc-hint kbd { font: 11px/1 var(--type); color: var(--chalk); border: 1.5px solid rgba(233,228,239,.6); border-radius: 3px; padding: 2px 4px; opacity: .8; }
+
+/* preview box: name and price; the slot above is lane B3-W5's */
+.pc-peek { position: absolute; right: 16px; bottom: 16px; width: 250px; background: var(--paper); border: 2.5px solid var(--ink);
+  border-radius: 6px; padding: 10px 14px 12px; box-shadow: 4px 5px 0 rgba(0,0,0,.4); pointer-events: auto; cursor: pointer;
+  transform: rotate(-1deg); transform-origin: 100% 100%; }
+.pc-peek-view:empty { display: none; }
+.pc-peek-view { height: 150px; border-bottom: 2px dashed var(--ink-soft); margin-bottom: 8px; }
+/* the preview itself (preview/): a 3D turntable or a picture, faded IN and OUT (lengths set by preview/frame.js) */
+.pc-pv-box { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.pc-pv { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity var(--pc-pv-out, 120ms) ease-in; }
+.pc-pv.pc-pv-on { opacity: 1; transition: opacity var(--pc-pv-in, 180ms) ease-out; }
+.pc-pv-img { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; }
+.pc-pv-avatar .pc-pv-img { inset: 8px; margin: auto; width: auto; height: calc(100% - 16px); aspect-ratio: 1; border-radius: 50%; border: 2.5px solid var(--ink);
+  object-fit: cover; background: var(--chalk); }
+.pc-pv-swatch .pc-pv-img { object-fit: cover; border: 2px solid var(--ink); border-radius: 4px; opacity: 0;
+  transition: opacity var(--pc-pv-in, 180ms) ease-out; }
+.pc-pv-swatch .pc-pv-lit { opacity: 1; }
+.pc-peek-name { margin: 0; font: 700 24px/1.1 var(--hand); }
+.pc-peek-price { margin: 6px 0 0; display: flex; align-items: center; gap: 6px; font-size: 20px; }
+.pc-peek-desc { margin: 6px 0 0; font-size: 14px; line-height: 1.3; color: var(--ink-soft); }
+.pc-peek.pc-swap { animation: pc-swap .26s cubic-bezier(.3,1.6,.5,1); }
+@keyframes pc-swap { from { transform: rotate(1deg) scale(.94); opacity: .4; } }
+.pc-red { color: var(--red); }
+.pc-soon { font-size: 15px; color: var(--ink-soft); }
+
+/* stamps */
+.pc-stamp { display: inline-flex; align-items: center; gap: 6px; font: 18px/1 var(--type); text-transform: uppercase; letter-spacing: .14em;
+  color: var(--pink); border: 3px solid var(--pink); padding: 3px 9px; transform: rotate(-8deg); }
+.pc-stamp-prime { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+
+/* confirm card */
+.pc-modal { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: auto; padding: 16px; }
+.pc-scrim { position: absolute; inset: 0; background: rgba(20,13,25,.5); transition: opacity .16s; }
+.pc-card { position: relative; width: min(340px, 100%); box-sizing: border-box; background: var(--paper); border: 3px solid var(--ink);
+  border-radius: 6px; padding: 18px 20px 16px; box-shadow: 6px 7px 0 rgba(0,0,0,.45); transform: rotate(-1deg);
+  transition: transform .2s cubic-bezier(.3,1.5,.5,1), opacity .16s; outline: none; display: grid; justify-items: start; gap: 8px; }
+.pc-modal.pc-in .pc-card { animation: pc-in .24s cubic-bezier(.3,1.5,.5,1); }
+.pc-modal.pc-in .pc-scrim { animation: pc-fade .16s; }
+@keyframes pc-in { from { transform: rotate(-4deg) scale(.9) translateY(14px); opacity: 0; } }
+@keyframes pc-fade { from { opacity: 0; } }
+.pc-modal.pc-out .pc-card { transform: rotate(2deg) scale(.94) translateY(10px); opacity: 0; }
+.pc-modal.pc-out .pc-scrim { opacity: 0; }
+.pc-card-name { margin: 0; font: 700 30px/1.05 var(--hand); }
+.pc-card-price { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 30px; }
+.pc-card-price .pc-star { width: 22px; height: 22px; }
+.pc-card-desc { margin: 0; font-size: 15px; line-height: 1.35; color: var(--ink-soft); }
+.pc-line { margin: 0; font-size: 15px; color: var(--ink-soft); }
+.pc-line-short { color: var(--red); }
+.pc-note { margin: 0; font-size: 14px; color: var(--pink); border-left: 3px solid var(--pink); padding-left: 8px; }
+.pc-acts { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.pc-btn { border: 2.5px solid var(--ink); background: var(--paper); border-radius: 30px; padding: 6px 18px; font-size: 17px;
+  box-shadow: 2px 3px 0 var(--ink); transition: transform .1s, box-shadow .1s; }
+.pc-btn:active { transform: translate(2px, 3px); box-shadow: none; }
+.pc-hud .pc-main { background: var(--pink); color: var(--paper); }
+.pc-btn:disabled { opacity: .5; cursor: progress; }
+.pc-card[aria-busy="true"] .pc-main { animation: pc-busy .9s ease-in-out infinite alternate; }
+@keyframes pc-busy { to { transform: translateY(1px); box-shadow: 1px 1px 0 var(--ink); } }
+
+/* status note and the sparkle flyers */
+.pc-status { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) rotate(-1deg); margin: 0; max-width: 300px;
+  background: var(--paper); border: 2.5px solid var(--ink); padding: 10px 16px; box-shadow: 4px 5px 0 rgba(0,0,0,.4); text-align: center; }
+.pc-fx { position: absolute; inset: 0; overflow: hidden; }
+
+/* signed out: the counter greys out behind one sign-in button (IN: the grey fades in, the button pops; OUT: both fade) */
+.pc-canvas { transition: filter .6s ease; }
+.pc.pc-signed-out .pc-canvas { filter: grayscale(.9) brightness(.5) contrast(.92); }
+.pc[data-motion="off"] .pc-canvas { transition: none; }
+.pc-gate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-1.5deg); pointer-events: auto;
+  transition: opacity .16s, transform .16s; }
+.pc-gate .pc-btn { font-size: 22px; padding: 10px 28px; white-space: nowrap; box-shadow: 3px 4px 0 var(--ink); }
+.pc-gate.pc-in { animation: pc-gate-in .3s cubic-bezier(.3,1.5,.5,1); }
+@keyframes pc-gate-in { from { transform: translate(-50%, -50%) rotate(-5deg) scale(.85); opacity: 0; } }
+.pc-gate.pc-out { opacity: 0; transform: translate(-50%, -44%) rotate(2deg) scale(.94); }
+.pc-fly { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; will-change: transform; }
+
+/* the plain list when the scene cannot load */
+.pc-list { position: absolute; inset: 76px 16px 16px; overflow: auto; pointer-events: auto; }
+.pc-shelf { list-style: none; padding: 12px 0 14px; margin: 0 0 14px; display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); border-bottom: 6px solid var(--gold); }
+.pc-item { width: 100%; text-align: left; background: var(--paper); border: 2.5px solid var(--ink); border-radius: 4px; padding: 8px 10px;
+  display: grid; gap: 4px; }
+.pc-item-name { font: 700 18px/1.1 var(--hand); }
+.pc-item > span:last-child { display: flex; align-items: center; gap: 5px; }
+.pc-item.pc-focus { outline: 3px solid var(--pink); outline-offset: 2px; }
+
+/* phone: tabs get their own row under the top line, the preview box becomes a strip */
+@media (max-width: 760px) {
+  .pc-top { top: 10px; left: 12px; right: 12px; }
+  .pc-wallet { font-size: 20px; }
+  .pc-tabs { top: 62px; left: 8px; right: 8px; transform: none; justify-content: center; }
+  .pc-hint { display: none; }
+  .pc-tab-row { gap: 4px; }
+  .pc-tab { width: 40px; height: 40px; border-radius: 6px 6px 3px 3px; }
+  .pc-ico { width: 24px; height: 24px; }
+  .pc-peek { left: 12px; right: 12px; bottom: 12px; width: auto; transform: none; display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: space-between; gap: 4px 12px; padding: 8px 12px; }
+  .pc-peek-view { flex-basis: 100%; height: 96px; }
+  .pc-peek-name { font-size: 20px; }
+  .pc-peek-price { margin: 0; }
+  .pc-peek-desc { flex-basis: 100%; margin: 4px 0 0; font-size: 13px; }
+  .pc-list { inset: 112px 12px 12px; }
+}
+@media (pointer: coarse) { .pc-hint { display: none; } }
+
+/* Gentle: fades only. Motion off: cuts. */
+[data-gentle] .pc-wallet, [data-gentle] .pc-wallet.pc-hit { transform: rotate(1deg); }
+[data-gentle] .pc-modal.pc-in .pc-card { animation-name: pc-fade; }
+[data-gentle] .pc-modal.pc-out .pc-card { transform: rotate(-1deg); }
+[data-gentle] .pc-peek.pc-swap { animation-name: pc-fade; }
+[data-gentle] .pc-card[aria-busy="true"] .pc-main { animation: none; }
+[data-gentle] .pc-gate.pc-in { animation-name: pc-fade; }
+[data-gentle] .pc-gate.pc-out { transform: translate(-50%, -50%) rotate(-1.5deg); }
+[data-motion="off"] *, [data-motion="off"] *::before { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .pc-hud *, .pc-hud *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+/* the how-to card and its door: three paper prints, same treatment as Racing Thoughts' hud/howto.js */
+.pc-howto { flex: none; height: 40px; min-width: 40px; padding: 0 12px; border: 2.5px solid var(--ink); border-radius: 20px; background: var(--paper);
+  box-shadow: 2px 3px 0 rgba(0,0,0,.35); font-size: 15px; white-space: nowrap; }
+.pc-howto-q { display: none; font: 900 20px/1 var(--type); }
+@media (max-width: 1099px) { .pc-howto { padding: 0; } .pc-howto-q { display: inline; } .pc-howto-w { display: none; } }
+.pc-modal.pc-guide-modal { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+.pc-card.pc-guide { --g-paper: #fbf8f2; --g-ink: #1c1722; --g-pink: #d4307c; --g-sans: system-ui, "Segoe UI", sans-serif; --g-mono: ui-monospace, Consolas, "Courier New", monospace;
+  width: min(880px, 100%); max-height: 100%; overflow: auto; padding: 16px 18px 14px; gap: 0; justify-items: stretch; background: #e9e2d4; color: var(--g-ink);
+  border-color: var(--g-ink); font-family: var(--g-sans); transform: rotate(-.4deg); }
+.pc-guide-title { margin: 0 0 12px 2px; font: 900 22px/1.1 var(--g-sans); letter-spacing: -.01em; }
+.pc-gbs { list-style: none; margin: 0 0 12px; padding: 8px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pc-gb { --g-r: 0deg; position: relative; padding: 7px 7px 9px; background: var(--g-paper); border: 1.5px solid var(--g-ink); border-radius: 3px;
+  box-shadow: 2px 2px 0 rgba(28,23,34,.18); transform: rotate(var(--g-r)); }
+.pc-gb:nth-child(1) { --g-r: -.6deg; }
+.pc-gb:nth-child(2) { --g-r: .4deg; }
+.pc-gb:nth-child(3) { --g-r: -.3deg; }
+.pc-gb-n { position: absolute; z-index: 1; top: -13px; left: -8px; width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--g-pink);
+  color: var(--g-pink); background: var(--g-paper); font: 900 17px/26px var(--g-sans); text-align: center; box-shadow: inset 0 0 0 2px var(--g-paper), inset 0 0 0 3.5px var(--g-pink); transform: rotate(-10deg); }
+.pc-gb-shot { display: block; width: 100%; height: auto; aspect-ratio: 520 / 273; object-fit: cover; box-sizing: border-box; border: 1.5px solid var(--g-ink); background: var(--g-ink); }
+.pc-gb-title { display: table; position: relative; margin: -13px 0 6px 5px; padding: 4px 7px 3px; background: var(--g-paper); color: var(--g-pink); border: 2px solid var(--g-pink); border-radius: 3px;
+  font: 900 13px/1 var(--g-sans); letter-spacing: .06em; text-transform: uppercase; transform: rotate(-1.6deg); }
+.pc-gb-gist { margin: 0 0 5px 2px; font: 700 14px/1.25 var(--g-sans); }
+.pc-gb-cap { margin: 0 0 0 2px; font: 700 12px/1.25 var(--g-mono); }
+.pc-hud .pc-guide-go { justify-self: end; color: var(--paper); font-family: var(--g-sans); font-weight: 800; font-size: 15px; }
+.pc-modal.pc-in .pc-gb { animation: pc-gb-in .3s cubic-bezier(.2,.9,.3,1.25) both; }
+.pc-modal.pc-in .pc-gb:nth-child(2) { animation-delay: .08s; }
+.pc-modal.pc-in .pc-gb:nth-child(3) { animation-delay: .16s; }
+@keyframes pc-gb-in { from { opacity: 0; transform: translateY(-6px) scale(1.05) rotate(var(--g-r)); } }
+.pc-hud[data-motion="less"] .pc-modal.pc-in .pc-gb { animation: none; }
+[data-gentle] .pc-modal.pc-in .pc-gb { animation-name: pc-fade; }
+[data-gentle] .pc-modal.pc-out .pc-card.pc-guide { transform: rotate(-.4deg); }
+/* phone upright: each print stands beside its words */
+@media (max-width: 760px) {
+  .pc-card.pc-guide { padding: 10px 10px 10px; }
+  .pc-guide-title { margin-bottom: 8px; font-size: 19px; }
+  .pc-gbs { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-bottom: 10px; padding-top: 6px; }
+  .pc-gb { display: grid; grid-template-columns: 40% minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px; }
+  .pc-gb-title { margin: 0 0 4px; font-size: 12px; }
+  .pc-gb-gist { margin: 0 0 3px; font-size: 13px; }
+  .pc-gb-cap { font-size: 11px; }
+}
+/* phone on its side: shorter prints and a tighter card, the button stays on screen */
+@media (max-height: 480px) and (min-width: 761px) {
+  .pc-modal.pc-guide-modal { padding: 6px 12px; }
+  .pc-card.pc-guide { padding: 8px 12px 8px; }
+  .pc-guide-title { margin-bottom: 4px; font-size: 16px; }
+  .pc-gbs { margin-bottom: 6px; padding-top: 4px; }
+  .pc-gb { padding: 5px 5px 6px; }
+  .pc-gb-gist { font-size: 12.5px; margin-bottom: 3px; }
+  .pc-gb-cap { font-size: 11px; }
+  .pc-hud .pc-guide-go { padding: 3px 14px; font-size: 14px; }
+}
+/* end how-to card */
+/* kart bars (hud/bars.js): the type word and four rows of ink pips. Nothing here moves, so Gentle and reduced motion have nothing to stop. */
+.pc-bars { display: grid; gap: 2px; width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1.5px dashed var(--ink-soft); }
+.pc-bars-type { margin: 0 0 2px; font: 700 18px/1.1 var(--hand); }
+.pc-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; line-height: 1.2; }
+.pc-pips { display: flex; gap: 2px; flex: none; }
+.pc-pip { display: block; width: 10px; height: 8px; box-sizing: border-box; border: 1.5px solid var(--ink); }
+.pc-on { background: var(--pink); }
+.pc-peek-bars { margin-top: 8px; }
+.pc-peek-bars .pc-bars { grid-template-columns: 1fr 1fr; gap: 2px 10px; }
+.pc-peek-bars .pc-bars-type { grid-column: 1 / -1; }
+.pc-peek-bars .pc-bar { font-size: 10px; gap: 4px; }
+.pc-peek-bars .pc-pip { width: 5px; height: 7px; }
+@media (max-width: 760px) { .pc-peek-bars { flex-basis: 100%; margin-top: 4px; } }
+/* end kart bars */
