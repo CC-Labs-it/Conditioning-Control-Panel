@@ -49,11 +49,14 @@ namespace ConditioningControlPanel.Services.Deeper
         // has a "welcome.ccpenh.json", their copy wins (they may have edited it).
         private void SeedBundledDemos()
         {
+            SeedBundledDemos(LibraryFolder, Path.Combine(AppContext.BaseDirectory, "Resources", "DeeperDemos"));
+        }
+
+        internal static void SeedBundledDemos(string libraryFolder, string demoSource)
+        {
             try
             {
                 if (CoreSettings.Current.HasSeededDeeperDemos) return;
-
-                var demoSource = Path.Combine(AppContext.BaseDirectory, "Resources", "DeeperDemos");
                 if (!Directory.Exists(demoSource))
                 {
                     Log.Debug("EnhancementLibrary: no bundled demos folder at {Path}", demoSource);
@@ -65,12 +68,21 @@ namespace ConditioningControlPanel.Services.Deeper
                 foreach (var src in sources)
                 {
                     var name = Path.GetFileName(src);
-                    var dst = Path.Combine(LibraryFolder, name);
-                    // Windows finds a differently cased name too; preserve that edit on Linux.
-                    if (File.Exists(dst) || (Directory.Exists(LibraryFolder) &&
-                        Directory.EnumerateFiles(LibraryFolder).Any(existing =>
-                            string.Equals(Path.GetFileName(existing), name, StringComparison.OrdinalIgnoreCase))))
-                        continue;
+                    var dst = Path.Combine(libraryFolder, name);
+                    if (File.Exists(dst)) continue;
+                    // Windows resolves case itself. Elsewhere, preserve differently cased edits
+                    // when listing is allowed, but still try the copy if it is not.
+                    if (!OperatingSystem.IsWindows())
+                    {
+                        try
+                        {
+                            if (Directory.EnumerateFiles(libraryFolder).Any(existing =>
+                                string.Equals(Path.GetFileName(existing), name, StringComparison.OrdinalIgnoreCase)))
+                                continue;
+                        }
+                        catch (UnauthorizedAccessException) { }
+                        catch (IOException) { }
+                    }
                     try { File.Copy(src, dst, overwrite: false); copied++; }
                     catch (Exception ex) { Log.Debug("EnhancementLibrary: failed to copy demo {Name}: {Error}", name, ex.Message); }
                 }

@@ -46,6 +46,34 @@ public sealed class EnhancementLibraryCoreTests
     }
 
     [Fact]
+    public void SeedCopiesWhenDirectoryCanBeWrittenButNotListed()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        WithSettings(() =>
+        {
+            var root = Directory.CreateTempSubdirectory("ccp-seed-").FullName;
+            var source = Directory.CreateDirectory(Path.Combine(root, "source")).FullName;
+            var destination = Directory.CreateDirectory(Path.Combine(root, "library")).FullName;
+            var demo = "welcome" + EnhancementLibrary.FileSuffix;
+            File.WriteAllText(Path.Combine(source, demo), "demo");
+            try
+            {
+                File.SetUnixFileMode(destination, UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                Assert.Throws<UnauthorizedAccessException>(() => Directory.GetFiles(destination));
+                EnhancementLibrary.SeedBundledDemos(destination, source);
+                Assert.Equal("demo", File.ReadAllText(Path.Combine(destination, demo)));
+                Assert.True(CoreSettings.Current.HasSeededDeeperDemos);
+            }
+            finally
+            {
+                File.SetUnixFileMode(destination, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                Directory.Delete(root, recursive: true);
+            }
+            return 0;
+        });
+    }
+
+    [Fact]
     public void Save_records_the_recent_file_and_last_directory_in_core_settings()
     {
         WithSettings(() =>
