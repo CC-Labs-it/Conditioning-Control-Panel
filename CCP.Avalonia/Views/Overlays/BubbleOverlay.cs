@@ -272,7 +272,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
-        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
+        internal static AmbientBubble? SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
             AmbientBubble b;
             if (Targets.Count == 0)
@@ -294,7 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     if (screen != null)
                     {
                         i = Targets.FindIndex(sc => sc.Bounds == screen.Bounds);
-                        if (i < 0) i = OpenTarget(screen) ? Targets.Count - 1 : 0;
+                        if (i < 0) { if (!OpenTarget(screen)) return null; i = Targets.Count - 1; }
                     }
                 }
                 var a = Targets[i].WorkingArea;
@@ -309,6 +309,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void PopChaos(AmbientBubble b)
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
+            var power = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.SpankerPower;
+            if (b.Spec.IsDarter && (power.HasValue || b.Spec.IsSweeper)) { b.Spank(Field.Random, power ?? 1); RequestFrame(); return; }
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
@@ -354,6 +356,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
         }
 
+        // WPF BubbleService.cs:1897: an allied rabbit mows overlapping chaos bubbles.
+        internal static void SweepSpanked()
+        {
+            if (Field.HoldChaos) return;
+            foreach (var ally in Field.Bubbles.ToArray())
+                if (ally.IsSpanked && !ally.Popping)
+                    foreach (var victim in Field.Bubbles.ToArray())
+                        if (victim.Screen == ally.Screen && victim.Spec is { IsDarter: false, IsFreeze: false } && !victim.Popping
+                            && Math.Abs(victim.CenterX - ally.CenterX) * 2 < victim.Size + ally.Size && Math.Abs(victim.CenterY - ally.CenterY) * 2 < victim.Size + ally.Size)
+                        { if (victim.IsLiveThreat) { if (victim.Snap()) Field.ChaosDefused?.Invoke(victim); } else PopChaos(victim); }
+        }
+
         internal static void OnFrame(TimeSpan now)
         {
             _pending = false;
@@ -364,7 +378,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
-                Field.Step();
+                Field.Step(); SweepSpanked();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
                 if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn

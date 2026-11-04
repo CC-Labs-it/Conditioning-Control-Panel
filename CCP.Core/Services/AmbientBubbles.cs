@@ -85,6 +85,18 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
+        public bool IsSpanked { get; private set; }
+        private double _spankCooldownMs;
+        // WPF BubbleService.cs:4722: redirect and grow only on the first smack.
+        public void Spank(Random random, double growth)
+        {
+            if (_spankCooldownMs > 0) return;
+            _spankCooldownMs = 250;
+            double speed = Math.Min(Math.Max(Math.Sqrt(_vx * _vx + _vy * _vy), 0.01) * 1.18, (Spec?.DarterSpeed ?? 9) * 2.2);
+            double angle = random.NextDouble() * Math.PI * 2;
+            _vx = Math.Cos(angle) * speed; _vy = Math.Sin(angle) * speed; _escaping = false; _bounces = 0; _throbPunch = 0.35;
+            if (!IsSpanked) { double old = Size; Size *= Math.Max(1, growth); X -= (Size - old) / 2; Y -= (Size - old) / 2; IsSpanked = true; }
+        }
         // WPF BubbleService.cs:4704-4706: catching during the flare is not quick.
         public bool WasQuickCatch => Spec is { IsDarter: true } && _telegraphMs <= 0 && _darterActiveMs <= Spec.QuickWindowMs;
         public double DarterFlareFraction => Spec is { IsDarter: true, TelegraphMs: > 0 }
@@ -170,7 +182,7 @@ namespace ConditioningControlPanel.Services
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
         {
-            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.IsDarter ? Math.Max(60, (int)Math.Round(spec.SizePx)) : spec.SizePx };
+            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, IsSpanked = spec.IsSweeper, Size = spec.IsDarter ? Math.Max(60, (int)Math.Round(spec.SizePx)) : spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
@@ -310,6 +322,7 @@ namespace ConditioningControlPanel.Services
         // times, then exit or expire harmlessly. Boon steering remains part B.
         private Result StepDarter(double ts)
         {
+            _spankCooldownMs = Math.Max(0, _spankCooldownMs - 32);
             _throbPhase += 0.5 * Math.Max(ts, 0.4);
             _throbPunch = Math.Max(0, _throbPunch - 0.05);
             Scale = 1 + 0.10 * Math.Sin(_throbPhase) + _throbPunch;

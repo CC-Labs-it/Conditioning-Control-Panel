@@ -68,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static bool _rabbitCallMaxed, _rabbitAimPrevDown;
         private static double _rabbitStormRemainingSec, _rabbitStormAccumSec;
         internal static double SlowMoRemainingSec { get; private set; }
+        internal static double? SpankerPower => _state?.SpankerActive == true ? _state.SpankGrowFactor : null;
         internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadRabbitPointer = X11Pointer.ReadLeft;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
@@ -729,13 +730,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state.PushEvent(Loc.Get("chaos_rabbit_whistle")); ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
         }
 
+        internal static Func<double?, double?, AmbientBubble?> SpawnRabbit = SpawnDarter;
         // WPF ChaosModeService.cs:2834-2914: hold the whistle until a fresh left press on a live field.
-        private static void SpawnDarter(double? x = null, double? y = null)
+        private static AmbientBubble? SpawnDarter(double? x = null, double? y = null)
         {
-            if (_state == null) return;
+            if (_state == null) return null;
             var spec = ChaosBubbleVariants.BuildDarter(_state.RunIntensity, spotlight: false, x, y);
             ChaosMeta.MarkDiscovered("bubble:darter");
-            BubbleOverlay.SpawnChaos(spec);
+            return BubbleOverlay.SpawnChaos(spec);
         }
 
         private static void ArmRabbitCall(int rabbits, bool maxed)
@@ -780,8 +782,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             int rabbits = _rabbitCallPending;
             bool maxed = _rabbitCallMaxed;
             DisarmRabbitCall();
+            var spawned = new List<AmbientBubble>();
             for (int i = 0; i < rabbits; i++)
-                SpawnDarter(at.X + Rng.Next(-60, 61), at.Y + Rng.Next(-60, 61));
+            {
+                var b = SpawnRabbit(at.X + Rng.Next(-60, 61), at.Y + Rng.Next(-60, 61));
+                if (b == null)
+                {
+                    foreach (var created in spawned) BubbleOverlay.Field.Bubbles.Remove(created);
+                    foreach (var toy in _state.ActiveToys) if (toy.Id == "rabbit_caller") toy.CooldownRemainingSec = 0;
+                    ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f); return;
+                }
+                spawned.Add(b);
+            }
             if (maxed)
             {
                 _rabbitStormRemainingSec = 10;

@@ -65,24 +65,24 @@ public sealed class BubbleOverlayTests
         try
         {
             host.Show(); settings.GlobalTargetMonitor = 1; settings.DualMonitorEnabled = false;
-            ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] { primary, second };
-            BubbleOverlay.SkipPlatformChecksForTests = true;
+            ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] { primary, second }; BubbleOverlay.SkipPlatformChecksForTests = true;
             BubbleOverlay.BeginChaos(host, _ => { });
-            var b = BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 1800, atPxY: 400));
-            Assert.Equal(0, b.Screen);
+            var b = BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 1800, atPxY: 400)); Assert.Equal(0, b.Screen);
             Assert.Equal(900, b.CenterX, 6); Assert.Equal(200, b.CenterY, 6);
             Assert.Equal(0, BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 1000, atPxY: 400)).Screen);
             var a = BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0)); Assert.Equal(1, a.Screen);
             var p = BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 400, atPxY: 300)); Assert.Equal(1, p.Screen); Assert.Equal(400, p.CenterX, 6);
+            BubbleOverlay.EndChaos(); BubbleOverlay.BeginChaos(host, _ => { }); BubbleOverlay.SkipPlatformChecksForTests = false;
+            Assert.Null(BubbleOverlay.SpawnChaos(ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0, atPxX: 400, atPxY: 300)));
         }
         finally
         {
-            BubbleOverlay.EndChaos(); host.Close();
-            ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = query;
+            BubbleOverlay.EndChaos(); host.Close(); ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = query;
             (settings.GlobalTargetMonitor, settings.DualMonitorEnabled, BubbleOverlay.SkipPlatformChecksForTests) = (target, dual, skip);
         }
         return Task.CompletedTask;
     });
+
 
     [Fact]
     public Task Darter_sprite_and_glow_are_visible_in_the_rendered_field() => AvaloniaTestDispatcher.RunAsync(() =>

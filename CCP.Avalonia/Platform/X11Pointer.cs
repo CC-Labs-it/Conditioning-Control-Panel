@@ -35,9 +35,19 @@ internal static class X11Pointer
 
     public static (PixelPoint At, bool Pressed, bool Escape)? Read() => ReadCore(false);
 
+    [StructLayout(LayoutKind.Sequential)] private struct WinPoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out WinPoint point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    private static (bool Success, int X, int Y) WindowsPosition() { bool ok = GetCursorPos(out var p); return (ok, p.X, p.Y); }
+    internal static (PixelPoint At, bool Pressed, bool Escape)? ReadWindows(Func<(bool Success, int X, int Y)> position, Func<int, short> key)
+    {
+        var p = position();
+        return p.Success ? (new PixelPoint(p.X, p.Y), (key(1) & 0x8000) != 0, (key(0x1b) & 0x8000) != 0) : null;
+    }
+
     // WPF RabbitAimTick reads VK_LBUTTON only.
     public static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft() =>
-        IsWaylandSession() ? null : ReadCore(true);
+        OperatingSystem.IsWindows() ? ReadWindows(WindowsPosition, GetAsyncKeyState) : IsWaylandSession() ? null : ReadCore(true);
 
     internal static bool IsWaylandSession() =>
         string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)
