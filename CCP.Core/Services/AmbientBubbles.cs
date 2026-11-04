@@ -257,7 +257,7 @@ namespace ConditioningControlPanel.Services
                 FuseRemainingMs -= FuseStepMs * ts;
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
-            _timeAlive += 0.02 * ts;
+            _timeAlive += 0.02;
             double offset = 0;
             switch (_animType)
             {

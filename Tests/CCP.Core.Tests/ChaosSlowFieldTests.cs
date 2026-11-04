@@ -8,6 +8,20 @@ namespace CCP.Core.Tests;
 public class ChaosSlowFieldTests
 {
     [Fact]
+    public void Slow_motion_keeps_wobble_at_normal_animation_speed()
+    {
+        var spec = new EffectBubbleSpec { IsLive = true, FuseMs = 5000, SizePx = 100 };
+        var normal = AmbientBubble.SpawnChaos(new Random(42), 0, 0, 0, 1000, 1000, 1, spec);
+        var slow = AmbientBubble.SpawnChaos(new Random(42), 0, 0, 0, 1000, 1000, 1, spec);
+        for (int i = 0; i < 20; i++)
+        {
+            normal.Step();
+            slow.Step(timeScale: 0.12);
+            Assert.Equal(normal.X, slow.X, 8);
+        }
+    }
+
+    [Fact]
     public void Chaos_slow_scales_motion_and_fuse_without_slowing_ambient()
     {
         var spec = new EffectBubbleSpec { IsLive = true, FuseMs = 5000, SizePx = 100 };

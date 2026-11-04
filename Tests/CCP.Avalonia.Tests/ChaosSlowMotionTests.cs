@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -8,12 +9,69 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
 public sealed class ChaosSlowMotionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Swing_feedback_matches_scoring_window(bool scoring) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var loc = LocalizationManager.Instance;
+        string language = loc.CurrentLanguage;
+        bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+        bool checks = ChaosEffectBannerOverlay.SkipPlatformChecksForTests;
+        var play = ChaosRunHost.PlaySlowCue;
+        var cues = new List<(string, float)>();
+        try
+        {
+            loc.SetLanguage("en");
+            CoreSettings.Current.ChaosAnnouncerEnabled = true;
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+            ChaosRunHost.PlaySlowCue = (key, volume) => cues.Add((key, volume));
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, PendulumSwing = true });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            ChaosRunHost.State!.PendulumPayMult = scoring ? 3 : 1;
+            for (int i = 0; i < 65 && ChaosRunHost.SlowRemainingSec <= 0; i++) ChaosRunHost.Tick();
+            Assert.True(ChaosRunHost.SlowRemainingSec > 0);
+            Assert.Equal(new[] { ("time_slow_in", 0.5f), ("ticktock", 0.45f) }, cues);
+            var line = ChaosAnnouncerOverlay.Active!.Current!;
+            Assert.Equal(scoring ? "focus_here" : "pendulum", line.ArtKey);
+            Assert.Equal(scoring ? "🕰 FOCUS HERE. everything pays x3" : "🕰 the pendulum swings", line.Text);
+            Assert.Equal(scoring ? "everything pays x3" : null, line.SubText);
+            Assert.Equal("🕰 the pendulum swings", ChaosRunHost.State.RecentEvents[0]);
+            ChaosRunHost.ActivatePendulum(); // refresh does not replay the in cue
+            Assert.Equal(2, cues.Count);
+            for (int i = 0; i < 10; i++) ChaosRunHost.Tick();
+            Assert.Equal(("time_slow_out", 0.45f), cues.Last());
+            ChaosRunHost.ActivatePendulum();
+            Assert.Equal(("time_slow_in", 0.5f), cues.Last());
+            ChaosRunHost.ForceShutdown();
+            Assert.Equal(("time_slow_out", 0.45f), cues.Last());
+            Assert.Equal(5, cues.Count);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosAnnouncerOverlay.CloseActive();
+            ChaosRunHost.PlaySlowCue = play;
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = checks;
+            CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+            loc.SetLanguage(language);
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task Pendulum_expires_and_restores_with_freeze_and_shutdown() => AvaloniaTestDispatcher.RunAsync(() =>
     {

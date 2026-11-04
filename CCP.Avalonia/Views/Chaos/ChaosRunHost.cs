@@ -83,7 +83,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private const double SlowFactor = 0.12;
         private static double _slowRemainingSec, _pendulumFireAt;
         private static int _pendulumWave;
-        private static bool _pendulumFired;
+        private static bool _pendulumFired, _slowCueOn;
+        internal static Action<string, float> PlaySlowCue = (key, volume) => ChaosOverlayWindow.ChaosSfx.Play(key, volume);
         internal static double SlowRemainingSec => _slowRemainingSec;
         internal static double PendulumMultiplier => _slowRemainingSec > 0 ? _state?.PendulumPayMult ?? 1 : 1;
 
@@ -451,6 +452,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _pendulumFired = true;
                 ActivatePendulum();
+                PlaySlowCue("ticktock", 0.45f);
+                bool scoring = _state.PendulumPayMult > 1;
+                ChaosAnnouncerOverlay.Announce(Loc.Get(scoring ? "chaos_pendulum_focus" : "chaos_pendulum_swing"),
+                    ChaosAnnounceKind.PowerUp, artKey: scoring ? "focus_here" : "pendulum",
+                    subText: scoring ? Loc.Get("chaos_pendulum_focus_sub") : null);
+                _state.PushEvent(Loc.Get("chaos_pendulum_swing"));
             }
         }
 
@@ -460,6 +467,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _slowRemainingSec = 2.5;
             BubbleOverlay.Field.ChaosTimeScale = SlowFactor;
             EffectPayload.GlobalDurationMult = 1.0 / SlowFactor;
+            if (!_slowCueOn) PlaySlowCue("time_slow_in", 0.5f);
+            _slowCueOn = true;
             ChaosEffectBannerOverlay.Show("slowmo", Loc.Get("option_flash_motion_pendulum"),
                 Color.FromRgb(0x7A, 0xE0, 0xFF), artKey: "pendulum");
         }
@@ -470,6 +479,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             BubbleOverlay.Field.ChaosTimeScale = 1;
             if (_freezeRemainingSec <= 0) EffectPayload.GlobalDurationMult = 1;
             ChaosEffectBannerOverlay.End("slowmo");
+            if (_slowCueOn) PlaySlowCue("time_slow_out", 0.45f);
+            _slowCueOn = false;
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
