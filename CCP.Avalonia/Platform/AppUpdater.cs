@@ -165,8 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 await Task.Delay(500);
                 // WPF :5414 classifies before the check; a failed version is skipped before its pill lights.
-                ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion, consume: false);
-                var report = ShowFailedUpdateAsync(shell, () => closed);
+                var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion, consume: false); var report = ShowFailedUpdateAsync(shell, () => closed, outcome);
                 var notice = ShowBrowserResetWhenReadyAsync(shell, report, () => closed);
 
                 // A waiting or open notice must not hold the network check or the update pill.
@@ -226,14 +225,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally { BrowserResetDialog = null; MainShellWindow.IsStartupDialogShowing = previous; }
         }
 
-        private static async Task ShowFailedUpdateAsync(MainShellWindow shell, Func<bool> closed)
+        private static async Task ShowFailedUpdateAsync(MainShellWindow shell, Func<bool> closed, ReleaseFeed.PendingUpdateOutcome? outcome)
         {
             if (!File.Exists(ReleaseFeed.AttemptFilePath(UserData))) return;
             // WPF StartupPresenter.cs:353-389 parks the ladder while the launcher or a game has the screen.
             while (!closed() && (StartupModalOpen() || StartupLadder.PassiveWindowUp()
                 || LauncherWindow.Instance is { IsVisible: true } || Views.Games.GameWindow.IsAnyOpen())) await Task.Delay(500);
             if (closed()) return; // leave the attempt on disk until it can be reported
-            var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
+            ReleaseFeed.ClearPendingUpdateAttempt(UserData);
             if (outcome is not { Succeeded: false }) return;
             var owner = StartupOwner(shell); // WPF UpdateFailedDialog.ShowFor supports no visible owner
             var previous = MainShellWindow.IsStartupDialogShowing;
