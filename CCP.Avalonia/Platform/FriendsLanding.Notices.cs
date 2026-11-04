@@ -59,6 +59,19 @@ internal static partial class FriendsLanding
         });
         FriendsSeen.Shared.RequestSeen(Service(), request);
     }
+    // WPF FriendsLanding.cs:272-280: a watch stays answerable in the Inbox when its notice leaves.
+    private static void ShowWatchNotice(Window anchor, InboxItem item)
+    {
+        FriendNotices.Present(anchor, Notice(NoticeKind.Watch, item.FromId, item.FromName, item, item.At), new NoticeLook
+        {
+            Line = KnockLine(item), AvatarUrl = item.FromAvatarUrl,
+            ActionLabel = item.Watch?.Kind == WatchKind.Flavour ? Str("friends_land_try", "Try it") : Str("friends_land_watch", "Watch"),
+            Act = p => { if (p is InboxItem i && !i.IsExpired(KnockCard.Clock())) OnKnockDone(i, KnockOutcome.Go); },
+            Open = p => OpenDrawer((p as InboxItem)?.FromId),
+            Left = p => { if (p is InboxItem i && !i.IsExpired(KnockCard.Clock())) TheSink.Inbox(i); },
+        });
+        FriendsSeen.Shared.Seen(Service(), item.Id);
+    }
     internal static void Waiting(IReadOnlyList<FriendRequest> waiting, bool announce, bool inGame)
     {
         const string key = "friends-requests-waiting";
