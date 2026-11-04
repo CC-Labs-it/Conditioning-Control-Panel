@@ -381,6 +381,23 @@ public sealed class BubbleCountSchedulerTests
         finally { b.Stop(); b.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = oldFreeze; }
     });
 
+    [Fact]
+    public void Test_now_deferred_by_feed_survives_service_stop() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Start();
+            b.Trigger(forceTest: true);
+            b.Stop();
+            host.Feed = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500) + BubbleCountScheduler.LeadIn);
+            Assert.Single(host.Shown);
+        }
+        finally { b.ForceCleanup(); }
+    });
+
     [Theory]
     [InlineData("expiry")]
     [InlineData("stop")]

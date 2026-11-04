@@ -124,8 +124,8 @@ namespace ConditioningControlPanel.Services
         {
             IsRunning = false;
             Dispose(ref _scheduler);
-            Dispose(ref _feedDefer);
-            _feedDeadline = null;
+            // WPF Stop resets its defer latch but does not cancel the feed poll. A deferred
+            // Test Now can still replay; an ordinary trigger rechecks IsRunning at replay.
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
