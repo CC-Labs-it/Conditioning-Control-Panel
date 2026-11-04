@@ -132,7 +132,9 @@ public sealed class EngineAudioTeardownTests
             await layers.VolumeUpdates.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(79, player.Current);
             player.BlockRestore = true;
+            var started = System.Diagnostics.Stopwatch.StartNew();
             duck.ForceUnduck();
+            Assert.True(started.Elapsed < TimeSpan.FromSeconds(3), "restore must not block the caller");
             Assert.True(player.Restoring.Wait(TimeSpan.FromSeconds(5)));
             duck.Duck(80);
             player.Release.Set();

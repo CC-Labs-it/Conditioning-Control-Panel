@@ -29,6 +29,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Dictionary<AudioLayerTrack, ILayerPlayer> _players = new();
         private float _duckFactor = 1f;
         private bool _disposed;
+        private Task _volumeWork = Task.CompletedTask;
+        private readonly Dictionary<AudioLayerTrack, long> _volumeVersions = new();
+        private long _volumeVersion;
 
         internal static LayeredAudio? Instance { get; set; }
 
@@ -100,15 +103,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock) { _duckFactor = 1f; SetMasterVolumeLive(); }
         }
 
-        // Players record targets immediately; native writes and retries run independently.
         private void QueueVolumes((AudioLayerTrack Track, ILayerPlayer Player, int Volume)[] updates)
         {
-            foreach (var (_, player, volume) in updates)
-                try { player.Volume = volume; }
-                catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
+            foreach (var (track, player, volume) in updates)
+            {
+                var version = ++_volumeVersion;
+                _volumeVersions[track] = version;
+                _volumeWork = _volumeWork.ContinueWith(_ =>
+                {
+                    lock (_lock)
+                        if (!_players.TryGetValue(track, out var current) || current != player ||
+                            !_volumeVersions.TryGetValue(track, out var latest) || latest != version) return;
+                    try { player.Volume = volume; }
+                    catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
+                }, TaskScheduler.Default);
+            }
         }
 
-        internal Task VolumeUpdates => Task.CompletedTask;
+        internal Task VolumeUpdates { get { lock (_lock) return _volumeWork; } }
 
         /// <summary>LibVLC volume 0-100 for a track, from WPF's linear gain chain.</summary>
         private int VolumeFor(int trackPercent, AppSettings s)
@@ -124,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             foreach (var p in _players.Values) { try { p.Dispose(); } catch { } }
             _players.Clear();
+            _volumeVersions.Clear();
         }
 
         public void Dispose()
@@ -155,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 public readonly MediaPlayer Player = player;
                 public readonly Media Media = media;
-                public bool Playing, Disposed, VolumeWorker;
+                public bool Playing, Disposed;
             }
 
             private readonly LibVLC _vlc;
@@ -237,7 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (c) { if (c.Disposed) return; LibVlcAudio.ApplyPreferredDevice(c.Player); }
                 bool configured;
                 lock (_gate) configured = !_disposed && _volumeConfigured;
-                if (configured) QueueVolume(c);
+                if (configured) ApplyVolume(c);
             }
 
             /// <summary>Start the next pass <see cref="OverlapMs"/> before this one ends, measured from its
@@ -297,27 +310,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         _volumeConfigured = true;
                         playing = _live.Where(c => c.Playing).ToArray();
                     }
-                    foreach (var c in playing) QueueVolume(c);
-                }
-            }
-
-            private void QueueVolume(Copy c)
-            {
-                lock (_gate)
-                {
-                    if (_disposed || c.VolumeWorker || !_live.Contains(c)) return;
-                    c.VolumeWorker = true;
-                    ThreadPool.QueueUserWorkItem(_ =>
-                    {
-                        while (true)
-                        {
-                            int target; lock (_gate) target = _volume;
-                            ApplyVolume(c);
-                            lock (_gate)
-                                if (_disposed || !_live.Contains(c) || target == _volume)
-                                { c.VolumeWorker = false; return; }
-                        }
-                    });
+                    foreach (var c in playing) ApplyVolume(c);
                 }
             }
 
