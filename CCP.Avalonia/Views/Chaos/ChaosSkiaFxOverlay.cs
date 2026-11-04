@@ -163,8 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var primary = Screens.Primary ?? Screens.All.FirstOrDefault();
             if (primary == null) return _hosts.Count > 0; // WPF keeps hosts while no screens are reported.
-            var screens = MonitorBoundsForTests ?? ((CoreSettings.Current?.DualMonitorEnabled ?? true)
-                ? Screens.All.Select(s => s.Bounds).ToArray() : new[] { primary.Bounds });
+            var screens = MonitorBoundsForTests ?? Screens.All.Select(s => s.Bounds).ToArray();
             if (screens.Count == 0) return _hosts.Count > 0;
             var scale = MonitorScaleForTests ?? primary.Scaling;
             _scale = scale > 0 ? scale : 1;

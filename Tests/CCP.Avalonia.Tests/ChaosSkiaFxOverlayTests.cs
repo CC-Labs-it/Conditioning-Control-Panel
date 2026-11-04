@@ -116,6 +116,54 @@ public sealed class ChaosSkiaFxOverlayTests
     });
 
     [Fact]
+    public Task SecondaryPopHasHostWhenDualMonitorIsOff() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var enabled = settings.ChaosSkiaFxEnabled;
+        var dual = settings.DualMonitorEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var held = BubbleOverlay.Field.HoldChaos;
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            settings.ChaosSkiaFxEnabled = true;
+            settings.DualMonitorEnabled = false;
+            BubbleOverlay.Field.HoldChaos = false;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.FramesForTests = new SteppedFrames();
+            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(0, 0, 200, 200), new PixelRect(200, 0, 200, 200) };
+            BubbleOverlay.PopChaos(new AmbientBubble { X = 250, Y = 50, Size = 100,
+                Spec = new EffectBubbleSpec { Tint = 0xFFFF0000 } });
+            var owner = ChaosSkiaFxOverlay.Active!;
+            Assert.Equal(2, owner.Hosts.Count);
+            Assert.Equal(new PixelPoint(200, 0), owner.Hosts[1].Position);
+            Assert.True(owner.Hosts[1].IsVisible);
+            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(200, 200));
+            ChaosSkiaFxOverlay.RenderMonitor(surface.Canvas, owner.Fx, new PixelRect(200, 0, 200, 200), new Size(200, 200));
+            using var image = surface.Snapshot();
+            using var bitmap = SkiaSharp.SKBitmap.FromImage(image);
+            Assert.True(bitmap.GetPixel(100, 100).Alpha > 200);
+        }
+        finally
+        {
+            BubbleOverlay.Field.HoldChaos = held;
+            ChaosSkiaFxOverlay.CloseActive();
+            settings.ChaosSkiaFxEnabled = enabled;
+            settings.DualMonitorEnabled = dual;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.FramesForTests = null;
+            ChaosSkiaFxOverlay.MonitorBoundsForTests = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task DisplayChangesUpdateHostsScaleAndTeardown() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
