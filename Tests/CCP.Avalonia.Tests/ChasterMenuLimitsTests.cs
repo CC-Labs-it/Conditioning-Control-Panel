@@ -21,6 +21,8 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -104,6 +106,44 @@ public sealed class ChasterMenuLimitsTests
             try { Directory.Delete(directory, true); } catch { }
         }
     }
+
+    [Fact]
+    public Task PaperTagSwingsOnlyWhileVisibleAndMotionAllowsIt() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, tab, window) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldTime = BeatLoop.Time;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            settings.PerformanceMode = false;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(tab.TagSwingRunning);
+            Assert.Equal(-7, tab.TagSwingAngle, 3);
+            time.Advance(TimeSpan.FromSeconds(3.6));
+            BeatLoop.StepAll();
+            Assert.Equal(-3, tab.TagSwingAngle, 3);
+            tab.IsVisible = false;
+            Assert.False(tab.TagSwingRunning);
+            Assert.Equal(-5, tab.TagSwingAngle, 3);
+            tab.IsVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.TagSwingRunning);
+            settings.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(tab.TagSwingRunning);
+            Assert.Equal(-5, tab.TagSwingAngle, 3);
+            settings.MotionLevel = MotionLevel.Full;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(tab.TagSwingRunning);
+            tab.FindControl<Button>("PaperTag")!.IsVisible = false; // unlink hides the tag
+            Assert.False(tab.TagSwingRunning);
+            Assert.Equal(-5, tab.TagSwingAngle, 3);
+        }
+        finally { BeatLoop.Time = oldTime; }
+        await Task.CompletedTask;
+    }));
 
     // WPF ChasterTabView.xaml:444-491: the clickable tag remains cream at rest, hover and press.
     [Fact]
