@@ -1560,7 +1560,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// The stored shortcut, defaulted. One reader for both the label and the binding so they can
         /// never disagree about what an unparseable setting means.
         /// </summary>
-        private static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
+        internal static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
         {
             var s = CoreSettings.Current.CompanionPrompt;
             var keyName = string.IsNullOrWhiteSpace(s?.ChatShortcutKey) ? "T" : s!.ChatShortcutKey;
