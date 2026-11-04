@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using ConditioningControlPanel;
@@ -21,7 +22,8 @@ public sealed class SessionRunnerTests : IDisposable
 {
     private const string Id = "runner-golden";
     private static readonly string[] AllowedSettingsChanges =
-        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun" };
+        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun",
+          "SeasonStatsSeason", "SeasonSessionsStarted", "SeasonFeatureUse" };
     private static readonly string[] Timestamps = { "started_at", "ended_at", "timestamp", "session_time_seconds" };
 
     private readonly SessionLogService _logs = new();
@@ -75,8 +77,12 @@ public sealed class SessionRunnerTests : IDisposable
         var s = CoreSettings.Current;
         s.SubliminalDuration = 3;
         var before = SettingsJson();
+        var startsBefore = s.SeasonSessionsStarted;
+        var flashBefore = s.SeasonFeatureUse.GetValueOrDefault(SeasonFeatureKeys.Flash);
 
         _runner.Start(OneMinute());
+        Assert.Equal(startsBefore + 1, s.SeasonSessionsStarted);
+        Assert.Equal(flashBefore + 1, s.SeasonFeatureUse[SeasonFeatureKeys.Flash]);
         Assert.True(CoreSession.IsSessionRunning && CoreEngine.IsRunning);
         Assert.NotNull(CoreSession.UserPhrasePoolsWhileOverriding!());
         Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning);

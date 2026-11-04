@@ -806,6 +806,7 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     // Main 8a89eaeb0: the crash journal (healed above at the next launch).
                     JournalDir = CorePaths.UserData,
+                    NoteFeatureDayEvent = ev => FeatureDayLog?.Note(ev),
                     // Main 8fe2a80a0: a Takeover pulse hands its boosted tint back before the snapshot.
                     SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),
                 };
