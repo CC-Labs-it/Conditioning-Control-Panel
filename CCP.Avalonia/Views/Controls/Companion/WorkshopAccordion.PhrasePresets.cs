@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -50,6 +51,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private async Task SavePhrasePresetAsync()
         {
             if (TopLevel.GetTopLevel(this) is not Window { IsVisible: true } owner) return;
+            // WPF MainWindow.Assets.cs:1790 captures the count before showing the prompt.
+            var activePhraseCount = CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled);
             var input = new TextBox
             {
                 Text = $"Preset {CoreSettings.Current.PhrasePresets.Count + 1}",
@@ -78,9 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             dialog.Content = grid;
             dialog.Opened += (_, _) => { input.Focus(); input.SelectAll(); };
             if (!await dialog.ShowDialogSafe<bool>(owner) || string.IsNullOrWhiteSpace(input.Text)) return;
-            // ponytail: the live CompanionPhraseService has not crossed. WPF's null-service count is 0;
-            // preserve that truthful fallback until the active phrase pool crosses in the -b lane.
-            var preset = PhrasePreset.FromCurrentSettings(input.Text.Trim(), activePhraseCount: 0);
+            var preset = PhrasePreset.FromCurrentSettings(input.Text.Trim(), activePhraseCount);
             CoreSettings.Current.PhrasePresets.Add(preset);
             CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
             CoreSettings.Save();
