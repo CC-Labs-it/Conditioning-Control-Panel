@@ -4,8 +4,7 @@
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
-// ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
-// RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise/restore
+// ponytail: still missing here - remote-driven session start, resume and stop, the directory opt-in chain, tray minimise/restore
 // for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and the browser
 // blindfold (no embedded browser under the overlay on this head).
 
@@ -40,8 +39,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF wires these in ChkRemoteControlEnabled_Changed; the relay here is one per process, so
         /// the shell listens from startup and lets go on close.</summary>
+        internal static MainShellWindow? RemoteCommandOwner;
+
         private void InitializeRemoteControlOverlay()
         {
+            RemoteCommandOwner = this;
             var r = RemoteControlTabView.Relay.Value;
             EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
@@ -57,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
+                if (ReferenceEquals(RemoteCommandOwner, this)) RemoteCommandOwner = null;
                 _remoteOverlayTimer?.Stop();
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
