@@ -108,6 +108,51 @@ public sealed class V2GetItRowTests
         });
     }
 
+    [Fact]
+    public async Task Mounted_controls_follow_grant_and_removal()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var user = CoreAccount.UnifiedUserId;
+            var seam = PrizeOwnership.IsGranted;
+            Window? host = null;
+            try
+            {
+                CoreAccount.UnifiedUserId = "grant-test";
+                PrizeOwnership.ResetHeld();
+                PrizeOwnership.IsGranted = PrizeOwnership.Held;
+                var card = new FlashFeatureControl();
+                host = new Window { Content = card };
+                host.Show();
+                var row = card.FindControl<V2GetItRow>("RowGetFlashesV2")!;
+                var motion = card.FindControl<Control>("RowMotion")!;
+                var shatter = card.FindControl<Control>("RowShatter")!;
+                Assert.False(motion.IsVisible);
+                Assert.False(shatter.IsVisible);
+                Assert.False(row.IsRowHidden);
+                PrizeOwnership.ApplySnapshot("grant-test", 1, new[] { PrizeOwnership.FlashDriftBounce });
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(motion.IsVisible);
+                Assert.True(shatter.IsVisible);
+                Assert.True(row.IsRowHidden);
+                PrizeOwnership.ApplySnapshot("grant-test", 2, Array.Empty<string>());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(motion.IsVisible);
+                Assert.False(shatter.IsVisible);
+                Assert.False(row.IsRowHidden);
+            }
+            finally
+            {
+                host?.Close();
+                PrizeOwnership.ResetHeld();
+                PrizeOwnership.IsGranted = seam;
+                CoreAccount.UnifiedUserId = user;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>Row feat-backroom-counter-buy: the startup-built service over a fake proxy. The row reads
     /// the counter when shown, Get it confirms at the shown price, buys, toasts, adopts the receipt's
     /// SP and hides once the reply's grants land; a refusal shows WPF's key. Never reaches a server.</summary>
