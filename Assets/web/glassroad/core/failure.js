@@ -8,6 +8,15 @@
  */
 
 export const FAILURE_KEY = 'glassroad.lastFailure';
+/** The last few records, so a later refusal cannot hide the loss that caused it. */
+export const FAILURE_LOG_KEY = 'glassroad.failureLog';
+export const FAILURE_LOG_MAX = 4;
+/** How long an earlier failure still explains this one. */
+export const EARLIER_MS = 10 * 60 * 1000;
+/** Chrome refuses WebGL and WebGPU to a site after a second GPU loss, for 2 minutes (gpu_data_manager_impl_private.cc,
+ *  kBlockedDomainExpirationPeriod): one rebuild per window, because a second one only feeds that block. */
+export const REBUILD_WINDOW_MS = 2 * 60 * 1000;
+const REBUILDS = ['lost', 'stalled', 'frame'];
 
 /** A short reason line from anything thrown: the message, or the value itself, trimmed. */
 export function reasonOf(e) {
@@ -44,7 +53,29 @@ export function failureLine(rec) {
 const store = () => { try { return globalThis.localStorage || null; } catch (e) { return null; } };
 
 export function rememberFailure(rec, storage = store()) {
-  try { storage?.setItem(FAILURE_KEY, JSON.stringify(rec)); return true; } catch (e) { return false; }
+  try {
+    storage?.setItem(FAILURE_KEY, JSON.stringify(rec));
+    const { stack, ua, ...brief } = rec;
+    storage?.setItem(FAILURE_LOG_KEY, JSON.stringify([...readFailureLog(storage), brief].slice(-FAILURE_LOG_MAX)));
+    return true;
+  } catch (e) { return false; }
+}
+
+export function readFailureLog(storage = store()) {
+  try { const list = JSON.parse(storage?.getItem(FAILURE_LOG_KEY) || '[]'); return Array.isArray(list) ? list.filter((r) => r && r.v === 1) : []; } catch (e) { return []; }
+}
+
+/** The oldest recent failure before rec, said on the cover after rec's own line: usually the actual cause. */
+export function earlierLine(rec, log = readFailureLog()) {
+  const first = log.find((r) => r.at < rec.at && rec.at - r.at <= EARLIER_MS);
+  if (!first) return '';
+  const s = Math.round((rec.at - first.at) / 1000);
+  return 'Earlier (' + (s < 90 ? s + ' s' : Math.round(s / 60) + ' min') + ' ago): ' + failureLine(first);
+}
+
+/** One automatic rebuild per window. Later dead worlds end on the reason and Retry. */
+export function rebuildAllowed(failures, now = Date.now(), windowMs = REBUILD_WINDOW_MS) {
+  return !failures.some((r) => REBUILDS.includes(r.kind) && now - r.at < windowMs);
 }
 
 export function readLastFailure(storage = store()) {

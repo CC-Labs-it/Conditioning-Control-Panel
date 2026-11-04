@@ -170,7 +170,9 @@ namespace ConditioningControlPanel.Avalonia
         /// the Haptics tab's "Quest complete" routing row decides how it feels.</summary>
         internal static void PlayQuestCompletionEffects()
         {
-            PlayExclamationChime("quest-complete");  // the haptic still posts if the chime fails
+            // WPF App.xaml.cs (#4078): the perk opt-out drops the popup, so the ding goes with it.
+            if (CoreSettings.Current.SuppressPerkNotifications != true)
+                PlayExclamationChime("quest-complete");  // the haptic still posts if the chime fails
             _ = CoreHaptics.Service?.PostEvent(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.QuestComplete);
         }
 
@@ -890,6 +892,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
                 // WPF App.xaml.cs:290: a game.* palette row is listed only when this head can start it.
                 SettingsPaletteIndex.GameAvailableProvider = Views.Windows.LauncherWindow.CanStartGame;
+                SettingsPaletteIndex.WallpaperDoorAvailableProvider = () => false;   // owner 2026-11-01: no door on this head
                 // WPF App.xaml.cs:312: the race's door asks this head's prize store (P31).
                 ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 // WPF App.xaml.cs:313: the race charts a track through this head's decoder (LibVLC, not NAudio).
@@ -983,6 +986,7 @@ namespace ConditioningControlPanel.Avalonia
                     shell.RefreshExclusivesTab();
                     shell.RefreshNavPremiumTags();
                 });
+                Platform.AccountSeed.GraceClosed += RepaintVeils;   // WPF MainWindow.OnGraceClosed
                 if (Platform.AccountSeed.Patreon is { } patreonSub) patreonSub.TierChanged += (_, _) => RepaintVeils();
                 if (Platform.AccountSeed.SubscribeStar is { } substarSub) substarSub.TierChanged += (_, _) => RepaintVeils();
                 Views.Controls.Invites.InvitePanel.ArmExpiry(); // WPF MainWindow.Patreon.cs: a running invite week's end repaints

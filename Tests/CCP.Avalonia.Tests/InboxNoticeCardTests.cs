@@ -72,8 +72,10 @@ public sealed class InboxNoticeCardTests
         new MainShellWindow().Show();
         var (notifications, onUi) = (0, false);
         AccountSeed.Patreon!.TierChanged += (_, _) => (notifications, onUi) = (notifications + 1, Dispatcher.UIThread.CheckAccess());
+        string? rawBody = null;
         void Heartbeat() => Assert.True(new SyncPush(() => null, () => false, new TierReply("{\"effective_tier\":2}", HttpStatusCode.OK))
-            { TierReceived = AccountSeed.OfferHeartbeatTier }.HeartbeatAsync().GetAwaiter().GetResult());
+            { TierReceived = AccountSeed.OfferHeartbeatTier, HeartbeatBody = body => rawBody = body }
+            .HeartbeatAsync().GetAwaiter().GetResult());
         Heartbeat();
         token = "new-token"; // the queued response belongs to the previous session
         Dispatcher.UIThread.RunJobs();
@@ -83,6 +85,7 @@ public sealed class InboxNoticeCardTests
         Heartbeat();
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs();
+        Assert.Equal("{\"effective_tier\":2}", rawBody);
         Assert.True(onUi);
         Assert.Equal(1, notifications);
         Assert.Equal(2, s.PatreonTier);
