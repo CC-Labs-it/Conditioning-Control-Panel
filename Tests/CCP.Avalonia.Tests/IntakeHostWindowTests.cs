@@ -35,7 +35,7 @@ public sealed class IntakeHostWindowTests
             CoreAccount.HasLabAccessProvider = () => false;
             (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc) = ("", null);
             var dir = Directory.CreateTempSubdirectory("intake-host-").FullName;
-            var host = new IntakeHostWindow { SessionsFolder = dir };
+            var host = new IntakeHostWindow { SessionsFolder = dir, PunchCardFolder = dir };
             var drafted = 0;
             host.Drafted += (_, path) => { drafted++; Assert.True(File.Exists(path)); };
             try
@@ -72,6 +72,7 @@ public sealed class IntakeHostWindowTests
                 Assert.False(AvApp.IntakePass.IsPassAvailable);
                 Assert.Single(Directory.GetFiles(dir, "*.session.json"));
                 Assert.Equal(1, drafted);   // the Sessions refresh + toast hang off this
+                Assert.True(ConditioningControlPanel.Models.IntakePunchCardState.ReadEverCompletedIntake(dir));
             }
             finally
             {
