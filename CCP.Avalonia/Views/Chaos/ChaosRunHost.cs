@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -76,7 +77,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused;
-        private static int _pendingWave;
+        private static int _pendingWave, _runsAtStart, _draftsThisRun;
+        private static bool _scriptThreat, _scriptSnapped, _scriptDraft, _sinRigged, _sinPending;
         private static bool _lessonCardsAfterDraft;
         private static readonly List<ChaosUnlockCardInfo> _pendingLessonCards = new();
 
@@ -126,6 +128,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void BeginRun()
         {
             if (!_active || _state == null || _spawning) return;
+            _runsAtStart = ChaosMeta.State.RunsCompleted; _draftsThisRun = 0;
+            _scriptThreat = _scriptSnapped = _scriptDraft = _sinRigged = _sinPending = false;
             ChaosRunEffects.ApplyLifetimeBoons(_state);
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
@@ -238,6 +242,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused) return;
+            if (_state.Config.ScriptedFirstRun && _scriptThreat && !_scriptSnapped)
+            {
+                _scriptSnapped = true;
+                var enabled = _state.Config.EnabledVariants;
+                if (enabled != null) foreach (var id in new[] { "pink", "spiral" }) if (!enabled.Contains(id)) enabled.Add(id);
+            }
             Label(b, "SNAP", SnapColor);   // WPF CompleteDefuse :4577 / Pop :4684
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
@@ -385,6 +395,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
+            if (_state.Config.ScriptedFirstRun && TickScriptedDraft()) return;
             UpdateHeatTint();
             TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
@@ -421,7 +432,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _spawnTimer?.Stop();
                     ChaosWaveTimerWindow.Clear();
                     BubbleOverlay.ClearChaos();
-                    var options = DealDraft();
+                    var options = DealDraft(rig: true);
                     _overlay!.ShowBoonDraft(_state.WaveIndex, options, ChooseBoon,
                         _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
                 }
@@ -433,12 +444,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        private static List<ChaosBoon> DealDraft()
+        // WPF ChaosHappyPath.cs:116-145, 207-218: the first run teaches one long-fuse threat,
+        // then interrupts the same wave with three starter cards after a snap or at 70%.
+        private static bool TickScriptedDraft()
+        {
+            var s = _state!;
+            if (!_scriptThreat && s.RunProgress >= 0.30)
+            {
+                _scriptThreat = true;
+                var pink = ChaosBubbleVariants.All.First(v => v.Id == "pink");
+                var spec = ChaosBubbleVariants.Build(pink, s.RunIntensity, s.FuseTimeMult * 3, null, s.Config.EffectIntensity, s.BubbleScale);
+                ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId); BubbleOverlay.SpawnChaos(spec);
+            }
+            if (_scriptDraft || s.RunProgress < 0.55 || (!_scriptSnapped && s.RunProgress < 0.70)) return false;
+            var ids = new[] { "extra_shield", "defuse_chain", "golden_touch", "welcome_shower", "heavy_drop" };
+            var cards = ChaosBoonPool.All.Where(b => !b.IsCurse && ids.Contains(b.Id)).OrderBy(_ => Rng.Next()).Take(3).ToList();
+            _scriptDraft = true;
+            if (cards.Count == 0) return false;
+            _draftPaused = true; _pendingWave = s.WaveIndex; _spawnTimer?.Stop();
+            ChaosWaveTimerWindow.Clear(); BubbleOverlay.ClearChaos();
+            foreach (var card in cards) ChaosMeta.MarkDiscovered("boon:" + card.Id);
+            _overlay!.ShowBoonDraft(s.WaveIndex, cards, ChooseBoon, s.Config.DraftAutoResumeSec);
+            return true;
+        }
+
+        private static List<ChaosBoon> DealDraft(bool rig = false)
         {
             var s = _state!;
             var taken = s.ActiveBoons.Concat(s.ActiveCurses).Select(b => b.Id).ToHashSet();
             var options = ChaosBoonPool.Draft(s.Config.AllowCurses, s.Config.DraftChoices,
                 s.MaxedBoons.Contains("surrender"), taken, s.Config.SinChance);
+            if (rig && ++_draftsThisRun == 1 && options.Count > 0 && _runsAtStart >= 3 && !ChaosMeta.State.SeenFirstSin && s.Config.AllowCurses)
+            {
+                var sin = ChaosBoonPool.All.FirstOrDefault(b => b.Id == "double_or_nothing");
+                if (sin != null)
+                {
+                    int index = options.FindIndex(b => b.IsCurse);
+                    if (!options.Any(b => b.Id == sin.Id)) options[index < 0 ? options.Count - 1 : index] = sin;
+                    _sinRigged = _sinPending = true;
+                    ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_first_sin_demo"), ChaosAnnounceKind.Temptation);
+                }
+            }
             foreach (var option in options) ChaosMeta.MarkDiscovered("boon:" + option.Id);
             return options;
         }
@@ -447,18 +493,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_draftPaused || _pendingWave == 0 || _state == null || _state.RerollsLeft <= 0) return null;
             _state.RerollsLeft--;
-            _state.PushEvent("🎲 tempted fate again");
+            _state.PushEvent(Loc.Get("chaos_draft_reroll"));
             return (DealDraft(), _state.RerollsLeft);
         }
 
         internal static void ChooseBoon(ChaosBoon? boon)
         {
             if (!_draftPaused || _pendingWave == 0 || _state == null) return;
+            if (_sinPending) { _sinPending = false; ChaosMeta.State.SeenFirstSin = true; ChaosMeta.Save(); }
             if (boon == null) _state.Shields++;
             else
             {
                 bool shield = boon.IsCurse && _state.MaxedBoons.Contains("surrender") && !_state.SurrenderShieldUsed;
                 if (shield) _state.SurrenderShieldUsed = true;
+                if (!shield && _sinRigged && boon.Id == "double_or_nothing") { shield = true; _sinRigged = false; }
                 if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Whisper);
                 if (boon.IsCurse && !ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Yes);
                 try
@@ -516,7 +564,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 float volume = (float)Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * 0.25f;
                 CoreAudio.PlayOneShot(sound, volume, "bubble-chime");
             }
-            _state.PushEvent("welcome shower: treats from above");
+            _state.PushEvent(Loc.Get("chaos_welcome_shower"));
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,

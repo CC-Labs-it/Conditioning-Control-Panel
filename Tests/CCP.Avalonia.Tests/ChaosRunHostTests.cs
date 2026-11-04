@@ -195,6 +195,102 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task First_descent_deals_one_scripted_draft_after_the_threat_or_fallback(bool snapped)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                ChaosMeta.State.LessonsComplete.Add("silk_touch");
+                var cfg = DtrhRunWire.FirstRunConfig(); cfg.DurationSec = 60; cfg.WaveCount = 3;
+                ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+                overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(72);
+                var threat = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.VariantId == "pink"));
+                if (snapped) ChaosRunHost.OnDefused(threat);
+                Ticks(60);
+                if (!snapped) { Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible); Ticks(36); }
+                Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+                var cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+                var ids = new[] { "extra_shield", "defuse_chain", "golden_touch", "welcome_shower", "heavy_drop" };
+                Assert.Equal(3, cards.Count);
+                Assert.All(cards.Cast<object>(), c => Assert.Contains(((ChaosBoon)c.GetType().GetField("Boon")!.GetValue(c)!).Id, ids));
+                var state = ChaosRunHost.State!; int wave = state.WaveIndex; double elapsed = state.ElapsedSec;
+                Ticks(4); Assert.Equal(elapsed, state.ElapsedSec);
+                ChaosRunHost.ChooseBoon(null); overlay.FinishCountdown();
+                Assert.Equal(wave, state.WaveIndex); Ticks(4); Assert.True(state.ElapsedSec > elapsed);
+                Ticks(60); Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task Fourth_descent_rigs_first_sin_and_spends_demo_on_pick_or_skip(bool pick, bool allow)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                var meta = ChaosMeta.State; meta.RunsCompleted = 3; meta.LessonsComplete.Add("silk_touch");
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = allow; cfg.SinChance = 0;
+                ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+                overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(80);
+                var cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+                Assert.Equal(allow, cards.Cast<object>().Any(c => ((ChaosBoon)c.GetType().GetField("Boon")!.GetValue(c)!).Id == "double_or_nothing"));
+                Assert.False(meta.SeenFirstSin);
+                if (allow) Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("chaos_first_sin_demo"), ChaosAnnouncerOverlay.Active!.Current!.Text);
+                bool shielded = false, downside = false;
+                var sin = new ChaosBoon("double_or_nothing", "test", "", ChaosRarity.Rare, true, 0, _ => downside = true) { ApplyShielded = _ => shielded = true };
+                ChaosRunHost.ChooseBoon(pick ? sin : null);
+                Assert.Equal(allow, meta.SeenFirstSin); Assert.Equal(pick && allow, shielded); Assert.False(downside);
+                overlay.FinishCountdown(); Ticks(80);
+                cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+                Assert.DoesNotContain(cards.Cast<object>(), c => ((ChaosBoon)c.GetType().GetField("Boon")!.GetValue(c)!).Id == "double_or_nothing");
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Draft_events_use_the_active_language()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta(); var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            string language = loc.CurrentLanguage;
+            try
+            {
+                foreach (var (code, _, _) in ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+                {
+                    var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json");
+                    var strings = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
+                    foreach (var key in new[] { "chaos_draft_reroll", "chaos_welcome_shower", "chaos_first_sin_demo" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
+                }
+                loc.SetLanguage("de"); ChaosMeta.State.LessonsComplete.Add("silk_touch");
+                var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+                ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+                overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!; state.RerollsLeft = 1; Ticks(80);
+                ChaosRunHost.RerollDraft(); Assert.Contains(loc.Get("chaos_draft_reroll"), state.RecentEvents);
+                state.WelcomeShowerEnabled = true; ChaosRunHost.ChooseBoon(null); overlay.FinishCountdown();
+                Assert.Contains(loc.Get("chaos_welcome_shower"), state.RecentEvents);
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); loc.SetLanguage(language); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
     /// toy (cooldown starts, the status counts down on the run clock); the toy key rides the panic
     /// key's listener; panic closes every button and unhooks the key.</summary>
