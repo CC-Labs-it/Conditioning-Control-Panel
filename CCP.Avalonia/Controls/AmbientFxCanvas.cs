@@ -198,6 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private struct Spark { public float X, Y, VX, VY, Life, Max, Size; }
         private Spark[]? _burst;
         private int _burstN;
+        internal int BurstCount => _burstN;
 
         /// <summary>
         /// One banked token. It carries its whole bezier rather than a velocity because the flight
