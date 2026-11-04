@@ -66,6 +66,8 @@ public sealed class MandatoryVideoGentleTests
                 Assert.Equal(TimeSpan.FromSeconds(0.75), Assert.IsType<DoubleTransition>(Assert.Single(curtain.Transitions!)).Duration);
                 o.CloseAll();   // panic or engine stop also drops an already fading exit
                 Assert.False(window.IsVisible);
+                Assert.False(curtain.IsVisible);
+                Assert.Empty(o.ExitCurtains);
 
                 var forced = new Window();
                 forced.Show();
