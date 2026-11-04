@@ -32,7 +32,13 @@ internal static class RainLookSyncHead
         {
             var s = CoreSettings.Current;
             Volatile.Write(ref _deferredFor, s.UnifiedId);
-            if (!PrizeOwnership.HasSnapshot(s.UnifiedId))
+            var needsGrants = false;
+            RainLookCodec.Normalize(look, (slot, id) =>
+            {
+                needsGrants |= RainItemManifest.Shipped.Find(slot, id)?.Access == RainItemAccessKind.Shop;
+                return false;
+            });
+            if (needsGrants && !PrizeOwnership.HasSnapshot(s.UnifiedId))
             {
                 lock (Gate) _pulledFor = null;
                 if (PrizeOwnership.HasSnapshot(s.UnifiedId)) AccountReady(s.UnifiedId, deferred: true);

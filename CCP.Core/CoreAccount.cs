@@ -45,7 +45,11 @@ namespace ConditioningControlPanel
             get => Volatile.Read(ref _unifiedUserId);
             set
             {
-                if (string.Equals(Interlocked.Exchange(ref _unifiedUserId, value), value, StringComparison.Ordinal)) return;
+                lock (SessionGate)
+                {
+                    if (string.Equals(Interlocked.Exchange(ref _unifiedUserId, value), value, StringComparison.Ordinal)) return;
+                    if (_trackSessions) _sessionVersion++;
+                }
                 foreach (EventHandler handler in UnifiedIdentityChanged?.GetInvocationList() ?? Array.Empty<Delegate>())
                 {
                     try { handler(null, EventArgs.Empty); }
@@ -54,6 +58,12 @@ namespace ConditioningControlPanel
             }
         }
         private static string? _unifiedUserId;
+        private static readonly object SessionGate = new();
+        private static long _sessionVersion;
+        private static bool _trackSessions;
+        public static long SessionVersion { get { lock (SessionGate) return _sessionVersion; } }
+        public static void ForSession(long version, Action work) { lock (SessionGate) if (version == _sessionVersion) work(); }
+        public static void EndSession(Action cleanup) { lock (SessionGate) { _trackSessions = true; _sessionVersion++; cleanup(); } }
 
         /// <summary>The unified identity changed (sign-in, sign-out, account switch). WPF: <c>App.UnifiedIdentityChanged</c>.</summary>
         public static event EventHandler? UnifiedIdentityChanged;

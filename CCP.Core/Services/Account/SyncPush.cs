@@ -215,6 +215,7 @@ namespace ConditioningControlPanel.Services
         /// <param name="waitForGate">Logout: wait (bounded) for an in-flight push instead of skipping.</param>
         public async Task<bool> PushAsync(string reason, bool waitForGate = false)
         {
+            var prizeSession = CoreAccount.SessionVersion;
             var s = CoreSettings.Current;
             if (!Loaded || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
             if (!await _gate.WaitAsync(waitForGate ? TimeSpan.FromSeconds(5) : TimeSpan.Zero)) return false;
@@ -298,7 +299,7 @@ namespace ConditioningControlPanel.Services
                     try
                     {
                         var snapshot = (reply["prizes"] as JObject)?.ToObject<PrizesBlock>();
-                        PrizesReceived?.Invoke(id, snapshot);
+                        CoreAccount.ForSession(prizeSession, () => PrizesReceived?.Invoke(id, snapshot));
                     }
                     catch (Exception ex) { Log.Debug("V2 Sync: Could not apply prizes: {Error}", ex.Message); }
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());

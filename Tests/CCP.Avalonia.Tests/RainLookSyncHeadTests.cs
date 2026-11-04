@@ -155,6 +155,50 @@ public sealed class RainLookSyncHeadTests : IDisposable
         });
 
     [Fact]
+    public async Task Logout_forgets_ownership_before_the_same_account_returns()
+    {
+        _resetOwnership = true;
+        s.AuthToken = "dummy";
+        PrizeOwnership.ApplySnapshot("rain-test", 3, new[] { "cos.rain.dress.rose-flare" });
+        Assert.True(PrizeOwnership.HasSnapshot("rain-test"));
+        await AccountSeed.Logout(accountDeleted: true);
+        s.UnifiedId = "rain-test"; s.AuthToken = "dummy";
+        Assert.False(PrizeOwnership.HasSnapshot("rain-test"));
+    }
+
+    [Fact]
+    public async Task Counter_reply_from_before_logout_is_not_applied_after_relogin()
+    {
+        _resetOwnership = true;
+        s.AuthToken = "dummy";
+        var reply = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var http = new Fake { Reply = () => reply.Task };
+        var api = new ConditioningControlPanel.Services.BackRoom.BackRoomApi(new HttpClient(http), FriendsHead.Identity, null, PrizeOwnership.ApplySnapshot, "https://rain.test");
+        var request = api.RelayAsync("counter", "state", null, null);
+        await AccountSeed.Logout(accountDeleted: true);
+        s.UnifiedId = "rain-test"; s.AuthToken = "dummy";
+        reply.SetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"ok\":true,\"prizes\":{\"revision\":4,\"grants\":[\"cos.rain.dress.rose-flare\"]}}") });
+        await request;
+        Assert.False(PrizeOwnership.HasSnapshot("rain-test"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("{\"rev\":1,\"items\":{},\"colors\":{\"hair\":\"#ffffff\"}}")]
+    public void Default_server_look_settles_without_ownership_snapshot(string look)
+    {
+        _resetOwnership = true;
+        PrizeOwnership.ResetHeld();
+        s.RainLook = "old"; s.RainLookAgreedUtc = null; s.RainLookPushOwed = true;
+        var hooks = (RainLookSync.Hooks)typeof(RainLookSync).GetField("_h", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(_previous)!;
+        var at = new DateTime(2026, 10, 30, 11, 0, 0, DateTimeKind.Utc);
+        hooks.Adopt(look, at);
+        Assert.Equal(RainLookCodec.Normalize(look), s.RainLook);
+        Assert.Equal(at, s.RainLookAgreedUtc);
+        Assert.False(s.RainLookPushOwed);
+    }
+
+    [Fact]
     public void Stop_cancels_a_source_captured_by_a_concurrent_reader_without_disposing_it()
     {
         // ApplyPrizes can read the source immediately before Stop swaps it, then read Token afterward.

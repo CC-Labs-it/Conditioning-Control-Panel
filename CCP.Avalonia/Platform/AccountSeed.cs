@@ -211,9 +211,14 @@ internal static class AccountSeed
         Patreon?.Logout();
         Discord?.Logout();
         SubscribeStar?.Logout();
-        CoreAccount.UnifiedUserId = null;
         var s = CoreSettings.Current;
-        s.UnifiedId = null;
+        CoreAccount.EndSession(() =>
+        {
+            RainLookSyncHead.Stop();
+            PrizeOwnership.ResetHeld();
+            CoreAccount.UnifiedUserId = null;
+            s.UnifiedId = null;
+        });
         s.AuthToken = null;
         s.UserDisplayName = null;
         s.HasLinkedDiscord = false;

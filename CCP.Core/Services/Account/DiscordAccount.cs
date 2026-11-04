@@ -108,9 +108,10 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>Validate the user, refreshing if needed. Never throws: a failure leaves what was there.</summary>
-        public async Task ValidateAndRefreshUserAsync(bool forceRefresh = false)
+        public async Task ValidateAndRefreshUserAsync(bool forceRefresh = false, long? session = null)
         {
             if (IsVerifying && !forceRefresh) return;
+            var prizeSession = session ?? CoreAccount.SessionVersion;
             var settings = _settings();
             if (settings?.OfflineMode == true) { Log.Debug("Offline mode enabled, skipping Discord validation"); return; }
 
@@ -140,7 +141,7 @@ namespace ConditioningControlPanel.Services
 
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
                 {
-                    if (await RefreshTokensAsync(tokens.RefreshToken)) { await ValidateAndRefreshUserAsync(forceRefresh: true); return; }
+                    if (await RefreshTokensAsync(tokens.RefreshToken)) { await ValidateAndRefreshUserAsync(forceRefresh: true, session: prizeSession); return; }
                     ClearTokens();
                     ClearUserInfo();
                     return;
@@ -151,7 +152,7 @@ namespace ConditioningControlPanel.Services
                 var user = await response.Content.ReadFromJsonAsync<DiscordUserResponse>();
                 if (user == null || !string.IsNullOrEmpty(user.Error)) { Log.Warning("Discord validation error: {Error}", user?.Error); return; }
 
-                ProviderSubscription.PrizesSink?.Invoke(prizesFor, user.UnifiedId, user.Prizes, "Discord validate");
+                CoreAccount.ForSession(prizeSession, () => ProviderSubscription.PrizesSink?.Invoke(prizesFor, user.UnifiedId, user.Prizes, "Discord validate"));
 
                 // Server-healed auth token, refused for a DIFFERENT unified record: adopting it would 401 every
                 // unified_id request and flip-flop with the other provider (duplicate-identity accounts).
