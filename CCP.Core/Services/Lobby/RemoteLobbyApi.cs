@@ -19,7 +19,6 @@ public sealed class RemoteLobbyApi
     private readonly HttpClient _http;
     private readonly Func<(string UnifiedId, string Token)?> _identity;
     private readonly string _baseUrl;
-
     public RemoteLobbyApi(HttpClient? http = null, Func<(string UnifiedId, string Token)?>? identity = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;

@@ -12,9 +12,7 @@ using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Lobby;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 [Collection(CoreSecretsStatics.Name)]
 public sealed class LobbyRemoteTests
 {
@@ -36,7 +34,6 @@ public sealed class LobbyRemoteTests
             return new HttpResponseMessage(Status) { Content = new StringContent(Response) };
         }
     }
-
     private sealed class Timer : IUiTimer
     {
         public TimeSpan Interval { get; set; }
@@ -45,7 +42,6 @@ public sealed class LobbyRemoteTests
         public void Stop() { }
         public void OnUiThread(Action action) => action();
     }
-
     [Fact]
     public async Task DirectoryUsesAccountHeadersAndMapsOpenAndClaimedSeats()
     {
@@ -70,7 +66,6 @@ public sealed class LobbyRemoteTests
         Assert.Null((await signedOut.TryClaimAsync("u_a")).Url);
         Assert.Equal(1, h.Calls);
     }
-
     [Fact]
     public async Task ClaimUsesSubjectInBodyAndRefreshesOnSuccessOrOrdinaryConflict()
     {
@@ -100,7 +95,6 @@ public sealed class LobbyRemoteTests
         }
         finally { MergedAccountRecovery.ResetForTest(); }
     }
-
     [Fact]
     public async Task RemoteSuccessFeedsMergeAndFailureKeepsLastDirectoryRows()
     {
@@ -147,5 +141,4 @@ public sealed class LobbyRemoteTests
         second.SetResult(PbpLobbyReply.Empty);
         await refreshed;
     }
-
 }

@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
-            GameHostUp = Views.Windows.PanicSurfaces.AnyOwnsTheScreen(),
+            GameHostUp = Views.Games.GameWindow.IsAnyGameOpen() || Views.Windows.IntakeHostWindow.IsAnyOpen(),
             LauncherHolding = Views.Windows.LauncherWindow.Instance is { IsVisible: true },
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,

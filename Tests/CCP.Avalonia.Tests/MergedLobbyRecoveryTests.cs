@@ -9,12 +9,11 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Lobby;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class MergedLobbyRecoveryTests
 {
     private sealed class Conflict : HttpMessageHandler
@@ -23,7 +22,6 @@ public sealed class MergedLobbyRecoveryTests
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent(
                 "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon456\"}") });
     }
-
     private sealed class Provider(string kind) : HttpMessageHandler
     {
         public int Auth, Profile;
@@ -37,7 +35,16 @@ public sealed class MergedLobbyRecoveryTests
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
         }
     }
-
+    [Theory, InlineData("fyp", false), InlineData("loom", false), InlineData("breakoutdemo", true)]
+    public void StartupGameProbeDistinguishesWebHosts(string id, bool isGame) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont().With(AppFonts.Options(systemEmoji: false)).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var window = new GameWindow(GameWindow.Games[id]);
+        try { window.Show(); Assert.Equal(isGame, StartupLadder.World(DateTime.UtcNow).GameHostUp); }
+        finally { window.Close(); }
+    });
     [Theory, InlineData("quiet", "patreon"), InlineData("game", "discord"), InlineData("launcher", "discord")]
     public async Task ClaimMergedConflictStopsSyncAdoptsCanonicalAndOffersSignIn(string owner, string providerName)
     {
@@ -50,7 +57,7 @@ public sealed class MergedLobbyRecoveryTests
             CoreSecrets.RetrieveProvider = key => secrets.TryGetValue(key, out var value) ? value : null;
             CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
             var settings = CoreSettings.Current;
-            var oldSurfaces = ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All; ConditioningControlPanel.Avalonia.Views.Windows.LauncherWindow? launcher = null;
+            GameWindow? game = null; ConditioningControlPanel.Avalonia.Views.Windows.LauncherWindow? launcher = null;
             var oldSync = AccountSeed.Sync;
             var oldV2 = AccountSeed.NewV2;
             var sync = new SyncPush(() => Array.Empty<string>(), () => false);
@@ -68,7 +75,7 @@ public sealed class MergedLobbyRecoveryTests
                 AccountSeed.SeedMergedRecovery();
                 StartupLadder.ResetForTests();
                 if (owner == "quiet") StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-                if (owner == "game") ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All = new[] { new ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.Surface("game", _ => { }, () => true) }; if (owner == "launcher") launcher = ConditioningControlPanel.Avalonia.Views.Windows.LauncherWindow.Open();
+                if (owner == "game") { game = new GameWindow(GameWindow.Games["breakoutdemo"]); game.Show(); } if (owner == "launcher") launcher = ConditioningControlPanel.Avalonia.Views.Windows.LauncherWindow.Open();
                 Assert.Equal(owner == "game", StartupLadder.World(DateTime.UtcNow).GameHostUp); Assert.Equal(owner == "launcher", StartupLadder.World(DateTime.UtcNow).LauncherHolding);
                 using var http = new HttpClient(new Conflict());
                 var api = new RemoteLobbyApi(http, () => ("u_old1234", "old-token"), "http://127.0.0.1:9");
@@ -84,7 +91,7 @@ public sealed class MergedLobbyRecoveryTests
                 var item = Assert.Single(StartupLadder.Inbox.Items);
                 Assert.Equal("merged-account-signin:u_canon456", item.Key);
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_title"), item.Title);
-                launcher?.Close(); launcher = null; ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All = oldSurfaces;
+                launcher?.Close(); launcher = null; game?.Close(); game = null;
                 // A different merged account with a provider credential mints a new token and reloads.
                 StartupLadder.ResetForTests();
                 MergedAccountRecovery.ResetForTest();
@@ -110,7 +117,7 @@ public sealed class MergedLobbyRecoveryTests
             }
             finally
             {
-                launcher?.Close(); ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All = oldSurfaces;
+                launcher?.Close(); game?.Close(); game = null;
                 AccountSeed.Sync = oldSync;
                 AccountSeed.NewV2 = oldV2;
                 StartupLadder.ResetForTests();
