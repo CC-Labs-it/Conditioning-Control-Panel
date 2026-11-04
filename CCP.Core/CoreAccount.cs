@@ -48,7 +48,7 @@ namespace ConditioningControlPanel
                 lock (SessionGate)
                 {
                     if (string.Equals(Interlocked.Exchange(ref _unifiedUserId, value), value, StringComparison.Ordinal)) return;
-                    if (_trackSessions) _sessionVersion++;
+                    if (_trackSessions) AdvanceSession();
                 }
                 foreach (EventHandler handler in UnifiedIdentityChanged?.GetInvocationList() ?? Array.Empty<Delegate>())
                 {
@@ -61,6 +61,14 @@ namespace ConditioningControlPanel
         private static readonly object SessionGate = new();
         private static long _sessionVersion;
         private static bool _trackSessions;
+        private static Action? _sessionChanged;
+        private static void AdvanceSession()
+        {
+            _sessionVersion++;
+            try { _sessionChanged?.Invoke(); }
+            catch (Exception ex) { Log.Debug("Session cleanup failed ({Kind})", ex.GetType().Name); }
+        }
+        public static void TrackSessions(Action changed) { lock (SessionGate) { _trackSessions = true; _sessionChanged = changed; AdvanceSession(); } }
         public static long SessionVersion { get { lock (SessionGate) return _sessionVersion; } }
         public static void ForSession(long version, Action work) { lock (SessionGate) if (version == _sessionVersion) work(); }
         public static void EndSession(Action cleanup) { lock (SessionGate) { _trackSessions = true; _sessionVersion++; cleanup(); } }

@@ -154,6 +154,42 @@ public sealed class RainLookSyncHeadTests : IDisposable
             }
         });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Direct_account_switch_invalidates_snapshot_and_late_reply(bool lateReply)
+    {
+        _resetOwnership = true;
+        s.AuthToken = "dummy"; CoreAccount.UnifiedUserId = "rain-test";
+        Assert.True(AccountSeed.Seed());
+        PrizeOwnership.ApplySnapshot("rain-test", 3, new[] { "cos.rain.dress.rose-flare" });
+        var reply = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var http = new Fake { Reply = () => reply.Task };
+        var api = new ConditioningControlPanel.Services.BackRoom.BackRoomApi(new HttpClient(http), FriendsHead.Identity, null, PrizeOwnership.ApplySnapshot, "https://rain.test");
+        var request = api.RelayAsync("counter", "state", null, null);
+        s.UnifiedId = "other"; CoreAccount.UnifiedUserId = "other";
+        s.UnifiedId = "rain-test"; CoreAccount.UnifiedUserId = "rain-test";
+        var retained = PrizeOwnership.HasSnapshot("rain-test");
+        PrizeOwnership.ResetHeld();
+        reply.SetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"ok\":true,\"prizes\":{\"revision\":4,\"grants\":[\"cos.rain.dress.rose-flare\"]}}") });
+        await request;
+        Assert.False(lateReply ? PrizeOwnership.HasSnapshot("rain-test") : retained);
+    }
+
+    [Fact]
+    public Task Queued_prizes_from_before_a_direct_switch_are_dropped()
+        => AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            _resetOwnership = true;
+            s.AuthToken = "dummy"; CoreAccount.UnifiedUserId = "rain-test";
+            Assert.True(AccountSeed.Seed());
+            RainLookSyncHead.ApplyPrizes("rain-test", "rain-test", new PrizesBlock { Revision = 3, Grants = new() { "cos.rain.dress.rose-flare" } }, "test", queueReady: false);
+            s.UnifiedId = "other"; CoreAccount.UnifiedUserId = "other";
+            s.UnifiedId = "rain-test"; CoreAccount.UnifiedUserId = "rain-test";
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            Assert.False(PrizeOwnership.HasSnapshot("rain-test"));
+        });
+
     [Fact]
     public async Task Logout_forgets_ownership_before_the_same_account_returns()
     {

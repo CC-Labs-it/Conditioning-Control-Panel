@@ -89,13 +89,14 @@ internal static class RainLookSyncHead
     internal static void ApplyPrizes(string? requested, string? answered, PrizesBlock? prizes, string source, bool queueReady = true)
     {
         if (string.IsNullOrEmpty(requested) || requested != answered) return;
+        var session = CoreAccount.SessionVersion;
         var token = Volatile.Read(ref _run).Token;
-        Dispatcher.UIThread.Post(() =>
+        Dispatcher.UIThread.Post(() => CoreAccount.ForSession(session, () =>
         {
             if (token.IsCancellationRequested) return;
             if (prizes?.Grants is { } grants) PrizeOwnership.ApplySnapshot(requested, prizes.Revision, grants);
             if (queueReady) Queue(requested, token);
-        });
+        }));
     }
 
     internal static void Stop()
