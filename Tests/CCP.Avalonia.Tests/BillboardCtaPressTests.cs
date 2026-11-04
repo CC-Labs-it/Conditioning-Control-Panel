@@ -32,6 +32,7 @@ public class BillboardCtaPressTests
             AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var service = new SettingsService();
+        var oldProvider = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => service;
         service.Current.MotionLevel = level;
         service.Current.PerformanceMode = false;
@@ -78,6 +79,16 @@ public class BillboardCtaPressTests
             Assert.Equal(DepthLaw.PressTravelPx, Y(), 5);
             window.MouseUp(point, MouseButton.Left);
             Assert.Equal(0, Y(), 5);
+            foreach (var type in new[] { PointerType.Touch, PointerType.Pen })
+            {
+                using var pointer = new Pointer(Pointer.GetNextFreeId(), type, true);
+                host.Cta.RaiseEvent(new PointerPressedEventArgs(host.Cta, pointer, window, point, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+                Assert.Equal(DepthLaw.PressTravelPx, Y(), 5);
+                host.Cta.RaiseEvent(new PointerReleasedEventArgs(host.Cta, pointer, window, point, 0,
+                    PointerPointProperties.None, KeyModifiers.None, MouseButton.Left));
+                Assert.Equal(0, Y(), 5);
+            }
             host.Cta.Focus();
             window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
             Assert.True(host.Cta.IsPressed);
@@ -96,7 +107,7 @@ public class BillboardCtaPressTests
             Assert.Equal(0, Y(), 5);
             Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == face);
         }
-        finally { window.Close(); host.ReleaseArt(); BeatLoop.Time = oldTime; }
+        finally { window.Close(); host.ReleaseArt(); BeatLoop.Time = oldTime; CoreSettings.ServiceProvider = oldProvider; }
         return Task.CompletedTask;
     });
 }

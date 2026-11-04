@@ -408,7 +408,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             };
             button.AddHandler(PointerPressedEvent, (_, e) =>
             {
-                if (e.Pointer.Type == PointerType.Mouse && e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) UpdateCtaPress(true);
+                if (e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) UpdateCtaPress(true);
             }, RoutingStrategies.Tunnel);
             button.AddHandler(PointerReleasedEvent, (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) UpdateCtaPress(false); }, RoutingStrategies.Tunnel);
             void ReleaseOutside(PointerEventArgs e) { if (_ctaPressed && !new Rect(button.Bounds.Size).Contains(e.GetPosition(button))) UpdateCtaPress(false); }
