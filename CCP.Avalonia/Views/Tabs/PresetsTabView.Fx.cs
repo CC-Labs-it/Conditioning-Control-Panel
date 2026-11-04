@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,6 +26,9 @@ public partial class PresetsTabView
     private Control? _sheenHost;
     private Window? _fxWindow;
     private CancellationTokenSource? _entranceCancellation;
+    private readonly Dictionary<Control, CancellationTokenSource> _entranceRises = new();
+    // Holds the real animation in flight for deterministic tests.
+    internal int? EntranceDurationForTests { get; set; }
 
     private void InitializeFocalFx()
     {
@@ -155,8 +159,10 @@ public partial class PresetsTabView
         scale.ScaleX = scale.ScaleY = target;
     }
 
-    private static void LiftSessionRow(Control row, bool on)
+    private void LiftSessionRow(Control row, bool on)
     {
+        // WPF MainWindow.TabFxPresetsQuestsAchievements.cs:430-441 clears Y before snapping.
+        if (!Env.AllowTransitions && _entranceRises.Remove(row, out var rise)) rise.Cancel();
         var slide = CardTransforms(row)?.Children.OfType<TranslateTransform>().FirstOrDefault();
         if (slide == null) return;
         slide.Transitions = Env.AllowTransitions ? new Transitions
@@ -183,6 +189,7 @@ public partial class PresetsTabView
         _entranceCancellation?.Cancel();
         _entranceCancellation?.Dispose();
         _entranceCancellation = null;
+        _entranceRises.Clear();
     }
     private void StaggerZones()
     {
@@ -196,9 +203,20 @@ public partial class PresetsTabView
             {
                 if (CardTransforms(card) == null) continue;
                 var delay = TimeSpan.FromMilliseconds(40 * Math.Min(index++, 6));
-                _ = EnterAsync(card, delay, 220, OpacityProperty, 0, 1, _entranceCancellation.Token);
-                _ = EnterAsync(card, delay, 260, TranslateTransform.YProperty, 10, 0, _entranceCancellation.Token);
+                _ = EnterAsync(card, delay, EntranceDurationForTests ?? 220, OpacityProperty, 0, 1, _entranceCancellation.Token);
+                _ = EnterRiseAsync(card, delay, EntranceDurationForTests ?? 260, _entranceCancellation.Token);
             }
+        }
+    }
+    private async Task EnterRiseAsync(Control card, TimeSpan delay, int ms, CancellationToken parent)
+    {
+        using var rise = CancellationTokenSource.CreateLinkedTokenSource(parent);
+        _entranceRises[card] = rise;
+        try { await EnterAsync(card, delay, ms, TranslateTransform.YProperty, 10, 0, rise.Token); }
+        finally
+        {
+            if (_entranceRises.TryGetValue(card, out var current) && ReferenceEquals(current, rise))
+                _entranceRises.Remove(card);
         }
     }
     private static async Task EnterAsync(Control card, TimeSpan delay, int ms, AvaloniaProperty property,
