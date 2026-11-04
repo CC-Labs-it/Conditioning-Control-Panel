@@ -240,6 +240,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF Snap Field: snap live bubbles and, at capstone, pay for treats too.</summary>
+        internal static void SnapField(bool all)
+        {
+            foreach (var bubble in Field.Bubbles.ToArray())
+            {
+                var spec = bubble.Spec;
+                if (spec == null || spec.IsDarter || spec.IsFreeze || bubble.Popping) continue;
+                if (bubble.IsLiveThreat)
+                {
+                    if (bubble.Snap()) Field.ChaosDefused?.Invoke(bubble);
+                }
+                else if (all && spec.VariantId != "tease" && spec.VariantId != "brittle" && spec.VariantId != "chaperone")
+                    PopChaos(bubble);
+            }
+            RequestFrame();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
