@@ -67,11 +67,14 @@ namespace ConditioningControlPanel.Services
         public static void AddConditioningTime(AppSettings s, double minutes)
         {
             if (!(minutes > 0)) return;
-            s.TotalConditioningMinutes += minutes;
-            if (string.IsNullOrEmpty(s.SeasonStatsSeason))
-                s.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(s, DateTime.UtcNow);
-            s.SeasonConditioningMinutes += minutes;
-            CoreSettings.Save();
+            lock (SeasonBookkeeping.Gate)
+            {
+                s.TotalConditioningMinutes += minutes;
+                if (string.IsNullOrEmpty(s.SeasonStatsSeason))
+                    s.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(s, DateTime.UtcNow);
+                s.SeasonConditioningMinutes += minutes;
+                CoreSettings.Save();
+            }
         }
     }
 }

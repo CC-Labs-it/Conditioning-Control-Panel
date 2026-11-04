@@ -90,6 +90,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AvaloniaXamlLoader.Load(this);
             InitializeLanguageSelector();
             InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
+            // WPF startup and ProfileSyncService's season nudge (MainWindow.Marquee.cs:271,
+            // ProfileSyncService.cs:978): handle the cached key and every adopted server key.
+            var seasonSettings = CoreSettings.Current;
+            void UpdateSeason()
+            {
+                try { ConditioningControlPanel.Services.SeasonBookkeeping.Update(
+                    seasonSettings, App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to update monthly bookkeeping"); }
+            }
+            System.ComponentModel.PropertyChangedEventHandler seasonChanged = (_, e) =>
+            {
+                if (e.PropertyName == nameof(ConditioningControlPanel.Models.AppSettings.CurrentSeason)) UpdateSeason();
+            };
+            seasonSettings.PropertyChanged += seasonChanged;
+            Closed += (_, _) => seasonSettings.PropertyChanged -= seasonChanged;
+            UpdateSeason();
 
             // WPF put these on the Window element itself; Avalonia routes them as attached events.
             HookResizeEdges();
