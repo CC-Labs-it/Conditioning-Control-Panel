@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
+// media-flavour / media-more / online-media), friend / Lobby join and watch intents (.Friends.cs),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -67,6 +67,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Environment.GetEnvironmentVariable(FriendsHead.EnvVar));
 
         private static readonly Random PbpRng = new();
+
+        private JObject? _pbpIntent;
+        private bool _pbpIdentityPosted;
+
+        internal static void HostPbpTable()
+        {
+            var window = Launch(PbpId);
+            window?.IntendPbpHost();
+        }
+
+        internal void IntendPbpHost()
+        {
+            _pbpIntent = new JObject { ["type"] = "pbp:friend", ["mode"] = "host" };
+            if (_pbpIdentityPosted) PostPbpIntent();
+        }
+
+        private void PostPbpIntent()
+        {
+            var intent = _pbpIntent;
+            _pbpIntent = null;
+            if (intent != null) Post(intent);
+        }
 
         private bool _pbpOpen;
         private Task? _pbpBootFrames;   // single-flight: settings always precedes identity, even during an OS query
@@ -200,6 +222,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Post(frame);
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
+            _pbpIdentityPosted = true;
+            PostPbpIntent();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
