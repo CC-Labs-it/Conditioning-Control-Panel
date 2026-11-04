@@ -2521,14 +2521,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // Avalonia's deferred TextChanged handlers fire and the flag stays clear.
                 UpdateTitle();
 
-                // ponytail: WPF also set TutorialEventBus.LastSavedEnhancementPath and emitted
-                // "FileSaved" so the HT walkthrough could advance to its follow-up card. Still
-                // blocked, and the blocker is NOT "the tutorial has not been ported" - the overlay
-                // has been (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs) and CoreTutorial is
-                // the seam. It is that CoreTutorial deliberately carries NO event bus: the
-                // OnEvent advance trigger crosses as an enum only, and the publisher side stays in
-                // ConditioningControlPanel/Services/TutorialEventBus.cs. Nothing here can emit, and
-                // with the seam unseeded on this head nothing would be listening either.
+                CoreTutorialEvents.LastSavedEnhancementPath = path;
+                CoreTutorialEvents.Emit("FileSaved");
             }
             catch (Exception ex)
             {
