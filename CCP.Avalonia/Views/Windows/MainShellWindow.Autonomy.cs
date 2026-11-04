@@ -79,7 +79,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!on) CancelAutonomyPulses();
                 FollowTakeoverQuestTick(on);
                 SetTakeoverActiveUi(on);
-                if (on) UpdateAutonomyButtonState(true); // WPF seeds the button from the saved enabled flag.
+                // WPF seeds the button from the saved enabled flag; a start stopped before this post ran stays Start.
+                if (on && Autonomy.IsEnabled && CoreSettings.Current.AutonomyModeEnabled) UpdateAutonomyButtonState(true);
             });
             // WPF AnnounceAction: matching mod event audio, otherwise text-only.
             Autonomy.AnnouncementMade += (_, phrase) => Dispatcher.UIThread.Post(() =>

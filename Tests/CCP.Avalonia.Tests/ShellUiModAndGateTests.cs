@@ -130,6 +130,29 @@ public sealed class ShellUiModAndGateTests
     });
 
     [Fact]
+    public void StartThenStopBeforeTheQueuedRepaintLeavesStart() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); Settle();
+            var s = CoreSettings.Current;
+            s.AutonomyConsentGiven = true;
+            Assert.True(shell.SetAutonomyEnabled(true));
+            Assert.False(shell.SetAutonomyEnabled(false));
+            Settle();   // the queued start and stop callbacks run only now
+            var button = shell.Named<Control>("BambiTakeoverTab")!.FindControl<Button>("BtnAutonomyStartStop")!;
+            Assert.False(s.AutonomyModeEnabled);
+            Assert.False(shell.Autonomy.IsEnabled);
+            Assert.Equal(Color.FromRgb(144, 238, 144), ColorOf(button.Foreground));
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_start_2"), Assert.IsType<TextBlock>(button.Content).Text);
+        }
+        finally { shell.Close(); }
+    });
+
+    [Fact]
     public void PanicThenFirstClickClearsTheSavedSwitchWithoutRestarting() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
