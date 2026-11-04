@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -124,7 +125,7 @@ internal sealed class KeywordAudioRuntime
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
     internal void Start() { IsActive = true; _input.Clear(); }
-    internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
+    internal void Stop() { IsActive = false; _input.Clear(); ClearOcr(); StopAudio(); }
 
     private bool Accept(string? process, bool own)
     {
@@ -157,15 +158,136 @@ internal sealed class KeywordAudioRuntime
             word => _cooldowns.IsMuted(word, now.ToUniversalTime()));
         if (fired.Count == 0) return;
         _input.Clear();
+        Fire(fired, "Keyboard", now);
+    }
+
+    private void Fire(List<KeywordTrigger> fired, string source, DateTime now)
+    {
+        var s = CoreSettings.Current;
         _cooldowns.LastGlobal = now;
         foreach (var t in fired)
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
-            RecordFire(t, "Keyboard", now);   // WPF KeywordTriggerService.cs:1191-1200
+            RecordFire(t, source, now);   // WPF KeywordTriggerService.cs:933-943,1191-1200
             try { TriggerFired?.Invoke(t); } catch (Exception ex) { Log.Warning(ex, "Keyword fired handler failed"); }
         }
         LastDispatch = DispatchAsync(fired);
+    }
+
+    // WPF KeywordTriggerService.cs:689-944. Kept on the same thread as keyboard input.
+    private Dictionary<string, int> _ocrSeen = new();
+    private readonly HashSet<string> _ocrFired = new();
+    internal bool NeedsOcrConfirmation { get; private set; }
+    private void ClearOcr() { _ocrSeen.Clear(); _ocrFired.Clear(); NeedsOcrConfirmation = false; }
+
+    internal bool CheckOcrWords(IReadOnlyList<ScreenOcrService.Word> words, string? process = null, bool own = false)
+    {
+        NeedsOcrConfirmation = false;
+        var s = CoreSettings.Current;
+        if (!Accept(process, own) || !s.ScreenOcrEnabled || words.Count == 0)
+        {
+            ClearOcr();
+            return false;
+        }
+        var now = Now();
+        if ((now - _cooldowns.LastGlobal).TotalSeconds < s.KeywordGlobalCooldownSeconds) return false;
+        var matched = new List<ScreenOcrService.Word>();
+        var fired = new List<KeywordTrigger>();
+        foreach (var trigger in KeywordMatchRules.Ordered(s.KeywordTriggers))
+        {
+            if (trigger == null || !trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword) ||
+                (now - trigger.LastTriggeredAt).TotalSeconds < trigger.CooldownSeconds ||
+                _cooldowns.IsMuted(trigger.Keyword, now.ToUniversalTime())) continue;
+            var hits = FindOcrMatches(trigger, words);
+            if (hits.Count == 0) continue;
+            fired.Add(trigger);
+            matched.AddRange(hits);
+        }
+        if (matched.Count == 0) { ClearOcr(); return false; }
+
+        var positions = new HashSet<string>();
+        foreach (var word in matched)
+            positions.Add($"{word.Text.ToLowerInvariant()}_{word.Bounds.X / 120}_{word.Bounds.Y / 120}");
+        _ocrFired.IntersectWith(positions);
+        var seen = new Dictionary<string, int>();
+        var confirmed = new List<string>();
+        foreach (var key in positions)
+        {
+            var count = (_ocrSeen.TryGetValue(key, out var previous) ? previous : 0) + 1;
+            seen[key] = count;
+            if (_ocrFired.Contains(key)) continue;
+            if (count < Math.Max(1, s.OcrConfirmationScans)) NeedsOcrConfirmation = true;
+            else confirmed.Add(key);
+        }
+        _ocrSeen = seen;
+        if (confirmed.Count == 0) return NeedsOcrConfirmation;
+        if (!s.OcrHighlightAll)
+        {
+            for (var i = confirmed.Count - 1; i > 0; i--)
+            {
+                var j = Random.Shared.Next(i + 1);
+                (confirmed[i], confirmed[j]) = (confirmed[j], confirmed[i]);
+            }
+            var count = Random.Shared.Next(1, confirmed.Count + 1);
+            confirmed.RemoveRange(count, confirmed.Count - count);
+        }
+        _ocrFired.UnionWith(confirmed);
+        Fire(fired, "OCR", now);
+        return NeedsOcrConfirmation;
+    }
+
+    private static List<ScreenOcrService.Word> FindOcrMatches(KeywordTrigger trigger, IReadOnlyList<ScreenOcrService.Word> words)
+    {
+        var results = new List<ScreenOcrService.Word>();
+        if (trigger.MatchType != KeywordMatchType.Regex)
+        {
+            var parts = trigger.Keyword.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) return results;
+            for (var i = 0; i <= words.Count - parts.Length; i++)
+            {
+                var matches = true;
+                for (var j = 0; j < parts.Length; j++)
+                {
+                    var text = words[i + j].Text;
+                    var start = 0; var end = text.Length;
+                    while (start < end && !char.IsLetterOrDigit(text[start])) start++;
+                    while (end > start && !char.IsLetterOrDigit(text[end - 1])) end--;
+                    if (!text.Substring(start, end - start).Equals(parts[j], StringComparison.OrdinalIgnoreCase))
+                    { matches = false; break; }
+                }
+                if (!matches) continue;
+                var bounds = words[i].Bounds;
+                for (var j = 1; j < parts.Length; j++) bounds = System.Drawing.Rectangle.Union(bounds, words[i + j].Bounds);
+                results.Add(parts.Length == 1 ? words[i] : new ScreenOcrService.Word(trigger.Keyword, bounds));
+            }
+            return results;
+        }
+        var textBuilder = new StringBuilder();
+        var starts = new int[words.Count];
+        for (var i = 0; i < words.Count; i++)
+        {
+            if (i > 0) textBuilder.Append(' ');
+            starts[i] = textBuilder.Length;
+            textBuilder.Append(words[i].Text);
+        }
+        try
+        {
+            foreach (Match match in Regex.Matches(textBuilder.ToString(), trigger.Keyword, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100)))
+            {
+                if (match.Length == 0) continue;
+                System.Drawing.Rectangle? bounds = null;
+                for (var i = 0; i < words.Count; i++)
+                {
+                    if (starts[i] + words[i].Text.Length <= match.Index || starts[i] >= match.Index + match.Length) continue;
+                    bounds = bounds is { } r ? System.Drawing.Rectangle.Union(r, words[i].Bounds) : words[i].Bounds;
+                }
+                if (bounds is { } rect) results.Add(new ScreenOcrService.Word(match.Value, rect));
+            }
+        }
+        catch (ArgumentException) { return new(); }
+        catch (RegexMatchTimeoutException) { return new(); }
+        return results;
     }
     internal event Action<KeywordTrigger>? TriggerFired;
     internal Action QuestCredit = () => App.Quests?.TrackKeywordTrigger();

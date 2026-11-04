@@ -61,6 +61,62 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:712-739,842-862,913-943
+    public void OcrRequiresConsecutivePositionsAndClearsAfterStopAccessOrScopeLoss() => Run((engine, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled);
+        try
+        {
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 2; s.OcrHighlightAll = true;
+            s.AwarenessLoopProtectionEnabled = false;
+            var words = new[] { new ScreenOcrService.Word("sit.", new System.Drawing.Rectangle(120, 200, 30, 20)) };
+            var fired = 0; engine.TriggerFired += _ => fired++;
+            Assert.True(engine.CheckOcrWords(words)); Assert.Equal(0, fired);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            Assert.False(engine.CheckOcrWords(words));
+            CoreEntitlement.HasPremiumProvider = () => true;
+            Assert.True(engine.CheckOcrWords(words)); Assert.Equal(0, fired);
+            s.KeywordTriggerIgnoreOwnFocus = true;
+            Assert.False(engine.CheckOcrWords(words, "ccp", true));
+            Assert.True(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(0, fired);
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(1, fired);
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(1, fired);
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 10);
+            engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>(), "editor", false);
+            Assert.True(engine.CheckOcrWords(words, "editor", false));
+            engine.Stop(); engine.Start();
+            Assert.True(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(1, fired);
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(2, fired);
+            Assert.Equal("OCR", engine.GetRecentFires()[0].Source);
+        }
+        finally { (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled) = saved; }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:774-784,999-1154
+    public void OcrWholeWordsPhrasesAndRegexMatchWithoutSubstrings() => Run((engine, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled);
+        try
+        {
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1; s.OcrHighlightAll = true;
+            s.AwarenessLoopProtectionEnabled = false;
+            var fired = 0; engine.TriggerFired += _ => fired++;
+            ScreenOcrService.Word W(string text, int x) => new(text, new System.Drawing.Rectangle(x, 0, 20, 10));
+            engine.CheckOcrWords([W("sitting", 0)]); Assert.Equal(0, fired);
+            s.KeywordTriggers[0].Keyword = "good boy";
+            engine.CheckOcrWords([W("Good,", 0), W("boy!", 30)]); Assert.Equal(1, fired);
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 10);
+            engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>());
+            s.KeywordTriggers[0].MatchType = KeywordMatchType.Regex;
+            s.KeywordTriggers[0].Keyword = "good\\s+boy";
+            engine.CheckOcrWords([W("good", 0), W("boy", 30)]); Assert.Equal(2, fired);
+            engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>());
+            s.KeywordTriggers[0].Keyword = "[";
+            engine.CheckOcrWords([W("good", 0)]); Assert.Equal(2, fired);
+        }
+        finally { (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled) = saved; }
+    });
+
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
 
     [Fact] // WPF KeywordTriggerService.cs:1366,1398,1847
