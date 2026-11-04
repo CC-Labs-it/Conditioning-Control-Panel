@@ -255,6 +255,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
 
+        // WPF StartupPresenter.SafeGameHostUp: the feed and editor are not games.
+        internal static bool AnyStartupBlockingGame()
+        {
+            lock (Open) return Open.Any(w => w.IsVisible && w.Spec.Id != FypId && w.Spec.Id != "loom");
+        }
+
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
 
         /// <summary>The open game window that is the active window, if any (friends landing anchor).</summary>
