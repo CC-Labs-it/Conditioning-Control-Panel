@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
-    /// GIF animation (first frame only), remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
+    /// remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
     {
@@ -153,6 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
+            _ = w.StartAnimation(path, Math.Max(rect.Width, rect.Height), s.FlashGifSpeedMultiplier);
             Paid(path, s, hydraGeneration, multiplier);
             return true;
         }

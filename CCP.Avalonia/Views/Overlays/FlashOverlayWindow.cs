@@ -1,5 +1,9 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -33,6 +37,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         private readonly Image _image;
         private bool _closed;
+        private readonly CancellationTokenSource _animationCancel = new();
+        private List<Bitmap>? _animationFrames;
+        private DispatcherTimer? _animationTimer;
+        private int _animationIndex;
+
+        internal async Task StartAnimation(string path, int maxDimension, double speed)
+        {
+            var ext = Path.GetExtension(path);
+            if (!ext.Equals(".gif", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".webp", StringComparison.OrdinalIgnoreCase)) return;
+            var (frames, delay) = await Task.Run(() => FlashAnimation.Decode(path, maxDimension, _animationCancel.Token));
+            if (_closed || frames.Count < 2)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                return;
+            }
+            _animationFrames = frames;
+            _image.Source = frames[0];
+            _animationTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = FlashAnimation.Delay(delay, speed) };
+            _animationTimer.Tick += (_, _) => AdvanceAnimation();
+            _animationTimer.Start();
+        }
+
+        internal object? PictureSource => _image.Source;
+        internal int AnimationFrameCount => _animationFrames?.Count ?? 0;
+        internal int AnimationIndex => _animationIndex;
+
+        internal void AdvanceAnimation()
+        {
+            if (_animationFrames is not { Count: > 1 } frames) return;
+            _animationIndex = (_animationIndex + 1) % frames.Count;
+            _image.Source = frames[_animationIndex];
+        }
+
         private readonly RotateTransform _motionRotate = new();
         private readonly ScaleTransform _dwellScale = new();
 
@@ -420,7 +457,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; _closed = true; _image.Source = null; picture.Dispose(); };
+            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; _closed = true; _animationCancel.Cancel(); _animationTimer?.Stop(); _animationTimer = null; _image.Source = null; if (_animationFrames != null) foreach (var frame in _animationFrames) frame.Dispose(); _animationFrames = null; picture.Dispose(); };
         }
 
         /// <summary>
