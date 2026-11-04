@@ -75,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// Shows the dialog modally, parented to <paramref name="owner"/> when it is usable.
         /// Never throws - a broken owner window must not swallow the update failure.
         /// </summary>
-        public static void ShowFor(Window? owner, string title, string message, string? detail = null)
+        public static UpdateFailedDialog? ShowFor(Window? owner, string title, string message, string? detail = null)
         {
             try
             {
@@ -92,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                     dialog.Show();
                 }
+                return dialog;
             }
             catch (Exception ex)
             {
@@ -102,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 // have. WPF's MessageBox.Show(releasesUrl) needed neither. A second Window here
                 // would fail the same way, so the log line is the record until this head grows an
                 // ownerless notification (a tray toast, or a Window shown with .Show()).
+                return null;
             }
         }
 

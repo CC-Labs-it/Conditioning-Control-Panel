@@ -164,20 +164,25 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// </summary>
         internal static async Task StartupAsync(MainShellWindow shell)
         {
+            var closed = false;
+            shell.Closed += (_, _) => closed = true;
             try
             {
                 await Task.Delay(500);
                 var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
-                if (outcome is { Succeeded: false })
-                    UpdateFailedDialog.ShowFor(shell, Loc.Get("title_update_failed"),
-                        Loc.GetF("msg_update_install_failed", outcome.Version, CoreReleaseContent.AppVersion));
+                var report = outcome is { Succeeded: false }
+                    ? UpdateFailedDialog.ShowFor(shell, Loc.Get("title_update_failed"),
+                        Loc.GetF("msg_update_install_failed", outcome.Version, CoreReleaseContent.AppVersion))
+                    : null;
+                var notice = ShowBrowserResetWhenReadyAsync(shell, report, () => closed);
 
                 var info = await CheckAsync(force: false);
-                if (info?.IsNewer != true) return;
-                shell.ShowUpdatePill(info.Version);
+                if (info?.IsNewer == true)
+                    shell.ShowUpdatePill(info.Version);
+                await notice; // the update offer is last on WPF's ladder (App.xaml.cs:5366-5373)
+                if (info?.IsNewer != true)
+                    return;
 
-                var closed = false;
-                shell.Closed += (_, _) => closed = true;
                 while (!closed && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible || StartupModalOpen()))
                     await Task.Delay(500);
                 if (!closed && !_busy) await OfferAsync(shell, info);
@@ -188,7 +193,83 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
+        internal const string BrowserResetAcknowledged = "browser-reset.ack.json";
+        internal static MessageDialog? BrowserResetDialog { get; private set; }
+
+        // Test seam: the old WPF browser profile only exists on Windows.
+        internal static bool OnWindows = OperatingSystem.IsWindows();
+
+        // WPF BrowserService.cs:125-132 keeps the old profile per user; checking it on each Windows launch covers
+        // machine installs, an installer run by another account, and a profile this head already created.
+        internal static bool NeedsBrowserResetNotice(string userData, bool windows) =>
+            windows && Directory.Exists(Path.Combine(userData, "browser_data"))
+            && !File.Exists(Path.Combine(userData, BrowserResetAcknowledged));
+
+        private static async Task ShowBrowserResetWhenReadyAsync(MainShellWindow shell, Window? report, Func<bool> closed)
+        {
+            if (!NeedsBrowserResetNotice(UserData, OnWindows))
+                return;
+            // WPF's failed update report is the first startup modal (App.xaml.cs:5417-5425).
+            while (report is { IsVisible: true } && !closed())
+                await Task.Delay(500);
+            var owner = await WaitForStartupOwnerAsync(shell, closed);
+            if (owner != null)
+                await ShowBrowserResetNoticeAsync(owner, UserData);
+        }
+
+        // WPF's updater runs setup /SILENT (UpdateService.cs:914, ReleaseFeed.cs:432), skipping the installer page; owed until OK.
+        internal static async Task ShowBrowserResetNoticeAsync(Window owner, string userData)
+        {
+            if (!NeedsBrowserResetNotice(userData, OnWindows))
+                return;
+            var notice = Loc.Get("installer_avalonia_upgrade_notice").Split(new[] { "\n\n" }, 2, StringSplitOptions.None);
+            var dialog = BrowserResetDialog = new MessageDialog(notice[0], notice.Length > 1 ? notice[1] : notice[0], false);
+            // WPF StartupPresenter.cs:569-587 raises this guard for startup modals.
+            var previous = MainShellWindow.IsStartupDialogShowing;
+            MainShellWindow.IsStartupDialogShowing = true;
+            try
+            {
+                if (await dialog.ShowDialogSafe<bool?>(owner) == true)
+                    File.WriteAllText(Path.Combine(userData, BrowserResetAcknowledged), "{}");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Browser reset notice failed");
+            }
+            finally
+            {
+                BrowserResetDialog = null;
+                MainShellWindow.IsStartupDialogShowing = previous;
+            }
+        }
+
+        private static Window? StartupOwner(MainShellWindow shell)
+        {
+            if (Views.Games.GameWindow.IsAnyOpen())
+                return null; // WPF StartupQueueCore.cs:256 parks the ladder for a game
+            if (shell.IsVisible && shell.IsActive && !shell.BuildingHiddenForBoot)
+                return shell;
+            if (LauncherWindow.Instance is { IsVisible: true } launcher)
+                return launcher;
+            return shell.IsVisible && !shell.BuildingHiddenForBoot ? shell : null;
+        }
+
+        private static async Task<Window?> WaitForStartupOwnerAsync(MainShellWindow shell, Func<bool> closed)
+        {
+            while (!closed())
+            {
+                var owner = StartupOwner(shell);
+                if (owner != null && CoreSettings.Current.HasAcceptedAgeVerification
+                    && !StartupModalOpen() && !StartupLadder.PassiveWindowUp())
+                    return owner;
+                await Task.Delay(500);
+            }
+            return null;
+        }
+
+        // WPF StartupQueueCore.CanStartModal: no other startup modal, update dialog or tutorial.
         private static bool StartupModalOpen() =>
+            MainShellWindow.IsStartupDialogShowing || IsUpdateDialogActive || CoreTutorial.IsActive ||
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Windows
                 .Any(w => w is FirstRunWizard or MessageDialog && w.IsVisible) == true;
 

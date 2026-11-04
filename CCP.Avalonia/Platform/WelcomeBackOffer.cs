@@ -91,6 +91,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 wizard.Closed += (_, _) => closed.TrySetResult();
                 await closed.Task;
             }
+            while (MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive)
+                await Task.Delay(500);
             // WPF StartupPresenter.cs:572-587: the flag every startup surface (feature intros) defers to.
             MainShellWindow.IsStartupDialogShowing = true;
             try { await new WelcomeBackSheet(content).ShowDialogSafe<bool>(desktop?.MainWindow); }
