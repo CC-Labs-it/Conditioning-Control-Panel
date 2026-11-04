@@ -53,6 +53,74 @@ public sealed class InboxNoticeCardTests
             Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
     }
 
+    private sealed class FocusReply : HttpMessageHandler
+    {
+        internal int Calls;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Calls);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StringContent("{\"user\":{\"effective_tier\":2}}") });
+        }
+    }
+
+    [Fact]
+    public async Task FocusRefreshesServerRiseAndThrottlesRepeatedActivation()
+    {
+        Run(() => { }); // Initialize the shared dispatcher and shipped fonts.
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var s = CoreSettings.Current;
+            string? token = "focus-token";
+            CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? token : null;
+            CoreSecrets.StoreProvider = (key, value) => { if (key == CoreSecrets.AuthToken) token = value; };
+            s.UnifiedId = null;
+            s.OfflineMode = false;
+            s.PatreonTier = 0;
+            s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
+            s.LastKnownEffectiveTier = 0;
+            s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+            var wire = new FocusReply();
+            AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            var now = DateTime.UtcNow;
+            AccountSeed.FocusClock = () => now;
+            AccountSeed.LastFocusCheckUtc = DateTime.MinValue;
+            Assert.True(AccountSeed.Seed());
+            var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            AccountSeed.Patreon!.TierChanged += (_, _) => changed.TrySetResult();
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+            var shell = new MainShellWindow();
+            var other = new Window();
+            try
+            {
+                shell.Show();
+                other.Show();
+                s.UnifiedId = Guid.NewGuid().ToString();
+                CoreAccount.UnifiedUserId = s.UnifiedId;
+                other.Activate();
+                shell.Activate(); // User returns after the server changed, with no heartbeat.
+                await changed.Task.WaitAsync(TimeSpan.FromSeconds(20));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, Volatile.Read(ref wire.Calls));
+                Assert.Equal(2, s.PatreonTier);
+                Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
+                other.Activate();
+                shell.Activate();
+                await Task.Delay(250);
+                Assert.Equal(1, Volatile.Read(ref wire.Calls)); // A second focus inside 20 seconds is suppressed.
+                token = "rotated-focus-token";
+                now = now.AddSeconds(21);
+                other.Activate();
+                shell.Activate();
+                var deadline = DateTime.UtcNow.AddSeconds(10);
+                while (!AccountSeed.ServerTierAnsweredThisRun && DateTime.UtcNow < deadline) await Task.Delay(20);
+                Assert.True(AccountSeed.ServerTierAnsweredThisRun);
+                Assert.Equal(2, Volatile.Read(ref wire.Calls)); // A later activation reads again.
+            }
+            finally { other.Close(); shell.Close(); }
+        });
+    }
+
     [Fact]
     public void HeartbeatRiseAppliesAndPostsRepeatNotice() => Run(() =>
     {
@@ -74,7 +142,7 @@ public sealed class InboxNoticeCardTests
         AccountSeed.Patreon!.TierChanged += (_, _) => (notifications, onUi) = (notifications + 1, Dispatcher.UIThread.CheckAccess());
         string? rawBody = null;
         void Heartbeat() => Assert.True(new SyncPush(() => null, () => false, new TierReply("{\"effective_tier\":2}", HttpStatusCode.OK))
-            { TierReceived = AccountSeed.OfferHeartbeatTier, HeartbeatBody = body => rawBody = body }
+            { TierReceived = (tier, account, token) => AccountSeed.OfferHeartbeatTier(tier, account, token), HeartbeatBody = body => rawBody = body }
             .HeartbeatAsync().GetAwaiter().GetResult());
         Heartbeat();
         token = "new-token"; // the queued response belongs to the previous session

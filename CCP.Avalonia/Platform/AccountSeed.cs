@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -156,6 +157,33 @@ internal static class AccountSeed
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
 
+    // WPF EntitlementTierSync.cs:223-237,272-297: throttle focus reads and keep only one in flight.
+    internal static Func<DateTime> FocusClock = () => DateTime.UtcNow;
+    internal static DateTime LastFocusCheckUtc = DateTime.MinValue;
+    private static int _focusInFlight;
+
+    internal static void OnAppFocused()
+    {
+        var s = CoreSettings.Current;
+        var (account, token) = (s.UnifiedId, s.AuthToken);
+        if (s.OfflineMode || string.IsNullOrEmpty(account) || string.IsNullOrEmpty(token)) return;
+        var now = FocusClock();
+        if (now - LastFocusCheckUtc < TimeSpan.FromSeconds(20)) return;
+        LastFocusCheckUtc = now;
+        if (Interlocked.Exchange(ref _focusInFlight, 1) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var node = await NewV2().GetUserProfileNodeAsync(account);
+                if (EntitlementTierRule.ParseTier(node?["effective_tier"]) is int tier)
+                    OfferHeartbeatTier(tier, account, token, "focus");
+            }
+            catch (Exception ex) { Log.Debug(ex, "Focus tier refresh failed"); }
+            finally { Interlocked.Exchange(ref _focusInFlight, 0); }
+        });
+    }
+
     // WPF EntitlementTierSync.cs:33,61-66: valid authenticated readings only, scoped to this session.
     private static volatile string? _tierAnsweredAccount, _tierAnsweredToken;
     internal static bool ServerTierAnsweredThisRun => !CoreSettings.Current.OfflineMode
@@ -172,14 +200,14 @@ internal static class AccountSeed
     }
 
     // WPF EntitlementTierSync.cs:43-53,60-94: apply a live rise on the UI thread.
-    internal static void OfferHeartbeatTier(int tier, string account, string? token)
+    internal static void OfferHeartbeatTier(int tier, string account, string? token, string source = "heartbeat")
     {
         global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             try
             {
                 if (!NoteTierReading(tier, account, token)) return;
-                ApplyTierReading(tier, "heartbeat");
+                ApplyTierReading(tier, source);
             }
             catch (Exception ex) { Log.Warning(ex, "Heartbeat tier apply failed"); }
         });

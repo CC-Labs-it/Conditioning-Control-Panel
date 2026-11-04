@@ -271,7 +271,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializePremiumCelebration()
         {
             Opened += (_, _) => MaybeShowPremiumCelebration();
-            Activated += (_, _) => TierOnNoticePass(mayShow: true);
+            Activated += (_, _) => { Platform.AccountSeed.OnAppFocused(); TierOnNoticePass(mayShow: true); };
             System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(MaybeShowPremiumCelebration);
             var patreon = Platform.AccountSeed.Patreon;
             var substar = Platform.AccountSeed.SubscribeStar;
