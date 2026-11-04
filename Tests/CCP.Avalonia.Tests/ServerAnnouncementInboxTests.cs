@@ -29,21 +29,28 @@ public sealed class ServerAnnouncementInboxTests
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        public TaskCompletionSource<bool>? AnnouncementGate;
+        public readonly TaskCompletionSource<bool> AnnouncementStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             lock (Calls) Calls.Add(r.Method + " " + path + r.RequestUri.Query + " " + r.Content?.ReadAsStringAsync().Result);
+            if (path == "/config/announcement")
+            {
+                AnnouncementStarted.TrySetResult(true);
+                if (AnnouncementGate is { } gate) await gate.Task;
+            }
             var body = path == "/config/announcement"
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 
     private static Task Run(Func<FakeProxy, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;   // the profile TestUserDataProfile seeded (feature intros spent)
@@ -133,6 +140,51 @@ public sealed class ServerAnnouncementInboxTests
             Assert.Empty(StartupLadder.Inbox.Items);
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task ClosedShellCannotRefileAnOpenedAnnouncement() => Run(async _ =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
+        var oldShell = new MainShellWindow();
+        var shell = new MainShellWindow();
+        try
+        {
+            oldShell.Show();
+            oldShell.Close();
+            shell.Show();
+            await shell.CheckServerAnnouncementAsync();
+            StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items));
+            Assert.Single(opened);
+            Assert.Empty(StartupLadder.Inbox.Items);
+
+            // An already queued timer can still invoke the old shell after it closes.
+            await oldShell.CheckServerAnnouncementAsync();
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally { oldShell.Close(); shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task ClosedShellIgnoresAnAnnouncementAlreadyInFlight() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var gate = fake.AnnouncementGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var check = shell.CheckServerAnnouncementAsync();
+            await fake.AnnouncementStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.False(check.IsCompleted);
+            shell.Close();
+            gate.TrySetResult(true);
+            await check;
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally { gate.TrySetResult(true); shell.Close(); }
     });
 
     [Fact]
