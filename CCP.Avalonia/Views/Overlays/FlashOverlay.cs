@@ -55,14 +55,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static readonly object BurstGate = new();
         private static int _generation;
-        private static int _voiceStarted;
+        private static int _voiceAttempted;
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
         internal static int Generation => _generation;
 
         /// <summary>A burst is still spawning (WPF <c>_isBusy</c>); the ambient tick skips.</summary>
         public static bool IsBusy { get { lock (BurstGate) return _busy; } }
-        internal static int BeginBurst() { lock (BurstGate) { _busy = true; Volatile.Write(ref _voiceStarted, 0); return _generation; } }
+        internal static int BeginBurst() { lock (BurstGate) { _busy = true; Volatile.Write(ref _voiceAttempted, 0); return _generation; } }
         internal static void FinishBurst(int generation) { lock (BurstGate) if (generation == _generation) _busy = false; }
 
         /// <summary>Fire one burst. Any attached visual works as <paramref name="host"/>; it only
@@ -226,13 +226,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     lock (sync) if (version == duckVersion && !duckReleased) { duckReleased = true; CoreAudio.Unduck(duckGeneration); }
                 });
             }
+            // WPF marks the burst before PlaySound, even if output fails.
+            Volatile.Write(ref _voiceAttempted, 1);
             var stop = CoreAudio.PlayStoppable(path, gain, "flash-voice", reported =>
             {
                 lock (sync)
                 {
                     if (ended || Volatile.Read(ref cancelled) != 0 || (generation.HasValue && generation.Value != Volatile.Read(ref _generation))) return;
                     didStart = true;
-                    Volatile.Write(ref _voiceStarted, 1);
                     var stamp = VoiceClock.GetTimestamp();
                     var first = Interlocked.CompareExchange(ref startedAt, stamp, -1);
                     var elapsed = first < 0 ? 0 : Math.Max(0, VoiceClock.GetElapsedTime(first, stamp).TotalSeconds);
@@ -335,7 +336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
             if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed
-            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: Volatile.Read(ref _voiceStarted) != 0, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
+            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: Volatile.Read(ref _voiceAttempted) != 0, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
             if (s.HydraLinkedTiming || hydraGeneration == 0)
             {
                 App.Achievements?.TrackFlashImage();   // WPF AchievementService.cs:388
