@@ -17,6 +17,7 @@ internal static class TestUserDataProfile
         Directory.CreateDirectory(Root);
         // Awareness polls the foreground window title; no test may ever read the real desktop.
         ConditioningControlPanel.Avalonia.Platform.X11ActiveWindow.Disabled = true;
+        ConditioningControlPanel.Avalonia.Platform.Win32Windows.AwarenessDisabled = true;
         // The runner's Windows "Animation effects" flag (off on CI) must not cap every motion test to Reduced.
         ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
         Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", Root);
