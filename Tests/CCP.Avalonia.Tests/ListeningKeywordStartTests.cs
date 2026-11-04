@@ -12,17 +12,14 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class ListeningKeywordStartTests
 {
     [Fact]
     public void RawControlStateFollowsKeyEventsInsteadOfTheLaterServerSnapshot()
     {
         var keys = new HashSet<int> { 37, 105 };
-        var held = new HashSet<int>();
-        X11PanicKey.TrackControl(keys, held, 37, true);
+        var held = new HashSet<int>(); X11PanicKey.TrackControl(keys, held, 37, true);
         Assert.Equal(4u, X11PanicKey.ControlAtEvent(0, 0, keys, held));
         X11PanicKey.TrackControl(keys, held, 105, true);
         X11PanicKey.TrackControl(keys, held, 37, false);
@@ -32,12 +29,10 @@ public sealed class ListeningKeywordStartTests
         Assert.Equal(4u, X11PanicKey.ControlAtEvent(0, 4, keys, held)); // sticky Control
         Assert.Null(X11PanicKey.ControlAtEvent(4, 0, null, held)); // fail closed if the map is unavailable
     }
-
     [Fact]
     public void QueuedXkbStateCarriesShiftLocksAndGroupToLookup()
     {
-        var state = new X11PanicKey.XkbState();
-        var keys = new HashSet<int> { 37 };
+        var state = new X11PanicKey.XkbState(); var keys = new HashSet<int> { 37 };
         var held = new HashSet<int>();
         X11PanicKey.ApplyXkbState(ref state, new X11PanicKey.XkbStateEvent { Mods = 1 }); // Shift down
         Assert.Equal(1u, X11PanicKey.LookupModifiers(state, keys, held)); // queued Shift+1 sees !
@@ -52,7 +47,6 @@ public sealed class ListeningKeywordStartTests
         Assert.Equal(4u, X11PanicKey.LookupModifiers(state, keys, held));
         Assert.Null(X11PanicKey.LookupModifiers(state, null, held));
     }
-
     [Fact] // WPF MainWindow.Patreon.cs:450-455: validation retries a saved-on source.
     public void SavedKeywordSourceRearmsWhenAccountValidationResolves() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -60,8 +54,7 @@ public sealed class ListeningKeywordStartTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var shell = new MainShellWindow();
-        var savedAttach = KeywordTriggerHead.CanAttachKeyboard;
-        var savedSource = KeywordTriggerHead.AttachKeyboard;
+        var savedAttach = KeywordTriggerHead.CanAttachKeyboard; var savedSource = KeywordTriggerHead.AttachKeyboard;
         var savedUnicode = KeywordTriggerHead.X11ToUnicode;
         var file = Path.GetTempFileName(); var played = 0;
         var cooldowns = (KeywordCooldowns)typeof(KeywordAudioRuntime).GetField("_cooldowns",
@@ -80,24 +73,20 @@ public sealed class ListeningKeywordStartTests
                 Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = file, DuckSystemAudio = false } } } };
             cooldowns.LastGlobal = DateTime.MinValue;
             CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { played++; return () => { }; };
-            CoreEntitlement.HasPremiumProvider = () => false;
-            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            CoreEntitlement.HasPremiumProvider = () => false; CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreSettings.Current.KeywordTriggersEnabled = true;
             KeywordTriggerHead.Sync();
             Assert.False(KeywordTriggerHead.Engine.IsActive);
             CoreEntitlement.HasPremiumProvider = () => true;
             shell.UpdateQuickLoginUI(accountChanged: true); // actual sign-in/validation funnel
-            Assert.True(CoreSettings.Current.KeywordTriggersEnabled);
-            Assert.True(KeywordTriggerHead.Engine.IsActive);
+            Assert.True(CoreSettings.Current.KeywordTriggersEnabled); Assert.True(KeywordTriggerHead.Engine.IsActive);
             Assert.NotNull(keyboard);
             foreach (var c in "rowfour") keyboard!((ulong)c, 0);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, played);
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(1, played);
             CoreSettings.Current.KeywordTriggersEnabled = false;
             KeywordTriggerHead.Sync();
             shell.UpdateQuickLoginUI(accountChanged: true);
-            Assert.False(KeywordTriggerHead.Engine.IsActive);
-            Assert.Null(keyboard);
+            Assert.False(KeywordTriggerHead.Engine.IsActive); Assert.Null(keyboard);
         }
         finally
         {
@@ -107,18 +96,14 @@ public sealed class ListeningKeywordStartTests
             shell.Close();
         }
     });
-
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(false, false)]
     public void PlatformAttachmentUsesAndDetachesOnlyItsOwnSource(bool windows, bool linux)
     {
-        var saved = X11PanicKey.KeywordKey;
-        X11PanicKey.KeywordKey = null;
-        var winEvents = 0;
-        var x11Events = 0;
-        var ensured = 0;
+        var saved = X11PanicKey.KeywordKey; X11PanicKey.KeywordKey = null;
+        var winEvents = 0; var x11Events = 0; var ensured = 0;
         Action<int, string?> win = (_, _) => winEvents++;
         Action<ulong, uint> x11 = (_, _) => x11Events++;
         Action? detach = null;
@@ -131,8 +116,7 @@ public sealed class ListeningKeywordStartTests
             Assert.Equal(windows ? 1 : 0, winEvents);
             Assert.Equal(linux ? 1 : 0, x11Events);
             Assert.Equal(windows ? 1 : 0, ensured);
-            detach?.Invoke();
-            detach = null;
+            detach?.Invoke(); detach = null;
             Win32PanicKey.OnDown(0x41, DateTime.UtcNow);
             X11PanicKey.KeywordKey?.Invoke('c', 4);
             Assert.Equal(windows ? 1 : 0, winEvents);
@@ -140,7 +124,6 @@ public sealed class ListeningKeywordStartTests
         }
         finally { detach?.Invoke(); X11PanicKey.KeywordKey = saved; }
     }
-
     // WPF VoiceCommandHost.cs:95 -> KeywordTriggerService.cs:176-188, :214-235.
     [Fact]
     public void VoiceRearmsInjectedSourceWithoutChangingSettingsAndRespectsAccessAndScope() => AvaloniaTestDispatcher.Run(() =>
@@ -185,7 +168,6 @@ public sealed class ListeningKeywordStartTests
             cooldowns.LastGlobal = DateTime.MinValue;
             KeywordTriggerHead.Engine.Now = () => now;
             CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { played++; return () => { }; };
-
             KeywordTriggerHead.Sync(); // without access, even a saved-on source cannot start
             Assert.False(KeywordTriggerHead.Engine.IsActive);
             Assert.False(KeywordTriggerHead.KeyboardInputAllowed);
@@ -194,7 +176,6 @@ public sealed class ListeningKeywordStartTests
             Dispatcher.UIThread.RunJobs();
             Assert.False(KeywordTriggerHead.Engine.IsActive);
             Assert.True(s.KeywordTriggersEnabled);
-
             CoreEntitlement.IsFreeTodayProvider = name => name == "awareness";
             Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi trigger words on", new[] { "hey bambi" }));
             Dispatcher.UIThread.RunJobs();
@@ -209,7 +190,6 @@ public sealed class ListeningKeywordStartTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, played);
             now = now.AddSeconds(2); // WPF clamps both cooldowns to at least one second
-
             // Scope uses the captured foreground identity; own-focus exclusion must suppress input.
             s.KeywordTriggerIgnoreOwnFocus = true;
             foreach (var c in "portword") KeywordTriggerHead.PostX11Key(c, 0, "ccp", true);
@@ -226,7 +206,6 @@ public sealed class ListeningKeywordStartTests
             foreach (var c in "portword") keyboard!((ulong)c, 0);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(2, played);
-
             now = now.AddSeconds(2);
             foreach (var c in "portwx") keyboard!((ulong)c, 0);
             keyboard!(0xff08, 0); // backspace
@@ -239,7 +218,6 @@ public sealed class ListeningKeywordStartTests
             foreach (var c in "word") keyboard!((ulong)c, 0);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(3, played);
-
             // WPF ToUnicode buffers Ctrl+C as a control character, never the letter C.
             now = now.AddSeconds(2);
             s.KeywordTriggers[0].Keyword = "c";
@@ -251,7 +229,6 @@ public sealed class ListeningKeywordStartTests
             keyboard!('c', 0x80); // AltGr alone does not mean Control
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(4, played);
-
             // Dropping a shortcut entirely would also be wrong: it could join a word across it.
             now = now.AddSeconds(2);
             s.KeywordTriggers[0].Keyword = "portword";
@@ -264,7 +241,6 @@ public sealed class ListeningKeywordStartTests
             foreach (var c in "portword") keyboard!((ulong)c, 0);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(5, played);
-
             KeywordTriggerHead.DetachKeyboard();
             KeywordTriggerHead.Stop();
             KeywordTriggerHead.Start();

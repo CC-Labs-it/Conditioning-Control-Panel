@@ -60,6 +60,24 @@ public sealed class KeywordAudioRuntimeTests
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
 
     [Fact]
+    public void EntitlementLapseStopsActiveClipAndClearsInput() => Run((_, s, played) =>
+    {
+        var shell = new MainShellWindow();
+        try
+        {
+            KeywordTriggerHead.Start(); Type(KeywordTriggerHead.Engine, "sit");
+            Assert.Single(played); Type(KeywordTriggerHead.Engine, "s");
+            CoreEntitlement.HasPremiumProvider = () => false; shell.RefreshEntitlementVeils();
+            Assert.False(s.KeywordTriggersEnabled); Assert.False(KeywordTriggerHead.Engine.IsActive);
+            Assert.Equal("stopped", played.Last().Path);
+            CoreEntitlement.HasPremiumProvider = () => true; s.KeywordTriggersEnabled = true;
+            KeywordTriggerHead.Start(); Type(KeywordTriggerHead.Engine, "it");
+            Assert.Equal(2, played.Count);
+        }
+        finally { shell.Close(); }
+    });
+
+    [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
     {
         Type(engine, "intensity"); Assert.Empty(played);
