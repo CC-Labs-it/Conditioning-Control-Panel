@@ -58,7 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>One press of the configured key (UI thread). A foreground board or DTRH may keep the first
         /// Escape as pause; unclaimed presses stop everything. A second
         /// counted press within 2 s exits the app, as WPF does when no engine is running.</summary>
-        internal void HandlePanicKeyPress(DateTime now)
+        internal void HandlePanicKeyPress(DateTime now, bool raceOwned = false)
         {
             var s = CoreSettings.Current;
             // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
@@ -78,7 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
-            if (TryGamePauseOnEscape(now)) return;
+            if (!raceOwned) { if (TryGamePauseOnEscape(now)) return; }
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
             // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and
@@ -105,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // stop tail with the exit ladder NOT armed (and no grace pause), in BOTH modes: override
             // (MainWindow.xaml.cs:1627) and ladder (:1720 RunPanicStopTail(advanceExitLadder: false)).
             // Sampled BEFORE the stop pass closes it (intake host, Chaos descent).
-            bool gameOwnedTheScreen = PanicSurfaces.AnyOwnsTheScreen();
+            bool gameOwnedTheScreen = raceOwned || PanicSurfaces.AnyOwnsTheScreen();
             // WPF #735: with PanicOverridesAll off (RunLadder), the first press over a playing mandatory
             // video grace-pauses it instead (TryGracePause refuses when panic overrides all), and the
             // window's own handling of the same keystroke is deduped there. Not a ladder rung.

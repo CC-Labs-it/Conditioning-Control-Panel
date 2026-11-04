@@ -234,8 +234,11 @@ public sealed partial class GameWindowTests
 
     /// <summary>Booting: Escape is a full panic that closes it. Up: the first Escape is its pause (kept-escape),
     /// a second inside 2 s is a full panic that closes it.</summary>
-    [Fact]
-    public void Glassroad_EscapePausesOnceUp_ASecondEscapeClosesIt() => RunGlassroad("1", (shell, _, _) =>
+    [Theory]
+    [InlineData(1000, false)]
+    [InlineData(1999, false)]
+    [InlineData(2000, true)]
+    public void Glassroad_EscapePausesOnceUp_ASecondEscapeClosesIt(int delayMs, bool remainsOpen) => RunGlassroad("1", (shell, _, _) =>
     {
         var s = CoreSettings.Current;
         var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
@@ -262,9 +265,9 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(GameWindow.IsAnyOpen());
             Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
-            shell.HandlePanicKeyPress(t1.AddMilliseconds(100));
+            shell.HandlePanicKeyPress(t1.AddMilliseconds(delayMs));
             Dispatcher.UIThread.RunJobs();
-            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Equal(remainsOpen, GameWindow.IsAnyOpen());
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
     });
@@ -326,6 +329,35 @@ public sealed partial class GameWindowTests
         else { Assert.False(observer.HasExited); Assert.Same(host, LinuxRaceHost.Current); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Glassroad_BootAndDisabledPanicDoNotRejectUnknownOrUnsupportedBackend(bool disabled) => RunGlassroad("1", (_, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var settings = CoreSettings.Current;
+        var (key, enabled) = (settings.PanicKey, settings.PanicKeyEnabled);
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
+        using var host = new LinuxRaceHost(p, x11Listening: () => false);
+        var unsupported = typeof(LinuxRaceHost).GetProperty("UnsupportedPanicKey", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        try
+        {
+            (settings.PanicKey, settings.PanicKeyEnabled) = ("F12", true);
+            if (!disabled) Assert.False((bool)unsupported.GetValue(host)!);
+            else
+            {
+                settings.PanicKeyEnabled = false;
+                host.ReadFrame(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "wayland" });
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(observer.HasExited);
+            }
+        }
+        finally { (settings.PanicKey, settings.PanicKeyEnabled) = (key, enabled); }
+    });
+
     [Fact]
     public void Glassroad_ReaderEscapeWatchdogKillsWhileUiIsBlocked() => RunGlassroad("1", (_, _, _) =>
     {
@@ -352,7 +384,7 @@ public sealed partial class GameWindowTests
             // The UI recovers: the queued press still runs the full panic, with the dead race no longer in front.
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, handled);
-            Assert.Null(atPanic);
+            Assert.Same(host, atPanic);
         }
         finally { ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = teardown; Dispatcher.UIThread.RunJobs(); }
     });

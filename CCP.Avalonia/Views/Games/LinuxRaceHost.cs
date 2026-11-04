@@ -24,31 +24,33 @@ internal sealed class LinuxRaceHost : IDisposable
     private int _closed;
     private long _lastEscape;
     private volatile string? _displayBackend;
+    private volatile bool _backendKnown;
     private readonly Func<bool> _x11Listening;
     internal bool InFront { get; private set; }
     internal bool Ready => _session.Ready;
     internal static string EnginePath => Path.Combine(CorePaths.UserData, "engines", "electron-45.1.0", "electron");
     internal static string ShellPath => Path.Combine(AppContext.BaseDirectory, "Resources", "web", "glassroad-shell", "main.js");
-    internal static bool TryLaunch(Uri url)
+    internal static bool TryLaunch(Uri url) => TryLaunch(url, EnginePath, ShellPath);
+    internal static bool TryLaunch(Uri url, string enginePath, string shellPath)
     {
         if (!OperatingSystem.IsLinux()) return false;
         if (Current is { } live) { live.Post(new { type = "focus" }); return true; }
-        if (!File.Exists(EnginePath) || !File.Exists(ShellPath)) return false;
+        if (!File.Exists(enginePath) || !File.Exists(shellPath)) return false;
         var start = new ProcessStartInfo("/usr/bin/setsid")
         {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true,
             RedirectStandardError = true, CreateNoWindow = true
         };
         // setsid execs without forking: this child's pid is its process group, never CCP's group.
-        start.ArgumentList.Add(EnginePath);
+        start.ArgumentList.Add(enginePath);
         start.ArgumentList.Add("--ozone-platform=x11");
-        start.ArgumentList.Add(ShellPath);
-        start.ArgumentList.Add(url.AbsoluteUri);
+        start.ArgumentList.Add(shellPath);
         var process = new Process { StartInfo = start };
         try
         {
             if (!process.Start()) throw new IOException("Race shell did not start");
             Current = new LinuxRaceHost(process);
+            Current.Post(new { type = "launch", url = url.AbsoluteUri });
             Current.StartReading();
             return true;
         }
@@ -63,7 +65,7 @@ internal sealed class LinuxRaceHost : IDisposable
     {
         _process = process; _pid = process.Id;
         _x11Listening = x11Listening ?? (() => Platform.X11PanicKey.IsListening && Platform.X11PanicKey.BoundKeycode != 0);
-        _panic = panic ?? (now => MainShellWindow.Current?.HandlePanicKeyPress(now));
+        _panic = panic ?? (now => MainShellWindow.Current?.HandlePanicKeyPress(now, raceOwned: _closed != 0));
         _session = new GlassroadSession(Post, Dispose, () => Post(new { type = "focus" }));
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _watch.Tick += (_, _) => { if (UnsupportedPanicKey) Dispose(); else _session.CheckGlassroadWatch(DateTime.UtcNow); };
@@ -93,8 +95,8 @@ internal sealed class LinuxRaceHost : IDisposable
         });
         _ = Task.Run(async () => { try { var b = new char[1024]; while (await _process.StandardError.ReadAsync(b, 0, b.Length) != 0) { } } catch { } });
     }
-    // A non-Escape key reaches CCP during the race only through a live X11 listener (WPF GlassroadHostService.cs:79-134 hooks every key).
-    private bool UnsupportedPanicKey => CoreSettings.Current.PanicKey != "Escape" && !(_displayBackend == "x11" && _x11Listening());
+    // A non-Escape key needs a live X11 listener (WPF MainWindow.xaml.cs:334-337 installs the global hook).
+    private bool UnsupportedPanicKey => _backendKnown && CoreSettings.Current.PanicKeyEnabled && CoreSettings.Current.PanicKey != "Escape" && !(_displayBackend == "x11" && _x11Listening());
     // Runs on the pipe reader: arm the watchdog before anything is queued behind a wedged UI.
     internal void ReadFrame(JObject frame)
     {
@@ -102,7 +104,7 @@ internal sealed class LinuxRaceHost : IDisposable
         var type = (string?)frame["type"];
         if (type == RaceShellProtocol.Loaded)
         {
-            _displayBackend = (string?)frame["displayBackend"];
+            _displayBackend = (string?)frame["displayBackend"]; _backendKnown = true;
             if (UnsupportedPanicKey) { Kill(); Dispatcher.UIThread.Post(Dispose); return; }
         }
         if (type != RaceShellProtocol.Escape) { Dispatcher.UIThread.Post(() => Receive(frame)); return; }
@@ -112,7 +114,7 @@ internal sealed class LinuxRaceHost : IDisposable
         {
             bool escapePanics = CoreSettings.Current.PanicKey == "Escape";
             // Killed meanwhile (watchdog): the race is gone, so the recovered UI still runs the full panic, not a pause.
-            if (_closed != 0) { if (escapePanics) { Dispose(); _panic(DateTime.Now); } return; }
+            if (_closed != 0) { try { if (escapePanics) _panic(DateTime.Now); } finally { Dispose(); } return; }
             InFront = true; if (escapePanics) _panic(DateTime.Now); else Pause();
         }
         if (CoreSettings.Current.PanicKey == "Escape" && CoreSettings.Current.PanicKeyEnabled && !MainShellWindow.LockdownActive
@@ -126,7 +128,7 @@ internal sealed class LinuxRaceHost : IDisposable
         switch ((string?)frame["type"])
         {
             case RaceShellProtocol.Loaded:
-                _displayBackend = (string?)frame["displayBackend"];
+                _displayBackend = (string?)frame["displayBackend"]; _backendKnown = true;
                 if (UnsupportedPanicKey) { Dispose(); break; }
                 _session.PostGlassroadInit(); break;
             case RaceShellProtocol.Focus: InFront = (bool?)frame["active"] == true; break;

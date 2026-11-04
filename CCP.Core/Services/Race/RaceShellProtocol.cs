@@ -5,14 +5,14 @@ namespace ConditioningControlPanel.Services.Race;
 /// A non-x11 backend is refused unless the configured panic key is Escape.
 /// Shell emits shell-loaded {displayBackend:"x11"|"wayland"} from the actual window backend after navigation, shell-focus {active}, shell-escape on non-repeat
 /// keydown with a positive, increasing sequence per process (repeat deliveries keep the same sequence).
-/// X11 owns Escape only for a confirmed x11 shell when listening; the shell is the fallback. Host sends focus or existing Glassroad frames. EOF in either direction ends the race.
+/// X11 owns Escape only for a confirmed x11 shell when listening; the shell is the fallback. Host sends launch {url} as the first stdin frame, then focus or existing Glassroad frames. EOF in either direction ends the race.
 /// The rt-race-shell lane must implement this contract; it is absent from the base checkout.</summary>
 public static class RaceShellProtocol
 {
     public const string Loaded = "shell-loaded", Focus = "shell-focus", Escape = "shell-escape";
     public static bool AcceptEscape(ref long last, long sequence, bool nativeListening, string? displayBackend)
     {
-        if ((nativeListening && displayBackend == "x11") || sequence <= last) return false;
+        if (displayBackend == null || (nativeListening && displayBackend == "x11") || sequence <= last) return false;
         last = sequence;
         return true;
     }

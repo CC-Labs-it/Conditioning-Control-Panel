@@ -13,13 +13,36 @@ public sealed class LinuxRaceHostTests
     [InlineData("x11", true, false)]
     [InlineData("wayland", true, true)]
     [InlineData("x11", false, true)]
-    [InlineData(null, true, true)]
+    [InlineData(null, true, false)]
     public void EscapeDeliveryHasOneSourceAndDeduplicatesBySequence(string? backend, bool listening, bool accepted)
     {
         long last = 0;
         Assert.Equal(accepted, RaceShellProtocol.AcceptEscape(ref last, 1, listening, backend));
         Assert.False(RaceShellProtocol.AcceptEscape(ref last, 1, listening, backend));
         Assert.Equal(accepted, RaceShellProtocol.AcceptEscape(ref last, 2, listening, backend));
+    }
+    [Fact]
+    public void LaunchUrlTravelsOnStdinAndNotInProcessArguments()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-race-" + Guid.NewGuid());
+        System.IO.Directory.CreateDirectory(dir);
+        var engine = System.IO.Path.Combine(dir, "engine"); var shell = System.IO.Path.Combine(dir, "shell");
+        var args = System.IO.Path.Combine(dir, "args"); var frame = System.IO.Path.Combine(dir, "frame");
+        System.IO.File.WriteAllText(shell, "");
+        System.IO.File.WriteAllText(engine, $"#!/bin/sh\nprintf '%s\\n' \"$@\" > '{args}'\nIFS= read -r line\nprintf '%s' \"$line\" > '{frame}'\nsleep 60\n");
+        System.IO.File.SetUnixFileMode(engine, System.IO.UnixFileMode.UserRead | System.IO.UnixFileMode.UserWrite | System.IO.UnixFileMode.UserExecute);
+        var url = new Uri("http://127.0.0.1:1234/race?token=fake-test-token");
+        try
+        {
+            Assert.True(LinuxRaceHost.TryLaunch(url, engine, shell));
+            Assert.True(System.Threading.SpinWait.SpinUntil(() => System.IO.File.Exists(frame) && new System.IO.FileInfo(frame).Length > 0, 10000));
+            Assert.DoesNotContain("fake-test-token", System.IO.File.ReadAllText(args));
+            var launch = JObject.Parse(System.IO.File.ReadAllText(frame));
+            Assert.Equal("launch", (string?)launch["type"]);
+            Assert.Equal(url.AbsoluteUri, (string?)launch["url"]);
+        }
+        finally { LinuxRaceHost.Current?.Dispose(); System.IO.Directory.Delete(dir, true); }
     }
     [Fact]
     public void InitTransportFailureDoesNotEscapeTheUiCallback()
