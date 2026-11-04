@@ -48,10 +48,6 @@
 //     TrainerCardText. Still missing: BtnDiscordTabLogin_Click, UpdateDiscordTabUI,
 //     ResolveProfilePictureUnavailable, LoadPatreonBadgeImage, ProfileDiscordHandle_Click,
 //     BtnProfileDiscord_Click (art). Change name / delete profile are ported below.
-//   * CoreMods (1): SyncSiteRadiosToActiveMod needs ShowBambiCloudOption() and
-//     GetDefaultBrowserUrl(); CCP.Core/CoreMods.cs carries neither yet. Its IsBrowserShowingKnownSite
-//     helper is NOT restored either: WebHost.CurrentUrl now answers it, but its only caller is
-//     SyncSiteRadiosToActiveMod, so write it with that caller.
 
 using System;
 using Avalonia.Controls;
@@ -118,6 +114,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Log.Warning(ex, "Browser navigation failed for {Url}", url);
                 return false;
             }
+        }
+
+        internal void NavigateBrowserForMod(string url)
+        {
+            if (!BrowserBlockedOffline(userInitiated: false)) NavigateBrowser(url);
         }
 
         /// <summary>WPF's <c>_browser.NavigationCompleted</c> handler (MainWindow.Browser.cs:132-160),
