@@ -10,8 +10,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Rendering.Composition;
 using System.Runtime.InteropServices;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -222,18 +224,34 @@ public sealed class ChasterMenuTests
         Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
 
         w.UpdateLayout();
-        using (w.CaptureRenderedFrame()) { } // hit testing uses the rendered viewport
         Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
         Assert.Equal(0, scroll.Offset.Y);
+        // A player can scroll to the hint first if font metrics put it below the fold.
+        hint.BringIntoView();
+        // A prior batch can still be in flight when this changed layout is committed.
+        var previousBatch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
+        hint.InvalidateMeasure();
+        w.UpdateLayout();
+        ContentHitTestTests.RenderLiveTree(w);
+        Assert.True(previousBatch.Rendered.IsCompleted);
+        var beforeHintClick = scroll.Offset.Y;
+        var hintPoint = hint.TranslatePoint(new Point(hint.Bounds.Width / 2, hint.Bounds.Height / 2), w)!.Value;
+        var hit = w.InputHitTest(hintPoint) as Visual;
+        Assert.True(hit == hint || (hit != null && hint.IsVisualAncestorOf(hit)),
+            $"hint at {hintPoint} hit {(hit as Control)?.Name ?? hit?.GetType().Name ?? "nothing"}");
+        bool released = false;
+        hint.AddHandler(InputElement.PointerReleasedEvent, (_, _) => released = true, RoutingStrategies.Bubble, handledEventsToo: true);
         Click(w, hint);
-        Dispatcher.UIThread.RunJobs();
-        Assert.True(scroll.Offset.Y > 0);
+        Assert.True(released, "hint did not receive the pointer release");
+        w.UpdateLayout();
+        ContentHitTestTests.RenderLiveTree(w);
+        Assert.True(scroll.Offset.Y > beforeHintClick);
         // The row's actual click must clear the hint immediately, not at the 30 s tick.
         var row = tab.PriceRows["attention"];
         row.BringIntoView();
         Dispatcher.UIThread.RunJobs();
         w.UpdateLayout();
-        using (w.CaptureRenderedFrame()) { }
+        ContentHitTestTests.RenderLiveTree(w);
         Click(w, row);
         Assert.Contains("attention", settings.ChasterPrices!);
         Assert.False(hint.IsVisible);
