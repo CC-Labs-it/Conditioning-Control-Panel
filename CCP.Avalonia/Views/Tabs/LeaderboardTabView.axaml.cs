@@ -186,12 +186,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var allTime = this.FindControl<Button>("BtnLeaderboardAllTime");
             if (monthly == null || allTime == null) return;
 
-            var pink = Res("PinkBrush");
+            var pink = new SolidColorBrush(Color.TryParse(CoreMods.AccentColorHex, out var accent)
+                ? accent : Color.Parse("#FF69B4"));
             var inactive = Res("AccentTintedBgBrush");
             var gold = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00));
 
             Set(monthly, IsAllTimeMode ? inactive : pink, IsAllTimeMode ? pink : Brushes.White);
             Set(allTime, IsAllTimeMode ? gold : inactive, IsAllTimeMode ? Res("DarkerBgBrush") : pink);
+            monthly.BorderBrush = pink;
+            allTime.BorderBrush = IsAllTimeMode ? gold : pink;
 
             // A missing resource leaves the markup's own brush alone; blanking a button's
             // foreground would hide its label, which is worse than the wrong half looking active.
@@ -205,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnLeaderboardModChanged(object? sender, ConditioningControlPanel.Models.ModPackage mod) =>
-            Dispatcher.UIThread.Post(UpdateLeaderboardTheme);
+            Dispatcher.UIThread.Post(() => { UpdateLeaderboardTheme(); UpdateModeButtons(); });
 
         // WPF MainWindow.Leaderboard.cs:858: repaint existing containers without fetching data.
         private void UpdateLeaderboardTheme()

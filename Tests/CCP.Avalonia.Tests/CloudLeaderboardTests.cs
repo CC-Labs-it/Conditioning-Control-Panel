@@ -166,12 +166,32 @@ public sealed partial class AccountSeedTests
                     CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
                     Dispatcher.UIThread.RunJobs();
                     Assert.Equal(seen, wire.Seen.Count);
+                    var monthly = tab.FindControl<Button>("BtnLeaderboardMonthly")!;
+                    var allTime = tab.FindControl<Button>("BtnLeaderboardAllTime")!;
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(monthly.Background));
+                    Assert.Equal(Colors.White, Actual(monthly.Foreground));
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(allTime.Foreground));
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(allTime.BorderBrush));
+                    var monthlyBorder = monthly.GetVisualDescendants().OfType<Border>().First(b => b.Name == "MonthlyBorder");
+                    var allTimeBorder = allTime.GetVisualDescendants().OfType<Border>().First(b => b.Name == "AllTimeBorder");
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(monthlyBorder.BorderBrush));
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(allTimeBorder.BorderBrush));
                     Assert.Equal(Color.Parse("#20ABCDEF"), Brush("LbTint20Brush"));
                     Assert.Equal(Color.Parse("#3CABCDEF"), Actual(row.Background));
                     Assert.Equal(Brush("LbTint20Brush"), ((ISolidColorBrush)tab.FindControl<Border>("YouBar")!.Background!).Color);
                     await tab.SetLeaderboardMode(true);
                     Assert.Equal(Color.Parse("#20FFD700"), Brush("LbTint20Brush"));
                     Assert.Equal(Color.Parse("#40FFD700"), ((ISolidColorBrush)tab.FindControl<Border>("YouBar")!.BorderBrush!).Color);
+                    seen = wire.Seen.Count;
+                    accent = "#654321";
+                    CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(seen, wire.Seen.Count);
+                    Assert.Equal(Color.Parse("#FF654321"), Actual(monthly.Foreground));
+                    Assert.Equal(Color.Parse("#FFFFD700"), Actual(allTime.Background));
+                    Assert.Equal(Color.Parse("#FFFFD700"), Actual(allTime.BorderBrush));
+                    Assert.Equal(Color.Parse("#FF654321"), Actual(monthlyBorder.BorderBrush));
+                    Assert.Equal(Color.Parse("#FFFFD700"), Actual(allTimeBorder.BorderBrush));
                 }
                 finally { host.Close(); }
             });

@@ -422,7 +422,7 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="MonthlyBorder" Background="{TemplateBinding Background}" CornerRadius="10,0,0,10"
-                                        Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
+                                        Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                                     <ContentPresenter Content="{TemplateBinding Content}"
                                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -443,7 +443,7 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="AllTimeBorder" Background="{TemplateBinding Background}" CornerRadius="0,10,10,0"
-                                        Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
+                                        Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                                     <ContentPresenter Content="{TemplateBinding Content}"
                                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
