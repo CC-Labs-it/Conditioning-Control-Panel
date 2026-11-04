@@ -45,7 +45,7 @@ const hostEscape = createHostEscape();
 const q = new URLSearchParams(location.search);
 const settingsFns = new Set();
 let hostInit = {};
-let station;
+let station, fallback = false, suspended = false;
 function applyHost(m) {
   hostInit = { ...hostInit, ...m };
   if (m.breakout) ctx.breakout = m.breakout;
@@ -119,12 +119,12 @@ const ctx = {
 /* The bridge holds every frame until init: say ready, take the host's init (the phone shim answers at once), then open the lane. */
 if (isHosted) {
   await new Promise((res) => {
-    const timer = q.has('avalonia') ? null : setTimeout(res, 1500);
-    bridge.on('init', m => { applyHost(m); clearTimeout(timer); res(); });
+    const timer = setTimeout(() => { fallback = true; res(); }, 1500);
+    bridge.on('init', async m => { applyHost(m); clearTimeout(timer); res(); if (q.has('avalonia') && fallback && station) { fallback = false; await station.destroy(); station = await mount(ctx); await station.open(); station.suspend(suspended); if (window.dev) window.dev.station = station; } });
     announceReady();
   });
   bridge.on('settings', applyHost);
-  bridge.on('suspend', m => station?.suspend(!!m.on));
+  bridge.on('suspend', m => { suspended = q.has('avalonia') && !!m.on; station?.suspend(!!m.on); });
   bridge.on(HOST_ESCAPE, () => hostEscape.kept());
   bridge.on('media-warm', () => window.dispatchEvent(new Event('br-media-changed')));
   markInitialized();
@@ -142,7 +142,7 @@ async function stand() {
 if (isHosted) bridge.on('close', async () => { await settle(); bridge.send({ type: 'exit-done' }); });
 async function open() { sit.hidden = true; await station.open(); if (isHosted) bridge.send({ type: 'station-open', station: 'breakout' }); }
 sit.onclick = open;
-await open();
+await open(); if (suspended) station.suspend(true);
 
 /* ---- the phone: keep the screen awake and go fullscreen on the first touch ---- */
 let armed = false;
