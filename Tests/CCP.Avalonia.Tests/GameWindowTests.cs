@@ -999,6 +999,127 @@ public sealed partial class GameWindowTests
         });
     }
 
+    [Fact]
+    public void Dtrh_Fullscreen_EchoesHostState() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.WindowState = global::Avalonia.Controls.WindowState.Maximized;
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        Assert.Equal("fullscreen", (string?)sent[0]["type"]);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\"}");
+        Assert.Equal(global::Avalonia.Controls.WindowState.Maximized, w.WindowState);
+        Assert.False((bool)Assert.Single(sent)["on"]!);
+    });
+
+    [Fact]
+    public void Dtrh_Fullscreen_NativeExitUpdatesPageBeforeNextToggle() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        // WPF DtrhHostService.cs:488-502 echoes the actual host state. The page's
+        // scene.js:75-84,482-486 uses that echo to choose the next toggle request.
+        var w = GameWindow.Launch("dtrh")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        var sent = new List<JObject>();
+        bool pageFullscreen = false;
+        w.Posted += json =>
+        {
+            var frame = JObject.Parse(json);
+            sent.Add(frame);
+            if ((string?)frame["type"] == "fullscreen") pageFullscreen = (bool)frame["on"]!;
+        };
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.True(pageFullscreen);
+        Assert.Single(sent); // the host-driven transition has one echo
+        sent.Clear();
+        w.WindowState = global::Avalonia.Controls.WindowState.Normal; // native exit
+        var notification = Assert.Single(sent);
+        Assert.Equal("fullscreen", (string?)notification["type"]);
+        Assert.False((bool)notification["on"]!);
+        Assert.False(pageFullscreen);
+        sent.Clear();
+        w.WindowState = global::Avalonia.Controls.WindowState.Maximized;
+        Assert.Empty(sent); // windowed to windowed is not a fullscreen edge
+        w.HandleMessage(new JObject { ["type"] = "fullscreen-set", ["on"] = !pageFullscreen }.ToString());
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        Assert.True(pageFullscreen);
+        Assert.Single(sent);
+        sent.Clear();
+        w.WindowState = global::Avalonia.Controls.WindowState.Normal;
+        Assert.False(pageFullscreen);
+        Assert.Single(sent);
+        sent.Clear();
+        w.WindowState = global::Avalonia.Controls.WindowState.FullScreen; // native entry
+        Assert.True(pageFullscreen);
+        Assert.Single(sent);
+    });
+
+    [Fact]
+    public void Dtrh_Fullscreen_ExternalExitCanEnterAgain() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        w.WindowState = global::Avalonia.Controls.WindowState.Normal; // the window manager exited fullscreen
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        w.WindowState = global::Avalonia.Controls.WindowState.Normal;
+        w.Position = new PixelPoint(120, 140); // a move after the native exit must be remembered
+        w.WindowState = global::Avalonia.Controls.WindowState.Maximized;
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+        Assert.Equal(global::Avalonia.Controls.WindowState.Maximized, w.WindowState);
+        w.WindowState = global::Avalonia.Controls.WindowState.Normal;
+        Assert.Equal(new PixelPoint(120, 140), w.Position);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Dtrh_Fullscreen_RestoresOrCentersFrame(bool disconnected) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        // WPF ChaosWebViewHost.cs:411-420: a captured frame on a removed screen is not restored.
+        var w = GameWindow.Launch("dtrh")!;
+        var primary = MakeDtrhScreen(new PixelRect(0, 0, 1920, 1080), true);
+        var external = MakeDtrhScreen(new PixelRect(1920, 0, 1920, 1080), false);
+        var old = global::ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] { primary, external };
+            w.Width = 800; w.Height = 600;
+            w.Position = new PixelPoint(2200, 100);
+            Dispatcher.UIThread.RunJobs();
+            w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+            if (disconnected) global::ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] { primary };
+            w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+            Assert.Equal(global::Avalonia.Controls.WindowState.Normal, w.WindowState);
+            Assert.Equal(disconnected ? new PixelPoint(560, 240) : new PixelPoint(2200, 100), w.Position);
+            Assert.Equal(800, w.Width);
+            Assert.Equal(600, w.Height);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = old; }
+    });
+
+    private static global::Avalonia.Platform.Screen MakeDtrhScreen(PixelRect bounds, bool primary)
+    {
+        var screen = (global::Avalonia.Platform.Screen)Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
+            new object[] { new global::Avalonia.Platform.PlatformHandle(new IntPtr(bounds.X), "headless-test") })!;
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Scaling")!.SetValue(screen, 1d);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(screen, bounds);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("WorkingArea")!.SetValue(screen, bounds);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("IsPrimary")!.SetValue(screen, primary);
+        return screen;
+    }
+
     /// <summary>WPF DtrhHostService.cs:309,405-433,462-479: seed the saved spiral pool,
     /// answer Loom commands and refresh only after successful changes.</summary>
     [Fact]
