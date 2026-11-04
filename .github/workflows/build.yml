@@ -328,20 +328,17 @@ jobs:
       - run: bash .github/scripts/fetch-vosk-model.sh
       # LibVLC tests use the system libvlc, like --smoke in core-linux.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvlc-dev vlc-plugin-base
-      - name: Provision two silent sinks for first-show routing
+      - run: sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
+      - run: bash Tests/CCP.Avalonia.Tests/scripts/pulse-fixture-test.sh
         if: matrix.shard == 1
-        run: |
-          sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
-          export XDG_RUNTIME_DIR="$RUNNER_TEMP/ccp-pulse"
-          mkdir -m 700 -p "$XDG_RUNTIME_DIR"
-          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
-          pulseaudio --start --exit-idle-time=-1
-          pactl load-module module-null-sink sink_name=ccp_default
-          pactl load-module module-null-sink sink_name=ccp_headphones
-          pactl set-default-sink ccp_default
       - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
       - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
-        run: bash .github/scripts/avalonia-tests-sharded.sh --shard ${{ matrix.shard }}
+        run: |
+          if [ "${{ matrix.shard }}" = 1 ]; then
+            bash .github/scripts/with-test-pulse.sh bash .github/scripts/avalonia-tests-sharded.sh --shard 1
+          else
+            bash .github/scripts/avalonia-tests-sharded.sh --shard ${{ matrix.shard }}
+          fi
         env:
           CCP_REQUIRE_VOSK: "1"
       - name: Record the suite's test count for the coverage check
