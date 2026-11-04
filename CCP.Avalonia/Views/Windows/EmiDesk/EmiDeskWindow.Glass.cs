@@ -113,7 +113,19 @@ public partial class EmiDeskWindow
         _glassLanded = false;
         _glassPhase = now;
         StopIdleBeats();
-        _glassFrames = new BeatLoop(this, elapsed => AdvanceGlass(now.AddSeconds(elapsed)));
+        // WPF EmiDeskWindow.Glass.cs:34,321-332: four tears at 55 ms intervals.
+        int lastTear = -1;
+        _glassFrames = new BeatLoop(this, elapsed =>
+        {
+            double ms = elapsed * 1000;
+            if (!_glassLanded && ms < 220)
+            {
+                int tear = (int)(ms / 55);
+                if (tear == lastTear) return;
+                lastTear = tear;
+            }
+            AdvanceGlass(now.AddSeconds(elapsed));
+        });
         _glassFrames.Start();
     }
 

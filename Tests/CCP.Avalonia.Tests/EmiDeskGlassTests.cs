@@ -97,7 +97,21 @@ public class EmiDeskGlassTests
             desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
             Assert.True(desk.GlassIsLive);
             Assert.Contains(BeatLoop.Running, loop => loop.Owner == desk);
-            time.Advance(TimeSpan.FromMilliseconds(219)); BeatLoop.StepAll();
+            // WPF EmiDeskWindow.Glass.cs:321-332: four distinct tears over 220 ms.
+            var layer = Assert.IsType<Canvas>(Assert.Single(desk.GlassHost.Children));
+            var previousTear = layer.Children[0];
+            int paints = 1;
+            for (int i = 0; i < 7; i++)
+            {
+                time.Advance(TimeSpan.FromMilliseconds(i == 6 ? 21 : 33));
+                BeatLoop.StepAll();
+                if (!ReferenceEquals(previousTear, layer.Children[0]))
+                {
+                    paints++;
+                    previousTear = layer.Children[0];
+                }
+            }
+            Assert.Equal(4, paints);
             Assert.False(desk.GlassHasLanded);
             time.Advance(TimeSpan.FromMilliseconds(1)); BeatLoop.StepAll();
             Assert.True(desk.GlassHasLanded);
