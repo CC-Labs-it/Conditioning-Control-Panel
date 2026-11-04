@@ -1,12 +1,12 @@
 // PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: 5. the menu (BuildMenu, Row,
 // PaintRowLit, PriceToggle_Changed :1176-1290), ApplyPriceToggles (:1149) and the red flash switch
 // (ChkFlashDodge_Changed :1168), on Core TabPrices / TabPageText / TabMenuCopy.
-// ponytail: the row trailer (hover popup, Row_MouseEnter/Leave) and FxRow / FxKeyTurned (Fx.cs) are not
-// ported (views-tab-chaster).
+// ponytail: the row trailer, row burst and FxKeyTurned (Fx.cs) are not ported (views-tab-chaster).
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
@@ -27,6 +27,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly Dictionary<string, ToggleButton> _priceToggles = new();
         private readonly Dictionary<string, Border> _rowDims = new();
         private bool _menuBuilt;
+
+        internal int RowPopCount { get; private set; }
 
         internal IReadOnlyDictionary<string, ToggleButton> PriceRows => _priceToggles;
 
@@ -171,6 +173,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // One hand-flipped row can land exactly on a preset, or step off one.
             RefreshPresets();
             RefreshSetupHint(); // WPF RefreshPresets also refreshes the empty-menu hint.
+            PopPriceRow(row);
+        }
+
+        // WPF ChasterTabView.Fx.cs:718-723, 899-910: both on and off pop.
+        private void PopPriceRow(ToggleButton row)
+        {
+            if (!AmbientFxCanvas.Env.AllowTransitions) return;
+            row.RenderTransform ??= new ScaleTransform(1, 1);
+            if (row.RenderTransform is not ScaleTransform) return;
+            var pop = new Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(380),
+                Children =
+                {
+                    new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1d), new Setter(ScaleTransform.ScaleYProperty, 1d) } },
+                    new KeyFrame { Cue = new Cue(0.35), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1.06), new Setter(ScaleTransform.ScaleYProperty, 1.06) } },
+                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1d), new Setter(ScaleTransform.ScaleYProperty, 1d) } },
+                },
+            };
+            _ = pop.RunAsync(row);
+            RowPopCount++;
         }
 
         /// <summary>Red flashes with a 4 s ring to dodge them, or none at all (the default).</summary>
