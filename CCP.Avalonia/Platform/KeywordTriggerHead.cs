@@ -166,8 +166,11 @@ internal sealed class KeywordAudioRuntime
         // buffer and records cooldowns, but dispatch stays silent during the post-panic quiet.
         if (Services.Safety.PanicAftermath.TriggersSilenced()) return;
 
-        // WPF merge: preset first, and only the first enabled PlayAudio action wins.
-        var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
+        // WPF :1271-1295,1319-1324 keeps every action for a single trigger, but
+        // merged triggers retain only the first enabled PlayAudio action.
+        var audios = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().Where(a => a.Enabled).ToList();
+        if (fired.Count > 1 && audios.Count > 1) audios.RemoveRange(1, audios.Count - 1);
+        var audio = audios.FirstOrDefault();
         var legacy = audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0);
         if (legacy)
         {
@@ -181,8 +184,17 @@ internal sealed class KeywordAudioRuntime
         // WPF :1698-1701 checks the legacy path as stored, without the action path resolver.
         // A held or missing legacy clip still ducks and releases after 500 ms (:1692-1695,1742-1745).
         var running = CoreSession.IsEngineRunning || CoreSession.IsSessionRunning;
-        if (audio != null && running && (!legacy || File.Exists(audio.FilePath))) Play(audio, resolveRelative: !legacy);
-        else if (legacy && fired[0].DuckAudio)
+        var actionDuck = audios.Any(a => a.DuckSystemAudio);
+        var played = legacy
+            ? audio != null && running && File.Exists(audio.FilePath) && Play(audio, resolveRelative: false, audio.DuckSystemAudio)
+            : running && audios.Any(a => Play(a, resolveRelative: true, actionDuck));
+        if (!played && !legacy && running && s.AudioDuckingEnabled && actionDuck)
+        {
+            // WPF KeywordTriggerService.cs:1351-1359,1378-1387 ducks even when no clip exists.
+            CoreAudio.Duck(s.DuckingLevel);
+            _ = ReleaseLegacyDuck(CoreAudio.DuckGeneration);
+        }
+        else if (!played && legacy && fired[0].DuckAudio)
         {
             // The pending release survives a clip stop. Keep each generation local.
             long generation = -1;
@@ -215,9 +227,9 @@ internal sealed class KeywordAudioRuntime
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio, bool resolveRelative)
+    private bool Play(PlayAudioAction audio, bool resolveRelative, bool duckRequested)
     {
-        if (string.IsNullOrEmpty(audio.FilePath)) return;
+        if (string.IsNullOrEmpty(audio.FilePath)) return false;
         var path = audio.FilePath;
         if (resolveRelative && !Path.IsPathRooted(path))
         {
@@ -225,16 +237,17 @@ internal sealed class KeywordAudioRuntime
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path)) return false;
         StopAudio();
         var cancellation = _audio = new CancellationTokenSource();
         var token = cancellation.Token;
-        if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
+        if (duckRequested && CoreSettings.Current.AudioDuckingEnabled)
         {
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             _duckGeneration = CoreAudio.DuckGeneration;
         }
         _ = Repeat();
+        return true;
         async Task Repeat()
         {
             try
