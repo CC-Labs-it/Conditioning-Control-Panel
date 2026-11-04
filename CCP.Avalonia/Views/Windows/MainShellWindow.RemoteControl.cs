@@ -6,8 +6,7 @@
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
 // RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise/restore
-// for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and remote
-// browser video playback and reveal.
+// for remote, the taskbar flash on join (no Avalonia API) and the RemoteHud pill.
 
 using System;
 using System.Linq;
@@ -51,8 +50,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.ControllerIdleChanged += idle;
             r.SessionEnded += ended;
             r.CommandReceived += command;
+            Func<string, string?> play = PlayHypnotubeFromRemote;
+            Action stop = StopBrowserVideoFromRemote;
+            (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (play, stop);
             Closed += (_, _) =>
             {
+                if (RemoteCommands.PlayHypnotube == play) (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (null, null);
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
@@ -110,7 +113,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var presets = CoreSettings.Current.RemoteEmotePresets;
             if (Named<ItemsControl>("LstEmotePresetsBigTop") is { } top) top.ItemsSource = presets.Take(3).ToList();
             if (Named<ItemsControl>("LstEmotePresetsBigBottom") is { } bottom) bottom.ItemsSource = presets.Skip(3).ToList();
-            if (Named<SettingsTabView>("SettingsTab") is { } settings) settings.BrowserContainer.IsVisible = false;
+            // WPF :904: not while the controller's own video plays; a reconnect mid-video keeps it visible.
+            if (!_remoteOverlayBrowserRevealed && Named<SettingsTabView>("SettingsTab") is { } settings) settings.BrowserContainer.IsVisible = false;
             if (Named<Border>("RemoteControlOverlay") is { } o) { o.IsVisible = true; o.Opacity = 1; }
             _remoteOverlayHidingAt = null;
             _remoteOverlayTimer ??= new DispatcherTimer(RemoteOverlaySlowTick, DispatcherPriority.Background, (_, _) => RemoteOverlayTick());
@@ -139,6 +143,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SetRemoteOverlayCadence();
         }
 
+        // WPF :946: a controller video has lifted the blindfold; Show must not put it back underneath.
+        private bool _remoteOverlayBrowserRevealed;
+
+        /// <summary>WPF RevealBrowserForRemoteVideo (:951): the controller's video wins over the overlay card;
+        /// when it stops and the controller is still here, the card gets the browser's space back.</summary>
+        private void RevealBrowserForRemoteVideo(bool reveal)
+        {
+            _remoteOverlayBrowserRevealed = reveal;
+            if (Named<SettingsTabView>("SettingsTab") is not { } settings) return;
+            if (reveal) settings.BrowserContainer.IsVisible = true;
+            else if (Named<Border>("RemoteControlOverlay")?.IsVisible == true) settings.BrowserContainer.IsVisible = false;
+        }
+
         /// <summary>The overlay's one timer (runs only while the overlay is up): WPF's 1 s session info
         /// refresh (:1057), the 2 s toast hold (:1240) and the fade-out collapse.</summary>
         internal void RemoteOverlayTick()
@@ -149,6 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _remoteOverlayTimer?.Stop();
                 if (Named<Border>("RemoteControlOverlay") is { } o) o.IsVisible = false;
                 if (Named<SettingsTabView>("SettingsTab") is { } settings) settings.BrowserContainer.IsVisible = true;
+                _remoteOverlayBrowserRevealed = false;
                 if (Named<Border>("RemoteCommandNotification") is { } n0) n0.Opacity = 0;
                 return;
             }

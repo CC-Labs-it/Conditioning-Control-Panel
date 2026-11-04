@@ -40,9 +40,9 @@
 //     OnHapticConnectionChangedForAudioSync, _hapticAudioSyncConnHooked); the pop-out and
 //     fullscreen rig (BtnPopOutBrowser_Click, FocusBrowserSurface's pop-out half,
 //     HandleBrowserFullscreenChanged, Arm/DisarmFullscreenEscapes, Enter/ExitBrowserFullscreen,
-//     ExitBrowserFullscreenForTeardown, the four _browserFs* fields); the remote video pair
-//     (PlayHypnotubeFromRemote, StopBrowserVideoFromRemote, _remoteBrowserVideoActive); the
-//     refused mute pair above.
+//     ExitBrowserFullscreenForTeardown, the four _browserFs* fields); the
+//     refused mute pair above. The remote video pair is ported below, minus the takeover script
+//     and BrowserMediaService (neither on this head).
 //   * the Trainer Card read (search, own card, lookup, badges, achievements, FormatNumber) is
 //     PORTED onto CCP.Avalonia/Views/Tabs/DiscordTabView.axaml.cs, text rules in Core
 //     TrainerCardText. Still missing: BtnDiscordTabLogin_Click, UpdateDiscordTabUI,
@@ -191,6 +191,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
 
             return NavigateBrowser(url);
+        }
+
+        // ============================== the remote controller's video ==============================
+
+        // WPF Browser.cs:3150: true only while a controller's play_hypnotube page is up, so a stop never
+        // takes the page the user was browsing themselves.
+        private bool _remoteBrowserVideoActive;
+
+        /// <summary>WPF ScreenOwningWebHostName (Browser.cs:3162): a host above the panel that would hide the
+        /// video. The Arcademy is not on this head.</summary>
+        private static string? ScreenOwningWebHostName() =>
+            Games.GameWindow.IsDtrhOpen() ? "Down the Rabbit Hole"
+            : IntakeHostWindow.IsAnyOpen() ? "Graded Intake" : null;
+
+        /// <summary>WPF PlayHypnotubeFromRemote (Browser.cs:3188): the URL is already allowlisted by Core
+        /// RemoteCommands. Null = handed to the browser, else the reason the controller sees.</summary>
+        internal string? PlayHypnotubeFromRemote(string url)
+        {
+            var ownedBy = ScreenOwningWebHostName();
+            if (ownedBy != null) return ownedBy + " is on screen";
+            _remoteBrowserVideoActive = true;
+            RevealBrowserForRemoteVideo(true);
+            if (NavigateToUrlInBrowser(url, autoPlayFullscreen: true)) return null;
+            _remoteBrowserVideoActive = false;
+            RevealBrowserForRemoteVideo(false);
+            return "the browser could not open it";
+        }
+
+        /// <summary>WPF StopBrowserVideoFromRemote (Browser.cs:3228) via EndWebVideoTakeover's remote branch
+        /// (:995): back to the site home, which drops the playing page, then the blindfold goes back on.</summary>
+        internal void StopBrowserVideoFromRemote()
+        {
+            if (!_remoteBrowserVideoActive) return;
+            _remoteBrowserVideoActive = false;
+            try { NavigateBrowserToCurrentSiteHome(); }
+            finally { RevealBrowserForRemoteVideo(false); }
         }
 
         // ============================== the profile viewer ==============================

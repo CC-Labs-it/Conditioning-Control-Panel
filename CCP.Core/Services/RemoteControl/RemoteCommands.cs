@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: pink filter, spiral, opacity, HypnoTube, autonomy, mind wipe, Melt (start/stop_brain_drain),
+    /// ponytail: pink filter, spiral, opacity, autonomy, mind wipe, Melt (start/stop_brain_drain),
     /// wallpaper and the session verbs have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
@@ -41,6 +41,12 @@ namespace ConditioningControlPanel.Services
         /// <summary>The remote haptic player (WPF RemoteControlService.RemoteHaptics). Easy is not on this head
         /// (no HUD), so the scale stays 1.</summary>
         internal static Remote.CoreRemoteHapticDriver RemoteHaptics = new(() => 1.0);   // tests swap in a stepped clock
+
+        /// <summary>The head's embedded browser (WPF MainWindow.PlayHypnotubeFromRemote / StopBrowserVideoFromRemote,
+        /// MainWindow.Browser.cs:3188 / :3228). Play returns null when the page was handed to the browser, else the
+        /// refusal. Null = this head has no browser to put it in.</summary>
+        public static Func<string, string?>? PlayHypnotube;
+        public static Action? StopBrowserVideo;
 
         private static int _panicGeneration;
         /// <summary>Moves on every panic: a command fetched before it never runs after it (RemoteRelay).</summary>
@@ -79,9 +85,16 @@ namespace ConditioningControlPanel.Services
                 case "stop_bubbles": CoreBubbles.Stop(); return null;
                 case "start_bounce_text": CoreBouncingText.Start(); return null;
                 case "stop_bounce_text": CoreBouncingText.Stop(); return null;
+                // WPF RemoteControlService.cs:1413: the URL is the only thing crossing the trust boundary, so
+                // only a real hypnotube.com video page reaches the browser. WPF drops a bad one silently;
+                // here it is reported, as every other refusal (ccp-bugs#1138).
+                case "play_hypnotube":
+                    var htUrl = p?["url"]?.ToString();
+                    if (!Helpers.HtUrlHelper.IsEligibleHtUrl(htUrl)) return "not an eligible HypnoTube URL";
+                    return PlayHypnotube is { } play ? play(htUrl!) : NotOnThisBuild;
                 case "trigger_video": return CoreEngine.Video?.Trigger() == true ? null : CoreEngine.Video == null ? NotOnThisBuild : "a video is already playing";
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
-                case "stop_video": CoreEngine.Video?.Stop(); return null;
+                case "stop_video": CoreEngine.Video?.Stop(); StopBrowserVideo?.Invoke(); return null;
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
                 case "start_lock_card": s.LockCardEnabled = true; LockCardScheduler.Instance.Start(); return null;
                 case "stop_lock_card": LockCardScheduler.Instance.Stop(); return null;
@@ -121,6 +134,8 @@ namespace ConditioningControlPanel.Services
             if (force) StopHaptics(); else RemoteHaptics.Stop();
             try { CoreHaptics.Service?.PanicStop(); } catch { }
             CoreAudio.Unduck();
+            // WPF StopAllRemoteEffects (:1001, :1164): the controller's browser video stops too; a no-op unless one plays.
+            try { StopBrowserVideo?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] browser video stop failed"); }
             if (force) CoreEngine.Stop();
             else
             {
