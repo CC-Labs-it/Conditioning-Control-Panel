@@ -110,6 +110,29 @@ public sealed class LobbyPageTests
         finally { LocalizationManager.Instance.SetLanguage("en"); }
     });
 
+    [Theory]
+    [InlineData("BtnHostChess")]
+    [InlineData("BtnEmptyHostChess")]
+    public void SignedOutChessHostAsksForLogin(string name) => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        shell.Show();
+        try
+        {
+            var page = Named<AvailableSubjectsTabView>(shell, "AvailableSubjectsTab");
+            page.ReadGates = () => LobbyGates.From(false, false, false);
+            shell.ShowTab("availablesubjects");
+            Named<Button>(page, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(shell.OwnedWindows, w => w is LoginDialog);
+        }
+        finally
+        {
+            foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
+            shell.Close();
+        }
+    });
+
     [Fact]
     public void SignedOutRemoteHostButtonOpensSignInInsteadOfRemote() => Run(() =>
     {
@@ -171,7 +194,8 @@ public sealed class LobbyPageTests
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         body();

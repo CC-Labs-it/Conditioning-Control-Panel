@@ -95,8 +95,15 @@ public partial class AvailableSubjectsTabView : UserControl
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
-        // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
+        // Goon host and row Join flows wait for their host integrations.
         // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+    }
+
+    private void BtnHostChess_Click(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
+        if (!ReadGates().SignedIn) { _ = shell.OpenUnifiedLoginDialog(); return; }
+        Games.GameWindow.HostPbpTable();
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
