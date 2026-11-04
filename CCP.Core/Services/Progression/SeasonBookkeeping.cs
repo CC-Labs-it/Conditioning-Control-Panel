@@ -11,6 +11,26 @@ public static class SeasonBookkeeping
     // Account sync can update CurrentSeason off the UI thread while the tracker is writing.
     internal static readonly object Gate = new();
 
+    /// <summary>WPF SeasonRecapService.cs:138-144, one count per admitted session start.</summary>
+    public static void RecordSessionStart(AppSettings s, DateTime utcNow)
+    {
+        lock (Gate)
+        {
+            Update(s);
+            if (s.PendingSeasonSnapshot != null && !string.IsNullOrEmpty(s.PendingSeasonTarget))
+            {
+                s.PendingSeasonSessions ??= new();
+                var target = s.PendingSeasonTarget;
+                s.PendingSeasonSessions.TryGetValue(target, out var count);
+                s.PendingSeasonSessions[target] = count + 1;
+                return;
+            }
+            if (string.IsNullOrEmpty(s.SeasonStatsSeason))
+                s.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(s, utcNow);
+            s.SeasonSessionsStarted++;
+        }
+    }
+
     public static void Update(AppSettings s, long? lifetimePointsSpent = null, int? leaderboardPercentile = null)
     {
         lock (Gate)
@@ -27,10 +47,11 @@ public static class SeasonBookkeeping
                 else if (string.CompareOrdinal(month, s.SeasonStatsSeason) > 0)
                 {
                     s.PendingSeasonMinutes ??= new();
+                    s.PendingSeasonSessions ??= new();
                     var points = lifetimePointsSpent ?? s.PendingSeasonLifetimePointsSpent;
                     var fallback = leaderboardPercentile ?? s.PendingSeasonPercentile;
                     // A failed save can span more than one confirmed season. Roll each pending bucket in order.
-                    var targets = s.PendingSeasonMinutes.Keys.Where(k => ProfileAdopt.LooksLikeMonthKey(k)
+                    var targets = s.PendingSeasonMinutes.Keys.Concat(s.PendingSeasonSessions.Keys).Where(k => ProfileAdopt.LooksLikeMonthKey(k)
                         && string.CompareOrdinal(k, s.SeasonStatsSeason) > 0 && string.CompareOrdinal(k, month) <= 0)
                         .Append(month).Distinct().OrderBy(k => k, StringComparer.Ordinal).ToArray();
                     foreach (var target in targets)
@@ -59,6 +80,7 @@ public static class SeasonBookkeeping
                         s.SeasonPointsSpent = 0;
                         s.SeasonStatsSeason = target;
                         if (s.PendingSeasonMinutes.Remove(target, out var minutes)) s.SeasonConditioningMinutes = minutes;
+                        if (s.PendingSeasonSessions.Remove(target, out var sessions)) s.SeasonSessionsStarted = sessions;
                     }
                     s.PendingSeasonTarget = null;
                     s.PendingSeasonPercentile = 0;

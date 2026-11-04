@@ -21,7 +21,7 @@ public sealed class SessionRunnerTests : IDisposable
 {
     private const string Id = "runner-golden";
     private static readonly string[] AllowedSettingsChanges =
-        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun" };
+        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun", "SeasonStatsSeason", "SeasonSessionsStarted" };
     private static readonly string[] Timestamps = { "started_at", "ended_at", "timestamp", "session_time_seconds" };
 
     private readonly SessionLogService _logs = new();
@@ -108,6 +108,20 @@ public sealed class SessionRunnerTests : IDisposable
         foreach (var o in new[] { saved, golden })
             foreach (var t in o.Descendants().OfType<JProperty>().Where(p => Timestamps.Contains(p.Name)).ToList()) t.Remove();
         Assert.Equal(golden.ToString(), saved.ToString());
+    }
+
+    [Fact]
+    public void EachAdmittedStartCountsOnce()
+    {
+        var s = CoreSettings.Current;
+        var before = s.SeasonSessionsStarted;
+        _runner.Start(OneMinute());
+        Assert.Equal(before + 1, s.SeasonSessionsStarted);
+        Assert.Throws<InvalidOperationException>(() => _runner.Start(OneMinute()));
+        Assert.Equal(before + 1, s.SeasonSessionsStarted);
+        _runner.Stop();
+        _runner.Start(OneMinute());
+        Assert.Equal(before + 2, s.SeasonSessionsStarted);
     }
 
     [Fact]
