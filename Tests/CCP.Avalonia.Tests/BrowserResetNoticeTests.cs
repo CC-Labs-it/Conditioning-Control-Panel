@@ -1,9 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -27,11 +25,7 @@ public class BrowserResetNoticeTests
             MainShellWindow? shell = null;
             try
             {
-                if (Application.Current is null)
-                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
-                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                        .SetupWithoutStarting();
+                BrowserResetReviewTests.Setup();
                 Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", null);
                 File.Delete(marker);
                 shell = new MainShellWindow();

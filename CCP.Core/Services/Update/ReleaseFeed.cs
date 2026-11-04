@@ -324,7 +324,7 @@ namespace ConditioningControlPanel.Services
         /// attempt was pending (or it was too old to be worth reporting). On failure the version is
         /// also written to the skip marker so we stop retrying the same broken install every launch.
         /// </summary>
-        public static PendingUpdateOutcome? ConsumePendingUpdateOutcome(string userData, string currentVersion)
+        public static PendingUpdateOutcome? ConsumePendingUpdateOutcome(string userData, string currentVersion, bool consume = true)
         {
             try
             {
@@ -347,7 +347,7 @@ namespace ConditioningControlPanel.Services
                 }
                 catch { }
 
-                ClearPendingUpdateAttempt(userData);
+                if (consume) ClearPendingUpdateAttempt(userData);
 
                 if (string.IsNullOrEmpty(version))
                     return null;

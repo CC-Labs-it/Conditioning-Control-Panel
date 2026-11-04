@@ -24,7 +24,7 @@ namespace CCP.Avalonia.Tests;
 
 public class BrowserResetReviewTests
 {
-    private static void Setup()
+    internal static void Setup()
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -156,8 +156,7 @@ public class BrowserResetReviewTests
                 AppUpdater.Handler = null;
                 Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", oldApi);
                 ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
-                File.Delete(marker);
-                File.Delete(ack);
+                File.Delete(marker); File.Delete(ack);
             }
         });
     }
@@ -226,12 +225,24 @@ public class BrowserResetReviewTests
             var shell = new MainShellWindow();
             UpdateFailedDialog? failed = null;
             using var hook = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is UpdateFailedDialog f) failed = f; });
+            global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow? game = null;
             try
             {
-                shell.Show(); shell.Hide();
+                shell.Show();
+                LauncherWindow.Boot = BootDecision.LauncherFirst;
+                LauncherWindow.RouteBoot(shell); // panel tucked in the tray, launcher up
+                game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
+                game.Show();
                 ReleaseFeed.SetPendingUpdateAttempt(CorePaths.UserData, "99.1.0");
                 File.WriteAllText(ReleaseFeed.AttemptResultFilePath(CorePaths.UserData), "1");
                 var startup = AppUpdater.StartupAsync(shell);
+                await Task.Delay(1300);
+                Assert.Null(failed); // parked behind the launcher and the game
+                LauncherWindow.Instance!.Hide();
+                await Task.Delay(1200);
+                Assert.Null(failed); // and behind the game alone
+                Assert.True(File.Exists(ReleaseFeed.AttemptFilePath(CorePaths.UserData)));
+                game.Close(); game = null;
                 await Until(() => failed != null);
                 Assert.Null(failed!.Owner);
                 Assert.False(File.Exists(ReleaseFeed.AttemptFilePath(CorePaths.UserData)));
@@ -248,7 +259,8 @@ public class BrowserResetReviewTests
             finally
             {
                 MainShellWindow.IsStartupDialogShowing = false;
-                failed?.Close(); shell.Close();
+                LauncherWindow.Boot = BootDecision.PanelFirst;
+                failed?.Close(); game?.Close(); LauncherWindow.Instance?.Close(); shell.Close();
                 ReleaseFeed.ClearPendingUpdateAttempt(CorePaths.UserData);
             }
         });
@@ -274,7 +286,7 @@ public class BrowserResetReviewTests
             var marker = Path.Combine(CorePaths.UserData, AppUpdater.BrowserResetMarker);
             var ack = Path.Combine(CorePaths.UserData, AppUpdater.BrowserResetAcknowledged);
             var oldApi = Environment.GetEnvironmentVariable("CCP_UPDATE_API_URL");
-            var feed = new Feed();
+            var feed = new Feed("99.1.0");
             File.Delete(ack);
             File.WriteAllText(marker, "pending");
             Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
@@ -290,8 +302,13 @@ public class BrowserResetReviewTests
             {
                 shell.Show();
                 CoreSettings.Current.HasAcceptedAgeVerification = false;
+                MainShellWindow.IsStartupDialogShowing = true; // another startup modal delays the report
                 var startup = AppUpdater.StartupAsync(shell);
-                await Until(() => Volatile.Read(ref feed.Requests) > 0 && failed != null);
+                // The check finishes first, yet the failed version is already skipped: no pill.
+                await Until(() => Volatile.Read(ref feed.Requests) > 0 && AppUpdater.Latest is { Version: "99.1.0", IsNewer: false });
+                Assert.Null(failed);
+                MainShellWindow.IsStartupDialogShowing = false;
+                await Until(() => failed != null);
                 Assert.Null(AppUpdater.BrowserResetDialog); // still behind the age gate and failure report
                 Assert.False(File.Exists(ReleaseFeed.AttemptFilePath(CorePaths.UserData)));
                 failed!.Close();
@@ -302,11 +319,10 @@ public class BrowserResetReviewTests
             }
             finally
             {
-                failed?.Close();
+                MainShellWindow.IsStartupDialogShowing = false; failed?.Close();
                 AppUpdater.BrowserResetDialog?.Close();
                 shell.Close();
-                File.Delete(marker);
-                File.Delete(ack);
+                File.Delete(marker); File.Delete(ack);
                 ReleaseFeed.ClearPendingUpdateAttempt(CorePaths.UserData);
                 AppUpdater.Handler = null;
                 Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", oldApi);

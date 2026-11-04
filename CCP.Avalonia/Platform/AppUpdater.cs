@@ -164,6 +164,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 await Task.Delay(500);
+                // WPF :5414 classifies before the check; a failed version is skipped before its pill lights.
+                ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion, consume: false);
                 var report = ShowFailedUpdateAsync(shell, () => closed);
                 var notice = ShowBrowserResetWhenReadyAsync(shell, report, () => closed);
 
@@ -227,7 +229,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static async Task ShowFailedUpdateAsync(MainShellWindow shell, Func<bool> closed)
         {
             if (!File.Exists(ReleaseFeed.AttemptFilePath(UserData))) return;
-            while (!closed() && (StartupModalOpen() || StartupLadder.PassiveWindowUp())) await Task.Delay(500);
+            // WPF StartupPresenter.cs:353-389 parks the ladder while the launcher or a game has the screen.
+            while (!closed() && (StartupModalOpen() || StartupLadder.PassiveWindowUp()
+                || LauncherWindow.Instance is { IsVisible: true } || Views.Games.GameWindow.IsAnyOpen())) await Task.Delay(500);
             if (closed()) return; // leave the attempt on disk until it can be reported
             var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
             if (outcome is not { Succeeded: false }) return;

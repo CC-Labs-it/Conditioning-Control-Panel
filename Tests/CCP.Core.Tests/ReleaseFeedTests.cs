@@ -162,6 +162,8 @@ public sealed class ReleaseFeedTests
         try
         {
             ReleaseFeed.SetPendingUpdateAttempt(d, "6.11.4");
+            Assert.False(ReleaseFeed.ConsumePendingUpdateOutcome(d, "6.11.3", consume: false)!.Succeeded);
+            Assert.True(ReleaseFeed.GetSkippedUpdateVersion(d) == "6.11.4" && File.Exists(ReleaseFeed.AttemptFilePath(d)));
             var o = ReleaseFeed.ConsumePendingUpdateOutcome(d, "6.11.3");   // no result: unknown exit
             Assert.NotNull(o);
             Assert.False(o!.Succeeded);
