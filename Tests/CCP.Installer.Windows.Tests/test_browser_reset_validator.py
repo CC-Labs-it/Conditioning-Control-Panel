@@ -1,6 +1,11 @@
 """Portable checks for the Windows integration test's result validator."""
+import io
+import json
+import socket
 import tempfile
+import threading
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import browser_reset_installer_test as installer
@@ -82,6 +87,78 @@ class ValidatorTests(unittest.TestCase):
             installer.verify_observed_identity('S-1', 'S-1', 'same', {('S-1', True), ('S-2', True)})
         with self.assertRaises(ValueError):
             installer.verify_observed_identity('S-1', 'S-1', 'different', {('S-1', True)})
+
+    def test_elevated_observer_monitors_when_original_user_cannot_query(self):
+        original, elevated = socket.socketpair()
+        original.settimeout(2); elevated.settimeout(2)
+        errors = []
+        calls = []
+
+        def inspect():
+            calls.append(True)
+            return {('S-2', True)}
+
+        def serve():
+            try:
+                with elevated.makefile('rwb') as stream:
+                    installer.serve_observer(stream, 'nonce', ('S-2', True), inspect)
+            except Exception as exc:
+                errors.append(exc)
+
+        thread = threading.Thread(target=serve, daemon=True)
+        thread.start()
+        try:
+            with original.makefile('rwb') as stream:
+                installer.authenticate_observer(stream, 'nonce', 'S-2')
+                proc = mock.Mock()
+                proc.poll.side_effect = [None, 0]
+                with mock.patch.object(installer, 'wizard_identities', side_effect=PermissionError('access denied')), \
+                     mock.patch.object(installer, 'windows_api', return_value=None), mock.patch.object(installer.time, 'sleep'):
+                    seen = installer.observe_setup(proc, stream, 2)
+                installer.verify_observed_identity('S-1', 'S-2', 'different', seen)
+                self.assertEqual([True], calls)
+                installer.send_message(stream, {'kind': 'stop'})
+            thread.join(2)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual([], errors)
+        finally:
+            original.close(); elevated.close()
+            thread.join(2)
+
+    def test_observer_authentication_fails_closed(self):
+        hello = {'kind': 'hello', 'nonce': 'nonce', 'sid': 'S-2', 'elevated': True}
+        def stream(value):
+            return io.BytesIO((json.dumps(value) + '\n').encode())
+        installer.authenticate_observer(stream(hello), 'nonce', 'S-2')
+        for key, value in [('nonce', 'wrong'), ('sid', 'S-1'), ('elevated', False), ('kind', 'other')]:
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                installer.authenticate_observer(stream(dict(hello, **{key: value})), 'nonce', 'S-2')
+        with self.assertRaises(RuntimeError):
+            installer.serve_observer(io.BytesIO(), 'nonce', ('S-2', False), lambda: set())
+
+    def test_harness_rejects_elevated_original_user(self):
+        api = (mock.Mock(), None, None, None)
+        class Arguments:
+            disposable_vm = True
+            @property
+            def setup_sid(self): raise RuntimeError('guard bypassed')
+        with mock.patch.object(installer.os, 'name', 'nt'), mock.patch.object(installer, 'windows_api', return_value=api), \
+             mock.patch.object(installer, 'process_identity', return_value=('S-1', True)), self.assertRaisesRegex(RuntimeError, 'without elevation'):
+            installer.run(Arguments())
+
+    def test_observer_failure_does_not_become_an_empty_result(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        with mock.patch.object(installer, 'poll_observer', side_effect=ConnectionError('observer lost')), self.assertRaises(ConnectionError):
+            installer.observe_setup(proc, None, 2)
+
+    def test_rejects_disconnected_or_malformed_observer(self):
+        with self.assertRaises(RuntimeError):
+            installer.read_message(io.BytesIO(b''))
+        for reply in ({'kind': 'other', 'identities': []}, {'kind': 'identities', 'identities': [['S-2', 1]]}):
+            with self.subTest(reply=reply), mock.patch.object(installer, 'send_message'), \
+                 mock.patch.object(installer, 'read_message', return_value=reply), self.assertRaises(RuntimeError):
+                installer.poll_observer(None)
 
 
 if __name__ == '__main__':

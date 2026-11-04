@@ -1,9 +1,13 @@
 """Exercise the real Inno installer on a disposable Windows VM; see README.md."""
 import argparse
 import ctypes
+import json
 import os
+import secrets
+import socket
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -123,6 +127,118 @@ def wizard_identities(api):
     return found
 
 
+def send_message(stream, value):
+    stream.write((json.dumps(value, separators=(',', ':')) + '\n').encode('utf-8'))
+    stream.flush()
+
+
+def read_message(stream):
+    line = stream.readline(65537)
+    if not line or len(line) > 65536 or not line.endswith(b'\n'):
+        raise RuntimeError('observer connection closed or sent an invalid message')
+    value = json.loads(line)
+    if not isinstance(value, dict):
+        raise RuntimeError('invalid observer message')
+    return value
+
+
+def authenticate_observer(stream, nonce, expected_sid):
+    hello = read_message(stream)
+    if (hello.get('kind') != 'hello' or not isinstance(hello.get('nonce'), str)
+            or not secrets.compare_digest(hello['nonce'], nonce)
+            or hello.get('sid') != expected_sid or hello.get('elevated') is not True):
+        raise RuntimeError('observer is not the expected elevated setup account')
+
+
+def poll_observer(stream):
+    send_message(stream, {'kind': 'poll'})
+    message = read_message(stream)
+    values = message.get('identities')
+    if message.get('kind') != 'identities' or not isinstance(values, list):
+        raise RuntimeError('invalid observer identity response')
+    if any(not isinstance(item, list) or len(item) != 2 or not isinstance(item[0], str)
+           or type(item[1]) is not bool for item in values):
+        raise RuntimeError('invalid observer identity response')
+    return {(sid, elevated) for sid, elevated in values}
+
+
+def serve_observer(stream, nonce, identity, inspect):
+    sid, elevated = identity
+    if not elevated:
+        raise RuntimeError('observer must run elevated')
+    send_message(stream, {'kind': 'hello', 'nonce': nonce, 'sid': sid, 'elevated': elevated})
+    while True:
+        request = read_message(stream)
+        if request.get('kind') == 'stop':
+            return
+        if request.get('kind') != 'poll':
+            raise RuntimeError('unknown observer request')
+        send_message(stream, {'kind': 'identities', 'identities': sorted(inspect())})
+
+
+def observer_main(port, nonce):
+    api = windows_api()
+    identity = process_identity(api, api[0].GetCurrentProcess())
+    with socket.create_connection(('127.0.0.1', port), timeout=30) as connection:
+        connection.settimeout(30)
+        with connection.makefile('rwb') as stream:
+            serve_observer(stream, nonce, identity, lambda: wizard_identities(api))
+
+
+def start_elevated_observer(expected_sid, timeout):
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        listener.bind(('127.0.0.1', 0))
+        listener.listen(1)
+        listener.settimeout(min(timeout, 120))
+        nonce = secrets.token_urlsafe(32)
+        params = subprocess.list2cmdline([str(Path(__file__).resolve()), '--elevated-observer',
+                                         str(listener.getsockname()[1]), nonce])
+        shell = ctypes.WinDLL('shell32', use_last_error=True)
+        shell.ShellExecuteW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p,
+                                       ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_int]
+        shell.ShellExecuteW.restype = ctypes.c_void_p
+        print('Approve the observer UAC prompt as the expected setup administrator.')
+        result = shell.ShellExecuteW(None, 'runas', sys.executable, params, None, 1)
+        if not result or result <= 32:
+            raise RuntimeError('could not start the elevated observer')
+        connection, _ = listener.accept()
+        try:
+            connection.settimeout(30)
+            stream = connection.makefile('rwb')
+            try:
+                authenticate_observer(stream, nonce, expected_sid)
+                return connection, stream
+            except BaseException:
+                stream.close()
+                raise
+        except BaseException:
+            connection.close()
+            raise
+    finally:
+        listener.close()
+
+
+def stop_observer(observer):
+    connection, stream = observer
+    try:
+        send_message(stream, {'kind': 'stop'})
+    except (OSError, ValueError):
+        pass
+    finally:
+        stream.close()
+        connection.close()
+
+
+def observe_setup(proc, stream, timeout):
+    seen = set()
+    deadline = time.monotonic() + timeout
+    while proc.poll() is None and time.monotonic() < deadline:
+        seen.update(poll_observer(stream))
+        time.sleep(0.1)
+    return seen
+
+
 def read_log(path):
     data = Path(path).read_bytes()
     if data.startswith((b'\xff\xfe', b'\xfe\xff')):
@@ -136,7 +252,9 @@ def run(args):
     if not args.disposable_vm:
         raise RuntimeError('Use only on a disposable VM: setup modifies install and registry state')
     api = windows_api()
-    original_sid, _ = process_identity(api, api[0].GetCurrentProcess())
+    original_sid, original_elevated = process_identity(api, api[0].GetCurrentProcess())
+    if original_elevated:
+        raise RuntimeError('launch the harness from the original user without elevation')
     expected_sid = args.setup_sid or original_sid
     if (expected_sid == original_sid) != (args.identity == 'same'):
         raise ValueError('setup SID must match the original user for same, and differ for different')
@@ -170,13 +288,17 @@ def run(args):
                '/LANG=english', '/DIR=' + str(run_dir / 'app'), '/LOG=' + str(log)]
         if args.mode == 'silent':
             cmd.append('/SILENT')
-        print('Starting setup. Complete any Windows elevation prompt and installer wizard; do not launch CCP.')
-        proc = subprocess.Popen(cmd, env=env)
-        seen = set()
-        deadline = time.monotonic() + args.timeout
-        while proc.poll() is None and time.monotonic() < deadline:
-            seen.update(wizard_identities(api))
-            time.sleep(0.1)
+        observer = start_elevated_observer(expected_sid, args.timeout)
+        try:
+            print('Starting setup. Complete any Windows elevation prompt and installer wizard; do not launch CCP.')
+            proc = subprocess.Popen(cmd, env=env)
+            try:
+                seen = observe_setup(proc, observer[1], args.timeout)
+            except BaseException:
+                cleanup_safe = proc.poll() is not None  # preserve fixtures while setup may be running
+                raise
+        finally:
+            stop_observer(observer)
         if proc.poll() is None:
             cleanup_safe = False  # an elevated child can outlive the launching process
             proc.terminate()
@@ -214,4 +336,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) == 4 and sys.argv[1] == '--elevated-observer':
+        observer_main(int(sys.argv[2]), sys.argv[3])
+    else:
+        main()
