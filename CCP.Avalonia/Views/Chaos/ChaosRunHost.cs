@@ -77,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Action<double, int>? ShakeFx;
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
-        private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused;
+        private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused, _showerAfterLesson;
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
         private static readonly List<ChaosUnlockCardInfo> _pendingLessonCards = new();
@@ -99,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
+            _showerAfterLesson = false;
             var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {
@@ -154,6 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
+            SpawnWelcomeShower();
         }
 
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
@@ -517,6 +519,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 var cards = _pendingLessonCards.ToArray();
                 _pendingLessonCards.Clear();
                 _lessonCardPaused = true;
+                _showerAfterLesson = true;
                 BubbleOverlay.HoldChaos(true);
                 ChaosOverlayWindow.ChaosSfx.Play("ui_unlock", 0.55f);
                 foreach (var card in cards)
@@ -524,6 +527,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return;
             }
             if (!_manualPaused && !_lessonCardPaused) _spawnTimer?.Start();
+            SpawnWelcomeShower();
+        }
+
+        // WPF ChaosModeService.cs:1644-1661.
+        private static void SpawnWelcomeShower()
+        {
+            if (_state?.WelcomeShowerEnabled != true) return;
+            for (int i = 0; i < 6; i++)
+                BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(ChaosBubbleVariants.All[Random.Shared.Next(2)],
+                    _state.RunIntensity, _state.FuseTimeMult, ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
@@ -590,6 +603,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _lessonCardPaused = false;
             BubbleOverlay.HoldChaos(_manualPaused);
             if (_spawning && !_manualPaused) _spawnTimer?.Start();
+            if (_showerAfterLesson && _spawning) SpawnWelcomeShower();
+            _showerAfterLesson = false;
         }
 
         public static void RequestStop()
