@@ -12,6 +12,7 @@ using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using Xunit;
 using M = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosPopTextMotion;
 
@@ -31,13 +32,17 @@ public sealed class ChaosPopTextTests
 
     // WPF ChaosModeService :2736-2748 and :2780: only a fired toy earns first play.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Snap_field_pays_first_play_once_and_snaps_the_field(bool maxed)
+    [InlineData(false, "en", "✋ snapped. every live one let go.")]
+    [InlineData(true, "en", "✋ snapped. all of it.")]
+    [InlineData(false, "fr", "✋ neutralisées. toutes les bulles actives.")]
+    [InlineData(true, "fr", "✋ neutralisées. toutes les bulles.")]
+    public async Task Snap_field_pays_first_play_once_and_snaps_the_field(bool maxed, string language, string feed)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
+            string previousLanguage = LocalizationManager.Instance.CurrentLanguage;
+            LocalizationManager.Instance.SetLanguage(language);
             var meta = ChaosMeta.State;
             int sparks = meta.Sparks;
             bool played = meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
@@ -69,6 +74,7 @@ public sealed class ChaosPopTextTests
                 ChaosRunHost.UseToyById(toy.Id);
                 Assert.True(live.Popping);
                 Assert.Equal(maxed, treat.Popping);
+                Assert.Contains(feed, state.RecentEvents);
                 Assert.True(toy.IsEffectActive);
                 Assert.Equal(45, toy.CooldownRemainingSec);
                 double x = BubbleOverlay.ChaosLastPopX, y = BubbleOverlay.ChaosLastPopY;
@@ -90,6 +96,7 @@ public sealed class ChaosPopTextTests
             finally
             {
                 ChaosRunHost.ForceShutdown();
+                LocalizationManager.Instance.SetLanguage(previousLanguage);
                 ChaosRunHost.PopText = hook;
                 meta.Sparks = sparks;
                 if (played) meta.FirstTimesAwarded.Add(ChaosFirstTimes.Play); else meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
