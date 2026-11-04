@@ -262,6 +262,58 @@ public sealed class BannerMotionTests
         (System.Collections.Generic.HashSet<Window>)typeof(SafeLink)
             .GetField("Prompts", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public Task BeatPopFollowsMotionAndCleansUp(MotionLevel motion) => InShell(w =>
+    {
+        var previous = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        var clock = new BannerClock();
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = clock;
+        try
+        {
+            CoreSettings.Current.MotionLevel = motion;
+            Tick(w);
+            var first = w.Named<TextBlock>("TxtBannerPrimary")!;
+            var next = w.Named<TextBlock>("TxtBannerSecondary")!;
+            Assert.False(first.IsHitTestVisible);
+            Assert.True(next.IsHitTestVisible);
+            if (motion == MotionLevel.Off) Assert.Null(next.RenderTransform);
+            else
+            {
+                var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(next.RenderTransform);
+                Assert.Equal(.96, scale.ScaleX, 3);
+                clock.Now += TimeSpan.FromMilliseconds(260).Ticks;
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+                Assert.Null(next.RenderTransform);
+                Tick(w);
+                var web = w.Named<TextBlock>("TxtBannerWeb")!;
+                Assert.NotNull(web.RenderTransform);
+                CoreSettings.Current.MotionLevel = MotionLevel.Off;
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+                Assert.Null(web.RenderTransform);
+                CoreSettings.Current.MotionLevel = motion;
+                Tick(w); // support returns despite the sheen throttle
+                Assert.True(w.BannerSheenSweeping);
+                Assert.NotNull(first.RenderTransform);
+                w.Hide();
+                Assert.Null(first.RenderTransform);
+                typeof(MainShellWindow).GetMethod("PopBannerBeat", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(w, new object[] { first });
+                Assert.Null(first.RenderTransform);
+            }
+        }
+        finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previous; }
+    });
+
+    private sealed class BannerClock : TimeProvider
+    {
+        public long Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now;
+    }
+
     internal static Task InShell(Action<MainShellWindow> action) => InShell(w => { action(w); return Task.CompletedTask; });
 
     private static Task InShell(Func<MainShellWindow, Task> action) => AvaloniaTestDispatcher.RunAsync(async () =>

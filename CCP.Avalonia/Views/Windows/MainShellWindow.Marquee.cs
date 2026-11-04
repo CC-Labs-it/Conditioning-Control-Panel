@@ -130,6 +130,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _bannerRotationTimer.Start();
             Closed += (_, _) => _bannerRotationTimer.Stop();
             InitializeBannerPool();
+            Deactivated += (_, _) => ParkBannerPop();
+            Closed += (_, _) => ParkBannerPop();
         }
 
         /// <summary>
@@ -218,6 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _bannerCurrentIndex = nextIndex;
 
             SweepBannerSheen();
+            PopBannerBeat(banners[nextIndex]);
         }
 
         /// <summary>
