@@ -395,7 +395,9 @@ namespace ConditioningControlPanel.Services
                 CoreProgression.TrackAttentionCheck(true);
             }
             else if (verdict == AttentionVerdict.Fail) CoreProgression.TrackAttentionCheck(false);
-            if (verdict is not (AttentionVerdict.Troll or AttentionVerdict.Fail)) { End(); return; }
+            if (verdict is not (AttentionVerdict.Troll or AttentionVerdict.Fail)
+                || !Video.MandatoryVideoPresentation.ReplaysAfterCheck(s.MandatoryVideoReplayAfterFailedCheck,
+                    IsStrict, LockdownService.Current?.IsActive == true)) { End(); return; }
 
             Penalties++;
             var mercy = Penalties >= s.MercyAfterFails && s.MercySystemEnabled;   // #1145: 2..10, default 3

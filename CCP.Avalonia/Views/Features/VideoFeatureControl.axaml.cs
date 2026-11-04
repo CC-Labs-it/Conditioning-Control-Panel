@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ChkRandomize.IsCheckedChanged += ChkRandomize_Changed;
             SliderDuration.ValueChanged += SliderDuration_Changed;
             SliderTargetSize.ValueChanged += SliderTargetSize_Changed;
+            ChkReplayFailedCheck.IsCheckedChanged += ChkReplayFailedCheck_Changed;
             ChkVideoGazeClick.IsCheckedChanged += ChkVideoGazeClick_Changed;
             BtnManageAttention.Click += BtnManageAttention_Click;
             BtnAttentionStyle.Click += BtnAttentionStyle_Click;
@@ -148,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtDuration.Text = s.AttentionLifespan.ToString();
                 SliderTargetSize.Value = s.AttentionSize;
                 TxtTargetSize.Text = s.AttentionSize.ToString();
+                ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
                 ChkVideoGazeClick.IsChecked = s.VideoGazeClickEnabled;
                 PopulateMonitors();
                 // Full screen first (the default). Rebuilt on every load so the names follow the language.
@@ -189,6 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.RandomizeAttentionTargets) ||
                 e.PropertyName == nameof(AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
@@ -375,6 +378,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (_isLoading) return;
             CoreSettings.Current.AttentionChecksEnabled = ChkMiniGame.IsChecked ?? false;
+            CoreSettings.Save();
+        }
+
+        private void ChkReplayFailedCheck_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.MandatoryVideoReplayAfterFailedCheck = ChkReplayFailedCheck.IsChecked == true;
             CoreSettings.Save();
         }
 
