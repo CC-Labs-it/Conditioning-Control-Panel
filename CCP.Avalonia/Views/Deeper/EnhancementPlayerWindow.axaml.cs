@@ -145,6 +145,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _pollInFlight;
         private bool _pollDisabled;
         private bool _videoNavigated;
+        private bool _videoVolumePending = true;
+        private int _videoVolumeGeneration;
 
         // One per window so EnhancementFetcher's per-session cache is worth having; disposed in
         // Window_Closing because it owns an HttpClient and its guarded handler.
@@ -302,7 +304,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _btnUnloadEnhancement.Click += (_, _) => Unload();
             this.FindControl<Button>("BtnEyeTracking")!.Click += (_, _) => BtnEyeTracking_Click();
             _btnPictureInPicture.Click += (_, _) => BtnPictureInPicture_Click();
+            _sliderVolume.Value = CoreSettings.Current.DeeperPlayerVolume;
             _sliderVolume.PropertyChanged += SliderVolume_PropertyChanged;
+            _videoBrowser.NavigationFinished += VideoNavigationFinished;
 
             foreach (var pill in new[] { _pillAll, _pillActions, _pillEngine, _pillErrors })
                 pill.Click += (s, _) => EventFilterPill_Click(s as ToggleButton);
@@ -322,6 +326,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             AddHandler(DragDrop.DragOverEvent, Window_DragOver);
             AddHandler(DragDrop.DropEvent, Window_Drop);
 
+            AddHandler(KeyDownEvent, Window_PreviewKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            AddHandler(KeyUpEvent, Window_PreviewKeyUp, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            Deactivated += (_, _) => { _keysDown.Clear(); CancelEscHold(); };
             RefreshEventList();
             UpdateFilterCounts();
             UpdateStatusPill();
@@ -812,6 +819,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnStop_Click()
         {
+            CancelEscHold();
             if (_isVideoMode && _videoNavigated)
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause(); l.currentTime=0;"));
             _isPlaying = false;
@@ -885,11 +893,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void SliderVolume_PropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
             if (e.Property != RangeBase.ValueProperty) return;
-            // ponytail: needs EnhancementAudioPlayer.Volume, wired when it moves to Core — both
-            // directions: the write on drag, and UpdateVolumeFromPlayer's read-back on open, which
-            // is why the WPF handler carried a _suppressVolumeSync re-entrancy flag. Not routed to
-            // the video's volume instead: this panel is hidden in video mode (ShowMediaPaneFor), so
-            // a viewer never sees it while a video is what is playing.
+            var volume = (int)Math.Round(_sliderVolume.Value);
+            if (!_muteChanging) _volumeBeforeMute = null;
+            _ = ApplyVideoVolumeAsync();
+            // Persist only an audible setting, matching WPF xaml.cs:1017-1050.
+            if (_volumeBeforeMute == null && CoreSettings.Current.DeeperPlayerVolume != volume)
+            {
+                CoreSettings.Current.DeeperPlayerVolume = volume;
+                CoreSettings.Save();
+            }
+        }
+
+        // WPF EnhancementPlayerWindow.xaml.cs:1431,1841: each new page receives the
+        // slider value, including temporary mute. A site may mount its video after navigation.
+        private void VideoNavigationFinished(Uri url, bool success)
+        {
+            _videoVolumeGeneration++;
+            _videoVolumePending = true;
+            if (success) _ = ApplyVideoVolumeAsync();
+        }
+
+        private async Task ApplyVideoVolumeAsync()
+        {
+            if (_pollDisabled || !_isVideoMode || !_videoNavigated) return;
+            var generation = _videoVolumeGeneration;
+            var volume = (_sliderVolume.Value / 100.0).ToString("0.##", CultureInfo.InvariantCulture);
+            var result = await _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.volume=" + volume + ";"));
+            if (generation == _videoVolumeGeneration && DeeperPreview.Unquote(result) == "ok")
+                _videoVolumePending = false;
         }
 
         // ====================================================================================
@@ -934,6 +965,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
                 var parts = DeeperPreview.Unquote(raw).Split('|');
                 if (parts.Length != 3) return;
+                if (_videoVolumePending) await ApplyVideoVolumeAsync();
                 // A video element answered, so the page is up: "Loading video…" is now false. WPF
                 // hid this on NavigationCompleted; there the pane was Edge's own media viewer, so
                 // the navigation finishing WAS the video appearing. Here the page can be a site
@@ -1163,7 +1195,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // the moment zoom is real. Same call and same reason in DeeperEditorWindow.axaml's
             // PreviewZoomCluster.
             _browserZoomCluster.IsVisible = false;
-            _volumePanel.IsVisible = !isVideo;
+            _volumePanel.IsVisible = true;
             _btnPictureInPicture.IsVisible = isVideo;
         }
 
@@ -1686,6 +1718,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void Window_Closing()
         {
+            CancelEscHold();
+            _keysDown.Clear();
+            _videoBrowser.NavigationFinished -= VideoNavigationFinished;
             // Stop the tick timer first so no UI work is queued onto a dying window — and because
             // --render-all opens and closes every view in one process, a timer left running would
             // accumulate one live 100ms tick per view.
