@@ -195,14 +195,16 @@ public sealed class CameraShortcutTests
         if (!OperatingSystem.IsLinux()) return;
         Assert.Equal(symbol, X11PanicKey.XKeyName(key)); Assert.NotEqual(0UL, X11PanicKey.KeysymOf(key));
         if (Environment.GetEnvironmentVariable("CCP_TEST_X11") != "1" || key is not ("OemBackslash" or "BrowserBack")) return;
-        var d = XOpenDisplay(IntPtr.Zero); Assert.NotEqual(IntPtr.Zero, d); using var pressed = new ManualResetEventSlim();
-        var code = XKeysymToKeycode(d, X11PanicKey.KeysymOf(key)); var ctrl = XKeysymToKeycode(d, X11PanicKey.KeysymOf("Control_L"));
+        var d = XOpenDisplay(IntPtr.Zero); Assert.NotEqual(IntPtr.Zero, d); using var pressed = new ManualResetEventSlim(); var settings = CoreSettings.Current; var old = (settings.PanicKeyEnabled, settings.PanicKey, settings.PauseKey); var oldBound = X11PanicKey.BoundKeycode; X11PanicKey.BindKeycodeForTest(0);
+        var code = XKeysymToKeycode(d, X11PanicKey.KeysymOf(key)); var ctrl = XKeysymToKeycode(d, X11PanicKey.KeysymOf("Control_L")); void Tap(bool down) { if (down) XTestFakeKeyEvent(d, ctrl, true, 0); XTestFakeKeyEvent(d, code, down, 0); if (!down) XTestFakeKeyEvent(d, ctrl, false, 0); XSync(d, false); }
         try
         {
-            Assert.NotEqual(0, code); Assert.NotEqual(0, ctrl); Assert.True(X11SummonChord.Arm("camera", ChordMods.Ctrl, key, pressed.Set));
-            XTestFakeKeyEvent(d, ctrl, true, 0); XTestFakeKeyEvent(d, code, true, 0); XSync(d, false); Assert.True(pressed.Wait(TimeSpan.FromSeconds(3)));
+            Assert.NotEqual(0, code); Assert.NotEqual(0, ctrl); settings.PanicKeyEnabled = false; settings.PauseKey = ""; Assert.True(X11SummonChord.Arm("camera", ChordMods.Ctrl, key, pressed.Set));
+            var alias = key == "OemBackslash" && code == XKeysymToKeycode(d, X11PanicKey.KeysymOf("OemComma")) ? "OemComma" : key; Tap(true); Assert.True(pressed.Wait(TimeSpan.FromSeconds(3)));
+            Tap(false); if (alias != key) Assert.True(X11SummonChord.Arm("camera", ChordMods.Ctrl, alias, pressed.Set)); settings.PanicKeyEnabled = true; settings.PanicKey = key; pressed.Reset(); Tap(true); Assert.False(pressed.Wait(TimeSpan.FromMilliseconds(500)));
+            Tap(false); settings.PanicKeyEnabled = false; settings.PauseKey = key; pressed.Reset(); Tap(true); Assert.False(pressed.Wait(TimeSpan.FromMilliseconds(500))); Tap(false); settings.PanicKeyEnabled = true; settings.PanicKey = "Escape"; settings.PauseKey = ""; X11PanicKey.BindKeycodeForTest(code); pressed.Reset(); Tap(true); Assert.False(pressed.Wait(TimeSpan.FromMilliseconds(500)));
         }
-        finally { XTestFakeKeyEvent(d, code, false, 0); XTestFakeKeyEvent(d, ctrl, false, 0); XSync(d, false); X11SummonChord.Disarm("camera"); XCloseDisplay(d); }
+        finally { Tap(false); X11SummonChord.Disarm("camera"); XCloseDisplay(d); X11PanicKey.BindKeycodeForTest(oldBound); (settings.PanicKeyEnabled, settings.PanicKey, settings.PauseKey) = old; }
     }
 
     [Theory]

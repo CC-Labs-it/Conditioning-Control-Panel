@@ -179,11 +179,11 @@ internal static class X11SummonChord
                         else if (type == KeyRelease) HeldCameraKeys.Remove(Marshal.ReadInt32(ev, KeyEventKeycode));
                         else if (type == KeyPress)
                         {
-                            int code = Marshal.ReadInt32(ev, KeyEventKeycode);
-                            uint mask = (uint)Marshal.ReadInt32(ev, KeyEventState) & (ShiftMask | ControlMask | Mod1Mask | Mod4Mask);
+                            int code = Marshal.ReadInt32(ev, KeyEventKeycode); var settings = CoreSettings.Current;
+                            uint mask = (uint)Marshal.ReadInt32(ev, KeyEventState) & (ShiftMask | ControlMask | Mod1Mask | Mod4Mask); var panic = settings.PanicKeyEnabled ? XKeysymToKeycode(_display, X11PanicKey.KeysymOf(settings.PanicKey)) : 0; var pause = XKeysymToKeycode(_display, X11PanicKey.KeysymOf(settings.PauseKey));
                             foreach (var pair in Bindings)
                                 if (pair.Value.Code == code && pair.Value.Mask == mask
-                                    && (pair.Key != "camera" || HeldCameraKeys.Add(code))) fires.Add(pair.Value.Press);
+                                    && (pair.Key != "camera" || (HeldCameraKeys.Add(code) && code != panic && code != pause && (!settings.PanicKeyEnabled || code != X11PanicKey.BoundKeycode)))) fires.Add(pair.Value.Press);
                         }
                     }
                 }
