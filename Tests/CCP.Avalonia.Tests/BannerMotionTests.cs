@@ -137,9 +137,9 @@ public sealed class BannerMotionTests
             w.UpdateQuickLoginUI(accountChanged: true);
             var expected = source == "offline"
                 ? ConditioningControlPanel.Localization.Loc.GetF("label_welcome_back_0_offline_mode", "Offline")
-                : source == "signed-out"
+                : source is "signed-out" or "stale-id"
                 ? ConditioningControlPanel.Localization.Loc.Get("label_welcome_consider_logging_in_with_patreon_for")
-                : source is "signed-in" or "stale-id"
+                : source == "signed-in"
                 ? ConditioningControlPanel.Localization.Loc.Get("banner_signed_in_no_name")
                 : ConditioningControlPanel.Localization.Loc.GetF("label_welcome_back_0", source == "unified" ? "Bambi" : "Provider");
             Assert.Equal(expected, w.Named<TextBlock>("TxtBannerSecondary")!.Text);
