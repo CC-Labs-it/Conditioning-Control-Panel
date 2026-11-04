@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ProfileSlots = ConditioningControlPanel.Services.ProfileSlots;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json.Linq;
 using Xunit;

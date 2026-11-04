@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Platform;
+using ProfileSlots = ConditioningControlPanel.Services.ProfileSlots;
 using Newtonsoft.Json.Linq;
 using Xunit;
-using Step = ConditioningControlPanel.Avalonia.Platform.ProfileEquipStep;
+using Step = ConditioningControlPanel.Services.ProfileEquipStep;
 
 namespace CCP.Avalonia.Tests;
 

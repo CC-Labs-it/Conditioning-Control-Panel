@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ProfileSlots = ConditioningControlPanel.Services.ProfileSlots;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using Xunit;
