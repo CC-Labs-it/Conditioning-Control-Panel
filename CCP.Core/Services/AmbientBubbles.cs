@@ -238,7 +238,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>One logical step. <paramref name="held"/> and the cursor (global DIPs) feed a
         /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
-        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, bool frozen = false)
+        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, bool frozen = false, double timeScale = 1.0)
         {
             if (Popping)
             {
@@ -250,13 +250,14 @@ namespace ConditioningControlPanel.Services
             }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
             if (frozen && Spec != null) return Result.Alive;
+            double ts = Spec == null ? 1.0 : timeScale;
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
             {
-                FuseRemainingMs -= FuseStepMs;
+                FuseRemainingMs -= FuseStepMs * ts;
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
-            _timeAlive += 0.02;
+            _timeAlive += 0.02 * ts;
             double offset = 0;
             switch (_animType)
             {
@@ -265,7 +266,7 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
+            Y -= _speed * ts;
             X = _startX + offset;
             if (Y >= _top) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
@@ -295,6 +296,8 @@ namespace ConditioningControlPanel.Services
         public bool HoldChaos;
         /// <summary>A freeze power-up holds motion and fuses but permits input and channels.</summary>
         public bool FreezeChaos;
+        /// <summary>Chaos motion and fuse speed, independent of ambient bubbles.</summary>
+        public double ChaosTimeScale = 1.0;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
@@ -357,7 +360,7 @@ namespace ConditioningControlPanel.Services
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
-                var r = b.Step(Held, CursorX, CursorY, now, FreezeChaos);
+                var r = b.Step(Held, CursorX, CursorY, now, FreezeChaos, ChaosTimeScale);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }
