@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// </summary>
     public partial class ChaosHubWindow : Window
     {
+        internal static ChaosHubWindow? Current { get; private set; }
         private static readonly Random _rng = new();
         private int _waves = 5;
 
@@ -115,7 +116,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => UnlockCards.Stop();
+            Opened += (_, _) => Current = this;
+            Closed += (_, _) => { if (Current == this) Current = null; UnlockCards.Stop(); };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");

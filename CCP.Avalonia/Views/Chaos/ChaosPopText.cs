@@ -30,9 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// FlashOverlayWindow; the rise is a TranslateTransform on the label. Both are sampled from
     /// <see cref="ChaosPopTextMotion"/> on the shared 30 fps <see cref="BeatLoop"/>.</para>
     ///
-    /// <para>ponytail: nothing calls <see cref="Show"/> yet. Every WPF caller is the bubble field
-    /// (BubbleService.ShowChaosLabel), the toys (ripple "gathering…") or the payout (pop score,
-    /// gold, focus refill, first-time bonus) - none ported to <see cref="ChaosRunHost"/>. WPF
+    /// <para>The run host calls <see cref="Show"/> for bubble and score words. Toy and some payout
+    /// callers remain missing. WPF
     /// <c>RaiseActive</c> (re-stack above a mandatory video) waits on the same
     /// RaiseGameLayerAboveVideo port; a freshly mapped override-redirect window is already on top.</para>
     /// </summary>
