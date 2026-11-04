@@ -18,6 +18,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private double _browserMediaDuration;
         private IDisposable? _browserMediaRecovery;
         private int _browserMediaRecoveryGeneration;
+        private Action? _browserDeferredVideo;
+
+        internal bool DeferVideoForBrowser(Action replay)
+        {
+            if (!BrowserMediaOwnsSlot) return false;
+            _browserDeferredVideo ??= replay;
+            return true;
+        }
+
+        internal void CancelBrowserDeferredVideo() => _browserDeferredVideo = null;
         // Like the pulse timer seam, tests step this without waiting for a long clip.
         internal Func<Action, TimeSpan, IDisposable> ScheduleBrowserMediaRecovery =
             (action, delay) => DispatcherTimer.RunOnce(action, delay);
@@ -120,24 +130,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             BrowserMediaOwnsSlot = false;
             CancelBrowserMediaRecovery();
+            CancelBrowserDeferredVideo();
         }
 
         // WPF MainWindow.xaml.cs:2045,2113 and BrowserMediaService.cs:400-415.
         internal void StopBrowserMediaForPanic()
         {
+            CancelBrowserDeferredVideo();
             try { _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaRecoveryScript); }
             finally { StopBrowserMediaTracking(); }
         }
 
         private void StopBrowserMediaTracking()
         {
+            var replay = _browserDeferredVideo;
             BrowserMediaPlaying = false;
             _browserMediaDuration = 0;
             ClearBrowserMediaClaim();
-            if (_browserMediaWatchdog == null) return;
-            _browserMediaWatchdog.Stop();
-            _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
-            _browserMediaWatchdog = null;
+            if (_browserMediaWatchdog != null)
+            {
+                _browserMediaWatchdog.Stop();
+                _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
+                _browserMediaWatchdog = null;
+            }
+            replay?.Invoke();
         }
 
         // Adapted from WPF BrowserService.cs:340-457. The carrier uses the native WebHost

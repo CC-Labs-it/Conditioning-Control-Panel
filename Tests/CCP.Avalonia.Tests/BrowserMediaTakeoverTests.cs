@@ -130,6 +130,36 @@ public sealed class BrowserMediaTakeoverTests
     }
 
     [Fact]
+    public void BrowserClaimDefersDirectVideoUntilReleaseAndPanicDropsIt() => WithDesktopBrowser(host =>
+    {
+        var overlay = MandatoryVideoOverlay.Instance;
+        var video = new MandatoryVideoScheduler(overlay, library: () => new[] { "/v/a.mp4" });
+        var oldVideo = CoreEngine.Video;
+        CoreEngine.Video = video;
+        var tab = ((MainShellWindow)((ClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).MainWindow!)
+            .Named<SettingsTabView>("SettingsTab")!;
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.True(tab.BrowserMediaOwnsSlot); // protection is off in WithDesktopBrowser
+            Assert.True(video.Trigger(path: "/v/first.mp4"));
+            Assert.True(video.Trigger(path: "/v/second.mp4"));
+            Assert.False(video.IsPlaying);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            Assert.True(video.IsPlaying); // the first request has entered pre-roll
+            video.ForceCleanup();
+
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.True(video.Trigger(path: "/v/panic.mp4"));
+            tab.StopBrowserMediaForPanic();
+            Assert.False(video.IsPlaying);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            Assert.False(video.IsPlaying);
+        }
+        finally { video.ForceCleanup(); CoreEngine.Video = oldVideo; }
+    });
+
+    [Fact]
     public void BrowserPlaybackReachesScheduledVideoHost() => WithDesktopBrowser(host =>
     {
         var video = MandatoryVideoOverlay.Instance;

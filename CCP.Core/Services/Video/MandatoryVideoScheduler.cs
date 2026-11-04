@@ -23,6 +23,10 @@ namespace ConditioningControlPanel.Services
         void ShowMessage(AttentionVerdict verdict, int ms, Action then);
         /// <summary>User browser media holds the fullscreen slot (WPF BrowserMediaService.cs:248-257).</summary>
         bool BrowserMediaActive => false;
+        /// <summary>Hold one direct trigger while browser playback owns the interaction slot.</summary>
+        bool DeferForBrowser(Action replay) => false;
+        /// <summary>Discard a trigger held for browser playback.</summary>
+        void CancelDeferredForBrowser() { }
     }
 
     /// <summary>What an ended clip's attention checks come to (WPF EndCurrentVideo :5955).</summary>
@@ -323,6 +327,7 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
             if (_playing) return false;
+            if (_host.DeferForBrowser(() => Trigger(strictOverride, path))) return true;
             path ??= PickNext();
             if (path == null)
             {
@@ -416,6 +421,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            _host.CancelDeferredForBrowser();
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.

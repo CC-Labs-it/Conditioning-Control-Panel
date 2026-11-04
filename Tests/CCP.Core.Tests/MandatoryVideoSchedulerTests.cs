@@ -18,6 +18,14 @@ public sealed class MandatoryVideoSchedulerTests
         public readonly List<(string Path, bool Strict)> Shown = new();
         public bool BrowserActive;
         public Action? BrowserProbe;
+        public Action? DeferredVideo;
+        public bool DeferForBrowser(Action replay)
+        {
+            if (!BrowserActive) return false;
+            DeferredVideo ??= replay;
+            return true;
+        }
+        public void CancelDeferredForBrowser() => DeferredVideo = null;
         public bool BrowserMediaActive { get { BrowserProbe?.Invoke(); return BrowserActive; } }
         public int Closes;
         public double Watched;
@@ -479,6 +487,32 @@ public sealed class MandatoryVideoSchedulerTests
         clock.Advance(TimeSpan.FromSeconds(1.3));
         Assert.Equal(new[] { ("/ai/named.mp4", false) }, host.Shown);
         Assert.False(v.Trigger(path: "/ai/other.mp4"));      // one already playing
+    });
+
+    [Fact]
+    public void DirectVideoWaitsForBrowserAndForceCleanupCancelsPendingReplay() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BrowserActive = true };
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        Assert.True(video.Trigger(false, "/v/first.mp4"));
+        Assert.True(video.Trigger(false, "/v/second.mp4"));
+        Assert.False(video.IsPlaying);
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        var replay = host.DeferredVideo;
+        host.DeferredVideo = null;
+        host.BrowserActive = false;
+        replay!();
+        Assert.True(video.IsPlaying);
+        clock.Advance(TimeSpan.FromSeconds(1.3));
+        Assert.Equal(new[] { ("/v/first.mp4", false) }, host.Shown);
+        video.ForceCleanup();
+        host.BrowserActive = true;
+        Assert.True(video.Trigger(path: "/v/cancel.mp4"));
+        Assert.NotNull(host.DeferredVideo);
+        video.ForceCleanup();
+        Assert.Null(host.DeferredVideo);
+        Assert.False(video.IsPlaying);
     });
 
     [Fact]   // WPF VideoService.cs:2948-2959: skip and retry in 30 s, without queueing.
