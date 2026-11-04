@@ -33,7 +33,7 @@ public sealed class WaylandQuickRecalTests
     [InlineData("Ctrl+Alt+G", true)]
     [InlineData("Control + Alt + g", true)]
     [InlineData("Alt+Ctrl+G", true)]
-    [InlineData("Strg+Alt+G", true)]
+    [InlineData("Strg+Alt+G", true), InlineData("Kontrol+Seçenek+G", true), InlineData("Kontrol+Seçenek+K", false)]
     [InlineData("Steuerung+Alt+G", true)]
     [InlineData("Strg+Alt+K", false)]
     [InlineData("Ctrl+Alt+K", false)]

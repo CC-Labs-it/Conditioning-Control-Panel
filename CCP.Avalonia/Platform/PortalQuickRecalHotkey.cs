@@ -37,8 +37,8 @@ internal sealed class PortalQuickRecalHotkey : IDisposable
         var parts = trigger.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 3) return false;
         var set = new HashSet<string>(parts, StringComparer.OrdinalIgnoreCase);
-        return set.Count == 3 && set.Contains("G") && set.Contains("Alt")
-            && (set.Contains("Ctrl") || set.Contains("Control") || set.Contains("Strg") || set.Contains("Steuerung"));
+        return set.Count == 3 && set.Contains("G") && (set.Contains("Alt") || set.Contains("Seçenek"))
+            && (set.Contains("Ctrl") || set.Contains("Control") || set.Contains("Kontrol") || set.Contains("Strg") || set.Contains("Steuerung"));
     }
 
     internal static async Task<IDisposable?> BindAsync(Action pressed, Action closed, CancellationToken cancellation)
