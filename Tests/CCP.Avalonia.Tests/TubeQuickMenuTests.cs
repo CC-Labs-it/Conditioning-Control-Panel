@@ -67,6 +67,26 @@ public sealed class TubeQuickMenuTests
         return Task.CompletedTask;
     });
 
+    // Static menu colors can be initialized by a worker calling a pure AvatarTubeWindow method.
+    // They must then be safe when the UI thread renders the menu and its inherited icon foregrounds.
+    [Fact]
+    public async Task MenuPaletteIsSafeForCrossThreadReuse()
+    {
+        var fields = new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" };
+        var colors = new[] { "#FFFF6347", "#FF90EE90", "#FF9B59B6", "#FF606070" };
+        var brushes = await Task.Run(() => fields.Select(name => typeof(AvatarTubeWindow)
+            .GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)).ToArray());
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            for (int i = 0; i < brushes.Length; i++)
+            {
+                var brush = Assert.IsType<global::Avalonia.Media.Immutable.ImmutableSolidColorBrush>(brushes[i]);
+                Assert.Equal(global::Avalonia.Media.Color.Parse(colors[i]), brush.Color);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public Task EngineItemStartsAndPanicStopsWhatItStarted() => WithShell((shell, tube) =>
     {
