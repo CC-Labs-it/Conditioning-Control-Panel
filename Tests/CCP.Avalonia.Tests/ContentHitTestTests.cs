@@ -45,6 +45,9 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                // The entrance animates the tab and its cards. Settle it before sampling
+                // coordinates so the compositor and the live tree describe the same frame.
+                w.CompleteTabTransition();
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -72,7 +75,8 @@ public sealed class ContentHitTestTests
                     Dispatcher.UIThread.RunJobs();
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
-                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
+                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, " +
+                            $"text {(hit as TextBlock)?.Text}, ancestors {string.Join(" > ", hit?.GetVisualAncestors().OfType<Control>().Select(c => $"{c.GetType().Name}/{c.Name}") ?? Array.Empty<string>())}, pressed {pressed}");
                 }
                 Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
             }
