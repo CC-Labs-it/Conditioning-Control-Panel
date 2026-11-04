@@ -231,7 +231,7 @@ public sealed class RemoteRelayTests
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
             Assert.True(s.StrictLockEnabled);
             Assert.True(s.PanicKeyEnabled);
-            Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("play_hypnotube", null));
+            Assert.Equal("not an eligible HypnoTube URL", RemoteCommands.Execute("play_hypnotube", null));   // WPF :1422
 
             s.StrictLockEnabled = false;
             ConditioningControlPanel.Services.Remote.RemoteWearer.Take();

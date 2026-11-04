@@ -184,6 +184,87 @@ public sealed class RemoteControlShellTests
         }
     });
 
+    /// <summary>WPF play_hypnotube (RemoteControlService.cs:1413 -> MainWindow.Browser.cs:3188): the page opens over the
+    /// overlay, a reconnect mid-fade keeps it, stop_video and a leave put the blindfold back, offline refuses.</summary>
+    [Fact]
+    public Task Controller_video_opens_over_the_overlay_and_stop_leave_and_offline_restore_the_blindfold() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var (oldRelay, oldTime, oldProvider) = (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider);
+        var (oldSink, oldPlay, oldStop) = (global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink, RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo);
+        global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => { };
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var f = new FakeRelay();
+        // Leave runs only the browser stop: the rest of StopEffects is covered in Core (RemoteHypnotubeTests).
+        var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => RemoteCommands.StopBrowserVideo?.Invoke(), f) { AutoPoll = false };
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        var clock = new SteppedClock();
+        MainShellWindow.RemoteOverlayTime = clock;
+        MainShellWindow? shell = null;
+        const string video = "https://hypnotube.com/video/example-123.html";
+        async Task Poll(string body) { f.Poll = body; await relay.PollOnceAsync(); Dispatcher.UIThread.RunJobs(); }
+        Func<string, string?>? hookAfterClose = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var settings = shell.Named<SettingsTabView>("SettingsTab")!;
+            var (browser, web) = (settings.BrowserContainer, settings.FindControl<global::ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("BrowserWebHost")!);
+            const string play = "{\"controller_connected\":true,\"commands\":[{\"id\":\"ID\",\"action\":\"play_hypnotube\",\"params\":{\"url\":\"" + video + "\"}}]}";
+            Assert.Equal("ABC123", await relay.StartAsync("light"));
+            await Poll("{\"controller_connected\":true}");
+            Assert.False(browser.IsVisible);
+
+            await Poll(play.Replace("ID", "1"));
+            Assert.True(browser.IsVisible);
+            Assert.Equal(new Uri(video), web.Source);
+
+            // Leave without the stop (the subject's choice), back before the fade ends: still visible.
+            service.Current.StopEffectsOnRemoteDisconnect = false;
+            await Poll("{\"controller_connected\":false}");
+            await Poll("{\"controller_connected\":true}");
+            Assert.True(browser.IsVisible);
+
+            // stop_video: back to the site home and under the overlay again (WPF :1410, :995).
+            await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"2\",\"action\":\"stop_video\"}]}");
+            Assert.False(browser.IsVisible);
+            Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+
+            // A leave with the stop on: the video goes, then the fade hands the browser back (WPF :1164, :915).
+            service.Current.StopEffectsOnRemoteDisconnect = true;
+            await Poll(play.Replace("ID", "3"));
+            Assert.True(browser.IsVisible);
+            await Poll("{\"controller_connected\":false}");
+            Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+            Assert.False(browser.IsVisible);
+            clock.Step(MainShellWindow.RemoteOverlayFadeOut);
+            shell.RemoteOverlayTick();
+            Assert.True(browser.IsVisible);
+
+            // Offline: the browser cannot open it, the controller is told, the blindfold stays.
+            await Poll("{\"controller_connected\":true}");
+            service.Current.OfflineMode = true;
+            Assert.Equal("the browser could not open it", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
+            Assert.False(browser.IsVisible);
+            Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+        }
+        finally
+        {
+            shell?.Close();
+            relay.Dispose();
+            hookAfterClose = RemoteCommands.PlayHypnotube;
+            (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider) = (oldRelay, oldTime, oldProvider);
+            (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (oldPlay, oldStop);
+            global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;
+        }
+        Assert.Null(hookAfterClose);   // the shell lets go of the hook on close
+    });
+
     /// <summary>The opacity the fade is heading to (the transition animates the visible value).</summary>
     private static double Target(Visual v) => v.GetBaseValue(Visual.OpacityProperty).Value;
 
