@@ -37,6 +37,56 @@ public sealed class MandatoryVideoSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void Cascade_coalesces_and_replays_once_after_clear() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { IsCascadeRaining = () => rain };
+        Assert.True(v.Trigger(true, Clips[0]));
+        Assert.True(v.Trigger(false, Clips[1]));
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.Empty(host.Shown);
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Single(host.Shown);
+        Assert.Equal((Clips[0], true), host.Shown[0]);
+        v.Stop();
+    });
+
+    [Fact]
+    public void Cascade_expires_and_stop_or_panic_cancels() => With(6, false, () =>
+    {
+        foreach (var mode in new[] { 0, 1, 2 })
+        {
+            var clock = new FakeClock(); var host = new Host(); var rain = true;
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips) { IsCascadeRaining = () => rain };
+            v.Trigger();
+            if (mode == 0) clock.Advance(TimeSpan.FromSeconds(90));
+            if (mode == 1) v.Stop();
+            if (mode == 2) v.ForceCleanup();
+            rain = false;
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.Empty(host.Shown);
+        }
+    });
+
+    [Fact]
+    public void Cascade_starting_in_preroll_blocks_show_and_keeps_original_deadline() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { IsCascadeRaining = () => rain };
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(88));
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(.5));
+        rain = true;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Shown);
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();
