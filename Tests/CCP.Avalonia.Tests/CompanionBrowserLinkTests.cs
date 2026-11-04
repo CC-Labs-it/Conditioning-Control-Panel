@@ -45,16 +45,13 @@ public sealed class CompanionBrowserLinkTests
     [Fact]
     public Task MissingEngineFallsBackExternallyAndReleasesTheClaim() => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
     {
-        Assert.False(host.HasEngine);
-        var opened = new List<string>();
+        Assert.False(host.HasEngine); var opened = new List<string>();
         AppUpdater.OpenUrl = (_, url) => { opened.Add(url); return Task.CompletedTask; };
         await CompanionLinkLauncher.OpenAsync("https://127.0.0.1/video");
         Assert.Equal(new[] { "https://127.0.0.1/video" }, opened);
-        Assert.False(shell.AvatarBrowserSessionActive);
-        await CompanionLinkLauncher.OpenAsync("http://127.0.0.1/video");
+        Assert.False(shell.AvatarBrowserSessionActive); await CompanionLinkLauncher.OpenAsync("http://127.0.0.1/video");
         Assert.Single(opened); // WPF permits only HTTPS as an external fallback
-        Assert.False(shell.AvatarBrowserSessionActive);
-        host.NavigationInvoker = _ => throw new InvalidOperationException();
+        Assert.False(shell.AvatarBrowserSessionActive); host.NavigationInvoker = _ => throw new InvalidOperationException();
         await CompanionLinkLauncher.OpenAsync("https://127.0.0.1/failure");
         Assert.Equal("https://127.0.0.1/failure", opened.Last());
         Assert.False(shell.AvatarBrowserSessionActive);
@@ -73,8 +70,7 @@ public sealed class CompanionBrowserLinkTests
         Assert.True(shell.AvatarBrowserSessionActive);
         Assert.Contains(PanicSurfaces.All, s => s.Id == "browser-media");
         PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
-        Assert.False(shell.AvatarBrowserSessionActive);
-        Assert.Contains(scripts, script => script.Contains("_ccpTakeoverStopped=true") && script.Contains("v.pause()"));
+        Assert.False(shell.AvatarBrowserSessionActive); Assert.Contains(scripts, script => script.Contains("_ccpTakeoverStopped=true") && script.Contains("v.pause()"));
         host.OnNavigationCompleted(new Uri("https://127.0.0.1/video"));
         Assert.DoesNotContain(scripts, script => script.Contains("ccpAvatarMedia"));
         await CompanionLinkLauncher.OpenAsync("https://127.0.0.1/timeout");
@@ -95,8 +91,7 @@ public sealed class CompanionBrowserLinkTests
         host.OnNavigationCompleted(url);
         PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
         delay.SetResult(); await Task.Yield();
-        Assert.False(shell.AvatarBrowserSessionActive);
-        Assert.Contains(scripts, x => x.Contains("v.pause()"));
+        Assert.False(shell.AvatarBrowserSessionActive); Assert.Contains(scripts, x => x.Contains("v.pause()"));
         Assert.DoesNotContain(scripts, x => x.Contains("ccpAvatarMedia"));
     }));
     [Fact]
@@ -141,7 +136,10 @@ public sealed class CompanionBrowserLinkTests
         host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("ok"); };
         shell.BrowserAutoplayDelay = () => Task.CompletedTask;
         var video = new Uri("https://127.0.0.1/video");
-        await CompanionLinkLauncher.OpenAsync(video.AbsoluteUri);
+        var old = new Uri("https://127.0.0.1/old");
+        await CompanionLinkLauncher.OpenAsync(old.AbsoluteUri); await CompanionLinkLauncher.OpenAsync(video.AbsoluteUri);
+        host.OnNavigationCompleted(old, false); Assert.True(shell.AvatarBrowserSessionActive);
+        host.OnNavigationCompleted(old); Assert.DoesNotContain(scripts, x => x.Contains("ccpAvatarMedia"));
         Assert.DoesNotContain(scripts, script => script.Contains("ccpAvatarMedia"));
         host.OnNavigationCompleted(new Uri("https://127.0.0.1/previous"));
         Assert.DoesNotContain(scripts, script => script.Contains("ccpAvatarMedia"));
