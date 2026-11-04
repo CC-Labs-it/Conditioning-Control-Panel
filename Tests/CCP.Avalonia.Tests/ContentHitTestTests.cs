@@ -13,6 +13,7 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -45,6 +46,8 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                // Freeze the completed entrance before measuring and clicking its controls (P08).
+                w.CompleteTabTransition();
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -53,6 +56,10 @@ public sealed class ContentHitTestTests
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
+                    // The previous probe can hover a help button. Its independent popup timer is not
+                    // covered by ToolTip.SetServiceEnabled and can obscure the next control.
+                    w.MouseMove(new Point(0, 0));
+                    HelpPopover.CloseActive();
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
                     RenderLiveTree(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
