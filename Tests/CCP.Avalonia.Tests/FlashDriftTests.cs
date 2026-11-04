@@ -33,11 +33,12 @@ public sealed class FlashDriftTests
         {
             EnsureApp();
             var s = CoreSettings.Current;
-            var (style, speed, seam) = (s.FlashMotionStyle, s.FlashDriftSpeed, PrizeOwnership.IsGranted);
+            var (style, speed, shatter, seam) = (s.FlashMotionStyle, s.FlashDriftSpeed, s.FlashShatterEnabled, PrizeOwnership.IsGranted);
             Window? host = null;
             try
             {
                 s.FlashMotionStyle = FlashMotionStyle.Still;
+                s.FlashShatterEnabled = true;
                 PrizeOwnership.IsGranted = _ => false;
                 var unowned = new FlashFeatureControl();
                 // Nothing owned: the box stays up for the Get it row's offer (WPF RefreshV2Box), motion row hidden.
@@ -50,6 +51,10 @@ public sealed class FlashDriftTests
                 host.Show();
                 var cmb = card.FindControl<ComboBox>("CmbMotion")!;
                 var speedRow = card.FindControl<Grid>("RowDriftSpeed")!;
+                var exit = card.FindControl<ComboBox>("CmbExit")!;
+                var note = card.FindControl<TextBlock>("TxtExitShatterNote")!;
+                Assert.False(exit.IsEnabled);
+                Assert.True(note.IsVisible);
                 Assert.True(card.FindControl<Border>("BoxFlashV2")!.IsVisible);
                 Assert.Equal(new[] { FlashMotionStyle.Still, FlashMotionStyle.DriftBounce, FlashMotionStyle.Mix },
                     cmb.Items.OfType<ComboBoxItem>().Select(i => (FlashMotionStyle)i.Tag!));
@@ -61,6 +66,7 @@ public sealed class FlashDriftTests
                 card.FindControl<Slider>("SliderDriftSpeed")!.Value = 2;
                 Assert.Equal(2, s.FlashDriftSpeed);
                 Assert.Equal("2x", card.FindControl<TextBlock>("TxtDriftSpeed")!.Text);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); // drain settings reloads before ownership changes
 
                 // WPF FlashFeatureControl.xaml.cs:78-85,433-451: revocation rebuilds the
                 // open picker without overwriting the saved selection; a grant restores it.
@@ -69,6 +75,8 @@ public sealed class FlashDriftTests
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.False(card.FindControl<Grid>("RowMotion")!.IsVisible);
                 Assert.False(speedRow.IsVisible);
+                Assert.True(exit.IsEnabled);
+                Assert.False(note.IsVisible);
                 Assert.Equal(FlashMotionStyle.Still, ((ComboBoxItem)cmb.SelectedItem!).Tag);
                 Assert.Equal(FlashMotionStyle.DriftBounce, s.FlashMotionStyle);
                 PrizeOwnership.IsGranted = id => id == PrizeOwnership.FlashDriftBounce;
@@ -76,6 +84,8 @@ public sealed class FlashDriftTests
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.True(card.FindControl<Grid>("RowMotion")!.IsVisible);
                 Assert.True(speedRow.IsVisible);
+                Assert.False(exit.IsEnabled);
+                Assert.True(note.IsVisible);
                 Assert.Equal(FlashMotionStyle.DriftBounce, ((ComboBoxItem)cmb.SelectedItem!).Tag);
                 Assert.Equal(FlashMotionStyle.DriftBounce, s.FlashMotionStyle);
                 host.Content = null;
@@ -91,7 +101,7 @@ public sealed class FlashDriftTests
             finally
             {
                 host?.Close();
-                (s.FlashMotionStyle, s.FlashDriftSpeed, PrizeOwnership.IsGranted) = (style, speed, seam);
+                (s.FlashMotionStyle, s.FlashDriftSpeed, s.FlashShatterEnabled, PrizeOwnership.IsGranted) = (style, speed, shatter, seam);
             }
             return Task.CompletedTask;
         });

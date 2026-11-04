@@ -155,7 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             var wasLoading = _isLoading;
             _isLoading = true;
-            try { BuildMotionPicker(); }
+            try { BuildMotionPicker(); RefreshExitRow(); } // WPF FlashFeatureControl.xaml.cs:75,81-85
             finally { _isLoading = wasLoading; }
         });
 
