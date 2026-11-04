@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private TaskCompletionSource<bool>? _browserSiteSync;
         private bool _syncModWants;
         private bool _syncNavigate;
+        private string? _syncPageUrl;
 
         private void CancelBrowserSiteSync()
         {
@@ -88,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 if (_browserSiteSync == null) { _browserSiteSyncRevision++; return; }
                 _browserSiteSyncRevision++;
-                CompleteBrowserSiteSync(url?.AbsoluteUri, _syncModWants, _syncNavigate);
+                CompleteBrowserSiteSync(_syncPageUrl, _syncModWants, _syncNavigate);
             };
             BrowserWebHost.PropertyChanged += (_, e) =>
             {
@@ -228,6 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _syncModWants = modWants;
                 _syncNavigate = navigateIfChanged;
                 RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
+                _syncPageUrl = (BrowserWebHost.LatestNavigationUrl ?? BrowserWebHost.Source)?.AbsoluteUri;
                 var current = modWants && BrowserWebHost.Source != null
                     ? await BrowserWebHost.ReadDocumentUrlAsync() : null;
                 void ApplySelection()

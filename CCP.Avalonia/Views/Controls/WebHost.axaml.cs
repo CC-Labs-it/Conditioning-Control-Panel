@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <c>BrowserService.GetCurrentUrl</c>, use <see cref="ReadDocumentUrlAsync"/>.
         /// </summary>
         public Uri? CurrentUrl { get; private set; }
+        internal Uri? LatestNavigationUrl { get; private set; }
 
         // WPF BrowserService.cs:1307-1309 reads the native document, including in-flight navigation.
         internal Func<Task<string?>>? DocumentUrlReader { get; set; }
@@ -76,7 +77,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         internal event Action? BrowserNavigationStarting;
         internal event Action<Uri?>? BrowserNativeNavigationStarting;
-        internal void OnBrowserNativeNavigationStarting(Uri? url) => BrowserNativeNavigationStarting?.Invoke(url);
+        internal void OnBrowserNativeNavigationStarting(Uri? url)
+        {
+            LatestNavigationUrl = url;
+            BrowserNativeNavigationStarting?.Invoke(url);
+        }
 
         /// <summary>
         /// Raised on the UI thread with <see cref="CurrentUrl"/> after every top-level navigation
@@ -98,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (url is null) return;
             CurrentUrl = url;
+            LatestNavigationUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
             NavigationFinished?.Invoke(url, success);
@@ -418,6 +424,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             // Invalidate pending site sync before every request, including an equal Source.
             BrowserNavigationStarting?.Invoke();
+            LatestNavigationUrl = url;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;

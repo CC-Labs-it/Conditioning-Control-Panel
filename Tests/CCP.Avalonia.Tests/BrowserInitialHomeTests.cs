@@ -205,6 +205,32 @@ public sealed class BrowserInitialHomeTests
         Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PendingSyncUsesPageBeforeInPageNavigation(bool knownBefore) => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        var before = knownBefore ? "https://bambicloud.com/video" : "https://example.com/old";
+        host.OnNavigationCompleted(new Uri("https://example.com/previous"));
+        Assert.True(shell.NavigateToUrlInBrowser(before)); // the known page may still be loading
+        var pending = new TaskCompletionSource<string?>();
+        host.DocumentUrlReader = () => pending.Task;
+        page.SyncBrowserCard();
+        host.NewScrolllerEngine()(true);
+        var destination = knownBefore ? "http://127.0.0.1/external" : "http://127.0.0.1/bambicloud.com";
+        var navigation = new WebViewNavigationStartingEventArgs { Request = new Uri(destination) };
+        host.OnNavigationStarted(null, navigation);
+        Assert.False(navigation.Cancel);
+        pending.SetResult(destination); // a delayed GTK read can observe the new navigation
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(knownBefore, page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked == true);
+        Assert.Equal(!knownBefore, page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked == true);
+        shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.Equal(knownBefore ? "https://bambicloud.com/" : "https://hypnotube.com/", host.Source!.AbsoluteUri);
+    });
+
     [Fact]
     public Task EqualUrlRequestInvalidatesAPendingNativeRead() => Run((shell, page, host, mod) =>
     {
