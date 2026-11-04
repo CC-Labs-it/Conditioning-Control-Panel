@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
@@ -11,8 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     ///
     /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
     /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// Manage Phrases forwards to the owning shell; the trigger timer awaits its runtime.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
@@ -27,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             this.FindControl<ComboBox>("CmbPhrasePresets")!.SelectionChanged += (_, _) => PhrasePresetSelectionChanged?.Invoke(this, EventArgs.Empty);
             this.FindControl<Button>("BtnSavePhrasePreset")!.Click += (_, _) => SavePhrasePresetRequested?.Invoke(this, EventArgs.Empty);
             this.FindControl<Button>("BtnDeletePhrasePreset")!.Click += (_, _) => DeletePhrasePresetRequested?.Invoke(this, EventArgs.Empty);
+            this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += async (_, _) => await EditTriggersAsync();
             // WPF forwards the real Phrase Manager action to its owning shell.
             this.FindControl<Button>("BtnManagePhrases")!.Click += (sender, e) =>
                 this.FindAncestorOfType<MainShellWindow>()?.BtnManagePhrases_Click(sender, e);
@@ -39,6 +42,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
             toggle.IsCheckedChanged += (_, _) => panel.IsVisible = toggle.IsChecked == true;
             slider.ValueChanged += (_, _) => intervalText.Text = $"{(int)slider.Value}s";
+        }
+        internal async System.Threading.Tasks.Task EditTriggersAsync()
+        {
+            if (TopLevel.GetTopLevel(this) is not Window owner || !owner.IsVisible) return;
+            var settings = CoreSettings.Current;
+            var original = (settings.CustomTriggers ?? new List<string>())
+                .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(t => t, _ => true);
+            var dialog = new TextEditorDialog("Trigger Phrases", original);
+            if (await dialog.ShowDialog<bool?>(owner) != true || dialog.ResultData == null) return;
+            var enabled = dialog.ResultData.Where(pair => pair.Value).Select(pair => pair.Key).ToList();
+            var defaults = new HashSet<string>(App.Mods?.GetDefaultCustomTriggers() ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var old = new HashSet<string>(original.Keys, StringComparer.OrdinalIgnoreCase);
+            var current = new HashSet<string>(enabled, StringComparer.OrdinalIgnoreCase);
+            foreach (var phrase in enabled)
+                if (!old.Contains(phrase) && !defaults.Contains(phrase)) settings.UserAddedCustomTriggers.Add(phrase);
+            foreach (var phrase in old)
+                if (!current.Contains(phrase)) settings.UserAddedCustomTriggers.Remove(phrase);
+            settings.CustomTriggers = enabled;
+            CoreSettings.Save();
         }
     }
 
