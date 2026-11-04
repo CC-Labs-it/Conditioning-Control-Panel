@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
+using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -93,6 +94,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool IsManuallyPaused => _manualPaused;
         /// <summary>Tests: stop the real 4 Hz timer so only stepped <see cref="Tick"/> calls move the clock (P08).</summary>
         internal static void StopTimerForTests() => _runTimer?.Stop();
+
+        // WPF ChaosModeService.cs:745-774. Raise only existing visible windows, bottom to top.
+        internal static Action<Window> RaiseGameWindow = w => X11Overlay.RaiseWithoutActivation(w);
+        internal static void RaiseGameLayerAboveVideo()
+        {
+            if (!_spawning || !CoreSettings.Current.ChaosPinOnTop) return;
+            void Raise(Window? w)
+            {
+                if (w is not { IsVisible: true }) return;
+                try { RaiseGameWindow(w); }
+                catch (Exception ex) { Log.Debug("Chaos video restack: {E}", ex.Message); }
+            }
+            Raise(ChaosFieldFxOverlay.Active);
+            Raise(ChaosSkiaFxOverlay.Active);
+            foreach (var w in ChaosPopText.Pool.All) Raise(w);
+            Raise(ChaosDvdOverlay.Window);
+            Raise(ChaosEffectBannerOverlay.Active);
+            Raise(ChaosAnnouncerOverlay.Active);
+            Raise(ChaosEStimOverlay.Active);
+            Raise(ChaosVibeTrailOverlay.Active);
+            Raise(_fx);
+            Raise(ChaosWaveTimerWindow.Active);
+            Raise(_boonBar);
+            Raise(_hud);
+            foreach (var w in _toyButtons) Raise(w);
+            foreach (var w in BubbleOverlay.GameWindows) Raise(w);
+            Raise(ChaosGifCascadeOverlay.Active);
+            foreach (var (w, _) in FlashOverlay.Active) Raise(w);
+        }
 
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {

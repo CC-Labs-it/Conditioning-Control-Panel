@@ -15,6 +15,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using LibVLCSharp.Shared;
@@ -114,6 +115,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Total ms spent downscaling blur fills, and how many (CCP perf check).</summary>
         internal double FillMs { get; private set; }
         internal int FillCount { get; private set; }
+
+        // WPF ChaosModeService.cs:816 and VideoService.cs:5818: retry after activation settles.
+        internal static Action<Action, TimeSpan> ScheduleGameRestack = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+        internal static void RestackOnVideoStart()
+        {
+            ChaosRunHost.RaiseGameLayerAboveVideo();
+            ScheduleGameRestack(ChaosRunHost.RaiseGameLayerAboveVideo, TimeSpan.FromMilliseconds(60));
+        }
+        internal static void RestackOnVideoClick() =>
+            ScheduleGameRestack(ChaosRunHost.RaiseGameLayerAboveVideo, TimeSpan.FromMilliseconds(50));
 
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
@@ -221,6 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _media = new Media(vlc, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
+            RestackOnVideoStart();
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
@@ -314,6 +326,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     case VideoKeyAction.Swallow: e.Handled = true; break;
                 }
             }
+            // Tunnel also catches clicks on controls before the video window is activated.
+            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => RestackOnVideoClick(),
+                global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             w.KeyDown += (_, e) => OnKey(e);
             // The panic key always wins: tunnel it so a focused Resume button cannot take it as a click
             // when the panic key is Enter/Space (the WPF card was a separate window). Other keys bubble as before.
