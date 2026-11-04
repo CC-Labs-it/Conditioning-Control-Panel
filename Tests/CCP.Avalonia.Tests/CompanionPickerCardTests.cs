@@ -144,13 +144,21 @@ public sealed class CompanionPickerCardTests
                 .SetupWithoutStarting();
         var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-preview-" + Guid.NewGuid());
         var resources = System.IO.Path.Combine(root, "resources");
-        var emotes = System.IO.Path.Combine(resources, "emotes", "set1");
-        System.IO.Directory.CreateDirectory(emotes);
+        var emotes1 = System.IO.Path.Combine(resources, "emotes", "set1");
+        var emotes2 = System.IO.Path.Combine(resources, "emotes", "set2");
+        System.IO.Directory.CreateDirectory(emotes1);
+        System.IO.Directory.CreateDirectory(emotes2);
         var assets = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Here())!, "..", "..", "Assets"));
-        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar0_emotes", "idle.gif"), System.IO.Path.Combine(emotes, "idle.gif"));
-        System.IO.File.WriteAllText(System.IO.Path.Combine(emotes, "emotes.json"), "{}");
-        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar_pose1.png"), System.IO.Path.Combine(resources, "avatar_pose1.png"));
-        var mod = new ModPackage(new ModManifest { Id = "preview-test", Name = "Preview" }, root, false);
+        var bundledPath = System.IO.Path.Combine(assets, "avatar0_emotes", "idle.gif");
+        var local1Path = System.IO.Path.Combine(emotes1, "idle.gif");
+        var local2Path = System.IO.Path.Combine(emotes2, "idle.gif");
+        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar0_emotes", "idle2.gif"), local1Path);
+        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar0_emotes", "idle3.gif"), local2Path);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(emotes1, "emotes.json"), "{}");
+        System.IO.File.WriteAllText(System.IO.Path.Combine(emotes2, "emotes.json"), "{}");
+        var posePath = System.IO.Path.Combine(resources, "avatar_pose1.png");
+        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar_pose1.png"), posePath);
+        var mod = new ModPackage(new ModManifest { Id = BuiltInMods.CCPDefaultId, Name = "Preview" }, root, false);
         var old = (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider, CoreSettings.Current.SelectedAvatarSet);
         try
         {
@@ -158,21 +166,32 @@ public sealed class CompanionPickerCardTests
             CoreMods.ActiveModIdProvider = () => mod.Id;
             CoreSettings.Current.SelectedAvatarSet = 1;
             var card = new CompanionPickerCard();
-            using var idleStream = System.IO.File.OpenRead(System.IO.Path.Combine(emotes, "idle.gif"));
-            using var idle = global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(idleStream, 240);
-            global::Avalonia.PixelSize Picture() => ((global::Avalonia.Media.Imaging.Bitmap)card.FindControl<Image>("ImgPreview")!.Source!).PixelSize;
-            Assert.Equal(idle.PixelSize, Picture()); // active
+            using var local1 = Decode(local1Path);
+            using var local2 = Decode(local2Path);
+            using var bundled = Decode(bundledPath);
+            using var pose = Decode(posePath);
+            Assert.Equal(local1.PixelSize, bundled.PixelSize);
+            Assert.False(Pixels(local1).SequenceEqual(Pixels(bundled))); // Same size, different art.
+            Assert.False(Pixels(local1).SequenceEqual(Pixels(local2)));
+            global::Avalonia.Media.Imaging.Bitmap Picture() => Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(card.FindControl<Image>("ImgPreview")!.Source);
+            void Matches(global::Avalonia.Media.Imaging.Bitmap expected)
+            {
+                var actual = Picture();
+                Assert.Equal(expected.PixelSize, actual.PixelSize);
+                Assert.Equal(Pixels(expected), Pixels(actual));
+            }
+            Matches(local1); // active set 1: local overrides bundled
             card.ShowPreview(mod, global::Avalonia.Media.Colors.HotPink);
-            Assert.Equal(idle.PixelSize, Picture()); // inactive
-            System.IO.File.Delete(System.IO.Path.Combine(emotes, "idle.gif"));
+            Matches(local1); // inactive set 1: local overrides bundled
+            CoreSettings.Current.SelectedAvatarSet = 2;
+            card.Refresh();
+            Matches(local2); // active selected set 2
+            System.IO.File.Delete(local1Path);
             card.ShowPreview(mod, global::Avalonia.Media.Colors.HotPink);
-            using var poseStream = System.IO.File.OpenRead(System.IO.Path.Combine(resources, "avatar_pose1.png"));
-            using var pose = global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(poseStream, 240);
-            Assert.NotEqual(idle.PixelSize, pose.PixelSize);
-            Assert.Equal(pose.PixelSize, Picture());
-            // Built-in registry assets must be packaged too.
-            card.ShowPreview(new ModPackage(new ModManifest { Id = BuiltInMods.CCPDefaultId, Name = "Default" }, null, true), global::Avalonia.Media.Colors.HotPink);
-            Assert.Equal(idle.PixelSize, Picture());
+            Matches(bundled); // bundled registry after local clip is removed
+            var unregistered = new ModPackage(new ModManifest { Id = "preview-test", Name = "Preview" }, root, false);
+            card.ShowPreview(unregistered, global::Avalonia.Media.Colors.HotPink);
+            Matches(pose); // no local clip or registry entry
         }
         finally
         {
@@ -181,6 +200,22 @@ public sealed class CompanionPickerCardTests
         }
         return Task.CompletedTask;
     });
+
+    private static global::Avalonia.Media.Imaging.Bitmap Decode(string path)
+    {
+        using var stream = System.IO.File.OpenRead(path);
+        return global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(stream, 240);
+    }
+
+    private static byte[] Pixels(global::Avalonia.Media.Imaging.Bitmap bitmap)
+    {
+        var size = bitmap.PixelSize;
+        var pixels = new byte[size.Width * size.Height * 4];
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(pixels, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try { bitmap.CopyPixels(new PixelRect(size), handle.AddrOfPinnedObject(), pixels.Length, size.Width * 4); }
+        finally { handle.Free(); }
+        return pixels;
+    }
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
 
