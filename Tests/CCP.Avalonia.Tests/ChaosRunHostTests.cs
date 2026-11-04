@@ -42,6 +42,42 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task Ripple_gathers_only_during_an_active_unpaused_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                var state = ChaosRunHost.State!;
+                state.RippleCooldown = 0.75;
+                Ticks(2);
+                Assert.Equal(0.75, state.RippleCooldown);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(1);
+                Assert.Equal(0.5, state.RippleCooldown);
+                Assert.Equal("1s", state.RippleText);
+                ChaosRunHost.ToggleManualPause();
+                Ticks(4);
+                Assert.Equal(0.5, state.RippleCooldown);
+                ChaosRunHost.ToggleManualPause();
+                Ticks(2);
+                Assert.True(state.RippleReady);
+                Assert.Equal("READY", state.RippleText);
+                Ticks(1);
+                Assert.Equal(0, state.RippleCooldown);
+                ChaosRunHost.ForceShutdown();
+                Ticks(1);
+                Assert.Null(ChaosRunHost.State);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task A_run_counts_down_ticks_and_ends_on_the_recap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

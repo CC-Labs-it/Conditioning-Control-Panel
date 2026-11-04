@@ -406,6 +406,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
+            // WPF ChaosModeService.cs:984-989: gather only while the run clock advances.
+            if (_state.RippleCooldown > 0)
+                _state.RippleCooldown -= ChaosRunEngine.TICK_SEC;
             TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
             if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
