@@ -46,6 +46,18 @@ public sealed class LobbyPageTests
     });
 
     [Fact]
+    public void SignedOutRepaintClearsCachedRows() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var row = new LobbyRow { Game = LobbyGame.Remote, Key = "r", HostName = "Host" };
+        page.PaintSnapshot(new LobbySnapshot(new[] { row }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, false, false));
+        page.ReadGates = () => LobbyGates.From(false, false, false);
+        page.IsVisible = false;
+        page.IsVisible = true;
+        Assert.Empty(Named<ItemsControl>(page, "AvailableSubjectsList").Items);
+    });
+
+    [Fact]
     public void EveryLobbyPillHasATemplateAndDrawsAtANonZeroSize() => Run(() =>
     {
         var page = new AvailableSubjectsTabView();

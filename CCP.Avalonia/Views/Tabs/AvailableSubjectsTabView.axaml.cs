@@ -20,6 +20,9 @@ public partial class AvailableSubjectsTabView : UserControl
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
+    private LobbyPoll? _lobby;
+    private IDisposable? _lobbyLease;
+    private IDisposable? _lobbyVisibility;
 
     public AvailableSubjectsTabView()
     {
@@ -29,20 +32,49 @@ public partial class AvailableSubjectsTabView : UserControl
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
         // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
         // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
-        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && IsVisible) Repaint(); };
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { Repaint(); SyncLobby(); } };
         Loaded += (_, _) =>
         {
+            _lobby = Platform.LobbyHead.Service;
+            _lobby.Changed += OnLobbyChanged;
+            _lobbyVisibility = EffectiveVisibility.Watch(this, SyncLobby);
+            SyncLobby();
             Repaint();
             SubjectsAmbientFx.StartLayers(new AmbientFxConfig
                 { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
-        Unloaded += (_, _) => SubjectsAmbientFx.Stop();
+        Unloaded += (_, _) =>
+        {
+            _lobbyLease?.Dispose(); _lobbyLease = null;
+            _lobbyVisibility?.Dispose(); _lobbyVisibility = null;
+            if (_lobby != null) _lobby.Changed -= OnLobbyChanged;
+            _lobby = null;
+            SubjectsAmbientFx.Stop();
+        };
+    }
+
+    private void SyncLobby()
+    {
+        if (_lobby == null) return;
+        if (IsEffectivelyVisible)
+        {
+            OnLobbyChanged(_lobby.Snapshot);
+            _lobbyLease ??= _lobby.Watch();
+        }
+        else { _lobbyLease?.Dispose(); _lobbyLease = null; }
+    }
+
+    private void OnLobbyChanged(LobbySnapshot snapshot)
+    {
+        if (!IsEffectivelyVisible) return;
+        var gates = ReadGates();
+        PaintSnapshot(gates.SignedIn ? snapshot : LobbySnapshot.Empty, gates);
     }
 
     private void Repaint()
     {
         var gates = ReadGates();
-        PaintSnapshot(_snapshot with { SignedIn = gates.SignedIn }, gates);
+        PaintSnapshot(gates.SignedIn ? _snapshot with { SignedIn = true } : LobbySnapshot.Empty, gates);
     }
 
     internal void SetNarrow(bool narrow)

@@ -71,15 +71,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, string? joinRoomId = null)
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
+            if (joinRoomId != null && (id != GlassroadId || !Services.Lobby.RaceJoinLink.IsRoomId(joinRoomId))) return null;
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
+            if (live != null) { if (joinRoomId != null) live.Post(new { type = "join-room", roomId = joinRoomId }); live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
+            if (joinRoomId != null) spec = spec with { Query = "join=" + joinRoomId };
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
