@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
@@ -27,8 +28,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// default over the user's file.</summary>
         private bool _isLoading = true;
 
-        public RemoteControlTabView()
+        private readonly Func<Bitmap?> _loadFeatureArt;
+
+        public RemoteControlTabView() : this(() => Helpers.ModArt.TryLoad("features/remote_control.png", 800)) { }
+
+        internal RemoteControlTabView(Func<Bitmap?> loadFeatureArt)
         {
+            _loadFeatureArt = loadFeatureArt;
             InitializeComponent(); // generated: loads the XAML AND fills the x:Name fields
 
             // The emote slots are AppSettings.RemoteEmotePresets, which is in Core - the same five
@@ -56,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ShowSession(r.SessionCode);
                 UpdateRemoteStatus(r.ControllerConnected, idle: !r.IsActive);
                 CoreMods.ModChanged += OnModChanged;
-                ApplyFeatureArt();
+                QueueFeatureArt();
             };
             DetachedFromVisualTree += (_, _) =>
             {
@@ -404,13 +410,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.UpdateDirectoryListingStatus(r.IsActive, r.DirectoryOptedIn, r.ControllerConnected);
         }
 
-        private void OnModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(ApplyFeatureArt);
+        private void OnModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(() => QueueFeatureArt(force: true));
 
-        /// <summary>WPF ApplyFeatureArt: features/remote_control.png (a mod's own first) into the hero plate.
-        /// A null answer leaves the bare plate, as WPF's resolver does.</summary>
-        private void ApplyFeatureArt()
+        private int _artRequest;
+        private string? _artMod;
+        private bool _artQueued;
+        internal Task FeatureArtReady { get; private set; } = Task.CompletedTask;
+
+        private void QueueFeatureArt(bool force = false)
         {
-            if (Helpers.ModArt.TryLoad("features/remote_control.png") is not { } art) return;
+            var mod = CoreMods.ActiveModId;
+            if (!force && _artQueued && _artMod == mod) return;
+            _artQueued = true;
+            _artMod = mod;
+            FeatureArtReady = ApplyFeatureArtAsync(++_artRequest);
+        }
+
+        /// <summary>WPF shares an already decoded source. Keep disk access and decode off the UI
+        /// thread, cap at WPF's 800px, and retain the brush across detach/attach. A late mod load
+        /// must never overwrite a newer choice.</summary>
+        private async Task ApplyFeatureArtAsync(int request)
+        {
+            var art = await Task.Run(_loadFeatureArt);
+            if (request != _artRequest) { art?.Dispose(); return; }
+            if (art == null) return;
             HeroArtPlate.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right };
         }
 
