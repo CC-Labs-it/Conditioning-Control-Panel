@@ -16,12 +16,20 @@ internal sealed class GazeDriftMouseHook : IDisposable
     private IntPtr _hook;
 
     private GazeDriftMouseHook(Action<int, int> click) { _click = click; _proc = Callback; }
+    private static bool _failed;
+    internal static bool Available() => !_failed && (OperatingSystem.IsWindows() || X11GazeDriftMouseHook.Available());
     internal static IDisposable? Start(Action<int, int> click)
     {
-        if (!OperatingSystem.IsWindows()) return null;
+        if (!OperatingSystem.IsWindows())
+        {
+            var listener = X11GazeDriftMouseHook.Start(click);
+            _failed = listener == null;
+            return listener;
+        }
         var hook = new GazeDriftMouseHook(click);
         hook._hook = SetWindowsHookEx(14, hook._proc, GetModuleHandle(null), 0);
-        return hook._hook == IntPtr.Zero ? null : hook;
+        _failed = hook._hook == IntPtr.Zero;
+        return _failed ? null : hook;
     }
     private IntPtr Callback(int code, IntPtr message, IntPtr data)
     {
