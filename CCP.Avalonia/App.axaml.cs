@@ -212,8 +212,15 @@ namespace ConditioningControlPanel.Avalonia
             CoreModsHooks.ModSwitched = name => Brain?.OnModSwitched(name);
             CoreModsHooks.InvalidateStablePrompt = BambiSprite.InvalidateStablePrompt;
             Mods = new ModService();
+            var mods = Mods;
+            mods.ModChanged += (_, _) =>
+            {
+                if (Dispatcher.UIThread.CheckAccess()) Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
+                else Dispatcher.UIThread.Post(() => Controls.AmbientFxCanvas.Env.ApplyPalette(mods));
+            };
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
+            Controls.AmbientFxCanvas.Env.ApplyPalette(Mods);
         }
 
         /// <summary>The cclabs catalogue client (WPF App.Catalogue): the same Core client and inputs as WPF's
