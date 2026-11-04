@@ -17,16 +17,16 @@ namespace ConditioningControlPanel.Services
     public sealed class GazeEngine
     {
         public const int FaceLostFramesThreshold = 15;      // ~0.5s
-        private const int IrisSmoothFrames = 12;
-        private const int SideStabilityFrames = 3;
-        private const double OneEuroMinCutoff = 1.4, OneEuroBeta = 0.007, OneEuroDCutoff = 1.0;
+        internal const int IrisSmoothFrames = 12;
+        internal const int SideStabilityFrames = 3;
+        internal const double OneEuroMinCutoff = 1.4, OneEuroBeta = 0.007, OneEuroDCutoff = 1.0;
         private const int EyeRefSmoothFrames = 6;
-        private const int IrisMedianFrames = 3;             // do not drop to 2: see WebcamTrackingService
-        private const double ScreenOneEuroMinCutoff = 1.5, ScreenOneEuroBetaDefault = 0.06;
+        internal const int IrisMedianFrames = 3;             // do not drop to 2: see WebcamTrackingService
+        internal const double ScreenOneEuroMinCutoff = 1.5, ScreenOneEuroBetaDefault = 0.06;
         private const int EyeDisagreementBaselineFrames = 90, EyeDisagreementMinSamples = 15;
         private const double EyeDisagreementRatio = 3.0, EyeDisagreementFloor = 0.04;
-        private const int TwoEyeStreakRequired = 15, MaxGateSkipFrames = 8;
-        private const double FollowMinDefault = 0.22, FollowMaxDefault = 0.48, RampDistDefault = 360.0;
+        internal const int TwoEyeStreakRequired = 15, MaxGateSkipFrames = 8;
+        internal const double FollowMinDefault = 0.22, FollowMaxDefault = 0.48, RampDistDefault = 360.0;
         private const double IrisClampMarginFrac = 0.35;
 
         private readonly Queue<double> _irisDxSmooth = new(), _irisDySmooth = new();
