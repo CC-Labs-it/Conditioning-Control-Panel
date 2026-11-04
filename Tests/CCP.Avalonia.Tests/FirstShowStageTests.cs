@@ -28,6 +28,42 @@ namespace CCP.Avalonia.Tests;
 /// plays the script's beats on a stepped clock, and Stop, panic and Esc close it and hand her back.</summary>
 public sealed class FirstShowStageTests
 {
+    [Theory]
+    [InlineData(false), InlineData(true)]
+    public Task PanicDuringPresentationArmsSilence(bool key) => Run(stage =>
+    {
+        var service = EmiDeskService.Instance; var old = service.LineEngine; var oldPanic = (CoreSettings.Current.PanicKeyEnabled, CoreSettings.Current.PanicKey);
+        var shell = new MainShellWindow();
+        try
+        {
+            service.LineEngine = EmiLineEngine.FromJson("{\"moments\":{\"panicPressed\":{\"hold\":true,\"tailMs\":300000}},\"pools\":{}}");
+            Assert.True(service.Window!.PresentationActive);
+            if (key)
+            {
+                CoreSettings.Current.PanicKeyEnabled = true; CoreSettings.Current.PanicKey = "F8"; LockCardWindow.ShowOnAllMonitors("test", 1, strictMode: true);
+                Assert.True(LockCardWindow.IsAnyOpen());
+                shell.HandlePanicKeyPress(new DateTime(2026, 1, 1));
+                Assert.False(LockCardWindow.IsAnyOpen());
+            }
+            else PanicSurfaces.StopAll("test");
+            Assert.False(FirstShowService.IsActive); Assert.True(service.LineEngine.HoldActive);
+        }
+        finally { LockCardWindow.ForceCloseAll(); shell.Close(); service.LineEngine = old; (CoreSettings.Current.PanicKeyEnabled, CoreSettings.Current.PanicKey) = oldPanic; }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task PresentationCancelsAnEarlierHoldTimer() => Run(stage =>
+    {
+        FirstShowService.Stop(); var emi = EmiDeskService.Instance.Window!;
+        var engine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
+        emi.SpeakRingLine(new LineDraw("hold", "hold", "", "-_-", null, 3, true, 1000), engine);
+        Assert.Equal("-_-", emi.Face);
+        Assert.True(FirstShowService.Open());
+        emi.PresentAt(new Point(600, 400), 0, 0, "idle", "^_~");
+        emi.EndHold(); Assert.Equal("^_~", emi.Face);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task OpensPlaysTheScriptAndStopHandsEmiBack() => Run(stage =>
     {
@@ -338,7 +374,7 @@ public sealed class FirstShowStageTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 

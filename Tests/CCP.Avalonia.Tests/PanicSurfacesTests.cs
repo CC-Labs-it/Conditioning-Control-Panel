@@ -124,6 +124,7 @@ public sealed class PanicSurfacesTests
         "pink-rush",
         "corner-gif",
         "emi-desk-feedback",
+        "emi-speech",
         "tube-speech",
         "lock-cards",
         "speak-cue",

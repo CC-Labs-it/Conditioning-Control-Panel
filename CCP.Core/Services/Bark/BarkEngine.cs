@@ -127,6 +127,7 @@ namespace ConditioningControlPanel.Services.Bark
         { try { return _loadRules() ?? BarkRuleSet.Empty; } catch (Exception ex) { Log.Warning(ex, "BarkEngine: rule load failed"); return BarkRuleSet.Empty; } }
 
         public void NoteUserMessage() { lock (_gate) _lastUserMessageUtc = Now; }   // WPF :806, chat suppression
+        public void NotifyExternalLineSpoken() { lock (_gate) _globalLastFireUtc = Now; } // WPF BarkService.cs:337
 
         /// <summary>WPF Raise (:1096): the first passing rule (priority order) wins; the gate decides under the
         /// lock, the mouth speaks after it. True when it spoke.</summary>

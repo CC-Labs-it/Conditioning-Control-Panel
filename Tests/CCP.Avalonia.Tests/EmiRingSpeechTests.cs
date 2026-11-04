@@ -1,0 +1,182 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.LogicalTree;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.EmiDesk;
+using Xunit;
+
+namespace CCP.Avalonia.Tests;
+
+public sealed class EmiRingSpeechTests
+{
+    private static void Setup()
+    {
+        if (Application.Current is null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
+    private static Task WithDesk(Action<EmiDeskWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup(); var desk = new EmiDeskWindow();
+        try { desk.Show(); body(desk); }
+        finally { desk.ShutDown(); }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task BubbleDodgesBookOnBothSidesAndStaysInTheWorkArea() => WithDesk(desk =>
+    {
+        var area = desk.Screens.Primary!.WorkingArea; var scale = desk.RenderScaling;
+        void MoveBodyTo(double x)
+        {
+            desk.Position = new PixelPoint((int)(x - (EmiDeskWindow.OverlayPadX + desk.BodyWidth / 2) * scale), area.Y + 250);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            // The headless Position setter does not raise the widget's drag-only Moved event.
+            if (desk.Book is { } book)
+                Assert.IsAssignableFrom<System.Reflection.MethodInfo>(typeof(EmiBookWindow).GetMethod("OnOwnerMoved", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))
+                    .Invoke(book, new object?[] { desk, EventArgs.Empty });
+        }
+        Border Bubble() => Assert.Single(desk.BubbleHost.Children.OfType<Border>());
+        double Left() => Canvas.GetLeft(Bubble());
+        double Centre() => EmiDeskWindow.OverlayPadX + desk.BodyWidth / 2;
+        void InsideWorkArea()
+        {
+            var bubble = Bubble(); var x = desk.PointToScreen(new Point(Left(), 0)).X;
+            Assert.True(x >= area.X, $"bubble starts off screen at {x}"); Assert.True(x + bubble.DesiredSize.Width * scale <= area.Right + 1, "bubble ends off screen");
+        }
+        MoveBodyTo(area.X + area.Width / 2);
+        desk.Say("short line"); desk.OpenBook();
+        Assert.Equal(1, desk.Book!.SideOfHer); Assert.True(Left() + Bubble().DesiredSize.Width / 2 < Centre());
+        desk.CloseBook();
+        Assert.True(Left() > Centre()); // closing is also a side change
+        desk.OpenBook();
+        MoveBodyTo(area.Right - 250 * scale);
+        Assert.Equal(-1, desk.Book!.SideOfHer);
+        Assert.True(Left() > Centre()); // live bubble moved after the book changed side
+        InsideWorkArea();
+        desk.CloseBook(); MoveBodyTo(area.X + area.Width / 2); desk.OpenBook();
+        Assert.True(Left() + Bubble().DesiredSize.Width / 2 < Centre());
+        desk.Book!.Close(); // external close must restore the preference too
+        Assert.True(Left() > Centre());
+        foreach (var edge in new[] { area.X + 110 * scale, area.Right - 110 * scale })
+        {
+            MoveBodyTo(edge);
+            desk.Say(new string('w', 100));
+            desk.StepSpeech(); desk.StepSpeech(); desk.StepSpeech();
+            desk.OpenBook();
+            InsideWorkArea();
+            desk.CloseBook();
+        }
+    });
+    [Fact]
+    public Task SayUsesCoreCadenceAndCancellationDropsTheContinuation() => WithDesk(desk =>
+    {
+        bool done = false; desk.Say("a card stays when you pin it.", done: () => done = true);
+        foreach (var expected in new[] { ".", "..", "...", "a card stays when you pin it." })
+        {
+            Assert.True(desk.ChainLive); Assert.Contains(desk.BubbleHost.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == expected);
+            desk.StepSpeech();
+        }
+        desk.StepSpeech();
+        Assert.True(done); Assert.False(desk.ChainLive);
+        Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
+        done = false; desk.Say("cancelled", done: () => done = true);
+        desk.CancelChain(); desk.StepSpeech();
+        Assert.False(done); Assert.False(desk.ChainLive);
+        Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
+        desk.Say("hidden"); desk.Hide();
+        Assert.False(desk.ChainLive);
+    });
+    [Fact]
+    public Task HoldCutsSpeechAndReturnsToRest() => WithDesk(desk =>
+    {
+        desk.Say("stop this");
+        var engine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
+        Assert.False(desk.SpeakRingLine(new LineDraw("h", "h", "", "-_-", null, 3, true, 100), engine)); Assert.False(desk.ChainLive);
+        Assert.Equal("-_-", desk.Face); Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
+        desk.EndHold(); Assert.Equal(EmiChains.RestFace, desk.Face);
+    });
+    private sealed class BarkClock : TimeProvider { public DateTimeOffset Now = DateTimeOffset.UtcNow; public override DateTimeOffset GetUtcNow() => Now; }
+    [Theory, InlineData(false, false), InlineData(true, false), InlineData(false, true)]
+    public Task RingSpeechStaggersAvatarUnlessMutedOrHolding(bool muted, bool hold) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup(); var service = EmiDeskService.Instance; service.Window?.ShutDown();
+        var s = CoreSettings.Current; var state = EmiState.Current; var saved = (BarkHead.Engine, s.AvatarEnabled, s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk, state.SummonCount, state.FirstBootSeen);
+        var clock = new BarkClock(); var rule = new BarkRule { Id = "emi-gap", Trigger = "emi-gap", Priority = 100, VariantPool = new() { new BarkVariant("bark") } };
+        var hadRotation = s.BarkVariantRotation.TryGetValue(rule.Id, out var oldRotation);
+        var bark = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Clock = clock, Speak = _ => { }, IsSpeaking = () => true };
+        try
+        {
+            (s.AvatarEnabled, s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk) = (true, true, muted, true);
+            BarkHead.Engine = bark; bark.Start(); await service.Summon("test");
+            var desk = Assert.IsType<EmiDeskWindow>(service.Window); Assert.Equal(muted, service.AvatarMuted);
+            var engine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}"); Assert.Equal(!hold, desk.SpeakRingLine(new LineDraw("test", "test", "hello", "^_^", null, 3, hold, 100), engine));
+            s.EmiDeskMuteAvatar = false;
+            Assert.Equal(muted || hold, bark.Raise("emi-gap"));
+            clock.Now = clock.Now.AddSeconds(59); Assert.False(bark.Raise("emi-gap"));
+            clock.Now = clock.Now.AddSeconds(1); Assert.True(bark.Raise("emi-gap"));
+        }
+        finally
+        {
+            service.Window?.ShutDown(); service.ResetMutePrompt();
+            if (hadRotation) s.BarkVariantRotation[rule.Id] = oldRotation!; else s.BarkVariantRotation.Remove(rule.Id);
+            (BarkHead.Engine, s.AvatarEnabled, s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk, state.SummonCount, state.FirstBootSeen) = saved;
+        }
+    });
+    [Fact]
+    public Task RealRingFiresOpenDismissAndThirdIgnoreAndPanicCutsSpeech() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup(); var service = EmiDeskService.Instance; service.Window?.ShutDown();
+        var oldSettings = (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar); var oldEngine = service.LineEngine;
+        (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar) = (true, false);
+        EmiState.Current.RingIgnoreStreak = 0;
+        service.LineEngine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
+        var audio = CoreAudio.PlayOneShotProvider; var suppressed = CoreAudio.IsOutputSuppressedProvider; var volume = CoreSettings.Current.MasterVolume; var clockBefore = EmiSfx.Clock; var clock = new BarkClock(); var played = new List<string>();
+        CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => played.Add(tag); CoreSettings.Current.MasterVolume = 50; EmiSfx.Clock = clock;
+        var moments = new List<string>(); EventHandler<EmiMoment> observer = (_, m) => moments.Add(m.Id);
+        service.MomentFired += observer;
+        try
+        {
+            await service.Summon("test");
+            var desk = Assert.IsType<EmiDeskWindow>(service.Window);
+            for (int i = 0; i < 3; i++)
+            {
+                desk.ToggleRing(); Assert.True(desk.RingOpen);
+                desk.CloseRing(); Assert.False(desk.RingOpen);
+            }
+            Assert.Equal(3, moments.Count(m => m == "ringOpen")); Assert.Equal(3, moments.Count(m => m == "ringDismissed"));
+            Assert.Single(moments.Where(m => m == "suggestionIgnored3x")); Assert.Equal(0, EmiState.Current.RingIgnoreStreak);
+            service.LineEngine = EmiLineEngine.FromJson("""{"moments":{"ringOpen":{"pools":["ring"],"priority":3,"cooldownMs":60000},"panicPressed":{"hold":true,"pools":["quiet"],"tailMs":300000}},"pools":{"ring":[{"id":"ring.1","t":"a card stays","face":"^_^","spice":0}],"quiet":[{"id":"quiet.1","t":"","face":"-_-"}]}}""");
+            service.Fire("ringOpen");
+            Assert.True(desk.ChainLive);
+            Assert.Null(service.LineEngine.Draw("ringOpen")); // first dot acknowledged the cooldown
+            desk.StepSpeech(); desk.StepSpeech(); desk.StepSpeech();
+            Assert.Contains(desk.BubbleHost.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "a card stays");
+            clock.Now = clock.Now.AddSeconds(10); played.Clear(); EmiSfx.Pat(); Assert.Contains("emi-sfx-pat", played); played.Clear();
+            CoreAudio.IsOutputSuppressedProvider = () => true; clock.Now = clock.Now.AddSeconds(1); EmiSfx.Pat(); Assert.Empty(played); CoreAudio.IsOutputSuppressedProvider = () => false;
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.StopAll("test");
+            clock.Now = clock.Now.AddSeconds(1); played.Clear(); EmiSfx.Pat(); Assert.Empty(played);
+            Assert.Equal("-_-", desk.Face);
+            desk.EndHold();
+            Assert.Equal(EmiChains.RestFace, desk.Face); Assert.False(desk.ChainLive);
+            Assert.Contains("panicPressed", moments); Assert.True(service.LineEngine.HoldActive);
+            service.Window?.ShutDown();
+            var away = new EmiDeskService { LineEngine = EmiLineEngine.FromJson("{\"moments\":{\"panicPressed\":{\"hold\":true,\"tailMs\":300000}},\"pools\":{}}") };
+            away.Fire("panicPressed");
+            Assert.True(away.LineEngine.HoldActive);
+        }
+        finally
+        {
+            service.MomentFired -= observer; service.Window?.ShutDown(); service.LineEngine = oldEngine; (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar) = oldSettings; CoreAudio.PlayOneShotProvider = audio; CoreAudio.IsOutputSuppressedProvider = suppressed; CoreSettings.Current.MasterVolume = volume; EmiSfx.Clock = clockBefore;
+        }
+    });
+}

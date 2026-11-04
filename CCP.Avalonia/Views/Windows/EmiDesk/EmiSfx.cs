@@ -10,9 +10,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// scales and 130 ms per-cue throttle, played through Core <see cref="CoreAudio"/>. The first
     /// candidate that exists under Resources/sounds wins; none is silence.
     ///
-    /// <para>ponytail: WPF also stays silent while AudioService.IsOutputSuppressed or an
-    /// EmiLineEngine hold is active; EmiLineEngine is in Core but nothing on this head takes a hold
-    /// and AudioService does not exist here, so only master volume 0 mutes.
+    /// <para>WPF EmiSfx.cs:156,161: output suppression and line-engine holds silence cues.
+    /// The output-suppression provider is not yet wired on this head.
     /// Files resolve through ContentLocator only: WPF's ModResourceResolver.ResolveAudioPath (a
     /// mod's replacement cue, the .wav/.mp3 swap) has no Core sounds seam yet, so a mod cannot
     /// re-voice these here; a stock install sounds right.</para>
@@ -100,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 int level = CoreSettings.Current?.MasterVolume ?? 0;
                 if (level <= 0) return;
+                if (CoreAudio.IsOutputSuppressed || EmiDeskService.Instance.LineEngine.HoldActive) return; // WPF EmiSfx.cs:156,161
                 float master = Math.Clamp(level / 100f, 0f, 1f);
                 foreach (var rel in candidates)
                 {

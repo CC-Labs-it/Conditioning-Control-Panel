@@ -263,9 +263,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
+        // Pat faces and speech are live; the full chain player (EmiChainPlayer, WPF head only;
         // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
-        public bool ChainLive => _patFeedback is not null;
+        public bool ChainLive => _patFeedback is not null || SpeechActive;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -895,16 +895,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: EmiChains.MakeSay / SayHoldMs / FrameForFace are in Core now; still needs
-        // EmiChainPlayer (WPF head) to play the result.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
-        {
-            done?.Invoke();
-        }
+            => StartSpeech(line, reactionFace, done);
 
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
+            CancelSpeech();
             StopPatFeedback();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
@@ -1472,8 +1469,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// rather than building a second panel.</para>
         ///
         /// <para>Bookmark and the lifetime open count are the router's own (EmiBook.cs Open):
-        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. ponytail: still missing
-        /// <c>NoteSideChanged</c> (the bubble dodge in EmiDeskWindow.Bubble.cs).</para>
+        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. Book placement changes relayout the speech bubble, as WPF EmiBook.SideChanged does.</para>
         /// </summary>
         internal void OpenBook(string? cardId = null)
         {
@@ -1494,6 +1490,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.Closed += OnBookClosed;
                 _book = win;
                 win.OpenBook(cardId);
+                PlaceSpeechBubble(); // WPF EmiBook.cs:147: opening also changes 0 to a side.
             }
             catch (Exception ex)
             {
@@ -1507,6 +1504,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             var win = _book;
             _book = null;
+            PlaceSpeechBubble(); // WPF EmiBook.cs:179: closing restores the default preference.
             if (win == null) return;
             try
             {
@@ -1520,6 +1518,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (!ReferenceEquals(sender, _book)) return;
             _book = null;
+            PlaceSpeechBubble();
         }
 
         /// <summary>Clear the resize hold, whichever way the drag ended.</summary>
