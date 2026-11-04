@@ -131,6 +131,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SetPauseButton(true);
         }
 
+        /// <summary>WPF MainWindow.RemoteControl.cs:1341: remote pause needs no confirmation.</summary>
+        internal string? PauseSessionFromRemote()
+        {
+            if (App.Sessions is { IsRunning: true, IsPaused: false } runner)
+            {
+                runner.Pause();
+                PinkFilterOverlay.Refresh(this);
+                SpiralOverlay.Refresh(this);
+                SetPauseButton(true);
+            }
+            return null;
+        }
+
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
         internal void SetPauseButton(bool paused)
         {

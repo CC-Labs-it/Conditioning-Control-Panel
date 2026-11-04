@@ -72,7 +72,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// Tests swap in a fake-relay client before opening the shell.</summary>
         internal static Lazy<RemoteRelay> Relay = new(() => new RemoteRelay(
             () => CoreSettings.Current.AuthToken, () => CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersion,
-            RemoteCommands.Execute, RemoteCommands.StopEffects));
+            ExecuteRemoteCommand, RemoteCommands.StopEffects));
+
+        internal static string? ExecuteRemoteCommand(string action, Newtonsoft.Json.Linq.JObject? parameters)
+        {
+            if (action == "pause_session")
+                return Windows.MainShellWindow.RemoteCommandOwner is { } owner
+                    ? owner.PauseSessionFromRemote() : RemoteCommands.NotOnThisBuild;
+            return RemoteCommands.Execute(action, parameters);
+        }
 
         private readonly ObservableCollection<string> _log = new();
 
