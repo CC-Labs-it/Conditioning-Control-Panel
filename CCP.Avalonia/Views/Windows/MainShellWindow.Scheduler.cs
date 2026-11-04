@@ -32,6 +32,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Serilog.Log.Information("Scheduler: App started within scheduled time window - auto-starting");
             MinimizeToTray(); Platform.OsNotifications.Show(Loc.Get("notif_scheduler_active"), Loc.Get("notif_scheduler_autostarted")); StartEngine();
         }
+        internal void SchedulerSettingsChanged(DateTime now)
+        {
+            var settings = CoreSettings.Current;
+            if (!settings.SchedulerEnabled || !CoreScheduler.InWindow(settings, now)) return;
+            if (Scheduler.OnTick(settings, now, CoreEngine.IsRunning, PanicAftermath.HoldsEngineRestart) != CoreScheduler.Step.Start) return;
+            Platform.OsNotifications.Show(Loc.Get("notif_scheduler_active"), Loc.Get("notif_scheduler_autostarted"));
+            StartEngine();
+        }
         internal void SchedulerTick(DateTime now)
         {
             switch (Scheduler.OnTick(CoreSettings.Current, now, CoreEngine.IsRunning, PanicAftermath.HoldsEngineRestart))

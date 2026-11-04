@@ -115,6 +115,43 @@ public sealed class StartStopScheduleTests
         Assert.Null(CoreEngine.StoppedHook); Assert.Same(oldSink, OsNotify.Sink);
     });
     [Fact]
+    public void SettingsEditsStartImmediatelyAndRespectHolds() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        var s = service.Current; var now = DateTime.Now;
+        s.FlashEnabled = s.SubliminalEnabled = s.BouncingTextEnabled = s.BubblesEnabled = s.LockCardEnabled = false;
+        s.MandatoryVideosEnabled = s.BubbleCountEnabled = s.PopQuizEnabled = s.MindWipeEnabled = false;
+        s.SchedulerMonday = s.SchedulerTuesday = s.SchedulerWednesday = s.SchedulerThursday = true;
+        s.SchedulerFriday = s.SchedulerSaturday = s.SchedulerSunday = true;
+        s.SchedulerStartTime = now.AddHours(2).ToString("HH:mm"); s.SchedulerEndTime = now.AddHours(3).ToString("HH:mm");
+        var control = new ConditioningControlPanel.Avalonia.Views.Features.SchedulerFeatureControl();
+        var shell = new MainShellWindow { TrayHostPresent = () => false, Content = control };
+        var oldSink = OsNotify.Sink; var notices = new List<string>();
+        try
+        {
+            OsNotify.Sink = (title, body) => notices.Add(title); shell.Show();
+            control.FindControl<CheckBox>("ChkEnabled")!.IsChecked = true;
+            Assert.False(CoreEngine.IsRunning);
+            control.FindControl<TextBox>("TxtStart")!.Text = now.AddHours(-1).ToString("HH:mm");
+            control.FindControl<TextBox>("TxtEnd")!.Text = now.AddHours(1).ToString("HH:mm");
+            typeof(ConditioningControlPanel.Avalonia.Views.Features.SchedulerFeatureControl)
+                .GetMethod("TxtTime_LostFocus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(control, new object?[] { null, new RoutedEventArgs() });
+            Assert.True(CoreEngine.IsRunning); Assert.True(shell.Scheduler.AutoStarted);
+            var count = notices.Count;
+            shell.SchedulerSettingsChanged(now); Assert.Equal(count, notices.Count);
+            MainShellWindow.StopEngine(); shell.Scheduler.AutoStarted = false; shell.Scheduler.ManuallyStopped = true;
+            shell.SchedulerSettingsChanged(now); Assert.False(CoreEngine.IsRunning);
+            shell.Scheduler.ManuallyStopped = false;
+            PanicSurfaces.StopAll("schedule settings", shell);
+            shell.SchedulerSettingsChanged(now); Assert.False(CoreEngine.IsRunning); Assert.False(shell.Scheduler.AutoStarted);
+        }
+        finally { CoreEngine.Stop(); OsNotify.Sink = oldSink; shell.Close(); ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+    [Fact]
     public System.Threading.Tasks.Task RampReachesNativeVideoWithoutAnAudioPage() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null) ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
