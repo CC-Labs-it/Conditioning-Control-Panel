@@ -17,6 +17,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Services.Race;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -65,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _grWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _grWatch.Tick += (_, _) => CheckGlassroadWatch(DateTime.UtcNow);
             _grWatch.Start();
+            PrizeOwnership.Changed += OnGlassroadOwnershipChanged;
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("GlassroadHost: launched");
         }
@@ -74,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_grOpen) return;
             _grOpen = false;
+            PrizeOwnership.Changed -= OnGlassroadOwnershipChanged;
             try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _grWatch = null;
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -89,10 +92,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
+
+        private void OnGlassroadOwnershipChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_grOpen && !_closing) Post(GlassroadOwnership.OwnedFrame(PrizeOwnership.Grants));
+        });
 
         /// <summary>The server's last effective tier, else the entitlement this head knows (display only: the
         /// lobby decides every gate itself).</summary>
