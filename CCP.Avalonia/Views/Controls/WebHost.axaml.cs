@@ -480,7 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (InjectCarrier)
             {
                 _carrierInstall ??= InstallCarrierAsync();
-                if (!await _carrierInstall && ConfinePageFullscreen && !(CarrierWindowsOverride ?? OperatingSystem.IsWindows())) return;
+                if (!await _carrierInstall && ConfinePageFullscreen && !(CarrierWindowsOverride ?? OperatingSystem.IsWindows())) { Log.Warning("WebHost: fullscreen confinement unavailable"); return; }
             }
             else if (ConfinePageFullscreen) return;
             if (engine != _scrolllerEngine || report != _gateReport) return;

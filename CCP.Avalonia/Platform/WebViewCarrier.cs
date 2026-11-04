@@ -97,6 +97,7 @@ internal static class WebViewCarrier
                     if (leave != 0) request.Disconnect!(request.View, leave);
                     throw new InvalidOperationException("fullscreen signal connection failed");
                 }
+                ok = true; // confinement is active even if the script install fails
             }
             var manager = request.Manager(request.View);
             // TOP_FRAME and START: the page sees the carrier before its own scripts.
