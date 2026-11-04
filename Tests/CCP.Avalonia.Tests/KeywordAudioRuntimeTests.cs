@@ -82,6 +82,42 @@ public sealed class KeywordAudioRuntimeTests
         finally { CoreSession.IsSessionRunningProvider = session; }
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:1401,1795: Mind Wipe needs clips and an active engine or session
+    public void MindWipeHonorsAudioHoldClipsAndPanic() => Run((engine, s, played) =>
+    {
+        var oldCount = CoreMindWipe.ClipCountProvider;
+        var oldTrigger = CoreMindWipe.TriggerOnceProvider;
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        var calls = 0;
+        var clips = 0;
+        var now = new DateTime(2026, 10, 14, 12, 0, 0);
+        try
+        {
+            CoreMindWipe.ClipCountProvider = () => clips;
+            CoreMindWipe.TriggerOnceProvider = () => calls++;
+            CoreSession.IsSessionRunningProvider = () => false;
+            engine.Now = () => now;
+            s.KeywordTriggers[0].Actions = new List<KeywordAction> { new VisualEffectAction { Effect = KeywordVisualEffect.MindWipe } };
+            void Fire() { now = now.AddMinutes(1); Type(engine, "sit"); }
+            Fire(); Assert.Equal(0, calls);
+            clips = 1; CoreSession.IsEngineRunningProvider = () => false;
+            Fire(); Assert.Equal(0, calls);
+            CoreSession.IsSessionRunningProvider = () => true;
+            Fire(); Assert.Equal(1, calls);
+            CoreSession.IsSessionRunningProvider = () => false;
+            CoreSession.IsEngineRunningProvider = () => true;
+            Fire(); Assert.Equal(2, calls);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Fire(); Assert.Equal(2, calls);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            CoreMindWipe.ClipCountProvider = oldCount; CoreMindWipe.TriggerOnceProvider = oldTrigger;
+            CoreSession.IsSessionRunningProvider = oldSession;
+        }
+    });
+
     [Fact] // WPF KeywordTriggerService.cs:1366 dispatches every action for one trigger
     public void SingleTriggerDispatchesBothAudioActionsInOrder() => Run((engine, s, played) =>
     {

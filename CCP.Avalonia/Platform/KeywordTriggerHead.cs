@@ -233,6 +233,11 @@ internal sealed class KeywordAudioRuntime
                     case PlayAudioAction audio:
                         if (!await PlayAsync(audio)) return;
                         break;
+                    case VisualEffectAction visual when visual.Effect == KeywordVisualEffect.MindWipe:
+                        // WPF KeywordTriggerService.cs:1795: one-shot audio is held with the engine off.
+                        if (CoreMindWipe.ClipCount > 0 && (CoreSession.IsEngineRunning || CoreSession.IsSessionRunning))
+                            CoreMindWipe.TriggerOnce();
+                        break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
                     case AddXpAction xp when xp.Amount > 0:
                         AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));
