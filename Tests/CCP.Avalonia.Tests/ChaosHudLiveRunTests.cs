@@ -1,4 +1,5 @@
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -15,6 +16,33 @@ namespace CCP.Avalonia.Tests;
 /// boundary and drafting a boon must show up on screen with no HUD-side code.</summary>
 public sealed class ChaosHudLiveRunTests
 {
+    [Fact]
+    public async Task Portrait_uses_user_art_then_bundled_and_hides_when_missing()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var user = Path.Combine(TestUserDataProfile.Root, "portrait-user");
+            var bundle = Path.Combine(TestUserDataProfile.Root, "portrait-bundle");
+            var userFile = Path.Combine(user, "assets", "Chaos", "portraits", "neutral.png");
+            var bundleFile = Path.Combine(bundle, "assets", "Chaos", "portraits", "neutral.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(userFile)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(bundleFile)!);
+            File.Copy(Path.Combine(System.AppContext.BaseDirectory, "assets", "Chaos", "portraits", "neutral.png"), bundleFile, true);
+            File.WriteAllText(userFile, "invalid image");
+            using (var fallback = ChaosHudWindow.ResolvePortrait(user, bundle)) Assert.NotNull(fallback);
+            File.Copy(bundleFile, userFile, true);
+            File.Delete(bundleFile);
+            using (var portrait = ChaosHudWindow.ResolvePortrait(user, bundle)) Assert.NotNull(portrait);
+            File.Delete(userFile);
+            Assert.Null(ChaosHudWindow.ResolvePortrait(user, bundle));
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task Hud_follows_a_stepped_run()
     {
