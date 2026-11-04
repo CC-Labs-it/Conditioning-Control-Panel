@@ -130,6 +130,85 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Theory]
+    [InlineData(false, false, true, true, false, true, false)]
+    [InlineData(false, true, false, true, false, true, false)]
+    [InlineData(false, false, true, false, false, false, false)]
+    [InlineData(true, false, true, true, false, false, false)]
+    [InlineData(true, true, false, true, false, true, false)]
+    [InlineData(false, false, true, true, true, true, true)]
+    [InlineData(false, true, false, true, true, true, true)]
+    [InlineData(true, true, false, true, true, true, false)]
+    public Task MultipleAudioActionsUseWpfDuckingAndMergeSelection(bool merged, bool firstDuck,
+        bool secondDuck, bool secondEnabled, bool secondValid, bool expectedDuck, bool expectedPlay) => RunAsync(async (engine, s, played) =>
+    {
+        var trigger = s.KeywordTriggers[0];
+        var first = (PlayAudioAction)trigger.Actions[0];
+        var validPath = first.FilePath;
+        first.FilePath = "missing-keyword-clip";
+        first.DuckSystemAudio = firstDuck;
+        var second = new PlayAudioAction { FilePath = secondValid ? validPath : "also-missing-keyword-clip",
+            DuckSystemAudio = secondDuck, Enabled = secondEnabled };
+        if (merged) s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "sit", CooldownSeconds = 0,
+            Actions = new List<KeywordAction> { second } });
+        else trigger.Actions.Add(second);
+        var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled);
+        var release = new TaskCompletionSource();
+        var unducked = new TaskCompletionSource<long>();
+        var delays = new List<int>();
+        var ducks = 0;
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => ducks++;
+            CoreAudio.DuckGenerationProvider = () => 42;
+            CoreAudio.UnduckProvider = generation => unducked.TrySetResult(generation);
+            engine.Delay = (ms, token) => { delays.Add(ms); return release.Task; };
+            Type(engine, "sit");
+            Assert.Equal(expectedPlay ? 1 : 0, played.Count);
+            Assert.Equal(expectedDuck ? 1 : 0, ducks);
+            Assert.Equal(expectedDuck && !expectedPlay ? new[] { 500 } : Array.Empty<int>(), delays);
+            if (expectedDuck && !expectedPlay)
+            {
+                Assert.False(unducked.Task.IsCompleted);
+                release.SetResult();
+                Assert.Equal(42, await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            }
+        }
+        finally
+        {
+            release.TrySetResult();
+            if (delays.Count > 0 && !unducked.Task.IsCompleted)
+                try { await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)); } catch (TimeoutException) { }
+            engine.StopAudio();
+            (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled) = old;
+        }
+    });
+
+    [Fact]
+    public void LaterMissingActionCanDuckAPlayingFirstAction() => Run((engine, s, played) =>
+    {
+        var trigger = s.KeywordTriggers[0];
+        trigger.Actions.Add(new PlayAudioAction { FilePath = "missing-keyword-clip", DuckSystemAudio = true });
+        var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled);
+        var ducks = 0;
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => ducks++;
+            CoreAudio.UnduckProvider = _ => { };
+            CoreAudio.DuckGenerationProvider = () => 42;
+            Type(engine, "sit");
+            Assert.Single(played);
+            Assert.Equal(1, ducks);
+        }
+        finally
+        {
+            engine.StopAudio();
+            (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled) = old;
+        }
+    });
+
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
     {
