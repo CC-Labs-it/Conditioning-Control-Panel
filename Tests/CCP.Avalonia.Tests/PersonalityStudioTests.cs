@@ -168,6 +168,45 @@ public sealed class PersonalityStudioTests
     });
 
     [Fact]
+    public Task ModManagerOpensStudioAndSavesOrCancels() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var owner = Boot();
+        var oldV2 = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
+        Environment.SetEnvironmentVariable("CCP_COMPANION_V2", "1");
+        var manager = new ModManagerDialog();
+        try
+        {
+            manager.Show(owner);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var list = manager.FindControl<ListBox>("ModList")!;
+            Assert.NotNull(list.SelectedItem);
+            var card = manager.FindControl<CompanionPickerCard>("CompanionCard")!;
+            Assert.True(card.FindControl<Control>("LivePanel")!.IsVisible);
+            var more = card.FindControl<Button>("BtnMorePersonality")!;
+            Assert.True(more.IsEffectivelyVisible);
+            Click(more);
+            var studio = Assert.Single(manager.OwnedWindows);
+            Field(studio, L("name")).Text = "Manager voice";
+            Click(Button(studio, L("save")));
+            await Task.Yield();
+            var preset = Assert.Single(CoreSettings.Current.UserPersonalityPresets);
+            Assert.Equal("Manager voice", preset.Name);
+            Click(more);
+            studio = Assert.Single(manager.OwnedWindows);
+            Field(studio, L("voice")).Text = "Cancelled edit";
+            Click(Button(studio, L("cancel")));
+            await Task.Yield();
+            Assert.NotEqual("Cancelled edit", preset.PromptSettings!.Personality);
+        }
+        finally
+        {
+            PersonalityStudio.CloseForPanic(); manager.Close(); owner.Close();
+            Environment.SetEnvironmentVariable("CCP_COMPANION_V2", oldV2);
+            CoreSettings.ServiceProvider = null;
+        }
+    });
+
+    [Fact]
     public Task DeleteConfirmationRendersLocalizedYesAndNo() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var owner = Boot();

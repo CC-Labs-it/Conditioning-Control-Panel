@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Controls.Documents;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -70,12 +71,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly ListBox _modList;
         private readonly StackPanel _detailsPanel;
         private readonly TextBlock _txtModName, _txtModAuthor, _txtModVersion, _txtModDescription;
-        private readonly TextBlock _txtArtOverrides, _txtPackState, _txtThemeColor, _txtCompanion, _txtActiveIndicator;
+        private readonly TextBlock _txtArtOverrides, _txtPackState, _txtThemeColor, _txtActiveIndicator;
         private readonly Border _previewImagePanel, _packPanel, _themeColorPreview;
         private readonly Image _imgModPreview;
         private readonly ProgressBar _packProgress;
-        private readonly Button _btnDownloadPack, _btnActivate, _btnShare, _btnTubeFit, _btnUninstall;
+        private readonly Button _btnDownloadPack, _btnActivate, _btnShare, _btnUninstall;
         private readonly Button _btnInstall, _btnExport;
+        private readonly CompanionPickerCard _companionCard;
 
         public ModManagerDialog()
         {
@@ -90,7 +92,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _txtArtOverrides = this.FindControl<TextBlock>("TxtArtOverrides")!;
             _txtPackState = this.FindControl<TextBlock>("TxtPackState")!;
             _txtThemeColor = this.FindControl<TextBlock>("TxtThemeColor")!;
-            _txtCompanion = this.FindControl<TextBlock>("TxtCompanion")!;
+            _companionCard = this.FindControl<CompanionPickerCard>("CompanionCard")!;
+            if (ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled)
+                _companionCard.MorePersonalityOptions = PersonalityStudio.Show;
             _txtActiveIndicator = this.FindControl<TextBlock>("TxtActiveIndicator")!;
             _previewImagePanel = this.FindControl<Border>("PreviewImagePanel")!;
             _packPanel = this.FindControl<Border>("PackPanel")!;
@@ -100,7 +104,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _btnDownloadPack = this.FindControl<Button>("BtnDownloadPack")!;
             _btnActivate = this.FindControl<Button>("BtnActivate")!;
             _btnShare = this.FindControl<Button>("BtnShare")!;
-            _btnTubeFit = this.FindControl<Button>("BtnTubeFit")!;
             _btnUninstall = this.FindControl<Button>("BtnUninstall")!;
             _btnInstall = this.FindControl<Button>("BtnInstall")!;
             _btnExport = this.FindControl<Button>("BtnExport")!;
@@ -114,7 +117,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _btnDownloadPack.Click += (_, _) => _ = BtnDownloadPack_Click();
             _btnActivate.Click += (_, _) => BtnActivate_Click();
             _btnShare.Click += (_, _) => ShareTask = BtnShare_Click();
-            _btnTubeFit.Click += (_, _) => BtnTubeFit_Click();
             _btnUninstall.Click += (_, _) => BtnUninstall_Click();
             _btnInstall.Click += (_, _) => BtnInstall_Click();
             _btnExport.Click += (_, _) => BtnExport_Click();
@@ -430,17 +432,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 _themeColorPreview.Background = new SolidColorBrush(Colors.HotPink);
             }
 
-            // Companion
-            _txtCompanion.Text = mod.Manifest.Identity?.CompanionName ?? "BambiSprite";
-
             // Active state
             var isActive = mod.Id == _activeModId;
             _txtActiveIndicator.IsVisible = isActive;
             _btnActivate.IsVisible = !isActive;
 
-            // Tube Fit edits the avatar's fit inside the tube for the mod that's actually rendering,
-            // so it only makes sense (and only previews correctly) for the active mod.
-            _btnTubeFit.IsVisible = isActive;
+            if (isActive) _companionCard.Refresh();
+            else
+            {
+                Color accent;
+                try { accent = Color.Parse(colorHex); }
+                catch { accent = Colors.HotPink; }
+                _companionCard.ShowPreview(mod, accent);
+            }
 
             // Can't uninstall built-in mods or active mod
             _btnUninstall.IsVisible = !mod.IsBuiltIn && !isActive;
@@ -689,14 +693,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 _btnExport.IsEnabled = true;
             }
-        }
-
-        // Live WYSIWYG editor for the avatar's scale/offsets inside the tube. Saves a per-mod user
-        // override in settings (never into the mod), so no ModWasChanged refresh is needed.
-        private void BtnTubeFit_Click()
-        {
-            var dialog = new TubeFitDialog();
-            dialog.ShowDialogSafe(this);
         }
 
         /// <summary>

@@ -28,6 +28,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.ModManagerDialog"
         Title="{loc:Str dialog_mod_manager}"
@@ -250,11 +251,7 @@
                                 <TextBlock x:Name="TxtThemeColor" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
                             </StackPanel>
 
-                            <!-- Companion Info -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Text="{loc:Str label_companion}" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock x:Name="TxtCompanion" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
-                            </StackPanel>
+                            <cmp:CompanionPickerCard x:Name="CompanionCard" Margin="0,0,0,14"/>
 
                             <!-- Active Indicator -->
                             <TextBlock x:Name="TxtActiveIndicator" Text="{loc:Str label_currently_active}" FontSize="13" FontWeight="SemiBold"
@@ -272,13 +269,6 @@
                                         Margin="0,0,10,0"
                                         IsVisible="False">
                                     <TextBlock Text="{loc:Str btn_share_mod}"/>
-                                </Button>
-                                <Button x:Name="BtnTubeFit" Theme="{StaticResource ModActionButton}"
-                                        ToolTip.Tip="{loc:Str tooltip_tube_fit}"
-                                        Background="{DynamicResource PanelAccentBrush}" Foreground="#B084DC"
-                                        Margin="0,0,10,0"
-                                        IsVisible="False">
-                                    <TextBlock Text="{loc:Str btn_tube_fit}"/>
                                 </Button>
                                 <Button x:Name="BtnUninstall" Theme="{StaticResource ModActionButton}"
                                         Background="{DynamicResource PanelAccentBrush}" Foreground="#FF6B6B">
