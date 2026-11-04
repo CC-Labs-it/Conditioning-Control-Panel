@@ -64,6 +64,17 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task TurningOffMotionCancelsTheActiveEntrances() => WithPresets((_, view) =>
+    {
+        var field = typeof(PresetsTabView).GetField("_entranceCancellation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var entrance = Assert.IsType<System.Threading.CancellationTokenSource>(field.GetValue(view));
+        Assert.False(entrance.IsCancellationRequested);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(entrance.IsCancellationRequested);
+    });
+
+    [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
         CoreSettings.Current.MotionLevel = MotionLevel.Off;

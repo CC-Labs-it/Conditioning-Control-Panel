@@ -45,6 +45,7 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                w.CompleteTabTransition(); // Hit geometry must match the completed tab entrance.
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -87,9 +88,10 @@ public sealed class ContentHitTestTests
     /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
     /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
+    internal static void RenderLiveTree(Visual w)
     {
         Dispatcher.UIThread.RunJobs();
+        (w as Control)?.UpdateLayout();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
         while (!batch.Rendered.IsCompleted)
@@ -98,6 +100,8 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
