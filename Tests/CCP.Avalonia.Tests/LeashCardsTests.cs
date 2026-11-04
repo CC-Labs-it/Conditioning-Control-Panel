@@ -71,6 +71,15 @@ public sealed class LeashCardsTests
             .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         body();
     });
+    // CoreSettings is global: each read-clock test picks its own intro state and restores the provider.
+    private static void RunIntro(bool seen, Action<ConditioningControlPanel.Services.SettingsService> body) => Run(() =>
+    {
+        var (old, oldName) = (ConditioningControlPanel.CoreSettings.ServiceProvider, ConditioningControlPanel.CoreAccount.DisplayNameProvider);
+        var settings = new ConditioningControlPanel.Services.SettingsService();
+        settings.Current.LeashIntroSeenLeashed = seen;
+        ConditioningControlPanel.CoreSettings.ServiceProvider = () => settings;
+        try { body(settings); } finally { (ConditioningControlPanel.CoreSettings.ServiceProvider, ConditioningControlPanel.CoreAccount.DisplayNameProvider) = (old, oldName); }
+    });
     private static T Find<T>(Control root, string tag) where T : Control => root.GetLogicalDescendants().OfType<T>().Single(c => c.Tag as string == tag);
     private static void Click(Control root, string tag)
     {
@@ -80,11 +89,8 @@ public sealed class LeashCardsTests
         Dispatcher.UIThread.RunJobs();
     }
     [Fact]
-    public void AskCanBeDismissedAndAcceptsOnlyAfterVisibleReadTimeAtTheChosenLevel() => Run(() =>
+    public void AskCanBeDismissedAndAcceptsOnlyAfterVisibleReadTimeAtTheChosenLevel() => RunIntro(false, settings =>
     {
-        var settings = new ConditioningControlPanel.Services.SettingsService();
-        ConditioningControlPanel.CoreSettings.ServiceProvider = () => settings;
-        settings.Current.LeashIntroSeenLeashed = false;
         var svc = new Service(); var offer = new LeashOffer(Person, Now, Now.AddDays(1));
         var card = new LeashOfferCard(offer, () => svc);
         using var cleanup = new WindowCleanup(new Window { Content = card });
@@ -102,6 +108,7 @@ public sealed class LeashCardsTests
         for (int i = 0; i < 24; i++) card.AdvanceReadClock();
         Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
         card.AdvanceReadClock();
+        ConditioningControlPanel.CoreAccount.DisplayNameProvider = () => " Mira ";
         Click(card, "leash-ask-level:2");
         Assert.NotNull(Find<TextBlock>(card, "leash-allow:chaster:on"));
         Click(card, "leash-ask-yes");
@@ -111,11 +118,12 @@ public sealed class LeashCardsTests
         Assert.Equal("leash-snap", snap.Tag);
         Assert.NotNull(Find<TextBlock>(snap, "leash-snap-title"));
         Assert.Equal(6, Find<Canvas>(snap, "leash-snap-chain").Children.Count);
+        Assert.Contains(snap.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("leash_snap_leashed", "Mira"));
         Click(snap, "leash-snap-ok"); Assert.Null(card.SnapWindow);
     });
 
     [Fact]
-    public void ReorderedOfferResumesItsReadClock() => Run(() =>
+    public void ReorderedOfferResumesItsReadClock() => RunIntro(false, _ =>
     {
         var svc = new Service();
         var a = new LeashOffer(Person, Now, Now.AddDays(1));
@@ -136,7 +144,7 @@ public sealed class LeashCardsTests
     });
 
     [Fact]
-    public void ReadClockPausesWhenExplanationScrollsOutOfView() => Run(() =>
+    public void ReadClockPausesWhenExplanationScrollsOutOfView() => RunIntro(false, _ =>
     {
         var svc = new Service();
         var card = new LeashOfferCard(new LeashOffer(Person, Now, Now.AddDays(1)), () => svc);
@@ -156,11 +164,8 @@ public sealed class LeashCardsTests
     });
 
     [Fact]
-    public void SeenIntroSkipsTheWaitAndFailureKeepsTheAskOpen() => Run(() =>
+    public void SeenIntroSkipsTheWaitAndFailureKeepsTheAskOpen() => RunIntro(true, settings =>
     {
-        var settings = new ConditioningControlPanel.Services.SettingsService();
-        ConditioningControlPanel.CoreSettings.ServiceProvider = () => settings;
-        settings.Current.LeashIntroSeenLeashed = true;
         var svc = new Service { AnswerResult = LeashAnswerResult.Failed };
         var card = new LeashOfferCard(new LeashOffer(Person, Now, Now.AddDays(1)), () => svc);
         using var cleanup = new WindowCleanup(new Window { Content = card });

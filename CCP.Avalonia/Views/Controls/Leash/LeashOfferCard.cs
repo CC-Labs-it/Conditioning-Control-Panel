@@ -85,8 +85,9 @@ public sealed class LeashOfferCard : Border
         _ready = !LeashIntroRule.ShouldExplain(CoreSettings.Service?.Current, LeashIntroSide.Leashed);
         _yes.IsEnabled = _ready;
         ToolTip.SetTip(_yes, _ready ? null : Loc.Get("leash_explain_read_first"));
-        _readTimer?.Stop();
+        _readTimer?.Stop(); _readTimer = null;
         StartReadClock();
+        LeashSound.Ask(DateTime.UtcNow);
     }
 
     private void StartReadClock()
@@ -173,14 +174,20 @@ public sealed class LeashOfferCard : Border
         _gone = result == LeashAnswerResult.Gone;
         _yes.IsEnabled = _ready && !_gone;
         _error.Text = Loc.GetF(result switch { LeashAnswerResult.Gone => "leash_ask_err_gone", LeashAnswerResult.Off => "leash_ask_err_off", _ => "leash_ask_err_failed" }, _offer.From.Name);
+        LeashSound.Denied(DateTime.UtcNow);
     }
+
+    // WPF LeashSurfaces.Me (:188): the display name, else "you".
+    private static string MeName() =>
+        string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim();
 
     // Independent of the offer row, which a successful answer can remove on the next poll.
     private void ShowSnap(Window? owner)
     {
         var title = new TextBlock { Text = Loc.Get("leash_snap_title"), FontSize = 24, Foreground = F.Gold, HorizontalAlignment = HorizontalAlignment.Center, Tag = "leash-snap-title" };
         var holder = new TextBlock { Text = Loc.GetF("leash_snap_holder", _offer.From.Name), TextWrapping = TextWrapping.Wrap };
-        var leashed = new TextBlock { Text = Loc.GetF("leash_snap_leashed", Loc.Get("leash_you")), TextWrapping = TextWrapping.Wrap };
+        var me = MeName();
+        var leashed = new TextBlock { Text = Loc.GetF("leash_snap_leashed", me), TextWrapping = TextWrapping.Wrap };
         var ok = new Button { Content = Loc.Get("leash_snap_ok"), Tag = "leash-snap-ok", HorizontalAlignment = HorizontalAlignment.Center };
         var chain = new Canvas { Width = 120, Height = 24, VerticalAlignment = VerticalAlignment.Center, Tag = "leash-snap-chain" };
         for (int i = 0; i < 6; i++)
@@ -191,9 +198,9 @@ public sealed class LeashOfferCard : Border
         var figures = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         figures.Children.Add(F.Avatar(_offer.From.Name, 60, null));
         chain.HorizontalAlignment = HorizontalAlignment.Center; Grid.SetColumn(chain, 1); figures.Children.Add(chain);
-        var you = F.Avatar(Loc.Get("leash_you"), 60, null); Grid.SetColumn(you, 2); figures.Children.Add(you);
+        var you = F.Avatar(me, 60, null); Grid.SetColumn(you, 2); figures.Children.Add(you);
         var body = new StackPanel { Spacing = 12, Margin = new Thickness(22), Width = 340, Children = { figures, title, holder, leashed, ok } };
-        var window = new Window { Title = Loc.Get("leash_snap_title"), Tag = "leash-snap", Content = body, CanResize = false,
+        var window = new Window { Title = Loc.Get("leash_snap_title"), Tag = "leash-snap", Content = body, CanResize = false, ShowInTaskbar = false,
             SizeToContent = SizeToContent.WidthAndHeight, WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen };
         SnapWindow = window;
         ok.Click += (_, _) => window.Close();
@@ -202,9 +209,11 @@ public sealed class LeashOfferCard : Border
         if (CoreSettings.Current.MotionLevel != Models.MotionLevel.Off)
         {
             var scale = new ScaleTransform(0, 1) { Transitions = new Transitions { new DoubleTransition
-                { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(340), Easing = new CubicEaseOut() } } };
+                { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(340), Easing = new SplineEasing(0.2, 1.5, 0.4, 1) } } };
             chain.RenderTransformOrigin = new RelativePoint(0, 0.5, RelativeUnit.Relative); chain.RenderTransform = scale;
-            window.Opened += (_, _) => Dispatcher.UIThread.Post(() => scale.ScaleX = 1);
+            title.Opacity = 0;
+            // WPF LeashSnapCard.Play (:123,:136): BezierEase.Thud chain, title after 300 ms.
+            window.Opened += (_, _) => { Dispatcher.UIThread.Post(() => scale.ScaleX = 1); DispatcherTimer.RunOnce(() => title.Opacity = 1, TimeSpan.FromMilliseconds(300)); };
         }
         try
         {

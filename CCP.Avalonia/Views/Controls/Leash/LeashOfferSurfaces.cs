@@ -73,7 +73,7 @@ internal sealed class LeashOfferSurfaces : IDisposable
         var card = new LeashOfferCard(offer, () => _service);
         var screen = owner.Screens.ScreenFromWindow(owner);
         var height = screen == null ? 700 : Math.Max(100, Math.Min(700, screen.WorkingArea.Height / screen.Scaling - 24));
-        var window = new Window { Tag = "leash-auto-ask", Title = offer.From.Name, Width = 440, MaxHeight = height,
+        var window = new Window { Tag = "leash-auto-ask", Title = offer.From.Name, Width = 440, MaxHeight = height, ShowInTaskbar = false, CanResize = false,
             SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content = new ScrollViewer { Content = card, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
         _window = window;
