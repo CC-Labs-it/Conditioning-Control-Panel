@@ -8008,6 +8008,13 @@ namespace ConditioningControlPanel.Models
         // TotalSessionsStarted) are unaffected. First season after deploy will undercount
         // because tracking starts at install — by design.
 
+        // Avalonia retains an unsaved ended snapshot and separately buckets later minutes until retry.
+        public SeasonRecapSnapshot? PendingSeasonSnapshot { get; set; }
+        public string? PendingSeasonTarget { get; set; }
+        public Dictionary<string, double> PendingSeasonMinutes { get; set; } = new();
+        public int PendingSeasonPercentile { get; set; }
+        public long PendingSeasonLifetimePointsSpent { get; set; }
+
         private string? _seasonStatsSeason = null;
         /// <summary>
         /// "YYYY-MM" the live season counters below currently belong to. Null until the first

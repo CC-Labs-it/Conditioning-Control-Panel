@@ -70,6 +70,18 @@ namespace ConditioningControlPanel.Services
             lock (SeasonBookkeeping.Gate)
             {
                 s.TotalConditioningMinutes += minutes;
+                if (s.PendingSeasonSnapshot != null && !string.IsNullOrEmpty(s.PendingSeasonTarget))
+                {
+                    if (!string.IsNullOrEmpty(s.CurrentSeason) && ProfileAdopt.LooksLikeMonthKey(s.CurrentSeason)
+                        && string.CompareOrdinal(s.CurrentSeason, s.PendingSeasonTarget) > 0)
+                        s.PendingSeasonTarget = s.CurrentSeason;
+                    s.PendingSeasonMinutes ??= new();
+                    s.PendingSeasonMinutes.TryGetValue(s.PendingSeasonTarget, out var pending);
+                    s.PendingSeasonMinutes[s.PendingSeasonTarget] = pending + minutes;
+                    SeasonBookkeeping.Update(s);
+                    CoreSettings.Save();
+                    return;
+                }
                 if (string.IsNullOrEmpty(s.SeasonStatsSeason))
                     s.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(s, DateTime.UtcNow);
                 s.SeasonConditioningMinutes += minutes;

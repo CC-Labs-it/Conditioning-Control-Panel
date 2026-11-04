@@ -48,6 +48,61 @@ public sealed class SeasonBookkeepingTests
     }
 
     [Fact]
+    public void FailedSnapshotKeepsLaterMinutesForTheNewSeasonAndRetries()
+    {
+        var path = Path.Combine(CorePaths.UserData, "season-recaps", "1904-01.json");
+        Directory.CreateDirectory(path);
+        var s = new AppSettings { CurrentSeason = "1904-02", SeasonStatsSeason = "1904-01",
+            LastSeasonResetSeen = "1904-01", SeasonConditioningMinutes = 5, TotalConditioningMinutes = 10 };
+        try
+        {
+            SeasonBookkeeping.Update(s);
+            ConditioningTimeTracker.AddConditioningTime(s, 3);
+            Assert.Equal(5, s.SeasonConditioningMinutes);
+            s.CurrentSeason = null; // a lost key must not redirect later minutes to the ended bucket
+            ConditioningTimeTracker.AddConditioningTime(s, 1);
+            Assert.Equal(5, s.SeasonConditioningMinutes);
+            s = Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(Newtonsoft.Json.JsonConvert.SerializeObject(s))!;
+            Directory.Delete(path);
+            ConditioningTimeTracker.AddConditioningTime(s, 2); // the persisted confirmed target can retry without a live key
+            Assert.Equal("1904-02", s.SeasonStatsSeason);
+            Assert.Equal(6, s.SeasonConditioningMinutes);
+            Assert.Equal(5, SeasonRecapStore.Load("1904-01")!.SeasonMinutes);
+            Assert.Equal(16, s.TotalConditioningMinutes);
+        }
+        finally { if (Directory.Exists(path)) Directory.Delete(path); }
+    }
+
+    [Fact]
+    public void PendingMinutesAcrossSeveralSeasonsStaySeparate()
+    {
+        var path = Path.Combine(CorePaths.UserData, "season-recaps", "1907-01.json");
+        Directory.CreateDirectory(path);
+        var s = new AppSettings { CurrentSeason = "1907-02", SeasonStatsSeason = "1907-01",
+            LastSeasonResetSeen = "1907-01", SeasonConditioningMinutes = 5, TotalConditioningMinutes = 5 };
+        try
+        {
+            SeasonBookkeeping.Update(s, 42, 15);
+            ConditioningTimeTracker.AddConditioningTime(s, 3);
+            s.CurrentSeason = "1907-03";
+            SeasonBookkeeping.Update(s);
+            ConditioningTimeTracker.AddConditioningTime(s, 4);
+            s = Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(Newtonsoft.Json.JsonConvert.SerializeObject(s))!;
+            Directory.Delete(path);
+            SeasonBookkeeping.Update(s);
+            Assert.Equal(5, SeasonRecapStore.Load("1907-01")!.SeasonMinutes);
+            var february = SeasonRecapStore.Load("1907-02")!;
+            Assert.Equal(3, february.SeasonMinutes);
+            Assert.Equal(8, february.AllTimeMinutes);
+            Assert.Equal(15, february.Percentile);
+            Assert.Equal("1907-03", s.SeasonStatsSeason);
+            Assert.Equal(4, s.SeasonConditioningMinutes);
+            Assert.Empty(s.PendingSeasonMinutes);
+        }
+        finally { if (Directory.Exists(path)) Directory.Delete(path); }
+    }
+
+    [Fact]
     public void FailedSnapshotDoesNotDiscardTheOldBucket()
     {
         var dir = Path.Combine(CorePaths.UserData, "season-recaps", "1902-01.json");
