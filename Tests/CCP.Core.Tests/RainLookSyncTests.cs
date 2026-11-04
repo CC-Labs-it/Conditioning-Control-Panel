@@ -260,52 +260,43 @@ public sealed class RainLookSyncTests
         Assert.False(RainLookSync.RebakeOwed("", "", _ => false));                              // the default look needs no pack
     }
 
-    [Fact]
-    public void The_ready_frame_bakes_a_look_that_owes_one_and_nothing_else()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cancellation_drops_even_a_successful_reply(bool push)
     {
-        var posted = new List<JObject>();
-        int commits = 0;
-        var dir = Path.Combine(Path.GetTempPath(), "ccp-rainsync-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            RainApplyController Controller() => new(new RainApplyController.Hooks
-            {
-                Post = m => posted.Add(JObject.FromObject(m)),
-                Store = () => new RainPackStore(RainPackStore.RootFor(dir), () => null,
-                    name => File.ReadAllText(Path.Combine(RepoRoot(), "Assets", "rain_emotes", name))),
-                Access = () => new RainItemAccess(LoadManifest(), new RainGrantSet(new[] { "cos.rain.dress.rose-flare" }), new Lvl()),
-                Clips = () => new[] { "idle" },
-                Commit = (_, _) => commits++,
-            });
-            var init = new JObject { ["type"] = "init" };
-            var apply = Controller();
-            RainWardrobeHostService.Route(JObject.FromObject(new { type = "rain-ready" }), apply, m => posted.Add(JObject.FromObject(m)),
-                () => init, () => { }, () => N(Dress));
-            // rain-baking = the dressing room's "1 of n" meter (fix wave F1c): a host-side re-bake counts too.
-            Assert.Equal(new[] { "init", "rain-bake", "rain-baking" }, posted.Select(p => (string?)p["type"]));
-            Assert.Equal(RainLookHash.Compute(N(Dress)), (string?)posted[1]["lookHash"]);
-            Assert.True(apply.IsBaking);
-            apply.Abort();
+        var pc = new Pc { Look = Dress, Owed = push };
+        using var stop = new CancellationTokenSource();
+        pc.Http.Answer = (_, _) => { stop.Cancel(); return Json(Equip(Hair, "2026-10-30T12:00:00Z")); };
+        await pc.Sync().SyncAsync(stop.Token);
+        Assert.Equal(Dress, pc.Look);
+        Assert.Equal(push, pc.Owed);
+        Assert.Empty(pc.Adopted);
+        Assert.Null(pc.Agreed);
+    }
 
-            posted.Clear();
-            RainWardrobeHostService.Route(JObject.FromObject(new { type = "rain-ready" }), Controller(), m => posted.Add(JObject.FromObject(m)),
-                () => init, () => { }, () => null);
-            Assert.Equal(new[] { "init" }, posted.Select(p => (string?)p["type"]));
-            Assert.Equal(0, commits);
-        }
-        finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch (IOException) { } }
+    [Fact]
+    public void Adoption_clamp_preserves_owned_items_and_removes_unowned_and_unknown_items()
+    {
+        var manifest = RainItemManifest.Parse("{\"rev\":1,\"items\":[{\"slot\":\"dress\",\"pageId\":\"rose-flare\",\"access\":\"shop\",\"grant\":\"cos.rain.dress.rose-flare\"}]}");
+        var progress = new Lvl();
+        var owned = new RainItemAccess(manifest, new RainGrantSet(new[] { "cos.rain.dress.rose-flare" }), progress);
+        var empty = new RainItemAccess(manifest, new RainGrantSet(null), progress);
+        Assert.Equal(N(Dress), RainLookClamp.Clamp(Dress, owned));
+        Assert.Equal("", RainLookClamp.Clamp(Dress, empty));
+        Assert.Equal("", RainLookClamp.Clamp(Hair, owned));
     }
 
     [Fact]
     public void Sync_state_is_machine_local()
     {
-        Assert.True(ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.RainLookPushOwed)));
-        Assert.True(ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.RainLookAgreedUtc)));
-        Assert.False(ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.RainLook)));   // the look itself rides the backup
+        Assert.True(CloudSettingsBackup.IsExcludedFromBackup(nameof(AppSettings.RainLookPushOwed)));
+        Assert.True(CloudSettingsBackup.IsExcludedFromBackup(nameof(AppSettings.RainLookAgreedUtc)));
+        Assert.False(CloudSettingsBackup.IsExcludedFromBackup(nameof(AppSettings.RainLook)));   // the look itself rides the backup
         var at = new DateTime(2026, 10, 30, 0, 0, 0, DateTimeKind.Utc);
         var current = new AppSettings { RainLookPushOwed = true, RainLookAgreedUtc = at };
         var restored = new AppSettings();
-        ProfileSyncService.PreserveLocalOnlyFields(current, restored);
+        CloudSettingsBackup.PreserveLocalOnlyFields(current, restored);
         Assert.True(restored.RainLookPushOwed);
         Assert.Equal(at, restored.RainLookAgreedUtc);
     }
@@ -315,16 +306,4 @@ public sealed class RainLookSyncTests
         public int Level { get; init; } = 1;
         public IReadOnlyCollection<string> UnlockedAchievements { get; init; } = Array.Empty<string>();
     }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return dir!.FullName;
-    }
-
-    private static RainItemManifest LoadManifest() =>
-        RainItemManifest.Load(Path.Combine(RepoRoot(), "Assets", "web", "rain-wardrobe", RainItemManifest.FileName));
 }

@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -167,7 +166,7 @@ internal sealed class RainLookSync
         if (local.Value.PushOwed) { await PushAsync(id.Value, local.Value.Look, ct); return; }
 
         var body = await SendAsync(HttpMethod.Get, id.Value, null, ct);
-        if (body == null || SafeIdentity()?.UnifiedId != id.Value.UnifiedId) return;
+        if (ct.IsCancellationRequested || body == null || SafeIdentity()?.UnifiedId != id.Value.UnifiedId) return;
         if (ReadEquip(body) is not { } server) { _h.Log?.Invoke("pull: reply without an equip block"); return; }
 
         local = _h.Local();
@@ -190,7 +189,7 @@ internal sealed class RainLookSync
     private async Task PushAsync((string UnifiedId, string Token) id, string look, CancellationToken ct)
     {
         var body = await SendAsync(HttpMethod.Put, id, PutBody(id.UnifiedId, look), ct);
-        if (body == null || SafeIdentity()?.UnifiedId != id.UnifiedId) return;   // owed stays: next run
+        if (ct.IsCancellationRequested || body == null || SafeIdentity()?.UnifiedId != id.UnifiedId) return;   // owed stays: next run
         // An ok equip reply with rain: null is the server's default look (a default push, or a look the
         // clamp emptied): it compares as "" below. Only a reply with no equip block keeps the push owed.
         if (ReadEquip(body) is not { } server) { _h.Log?.Invoke("push: reply without an equip block"); return; }
@@ -258,80 +257,4 @@ internal sealed class RainLookSync
         return hasPack(hash) ? hash : "";
     }
 
-    // ------------------------------------------------------------------ the app's one
-
-    private static RainLookSync? _app;
-    private static string? _pulledFor;
-
-    private static RainLookSync App_ => _app ??= new RainLookSync(null, new Hooks
-    {
-        Identity = BackRoomApi.AppIdentity,
-        Local = () => App.Settings?.Current is { } s ? (s.RainLook, s.RainLookPushOwed, s.RainLookAgreedUtc) : null,
-        Agreed = (look, at) =>
-        {
-            if (App.Settings?.Current is not { } s) return;
-            if (string.Equals(RainLookCodec.Normalize(s.RainLook), RainLookCodec.Normalize(look), StringComparison.Ordinal))
-                s.RainLookPushOwed = false;
-            s.RainLookAgreedUtc = at;
-            App.Settings.Save();
-        },
-        Adopt = AdoptOnThisPc,
-        Log = line => App.Logger?.Information("RainLookSync: {Line}", line),
-    });
-
-    private static bool HasPack(string hash)
-    {
-        try { return RainPackStore.CreateDefault().TryGetFolder(hash) != null; }
-        catch (Exception) { return false; }
-    }
-
-    /// <summary>The account is known (a validate prizes block landed, grants applied): pull once per
-    /// account per run. UI thread.</summary>
-    public static void OnAccountReady(string? account)
-    {
-        if (string.IsNullOrEmpty(account) || string.Equals(account, _pulledFor, StringComparison.Ordinal)) return;
-        if (!string.Equals(account, BackRoomApi.AppIdentity()?.UnifiedId, StringComparison.Ordinal)) return;
-        _pulledFor = account;
-        _ = App_.SyncAsync();
-    }
-
-    /// <summary>The wardrobe's Apply committed a look on this PC: owe a push and send it. UI thread.</summary>
-    public static void NoteLocalChange()
-    {
-        if (App.Settings?.Current is not { } s) return;
-        s.RainLookPushOwed = true;
-        App.Settings.Save();
-        _ = App_.SyncAsync();
-    }
-
-    /// <summary>The live re-bake rule for the dressing room's ready frame: the clamped look to bake, or null.</summary>
-    internal static string? LookOwingABake()
-    {
-        var s = App.Settings?.Current;
-        if (s == null) return null;
-        var look = RainWardrobeCatalog.Clamp(s.RainLook, App.Ownership?.Grants);
-        return RebakeOwed(look, s.RainPackHash, HasPack) ? look : null;
-    }
-
-    private static void AdoptOnThisPc(string serverLook, DateTime? at)
-    {
-        if (App.Settings?.Current is not { } s) return;
-        // A dressing room on screen owns the look until it closes.
-        if (RainWardrobeHostService.IsActive)
-        {
-            App.Logger?.Information("RainLookSync: adopt deferred, the dressing room is open");
-            _pulledFor = null;   // the next validate prizes block pulls again
-            return;
-        }
-        var look = RainWardrobeCatalog.Clamp(serverLook, App.Ownership?.Grants);
-        s.RainLook = look;
-        s.RainPackHash = PackFor(look, HasPack);
-        s.RainLookPushOwed = false;
-        s.RainLookAgreedUtc = at;
-        App.Settings.Save();
-        App.AvatarWindow?.RefreshRainLook();
-        // RainV2Gate off: the look is adopted silently, never a toast about a wardrobe nobody can open.
-        if (RainV2Gate.On && RebakeOwed(look, s.RainPackHash, HasPack))
-            App.Notifications?.Show(Loc.Get("rain_look_synced_rebake"), NotificationType.Info, TimeSpan.FromSeconds(8));
-    }
 }

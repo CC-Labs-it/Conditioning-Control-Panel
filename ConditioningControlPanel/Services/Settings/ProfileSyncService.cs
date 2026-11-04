@@ -584,7 +584,7 @@ namespace ConditioningControlPanel.Services
             PrizeFeed.Apply(requestedFor, answeredFor, prizes, source);
             // Rain look sync (/v2/equip family rain): queued behind the snapshot, so the clamp sees the grants.
             if (!string.IsNullOrEmpty(requestedFor) && string.Equals(requestedFor, answeredFor, StringComparison.Ordinal))
-                PostPrizeWork(() => Companion.RainLookSync.OnAccountReady(requestedFor));
+                PostPrizeWork(() => Companion.RainLookSyncHead.OnAccountReady(requestedFor));
         }
 
         /// <summary>
