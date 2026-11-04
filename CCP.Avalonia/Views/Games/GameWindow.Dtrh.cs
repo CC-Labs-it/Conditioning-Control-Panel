@@ -17,7 +17,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -50,7 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private global::Avalonia.PixelPoint _dtrhWindowPosition;
         private double _dtrhWindowWidth, _dtrhWindowHeight;
         private global::Avalonia.Controls.WindowState _dtrhWindowState;
-        private bool _dtrhFullscreen;
+        private bool _dtrhFullscreen, _dtrhHasWindowedFrame;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
 
         internal bool DtrhRunActive => _dtrhRunActive;
@@ -109,6 +112,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
         }
 
+        // Avalonia has no RestoreBounds. Remember the normal frame while the user moves or resizes it.
+        private void CaptureDtrhWindowedFrame()
+        {
+            if (_dtrhFullscreen || WindowState != WindowState.Normal || !IsVisible) return;
+            if (ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
+            _dtrhWindowPosition = Position;
+            _dtrhWindowWidth = ClientSize.Width;
+            _dtrhWindowHeight = ClientSize.Height;
+            _dtrhHasWindowedFrame = true;
+        }
+
         // WPF DtrhHostService.ApplyHostFullscreen and ChaosWebViewHost.ApplyWindowMode.
         private void SetDtrhFullscreen(bool on)
         {
@@ -116,21 +130,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (on)
             {
                 _dtrhWindowState = WindowState;
-                _dtrhWindowPosition = Position;
-                _dtrhWindowWidth = Width;
-                _dtrhWindowHeight = Height;
+                CaptureDtrhWindowedFrame();
                 _dtrhFullscreen = true;
-                WindowState = global::Avalonia.Controls.WindowState.FullScreen;
+                WindowState = WindowState.FullScreen;
             }
             else
             {
+                var screens = ScreenList.Enumerate(this);
+                // Position and screen bounds are physical pixels; sizes are DIPs.
+                bool reachable = _dtrhHasWindowedFrame && screens.Any(s =>
+                    _dtrhWindowPosition.X < s.Bounds.Right && _dtrhWindowPosition.Y < s.Bounds.Bottom &&
+                    _dtrhWindowPosition.X + _dtrhWindowWidth * s.Scaling > s.Bounds.X &&
+                    _dtrhWindowPosition.Y + _dtrhWindowHeight * s.Scaling > s.Bounds.Y);
+                var target = screens.FirstOrDefault(s => s.Bounds.Contains(Position))
+                    ?? screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
+                WindowState = WindowState.Normal;
+                if (reachable || target == null)
+                {
+                    if (_dtrhHasWindowedFrame)
+                    {
+                        Width = _dtrhWindowWidth;
+                        Height = _dtrhWindowHeight;
+                        Position = _dtrhWindowPosition;
+                    }
+                }
+                else
+                {
+                    var bounds = target.Bounds;
+                    var scale = target.Scaling > 0 ? target.Scaling : 1;
+                    Width = Math.Min(_dtrhWindowWidth, bounds.Width / scale);
+                    Height = Math.Min(_dtrhWindowHeight, bounds.Height / scale);
+                    Position = new PixelPoint(bounds.X + (int)((bounds.Width - Width * scale) / 2),
+                                              bounds.Y + (int)((bounds.Height - Height * scale) / 2));
+                }
+                if (reachable && _dtrhWindowState == WindowState.Maximized)
+                    WindowState = WindowState.Maximized;
                 _dtrhFullscreen = false;
-                WindowState = global::Avalonia.Controls.WindowState.Normal;
-                Width = _dtrhWindowWidth;
-                Height = _dtrhWindowHeight;
-                Position = _dtrhWindowPosition;
-                if (_dtrhWindowState == global::Avalonia.Controls.WindowState.Maximized)
-                    WindowState = _dtrhWindowState;
+                CaptureDtrhWindowedFrame();
             }
             Activate();
         }
