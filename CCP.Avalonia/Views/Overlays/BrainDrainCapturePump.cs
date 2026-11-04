@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
@@ -9,7 +10,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 // The worker owns every GDI handle and shutdown never waits for it.
 internal sealed class BrainDrainCapturePump
 {
-    internal sealed record Frame(int Width, int Height, byte[] Pixels);
+    // A taken frame owns its buffer until the UI has finished copying it.
+    internal sealed class Frame(int width, int height, byte[] pixels, ArrayPool<byte>? pool = null) : IDisposable
+    {
+        public int Width { get; } = width;
+        public int Height { get; } = height;
+        public byte[] Pixels { get; } = pixels;
+        private ArrayPool<byte>? _pool = pool;
+        public void Dispose() => Interlocked.Exchange(ref _pool, null)?.Return(Pixels);
+    }
     internal const uint DesktopCopy = 0x00CC0020; // SRCCOPY, without CAPTUREBLT.
     private static readonly Frame Stopped = new(0, 0, Array.Empty<byte>());
     private readonly Func<Frame?> _capture;
@@ -36,7 +45,7 @@ internal sealed class BrainDrainCapturePump
         }
     }
 
-    internal void Shutdown() => Interlocked.Exchange(ref _frame, Stopped);
+    internal void Shutdown() => Interlocked.Exchange(ref _frame, Stopped)?.Dispose();
 
     private void Loop()
     {
@@ -50,8 +59,9 @@ internal sealed class BrainDrainCapturePump
                 while (true)
                 {
                     var old = Volatile.Read(ref _frame);
-                    if (ReferenceEquals(old, Stopped)) return;
-                    if (ReferenceEquals(Interlocked.CompareExchange(ref _frame, frame, old), old)) break;
+                    if (ReferenceEquals(old, Stopped)) { frame.Dispose(); return; }
+                    if (ReferenceEquals(Interlocked.CompareExchange(ref _frame, frame, old), old))
+                    { old?.Dispose(); break; }
                 }
             }
             if (ReferenceEquals(Volatile.Read(ref _frame), Stopped)) return;
@@ -81,11 +91,17 @@ internal sealed class BrainDrainCapturePump
             SetStretchBltMode(memory, 4); // HALFTONE, WPF BrainDrainCapturePump.cs:495.
             if (!StretchBlt(memory, 0, 0, width, height, dc, bounds.X, bounds.Y, bounds.Width, bounds.Height, DesktopCopy)) return null;
             if (!GdiFlush()) return null; // DIB writes must finish before reading its memory.
-            var pixels = new byte[checked(width * height * 4)];
-            Marshal.Copy(bits, pixels, 0, pixels.Length);
-            // GDI's fourth byte is undefined. Frames are opaque BGRA.
-            for (int i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
-            return new Frame(width, height, pixels);
+            int length = checked(width * height * 4);
+            var pool = ArrayPool<byte>.Shared;
+            var pixels = pool.Rent(length);
+            try
+            {
+                Marshal.Copy(bits, pixels, 0, length);
+                // GDI's fourth byte is undefined. Frames are opaque BGRA.
+                for (int i = 3; i < length; i += 4) pixels[i] = 255;
+                return new Frame(width, height, pixels, pool);
+            }
+            catch { pool.Return(pixels); throw; }
         }
         finally
         {
