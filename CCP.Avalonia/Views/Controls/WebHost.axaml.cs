@@ -305,23 +305,55 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly Panel _webSlot;
         private readonly Border _fallback;
         private readonly TextBlock _txtReason, _txtSource;
-        private readonly NativeWebView? _web;
+        private NativeWebView? _web;
+        private readonly bool _engineAvailable;
+        private readonly Func<NativeWebView> _createWeb;
 
-        public WebHost()
+        // Home retries a constructor failure on the next user navigation.
+        public bool RetryFailedConstruction { get; set; }
+
+        public WebHost() : this(IsAvailable, () => new NativeWebView()) { }
+
+        internal WebHost(bool engineAvailable, Func<NativeWebView> createWeb)
         {
+            _engineAvailable = engineAvailable;
+            _createWeb = createWeb;
             AvaloniaXamlLoader.Load(this);
             _webSlot = this.FindControl<Panel>("WebSlot")!;
             _fallback = this.FindControl<Border>("Fallback")!;
             _txtReason = this.FindControl<TextBlock>("TxtReason")!;
             _txtSource = this.FindControl<TextBlock>("TxtSource")!;
 
-            if (IsAvailable)
+            if (_engineAvailable) BuildEngine();
+            else
             {
+                // Linux: name the distro's install command (docs/avalonia-linux-install.html) instead of
+                // the adapter's generic "Install webkit2gtk 4.0+ package.", which stays the fallback.
+                // CCP_LINUX_WEBVIEW=off: the reason is the user's own choice, not a missing package.
+                var hint = LinuxChoice == "off" ? null : _linuxHint.Value;
+                _txtReason.Text = hint?.Text ?? UnavailableReason!;
+                if (hint?.Command is { } command)
+                {
+                    var copy = this.FindControl<Button>("BtnCopyCommand")!;
+                    copy.IsVisible = true;
+                    copy.Click += async (_, _) =>
+                    {
+                        try { if (TopLevel.GetTopLevel(this)?.Clipboard is { } c) await c.SetTextAsync(command); }
+                        catch (Exception ex) { Log.Debug("WebHost: copy failed: {Error}", ex.Message); }
+                    };
+                }
+            }
+            _fallback.IsVisible = _web is null;
+            ApplySource();
+        }
+
+        private void BuildEngine()
+        {
                 // try/catch, not a bare new: the probe says an engine is installed, it does not
                 // promise the adapter builds. A throw here must show the panel, not kill the host.
                 try
                 {
-                    _web = new NativeWebView();
+                    _web = _createWeb();
                     // A native child does not inherit the parent's brush (Spiral's no-white-flash sink).
                     BindNativeBackground(_web);
                     // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
@@ -348,31 +380,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 }
                 catch (Exception ex)
                 {
+                    if (_web != null) _webSlot.Children.Remove(_web);
                     _web = null;
                     _txtReason.Text = ex.Message;
                 }
-            }
-            else
-            {
-                // Linux: name the distro's install command (docs/avalonia-linux-install.html) instead of
-                // the adapter's generic "Install webkit2gtk 4.0+ package.", which stays the fallback.
-                // CCP_LINUX_WEBVIEW=off: the reason is the user's own choice, not a missing package.
-                var hint = LinuxChoice == "off" ? null : _linuxHint.Value;
-                _txtReason.Text = hint?.Text ?? UnavailableReason!;   // the hint ends with LinuxDependencies.RestartHint
-                if (hint?.Command is { } command)
-                {
-                    var copy = this.FindControl<Button>("BtnCopyCommand")!;
-                    copy.IsVisible = true;
-                    copy.Click += async (_, _) =>
-                    {
-                        try { if (TopLevel.GetTopLevel(this)?.Clipboard is { } c) await c.SetTextAsync(command); }
-                        catch (Exception ex) { Log.Debug("WebHost: copy failed: {Error}", ex.Message); }
-                    };
-                }
-            }
-
             _fallback.IsVisible = _web is null;
-            ApplySource();
         }
 
         internal void BindNativeBackground(NativeWebView native) =>
@@ -417,6 +429,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
+            if (RetryFailedConstruction && _engineAvailable && _web is null) BuildEngine();
             if (RefusesScrolller(url)) { RefusedNavigations++; return; }
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }

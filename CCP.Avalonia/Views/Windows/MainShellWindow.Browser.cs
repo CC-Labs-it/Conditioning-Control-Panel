@@ -147,14 +147,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // WPF MainWindow/MainWindow.Browser.cs:487-498: HTTPS only, after the offline gate.
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
-            if (BrowserView is { HasEngine: false })
-            {
-                var navigated = NavigateBrowser(url); // retain the requested URL on the fallback panel
-                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
-                    Platform.ExternalOpener.Open(url);
-                return navigated;
-            }
-            return NavigateBrowser(url);
+            var navigated = NavigateBrowser(url);
+            if (BrowserView is { HasEngine: false }
+                && Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+                Platform.ExternalOpener.Open(url);
+            return navigated;
         }
 
         // ============================== the profile viewer ==============================
