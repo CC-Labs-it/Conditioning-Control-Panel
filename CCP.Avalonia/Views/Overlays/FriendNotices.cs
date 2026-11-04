@@ -30,7 +30,9 @@ internal sealed class FriendNotices : Window
     internal readonly FriendNoticeStack Stack = new();
     private readonly Dictionary<FriendNotice, NoticeLook> _looks = new();
     private readonly Dictionary<FriendNotice, (ScaleTransform Bar, TextBlock Ago)> _drawn = new();
+    private readonly Dictionary<FriendNotice, Border> _cards = new();
     private readonly StackPanel _column = new();
+    private readonly Dictionary<Border, (double Start, double Ms, long At)> _fades = new();
     private readonly BeatLoop _beat;
     private Window? _anchor;
     private double _lastT;
@@ -69,6 +71,7 @@ internal sealed class FriendNotices : Window
                 _enterMs = Math.Max(0, BeatLoop.Time.GetElapsedTime(_enterStarted).TotalMilliseconds);
                 StepEnter(0);
             }
+            StepFades(null);
             Tick((t - _lastT) * 1000);
             _lastT = t;
         });
@@ -97,7 +100,7 @@ internal sealed class FriendNotices : Window
         w.Stack.Clear();
         w.Close();
     }
-    internal void Advance(double ms) { StepEnter(ms); Tick(ms); }
+    internal void Advance(double ms) { StepEnter(ms); StepFades(ms); Tick(ms); }
     private void Tick(double ms)
     {
         var gone = Stack.Tick(ms);
@@ -118,13 +121,32 @@ internal sealed class FriendNotices : Window
     {
         if (!_looks.TryGetValue(n, out var look) || !Stack.Remove(n)) return;
         Leave(n, acted, false);
-        AfterRemoval();
+        var card = _cards.GetValueOrDefault(n);
+        if (card != null && AmbientFxCanvas.Env.Level != MotionLevel.Off)
+        {
+            if (ReferenceEquals(_enterCard, card)) { _enterCard = null; _enterShift = null; }
+            card.IsHitTestVisible = false;
+            _fades[card] = (card.Opacity, 0, BeatLoop.Time.GetTimestamp());
+        }
+        else AfterRemoval();
         try { if (acted) look.Act?.Invoke(n.Payload); else if (open) look.Open?.Invoke(n.Payload); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice action"); }
     }
+    private void StepFades(double? elapsed)
+    {
+        var completed = false;
+        foreach (var (card, fade) in new List<KeyValuePair<Border, (double Start, double Ms, long At)>>(_fades))
+        {
+            var ms = elapsed.HasValue ? fade.Ms + Math.Max(0, elapsed.Value) : BeatLoop.Time.GetElapsedTime(fade.At).TotalMilliseconds;
+            card.Opacity = fade.Start * Math.Max(0, 1 - ms / 140);
+            if (ms >= 140) { _fades.Remove(card); _column.Children.Remove(card); completed = true; }
+            else _fades[card] = (fade.Start, ms, fade.At);
+        }
+        if (completed && IsVisible) AfterRemoval();
+    }
     private void AfterRemoval()
     {
-        if (Stack.All.Count == 0) Close(); else Rebuild();
+        if (Stack.All.Count == 0 && _fades.Count == 0) Close(); else Rebuild();
     }
     private void Place()
     {
@@ -148,6 +170,7 @@ internal sealed class FriendNotices : Window
         _enterShift = null;
         _column.Children.Clear();
         _drawn.Clear();
+        _cards.Clear();
         foreach (var n in Stack.Visible)
         {
             var look = _looks[n];
@@ -214,7 +237,9 @@ internal sealed class FriendNotices : Window
             _column.Children.Add(card);
             if (ReferenceEquals(n, fresh)) Enter(card, folded);
             _drawn[n] = (bar, ago);
+            _cards[n] = card;
         }
+        foreach (var card in _fades.Keys) _column.Children.Add(card);
         if (Stack.Hidden > 0) _column.Children.Add(new TextBlock {
             Text = string.Format(Loc.Get("friends_notice_more"), Stack.Hidden), Foreground = FriendsDrawer.Muted,
             HorizontalAlignment = HorizontalAlignment.Right });

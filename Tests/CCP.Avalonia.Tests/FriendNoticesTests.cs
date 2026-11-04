@@ -51,9 +51,87 @@ public sealed class FriendNoticesTests
             w.Dismiss(n, true);
             Assert.Equal("new", acted);
             Assert.Equal(0, missed);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
         }
         finally { FriendNotices.CloseAll(); }
+        return Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Full)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Reduced)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Off)]
+    public Task DismissalFadesOnceAndSurvivesExpiry(global::ConditioningControlPanel.Models.MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var (oldLevel, oldGentle, oldProbe, oldTime) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe, BeatLoop.Time);
+        try
+        {
+            BeatLoop.Time = new SteppedTime();
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = level; settings.GentleVisuals = false;
+            int actions = 0, missed = 0;
+            var at = DateTimeOffset.UtcNow;
+            FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", at, 6000), new NoticeLook { Act = _ => actions++ });
+            var w = FriendNotices.Current!;
+            w.Advance(260);
+            var n = Assert.Single(w.Stack.All);
+            var card = ((StackPanel)w.Content!).Children.OfType<Border>().Single();
+            w.Dismiss(n, true); w.Dismiss(n, true);
+            Assert.Equal(1, actions);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Off)
+                Assert.Null(FriendNotices.Current);
+            else
+            {
+                Assert.Same(w, FriendNotices.Current);
+                w.Advance(70);
+                Assert.Equal(0.5, card.Opacity, 5);
+                FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "b", "B", at, 1), new NoticeLook { Missed = _ => missed++ });
+                w.Advance(1);
+                Assert.Equal(1, missed);
+                Assert.Contains(card, ((StackPanel)w.Content!).Children);
+                w.Advance(68);
+                Assert.Same(w, FriendNotices.Current);
+                w.Advance(1);
+                Assert.Null(FriendNotices.Current);
+            }
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task ClosingDuringDismissalDoesNotRepeatTheAction() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var (oldLevel, oldGentle, oldProbe) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe);
+        try
+        {
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = false;
+            int actions = 0;
+            FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", DateTimeOffset.UtcNow, 6000), new NoticeLook { Act = _ => actions++ });
+            var w = FriendNotices.Current!;
+            var n = Assert.Single(w.Stack.All);
+            w.Dismiss(n, true);
+            Assert.Same(w, FriendNotices.Current);
+            FriendNotices.CloseAll();
+            w.Advance(140);
+            w.Dismiss(n, true);
+            Assert.Equal(1, actions);
+            Assert.Null(FriendNotices.Current);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
         return Task.CompletedTask;
     });
     // WPF FriendNotices.cs:101-108,234-245,395-411. Only the fresh card moves.
@@ -366,6 +444,7 @@ public sealed class FriendNoticesTests
             Assert.Single(w.Stack.All);
             Press(w, onName, MouseButton.Left);
             Assert.Equal(1, opened);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "b", "Friend", DateTimeOffset.UtcNow, 6000), Look());
             w = FriendNotices.Current!;
@@ -373,6 +452,7 @@ public sealed class FriendNoticesTests
             Press(w, Centre(Tagged(w, "friend-notice-action"), w), MouseButton.Left);
             Assert.Equal(1, acted);
             Assert.Equal(1, opened);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
         }
         finally { FriendNotices.CloseAll(); }
