@@ -42,6 +42,38 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task Live_bubble_hover_lights_focus_and_clears_on_exit_and_teardown()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var bar = ChaosRunHost.Hud!.FindControl<StackPanel>("FocusStripBlock")!;
+                var bubble = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { IsLive = true, FuseMs = 5000, SizePx = 200 });
+                BubbleOverlay.SetHover(bubble.Screen, bubble.CenterX, bubble.CenterY);
+                ChaosRunHost.Tick();
+                Assert.NotNull(bar.Effect);
+                BubbleOverlay.SetHover(bubble.Screen, bubble.CenterX + 1000, bubble.CenterY);
+                ChaosRunHost.Tick();
+                Assert.Null(bar.Effect);
+                BubbleOverlay.SetHover(bubble.Screen, bubble.CenterX, bubble.CenterY);
+                ChaosRunHost.Tick();
+                Assert.NotNull(bar.Effect);
+                BubbleOverlay.EndChaos();
+                ChaosRunHost.Tick();
+                Assert.Null(bar.Effect);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task A_run_counts_down_ticks_and_ends_on_the_recap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

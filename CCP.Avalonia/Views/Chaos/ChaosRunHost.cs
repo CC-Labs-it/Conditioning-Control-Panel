@@ -375,6 +375,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawnTimer?.Stop();
             _spawnTimer = null;
             BubbleOverlay.EndChaos();
+            _hud?.SetCursorOnLive(false);
         }
 
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>
@@ -384,6 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
+            _hud?.SetCursorOnLive(BubbleOverlay.CursorOnLive);
             TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
             if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))

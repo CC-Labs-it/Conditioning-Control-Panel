@@ -180,6 +180,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
         private static Action<AmbientBubble>? _chaosPopped;
+        private static int _hoverScreen = -1;
+        private static double _hoverX, _hoverY;
+
+        internal static void SetHover(int screen, double x, double y)
+        {
+            _hoverScreen = screen;
+            _hoverX = x;
+            _hoverY = y;
+        }
+
+        internal static void ClearHover(int screen)
+        {
+            if (_hoverScreen == screen) _hoverScreen = -1;
+        }
+
+        internal static bool CursorOnLive => _chaosPopped != null && _hoverScreen >= 0
+            && Field.HitTest(_hoverScreen, _hoverX, _hoverY)?.IsLiveThreat == true;
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
@@ -244,6 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
+            _hoverScreen = -1;
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
@@ -415,7 +433,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Content = new Layer(this);
             FrameCallback = now => { if (BubbleOverlay.IsFrameOwner(this)) BubbleOverlay.OnFrame(now); };
             PointerPressed += OnPressed;
-            PointerMoved += (_, e) => OnHold(e, true);
+            PointerEntered += (_, e) => UpdateHover(e);
+            PointerMoved += (_, e) => { UpdateHover(e); OnHold(e, true); };
+            PointerExited += (_, _) => BubbleOverlay.ClearHover(Index);
             PointerReleased += (_, e) => OnHold(e, false);
             // WPF polls the physical button (BubbleService.cs:545): a release the window never saw
             // (alt-tab, compositor grab) still breaks the hold.
@@ -436,6 +456,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b == null) return;
             BubbleOverlay.Press(b, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
             e.Handled = true;
+        }
+
+        private void UpdateHover(PointerEventArgs e)
+        {
+            var p = e.GetPosition(this);
+            BubbleOverlay.SetHover(Index, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
         }
 
         /// <summary>The press is captured, so the hold's moves and release land here (WPF TickChannel reads them).</summary>
