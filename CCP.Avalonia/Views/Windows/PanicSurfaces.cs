@@ -95,7 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence(), After: ["corner-gif"]),
             // WPF LockCardService.Stop(dismissOpenCards: true); :2041 StopAdHocEffects closes lock cards after the engine/media stop.
             new("lock-cards", _ => MainShellWindow.StopLockCards(), After: ["engine", "leash-task"]),
-            new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
+            new("speak-cue", _ => { Deeper.SpeakPromptSession.StopAll(); Overlays.SpeakCueOverlay.CloseActive(); }),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)

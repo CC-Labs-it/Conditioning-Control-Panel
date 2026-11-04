@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,10 +20,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper;
 internal sealed class SpeakPromptSession
 {
     internal static bool PromptedConsentThisRun;
+    private static readonly object LiveGate = new();
+    private static readonly HashSet<SpeakPromptSession> Live = new();
+    private bool Track()
+    {
+        lock (LiveGate) { if (Volatile.Read(ref _stopped) != 0 || (_started && !Live.Contains(this))) return false; Live.Add(this); return true; }
+    }
+    private void Untrack() { lock (LiveGate) Live.Remove(this); }
+    internal static void StopAll() {
+        SpeakPromptSession[] sessions; lock (LiveGate) sessions = Live.ToArray();
+        foreach (var session in sessions) session.Stop();
+    }
     private readonly SpeakPromptPlan _plan;
     private readonly SpeakPromptCueSession _cue;
     private readonly CancellationTokenSource _stop = new();
-    private bool _started, _evicted;
+    private volatile bool _started;
+    private bool _evicted;
     private int _stopped;
 
     // Instance seams let tests exercise the same session without a microphone or modal dialog.
@@ -72,12 +86,12 @@ internal sealed class SpeakPromptSession
         return Regex.Replace(text, "<[^>]*>", "");
     }
 
-    internal void Start() => Dispatcher.UIThread.Post(() => _ = StartAsync());
+    internal void Start() { if (!_started && Track()) Dispatcher.UIThread.Post(() => _ = StartAsync()); }
 
     // UI-thread owned, including the asynchronous consent continuation and final cleanup.
     internal async Task StartAsync()
     {
-        if (_started || Volatile.Read(ref _stopped) != 0) return;
+        if (_started || !Track()) return;
         _started = true;
         try
         {
@@ -144,6 +158,7 @@ internal sealed class SpeakPromptSession
     internal void Stop()
     {
         if (Interlocked.Exchange(ref _stopped, 1) != 0) return;
+        Untrack();
         try { _stop.Cancel(); } catch { }
         void Teardown() { _cue.Dispose(); Restore(); }
         if (Dispatcher.UIThread.CheckAccess()) Teardown();
@@ -152,6 +167,7 @@ internal sealed class SpeakPromptSession
 
     private void Finish()
     {
+        Untrack();
         _cue.Dispose();
         Restore();
     }

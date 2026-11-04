@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -141,6 +142,22 @@ public sealed class SpeakPromptSessionTests
         Assert.False(otherCapture.IsCancellationRequested);
         await run;
         Assert.Equal(1, source.Plays);
+    });
+
+    [Fact]
+    public Task Panic_StopsActiveAndQueuedPrompts() => Run(async () =>
+    {
+        var source = new Playback(); var result = new TaskCompletionSource<PhraseResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var active = Session(source); CancellationToken token = default;
+        active.Recognize = (_, _, ct) => { token = ct; return result.Task; };
+        var run = active.StartAsync(); var queued = Session(source); var started = 0;
+        queued.Available = () => { started++; return true; }; queued.Start();
+        ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "speak-cue").Stop(null);
+        Assert.True(token.IsCancellationRequested);
+        result.SetResult(new PhraseResult { Matched = true }); await run;
+        var drained = new TaskCompletionSource();
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() => drained.SetResult());
+        await drained.Task; Assert.Equal(0, started); Assert.Equal(1, source.Plays);
     });
 
     [Fact]
