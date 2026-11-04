@@ -30,7 +30,7 @@
 //                                 DescentCycleXp.XpBonusFor), called from SetProfileViewingSelf as WPF.
 //   FindNextAchievementName     - Models.Achievement.All
 //                                 (ConditioningControlPanel/Models/Achievement.cs).
-//   RefreshProfileSpiralPlate   - MainShellWindow.ProfileSpiral.cs, still a stub.
+//   RefreshProfileSpiralPlate   - MainShellWindow.ProfileSpiral.cs.
 //
 // Callers: DiscordTabView (own card, search, lookup) calls SetProfileViewingSelf and
 // UpdateProfileShowcase; BtnProfilePrivacy_Click opens the Privacy dialog.
@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                 // The migration receipt rides the same switch: a searched card must never wear your descent.
                 RefreshProfileDescentReceipt(page);
+                RefreshProfileSpiralPlate();
 
                 var back = page.FindControl<Button>("BtnProfileBackToMe");
                 if (back is not null) back.IsVisible = !isSelf;

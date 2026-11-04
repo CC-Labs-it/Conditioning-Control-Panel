@@ -293,8 +293,9 @@ namespace ConditioningControlPanel.Services
                     var reply = JObject.Parse(json);
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
-                    // takes the offer (no descent_auto), so only the ack half runs here.
+                    // auto-applies an offer (no descent_auto); retain any required offer to withhold spiral surfaces.
                     Descent.DescentMigrationAck.Apply(s, reply);
+                    DescentReader?.ObserveMigrationOffer(reply);
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).

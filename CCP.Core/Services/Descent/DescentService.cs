@@ -80,6 +80,22 @@ namespace ConditioningControlPanel.Services.Descent
         /// </summary>
         public bool HasSeenBlock { get; private set; }
 
+        public bool HasMigrationOffer { get; private set; }
+
+        // WPF ProfileSyncService.cs:4926-4948 and DescentMigrationService.cs:72,90,132-145.
+        // Retain an unanswered offer until an ack or logout, including replies without the block.
+        public void ObserveMigrationOffer(JObject response)
+        {
+            if (response["descent_migration"] is not JObject migration) return;
+            bool completed = migration["completed"]?.Type == JTokenType.Boolean && migration.Value<bool>("completed");
+            bool required = migration["required"]?.Type == JTokenType.Boolean && migration.Value<bool>("required");
+            if (!completed && !required) return;
+            bool offered = !completed && required;
+            if (HasMigrationOffer == offered) return;
+            HasMigrationOffer = offered;
+            NotifySurfaces("migration offer changed");
+        }
+
         /// <summary>
         /// Raised on the UI thread after every accepted fetch, including one that
         /// turned the block off (payload arrived without it). Surfaces subscribe and
@@ -303,6 +319,7 @@ namespace ConditioningControlPanel.Services.Descent
             lock (_refreshGate) _refreshGate.Reset();   // the floor (a re-login may ask at once), its credentials, any want
             Current = null;
             HasSeenBlock = false;
+            HasMigrationOffer = false;
             Log.Debug("[Descent] state cleared (logout)");
             RaiseBlockChanged();
         }
