@@ -197,7 +197,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             void Set(string key, global::Avalonia.Media.Color c)
             {
                 values[key] = c;
-                values[key + "Brush"] = new global::Avalonia.Media.SolidColorBrush(c);
+                // Retain the brush identity so a section change does not replace the
+                // DynamicResource value on every visible and hidden consumer. Brush
+                // invalidation repaints the ink without rerunning their property bindings.
+                // Only reuse our application override, never a shared merged-theme brush.
+                if (res.TryGetValue(key + "Brush", out var old) &&
+                    old is global::Avalonia.Media.SolidColorBrush brush)
+                    brush.Color = c;
+                else values[key + "Brush"] = new global::Avalonia.Media.SolidColorBrush(c);
             }
         }
 
