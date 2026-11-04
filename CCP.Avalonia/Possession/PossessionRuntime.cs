@@ -208,10 +208,10 @@ namespace ConditioningControlPanel.Avalonia.Possession
         }
 
         /// <summary>WPF UndoAll: synchronous, no animation, never throws. Every control gets its own
-        /// transform and origin back now.</summary>
+        /// transform and origin back now. The director hears each end so its run and ember go too.</summary>
         public void UndoAll()
         {
-            foreach (var g in _ghosts.ToArray()) Finish(g);
+            foreach (var g in _ghosts.ToArray()) if (_ghosts.Contains(g)) FinishAndNotify(g);
             Unsubscribe();
         }
 

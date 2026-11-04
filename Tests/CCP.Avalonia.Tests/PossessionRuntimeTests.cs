@@ -224,6 +224,36 @@ public sealed class PossessionRuntimeTests
     });
 
     [Fact]
+    public Task PanicReleasesDirectorRunAndEmberNow() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var first = Btn("BtnPanic");
+        var window = Host(first);
+        var frames = new FakeFrames(); var layer = new Canvas();
+        var attribution = new ImmediateCharge(new EmberHeadAttribution(layer, _ => new Rect(0, 0, 80, 30), frames, () => false));
+        var host = new TestHost();
+        var a = new PossessionTarget { Visual = first, Role = PossessionRole.Button, Key = "first" };
+        host.Items.Add(a);
+        using var lockdown = new ConditioningControlPanel.Services.LockdownService();
+        var runtime = new PossessionRuntime(frames);
+        var effect = new DirectorHeadEffect(new NudgeHeadEffect(), runtime);
+        using var director = new PossessionDirector(lockdown, new[] { effect }, new PossessionDirectorHead { Attribution = _ => attribution });
+        try
+        {
+            director.AttachHost(host);
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var entry = ((System.Collections.IList)typeof(PossessionDirector).GetField("_hosts", flags)!.GetValue(director)!)[0]!;
+            await (Task)typeof(PossessionDirector).GetMethod("StartOneAsync", flags)!.Invoke(director, new object[] { entry, PossessionRung.Settle, TimeSpan.FromMinutes(5), 0.1 })!;
+            Assert.Equal(1, director.LiveEffectCount); Assert.True(a.IsLive); Assert.Single(layer.Children);
+            // Null shell: only the runtime is reached, so the director must hear the end from it.
+            PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+            Assert.Equal(0, director.LiveEffectCount); Assert.False(a.IsLive); Assert.False(effect.IsLive);
+            Assert.Empty(layer.Children); Assert.False(PossessionLease.IsLeased(first)); Assert.Equal(0, frames.Count);
+        }
+        finally { director.UndoAll(); window.Close(); }
+    });
+
+    [Fact]
     public Task DeckPickedNudgeMovesItsTargetThenGivesItsOwnTransformBack() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

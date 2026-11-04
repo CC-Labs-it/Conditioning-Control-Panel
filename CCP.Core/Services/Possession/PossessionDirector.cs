@@ -347,7 +347,7 @@ public sealed class PossessionDirector : IDisposable
                         && Warden?.IsAvailable == true
                         && _rng.Next(4) == 0;
 
-            var ctx = BuildContext(host, rung, remaining, frac, () => effect!, acquired => { if (ghost != null) FailGhost(ghost, acquired); });
+            var ctx = BuildContext(host, rung, remaining, frac, () => effect!, acquired => { if (ghost != null) EndGhost(ghost, acquired); });
             if (knock)
             {
                 // A knock wants the card to FALL; use the catalog's fall effect when it exists so the
@@ -624,7 +624,7 @@ public sealed class PossessionDirector : IDisposable
 
             LiveGhost? ghost = null;
             var ctx = BuildContext(host, rung, _lockdown.Remaining, _lockdown.ElapsedFraction, () => effect,
-                acquired => { if (ghost != null) FailGhost(ghost, acquired); });
+                acquired => { if (ghost != null) EndGhost(ghost, acquired); });
             if (!effect.CanApply(ctx, target)) return;
 
             _lastReactiveAt = now;
@@ -859,13 +859,13 @@ public sealed class PossessionDirector : IDisposable
         await UndoGhostAsync(ghost, TimeSpan.FromMilliseconds(600)).ConfigureAwait(true);
     }
 
-    private PossessionContext BuildContext(HostEntry host, PossessionRung rung, TimeSpan remaining, double frac, Func<IPossessionEffect> effect, Action<bool>? effectFailed = null)
+    private PossessionContext BuildContext(HostEntry host, PossessionRung rung, TimeSpan remaining, double frac, Func<IPossessionEffect> effect, Action<bool>? effectEnded = null)
     {
         return new PossessionContext
         {
             Host = host.Host,
             Attribution = host.Attribution,
-            EffectFinished = effectFailed,
+            EffectFinished = effectEnded,
             Rung = rung,
             Intensity = _intensity,
             Photosafe = _photosafe,
@@ -912,7 +912,7 @@ public sealed class PossessionDirector : IDisposable
     //  Undo
     // ---------------------------------------------------------------------------------------------
 
-    private void FailGhost(LiveGhost ghost, bool acquired)
+    private void EndGhost(LiveGhost ghost, bool acquired)
     {
         if (acquired) UndoGhostSync(ghost);
         else if (Release(ghost)) ghost.Dispose();
