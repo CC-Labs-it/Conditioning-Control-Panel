@@ -47,10 +47,11 @@ public sealed class HomeMarqueeTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
+            var (oldProvider, oldDaily) = (CoreSettings.ServiceProvider, global::ConditioningControlPanel.Avalonia.App.DailyFree);
             var saved = (s.MarqueeMessage, s.BrowserVideoMuted, s.ForceShowBambiCloud, s.DiscordRichPresenceEnabled,
                 s.HasLinkedDiscord, s.MotionLevel, s.PerformanceMode, s.OfflineMode);
             var (oldClient, oldFree, oldShell, oldTime) =
@@ -66,6 +67,8 @@ public sealed class HomeMarqueeTests
             }
             finally
             {
+                CoreSettings.ServiceProvider = oldProvider;
+                global::ConditioningControlPanel.Avalonia.App.DailyFree = oldDaily;
                 w.Close();
                 MainShellWindow.AnnouncementClient = oldClient;
                 CoreEntitlement.IsFreeTodayProvider = oldFree;
@@ -392,12 +395,41 @@ public sealed class HomeMarqueeTests
     [Fact]
     public Task MysteryBoxOpensTodaysFreeFeature() => WithShell((w, dash) =>
     {
-        CoreEntitlement.IsFreeTodayProvider = k => k == "voice";
+        global::ConditioningControlPanel.Avalonia.App.DailyFree = DashboardGiftPresentationTests.GiftFor("voice");
+        CoreEntitlement.IsFreeTodayProvider = global::ConditioningControlPanel.Avalonia.App.DailyFree.IsFreeToday;
         var box = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardMystery")!;
         box.RaiseEvent(new RoutedEventArgs(ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("shelistening", w.CurrentTab);
         Assert.Equal("play", SettingsTabView.MysteryTabFor("dtrh"));
+        return Task.CompletedTask;
+    });
+
+    // WPF MainWindow.Presets.cs:1086 (navigation), :1171 (presentation): TodayKey, not the gate union.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DailyGiftIgnoresMemberAndPostGrants(bool navigate) => WithShell((w, dash) =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.PatreonMember = true;
+        settings.Current.PostGrants["takeover"] = DateTime.UtcNow.AddDays(1).ToString("O");
+        var gift = DashboardGiftPresentationTests.GiftFor("remote");
+        global::ConditioningControlPanel.Avalonia.App.DailyFree = gift;
+        CoreEntitlement.IsFreeTodayProvider = gift.IsFreeToday;
+        Assert.True(CoreEntitlement.IsFreeToday("takeover"));
+        Assert.True(CoreEntitlement.IsFreeToday("remote"));
+        if (navigate)
+        {
+            dash.CardMystery_Click(null, new RoutedEventArgs());
+            Assert.Equal("remotecontrol", w.CurrentTab);
+        }
+        else
+        {
+            dash.RefreshMysteryGift();
+            Assert.Equal(Loc.Get("tab_remote_control"), dash.MysteryRevealName.Text);
+        }
         return Task.CompletedTask;
     });
 

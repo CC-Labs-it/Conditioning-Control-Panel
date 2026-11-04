@@ -816,7 +816,7 @@
                 BorderBrush="#FFD54A" BorderThickness="1.5"
                 Cursor="Hand">
           <Grid>
-            <Border CornerRadius="11" RenderOptions.BitmapInterpolationMode="HighQuality">
+            <Border x:Name="MysteryRevealArt" CornerRadius="11" RenderOptions.BitmapInterpolationMode="HighQuality">
               <Border.Background>
                 <ImageBrush Stretch="UniformToFill"/>
               </Border.Background>

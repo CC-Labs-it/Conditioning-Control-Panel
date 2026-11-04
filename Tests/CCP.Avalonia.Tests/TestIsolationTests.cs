@@ -48,6 +48,28 @@ public class TestIsolationTests
     public void TheHookCoversEverySeamThatLeakedBefore(System.Type type, string member) =>
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 
+    [Theory]
+    [InlineData(0), InlineData(1), InlineData(2), InlineData(3), InlineData(4)]
+    public System.Threading.Tasks.Task GiftFixturesRestoreStateWithoutAnInterveningHook(int fixture) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var provider = CoreSettings.ServiceProvider;
+            var daily = AvApp.DailyFree;
+            var s = CoreSettings.Current;
+            var saved = (s.MotionLevel, s.PerformanceMode, s.DailyGiftLastRevealDate, s.GentleVisuals, s.AutoPerformanceMode);
+            await (fixture switch
+            {
+                0 => new HomeMarqueeTests().MysteryBoxOpensTodaysFreeFeature(),
+                1 => new HomeMarqueeTests().DailyGiftIgnoresMemberAndPostGrants(true),
+                2 => new DashboardGiftPresentationTests().RestingInTheGutterKeepsTheOfferFace(-3),
+                3 => new DashboardGiftPresentationTests().UnopenedBreathUsesSharedTimeAndParksOnMotionGateAndDetach(),
+                _ => new DashboardGiftPresentationTests().PanicRegistryClosesTheRevealedGift(),
+            });
+            Assert.Same(provider, CoreSettings.ServiceProvider);
+            Assert.Same(daily, AvApp.DailyFree);
+            Assert.Equal(saved, (s.MotionLevel, s.PerformanceMode, s.DailyGiftLastRevealDate, s.GentleVisuals, s.AutoPerformanceMode));
+        });
+
     [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()
     {
