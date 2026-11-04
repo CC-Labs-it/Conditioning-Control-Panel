@@ -16,12 +16,12 @@ import { withPrivateCues } from './cueFiles.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // the app serves Resources/web whole, so glassroad's ../../arcademy imports (the Loom) resolve to /arcademy/
-// here; only that tree is mounted beside this one
+// here; the shared host carrier is mounted beside it as well
 const ARCADEMY = resolve(ROOT, '..', 'arcademy');
 // DEV ONLY: the owner's private song folder (charts + mp3s, handoff-1022/MUSIC-ROAD-BRIEF.md) at /private-audio/.
 // It is read in place and never copied into this tree; GLASSROAD_AUDIO_DIR points it elsewhere.
 const PRIVATE = resolve(process.env.GLASSROAD_AUDIO_DIR || 'C:/Projects/glassroad-audio');
-const MOUNTS = [['/arcademy/', ARCADEMY], ['/private-audio/', PRIVATE]];
+const MOUNTS = [['/arcademy/', ARCADEMY], ['/shared/', resolve(ROOT, '..', 'shared')], ['/private-audio/', PRIVATE]];
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
 let mainframeChart, mainframeRecording;
 let keepChart;

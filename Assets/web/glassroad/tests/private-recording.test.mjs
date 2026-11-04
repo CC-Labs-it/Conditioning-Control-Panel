@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -56,6 +56,10 @@ test('missing private song and timings return 503 without exposing any private p
       child.stdout.on('data', data => { const match = data.toString().match(/http:\/\/127\.0\.0\.1:\d+/); if (match) { clearTimeout(timer); resolve(match[0]); } });
       child.once('exit', code => { clearTimeout(timer); reject(new Error(`Dev server exited ${code}`)); });
     });
+    const carrier = await fetch(url + '/shared/carrier.js');
+    assert.equal(carrier.status, 200);
+    assert.match(carrier.headers.get('content-type'), /javascript/);
+    assert.equal(await carrier.text(), await readFile(new URL('../../shared/carrier.js', import.meta.url), 'utf8'));
     for (const path of [GOON_CHART, GOON_AUDIO, BOUDOIR_CHART, BOUDOIR_AUDIO, KEEP_REMIX_CHART, KEEP_REMIX_AUDIO, MAINFRAME_CHART, MAINFRAME_AUDIO]) {
       const res = await fetch(url + path); assert.equal(res.status, 503); assert.equal((await res.text()).includes(dir), false);
       assert.equal((await fetch(url + path, { method: 'POST' })).status, 405);
