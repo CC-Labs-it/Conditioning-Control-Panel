@@ -70,6 +70,34 @@ public sealed class RemoteSessionControlTests
     });
 
     [Fact]
+    public Task Controller_panic_ends_the_wearers_session() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var saved = (CoreDispatch.InvokeProvider, AvApp.Sessions);
+        var runner = new SessionRunner(new SessionLogService());
+        var handler = new RelayHandler();
+        using var relay = new RemoteRelay(() => "token", () => "user", "1", RemoteControlTabView.ExecuteRemoteCommand,
+            RemoteCommands.StopEffects, handler) { AutoPoll = false };
+        try
+        {
+            AvApp.Sessions = runner;
+            CoreDispatch.InvokeProvider = (f, _) => (true, f());
+            runner.Start(new Session { Id = "panic-test", Name = "Panic test", DurationMinutes = 30,
+                Settings = new SessionSettings { FlashEnabled = true, SubliminalEnabled = false } });
+            Assert.True(runner.IsRunning && CoreEngine.IsRunning);
+            await relay.StartAsync("full");
+            handler.Poll = "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"trigger_panic\"}]}";
+            await relay.PollOnceAsync();
+            Assert.Equal("ok", (string?)handler.Status[^1]["last_executed"]!["status"]);
+            Assert.False(runner.IsRunning || CoreEngine.IsRunning || CoreFlash.IsRunning);
+        }
+        finally
+        {
+            try { runner.Stop(); CoreEngine.Stop(); }
+            finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); (CoreDispatch.InvokeProvider, AvApp.Sessions) = saved; }
+        }
+    });
+
+    [Fact]
     public Task Stop_also_stops_an_engine_without_a_session() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var saved = AvApp.Sessions;
