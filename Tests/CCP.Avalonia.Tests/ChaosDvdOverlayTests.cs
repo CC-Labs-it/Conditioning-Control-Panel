@@ -5,6 +5,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Platform;
+using Avalonia.Platform;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -32,6 +38,74 @@ public sealed class ChaosDvdOverlayTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
+
+    [Fact]
+    public Task SharedHostCoversStageAndKeepsLogosInPrimaryWorkArea() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        Screen MakeScreen(PixelRect bounds, PixelRect work, bool primary, double scale)
+        {
+            var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen),
+                new object[] { new PlatformHandle(new IntPtr(bounds.X + 1), "headless-test") })!;
+            typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(screen, scale);
+            typeof(Screen).GetProperty(nameof(Screen.Bounds))!.SetValue(screen, bounds);
+            typeof(Screen).GetProperty(nameof(Screen.WorkingArea))!.SetValue(screen, work);
+            typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, primary);
+            return screen;
+        }
+        var query = ScreenList.QueryOverride;
+        var (can, prep, shared, sfx) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.PlaySfx);
+        var dual = CoreSettings.Current.DualMonitorEnabled;
+        var host = new Window();
+        host.Show();
+        try
+        {
+            ScreenList.QueryOverride = _ => new[] { MakeScreen(new PixelRect(0, 0, 1000, 800), new PixelRect(0, 30, 1000, 750), true, 2),
+                MakeScreen(new PixelRect(-500, -200, 500, 800), new PixelRect(-500, -200, 500, 800), false, 1) };
+            CoreSettings.Current.DualMonitorEnabled = true;
+            ChaosDvdOverlay.SharedHost = () => true;
+            ChaosDvdOverlay.CanOverlay = () => true;
+            PixelRect actual = default;
+            ChaosDvdOverlay.PrepareWindow = (window, bounds) =>
+            {
+                actual = bounds;
+                X11Overlay.SetOverrideRedirect(window, bounds, passive: true, topmost: window.Topmost);
+                return true; // headless has no native X11 handle; geometry still uses production preparation
+            };
+            ChaosDvdOverlay.PlaySfx = (_, _) => { };
+            ChaosDvdOverlay.Launch(host, 10, 1, 1);
+            Assert.Equal(new PixelRect(-500, -200, 1500, 1000), actual);
+            var w = Assert.IsType<Window>(ChaosDvdOverlay.Window);
+            Assert.Equal(1, w.DesktopScaling);
+            Assert.Equal(actual.Position, w.Position);
+            Assert.Equal(1500 / w.DesktopScaling, w.Width);
+            Assert.Equal(1000 / w.DesktopScaling, w.Height);
+            var label = Assert.Single(Assert.IsType<Canvas>(w.Content).Children);
+            var logo = Assert.Single(ChaosDvdOverlay.Flock.Active);
+            void CheckPlacement()
+            {
+                Assert.Equal((logo.X * 2 + 500) / w.DesktopScaling, Canvas.GetLeft(label), 6);
+                Assert.Equal((logo.Y * 2 + 230) / w.DesktopScaling, Canvas.GetTop(label), 6);
+                var transform = Assert.IsType<ScaleTransform>(label.RenderTransform);
+                Assert.Equal(2 / w.DesktopScaling, transform.ScaleX);
+                Assert.Equal(2 / w.DesktopScaling, transform.ScaleY);
+            }
+            CheckPlacement();
+            var before = (logo.X, logo.Y);
+            ChaosDvdOverlay.Advance(0.05);
+            Assert.NotEqual(before, (logo.X, logo.Y));
+            CheckPlacement();
+        }
+        finally
+        {
+            ChaosDvdOverlay.CloseActive();
+            ScreenList.QueryOverride = query;
+            (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.PlaySfx) = (can, prep, shared, sfx);
+            CoreSettings.Current.DualMonitorEnabled = dual;
+            host.Close();
+        }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public async Task LogosFlyOnTheHostFramesAndPanicClosesTheWindow()
