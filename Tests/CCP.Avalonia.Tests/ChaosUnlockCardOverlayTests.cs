@@ -189,102 +189,64 @@ public sealed class ChaosUnlockCardOverlayTests
     private static void AssertHeld(ChaosRunState state, double elapsed) { ChaosRunHost.Tick(); Assert.Equal(elapsed, state.ElapsedSec); }
     private static void DismissLast(SteppedClock clock) { Step(clock, 240); Click(); Step(clock, 150); }
     private static ChaosOverlayWindow BeginDraft() { Begin(); for (int i = 0; i < 80; i++) ChaosRunHost.Tick(); return ChaosRunHost.Overlay!; }
-
     // WPF ChaosModeService.cs:140-180, 1534-1547, 1597-1613: both lessons earned
     // by one sin wait for SINK and hold the field until the last card is dismissed.
     [Fact]
     public Task Draft_pick_defers_both_lessons_until_countdown_then_holds_until_last_dismissal() => ChaosWaveDraftTests.Run(async () =>
     {
-        var clock = new SteppedClock();
-        ChaosUnlockCardOverlay.Clock = clock;
-        var loc = LocalizationManager.Instance;
-        string oldLanguage = loc.CurrentLanguage;
-        var oldCulture = System.Globalization.CultureInfo.CurrentCulture;
+        var clock = new SteppedClock(); ChaosUnlockCardOverlay.Clock = clock; var loc = LocalizationManager.Instance;
+        string oldLanguage = loc.CurrentLanguage; var oldCulture = System.Globalization.CultureInfo.CurrentCulture;
         try
         {
-            loc.SetLanguage("fr");
-            System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+            loc.SetLanguage("fr"); System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
             ChaosMeta.State.LessonsComplete.Add("silk_touch");
             foreach (var id in new[] { "draft4", "surrender" })
             {
-                ChaosMeta.State.LessonsComplete.Remove(id);
-                ChaosMeta.State.LessonProgress[id] = ChaosLessons.ById(id)!.Target - 1;
+                ChaosMeta.State.LessonsComplete.Remove(id); ChaosMeta.State.LessonProgress[id] = ChaosLessons.ById(id)!.Target - 1;
             }
-            Begin();
-            var state = ChaosRunHost.State!;
-            var overlay = ChaosRunHost.Overlay!;
+            Begin(); var state = ChaosRunHost.State!; var overlay = ChaosRunHost.Overlay!;
             await ChaosWaveDraftTests.PickSurrender(state, overlay);
-            Assert.True(ChaosLessons.IsComplete("draft4"));
-            Assert.True(ChaosLessons.IsComplete("surrender"));
+            Assert.True(ChaosLessons.IsComplete("draft4")); Assert.True(ChaosLessons.IsComplete("surrender"));
             Assert.Contains("🕯 péché accepté (+0.40x)", state.RecentEvents);
             Assert.Contains("🕯 la bougie a ôté la morsure (sans contrepartie)", state.RecentEvents);
-            Assert.Contains("🕯 tu as dit oui. elle a rendu la pareille (+1 résistance)", state.RecentEvents);
-            Assert.False(ChaosUnlockCardOverlay.IsShowing);
-            double elapsed = state.ElapsedSec;
-            AssertHeld(state, elapsed);
-
-            overlay.FinishCountdown();
+            Assert.Contains("🕯 tu as dit oui. elle a rendu la pareille (+1 résistance)", state.RecentEvents); Assert.False(ChaosUnlockCardOverlay.IsShowing);
+            double elapsed = state.ElapsedSec; AssertHeld(state, elapsed); overlay.FinishCountdown();
             Assert.Equal(ChaosUnlockCardRules.ForLesson("draft4")!.Title, ChaosUnlockCardOverlay.Active!.Current!.Title);
-            Assert.Equal(1, ChaosUnlockCardOverlay.QueuedCount);
-            Assert.False(ChaosUnlockCardOverlay.Active.AutoDismiss);
-            Assert.True(BubbleOverlay.Field.HoldChaos);
-            ChaosRunHost.SpawnTick();
-            Assert.Equal(0, BubbleOverlay.ChaosCount);
-            Step(clock, 20000);
-            AssertHeld(state, elapsed);
-            Click();
+            Assert.Equal(1, ChaosUnlockCardOverlay.QueuedCount); Assert.False(ChaosUnlockCardOverlay.Active.AutoDismiss);
+            Assert.True(BubbleOverlay.Field.HoldChaos); ChaosRunHost.SpawnTick();
+            Assert.Equal(0, BubbleOverlay.ChaosCount); Step(clock, 20000); AssertHeld(state, elapsed); Click();
             Assert.Equal(ChaosUnlockCardRules.ForLesson("surrender")!.Title, ChaosUnlockCardOverlay.Active!.Current!.Title);
-            Assert.False(ChaosUnlockCardOverlay.Active.AutoDismiss);
-            AssertHeld(state, elapsed);
-            DismissLast(clock);
-            Assert.False(ChaosUnlockCardOverlay.IsShowing);
-            Assert.False(BubbleOverlay.Field.HoldChaos);
-            ChaosRunHost.Tick();
+            Assert.False(ChaosUnlockCardOverlay.Active.AutoDismiss); AssertHeld(state, elapsed); DismissLast(clock);
+            Assert.False(ChaosUnlockCardOverlay.IsShowing); Assert.False(BubbleOverlay.Field.HoldChaos); ChaosRunHost.Tick();
             Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, state.ElapsedSec);
         }
         finally
         {
-            ChaosRunHost.ForceShutdown();
-            ChaosUnlockCardOverlay.Clock = TimeProvider.System;
-            loc.SetLanguage(oldLanguage);
+            ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System; loc.SetLanguage(oldLanguage);
             System.Globalization.CultureInfo.CurrentCulture = oldCulture;
         }
     });
-
     // WPF :140-144 and :1443-1459: a clean loop's lesson is deferred too, even on a fast skip.
     [Fact]
     public Task Loop_boundary_lesson_waits_for_the_draft_countdown() => Run(clock =>
     {
-        ChaosMeta.State.LessonsComplete.Remove("silk_touch");
-        ChaosMeta.State.LessonProgress.Remove("silk_touch");
-        ChaosMeta.State.RunsCompleted = 2;
-        ChaosMeta.State.SeenSkipDebut = true;
-        var overlay = BeginDraft();
-        Assert.True(ChaosLessons.IsComplete("silk_touch"));
-        Assert.False(ChaosUnlockCardOverlay.IsShowing);
-        overlay.FindControl<Button>("BtnSkipBoon")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        overlay.FinishCountdown();
+        ChaosMeta.State.LessonsComplete.Remove("silk_touch"); ChaosMeta.State.LessonProgress.Remove("silk_touch"); ChaosMeta.State.RunsCompleted = 2;
+        ChaosMeta.State.SeenSkipDebut = true; var overlay = BeginDraft();
+        Assert.True(ChaosLessons.IsComplete("silk_touch")); Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        overlay.FindControl<Button>("BtnSkipBoon")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); overlay.FinishCountdown();
         Assert.Equal(ChaosUnlockCardRules.ForLesson("silk_touch")!.Title, ChaosUnlockCardOverlay.Active!.Current!.Title);
-        Assert.False(ChaosUnlockCardOverlay.Active.AutoDismiss);
-        double elapsed = ChaosRunHost.State!.ElapsedSec;
-        ChaosRunHost.Tick();
-        Assert.Equal(elapsed, ChaosRunHost.State.ElapsedSec);
-        DismissLast(clock);
-        ChaosRunHost.Tick();
-        Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, ChaosRunHost.State.ElapsedSec);
+        Assert.False(ChaosUnlockCardOverlay.Active.AutoDismiss); double elapsed = ChaosRunHost.State!.ElapsedSec;
+        ChaosRunHost.Tick(); Assert.Equal(elapsed, ChaosRunHost.State.ElapsedSec); DismissLast(clock);
+        ChaosRunHost.Tick(); Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, ChaosRunHost.State.ElapsedSec);
     });
-
     // WPF ForceShutdown / EndRun: queued cards from a stopped run cannot surface in the next one.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task Stopping_a_draft_discards_its_pending_lesson(bool panic) => Run(_ =>
     {
-        ChaosMeta.State.LessonsComplete.Add("silk_touch");
-        ChaosMeta.State.RunsCompleted = 2;
-        ChaosMeta.State.SeenSkipDebut = true;
-        ChaosMeta.State.LessonsComplete.Remove("draft4");
-        ChaosMeta.State.LessonProgress["draft4"] = ChaosLessons.T_DRAFT4 - 1;
+        ChaosMeta.State.LessonsComplete.Add("silk_touch"); ChaosMeta.State.RunsCompleted = 2; ChaosMeta.State.SeenSkipDebut = true;
+        ChaosMeta.State.LessonsComplete.Remove("draft4"); ChaosMeta.State.LessonProgress["draft4"] = ChaosLessons.T_DRAFT4 - 1;
         BeginDraft();
         ChaosLessons.Tick("draft4");
         Assert.False(ChaosUnlockCardOverlay.IsShowing);

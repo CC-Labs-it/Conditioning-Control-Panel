@@ -39,20 +39,14 @@ public sealed class ChaosWaveDraftTests
     {
         ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = enabled,
             AllowCurses = false, DraftAutoResumeSec = 0 });
-        ChaosRunHost.Overlay!.FinishCountdown();
-        ChaosRunHost.StopTimerForTests();
+        ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
     }
     // Deal the guaranteed sin and commit its 1.5 s pick beat, as in WPF :1476-1483.
     internal static async Task PickSurrender(ChaosRunState state, ChaosOverlayWindow overlay)
     {
-        state.Config.AllowCurses = true;
-        state.Config.SinChance = 0;
-        state.MaxedBoons.Add("surrender");
-        state.SinExtraMult = 0.4;
-        Ticks(80);
+        state.Config.AllowCurses = true; state.Config.SinChance = 0; state.MaxedBoons.Add("surrender"); state.SinExtraMult = 0.4; Ticks(80);
         var host = overlay.FindControl<StackPanel>("BoonCardHost")!;
-        var pick = ((Border)host.Children[2]).GetVisualDescendants().OfType<Button>().Single();
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var pick = ((Border)host.Children[2]).GetVisualDescendants().OfType<Button>().Single(); var deadline = DateTime.UtcNow.AddSeconds(10);
         while (!pick.IsEnabled && DateTime.UtcNow < deadline) await Task.Delay(50);
         Assert.True(pick.IsEnabled);
         Click(pick);
@@ -100,11 +94,26 @@ public sealed class ChaosWaveDraftTests
     public Task Welcome_shower_spawns_after_the_draft_countdown() => Run(() =>
     {
         Start(); var state = ChaosRunHost.State!; var overlay = ChaosRunHost.Overlay!;
-        state.WelcomeShowerEnabled = true; Ticks(80);
-        Click(overlay.FindControl<Button>("BtnSkipBoon")!);
+        state.WelcomeShowerEnabled = true; Ticks(80); Click(overlay.FindControl<Button>("BtnSkipBoon")!);
         Assert.Equal(0, BubbleOverlay.ChaosCount);
         overlay.FinishCountdown();
         Assert.Equal(6, BubbleOverlay.ChaosCount);
+        foreach (var bubble in BubbleOverlay.Field.Bubbles.Where(b => b.Spec != null))
+        {
+            var y = bubble.Y; Assert.True(y < 0); bubble.Step(); Assert.True(bubble.Y > y);
+        }
+    });
+    // WPF ChaosModeService.cs:422-438.
+    [Fact]
+    public Task Equipped_welcome_shower_starts_on_first_go() => Run(() =>
+    {
+        var old = ChaosMeta.State.EquippedStartBoon;
+        try
+        {
+            ChaosMeta.State.EquippedStartBoon = "welcome_shower"; Start();
+            Assert.True(ChaosRunHost.State!.WelcomeShowerEnabled); Assert.Equal(6, BubbleOverlay.ChaosCount);
+        }
+        finally { ChaosMeta.State.EquippedStartBoon = old; }
     });
     // WPF :1477-1483, :1507-1526, :1529-1547, :1586-1593.
     [Fact]

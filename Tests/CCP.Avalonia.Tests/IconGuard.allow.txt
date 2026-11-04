@@ -59,6 +59,7 @@ Views/Chaos/ChaosRunHost.cs :: "🎲 " + Loc.Get("chaos_draft_rerolled") :: WPF 
 Views/Chaos/ChaosRunHost.cs :: candle = "🕯 " :: WPF ChaosModeService.cs:1555-1561 event-feed sentences (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: "♥ " + Loc.Get("chaos_draft_resisted") :: WPF ChaosModeService.cs:1580 event-feed sentence (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: "☠" : "◈" :: WPF ChaosModeService.cs:1566,1574 announcer sentences (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ◈ {boon.Name} :: WPF ChaosModeService.cs:434 start-boon announcer sentence (content (c).3)
 
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
 Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations
