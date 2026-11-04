@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -15,7 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
-    private DispatcherTimer? _glassWatch, _glassFrames;
+    private DispatcherTimer? _glassWatch;
+    private BeatLoop? _glassFrames;
     private DateTime _glassActivity = DateTime.UtcNow, _glassPhase;
     private TimeSpan _glassIdle = NextGlassIdle();
     private Canvas? _glassLayer;
@@ -111,9 +113,19 @@ public partial class EmiDeskWindow
         _glassLanded = false;
         _glassPhase = now;
         StopIdleBeats();
-        PaintGlassGlitch();
-        _glassFrames = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(55) };
-        _glassFrames.Tick += (_, _) => AdvanceGlass(DateTime.UtcNow);
+        // WPF EmiDeskWindow.Glass.cs:34,321-332: four tears at 55 ms intervals.
+        int lastTear = -1;
+        _glassFrames = new BeatLoop(this, elapsed =>
+        {
+            double ms = elapsed * 1000;
+            if (!_glassLanded && ms < 220)
+            {
+                int tear = (int)(ms / 55);
+                if (tear == lastTear) return;
+                lastTear = tear;
+            }
+            AdvanceGlass(now.AddSeconds(elapsed));
+        });
         _glassFrames.Start();
     }
 
@@ -126,7 +138,6 @@ public partial class EmiDeskWindow
             if (elapsed < 220) { PaintGlassGlitch(); return; } // WPF EmiChannels.cs:85-86
             _glassLanded = true;
             _glassPhase = now;
-            if (_glassFrames != null) _glassFrames.Interval = TimeSpan.FromMilliseconds(33);
             PaintOffAir();
             return;
         }

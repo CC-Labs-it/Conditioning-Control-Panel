@@ -21,9 +21,6 @@
 //   * The 30s `App.IsUpdateDialogActive` wait. That flag lives in ConditioningControlPanel/
 //     App.xaml.cs and this head never shows an update dialog at all (UpdateNotificationDialog has
 //     no caller here - see its own file for why), so waiting on it would be waiting on a constant.
-//   * `App.EmiDesk.Fire("firstLaunchEver") / ReleaseHold(...)`. There is no EmiDesk seam in Core -
-//     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
-//     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
 //   * The rest of the `else` branch (ShowWhatsNewIfNeeded / TryPresentSeasonRecap). Returning users
 //     get no mod popup: WPF removed it (MainWindow.xaml.cs:587-588). MainShellWindow.Marquee.cs documents
@@ -53,6 +50,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 bool fresh = FirstRunWizard.ShouldRunAndClaim();
+                // WPF MainWindow.xaml.cs:529-533,555-560: quiet EMI until the wizard is done.
+                if (fresh)
+                {
+                    EmiDesk.EmiDeskService.Instance.FireHold("firstLaunchEver");
+                    Closed += ReleaseFirstRunHold;
+                }
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
                 OfferWhatMovedIfNeeded(freshInstall: fresh);
                 if (fresh) Opened += OnFirstRunShellOpened;
@@ -107,6 +110,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "[FirstShow] first-run show failed to open"); }
         }
 
+        private void ReleaseFirstRunHold(object? sender, EventArgs e)
+        {
+            Closed -= ReleaseFirstRunHold;
+            EmiDesk.EmiDeskService.Instance.ReleaseHold("firstLaunchEver");
+        }
+
         private void OnFirstRunShellOpened(object? sender, EventArgs e)
         {
             Opened -= OnFirstRunShellOpened;   // one launch, one wizard
@@ -127,12 +136,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
 
                     await FirstRunWizard.Run(this);
+                    ReleaseFirstRunHold(this, EventArgs.Empty);
                     OfferWelcomeShowAfterFirstRun();
                 }
                 catch (Exception ex)
                 {
                     Log.Warning(ex, "[FirstRun] The first-run wizard failed to run");
                 }
+                finally { ReleaseFirstRunHold(this, EventArgs.Empty); }
             }, DispatcherPriority.Normal);
         }
     }
