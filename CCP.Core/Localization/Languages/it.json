@@ -8708,5 +8708,9 @@
   "online_official_nice": "Bello",
   "online_official_stamped_line": "I media online arrivano da Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\".",
   "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati.",
-  "installer_avalonia_upgrade_notice": "Aggiornamento ad Avalonia\n\nPassando da WPF, gli accessi nel browser integrato vengono reimpostati. Accedi di nuovo ai siti aperti in CCP.\n\nIl nuovo profilo browser_data_avalonia si trova nella cartella dei dati utente di CCP. Il vecchio profilo browser_data viene conservato.\n\nQuesta modifica non cancella i token dell’account CCP, le impostazioni o i progressi."
+  "installer_avalonia_upgrade_notice": "Aggiornamento ad Avalonia\n\nPassando da WPF, gli accessi nel browser integrato vengono reimpostati. Accedi di nuovo ai siti aperti in CCP.\n\nIl nuovo profilo browser_data_avalonia si trova nella cartella dei dati utente di CCP. Il vecchio profilo browser_data viene conservato.\n\nQuesta modifica non cancella i token dell’account CCP, le impostazioni o i progressi.",
+  "deeper_open_player_failed_title": "Apertura del player non riuscita",
+  "deeper_open_player_failed_fmt": "Impossibile aprire il player Deeper:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "Apertura dell'editor non riuscita",
+  "deeper_open_editor_failed_fmt": "Impossibile aprire l'editor Deeper:\n\n{0}: {1}"
 }

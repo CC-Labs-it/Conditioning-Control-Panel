@@ -8713,5 +8713,9 @@
   "online_official_nice": "Nice",
   "online_official_stamped_line": "Online media comes from Scrolller. Each picture and clip carries a small \"via Scrolller\" mark.",
   "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded.",
-  "installer_avalonia_upgrade_notice": "Avalonia upgrade\n\nEmbedded browser logins reset when upgrading from WPF. Sign in again to websites opened inside CCP.\n\nThe new browser profile is browser_data_avalonia under your CCP user data folder. The old browser_data profile is kept.\n\nThis browser change does not clear CCP account tokens, settings or progress."
+  "installer_avalonia_upgrade_notice": "Avalonia upgrade\n\nEmbedded browser logins reset when upgrading from WPF. Sign in again to websites opened inside CCP.\n\nThe new browser profile is browser_data_avalonia under your CCP user data folder. The old browser_data profile is kept.\n\nThis browser change does not clear CCP account tokens, settings or progress.",
+  "deeper_open_player_failed_title": "Open Player failed",
+  "deeper_open_player_failed_fmt": "Couldn't open Deeper Player:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "Open Editor failed",
+  "deeper_open_editor_failed_fmt": "Couldn't open Deeper Editor:\n\n{0}: {1}"
 }
