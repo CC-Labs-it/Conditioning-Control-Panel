@@ -99,6 +99,52 @@ public sealed class EmiDeskPatFeedbackTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData("hover")]
+    [InlineData("flick")]
+    [InlineData("glee")]
+    [InlineData("rage")]
+    public Task PatMovesTheBody(string kind) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var clock = new ManualClock();
+        var desk = new EmiDeskWindow { PatClock = clock };
+        var state = EmiState.Current;
+        int pets = state.PetsTotal; bool gist = state.PetGistGot;
+        try
+        {
+            desk.Show();
+            var type = typeof(EmiDeskWindow);
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            void Pat() => type.GetMethod("PetFromClick", flags)!.Invoke(desk, null);
+            if (kind == "hover")
+                type.GetMethod("OnPetTick", flags)!.Invoke(desk, new object?[] { null, EventArgs.Empty });
+            else
+            {
+                Pat();
+                int count = kind == "flick" ? 2 : kind == "glee" ? 3 : 5;
+                for (int i = 1; i < count; i++)
+                {
+                    clock.Advance(i == 3 ? 1700 : 1000);
+                    desk.AdvancePatFeedback();
+                    if (i == count - 1 && kind != "rage")
+                    {
+                        var previous = type.GetField("_crtAnim", flags)!.GetValue(desk);
+                        Pat();
+                        Assert.NotSame(previous, type.GetField("_crtAnim", flags)!.GetValue(desk));
+                        return Task.CompletedTask;
+                    }
+                    Pat();
+                }
+            }
+            Assert.NotNull(type.GetField(kind == "rage" ? "_moveXAnim" : "_crtAnim", flags)!.GetValue(desk));
+        }
+        finally { desk.ShutDown(); state.PetsTotal = pets; state.PetGistGot = gist; }
+        return Task.CompletedTask;
+    });
+
     private sealed class ManualClock : TimeProvider
     {
         private DateTimeOffset _now = new(2026, 10, 14, 0, 0, 0, TimeSpan.Zero);
