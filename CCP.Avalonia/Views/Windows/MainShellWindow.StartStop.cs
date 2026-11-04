@@ -2,7 +2,7 @@
 // BtnStartMenu_Click, MenuStartNormal_Click, StartEngine (:294), StopEngine (:444) and
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
-// Still missing: Relapse, the lockdown dose keeper, Brain Drain and Takeover lifecycle,
+// Still missing: the lockdown dose keeper, Brain Drain and Takeover lifecycle,
 // ramp and scheduler starts, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
@@ -35,10 +35,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body",
                     "btn_stop_session_yes", "btn_stop_session_no");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning) { App.Achievements?.TrackPanicPressed(); StopEngine(); }
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
+            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); App.Achievements?.TrackPanicPressed(); StopEngine(); }
             else StartEngineFromUser();
         }
 
@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
                 if (parked != null && (!ReferenceEquals(App.Sessions, parked) || !parked.IsRunning || !parked.IsPaused)) return;
+                if (!systemInitiated) App.Achievements?.CheckRelapse();
                 CoreEngine.Start(resumingSession: parked != null, systemInitiated: systemInitiated);
                 // WPF StartStop.cs:365-367: an audio-only run forces the bed on.
                 if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
