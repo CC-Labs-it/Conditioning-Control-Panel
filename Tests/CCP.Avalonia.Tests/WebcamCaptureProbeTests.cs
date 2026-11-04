@@ -243,12 +243,13 @@ public sealed class WebcamCaptureProbeTests
             tracker.OnStartupProgress += record;
             shell.Show();
             start = tracker.StartAsync();
-            var retry = Loc.GetF("webcam_capture_retry_fmt", 2, 2);
+            var total = OperatingSystem.IsWindows() ? 4 : 2;
+            var retry = Loc.GetF("webcam_capture_retry_fmt", 2, total);
             var deadline = DateTime.UtcNow.AddSeconds(20);
             while (!progress.Exists(x => x.Text == retry)) { Assert.True(DateTime.UtcNow < deadline); await Task.Delay(10); }
             while (!late.Entered.IsSet) { Assert.True(DateTime.UtcNow < deadline); await Task.Delay(10); }
             Assert.False(start.IsCompleted);
-            Assert.Equal(.735, progress.Find(x => x.Text == retry).Value, 3);
+            Assert.Equal(0.55 + 0.37 / total, progress.Find(x => x.Text == retry).Value, 3);
             Assert.Equal(retry, shell.WebcamLoadingSplashForTests!.FindControl<TextBlock>("TxtStatus")!.Text);
             late.Release.Set();
             Assert.False(await start);
@@ -320,7 +321,7 @@ public sealed class WebcamCaptureProbeTests
             Assert.False(tracker.Start());
             Assert.True(late.Entered.Wait(TimeSpan.FromSeconds(5)));
             Dispatcher.UIThread.RunJobs();
-            Assert.DoesNotContain(Loc.GetF("webcam_capture_retry_fmt", 2, 2), progress);
+            Assert.DoesNotContain(Loc.GetF("webcam_capture_retry_fmt", 2, OperatingSystem.IsWindows() ? 4 : 2), progress);
         }
         finally
         {
