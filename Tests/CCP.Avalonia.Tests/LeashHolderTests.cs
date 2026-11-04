@@ -14,6 +14,10 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Controls.Leash;
@@ -55,6 +59,7 @@ public sealed class LeashHolderTests
         public IReadOnlyList<LeashSentItem> SentTo(string id) => Items;
         public LeashSendResult Reply = new(LeashSendStatus.Sent);
         public bool ThrowSend;
+        public bool ReleaseResult = true;
         public readonly List<(string Op, object? Kind, object? Value, LeashWatch? Watch)> Calls = new();
         public void Publish(params HeldLeash[] held) { Snapshot = new(null, held, Array.Empty<LeashOffer>()); SnapshotChanged?.Invoke(Snapshot); }
         public void Receipt(LeashSentItem item) { Items = new[] { item }; ReceiptsChanged?.Invoke(); }
@@ -65,7 +70,7 @@ public sealed class LeashHolderTests
         public Task<LeashSendResult> PunishAsync(string id, PunishKind kind, int size, LeashWatch? watch = null) => Send("punish", kind, size, watch);
         public Task<LeashSendResult> RewardAsync(string id, RewardKind kind, string? token = null, int? size = null) => Send("reward", kind, token ?? (object?)size);
         public Task<LeashSendResult> TugAsync(string id) => Send("tug");
-        public Task<bool> ReleaseAsync(string id) { Calls.Add(("release", id, null, null)); Publish(); return Task.FromResult(true); }
+        public Task<bool> ReleaseAsync(string id) { Calls.Add(("release", id, null, null)); if (ReleaseResult) Publish(); return Task.FromResult(ReleaseResult); }
         public Task<LeashAnswerResult> AnswerAsync(string id, bool accept, LeashIntensity intensity) => throw new NotSupportedException();
         public Task CutAsync() => Task.CompletedTask; public Task SetIntensityAsync(LeashIntensity i) => Task.CompletedTask;
         public Task SetDndAsync(LeashDnd d) => Task.CompletedTask;
@@ -88,6 +93,95 @@ public sealed class LeashHolderTests
         var window = new Window { Content = page, Width = 660, Height = 750 };
         try { window.Show(); page.OnShown(); Dispatcher.UIThread.RunJobs(); action(page, service, held); }
         finally { window.Close(); }
+    });
+    [Fact]
+    public void ReleaseRequiresConfirmationAndFailureStaysVisible() => Run((page, svc, held) =>
+    {
+        var card = Assert.Single(page.HolderCards.Values);
+        var more = Tagged<Button>(card, "leash-holder-more");
+        var release = Assert.IsType<MenuItem>(Assert.Single(more.ContextMenu!.Items));
+        release.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        Assert.Empty(svc.Calls);
+        LeashGateCardTests.Click(LeashCutConfirmWindow.Current!.NoButton);
+        Assert.Empty(svc.Calls);
+        svc.ReleaseResult = false;
+        release.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        LeashGateCardTests.Click(LeashCutConfirmWindow.Current!.YesButton);
+        Assert.Equal("release", Assert.Single(svc.Calls).Op);
+        Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
+        card.Render();
+        Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
+    });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReleaseReportsOutcomeEvenWhenTheCardIsRemoved(bool success) => Run((page, svc, held) =>
+    {
+        var card = Assert.Single(page.HolderCards.Values);
+        var cues = new List<LeashCue>();
+        var notices = new List<(string, NotificationType)>();
+        card.PlayCue = cues.Add;
+        card.Notify = (text, type) => notices.Add((text, type));
+        svc.ReleaseResult = success;
+        Assert.Equal(success, card.ReleaseAsync().GetAwaiter().GetResult());
+        if (success) Assert.Empty(page.HolderCards);
+        Assert.Equal(success ? LeashCue.Cut : LeashCue.Denied, Assert.Single(cues));
+        Assert.Equal((Loc.GetF(success ? "leash_release_done" : "leash_release_failed", held.Who.Name),
+            success ? NotificationType.Info : NotificationType.Warning), Assert.Single(notices));
+    });
+
+    [Fact]
+    public void ReleaseMenuOpensTheLetGoSlip() => Run((page, svc, held) =>
+    {
+        var card = Assert.Single(page.HolderCards.Values);
+        var more = Tagged<Button>(card, "leash-holder-more");
+        LeashGateCardTests.Click(more);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(more.ContextMenu!.IsOpen);
+        var release = Assert.IsType<MenuItem>(Assert.Single(more.ContextMenu.Items));
+        var head = Assert.IsType<StackPanel>(release.Header);
+        Assert.Contains(head.Children, c => c.Tag as string == "leash-slip-help:" + LeashHelpCatalog.LetGoId);
+        var tip = Assert.IsType<ToolTip>(ToolTip.GetTip(release));
+        ToolTip.SetIsOpen(release, true);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(ToolTip.GetIsOpen(release));
+        var slip = Assert.IsType<LeashHelpSlip>(tip.Content);
+        Assert.Equal(LeashHelpCatalog.LetGoId, slip.Entry.Id);
+        Assert.Equal(Loc.Get("leash_slip_letgo_cap"), slip.CaptionText);
+        Assert.Contains(slip.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("leash_slip_letgo_lim"));
+        Assert.Empty(svc.Calls);
+        ToolTip.SetIsOpen(release, false);
+        more.ContextMenu.Close();
+    });
+
+    [Fact]
+    public void ReleaseSoundsUseWpfAssetsAndVolumes() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = CoreSettings.Current;
+        var volume = settings.MasterVolume;
+        var output = CoreAudio.IsOutputSuppressedProvider;
+        var play = CoreAudio.PlayOneShotProvider;
+        var mod = CoreModArt.AudioOverridePathProvider;
+        var played = new List<(string, float, string)>();
+        try
+        {
+            settings.MasterVolume = 100;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreModArt.AudioOverridePathProvider = _ => null;
+            CoreAudio.PlayOneShotProvider = (path, v, tag, _, _) => played.Add((System.IO.Path.GetFileName(path), v, tag));
+            var now = DateTime.UtcNow;
+            var rules = new LeashSfxRules();
+            LeashSound.Play(LeashCue.Denied, now, rules);
+            LeashSound.Play(LeashCue.Cut, now.AddSeconds(4), rules);
+            Assert.Equal(new[] { ("ui_denied.mp3", 0.16f, "leash-denied"), ("snap.mp3", 0.22f, "leash-cut") }, played);
+        }
+        finally
+        {
+            settings.MasterVolume = volume;
+            CoreAudio.IsOutputSuppressedProvider = output;
+            CoreAudio.PlayOneShotProvider = play;
+            CoreModArt.AudioOverridePathProvider = mod;
+        }
     });
     [Fact]
     public void HoldingAloneReachesTheCardAndPollsKeepItsOpenSheet() => Run((page, svc, held) =>
