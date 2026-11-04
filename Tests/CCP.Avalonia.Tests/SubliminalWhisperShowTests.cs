@@ -32,9 +32,11 @@ public sealed class SubliminalWhisperShowTests
         CoreAudio.PlayOneShotProvider = (p, v, tag, _, done) => { run.Log.Add($"play {Path.GetFileName(p)} {tag}"); done?.Invoke(); };
         CoreAudio.DuckProvider = n => run.Log.Add("duck " + n);
         CoreAudio.UnduckProvider = _ => run.Log.Add("unduck");
+        SubliminalWhisperShow.StopAll();
         try { body(run); }
         finally
         {
+            SubliminalWhisperShow.StopAll();
             (s.SubAudioEnabled, s.SubAudioMuted, s.AudioDuckingEnabled, s.DuckingLevel) = (en, mu, d, lvl);
             (SubliminalWhisperShow.Draw, SubliminalWhisperShow.After, SubliminalWhisperShow.Roll) = (draw, after, rollFn);
             (CoreAudio.PlayOneShotProvider, CoreAudio.DuckProvider, CoreAudio.UnduckProvider) = (play, duck, unduck);
@@ -68,6 +70,60 @@ public sealed class SubliminalWhisperShowTests
         Fire(run, 50); Fire(run, 250);
         Assert.Equal("card Reset", run.Log[^1]);
         Assert.Empty(run.Timers);
+    });
+
+    /// <summary>WPF TriggerBambiFreeze(deferReset: true) + TriggerDeferredBambiReset: before a video the
+    /// Reset is held (no 4-8 s timer) and follows 1-2 s after the video ends, once.</summary>
+    [Fact]
+    public void Video_freeze_holds_its_reset_until_the_video_ends() => With(audible: true, roll: 0.5, run =>
+    {
+        var (fp, rp) = (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider);
+        (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider) =
+            (SubliminalWhisperShow.FreezeBeforeVideo, SubliminalWhisperShow.DeferredReset);   // as App.axaml.cs seeds them
+        try
+        {
+            CoreSubliminal.TriggerDeferredBambiFreeze();
+            Fire(run, 500);
+            Fire(run, 50); Fire(run, 250);
+            Assert.Equal("card Freeze", run.Log[^1]);
+            Assert.Empty(run.Timers);                                           // no 4-8 s Reset: the video holds it
+            CoreSubliminal.TriggerDeferredBambiReset();                         // the video ended
+            var reset = Assert.Single(run.Timers);
+            Assert.InRange(reset.Ms, 1000, 1999);
+            CoreSubliminal.TriggerDeferredBambiReset();                         // a second end owes nothing
+            Assert.Single(run.Timers);
+            Fire(run, reset.Ms);
+            Assert.Equal("play reset.mp3 whisper", run.Log[^1]);
+        }
+        finally { (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider) = (fp, rp); }
+    });
+
+    [Theory]
+    [InlineData(false, 0.5, false)]
+    [InlineData(true, 0.95, false)]
+    [InlineData(true, 0.5, true)]
+    public void Deferred_reset_is_dropped_when_muted_skipped_or_stopped(bool audible, double roll, bool stop) =>
+        With(audible, roll, run =>
+        {
+            SubliminalWhisperShow.FreezeBeforeVideo();
+            if (audible) { Fire(run, 500); Fire(run, 50); Fire(run, 250); }
+            Assert.Empty(run.Timers);
+            if (stop) SubliminalWhisperShow.StopAll();
+            SubliminalWhisperShow.DeferredReset();
+            Assert.Empty(run.Timers);
+        });
+
+    [Fact]
+    public void Stop_drops_a_reset_already_scheduled_after_video() => With(true, 0.5, run =>
+    {
+        SubliminalWhisperShow.FreezeBeforeVideo();
+        Fire(run, 500); Fire(run, 50); Fire(run, 250);
+        SubliminalWhisperShow.DeferredReset();
+        var reset = Assert.Single(run.Timers);
+        SubliminalWhisperShow.StopAll();
+        run.Log.Clear();
+        Fire(run, reset.Ms);
+        Assert.Empty(run.Log);
     });
 
     [Fact]

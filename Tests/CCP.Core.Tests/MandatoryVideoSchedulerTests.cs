@@ -82,6 +82,86 @@ public sealed class MandatoryVideoSchedulerTests
         v.ForceCleanup();
     });
 
+    [Fact]   // WPF VideoService.cs:2479 / Cleanup :7937: a Freeze 800 ms before the pre-roll, its Reset at the end
+    public void Freeze_leads_the_video_and_its_reset_waits_for_the_end() => With(20, false, () =>
+    {
+        var s = CoreSettings.Current;
+        var (att, fp, rp) = (s.AttentionChecksEnabled, CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider);
+        var log = new List<string>();
+        CoreSubliminal.DeferredBambiFreezeProvider = () => log.Add("freeze");
+        CoreSubliminal.DeferredBambiResetProvider = () => log.Add("reset");
+        s.AttentionChecksEnabled = false;
+        try
+        {
+            var clock = new FakeClock(); var host = new Host();
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+            Assert.True(v.Trigger());
+            Assert.Equal(new[] { "freeze" }, log);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Empty(host.Shown);                        // the Freeze's 800 ms come first
+            clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Single(host.Shown);
+            v.End();
+            Assert.Equal(new[] { "freeze", "reset" }, log);  // natural end / Esc: the held Reset
+            Assert.True(v.Trigger());
+            v.ForceCleanup();                                // panic: no Reset (WPF ForceCleanup)
+            Assert.Equal(new[] { "freeze", "reset", "freeze" }, log);
+            s.AttentionChecksEnabled = true;                 // targets to click: no Freeze, plain pre-roll
+            Assert.True(v.Trigger());
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(2, host.Shown.Count);
+            Assert.Equal(3, log.Count);
+            v.ForceCleanup();
+        }
+        finally
+        {
+            s.AttentionChecksEnabled = att;
+            (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider) = (fp, rp);
+        }
+    });
+
+    private sealed class BubbleHost : IBubbleCountHost
+    {
+        public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) { }
+        public void ShowMessage(string text, int ms, Action then) { }
+        public void CloseAll() { }
+        public double LastVideoDurationSeconds => 0;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Busy_bubble_game_skips_only_the_scheduled_freeze(bool specific) => With(20, false, () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AttentionChecksEnabled, CoreEngine.BubbleCount, CoreSubliminal.DeferredBambiFreezeProvider);
+        var clock = new FakeClock();
+        var game = new BubbleCountScheduler(new BubbleHost(), clock, () => Clips);
+        var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var freezes = 0;
+        try
+        {
+            s.AttentionChecksEnabled = false;
+            CoreEngine.BubbleCount = game;
+            game.Trigger(forceTest: true);
+            Assert.True(game.IsBusy);
+            CoreSubliminal.DeferredBambiFreezeProvider = () => freezes++;
+            Assert.True(video.Trigger(path: specific ? Clips[0] : null));
+            Assert.Equal(specific ? 1 : 0, freezes);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(specific ? 0 : 1, host.Shown.Count);
+            clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Single(host.Shown);
+        }
+        finally
+        {
+            video.ForceCleanup();
+            game.ForceCleanup();
+            (s.AttentionChecksEnabled, CoreEngine.BubbleCount, CoreSubliminal.DeferredBambiFreezeProvider) = saved;
+        }
+    });
+
     [Fact]
     public void ForceCleanup_does_not_rearm_and_cancels_a_pending_pre_roll() => With(20, true, () =>
     {

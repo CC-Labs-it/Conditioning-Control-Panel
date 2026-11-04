@@ -54,6 +54,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF <c>SkipRetrySeconds</c>: a skipped tick retries this soon.</summary>
         public const double SkipRetrySeconds = 30;
         public static readonly TimeSpan PreRoll = TimeSpan.FromSeconds(1.3);
+        /// <summary>WPF TriggerVideo/PlaySpecificVideo: the Bambi Freeze plays this long before PlayVideo's pre-roll.</summary>
+        public static readonly TimeSpan FreezeLead = TimeSpan.FromMilliseconds(800);
 
         public static readonly string[] SupportedVideoExtensions =
             { ".mp4", ".mov", ".avi", ".wmv", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg", ".flv", ".ts" };
@@ -319,6 +321,7 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
             if (_playing) return false;
+            var specific = path != null;
             path ??= PickNext();
             if (path == null)
             {
@@ -333,6 +336,16 @@ namespace ConditioningControlPanel.Services
             AttentionSpawned = AttentionHits = 0;
             CoreFlash.Stop();   // WPF PlayVideo: App.Flash?.Stop()
             var strict = IsStrict;
+            // WPF VideoService.cs:2479/2587: a Freeze (Reset held until the video ends) and 800 ms, unless the user
+            // must click attention targets (so a verdict replay never freezes, as WPF :6021) or
+            // (scheduled pick only) a bubble-count game is up.
+            var preRoll = PreRoll;
+            if (CoreSubliminal.DeferredBambiFreezeProvider != null && !CoreSettings.Current.AttentionChecksEnabled
+                && (specific || CoreEngine.BubbleCount?.IsBusy != true))
+            {
+                CoreSubliminal.TriggerDeferredBambiFreeze();
+                preRoll += FreezeLead;
+            }
             Dispose(ref _preroll);
             ITimer? created = null;
             created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
@@ -353,7 +366,7 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _preroll = created;
-            created.Change(PreRoll, Timeout.InfiniteTimeSpan);
+            created.Change(preRoll, Timeout.InfiniteTimeSpan);
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
         }
@@ -370,6 +383,7 @@ namespace ConditioningControlPanel.Services
         {
             Penalties = 0;
             CoreBubbles.Resume();   // WPF Cleanup: App.Bubbles?.Resume() - not before a verdict replay
+            CoreSubliminal.TriggerDeferredBambiReset();   // WPF VideoService.cs:7937: the Reset the pre-video Freeze held
             if (_running && CoreSettings.Current.FlashEnabled) CoreFlash.Start();
             else CoreDiscord.Service?.SetIdleActivity(); // WPF Cleanup:7962
             if (_running) ScheduleNext();
