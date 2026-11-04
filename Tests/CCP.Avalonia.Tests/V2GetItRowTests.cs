@@ -234,6 +234,54 @@ public sealed class V2GetItRowTests
     });
 
     [Fact]
+    public Task SigningBackInToTheSameAccountReadsTheCounter() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var s = CoreSettings.Current;
+        var old = (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service);
+        var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        var proxy = new FakeProxy();
+        Window? host = null;
+        try
+        {
+            // The id was restored but the token is absent: the row asks to sign in.
+            (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints) = ("same-user", null, false, 50);
+            CoreAccount.UnifiedUserId = "same-user";
+            PrizeOwnership.IsGranted = _ => false;
+            var svc = V2PurchaseHead.Create(null, "http://127.0.0.1:9", new System.Net.Http.HttpClient(proxy))!;
+            V2PurchaseHead.Service = svc;
+            proxy.Reply("{\"ok\":true,\"open\":true,\"catalogVersion\":4,\"sp\":50,\"catalog\":[{\"id\":\"flashes_v2\",\"priceSp\":30,\"sale\":\"on\"}]}");
+            var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            svc.Changed += () => { if (proxy.Seen.Count >= 1) read.TrySetResult(); };
+            var panel = new FlashFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            var row = panel.FindControl<V2GetItRow>("RowGetFlashesV2")!;
+            Assert.Equal(V2PurchaseRowState.SignIn, row.Row.State);
+            // Same id, so no UnifiedIdentityChanged: only the token comes back.
+            row.OpenLogin = () => { s.AuthToken = "test-token"; return Task.CompletedTask; };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await read.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await svc.LastBackgroundRead.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(proxy.Seen);
+            Assert.Equal(V2PurchaseRowState.Offer, row.Row.State);
+            Assert.Equal("30", row.FindControl<TextBlock>("TxtPrice")!.Text);
+        }
+        finally
+        {
+            host?.Close();
+            s.AuthToken = null;
+            (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+                CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service) = old;
+        }
+    });
+
+    [Fact]
     public Task VisibleOfferReadsNewAccountAfterAnOlderReadFinishes() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         BubbleMotionPickerTests.Setup();

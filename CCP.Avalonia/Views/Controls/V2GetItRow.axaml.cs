@@ -179,6 +179,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 var open = OpenLogin ?? (() => (TopLevel.GetTopLevel(this) as MainShellWindow)?.OpenUnifiedLoginDialog() ?? Task.CompletedTask);
                 await open();
+                // Signing back in to the same account raises no identity event, so repaint and read here.
+                Apply();
+                EnsureStateIfShown();
                 return;
             }
             // No price on the row means no press: a confirm reading "Spend 0 Sparkle Points" must never
