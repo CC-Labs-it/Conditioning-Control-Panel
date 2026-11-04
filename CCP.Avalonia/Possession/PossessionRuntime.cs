@@ -53,6 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             public double? ForcedHoldMs;
             public double ReturnDurationMs = ReturnMs;
             public TaskCompletionSource Done = new();
+            public Action? Finished;
         }
 
         private readonly IFrameSource _frames;
@@ -86,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>WPF CanApply + Apply: refuses an off-limits, hidden, zero-size, wrong-role or already
         /// possessed control, and an effect instance that is already live.</summary>
-        public bool TryApply(HeadEffect effect, PossessionHeadTarget target)
+        public bool TryApply(HeadEffect effect, PossessionHeadTarget target, Action? finished = null)
         {
             var el = target.Element;
             if (PossessionTree.IsOffLimits(el)) return false;
@@ -103,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 Serilog.Log.Warning(ex, "Possession {Id} start failed", effect.Id);
                 return false;
             }
-            _ghosts.Add(new Ghost { Effect = effect, Lease = lease, Target = target });
+            _ghosts.Add(new Ghost { Effect = effect, Lease = lease, Target = target, Finished = finished });
             _lastKey = target.Key;
             if (!_subscribed) { _subscribed = true; _frames.Subscribe(_onFrame); }
             return true;
@@ -173,6 +174,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
             catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} release failed", g.Effect.Id); }
             _cooldownUntil[g.Target.Key] = _time.GetTimestamp() + (long)(PossessionDeck.TargetCooldown.TotalSeconds * _time.TimestampFrequency);
             g.Done.TrySetResult();
+            try { g.Finished?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} completion failed", g.Effect.Id); }
         }
 
         internal bool IsLive(HeadEffect effect) => _ghosts.Exists(g => ReferenceEquals(g.Effect, effect));

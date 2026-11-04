@@ -173,6 +173,66 @@ public sealed class PossessionShellTests
         }
         Assert.Equal(saved, (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe)); return Task.CompletedTask;
     });
+    private sealed class BrokenHeadEffect(bool failAtStart) : HeadEffect
+    {
+        public override string Id => "broken";
+        public override PossessionRung MinRung => PossessionRung.Settle;
+        public override double Weight => 1;
+        public override TimeSpan HoldFor => TimeSpan.FromSeconds(2);
+        public override System.Collections.Generic.IReadOnlyList<PossessionRole> Roles => new[] { PossessionRole.Button };
+        protected override void Start() { if (failAtStart) throw new InvalidOperationException(); }
+        internal override void Frame(double ms) => throw new InvalidOperationException();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task FailedHeadEffectReleasesDirectorAndAttribution(bool failAtStart) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = LockdownService.Current;
+        using var lockdown = new LockdownService();
+        LockdownService.Current = lockdown;
+        var s = CoreSettings.Current;
+        var saved = (s.LockdownPossessionEnabled, s.LockdownPhotosafe, s.LockdownPossessionIntroSeen);
+        (s.LockdownPossessionEnabled, s.LockdownPhotosafe, s.LockdownPossessionIntroSeen) = (true, true, true);
+        var frames = new Frames(); MainShellWindow.PossessionFramesForTests = frames;
+        var shell = new MainShellWindow();
+        var button = Button("BtnVictim");
+        shell.Content = new StackPanel { Children = { button } };
+        shell.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var director = shell.PossessionDirector!;
+            var effects = (System.Collections.Generic.List<IPossessionEffect>)typeof(PossessionDirector)
+                .GetField("_effects", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(director)!;
+            var runtime = new PossessionRuntime(frames);
+            effects.Clear(); effects.Add(new DirectorHeadEffect(new BrokenHeadEffect(failAtStart), runtime, director.EffectFinished));
+            lockdown.Activate(TimeSpan.FromMinutes(10)); Dispatcher.UIThread.RunJobs();
+            typeof(PossessionDirector).GetField("_nextDue", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(director, DateTime.MinValue);
+            typeof(LockdownService).GetMethod("OnCountdownTick", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(lockdown, new object?[] { null, EventArgs.Empty });
+            Assert.Equal(1, director.LiveEffectCount);
+            frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(600)); Dispatcher.UIThread.RunJobs();
+            if (!failAtStart)
+            {
+                Assert.Equal(1, director.LiveEffectCount);
+                Assert.Single(((Canvas)typeof(MainShellWindow).GetField("_possessionGhostLayer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(shell)!).Children);
+                frames.Frame(TimeSpan.FromMilliseconds(616)); Dispatcher.UIThread.RunJobs();
+            }
+            Assert.Equal(0, director.LiveEffectCount);
+            Assert.Equal(0, runtime.LiveCount);
+            Assert.False(PossessionLease.IsLeased(button));
+            Assert.Empty(((Canvas)typeof(MainShellWindow).GetField("_possessionGhostLayer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(shell)!).Children);
+            Assert.False(shell.GetPossessionTargets().Single(t => ReferenceEquals(t.Visual, button)).IsLive);
+        }
+        finally
+        {
+            lockdown.Deactivate(); shell.Close(); LockdownService.Current = previous; MainShellWindow.PossessionFramesForTests = null;
+            (s.LockdownPossessionEnabled, s.LockdownPhotosafe, s.LockdownPossessionIntroSeen) = saved;
+        }
+        return Task.CompletedTask;
+    });
     [Fact]
     public Task ChargeCompletesWhenFramesStop() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

@@ -45,7 +45,7 @@ public partial class MainShellWindow : IPossessionHost
         var runtime = new PossessionRuntime(PossessionFrames);
         _possessionGhostLayer = new Canvas { IsHitTestVisible = false, ClipToBounds = false, ZIndex = 9000 };
         Named<Grid>("RootGrid")?.Children.Add(_possessionGhostLayer);
-        PossessionDirector = new PossessionDirector(lockdown, PossessionRuntime.CreateAll().Select(e => new DirectorHeadEffect(e, runtime)), new PossessionDirectorHead
+        PossessionDirector = new PossessionDirector(lockdown, PossessionRuntime.CreateAll().Select(e => new DirectorHeadEffect(e, runtime, effect => PossessionDirector?.EffectFinished(effect))), new PossessionDirectorHead
         {
             OnUi = a => { if (Dispatcher.UIThread.CheckAccess()) a(); else Dispatcher.UIThread.Post(a); },
             UiAlive = () => !_possessionClosed,
@@ -63,16 +63,44 @@ public partial class MainShellWindow : IPossessionHost
         PossessionDirector.AttachHost(this);
         var lockdownTab = Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView>("LockdownTab");
         lockdownTab?.SetPossessionReadoutDirector(PossessionDirector);
-        if (lockdown.IsActive) PossessionDirector.OnLockdownActivated();
+        void OfferRules() => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_possessionClosed && lockdown.IsActive) ShowPossessionRulesIfFirstTime();
+        });
+        lockdown.LockdownActivated += OfferRules;
+        if (lockdown.IsActive) { PossessionDirector.OnLockdownActivated(); OfferRules(); }
         LayoutUpdated += (_, _) => _possessionDirty = true; // only flag; rebuild floor is 750 ms
         PointerMoved += (_, e) => _possessionPointer = e.GetPosition(this);
         Closed += (_, _) =>
         {
             _possessionClosed = true;
+            lockdown.LockdownActivated -= OfferRules;
             lockdownTab?.SetPossessionReadoutDirector(null);
             PossessionDirector.Dispose();
             runtime.UndoAll();
         };
+    }
+    // WPF MainWindow.Lab.cs:1104-1136: an unread Inbox row does not spend the rules.
+    private void ShowPossessionRulesIfFirstTime()
+    {
+        var settings = CoreSettings.Current;
+        if (!settings.LockdownPossessionEnabled || settings.LockdownPossessionIntroSeen) return;
+        Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+        {
+            Key = "intro:possession", Glyph = "🕶", Title = "The warden's rules",
+            Summary = "What possession does before the room starts moving.",
+            Open = () =>
+            {
+                var live = CoreSettings.Current;
+                if (!live.LockdownPossessionIntroSeen)
+                {
+                    live.LockdownPossessionIntroSeen = true;
+                    CoreSettings.Save();
+                }
+                FeatureIntroPopup.ShowIfFirstTime("possession", this);
+            },
+        });
+        Platform.BarkHead.Engine?.Raise(PossessionBarkTriggers.Rules, guaranteed: true);
     }
     IReadOnlyList<PossessionTarget> IPossessionHost.Targets => GetPossessionTargets();
     bool IPossessionHost.IsUsable => IsVisible && !_possessionClosed && WindowState != WindowState.Minimized

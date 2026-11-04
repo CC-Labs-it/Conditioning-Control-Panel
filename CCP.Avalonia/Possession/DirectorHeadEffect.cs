@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using ConditioningControlPanel.Services.Possession;
 namespace ConditioningControlPanel.Avalonia.Possession;
-internal sealed class DirectorHeadEffect(HeadEffect effect, PossessionRuntime runtime) : IPossessionEffect
+internal sealed class DirectorHeadEffect(HeadEffect effect, PossessionRuntime runtime, Action<IPossessionEffect>? finished = null) : IPossessionEffect
 {
     private IDisposable? _attribution;
     public string Id => effect.Id;
@@ -28,8 +28,12 @@ internal sealed class DirectorHeadEffect(HeadEffect effect, PossessionRuntime ru
         await ctx.Attribution.ChargeAsync(c, ct);
         ct.ThrowIfCancellationRequested();
         runtime.Photosafe = ctx.Photosafe;
-        if (runtime.TryApply(effect, new PossessionHeadTarget(c, target.Role, target.Key)))
-            _attribution = ctx.Attribution.Possess(c);
+        if (!runtime.TryApply(effect, new PossessionHeadTarget(c, target.Role, target.Key), () =>
+        {
+            _attribution?.Dispose(); _attribution = null;
+            finished?.Invoke(this);
+        })) throw new InvalidOperationException("Possession effect could not start");
+        _attribution = ctx.Attribution.Possess(c);
     }
     public async Task UndoAsync(TimeSpan duration)
     {

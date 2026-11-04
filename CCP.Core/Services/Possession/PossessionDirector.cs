@@ -104,6 +104,14 @@ public sealed class PossessionDirector : IDisposable
     public IPossessionWarden? Warden { get; set; }
     public int LiveEffectCount => _live.Count;
 
+    /// <summary>A head-side effect ended early. Release its booking on the director's UI thread.</summary>
+    internal void EffectFinished(IPossessionEffect effect)
+    {
+        var ghost = _live.FirstOrDefault(g => ReferenceEquals(g.Effect, effect));
+        if (ghost != null) UndoGhostSync(ghost);
+    }
+
+
     /// <summary>Raised the moment a haunt is committed (effect id, victim key or null for a window
     /// effect, whether the warden will name it). The audio layer rides this for its ember tick rather
     /// than hooking every effect, which keeps the effects ignorant of sound.</summary>
