@@ -323,4 +323,13 @@ public sealed class BubbleCountNativeTeardownTests
         }
     }
 
+    [Fact]
+    public void Isolated_engine_uses_the_app_audio_identity()
+    {
+        var engine = (LibVLC)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(LibVLC)); GC.SuppressFinalize(engine);
+        var options = new[] { "--aout=dummy" }; LibVLC? configured = null; string? name = null, agent = null;
+        var result = LibVlcAudio.CreateVideoEngine(options, actual => { Assert.Same(options, actual); return engine; }, (actual, n, a) => { configured = actual; name = n; agent = a; });
+        Assert.Same(engine, result); Assert.Same(engine, configured); Assert.Equal("Conditioning Control Panel", name); Assert.Equal("CCP", agent);
+    }
+
 }
