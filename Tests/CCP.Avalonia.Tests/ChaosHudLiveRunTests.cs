@@ -1,8 +1,10 @@
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -15,6 +17,52 @@ namespace CCP.Avalonia.Tests;
 /// boundary and drafting a boon must show up on screen with no HUD-side code.</summary>
 public sealed class ChaosHudLiveRunTests
 {
+    [Fact]
+    public async Task Portrait_uses_user_art_then_bundled_and_hides_when_missing()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var user = Path.Combine(TestUserDataProfile.Root, "portrait-user");
+            var bundle = Path.Combine(TestUserDataProfile.Root, "portrait-bundle");
+            var userFile = Path.Combine(user, "assets", "Chaos", "portraits", "neutral.png");
+            var bundleFile = Path.Combine(bundle, "assets", "Chaos", "portraits", "neutral.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(userFile)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(bundleFile)!);
+            File.Copy(Path.Combine(System.AppContext.BaseDirectory, "assets", "Chaos", "portraits", "neutral.png"), bundleFile, true);
+            // A distinct 1x1 PNG, compared with the shipped 1024x1024 portrait.
+            File.WriteAllBytes(userFile, System.Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="));
+            var hud = new ChaosHudWindow(new ChaosRunState(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 }));
+            try
+            {
+                var portrait = hud.FindControl<Image>("Portrait")!;
+                var host = hud.FindControl<Border>("PortraitHost")!;
+                Assert.True(host.IsVisible);
+                Assert.NotNull(portrait.Source); // The constructor loads the shipped portrait.
+                hud.LoadPortrait(user, bundle);
+                Assert.True(host.IsVisible);
+                Assert.Equal(1, Assert.IsType<Bitmap>(portrait.Source).PixelSize.Width);
+
+                File.WriteAllText(userFile, "invalid image");
+                hud.LoadPortrait(user, bundle);
+                Assert.True(host.IsVisible);
+                Assert.Equal(1024, Assert.IsType<Bitmap>(portrait.Source).PixelSize.Width);
+
+                File.Delete(userFile);
+                File.Delete(bundleFile);
+                hud.LoadPortrait(user, bundle);
+                Assert.Null(portrait.Source);
+                Assert.False(host.IsVisible);
+            }
+            finally { hud.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task Hud_follows_a_stepped_run()
     {

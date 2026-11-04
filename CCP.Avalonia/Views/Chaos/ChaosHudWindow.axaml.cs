@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.IO;
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Animation.Easings;
@@ -262,7 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Height = WorkAreaDip().Height * 0.6;
             if (double.IsNaN(Height) || Height < 200) Height = 780;   // headless, or no screen yet
             ApplySide(CoreSettings.Current.ChaosHudOnRight);
-            LoadPortrait();
+            LoadPortrait(Path.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory);
             AttachHudTips();
         }
 
@@ -378,22 +379,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ToolTip.SetTip(target, sp);
         }
 
-        /// <summary>
-        /// Sidebar portrait slot. WPF resolved art by convention through <c>ChaosArt.Resolve</c>
-        /// and collapsed the host when no file was present.
-        /// <para>ponytail: needs <c>Services/Chaos/ChaosArt.cs</c>, still in the WPF head because
-        /// it returns <c>System.Windows.Media.ImageSource</c>. Only the RESOLUTION half is
-        /// portable (<c>ChaosArt.PathFor</c> / <c>FilePath</c>, returning an absolute path each
-        /// head decodes itself) - that is the half to move, as <c>CoreModArt</c> did for mod art.
-        /// Whoever moves it: <c>Roots()</c> yields <c>App.UserAssetsPath</c> (= UserData/assets)
-        /// and the callers then append <c>assets/Chaos/...</c>, so the user root probes a doubled
-        /// <c>assets</c> segment; decide whether that is the intended layout before copying it.
-        /// Until then this is the no-art path - what a fresh install renders anyway.</para>
-        /// </summary>
-        private void LoadPortrait()
+        // WPF ChaosHudWindow.xaml.cs:193-200 and ChaosArt.cs:59-70, 138-144.
+        internal void LoadPortrait(string userRoot, string bundleRoot)
         {
-            _portrait.Source = null;
-            _portraitHost.IsVisible = false;
+            _portrait.Source = ResolvePortrait(userRoot, bundleRoot);
+            _portraitHost.IsVisible = _portrait.Source != null;
+        }
+
+        internal static Bitmap? ResolvePortrait(string userRoot, string bundleRoot)
+        {
+            foreach (var root in new[] { userRoot, bundleRoot })
+            {
+                var path = Path.Combine(root, "assets", "Chaos", "portraits", "neutral.png");
+                try { if (File.Exists(path)) return new Bitmap(path); }
+                catch (Exception ex) { Log.Debug("ChaosHud portrait {Path}: {Error}", path, ex.Message); }
+            }
+            return null;
         }
 
         private bool _pinnedOpen;   // pre-run loadout glance: panel stays open until SINK fires
