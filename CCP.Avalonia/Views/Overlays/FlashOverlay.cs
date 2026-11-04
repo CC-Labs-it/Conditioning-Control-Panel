@@ -151,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // path until their input, motion and glow can be hosted without losing behaviour.
             if (!s.FlashGazePopEnabled && !s.FlashGazeLingerEnabled
                 && CanHost(s.UnifiedOverlayHost, clickable, glow.HasGlow, inheritMotion ?? s.FlashMotionStyle)
-                && ShowHosted(bmp, rect, screen.Bounds, screen.Scaling, alpha, fade, lifetime))
+                && ShowHosted(bmp, rect, screen.Bounds, screen.Scaling, alpha, fade, lifetime, s.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2()))
             {
                 Paid(path, s, hydraGeneration, multiplier);
                 return true;
@@ -169,12 +169,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool CanHost(bool unified, bool clickable, bool glow, FlashMotionStyle motion) =>
             unified && !clickable && !glow && motion == FlashMotionStyle.Still;
 
-        internal static Action<Action, TimeSpan> ScheduleHosted = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+        internal static Func<Action, TimeSpan, IDisposable> ScheduleHosted = (action, delay) => DispatcherTimer.RunOnce(action, delay);
         private static readonly Dictionary<Image, Action> HostedCleanup = new();
 
         // Each image owns its lease and bitmap. Closing one must not close the other layers.
         internal static bool ShowHosted(Bitmap bitmap, PixelRect rect, PixelRect screen, double scaling,
-            double alpha, TimeSpan fade, TimeSpan lifetime)
+            double alpha, TimeSpan fade, TimeSpan lifetime, bool rounded = false, bool ownsV2 = false)
         {
             var lease = SharedOverlayHost.Acquire(screen);
             if (lease == null) return false;
@@ -187,15 +187,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Margin = new Thickness((rect.X - screen.X) / scale, (rect.Y - screen.Y) / scale, 0, 0),
                 ZIndex = CompositorLayers.Flash, Opacity = 0,
             };
+            var radius = FlashCorners.Resolve(rounded, ownsV2, hasGlow: false, Math.Min(image.Width, image.Height), dpiScale: 1);
+            if (radius > 0) image.Clip = new RectangleGeometry(new Rect(0, 0, image.Width, image.Height), radius, radius);
             var entry = (lease, image, rect);
             var closed = false;
             var fadeGeneration = 0;
+            var timers = new List<IDisposable>();
             void OnStageClosed(object? sender, EventArgs e) => Remove();
             void Remove()
             {
                 if (closed) return;
                 closed = true;
                 lease.Window.Closed -= OnStageClosed;
+                foreach (var timer in timers) timer.Dispose();
+                timers.Clear();
                 Hosted.Remove(entry);
                 HostedCleanup.Remove(image);
                 lease.Canvas.Children.Remove(image);
@@ -215,12 +220,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var value = from + (to - from) * i / steps;
                     var last = i == steps;
-                    ScheduleHosted(() => { if (closed || generation != fadeGeneration) return; image.Opacity = value; if (last) done?.Invoke(); },
-                        span * i / steps + TimeSpan.FromMilliseconds(1));
+                    timers.Add(ScheduleHosted(() => { if (closed || generation != fadeGeneration) return; image.Opacity = value; if (last) done?.Invoke(); },
+                        span * i / steps + TimeSpan.FromMilliseconds(1)));
                 }
             }
             Fade(0, alpha);
-            ScheduleHosted(() => { if (!closed) Fade(image.Opacity, 0, Remove); }, lifetime);
+            timers.Add(ScheduleHosted(() => { if (!closed) Fade(image.Opacity, 0, Remove); }, lifetime));
             return true;
         }
 
