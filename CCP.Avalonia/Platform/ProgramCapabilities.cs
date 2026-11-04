@@ -16,8 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             QuestCategory.Flash, QuestCategory.Video, QuestCategory.Spiral, QuestCategory.PinkFilter,
             QuestCategory.Bubbles, QuestCategory.LockCard, QuestCategory.BubbleCount, QuestCategory.Mantra,
-            QuestCategory.Autonomy, QuestCategory.Lockdown, QuestCategory.BlinkTrainer,
-            // Not raised: KeywordTrigger (engine not ported), Remote/RemoteIssue, Session, Streak, Combined.
+            QuestCategory.Autonomy, QuestCategory.Lockdown, QuestCategory.BlinkTrainer, QuestCategory.KeywordTrigger,
+            // Not raised: Remote/RemoteIssue, Session, Streak, Combined.
         };
 
         /// <summary>Ritual tasks: SubmitRitualTask + the seeded roadmap (programs 3b). Tests flip it to prove the gate.</summary>

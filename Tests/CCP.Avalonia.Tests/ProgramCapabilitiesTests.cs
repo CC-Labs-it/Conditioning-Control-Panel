@@ -23,8 +23,8 @@ public sealed class ProgramCapabilitiesTests
         ["first_week"] = new string[0],
         ["presentation"] = new string[0],
         ["the_takeover"] = new string[0],
-        ["kept"] = new[] { "KeywordTrigger" },
-        ["firmware_install"] = new[] { "KeywordTrigger" },
+        ["kept"] = new string[0],
+        ["firmware_install"] = new string[0],
     };
 
     [Fact]
@@ -39,13 +39,14 @@ public sealed class ProgramCapabilitiesTests
                 .Distinct().OrderBy(s => s);
             Assert.True(Needs[p.Id].OrderBy(s => s).SequenceEqual(missing), $"{p.Id}: {string.Join(",", missing)}");
         }
-        Assert.Equal(new[] { "first_week", "presentation", "the_takeover" },
+        Assert.Equal(new[] { "first_week", "presentation", "firmware_install", "the_takeover", "kept" },
             all.Where(p => ProgramService.UnavailableTasks(p, ProgramCapabilities.IsAvailable).Count == 0).Select(p => p.Id));
     }
 
     /// <summary>The QuestService call that raises each category.</summary>
     private static readonly Dictionary<QuestCategory, string> TrackCall = new()
     {
+        [QuestCategory.KeywordTrigger] = "TrackKeywordTrigger",
         [QuestCategory.Flash] = "TrackFlashImage",
         [QuestCategory.Video] = "TrackVideoMinutes",
         [QuestCategory.Spiral] = "TrackSpiralMinutes",

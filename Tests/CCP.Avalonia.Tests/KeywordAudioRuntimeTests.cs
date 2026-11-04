@@ -129,6 +129,42 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void KeyboardMatchesForwardEachPermittedTriggerToProgramVerifier() => Run((engine, s, played) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-keyword-program-").FullName;
+        var oldQuests = AvApp.Quests;
+        var oldVerifier = CoreQuests.TrackProgramVerifierProvider;
+        var quests = new QuestService(null, dir);
+        var credits = new List<(QuestCategory, int)>();
+        try
+        {
+            AvApp.Quests = quests;
+            CoreQuests.TrackProgramVerifierProvider = (category, amount) => credits.Add((category, amount));
+            s.AwarenessLoopProtectionEnabled = false;
+            s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:one", Keyword = "sit", CooldownSeconds = 0 });
+            CoreEntitlement.HasPremiumProvider = () => false;
+            Type(engine, "sit");
+            Assert.Empty(credits);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            PanicAftermath.ArmQuiet();
+            Type(engine, "sit");
+            Assert.Empty(credits);
+            PanicAftermath.EndQuiet();
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 2);
+            Type(engine, "sit");
+            Assert.Equal(new[] { (QuestCategory.KeywordTrigger, 1), (QuestCategory.KeywordTrigger, 1) }, credits);
+        }
+        finally
+        {
+            PanicAftermath.EndQuiet();
+            CoreQuests.TrackProgramVerifierProvider = oldVerifier;
+            AvApp.Quests = oldQuests;
+            quests.Dispose();
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    });
+
+    [Fact]
     public void PanicQuietSuppressesKeyboardDispatchAndQuestCredit() => Run((engine, s, played) =>
     {
         var dir = Directory.CreateTempSubdirectory("ccp-keyword-quiet-").FullName;
