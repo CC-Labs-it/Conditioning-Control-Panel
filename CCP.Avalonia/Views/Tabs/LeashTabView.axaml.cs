@@ -43,6 +43,7 @@ public partial class LeashTabView : UserControl
     {
         if (_service != null) { _service.SnapshotChanged -= OnSnapshot; _service.ReceiptsChanged -= Render; }
         foreach (var card in _holders.Values) card.Fold();
+        foreach (var card in _offers.Values) card.Fold();
     }
     private void OnSnapshot(LeashSnapshot _) => Render();
 
