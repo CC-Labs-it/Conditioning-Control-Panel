@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// Adapted from WPF's TutorialOverlay: card, spotlight and automatic advance subscriptions.
     /// Live cards use the host overlay layer, including a real spotlight input hole. Narration,
-    /// guide navigation, keyword demo and fade timing remain in wire-win-tutorial-overlay-c. The parameterless constructor renders a
+    /// the exit fade and monitor-wide dim remain to be ported. The parameterless constructor renders a
     /// sample and never subscribes to the live tour.
     /// </summary>
     public partial class TutorialOverlay : Window
