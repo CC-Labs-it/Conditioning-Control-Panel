@@ -28,6 +28,34 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class LeaderboardFxTests
 {
+    [Fact]
+    public Task TrophyCaseVisibilityTracksOwnership() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (global::Avalonia.Application.Current == null)
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var old = settings.UnlockedSkills;
+        Window? window = null;
+        try
+        {
+            settings.UnlockedSkills = new();
+            var tab = new LeaderboardTabView();
+            window = new Window { Content = tab };
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.False(tab.ShowTrophyStats);
+            settings.UnlockedSkills = new() { "trophy_case" };
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.ShowTrophyStats);
+            settings.UnlockedSkills = new();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(tab.ShowTrophyStats);
+        }
+        finally { window?.Close(); settings.UnlockedSkills = old; }
+        return Task.CompletedTask;
+    });
+
     private sealed class BoardWire : HttpMessageHandler
     {
         public string? Response;
