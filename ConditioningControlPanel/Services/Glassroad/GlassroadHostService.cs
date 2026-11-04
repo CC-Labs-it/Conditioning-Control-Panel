@@ -262,7 +262,7 @@ internal static class GlassroadHostService
         }
         // The results slip (W7) lands on the results card that is up when the receipt comes in.
         var slipHost = _host;
-        _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim(GlassroadRules.SparklesGame, claim.Mode,
+        _ = Sparkles.SparklesSlipDelivery.Deliver(Sparkles.SparklesGameEnd.Claim(GlassroadRules.SparklesGame, claim.Mode,
             claim.Result, claim.Duration, claim.Detail, claim.Proof), json => slipHost?.Post(new JRaw(json)));
     }
 

@@ -625,7 +625,7 @@ internal static class DtrhHostService
             if (!((bool?)o["abandoned"] ?? false) && !_testMode)
             {
                 var slipHost = _host;
-                _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim("dtrh", "solo",
+                _ = Sparkles.SparklesSlipDelivery.Deliver(Sparkles.SparklesGameEnd.Claim("dtrh", "solo",
                     Sparkles.SparklesResult.ForMedal(Sparkles.SparklesGameEnd.RatioMedal(booking.Score, 250.0 * (booking.DurationSec / 60.0) * booking.DiffMult)),
                     TimeSpan.FromSeconds(booking.DurationSec), new JObject { ["difficulty"] = diff }),
                     json => slipHost?.Post(new JRaw(json)));

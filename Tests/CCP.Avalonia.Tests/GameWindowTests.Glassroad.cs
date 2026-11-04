@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Threading;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Interactivity;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -25,13 +28,19 @@ public sealed partial class GameWindowTests
     private sealed class GrHttp : System.Net.Http.HttpMessageHandler
     {
         public readonly List<(string Method, string Url, string Body, string? Token)> Seen = new();
+        public readonly Queue<(int Status, string Body)> Replies = new();
+        public readonly System.Threading.ManualResetEventSlim RequestSeen = new();
+        public System.Threading.Tasks.TaskCompletionSource<bool>? ReplyGate;
         protected override async System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
             System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
         {
             var body = request.Content == null ? "" : await request.Content.ReadAsStringAsync(ct);
             Seen.Add((request.Method.Method, request.RequestUri!.ToString(), body,
                 request.Headers.TryGetValues("X-Auth-Token", out var t) ? t.Single() : null));
-            return new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent("{\"ok\":1}") };
+            RequestSeen.Set();
+            if (ReplyGate != null) await ReplyGate.Task;
+            var reply = Replies.Count > 0 ? Replies.Dequeue() : (200, "{\"ok\":1}");
+            return new System.Net.Http.HttpResponseMessage((System.Net.HttpStatusCode)reply.Item1) { Content = new System.Net.Http.StringContent(reply.Item2) };
         }
     }
 
@@ -140,8 +149,7 @@ public sealed partial class GameWindowTests
 
     // ---- the window ----
 
-    /// <summary>Door shut: the page cannot be opened and the race tile stays hidden without a track. Door open: the
-    /// Racing Thoughts tile shows, Play opens Glassroad (not dtrh/race.html), and panic closes it.</summary>
+    /// <summary>The old direct preview gate remains; the launcher shows the race and opens Glassroad for Lab.</summary>
     [Fact]
     public void Glassroad_DoorHidesIt_TheRaceTileOpensIt_PanicClosesIt()
     {
@@ -149,12 +157,13 @@ public sealed partial class GameWindowTests
         {
             Assert.Equal("race", GameWindow.ResolveDoor("race"));
             Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
             Assert.False(GameWindow.IsAnyOpen());
         });
         RunGlassroad("1", (shell, launcher, _) =>
         {
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+            CoreEntitlement.HasLabProvider = () => true;
             launcher.Play(LauncherCards.Find("race")!);
             Dispatcher.UIThread.RunJobs();
             var w = Assert.Single(GameWindow.OpenWindowsForTests());
@@ -166,6 +175,48 @@ public sealed partial class GameWindowTests
             Assert.False(GameWindow.IsAnyOpen());
         });
     }
+
+    // WPF LauncherCatalogue.cs:231-238 and GlassroadHostService.cs:55-82.
+    [Fact]
+    public void LauncherRace_AlwaysVisible_GatesAndOpensGlassroadWithoutPreviewSwitch() => RunGlassroad(null, (shell, launcher, _) =>
+    {
+        bool lab = false;
+        var denied = new List<TierVerdict>();
+        CoreEntitlement.HasLabProvider = () => lab;
+        CoreEntitlement.ShowDeniedHandler = denied.Add;
+        var card = LauncherCards.Find("race")!;
+        Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+        Assert.True(LauncherWindow.Destinations["race"].Locked());
+        launcher.BuildTiles();
+        var tile = (Border)launcher.FindControl<UniformGrid>("GamesGrid")!.Children.Single(c => (string?)c.Tag == "race");
+        var text = (StackPanel)((Grid)tile.Child!).Children[1];
+        var button = text.Children.OfType<Button>().Single();
+        Assert.Contains(((StackPanel)button.Content!).Children.OfType<TextBlock>(), t => t.Text == ConditioningControlPanel.Localization.Loc.Get("launcher_locked"));
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Single(denied);
+        Assert.Equal(ConditioningControlPanel.Models.PatreonTier.Level2, denied[0].Required);
+        Assert.False(LauncherWindow.LaunchGame(shell, "race")); // boot/handoff must fall back to the launcher
+        Assert.Equal(2, denied.Count);
+        var boot = LauncherWindow.Boot;
+        try { LauncherWindow.Boot = BootDecision.GameFirst("race"); LauncherWindow.RouteBoot(shell); }
+        finally { LauncherWindow.Boot = boot; }
+        Assert.True(launcher.IsVisible);
+        Assert.False(shell.IsVisible);
+        Assert.Equal(3, denied.Count);
+        launcher.Hide();
+
+        lab = true;
+        Assert.False(LauncherWindow.Destinations["race"].Locked());
+        launcher.Play(card);
+        var game = Assert.Single(GameWindow.OpenWindowsForTests());
+        Assert.Equal(GameWindow.GlassroadId, game.Spec.Id);
+        Assert.EndsWith("/glassroad/index.html", game.PageUrl!.AbsolutePath);
+        lab = false;
+        launcher.Play(card); // a live game must not bypass the gate
+        Assert.Equal(4, denied.Count);
+        Assert.Same(game, Assert.Single(GameWindow.OpenWindowsForTests()));
+    });
 
     /// <summary>Init goes out at load, on the first message and at ready; the relay signs as the host's player, sends
     /// only /v2/race/ (judged signed), never the room-signed result; exit and menu-back close; a silent page is pinged

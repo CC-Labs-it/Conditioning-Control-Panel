@@ -145,6 +145,7 @@ internal static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
@@ -257,6 +258,8 @@ internal static class FriendsLanding
         if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
+        if (item.Destination == InviteDestination.Race && !TierGate.DemandLab(Loc.Get("launcher_game_race_title")))
+        { FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Declined)); return; }
         FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
         Sfx("chaos/reveal_chime.mp3", 0.20f, "friends-join");   // WPF FriendsSfx.Join
         Join(item);
@@ -264,7 +267,7 @@ internal static class FriendsLanding
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
     /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    internal static bool CanJoin(InboxItem item) => item.Destination is InviteDestination.Ramp or InviteDestination.Race;
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -280,6 +283,7 @@ internal static class FriendsLanding
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        else if (item.Destination == InviteDestination.Race) GameWindow.Launch("race", launcherRace: true, joinRoomId: item.Room);
     }
 
     private static readonly FriendsSfxGate SfxGate = new();

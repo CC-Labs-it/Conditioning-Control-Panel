@@ -37,23 +37,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
                 // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
-                // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
-                ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
+                // WPF LauncherCatalogue.cs:231-238: always revealed, Lab/Prime locked, Glassroad.
+                ["race"] = (Games.GameWindow.LauncherRaceLocked, _ => Games.GameWindow.Launch("race", launcherRace: true)),
                 // WPF LauncherCatalogue :241: Lab tier (or the daily-free drop); GameWindow.Launch runs DemandLab.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
-
-        /// <summary>WPF LauncherEntry.IsRevealed: a race without a track is WPF's mystery card pointing at the
-        /// Back Room counter. Neither exists on this head, so the unrevealed tile is left out.</summary>
-        private static bool Revealed(string id) =>
-            !string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) || Services.Race.RacingAccess.CanLaunch
-            || Games.GameWindow.GlassroadDoorOpen();   // WPF revealed: GlassroadRules.DoorOpenNow() || CanLaunch
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>
         internal static bool CanStartGame(string id) => Destinations.ContainsKey(id);
 
-        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id) && Revealed(c.Id));
+        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id));
 
         private static LauncherWindow? _window;
 
@@ -183,15 +177,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>WPF LauncherHost.LaunchGame for the cards this head can open; false = no such card here.</summary>
+        /// <summary>WPF LauncherHost.LaunchGame for the cards this head can open; false = unavailable or refused.</summary>
         internal static bool LaunchGame(MainShellWindow panel, string id)
         {
             var card = VisibleCards.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
             if (card == null) return false;
             // The sign-in ask is owned by the launcher, so only then does it come on screen.
             var w = card.RequiresAccount && !CoreAccount.IsLoggedIn ? OpenFor(panel) : (_window ??= new LauncherWindow()).Link(panel);
-            w.Play(card);
-            return true;
+            return w.Play(card);
         }
 
         /// <summary>WPF LauncherHost.OpenPanel without a launcher instance in hand.</summary>
@@ -516,9 +509,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF LauncherHost.LaunchGame for the destinations this head has.</summary>
-        internal void Play(LauncherCard card)
+        internal bool Play(LauncherCard card)
         {
-            if (!Destinations.TryGetValue(card.Id, out var dest)) return;
+            if (!Destinations.TryGetValue(card.Id, out var dest)) return false;
             bool game = Games.GameWindow.Games.ContainsKey(card.Id);
             bool needsAccount = card.RequiresAccount && !CoreAccount.IsLoggedIn;
             // A panel tab that is locked still opens (its own gate paints the refusal), as WPF's does; a
@@ -530,25 +523,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (step == LauncherGameStep.SignIn)
             {
                 OpenSignIn();
-                return;
+                return false;
             }
             if (step == LauncherGameStep.Leash)
             {
                 Log.Information("[Launcher] {Id} waits: a leash punishment is pending", card.Id);
                 OpenPanel(p => p.PresentLeashGateFromLauncher());
-                return;
+                return true;
             }
-            if (game) { LaunchGameWindow(card.Id); return; }
+            if (game) return LaunchGameWindow(card.Id);
             OpenPanel(dest.Open);
+            return true;
         }
 
         /// <summary>WPF LauncherHost.LaunchGame (:335): the game opens, then the launcher hides behind it;
         /// the return poll brings the launcher back when the game closes and the panel is not up. A gate
         /// that refused leaves the launcher where it is.</summary>
-        private void LaunchGameWindow(string id)
+        private bool LaunchGameWindow(string id)
         {
-            var game = Games.GameWindow.Launch(id);
-            if (game == null) return;
+            var game = Games.GameWindow.Launch(id, launcherRace: string.Equals(id, "race", StringComparison.OrdinalIgnoreCase));
+            if (game == null) return false;
             AfterExitBeat(() =>
             {
                 if (!game.IsVisible) return;
@@ -561,6 +555,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { Show(); Activate(); }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] return after {Id} failed", id); }
             };
+            return true;
         }
 
         private static bool Locked((Func<bool> Locked, Action<MainShellWindow> Open) dest)
