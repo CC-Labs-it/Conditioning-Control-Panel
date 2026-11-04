@@ -102,6 +102,13 @@ public sealed class FriendsRailChip : Grid
     }
 
     internal int PillCount => _pill.IsVisible && int.TryParse(_pillText.Text, out var n) ? n : 0;
+    internal void Open()
+    {
+        if (_popup.IsOpen) return;
+        Rebind();
+        _popup.IsOpen = true;
+    }
+
     internal void Toggle()
     {
         if (_popup.IsOpen) { _popup.IsOpen = false; return; }
