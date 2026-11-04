@@ -89,6 +89,42 @@ public sealed class ChaosVibeTrailOverlayTests
     }
 
     [Fact]
+    public async Task Precreation_shows_and_hides_the_same_window_once()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            int opened = 0;
+            double? opacityWhenOpened = null;
+            ChaosVibeTrailOverlay.BeforePrewarmForTests = w => w.Opened += (_, _) =>
+            {
+                opened++;
+                opacityWhenOpened = w.Opacity;
+            };
+            try
+            {
+                ChaosVibeTrailOverlay.EnsureCreated();
+                var w = ChaosVibeTrailOverlay.Active;
+                Assert.NotNull(w);
+                Assert.Equal(1, opened);
+                Assert.Equal(0d, opacityWhenOpened.GetValueOrDefault(-1));
+                Assert.Equal(1d, w!.Opacity);
+                Assert.False(w.IsVisible);
+                Assert.False(w.IsFollowing);
+                ChaosVibeTrailOverlay.EnsureCreated();
+                Assert.Same(w, ChaosVibeTrailOverlay.Active);
+                Assert.Equal(1, opened);
+            }
+            finally
+            {
+                ChaosVibeTrailOverlay.BeforePrewarmForTests = null;
+                ChaosVibeTrailOverlay.CloseActive();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Precreation_cannot_recreate_the_trail_after_immediate_close()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

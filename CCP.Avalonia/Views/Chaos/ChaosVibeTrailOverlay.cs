@@ -33,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     {
         private static ChaosVibeTrailOverlay? _active;
         internal static bool SkipPlatformChecksForTests;
+        internal static Action<ChaosVibeTrailOverlay>? BeforePrewarmForTests;
         private static bool _refused;   // the platform said no once: later vibes don't rebuild and re-warn
         internal static ChaosVibeTrailOverlay? Active => _active;
 
@@ -41,7 +42,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             void Create()
             {
-                try { _active ??= new ChaosVibeTrailOverlay(); }
+                try
+                {
+                    if (_active != null || _refused) return;
+                    var w = _active = new ChaosVibeTrailOverlay();
+                    BeforePrewarmForTests?.Invoke(w);
+                    // The sample drawing must not flash during the show-and-hide prewarm.
+                    w.Opacity = 0;
+                    try { w.Show(); }
+                    finally { w.Hide(); w.Opacity = 1; }
+                }
                 catch (Exception ex) { Log.Debug("ChaosVibeTrail.EnsureCreated: {E}", ex.Message); }
             }
             if (Dispatcher.UIThread.CheckAccess()) Create();
