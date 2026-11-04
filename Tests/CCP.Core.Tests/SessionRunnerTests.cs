@@ -222,6 +222,29 @@ public sealed class SessionRunnerTests : IDisposable
     }
 
     [Fact]
+    public void Pause_StopsBubblesAndMindWipe()
+    {
+        var oldBubbles = CoreBubbles.StopAction;
+        var oldMindWipe = CoreMindWipe.StopProvider;
+        var bubbles = 0;
+        var mindWipe = 0;
+        try
+        {
+            _runner.Start(OneMinute());
+            CoreBubbles.StopAction = () => bubbles++;
+            CoreMindWipe.StopProvider = () => mindWipe++;
+            _runner.Pause();
+            Assert.Equal(1, bubbles);
+            Assert.Equal(1, mindWipe);
+        }
+        finally
+        {
+            CoreBubbles.StopAction = oldBubbles;
+            CoreMindWipe.StopProvider = oldMindWipe;
+        }
+    }
+
+    [Fact]
     public void AGateThatRefusesTheAward_LogsZeroBanked()
     {
         var old = CoreProgression.AddXPProvider;
