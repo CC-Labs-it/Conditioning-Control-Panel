@@ -12,6 +12,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -189,7 +190,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
         internal static void Press(AmbientBubble b, double x, double y)
         {
-            if (!b.IsLiveThreat) { Pop(b); return; }
+            if (!b.IsLiveThreat)
+            {
+                bool wasPopping = b.Popping;
+                Pop(b);
+                if (!wasPopping && b.Popping) EStimClick(b);
+                return;
+            }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -244,6 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
+            ClearEStim();
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
@@ -251,6 +259,93 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
+        }
+
+        // WPF BubbleService.cs:352-440: a charge is consumed only after a player pop
+        // finds a conductor. Timers carry the run generation so they cannot pay after teardown.
+        private static int _estimCharges, _estimGeneration;
+        private static bool _estimFork;
+        internal static int EStimCharges => _estimCharges;
+        internal static Action<int>? EStimArc;
+
+        internal static void ArmEStim(int charges, bool fork)
+        {
+            if (_chaosPopped == null) return;
+            _estimCharges = Math.Max(1, charges);
+            _estimFork = fork;
+            ChaosEStimOverlay.Arm();
+        }
+
+        private static void ClearEStim()
+        {
+            _estimGeneration++;
+            _estimCharges = 0;
+            _estimFork = false;
+            EStimArc = null;
+            ChaosEStimOverlay.Disarm();
+        }
+
+        private static void EStimClick(AmbientBubble source)
+        {
+            if (_estimCharges <= 0 || source.Spec is not { IsLive: false, IsDarter: false, IsFreeze: false }) return;
+            static double Distance(AmbientBubble a, AmbientBubble b) =>
+                Math.Pow(a.CenterX - b.CenterX, 2) + Math.Pow(a.CenterY - b.CenterY, 2);
+            var pool = Field.Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping &&
+                b.Spec is { IsDarter: false, IsFreeze: false, IsTease: false, IsBrittle: false, IsChaperoneLive: false }).ToList();
+            var hits = new List<(AmbientBubble From, AmbientBubble To, int Delay)>();
+            if (!_estimFork)
+            {
+                foreach (var target in pool.OrderBy(b => Distance(source, b)).Where(b => Distance(source, b) <= 600 * 600).Take(3))
+                    hits.Add((source, target, 70 * (hits.Count + 1)));
+            }
+            else
+            {
+                var queue = new Queue<(AmbientBubble Bubble, int Depth)>();
+                var taken = new HashSet<AmbientBubble> { source };
+                queue.Enqueue((source, 0));
+                while (queue.Count > 0 && hits.Count < 40)
+                {
+                    var (current, depth) = queue.Dequeue();
+                    foreach (var target in pool)
+                    {
+                        if (taken.Contains(target) || Distance(current, target) > 600 * 600) continue;
+                        taken.Add(target);
+                        hits.Add((current, target, 70 * (depth + 1)));
+                        queue.Enqueue((target, depth + 1));
+                        if (hits.Count == 40) break;
+                    }
+                }
+            }
+            if (hits.Count == 0) return;
+            _estimCharges--;
+            if (_estimCharges == 0) { _estimFork = false; ChaosEStimOverlay.Disarm(); }
+            var generation = _estimGeneration;
+            foreach (var hit in hits)
+            {
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(hit.Delay) };
+                timer.Tick += (_, _) =>
+                {
+                    timer.Stop();
+                    if (generation != _estimGeneration || !Field.Bubbles.Contains(hit.To) || hit.To.Popping) return;
+                    if (hit.To.IsLiveThreat)
+                    {
+                        if (hit.To.Snap()) Field.ChaosDefused?.Invoke(hit.To);
+                    }
+                    else PopChaos(hit.To);
+                    RequestFrame();
+                };
+                timer.Start();
+            }
+            PixelPoint CenterPx(AmbientBubble b)
+            {
+                double scale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                return new PixelPoint((int)(b.CenterX * scale), (int)(b.CenterY * scale));
+            }
+            var bolts = hits.Select(h => (CenterPx(h.From), CenterPx(h.To))).ToList();
+            if (ChaosSkiaFxOverlay.Enabled)
+                ChaosSkiaFxOverlay.Strike(bolts.Select(b => (new Point(b.Item1.X, b.Item1.Y), new Point(b.Item2.X, b.Item2.Y))).ToList());
+            else ChaosEStimOverlay.Strike(bolts);
+            EStimArc?.Invoke(_estimCharges);
         }
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
