@@ -240,9 +240,10 @@ public sealed class PackMediaPoolTests : IDisposable
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void FailedCloseKeepsTheClipUntilThePlayerCloses(bool useVideo)
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void FailedCloseKeepsTheClipUntilThePlayerCloses(bool useVideo, bool retryPanic)
     {
         ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.mp4", "video"));
         var store = NewStore(); var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
@@ -260,7 +261,7 @@ public sealed class PackMediaPoolTests : IDisposable
             else { bubble.ReloadAssets(); bubble.ForceCleanup(); }
             Assert.True(File.Exists(path)); // a throwing close did not release the player
             vh.ThrowClose = false; bh.ThrowClose = false;
-            if (useVideo) { Assert.True(video.Trigger()); video.ForceCleanup(); }
+            if (useVideo) { if (!retryPanic) Assert.True(video.Trigger()); video.ForceCleanup(); }
             else { bubble.Trigger(forceTest: true); bubble.ForceCleanup(); }
             Assert.False(File.Exists(path));
         }

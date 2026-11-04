@@ -431,7 +431,7 @@ namespace ConditioningControlPanel.Services
         private bool Finish()
         {
             Dispose(ref _preroll);
-            if (!_playing) return false;
+            if (!_playing && _heldPath == null) return false;
             _playing = false;
             IsStrict = false;
             double watched = 0;
