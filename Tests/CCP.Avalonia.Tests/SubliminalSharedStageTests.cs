@@ -13,14 +13,11 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Compositor;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 [Collection(RunsAloneCollection.Name)]
 public sealed class SubliminalSharedStageTests
 {
     private static readonly PixelRect Bounds = new(0, 0, 300, 200);
-
     private static Screen ScreenAt(PixelRect bounds)
     {
         var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen),
@@ -31,15 +28,11 @@ public sealed class SubliminalSharedStageTests
         typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, true);
         return screen;
     }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
+    [Theory, InlineData(true), InlineData(false)]
     public void Tint_and_card_share_a_stage_and_stop_independently(bool tintFirst) => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
-        var configure = SharedOverlayHost.Configure;
-        var transparency = SharedOverlayHost.IsTransparent;
+        var configure = SharedOverlayHost.Configure; var transparency = SharedOverlayHost.IsTransparent;
         var raise = SharedOverlayHost.Raise;
         var available = PinkFilterOverlay.IsAvailable;
         var query = ScreenList.QueryOverride;
@@ -74,13 +67,11 @@ public sealed class SubliminalSharedStageTests
             Assert.Equal(CompositorLayers.PinkTint, tint.ZIndex);
             Assert.True(tint.ZIndex > card.ZIndex);
             Assert.Equal(Color.FromArgb(102, 0x11, 0x22, 0x33), Assert.IsType<SolidColorBrush>(tint.Background).Color);
-
             settings.PinkFilterColor = "#445566";
             settings.PinkFilterOpacity = 20;
             PinkFilterOverlay.Refresh(owner);
             Assert.Same(stage, Assert.Single(stages));
             Assert.Equal(Color.FromArgb(51, 0x44, 0x55, 0x66), Assert.IsType<SolidColorBrush>(tint.Background).Color);
-
             if (tintFirst)
             {
                 PinkFilterOverlay.CloseAll();
@@ -110,8 +101,7 @@ public sealed class SubliminalSharedStageTests
             }
             finally
             {
-                SharedOverlayHost.Configure = configure;
-                SharedOverlayHost.IsTransparent = transparency;
+                SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency;
                 SharedOverlayHost.Raise = raise;
                 PinkFilterOverlay.IsAvailable = available;
                 ScreenList.QueryOverride = query;
@@ -119,12 +109,8 @@ public sealed class SubliminalSharedStageTests
             }
         }
     });
-
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    [InlineData(true, true)]
-    [InlineData(false, true)]
+    [Theory, InlineData(true, false), InlineData(false, false)]
+    [InlineData(true, true), InlineData(false, true)]
     public void Tint_scenario_leaves_the_callers_settings_untouched(bool tintFirst, bool fallback) => AvaloniaTestDispatcher.Run(() =>
     {
         var provider = CoreSettings.ServiceProvider;
@@ -151,15 +137,11 @@ public sealed class SubliminalSharedStageTests
             finally { CoreSettings.ServiceProvider = provider; }
         }
     });
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
+    [Theory, InlineData(true), InlineData(false)]
     public void Shared_stage_stays_below_an_open_chaos_hud(bool tintFirst) => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
-        var configure = SharedOverlayHost.Configure;
-        var transparency = SharedOverlayHost.IsTransparent;
+        var configure = SharedOverlayHost.Configure; var transparency = SharedOverlayHost.IsTransparent;
         var raise = SharedOverlayHost.Raise;
         var schedule = SubliminalOverlay.Schedule;
         var stack = new List<Window>();
@@ -191,14 +173,12 @@ public sealed class SubliminalSharedStageTests
             try { PinkFilterOverlay.CloseAll(); SubliminalOverlay.CloseAll(); hud?.Close(); }
             finally
             {
-                SharedOverlayHost.Configure = configure;
-                SharedOverlayHost.IsTransparent = transparency;
+                SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency;
                 SharedOverlayHost.Raise = raise;
                 SubliminalOverlay.Schedule = schedule;
             }
         }
     });
-
     [Fact]
     public void Opaque_stage_is_closed_and_both_consumers_can_fall_back() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -218,19 +198,15 @@ public sealed class SubliminalSharedStageTests
         }
         finally
         {
-            PinkFilterOverlay.CloseAll();
-            SubliminalOverlay.CloseAll();
-            SharedOverlayHost.Configure = configure;
-            SharedOverlayHost.IsTransparent = transparency;
+            PinkFilterOverlay.CloseAll(); SubliminalOverlay.CloseAll();
+            SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency;
         }
     });
-
     [Fact]
     public void Card_reopens_a_stage_closed_outside_its_lease() => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
-        var configure = SharedOverlayHost.Configure;
-        var transparency = SharedOverlayHost.IsTransparent;
+        var configure = SharedOverlayHost.Configure; var transparency = SharedOverlayHost.IsTransparent;
         var raise = SharedOverlayHost.Raise;
         var stages = new List<Window>();
         SharedOverlayHost.Configure = (w, _) => { stages.Add(w); w.Width = 300; w.Height = 200; return true; };
@@ -248,12 +224,10 @@ public sealed class SubliminalSharedStageTests
         finally
         {
             SubliminalOverlay.CloseAll();
-            SharedOverlayHost.Configure = configure;
-            SharedOverlayHost.IsTransparent = transparency;
+            SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency;
             SharedOverlayHost.Raise = raise;
         }
     });
-
     [Fact]
     public void Screens_are_independent_and_a_closed_stage_can_be_recreated() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -285,8 +259,7 @@ public sealed class SubliminalSharedStageTests
         {
             first?.Dispose(); second?.Dispose(); replacement?.Dispose();
             foreach (var stage in stages) if (stage.IsVisible) stage.Close();
-            SharedOverlayHost.Configure = configure;
-            SharedOverlayHost.IsTransparent = transparency;
+            SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency;
         }
     });
 }

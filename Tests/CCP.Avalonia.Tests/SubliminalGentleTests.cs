@@ -9,9 +9,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 [Collection(RunsAloneCollection.Name)]
 public sealed class SubliminalGentleTests
 {
@@ -32,14 +30,12 @@ public sealed class SubliminalGentleTests
         }
         finally { CoreSettings.ServiceProvider = provider; }
     });
-
     [Fact]
     public void Hosted_card_uses_gentle_fades_without_shortening_the_hold() => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var provider = CoreSettings.ServiceProvider;
-        var configure = SharedOverlayHost.Configure;
-        var transparency = SharedOverlayHost.IsTransparent;
+        var configure = SharedOverlayHost.Configure; var transparency = SharedOverlayHost.IsTransparent;
         var raise = SharedOverlayHost.Raise;
         var scheduler = SubliminalOverlay.Schedule;
         var settings = new SettingsService();
@@ -80,13 +76,11 @@ public sealed class SubliminalGentleTests
         {
             SubliminalOverlay.CloseAll();
             SubliminalOverlay.Schedule = scheduler;
-            SharedOverlayHost.Configure = configure;
-            SharedOverlayHost.IsTransparent = transparency;
+            SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency;
             SharedOverlayHost.Raise = raise;
             CoreSettings.ServiceProvider = provider;
         }
     });
-
     [Fact]
     public void Classic_card_schedules_gentle_ramps_and_a_late_enough_backstop() => AvaloniaTestDispatcher.Run(() =>
     {
