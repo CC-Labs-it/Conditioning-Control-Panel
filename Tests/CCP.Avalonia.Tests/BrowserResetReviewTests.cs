@@ -119,8 +119,14 @@ public class BrowserResetReviewTests
                 var startup = AppUpdater.StartupAsync(shell);
                 await Task.Delay(1300);
                 Assert.Null(AppUpdater.BrowserResetDialog); // a passive surface is already up
+                game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
+                game.Show();
                 announcement.Close();
                 announcement = null;
+                await Task.Delay(1200);
+                Assert.Null(AppUpdater.BrowserResetDialog); // nor over a game (WPF StartupQueueCore.cs:256)
+                game.Close();
+                game = null;
                 await Until(() => AppUpdater.BrowserResetDialog != null);
                 Assert.Same(launcher, AppUpdater.BrowserResetDialog!.Owner);
                 Assert.True(MainShellWindow.IsStartupDialogShowing);

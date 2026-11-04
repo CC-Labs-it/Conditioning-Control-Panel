@@ -155,8 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         // ---- flows (WPF App.xaml.cs) --------------------------------------------------------------
 
-        /// <summary>WPF App.xaml.cs:5410-5425 reports a failed install, then :5366-5373 queues
-        /// an available update. The feed check runs independently of startup dialogs.</summary>
+        /// <summary>WPF App.xaml.cs:5410-5425 reports a failed install, then :5366-5373 queues an update; the feed check runs independently.</summary>
         internal static async Task StartupAsync(MainShellWindow shell)
         {
             var closed = false;
@@ -168,7 +167,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion, consume: false); var report = ShowFailedUpdateAsync(shell, () => closed, outcome);
                 var notice = ShowBrowserResetWhenReadyAsync(shell, report, () => closed);
 
-                // A waiting or open notice must not hold the network check or the update pill.
                 var info = await CheckAsync(force: false);
                 if (info?.IsNewer == true) shell.ShowUpdatePill(info.Version);
                 await notice;
@@ -187,9 +185,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal const string BrowserResetAcknowledged = "browser-reset.ack.json";
         internal static MessageDialog? BrowserResetDialog { get; private set; }
 
-        // WPF BrowserService.cs:125-132 keeps this per user. Looking at that folder on every
-        // Windows launch covers machine installs and a different elevated installer account,
-        // even if this head has already created its own profile before the notice is shown.
+        // WPF BrowserService.cs:125-132 keeps this per user; checking it each Windows launch covers machine
+        // installs, another elevated installer account, and a profile this head already created.
         internal static bool NeedsBrowserResetNotice(string userData, bool windows) =>
             !File.Exists(Path.Combine(userData, BrowserResetAcknowledged)) &&
             (File.Exists(Path.Combine(userData, BrowserResetMarker)) ||
@@ -249,13 +246,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private static Window? StartupOwner(MainShellWindow shell)
         {
-            var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-            var games = desktop?.Windows.OfType<Views.Games.GameWindow>().Where(w => w.IsVisible).ToArray();
-            if (games?.FirstOrDefault(w => w.IsActive) is { } activeGame) return activeGame;
+            if (Views.Games.GameWindow.IsAnyOpen()) return null; // WPF StartupQueueCore.cs:256 parks for a game
             if (shell.IsVisible && shell.IsActive && !shell.BuildingHiddenForBoot) return shell;
             if (LauncherWindow.Instance is { IsVisible: true } launcher) return launcher;
-            if (shell.IsVisible && !shell.BuildingHiddenForBoot) return shell;
-            return games?.FirstOrDefault();
+            return shell.IsVisible && !shell.BuildingHiddenForBoot ? shell : null;
         }
 
         private static async Task<Window?> WaitForStartupOwnerAsync(MainShellWindow shell, Func<bool> closed, bool requireAge, bool panelOnly = false)
