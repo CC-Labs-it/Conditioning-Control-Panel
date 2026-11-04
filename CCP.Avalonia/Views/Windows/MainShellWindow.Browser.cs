@@ -179,6 +179,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _playlistWatchdog?.Stop();
                     break;
                 case "failed":
+                    if (!_playlistPlaying) { _playlistClaimed = _playlistSlotHeld = false; _playlistWatchdog?.Stop(); }
+                    break;
                 case "navigated":
                     CancelVideoAutoPlay();
                     break;
@@ -362,9 +364,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (!current()) return;
                     btn = document.querySelector('button.play-action');
                 }
-                if (!btn) { cleanup(); post('failed'); return; }
+                if (!btn) { post('failed'); return; }
                 if (!current()) return;
-                try { btn.click(); } catch (_) { cleanup(); post('failed'); return; }
+                try { btn.click(); } catch (_) { post('failed'); return; }
                 fallback = setTimeout(() => { if (!notified) { notified = true; post('playing'); } }, 3000);
             })();
             """;

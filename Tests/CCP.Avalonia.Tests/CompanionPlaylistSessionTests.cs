@@ -76,14 +76,13 @@ public sealed class CompanionPlaylistSessionTests
             shell.StopBrowserMediaForPanic();
             scripts.Clear();
             var first = await Open();
-            Send(first, "playing");
+            Send(first, "playing"); Send(first, "failed");
             Assert.True(shell.Autonomy.IsBusy());
             Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.BrowserMediaActive);
             Assert.True(BubbleCountHost.Instance.OtherInteractionActive);
             Send("stale", "ended");
             Assert.True(shell.Autonomy.IsBusy());
-            Send(first, "ended");
-            Assert.False(shell.Autonomy.IsBusy());
+            Send(first, "ended"); Assert.False(shell.Autonomy.IsBusy());
             Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.BrowserMediaActive);
             Assert.False(BubbleCountHost.Instance.OtherInteractionActive);
             Send(first, "playing"); // WPF opens a user session if audio resumes
@@ -98,7 +97,7 @@ public sealed class CompanionPlaylistSessionTests
             Assert.True(shell.Autonomy.IsBusy());
             Send(second, "failed");
             Assert.False(shell.Autonomy.IsBusy());
-            Assert.Contains("window.__ccpPlaylistCleanup?.();", scripts);
+            Send(second, "playing"); Assert.True(shell.Autonomy.IsBusy()); Send(second, "ended");
 
             var third = await Open();
             shell.StopBrowserMediaForPanic();
@@ -106,10 +105,8 @@ public sealed class CompanionPlaylistSessionTests
             Send(third, "playing");
             Assert.False(shell.Autonomy.IsBusy());
             var resumed = Regex.Match(Assert.Single(scripts, s => s.Contains("'yes' === 'yes'")), "const token = '([0-9a-f]{32})';").Groups[1].Value;
-            Send(resumed, "playing");
-            Assert.True(shell.Autonomy.IsBusy());
-            Send(resumed, "ended");
-            Assert.False(shell.Autonomy.IsBusy());
+            Send(resumed, "playing"); Assert.True(shell.Autonomy.IsBusy());
+            Send(resumed, "ended"); Assert.False(shell.Autonomy.IsBusy());
             scripts.Clear();
 
             await CompanionLinkLauncher.OpenAsync(url.ToString());

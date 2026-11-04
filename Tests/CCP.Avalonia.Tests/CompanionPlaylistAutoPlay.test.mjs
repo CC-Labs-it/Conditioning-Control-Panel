@@ -50,8 +50,8 @@ test('clicks the playlist play button once after hydration', async () => {
 test('gives up after twenty polls if no play button appears', async () => {
     const p = page(Infinity);
     await p.run();
-    assert.deepEqual(p.counts(), [21, 0]);
-    assert.deepEqual(p.waits, Array(20).fill(250));
+    assert.deepEqual(p.counts(), [21, 0]); assert.deepEqual(p.waits, Array(20).fill(250));
+    p.audioEvents.playing(); assert.deepEqual(p.messages, [message('failed'), message('playing')]);
 });
 
 test('panic during hydration prevents a later click', async () => {
@@ -117,7 +117,8 @@ test('reports a failed click and stops reporting after panic or replacement', as
     failed.button.click = () => { throw new Error('blocked'); };
     await failed.run();
     assert.deepEqual(failed.messages, [message('failed')]);
-    assert.deepEqual(failed.cleanup(), [1, 1]);
+    assert.deepEqual(failed.cleanup(), [0, 0]);
+    failed.audioEvents.playing(); assert.deepEqual(failed.messages, [message('failed'), message('playing')]);
     const p = page(0);
     await p.run();
     p.stop();
