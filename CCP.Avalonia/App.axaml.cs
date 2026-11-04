@@ -196,10 +196,11 @@ namespace ConditioningControlPanel.Avalonia
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
         private static void RebaselineDayLogAfterCloudMerge(global::ConditioningControlPanel.Models.AppSettings _) => FeatureDayLog?.Rebaseline("v2 cloud merge");
 
-        /// <summary>WPF App.WindowAwareness (App.xaml.cs:3005), the legacy title observer. On X11/XWayland,
-        /// privacy rules also check the foreground process before reactions (docs/avalonia-decisions.html).</summary>
+        /// <summary>WPF App.WindowAwareness (App.xaml.cs:3005), the legacy title observer. On Windows and
+        /// X11/XWayland, privacy rules also check the foreground process before reactions.</summary>
         internal static WindowAwarenessService WindowAwareness { get; } =
-            CreateWindowAwareness(Platform.X11ActiveWindow.ReadForeground);
+            CreateWindowAwareness(OperatingSystem.IsWindows()
+                ? Platform.Win32Windows.ReadAwarenessForeground : Platform.X11ActiveWindow.ReadForeground);
 
         // Keep the title and process from one foreground sample together for the privacy check.
         internal static WindowAwarenessService CreateWindowAwareness(Func<(string Title, string Process)> read)
