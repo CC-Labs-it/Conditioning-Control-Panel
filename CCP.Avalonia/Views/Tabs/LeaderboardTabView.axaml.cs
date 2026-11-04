@@ -128,20 +128,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private AppSettings? _trophySettings;
+        private SettingsService? _trophySettingsService;
+        private bool _trophyAttached;
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            _trophySettings = CoreSettings.Current;
-            _trophySettings.PropertyChanged += OnTrophySettingsChanged;
-            UpdateTrophyCaseColumns();
+            _trophyAttached = true;
+            _trophySettingsService = CoreSettings.Service;
+            if (_trophySettingsService != null) _trophySettingsService.CurrentReplaced += OnTrophySettingsReplaced;
+            BindTrophySettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            _trophyAttached = false;
+            if (_trophySettingsService != null) _trophySettingsService.CurrentReplaced -= OnTrophySettingsReplaced;
+            _trophySettingsService = null;
             if (_trophySettings != null) _trophySettings.PropertyChanged -= OnTrophySettingsChanged;
             _trophySettings = null;
             base.OnDetachedFromVisualTree(e);
+        }
+
+        private void OnTrophySettingsReplaced() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_trophyAttached) BindTrophySettings();
+        });
+
+        private void BindTrophySettings()
+        {
+            if (_trophySettings != null) _trophySettings.PropertyChanged -= OnTrophySettingsChanged;
+            _trophySettings = CoreSettings.Current;
+            _trophySettings.PropertyChanged += OnTrophySettingsChanged;
+            UpdateTrophyCaseColumns();
         }
 
         private void OnTrophySettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

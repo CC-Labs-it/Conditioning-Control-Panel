@@ -56,6 +56,47 @@ public sealed class LeaderboardFxTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task TrophyCaseVisibilityFollowsReplacedSettings() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (global::Avalonia.Application.Current == null)
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        Window? window = null;
+        try
+        {
+            service.Current.UnlockedSkills = new();
+            var tab = new LeaderboardTabView();
+            window = new Window { Content = tab };
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.False(tab.ShowTrophyStats);
+            var previous = service.Current;
+            var restored = new AppSettings { UnlockedSkills = new() { "trophy_case" } };
+            service.RestoreFrom(restored);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.ShowTrophyStats);
+            restored.UnlockedSkills = new();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(tab.ShowTrophyStats);
+            previous.UnlockedSkills = new() { "trophy_case" };
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(tab.ShowTrophyStats);
+            window.Content = null;
+            service.RestoreFrom(new AppSettings { UnlockedSkills = new() { "trophy_case" } });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(tab.ShowTrophyStats);
+            window.Content = tab;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.ShowTrophyStats);
+        }
+        finally { window?.Close(); CoreSettings.ServiceProvider = oldProvider; }
+        return Task.CompletedTask;
+    });
+
     private sealed class BoardWire : HttpMessageHandler
     {
         public string? Response;
