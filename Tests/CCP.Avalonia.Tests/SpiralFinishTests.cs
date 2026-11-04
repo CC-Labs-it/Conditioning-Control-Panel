@@ -354,6 +354,58 @@ public sealed class SpiralFinishTests
             }
         });
 
+    [Theory]
+    [InlineData(false, 1f)]
+    [InlineData(true, 0.5f)]
+    public Task Native_video_applies_gentle_rate_after_start_and_loop(bool gentle, float expected)
+        => Run(async () =>
+        {
+            if (LibVlcAudio.Shared == null) _ = new LibVlcAudio("--aout=dummy");
+            var s = CoreSettings.Current;
+            var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed);
+            var engine = CoreSession.IsEngineRunningProvider;
+            var checks = SpiralOverlay.SkipPlatformChecksForTests;
+            var host = new Window();
+            try
+            {
+                host.Show();
+                CoreSession.IsEngineRunningProvider = null;
+                SpiralOverlay.SkipPlatformChecksForTests = true;
+                if (SpiralOverlay.Decoding is { } pending) await pending;
+                SpiralOverlay.CloseAll();
+                (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed) =
+                    (true, Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), false, gentle, 0.5);
+                SpiralOverlay.Refresh(host);
+                var deadline = DateTime.UtcNow.AddSeconds(20);
+                DateTime? first = null;
+                var framesBeforeLoop = 0;
+                while (DateTime.UtcNow < deadline && (first is null || DateTime.UtcNow - first < TimeSpan.FromSeconds(5)))
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    await Task.Yield();
+                    if (SpiralOverlay.VideoFrames > 0 && first is null)
+                    {
+                        first = DateTime.UtcNow;
+                    }
+                    if (first is { } started && DateTime.UtcNow - started > TimeSpan.FromSeconds(1) && framesBeforeLoop == 0)
+                    {
+                        Assert.Equal(expected, SpiralOverlay.VideoRate, 2);
+                        framesBeforeLoop = SpiralOverlay.VideoFrames;
+                    }
+                }
+                Assert.NotNull(first);
+                Assert.True(framesBeforeLoop > 0 && SpiralOverlay.VideoFrames > framesBeforeLoop);
+                Assert.Equal(expected, SpiralOverlay.VideoRate, 2);
+            }
+            finally
+            {
+                SpiralOverlay.CloseAll(); host.Close();
+                (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed) = saved;
+                CoreSession.IsEngineRunningProvider = engine;
+                SpiralOverlay.SkipPlatformChecksForTests = checks;
+            }
+        });
+
     private sealed class OnDispose(Action dispose) : IDisposable
     {
         public void Dispose() => dispose();
