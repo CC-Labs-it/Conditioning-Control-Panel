@@ -5,7 +5,7 @@
 // The head owns one Core SessionRunner (App.Sessions), which runs only the ported subset - flash,
 // subliminal, bouncing text, lock cards (docs/avalonia-decisions.html).
 // BtnPauseSession_Click (:2021) too.
-// ponytail: dropped, each with no service on this head: remote gates, program/punch-card/Bark/profile-sync hooks, the
+// ponytail: dropped, each with no service on this head: remote gates, program/Bark/profile-sync hooks, the
 // Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).
 // ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
 // "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
@@ -148,11 +148,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// and both clock labels. Runs on the UI thread (the runner ticks through CoreDispatch).</summary>
         private (bool, double?)? _spiralTickKey;
 
+        internal void OnPunchCardSessionStopped(Session session, bool completed)
+        {
+            if (completed) Platform.IntakePunchCardHead.Progress(CorePaths.UserData, session.Id, 0, completed: true);
+        }
+
         internal void OnSessionTick()
         {
             RefreshSessionFeatureLock(force: false);
             Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
+            if (session.DurationMinutes > 0 && runner.Elapsed.TotalMinutes >= session.DurationMinutes / 2.0)
+                Platform.IntakePunchCardHead.Progress(CorePaths.UserData, session.Id, runner.Elapsed.TotalMinutes / session.DurationMinutes * 100);
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
             // The same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823), only when the start or the
             // ramp moved it: a Refresh enumerates screens and probes the file. A landing decode refreshes itself.

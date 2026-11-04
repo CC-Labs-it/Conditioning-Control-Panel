@@ -962,6 +962,7 @@ namespace ConditioningControlPanel.Avalonia
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 Sessions.Ticked += shell.OnSessionTick;
+                Sessions.Stopped += shell.OnPunchCardSessionStopped;
                 Sessions.SessionLog.LogReady += shell.OnSessionLogReady;
                 // WPF App.xaml.cs:529 (main fbe161de2): "See tiers" opens the vault gate card at the tier this door needs.
                 CoreEntitlement.ShowDeniedHandler = verdict => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -1002,6 +1003,7 @@ namespace ConditioningControlPanel.Avalonia
                     Serilog.Log.Information("Shell closed: stopping the session and the engine");
                     CoreEngine.StoppedHook = null;   // the shell is gone; do not repaint it
                     Sessions.Ticked -= shell.OnSessionTick;
+                    Sessions.Stopped -= shell.OnPunchCardSessionStopped;
                     Sessions.SessionLog.LogReady -= shell.OnSessionLogReady;
                     Sessions.Stop();   // restores the pre-session settings before exit
                     CoreEngine.Stop();
