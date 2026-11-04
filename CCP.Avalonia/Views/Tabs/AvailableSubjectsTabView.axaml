@@ -59,7 +59,7 @@
               Width="{Binding FrameSize}" Height="{Binding FrameSize}" Margin="{Binding FrameMargin}"/>
       </Grid>
      </Grid>
-     <StackPanel Grid.Column="1">
+     <StackPanel Grid.Column="1" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal">
        <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}" FontWeight="SemiBold" MaxLines="1" TextTrimming="CharacterEllipsis" MaxWidth="190"/>
        <Ellipse Width="7" Height="7" Margin="7,1,0,0" VerticalAlignment="Center" Fill="#5FFFD0" IsVisible="{Binding Friend}" ToolTip.Tip="{loc:Str lobby_friend_tip}"/>

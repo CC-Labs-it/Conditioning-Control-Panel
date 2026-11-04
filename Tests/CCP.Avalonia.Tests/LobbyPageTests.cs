@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Controls.Templates;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
@@ -191,6 +192,8 @@ public sealed class LobbyPageTests
         Assert.Equal(-(worn.FrameSize - 22) / 2, worn.FrameMargin.Left, 6);
         var card = template.Build(worn)!;
         card.DataContext = worn;
+        var textPanel = card.GetVisualDescendants().OfType<StackPanel>().Single(c => Grid.GetColumn(c) == 1);
+        Assert.Equal(VerticalAlignment.Center, textPanel.VerticalAlignment);
         var face = card.GetVisualDescendants().OfType<Grid>().Single(c => Equals(c.Tag, "lobby-face"));
         var frame = face.Children.OfType<Image>().Single();
         Assert.True(face.IsVisible);
