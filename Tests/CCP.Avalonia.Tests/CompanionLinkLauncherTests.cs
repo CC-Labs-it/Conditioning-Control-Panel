@@ -1,6 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
@@ -12,6 +19,50 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CompanionLinkLauncherTests
 {
+    [Theory]
+    [InlineData("https://127.0.0.1/watch")]
+    [InlineData("http://127.0.0.1/watch")]
+    public Task WatchLinkUsesEmbeddedBrowser(string url) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var app = Application.Current!;
+        var field = typeof(Application).GetField("_applicationLifetime",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var oldLifetime = field.GetValue(app);
+        var oldOffline = CoreSettings.Current.OfflineMode;
+        var oldOpen = AppUpdater.OpenUrl;
+        var oldRelay = RemoteControlTabView.Relay;
+        var lifetime = new ClassicDesktopStyleApplicationLifetime();
+        using var relay = new RemoteRelay(() => null, () => null, "test", (_, _) => null, _ => { });
+        var shell = new MainShellWindow();
+        var external = new List<string>();
+        try
+        {
+            field.SetValue(app, lifetime);
+            lifetime.MainWindow = shell;
+            CoreSettings.Current.OfflineMode = false;
+            RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+            AppUpdater.OpenUrl = (_, value) => { external.Add(value); return Task.CompletedTask; };
+            shell.Show();
+            var tab = shell.Named<SettingsTabView>("SettingsTab")!;
+            var host = tab.FindControl<WebHost>("BrowserWebHost")!;
+            var requests = host.NavigationRequests;
+            await CompanionLinkLauncher.OpenAsync(url);
+            Assert.Equal(requests + 1, host.NavigationRequests);
+            Assert.Equal(new Uri(url), host.Source);
+            Assert.Empty(external);
+        }
+        finally
+        {
+            shell.Close();
+            field.SetValue(app, oldLifetime);
+            CoreSettings.Current.OfflineMode = oldOffline;
+            AppUpdater.OpenUrl = oldOpen;
+            RemoteControlTabView.Relay = oldRelay;
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
     [Theory]
     [InlineData(false, true, "https://127.0.0.1/video", 1, 0)]
     [InlineData(false, false, "https://127.0.0.1/video", 1, 1)]
