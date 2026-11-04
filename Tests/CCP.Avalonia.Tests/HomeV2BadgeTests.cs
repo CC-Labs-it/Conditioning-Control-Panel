@@ -79,7 +79,18 @@ public sealed class HomeV2BadgeTests
             Assert.False(view.CardBubblePop.ShowV2Badge);
             Assert.True(view.CardFlash.FindControl<Border>("V2BadgeHost")!.IsVisible);
 
-            Task.Run(() => PrizeOwnership.ApplySnapshot("badge-account", 2, new[] { PrizeOwnership.BubbleSpiralIn })).GetAwaiter().GetResult();
+            // WPF MainWindow.UiUpdates.cs:2454-2473 and OwnershipService.cs:77-82:
+            // offline keeps ownership, including a response already in flight.
+            service.Current.OfflineMode = true;
+            view.IsVisible = false; view.IsVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(view.CardFlash.ShowV2Badge);
+            PrizeOwnership.ApplySnapshot("badge-account", 2, new[] { PrizeOwnership.FlashPendulum });
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashPendulum));
+            Assert.False(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
+            service.Current.OfflineMode = false;
+
+            Task.Run(() => PrizeOwnership.ApplySnapshot("badge-account", 3, new[] { PrizeOwnership.BubbleSpiralIn })).GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.False(view.CardFlash.ShowV2Badge);
             Assert.True(view.CardBubblePop.ShowV2Badge);

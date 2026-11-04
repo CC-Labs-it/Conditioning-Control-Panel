@@ -61,6 +61,32 @@ public sealed class FlashDriftTests
                 card.FindControl<Slider>("SliderDriftSpeed")!.Value = 2;
                 Assert.Equal(2, s.FlashDriftSpeed);
                 Assert.Equal("2x", card.FindControl<TextBlock>("TxtDriftSpeed")!.Text);
+
+                // WPF FlashFeatureControl.xaml.cs:78-85,433-451: revocation rebuilds the
+                // open picker without overwriting the saved selection; a grant restores it.
+                PrizeOwnership.IsGranted = _ => false;
+                ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.False(card.FindControl<Grid>("RowMotion")!.IsVisible);
+                Assert.False(speedRow.IsVisible);
+                Assert.Equal(FlashMotionStyle.Still, ((ComboBoxItem)cmb.SelectedItem!).Tag);
+                Assert.Equal(FlashMotionStyle.DriftBounce, s.FlashMotionStyle);
+                PrizeOwnership.IsGranted = id => id == PrizeOwnership.FlashDriftBounce;
+                ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(card.FindControl<Grid>("RowMotion")!.IsVisible);
+                Assert.True(speedRow.IsVisible);
+                Assert.Equal(FlashMotionStyle.DriftBounce, ((ComboBoxItem)cmb.SelectedItem!).Tag);
+                Assert.Equal(FlashMotionStyle.DriftBounce, s.FlashMotionStyle);
+                host.Content = null;
+                PrizeOwnership.IsGranted = _ => false;
+                ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(card.FindControl<Grid>("RowMotion")!.IsVisible); // detached
+                host.Content = card;
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.False(card.FindControl<Grid>("RowMotion")!.IsVisible);
+                Assert.Equal(FlashMotionStyle.DriftBounce, s.FlashMotionStyle);
             }
             finally
             {

@@ -36,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static bool Held(string id)
         {
             var s = CoreSettings.Current;
-            lock (Gate) return !s.OfflineMode && s.UnifiedId != null && s.UnifiedId == CoreAccount.UnifiedUserId
+            lock (Gate) return s.UnifiedId != null && s.UnifiedId == CoreAccount.UnifiedUserId
                 && s.UnifiedId == _heldAccount && _grants.Contains(id);
         }
 
@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (Gate)
             {
                 var s = CoreSettings.Current;
-                if (s.OfflineMode || s.UnifiedId != accountId || CoreAccount.UnifiedUserId != accountId) return;
+                if (s.UnifiedId != accountId || CoreAccount.UnifiedUserId != accountId) return;
                 if (_heldAccount == accountId && revision < _revision) return;
                 var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
                 changed = _heldAccount == accountId ? !_grants.SetEquals(next) : next.Count != 0;
