@@ -18,6 +18,11 @@ internal static class LeashHead
     /// <summary>WPF App.Leash. Null until startup built it and after exit.</summary>
     internal static ILeashService? Service { get; set; }
 
+    // The Wayland portal may be unbound, rebound, or unable to prove a key release.
+    internal static bool WaylandSession => OperatingSystem.IsLinux()
+        && (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
+            || string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>WPF App.LeashedChanged: the account went on or off a leash.</summary>
     internal static event Action<bool>? LeashedChanged;
 
