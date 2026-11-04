@@ -6,13 +6,18 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Localization;
@@ -38,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
     /// attention input, no-activate z-order, the remote-media offer after the "no videos" dialog,
-    /// and the remote video credit link and end card.
+    /// and the remote video credit end card.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -54,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
 
         private readonly List<Surface> _surfaces = new();
+        private readonly List<ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge> _creditBadges = new();
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
@@ -68,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal long FrameTs;
         private bool _healUsed, _strict;
         private string _path = "";
+        private string? _queuedCreditPath;
         private readonly Stopwatch _sinceFrame = new();
         /// <summary>Max-length cap seconds this clip spent before its one heal replay.</summary>
         private double _capSpent;
@@ -135,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
+            ResetCreditBadges();
             _sinceShow.Restart();
             _guardStartedAt = 0;
             _sinceFrame.Reset();
@@ -220,6 +228,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (len > 0) Interlocked.Exchange(ref _watchedMs, len);
                 Dispatcher.UIThread.Post(() =>   // never tear down on LibVLC's own thread
                 {
+                    if (_player != live || !Scheduler.IsPlaying) return;
+                    OpenQueuedCreditLink();
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
                     Scheduler.Ended();
@@ -256,6 +266,89 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 || ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.LinkFor(meta?.Sub) != null);
             return credit;
         }
+
+        // WPF VideoService.Browser.cs:634-650,674-684: only a known subreddit can be opened;
+        // fullscreen presses wait for this clip's end, and every lock is checked again at dispatch.
+        internal static Func<string, bool> CreditOpener = ExternalOpener.Open;
+        private bool CreditLinkAllowed() => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.CanOpenLink(
+            _strict || Scheduler.IsStrict,
+            ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true,
+            global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+
+        private static string? CreditLink(string path) => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.LinkFor(
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerItemIndex.MetaFor(path)?.Sub);
+
+        internal Button CreditButton(string path)
+        {
+            var mark = CreditFor(path);
+            // WPF player.css:165-166,169-171 fades the badge and hover over 600 ms.
+            mark.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(600)) } };
+            var label = mark.Child!;
+            mark.Child = null;
+            var tick = new IconGlyph { Kind = IconKind.Checkmark, Size = 11, Foreground = Brushes.White,
+                Margin = new Thickness(3, 0, 0, 0), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, IsVisible = false };
+            mark.Child = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal, Children = { label, tick } };
+            _creditBadges.Add(mark);
+            if (_queuedCreditPath == path) SetCreditQueued(mark, true);
+            var clickable = CreditLink(path) != null && CreditLinkAllowed();
+            // WPF player.css:169-171: no button chrome, a hand, and only the badge brightens on hover.
+            var button = new Button { Content = mark, Padding = new Thickness(0), BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Right,
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom, IsVisible = mark.Shown,
+                IsHitTestVisible = clickable, Cursor = clickable ? new Cursor(StandardCursorType.Hand) : null,
+                Template = new FuncControlTemplate<Button>((b, _) => new ContentPresenter
+                    { Background = Brushes.Transparent, [!ContentPresenter.ContentProperty] = b[!ContentControl.ContentProperty] }) };
+            AutomationProperties.SetName(button, ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.Mark);
+            if (clickable)
+            {
+                button.PointerEntered += (_, _) => mark.Opacity = 1;
+                button.PointerExited += (_, _) => mark.Opacity = ScrolllerCreditBadge.ShownOpacity;
+            }
+            button.Click += (_, _) => CreditPressed(path);
+            return button;
+        }
+
+        internal void CreditPressed(string path)
+        {
+            var link = CreditLink(path);
+            if (!Scheduler.IsPlaying || path != _path || link == null || !CreditLinkAllowed()) return;
+            if (!Floating)
+            {
+                _queuedCreditPath = path;
+                // WPF VideoService.Browser.cs:648-649 broadcasts to every screen;
+                // Assets/web/player/player.js:958-961 shows the tick on each badge.
+                foreach (var badge in _creditBadges) SetCreditQueued(badge, true);
+                return;
+            }
+            PostCreditLink(link, _strict);
+        }
+
+        private static void SetCreditQueued(ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge badge, bool queued)
+        {
+            if (badge.Child is StackPanel { Children.Count: > 1 } panel && panel.Children[1] is IconGlyph tick)
+                tick.IsVisible = queued;
+        }
+
+        private void ResetCreditBadges()
+        {
+            _queuedCreditPath = null;
+            foreach (var badge in _creditBadges) SetCreditQueued(badge, false);
+            _creditBadges.Clear();
+        }
+
+        internal void OpenQueuedCreditLink()
+        {
+            var path = _queuedCreditPath;
+            _queuedCreditPath = null;
+            if (!Scheduler.IsPlaying || path == null || path != _path || !CreditLinkAllowed()) return;
+            var link = CreditLink(path);
+            if (link != null) PostCreditLink(link, _strict);
+        }
+
+        private void PostCreditLink(string link, bool strict) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!strict && CreditLinkAllowed()) CreditOpener(link);
+        });
 
         /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
         internal bool Floating { get; private set; }
@@ -305,7 +398,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var (grace, countdown) = GraceCard();
             var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
             // The WPF browser player credits Scrolller during playback (VideoService.Browser.cs:158).
-            var credit = CreditFor(_path);
+            var credit = CreditButton(_path);
             var w = new Window
             {
                 Title = "CCP Video",
@@ -535,6 +628,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, elapsed);
+            // WPF VideoService.cs:6759-6762: the duration cap also releases a queued credit link.
+            if (why == "max length") OpenQueuedCreditLink();
             Scheduler.End();
         }
 
@@ -919,6 +1014,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 _attention = _gracePaused = false;
+                ResetCreditBadges();
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
                 _userMuted = false;
