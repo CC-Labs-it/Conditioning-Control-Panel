@@ -24,6 +24,7 @@ public partial class MainShellWindow : IPossessionHost
     internal PossessionDirector? PossessionDirector { get; private set; }
     private Point _possessionPointer;
     private bool _possessionClosed;
+    private bool _possessionHooked;
     private static readonly HashSet<string> PossessionNeverNames = new(StringComparer.Ordinal)
     {
         "TxtLockdownTimer", "TxtLockdownExit", "BtnEmergencyExit", "EERoot", "LockdownGate",
@@ -33,8 +34,14 @@ public partial class MainShellWindow : IPossessionHost
     private IFrameSource PossessionFrames => PossessionFramesForTests ?? TopLevelFrameSource.For(this);
     private void InitializePossessionHost()
     {
-        if (Named<Border>("LockdownBadge") is { } badge) PossessionTree.SetExclude(badge, true);
-        if (LockdownService.Current is not { } lockdown) return;
+        if (!_possessionHooked)
+        {
+            _possessionHooked = true;
+            if (Named<Border>("LockdownBadge") is { } badge) PossessionTree.SetExclude(badge, true);
+            Opened += (_, _) => InitializePossessionHost();
+            Closed += (_, _) => _possessionClosed = true;
+        }
+        if (_possessionClosed || PossessionDirector != null || LockdownService.Current is not { } lockdown) return;
         var runtime = new PossessionRuntime(PossessionFrames);
         _possessionGhostLayer = new Canvas { IsHitTestVisible = false, ClipToBounds = false, ZIndex = 9000 };
         Named<Grid>("RootGrid")?.Children.Add(_possessionGhostLayer);
