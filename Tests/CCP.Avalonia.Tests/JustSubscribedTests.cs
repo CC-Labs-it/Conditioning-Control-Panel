@@ -188,6 +188,33 @@ public sealed class JustSubscribedTests
         finally { AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
     });
     [Fact]
+    public Task LapseReadingIsPublishedWhenStoredAndCleared() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = new SettingsService(); var s = settings.Current;
+        s.PatreonTier = 1; s.ServerTierSeen = null; s.OfflineMode = false;
+        s.UnifiedId = "test-user";
+        CoreSettings.ServiceProvider = () => settings;
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key); CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        s.AuthToken = "test-token";
+        AccountSeed.Seed(p => new ProviderSubscription(p, () => s));
+        var oldFactory = AccountSeed.NewV2;
+        var readings = new List<int?>();
+        void OnReading() => readings.Add(s.ServerTierSeen);
+        AccountSeed.SubscriptionReadingApplied += OnReading;
+        try
+        {
+            foreach (var tier in new[] { 0, 0, 1 })
+            {
+                var wire = new ProfileWire(); AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+                wire.Answer("{\"user\":{\"effective_tier\":" + tier + "}}");
+                await AccountSeed.CheckSubscriptionNowAsync();
+            }
+            Assert.Equal(new int?[] { 0, null }, readings);
+        }
+        finally { AccountSeed.SubscriptionReadingApplied -= OnReading; AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
+    });
+    [Fact]
     public Task LateProfileCannotGrantTheNextAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var settings = new SettingsService(); var s = settings.Current;

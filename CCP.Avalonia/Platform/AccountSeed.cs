@@ -196,6 +196,8 @@ internal static class AccountSeed
     }
 
     internal static event Action<int>? SubscriptionTierRaised;
+    // WPF EntitlementTierSync.ReadingApplied: lower reading stored or cleared.
+    internal static event Action? SubscriptionReadingApplied;
     internal static bool EntitlementServerAnswered;
     private static int _subscriptionReadInFlight;
 
@@ -229,6 +231,11 @@ internal static class AccountSeed
                         var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, tier, s.ServerTierSeen);
                         bool changed = seen != s.ServerTierSeen;
                         s.ServerTierSeen = seen;
+                        if (changed)
+                        {
+                            try { SubscriptionReadingApplied?.Invoke(); }
+                            catch (Exception ex) { Log.Warning(ex, "Subscription reading handler failed"); }
+                        }
                         bool rose = EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
                         changed |= rose;
                         int accessBeforeRestamp = EffectivePaidTier();
