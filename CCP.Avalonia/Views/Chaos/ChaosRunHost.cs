@@ -759,6 +759,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _rabbitAimBeat?.Stop();
             bool started = false; // BeatLoop.Start invokes its step synchronously before it subscribes.
             _rabbitAimBeat = new BeatLoop(_overlay!, _ => { if (started) RabbitAimTick(); });
+            _rabbitAimBeat.Interval = TimeSpan.FromMilliseconds(16); // WPF ChaosModeService.cs:2862
             _rabbitAimBeat.Start(); started = true;
         }
 

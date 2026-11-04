@@ -48,6 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             !_owner.IsEffectivelyVisible
             || global::Avalonia.Controls.TopLevel.GetTopLevel(_owner) is global::Avalonia.Controls.Window { WindowState: global::Avalonia.Controls.WindowState.Minimized };
 
+        internal TimeSpan Interval { set => _clock.Interval = value; }
+
         /// <summary>True while the beat's clock is actually subscribed (not parked).</summary>
         internal bool IsTicking => _clock.IsEnabled;
 
