@@ -66,6 +66,7 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 SpiralOverlay.Refresh(owner);
                 await Settle();
                 Assert.True(SpiralOverlay.IsShowing && SpiralOverlay.IsAnimating);
+                Assert.True(SpiralOverlay.QuestMinutes.TickRunning);
                 Assert.Empty(SpiralOverlay.Shown);
                 var canvas = Assert.IsType<Grid>(stage!.Content);
                 var root = Assert.Single(canvas.Children.OfType<Panel>());
@@ -82,6 +83,7 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 var bounds = owner.Screens.Primary!.Bounds;
                 using var other = SharedOverlayHost.Acquire(bounds)!;
                 SpiralOverlay.CloseAll();
+                Assert.False(SpiralOverlay.QuestMinutes.TickRunning);
                 Assert.True(stage.IsVisible);
                 Assert.Empty(canvas.Children);
                 other.Dispose();
@@ -129,10 +131,12 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
         Assert.Equal(0.5, root.Opacity, 3);
         SpiralOverlay.CloseAll();
         Assert.False(SpiralOverlay.IsShowing);
+        Assert.False(SpiralOverlay.QuestMinutes.TickRunning);
         SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
         Assert.Equal(0.4, root.Opacity, 3);
         SpiralOverlay.Refresh(owner);
         Assert.True(SpiralOverlay.IsShowing);
+        Assert.True(SpiralOverlay.QuestMinutes.TickRunning);
         SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
         Assert.Equal(0.5, root.Opacity, 3);
         for (var i = 0; i < 5; i++) SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
@@ -239,6 +243,7 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 shell.StartEngine();
                 await Settle();
                 Assert.True(SpiralOverlay.IsShowing, Why());
+                Assert.True(SpiralOverlay.QuestMinutes.TickRunning);
                 Assert.True(SpiralOverlay.IsAnimating, Why());
                 Assert.Equal(TimeSpan.FromMilliseconds(30), SpiralOverlay.FrameDelay);
                 Assert.Equal(SpiralFrames.Paint(0.4), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
@@ -265,13 +270,16 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 // Panic: windows and clock gone; the saved flag is untouched.
                 shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
                 Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+                Assert.False(SpiralOverlay.QuestMinutes.TickRunning);
                 Assert.True(s.SpiralEnabled);
 
                 // Restart reuses the cached frames at once; Stop clears it again.
                 shell.StartEngine();
                 Assert.True(SpiralOverlay.IsShowing && SpiralOverlay.IsAnimating);
+                Assert.True(SpiralOverlay.QuestMinutes.TickRunning);
                 MainShellWindow.StopEngine();
                 Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+                Assert.False(SpiralOverlay.QuestMinutes.TickRunning);
             }
             finally
             {
