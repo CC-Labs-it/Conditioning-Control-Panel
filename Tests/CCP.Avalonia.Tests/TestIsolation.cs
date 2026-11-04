@@ -150,6 +150,8 @@ internal sealed class ProcessStateSnapshot
     private readonly List<(MemberInfo Member, object? Value)> _statics = new();
     private readonly List<(AppSettings Settings, string Json)> _settings = new();
     private readonly Dictionary<string, byte[]> _files = new();
+    private ConditioningControlPanel.Services.EmiDesk.EmiLineEngine _emiEngine = null!;
+    private string _emiState = "";
 
     private static readonly JsonSerializerSettings Json = new()
     {
@@ -160,6 +162,9 @@ internal sealed class ProcessStateSnapshot
     internal static ProcessStateSnapshot Take()
     {
         var s = new ProcessStateSnapshot();
+        var emi = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        s._emiEngine = emi.LineEngine; emi.LineEngine = new ConditioningControlPanel.Services.EmiDesk.EmiLineEngine();
+        s._emiState = JsonConvert.SerializeObject(ConditioningControlPanel.Services.EmiDesk.EmiState.Current, Json);
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
         foreach (var settings in new[] { CoreSettings.Current, FallbackSettings() }.Distinct())
             s._settings.Add((settings, JsonConvert.SerializeObject(settings, Json)));
@@ -171,6 +176,8 @@ internal sealed class ProcessStateSnapshot
 
     internal void Restore()
     {
+        ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance.LineEngine = _emiEngine;
+        JsonConvert.PopulateObject(_emiState, ConditioningControlPanel.Services.EmiDesk.EmiState.Current, Json);
         foreach (var (m, value) in _statics)
         {
             var now = Get(m);

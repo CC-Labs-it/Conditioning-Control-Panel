@@ -6,14 +6,12 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 internal sealed record EmiMoment(string Id, object? Context);
-
 // Re-cut from wire-win-emi-ring-b. WPF EmiDeskService.cs:661-705, Bubble.cs:503-536.
 // Ask probes remain unset: offers need their own UI and effect runner before being enabled.
 internal sealed partial class EmiDeskService
 {
     internal EmiLineEngine LineEngine { get; set; } = EmiLineEngine.Instance;
     public event EventHandler<EmiMoment>? MomentFired;
-
     public void Fire(string id, object? context = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return;

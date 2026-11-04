@@ -148,7 +148,7 @@ public sealed class EmiLineEngine
     }
 
     /// <summary>The process-wide engine, reading and writing the real state file.</summary>
-    private EmiLineEngine() { }
+    internal EmiLineEngine() { }
 
     private EmiLineEngine(string json)
     {

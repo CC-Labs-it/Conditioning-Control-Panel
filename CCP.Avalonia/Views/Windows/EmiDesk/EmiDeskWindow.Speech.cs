@@ -22,7 +22,6 @@ public partial class EmiDeskWindow
     private bool _speechHooked;
     private DispatcherTimer? _holdTimer;
     internal bool SpeechActive => _speechTimer?.IsEnabled == true;
-
     private void StartSpeech(string? line, string face, Action? done)
     {
         CancelChain(); CancelHold();
@@ -59,10 +58,8 @@ public partial class EmiDeskWindow
         _speechTimer!.Interval = TimeSpan.FromMilliseconds(frame.Ms);
         _speechTimer.Start();
     }
-
     /// <summary>Test seam (P08): run the next say-frame now instead of waiting on its timer.</summary>
     internal void StepSpeech() { if (SpeechActive) AdvanceSpeech(null, EventArgs.Empty); }
-
     /// <summary>The hold's end: back to rest and the idle beats. Test seam (P08) when called directly.</summary>
     internal void EndHold()
     {
@@ -70,16 +67,13 @@ public partial class EmiDeskWindow
         _holdTimer.Stop(); _holdTimer = null;
         DrawFace(EmiChains.RestFace); RestartIdleBeats();
     }
-
     private void CancelSpeech()
     {
         _speechTimer?.Stop(); _speechDone = null;
         _speechFrames = Array.Empty<EmiFrame>(); HideSpeechBubble();
     }
-
     // WPF Bubble.cs:573: a chain cancellation must not steal the hold's return to rest.
     private void CancelHold() { _holdTimer?.Stop(); _holdTimer = null; }
-
     /// <summary>WPF SpeakLine: acknowledge only once the first dot reaches the widget.</summary>
     internal bool SpeakRingLine(LineDraw line, EmiLineEngine engine)
     {
@@ -102,7 +96,6 @@ public partial class EmiDeskWindow
         else Say(line.Text, string.IsNullOrEmpty(line.Face) ? "^_^" : line.Face);
         return true;
     }
-
     partial void OnBubbleTextCore(string? text)
     {
         if (string.IsNullOrEmpty(text)) { HideSpeechBubble(); return; }
@@ -129,13 +122,11 @@ public partial class EmiDeskWindow
         _speechBubble.IsVisible = true; _speechTail!.IsVisible = true;
         PlaceSpeechBubble();
     }
-
     private void HideSpeechBubble()
     {
         if (_speechBubble != null) _speechBubble.IsVisible = false;
         if (_speechTail != null) _speechTail.IsVisible = false;
     }
-
     internal void PlaceSpeechBubble()
     {
         if (_speechBubble?.IsVisible != true || _speechText == null) return;

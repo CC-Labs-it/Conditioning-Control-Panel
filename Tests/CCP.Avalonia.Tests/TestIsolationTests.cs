@@ -49,6 +49,20 @@ public class TestIsolationTests
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 
     [Fact]
+    public void RestoreSeparatesEmiPanicAndCounters()
+    {
+        var service = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance; var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        var engine = service.LineEngine; var before = (state.RingOpens, state.RingIgnoreStreak, state.RingGistGot, state.CodexOpens, state.BookCard); var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() => service.Fire("panicPressed")); Assert.True(service.LineEngine.HoldActive);
+            state.RingOpens++; state.RingIgnoreStreak++; state.RingGistGot = !state.RingGistGot; state.CodexOpens++; state.BookCard = "test";
+        }
+        finally { snapshot.Restore(); }
+        Assert.Same(engine, service.LineEngine); Assert.False(service.LineEngine.HoldActive);
+        Assert.Equal(before, (state.RingOpens, state.RingIgnoreStreak, state.RingGistGot, state.CodexOpens, state.BookCard));
+    }
+    [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()
     {
         var settingsFile = Path.Combine(TestUserDataProfile.Root, "settings.json");
