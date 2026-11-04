@@ -29,9 +29,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Dictionary<AudioLayerTrack, ILayerPlayer> _players = new();
         private float _duckFactor = 1f;
         private bool _disposed;
-        private Task _volumeWork = Task.CompletedTask;
-        private readonly Dictionary<AudioLayerTrack, long> _volumeVersions = new();
-        private long _volumeVersion;
+        private readonly Dictionary<ILayerPlayer, int> _pendingVolume = new();
+        private readonly Dictionary<ILayerPlayer, Task> _volumeWriters = new();
 
         internal static LayeredAudio? Instance { get; set; }
 
@@ -103,24 +102,31 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock) { _duckFactor = 1f; SetMasterVolumeLive(); }
         }
 
+        // One writer per player, off the caller, always sending that player's newest gain: a player
+        // whose write is slow holds up neither the caller nor any other player's duck.
         private void QueueVolumes((AudioLayerTrack Track, ILayerPlayer Player, int Volume)[] updates)
         {
-            foreach (var (track, player, volume) in updates)
+            foreach (var (_, player, volume) in updates)
             {
-                var version = ++_volumeVersion;
-                _volumeVersions[track] = version;
-                _volumeWork = _volumeWork.ContinueWith(_ =>
-                {
-                    lock (_lock)
-                        if (!_players.TryGetValue(track, out var current) || current != player ||
-                            !_volumeVersions.TryGetValue(track, out var latest) || latest != version) return;
-                    try { player.Volume = volume; }
-                    catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
-                }, TaskScheduler.Default);
+                _pendingVolume[player] = volume;
+                if (!_volumeWriters.ContainsKey(player)) _volumeWriters[player] = Task.Run(() => WriteVolumes(player));
             }
         }
 
-        internal Task VolumeUpdates { get { lock (_lock) return _volumeWork; } }
+        private void WriteVolumes(ILayerPlayer player)
+        {
+            while (true)
+            {
+                int volume;
+                lock (_lock)
+                    if (!_pendingVolume.Remove(player, out volume) || !_players.ContainsValue(player))
+                    { _volumeWriters.Remove(player); return; }
+                try { player.Volume = volume; }
+                catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
+            }
+        }
+
+        internal Task VolumeUpdates { get { lock (_lock) return Task.WhenAll(_volumeWriters.Values.ToArray()); } }
 
         /// <summary>LibVLC volume 0-100 for a track, from WPF's linear gain chain.</summary>
         private int VolumeFor(int trackPercent, AppSettings s)
@@ -136,7 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             foreach (var p in _players.Values) { try { p.Dispose(); } catch { } }
             _players.Clear();
-            _volumeVersions.Clear();
+            _pendingVolume.Clear();
         }
 
         public void Dispose()
@@ -169,6 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 public readonly MediaPlayer Player = player;
                 public readonly Media Media = media;
                 public bool Playing, Disposed;
+                public int VolumeWorker;   // 1 while a retry loop owns this copy's gain
             }
 
             private readonly LibVLC _vlc;
@@ -302,6 +309,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 set
                 {
+                    if (_disposed) return;   // before _gate: teardown holds it through native Stop
                     Copy[] playing;
                     lock (_gate)
                     {
@@ -314,27 +322,36 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
             }
 
-            // Retry until the output accepts the current target or playback stops.
+            // Retry until the output accepts the newest target or playback stops: one worker per
+            // copy, on the thread pool, so a caller (the mantra window's ramp) never waits on the output.
             private void ApplyVolume(Copy c)
             {
-                RetryVolume(() =>
-                {
-                    lock (c)
-                    {
-                        if (_disposed || c.Disposed) return true;
-                        var v = _volume;
-                        c.Player.Volume = v;
-                        if (c.Player.Volume == v && _volume == v) { c.Player.Mute = false; return true; }
-                        c.Player.Mute = true;
-                        return false;
-                    }
-                });
+                if (Interlocked.Exchange(ref c.VolumeWorker, 1) == 0) RetryVolume(() => TryApplyVolume(c));
             }
 
-            internal static void RetryVolume(Func<bool> attempt)
+            private bool TryApplyVolume(Copy c)
             {
-                while (!attempt()) Thread.Sleep(25);
+                int v;
+                lock (c)
+                {
+                    if (_disposed || c.Disposed) { Volatile.Write(ref c.VolumeWorker, 0); return true; }
+                    v = _volume;
+                    try
+                    {
+                        c.Player.Volume = v;
+                        var stuck = c.Player.Volume == v;
+                        c.Player.Mute = !stuck;
+                        if (!stuck) return false;
+                    }
+                    catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
+                }
+                Volatile.Write(ref c.VolumeWorker, 0);
+                // A target set while we held the worker skipped starting one; take it on unless another did.
+                return _volume == v || Interlocked.Exchange(ref c.VolumeWorker, 1) != 0;
             }
+
+            internal static void RetryVolume(Func<bool> attempt) =>
+                ThreadPool.QueueUserWorkItem(_ => { while (!attempt()) Thread.Sleep(25); });
 
             public void Dispose()
             {

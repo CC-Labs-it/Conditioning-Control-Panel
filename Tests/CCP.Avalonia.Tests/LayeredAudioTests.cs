@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
@@ -20,13 +22,74 @@ public sealed class LayeredAudioTests
         public void Dispose() => Disposed = true;
     }
 
-    [Fact]
-    public void GainRetriesBeyondInitialWindowUntilOutputRecovers()
+    private sealed class GatedPlayer : LayeredAudio.ILayerPlayer
     {
-        var attempts = 0;
-        LayeredAudio.VlcLayerPlayer.RetryVolume(() => ++attempts == 22);
-        Assert.Equal(22, attempts);
+        public readonly ManualResetEventSlim Gate = new(true), Entered = new();
+        private int _volume = -1;
+        public int Current => Volatile.Read(ref _volume);
+        public int Volume { set { Entered.Set(); Gate.Wait(TimeSpan.FromSeconds(10)); Volatile.Write(ref _volume, value); } }
+        public void Dispose() { }
     }
+
+    [Fact]
+    public void UnresponsiveOutputRetriesOffTheCallerUntilItRecovers()
+    {
+        var caller = Environment.CurrentManagedThreadId;
+        int attempts = 0, thread = caller;
+        var recovered = false;
+        using var done = new ManualResetEventSlim();
+        var clock = Stopwatch.StartNew();
+        LayeredAudio.VlcLayerPlayer.RetryVolume(() =>
+        {
+            Volatile.Write(ref thread, Environment.CurrentManagedThreadId);
+            Interlocked.Increment(ref attempts);
+            if (!Volatile.Read(ref recovered)) return false;
+            done.Set();
+            return true;
+        });
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), "the caller (mantra ramp, UI thread) never waits on the output");
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref attempts) >= 22, 5000), "retries past the old 20-attempt window");
+        Assert.NotEqual(caller, Volatile.Read(ref thread));
+        Volatile.Write(ref recovered, true);
+        Assert.True(done.Wait(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public void BlockedLayerWriteDoesNotHoldBackAnotherLayersDuck()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AudioLayers, s.AudioLayersEnabled, s.AudioLayersMasterVolume, s.MasterVolume);
+        var file = Path.GetTempFileName();
+        var players = new List<GatedPlayer>();
+        try
+        {
+            var a = new AudioLayerTrack { Path = file, Volume = 100 };
+            s.AudioLayers = new List<AudioLayerTrack> { a, new() { Path = file, Volume = 100 } };
+            s.AudioLayersMasterVolume = s.MasterVolume = 100;
+            var layers = new LayeredAudio((_, volume) => { var p = new GatedPlayer(); p.Volume = volume; players.Add(p); return p; });
+            layers.Start(ignoreMasterToggle: true);
+            players[0].Entered.Reset();
+            players[0].Gate.Reset();
+            a.Volume = 50;                                       // the slider stores it, then pushes it live
+            layers.SetTrackVolumeLive(a, 50);                    // layer A's write hangs
+            Assert.True(players[0].Entered.Wait(TimeSpan.FromSeconds(5)));
+            layers.ApplyDuck(0.8f);                              // a cue starts while A is stuck
+            Assert.True(SpinWait.SpinUntil(() => players[1].Current == 58, 5000), "B ducks during the cue"); // cbrt(0.2)
+            layers.ReleaseDuck();
+            Assert.True(SpinWait.SpinUntil(() => players[1].Current == 100, 5000));
+            players[0].Gate.Set();
+            Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));
+            Assert.Equal(79, players[0].Current);                // A lands on its newest gain, cbrt(0.5)
+            layers.Dispose();
+        }
+        finally
+        {
+            foreach (var p in players) p.Gate.Set();
+            (s.AudioLayers, s.AudioLayersEnabled, s.AudioLayersMasterVolume, s.MasterVolume) = saved;
+            File.Delete(file);
+        }
+    }
+
     [Fact]
     public void StartVolumeDuckStopFollowWpfRules()
     {
