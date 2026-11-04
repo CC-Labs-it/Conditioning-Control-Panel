@@ -145,6 +145,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             foreach (var w in ChaosFlashOverlay.Shown) RaiseVisible(w);
             foreach (var (w, _) in FlashOverlay.Active) RaiseVisible(w);
             foreach (var w in FlashOverlay.Exiting) RaiseVisible(w);
+            if (ChaosRunHost.DraftPaused) RaiseVisible(ChaosRunHost.Overlay, managed: true);
+            RaiseVisible(ChaosUnlockCardOverlay.Active, managed: true);
             X11Overlay.RestackLayer(layers);
         }
 

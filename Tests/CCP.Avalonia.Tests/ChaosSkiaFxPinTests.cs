@@ -77,6 +77,39 @@ public sealed class ChaosSkiaFxPinTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task LessonCardStaysAboveRaisedGameplay() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var enabled = settings.ChaosSkiaFxEnabled; var pin = settings.ChaosPinOnTop;
+        var composited = ChaosSkiaFxOverlay.Composited; var needsRaise = ChaosSkiaFxOverlay.X11NeedsRaise;
+        var raise = ChaosSkiaFxOverlay.Raise; var raised = new System.Collections.Generic.List<global::Avalonia.Controls.Window>();
+        try
+        {
+            settings.ChaosSkiaFxEnabled = settings.ChaosPinOnTop = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.X11NeedsRaise = _ => true;
+            ChaosSkiaFxOverlay.Raise = raised.Add;
+            ChaosUnlockCardOverlay.Show(ConditioningControlPanel.Services.Chaos.ChaosUnlockCardRules.ForLesson("taking_chances")!, autoDismiss: false);
+            ChaosSkiaFxOverlay.TrailDot(new Point(100, 100), 0.4);
+            Assert.Same(ChaosUnlockCardOverlay.Active, raised[^1]);
+        }
+        finally
+        {
+            ChaosUnlockCardOverlay.CloseActive();
+            ChaosSkiaFxOverlay.CloseActive(); ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.X11NeedsRaise = needsRaise; ChaosSkiaFxOverlay.Raise = raise;
+            settings.ChaosSkiaFxEnabled = enabled;
+            settings.ChaosPinOnTop = pin;
+        }
+        return Task.CompletedTask;
+    });
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
