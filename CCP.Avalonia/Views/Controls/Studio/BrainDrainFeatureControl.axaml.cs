@@ -100,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             // X11 has no capture-exclusion equivalent (Win32Overlay.SetCaptureAffinity), so the
             // row shows on Windows only rather than offering a switch that does nothing.
             this.FindControl<Grid>("CaptureRow")!.IsVisible = System.OperatingSystem.IsWindows();
+            this.FindControl<Border>("CaptureDivider")!.IsVisible = System.OperatingSystem.IsWindows();
 
             // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
             // OverlayService re-sorts on the settings hook): BrainDrainOverlay reads it on its
