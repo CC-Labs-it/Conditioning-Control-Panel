@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -86,10 +87,14 @@ public sealed class ChatHotkeyTests
         Init();
         var settings = CoreSettings.Current;
         bool old = settings.AvatarEnabled;
+        bool oldGlobal = settings.CompanionPrompt.ChatShortcutGlobal;
+        Action? pressed = null;
         var shell = new MainShellWindow();
+        shell.RegisterChatHotkey = (_, _, _, callback) => { pressed = callback; return new Registration(); };
         try
         {
             settings.AvatarEnabled = true;
+            settings.CompanionPrompt.ChatShortcutGlobal = true;
             var tube = new AvatarTubeWindow(shell);
             typeof(MainShellWindow).GetField("_avatarTubeWindow", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(shell, tube);
             shell.Show();
@@ -104,7 +109,9 @@ public sealed class ChatHotkeyTests
             input.IsVisible = false;
             shell.WindowState = WindowState.Minimized;
             shell.Hide();
-            shell.BringToForegroundAndOpenChat();
+            Assert.NotNull(pressed);
+            pressed();
+            Dispatcher.UIThread.RunJobs();
             Assert.True(shell.IsVisible);
             Assert.Equal(WindowState.Normal, shell.WindowState);
             Assert.True(tube.IsVisible);
@@ -115,7 +122,7 @@ public sealed class ChatHotkeyTests
             Assert.Equal(0, text.SelectionStart);
             Assert.Equal(text.Text!.Length, text.SelectionEnd);
         }
-        finally { shell.Close(); settings.AvatarEnabled = old; }
+        finally { shell.Close(); settings.AvatarEnabled = old; settings.CompanionPrompt.ChatShortcutGlobal = oldGlobal; }
     });
     [Fact]
     public void ChatInputRaisesWindowBeforeFocusingAndSelectingText() => AvaloniaTestDispatcher.Run(() =>
@@ -138,6 +145,74 @@ public sealed class ChatHotkeyTests
             Assert.Equal(5, text.SelectionEnd);
         }
         finally { tube.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ChatRaiseRespectsLiveHostAndTubeMode(bool intake) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        var settings = CoreSettings.Current;
+        bool oldDetached = settings.AvatarTubeDetached;
+        settings.AvatarTubeDetached = false;
+        var shell = new Window();
+        var tube = new AvatarTubeWindow(shell);
+        Window host = intake ? new IntakeHostWindow() : new GameWindow();
+        Func<bool> isOpen = intake ? IntakeHostWindow.IsAnyOpen : GameWindow.IsAnyOpen;
+        int raises = 0;
+        tube.FocusChatWindow = _ => raises++;
+        try
+        {
+            shell.Show();
+            tube.Show();
+            tube.OpenChatInput();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, raises); // attached with no host
+            host.Show();
+            Assert.True(isOpen());
+            tube.OpenChatInput();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, raises); // attached while host is open
+            Assert.True(tube.FindControl<Border>("InputPanel")!.IsVisible);
+            tube.Detach();
+            tube.OpenChatInput();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, raises); // detached keeps its raise
+            host.Close();
+            Assert.False(isOpen());
+            tube.Attach();
+            tube.OpenChatInput();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(3, raises); // attached again after the host closes
+        }
+        finally
+        {
+            host.Close();
+            tube.Close();
+            shell.Close();
+            settings.AvatarTubeDetached = oldDetached;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReopenedHostIsRemovedWhenClosed(bool intake) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        Window host = intake ? new IntakeHostWindow() : new GameWindow();
+        Func<bool> isOpen = intake ? IntakeHostWindow.IsAnyOpen : GameWindow.IsAnyOpen;
+        try
+        {
+            host.Show();
+            host.Hide();
+            host.Show();
+            Assert.True(isOpen());
+            host.Close();
+            Assert.False(isOpen());
+        }
+        finally { host.Close(); }
     });
 
     [Fact]

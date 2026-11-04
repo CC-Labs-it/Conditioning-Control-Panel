@@ -1516,7 +1516,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 try
                 {
-                    FocusChatWindow(this);
+                    // WPF ChatInput.cs:685: keep an attached tube at the shell level while a host is open.
+                    if (IsDetached || (!Games.GameWindow.IsAnyOpen() && !Windows.IntakeHostWindow.IsAnyOpen())) FocusChatWindow(this);
                     _txtUserInput.Focus();
                     _txtUserInput.SelectAll();
                 }
