@@ -16,29 +16,62 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class RemoteRelayTests
 {
+    // WPF RemoteControlService.cs:1476/:1488 dispatch; :980 panic/session end stop and re-arm on the saved
+    // switch; :1159 a leave only cancels pulses; :1020/:1179 every card closes.
     [Fact]
-    public void RemoteAutonomyRoutesCommandsAndTeardownAndRefusesWithoutHost()
+    public async Task Remote_autonomy_and_lock_card_route_to_the_head_and_each_teardown_does_what_WPF_does()
     {
-        var previous = RemoteCommands.AutonomyCommand;
-        var previousStop = RemoteCommands.StopRemoteAutonomy;
+        var s = CoreSettings.Current;
+        var saved = (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.ShowHandler,
+            CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled);
+        var log = new List<string>();
         try
         {
-            RemoteCommands.AutonomyCommand = null;
-            Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("start_autonomy", null));
-            Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("stop_autonomy", null));
-            var calls = new List<bool>();
-            bool stopped = false;
-            RemoteCommands.AutonomyCommand = on => { calls.Add(on); return true; };
-            RemoteCommands.StopRemoteAutonomy = () => stopped = true;
+            (RemoteCommands.AutonomyCommand, CoreLockCard.ShowHandler) = (null, null);
+            foreach (var a in new[] { "start_autonomy", "stop_autonomy", "trigger_lock_card" })
+                Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute(a, null));
+
+            RemoteCommands.AutonomyCommand = on => { log.Add(on ? "start" : "stop"); return true; };
+            RemoteCommands.CancelAutonomyPulses = () => log.Add("pulses");
+            CoreLockCard.ShowHandler = test => log.Add(test ? "test card" : "card");
+            CoreLockCard.CloseAllHandler = () => log.Add("close");
             Assert.Null(RemoteCommands.Execute("start_autonomy", null));
             Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
-            Assert.Equal(new[] { true, false }, calls);
-            RemoteCommands.StopEffects(false);
-            Assert.True(stopped);
+            Assert.Null(RemoteCommands.Execute("trigger_lock_card", null));
+            Assert.Equal(new[] { "start", "stop", "card" }, log);
+
+            log.Clear();
+            RemoteCommands.StopEffects(false);   // the controller left: autonomy keeps running
+            Assert.Equal(new[] { "pulses", "close" }, log);
+
+            s.AutonomyModeEnabled = true;
+            log.Clear();
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+            Assert.Equal(new[] { "pulses", "stop", "start", "close" }, log);
+            s.AutonomyModeEnabled = false;
+            log.Clear();
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+            Assert.Equal(new[] { "pulses", "stop", "close" }, log);
+
+            s.AutonomyModeEnabled = true;
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("full");
+            log.Clear();
+            f.Answer = _ => Json(HttpStatusCode.NotFound, "{}");
+            await r.PollOnceAsync();   // the session ended
+            Assert.False(r.IsActive);
+            Assert.Equal(new[] { "pulses", "stop", "start" }, log);
+
             RemoteCommands.AutonomyCommand = _ => false;
             Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("start_autonomy", null));
         }
-        finally { RemoteCommands.AutonomyCommand = previous; RemoteCommands.StopRemoteAutonomy = previousStop; }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.ShowHandler,
+                CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled) = saved;
+        }
     }
 
     private sealed class FakeRelay : HttpMessageHandler

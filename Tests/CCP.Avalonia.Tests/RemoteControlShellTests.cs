@@ -27,15 +27,18 @@ namespace CCP.Avalonia.Tests;
 /// MainWindow.RemoteControl.cs overlay, toast, Start lock, big emotes and End Session.</summary>
 public sealed class RemoteControlShellTests
 {
+    // WPF RemoteControlService.cs:1476 start/stop; :1159 a leave only cancels pulses; :980 panic and session
+    // end stop and re-arm on the saved switch; :1488 trigger_lock_card shows a card, :1179 teardown closes it.
     [Fact]
-    public void RemoteAutonomyReachesShellAndTeardownStopsIt() => AvaloniaTestDispatcher.Run(() =>
+    public void RemoteAutonomyAndLockCardReachTheShellAndTeardownFollowsWpf() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
-        var old = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, CoreEntitlement.HasPremiumProvider);
+        var old = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, CoreEntitlement.HasPremiumProvider, s.LockCardPhrases,
+            s.LockCardStrict, CoreLockCard.ShowHandler, CoreLockCard.CloseAllHandler);
         MainShellWindow? shell = null;
         try
         {
@@ -47,14 +50,35 @@ public sealed class RemoteControlShellTests
             Assert.True(shell.Autonomy.IsEnabled);
             Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
             Assert.False(shell.Autonomy.IsEnabled);
-            Assert.Null(RemoteCommands.Execute("start_autonomy", null));
-            RemoteCommands.StopEffects(false);
+
+            Assert.True(shell.Autonomy.Start());   // the wearer's own run
+            RemoteCommands.StopEffects(false);      // the controller left
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
+            RemoteCommands.ResetAutonomy();         // panic or session end: back on the saved switch
+            Assert.True(shell.Autonomy.IsEnabled);
+            s.AutonomyModeEnabled = false;
+            RemoteCommands.ResetAutonomy();
             Assert.False(shell.Autonomy.IsEnabled);
+
+            (s.LockCardPhrases, s.LockCardStrict) = (new Dictionary<string, bool> { ["GOOD GIRL"] = true }, false);
+            (CoreLockCard.ShowHandler, CoreLockCard.CloseAllHandler) = (LockCardWindow.PostNext, LockCardWindow.ForceCloseAll);
+            Assert.Null(RemoteCommands.Execute("trigger_lock_card", null));
+            RemoteCommands.StopEffects(false);      // teardown before the posted card drew
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(LockCardWindow.IsAnyOpen());
+            Assert.Null(RemoteCommands.Execute("trigger_lock_card", null));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(LockCardWindow.IsAnyOpen());
+            RemoteCommands.StopEffects(false);
+            Assert.False(LockCardWindow.IsAnyOpen());
         }
         finally
         {
+            LockCardWindow.ForceCloseAll();
             shell?.Close();
-            (s.AutonomyModeEnabled, s.AutonomyConsentGiven, CoreEntitlement.HasPremiumProvider) = old;
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven, CoreEntitlement.HasPremiumProvider, s.LockCardPhrases,
+                s.LockCardStrict, CoreLockCard.ShowHandler, CoreLockCard.CloseAllHandler) = old;
         }
     });
 

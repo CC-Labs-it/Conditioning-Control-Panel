@@ -197,6 +197,7 @@ namespace ConditioningControlPanel.Services
             void StopEffects()
             {
                 try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                RemoteCommands.ResetAutonomy();   // WPF StopAllRemoteEffects: the session end resets autonomy, a leave does not
                 Remote.RemoteWearer.Drop();
             }
             var (done, _) = CoreDispatch.Invoke(() => { StopEffects(); return 0; }, TimeSpan.FromSeconds(10));

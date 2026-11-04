@@ -42,9 +42,24 @@ namespace ConditioningControlPanel.Services
         /// (no HUD), so the scale stays 1.</summary>
         internal static Remote.CoreRemoteHapticDriver RemoteHaptics = new(() => 1.0);   // tests swap in a stepped clock
 
-        // The head owns the scheduler and cancels remote-started work on session teardown.
+        /// <summary>WPF App.Autonomy: the head owns the scheduler. Starts (true) or stops (false) the runtime,
+        /// never the saved switch; false back means nothing ran. Unseeded: the verbs refuse.</summary>
         public static Func<bool, bool>? AutonomyCommand;
-        public static Action? StopRemoteAutonomy;
+        /// <summary>WPF AutonomyService.CancelActivePulses.</summary>
+        public static Action? CancelAutonomyPulses;
+
+        /// <summary>WPF StopAllRemoteEffects (panic, session end; RemoteControlService.cs:980): pulses go and the
+        /// runtime stops, then comes back when the wearer's own switch is on (#299). A controller leaving
+        /// only cancels pulses (StopRemoteTriggeredEffects, :1159).</summary>
+        internal static void ResetAutonomy()
+        {
+            try
+            {
+                CancelAutonomyPulses?.Invoke();
+                if (AutonomyCommand?.Invoke(false) == true && CoreSettings.Current.AutonomyModeEnabled) AutonomyCommand(true);
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy reset failed"); }
+        }
 
         private static int _panicGeneration;
         /// <summary>Moves on every panic: a command fetched before it never runs after it (RemoteRelay).</summary>
@@ -87,6 +102,7 @@ namespace ConditioningControlPanel.Services
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
                 case "stop_video": CoreEngine.Video?.Stop(); return null;
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
+                case "trigger_lock_card": if (CoreLockCard.ShowHandler == null) return NotOnThisBuild; CoreLockCard.Show(); return null;
                 case "start_lock_card": s.LockCardEnabled = true; LockCardScheduler.Instance.Start(); return null;
                 case "stop_lock_card": LockCardScheduler.Instance.Stop(); return null;
                 case "start_autonomy":
@@ -119,7 +135,9 @@ namespace ConditioningControlPanel.Services
         /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
         public static void StopEffects(bool force)
         {
-            try { StopRemoteAutonomy?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy stop failed"); }
+            // A leave and the session end both arrive here unforced; RemoteRelay.Cleanup adds the session-end reset.
+            if (force) ResetAutonomy();
+            else try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             // A controller's panic is a way out like the key: Circe's Tab opens its safety hold (PanicChasterHold).
             if (force) Safety.PanicChasterHold.Open("remote panic");
@@ -135,6 +153,7 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
+            CoreLockCard.CloseAll();   // WPF LockCardWindow.ForceCloseAll (:1020, :1179), a card still posted included
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.

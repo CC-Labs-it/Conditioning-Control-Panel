@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _pinkBaseOpacity, _pinkAppliedOpacity;
         private int _pulseGen;
 
-        private bool _autonomyHooked, _remoteStartedAutonomy;
+        private bool _autonomyHooked;
 
         // WPF AchievementService.TrackTimeBasedProgress, the Takeover half (ccp-bugs #1327): quest
         // minutes measured on a monotonic clock between 1 s ticks, so a throttled or late tick still
@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_autonomyHooked) return;
             _autonomyHooked = true;
             RemoteCommands.AutonomyCommand = RemoteAutonomyCommand;
-            RemoteCommands.StopRemoteAutonomy = StopRemoteAutonomy;
+            RemoteCommands.CancelAutonomyPulses = CancelAutonomyPulses;
             Autonomy.CanPerform = CanPerformAutonomy;
             // WPF CanTakeAction: never over a fullscreen interaction (InteractionQueue.IsBusy).
             Autonomy.IsBusy = () => CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen()
@@ -91,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
             });
             Closed += (_, _) => { if (RemoteCommands.AutonomyCommand == RemoteAutonomyCommand) RemoteCommands.AutonomyCommand = null;
-                if (RemoteCommands.StopRemoteAutonomy == StopRemoteAutonomy) RemoteCommands.StopRemoteAutonomy = null;
+                if (RemoteCommands.CancelAutonomyPulses == CancelAutonomyPulses) RemoteCommands.CancelAutonomyPulses = null;
                 CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
         }
@@ -99,19 +99,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF RemoteControlService.cs:1476: start/stop the runtime, not the saved switch.
         private bool RemoteAutonomyCommand(bool start)
         {
-            if (!start) { _remoteStartedAutonomy = false; CancelAutonomyPulses(); Autonomy.Stop(); return true; }
-            bool alreadyRunning = Autonomy.IsEnabled;
-            if (!Autonomy.Start()) return false;
-            if (!alreadyRunning) _remoteStartedAutonomy = true;
-            return true;
-        }
-
-        private void StopRemoteAutonomy()
-        {
-            if (!_remoteStartedAutonomy) return;
-            _remoteStartedAutonomy = false;
-            CancelAutonomyPulses();
+            if (start) return Autonomy.Start();
             Autonomy.Stop();
+            return true;
         }
 
         private bool CanPerformAutonomy(AutonomyActionType a) => a switch
