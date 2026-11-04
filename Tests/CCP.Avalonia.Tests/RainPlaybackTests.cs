@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Services;
 using SkiaSharp;
@@ -49,7 +50,7 @@ public class RainPlaybackTests
             player.Tick(100); Assert.Equal(1, player.FrameIndex);
             using (var frame = Assert.IsType<WriteableBitmap>(image.Source).Lock()) Assert.Equal(255, Marshal.ReadByte(frame.Address, 0));
             player.Tick(200); Assert.True(player.IsComplete); player.Pause(); player.ManualClock = false; player.Resume(); Assert.False(player.TimerRunning);
-            player.Stop(); Assert.False(player.IsReady); Assert.Equal(0, player.FrameCount); Assert.Null(image.Source);
+            player.Stop(); Assert.False(player.IsReady); Assert.Equal(0, player.FrameCount); Assert.Null(image.Source); long beatClock = 0; using var beatPlayer = new RainClipPlayer(image) { Now = () => beatClock }; await beatPlayer.LoadStrip(path, 2, 10); Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, image)); beatClock = 100; BeatLoop.StepAll(); Assert.Equal(1, beatPlayer.FrameIndex); beatPlayer.Pause(); beatClock += 10_000; BeatLoop.StepAll(); Assert.Equal(1, beatPlayer.FrameIndex); beatPlayer.Resume(); beatClock += 99; BeatLoop.StepAll(); Assert.False(beatPlayer.IsComplete); beatClock++; BeatLoop.StepAll(); Assert.True(beatPlayer.IsComplete); Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, image));
         }
         finally { File.Delete(path); }
     });

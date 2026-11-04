@@ -6,7 +6,7 @@ using Avalonia;
 using Avalonia.Platform;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using SkiaSharp;
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
     internal sealed class RainClipPlayer : IDisposable
@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
         private const int MinFrameMs = 20;
         private const int DefaultFrameMs = 100;   // a 0/10 ms GIF delay plays as browsers do
         private readonly Image _target;
-        private readonly DispatcherTimer _timer;
+        private readonly BeatLoop _timer;
         private int _generation, _index;
         private SKCodec? _codec;
         private SKData? _data;
@@ -25,8 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
         private WriteableBitmap? _bitmap;
         public RainClipPlayer(Image target) {
             _target = target ?? throw new ArgumentNullException(nameof(target));
-            _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(15) };
-            _timer.Tick += (_, _) => Tick(Now());
+            _timer = new BeatLoop(_target, _ => Tick(Now()));
         }
         public bool IsReady { get; private set; }
         public bool IsComplete { get; private set; }
@@ -34,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
         public int FrameIndex => _index;
         public event Action<RainClipPlayer>? Completed;
         public Func<long> Now { get; set; } = static () => Environment.TickCount64;
-        internal bool ManualClock { get; set; } internal bool TimerRunning => _timer.IsEnabled; internal long FrameStarted => _frameStartMs;
+        internal bool ManualClock { get; set; } internal bool TimerRunning => _timer.IsRunning; internal long FrameStarted => _frameStartMs;
         public async Task Load(Uri source) {
             int gen = ++_generation;
             IsReady = false; IsComplete = false; _timer.Stop(); ReleaseCodec();
