@@ -46,6 +46,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private bool WindowOnScreen => _window?.IsVisible == true;
 
+        // WPF EmiDeskService.cs:782: only stagger the avatar when she is not muted.
+        internal void NoteEmiSpoke()
+        {
+            try { if (!AvatarMuted) Platform.BarkHead.Engine?.NotifyExternalLineSpoken(); }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] bark min-gap stamp failed"); }
+        }
+
         /// <summary>Summon her if she is away, send her away if she is out. A widget ON SCREEN wins over the flag.</summary>
         public void Toggle()
         {

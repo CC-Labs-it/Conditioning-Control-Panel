@@ -128,6 +128,9 @@ namespace ConditioningControlPanel.Services.Bark
 
         public void NoteUserMessage() { lock (_gate) _lastUserMessageUtc = Now; }   // WPF :806, chat suppression
 
+        /// <summary>WPF BarkService.cs:337: an external line advances the global bark floor.</summary>
+        public void NotifyExternalLineSpoken() { lock (_gate) _globalLastFireUtc = Now; }
+
         /// <summary>WPF Raise (:1096): the first passing rule (priority order) wins; the gate decides under the
         /// lock, the mouth speaks after it. True when it spoke.</summary>
         public bool Raise(string trigger, Action<BarkContext>? fill = null, bool guaranteed = false)

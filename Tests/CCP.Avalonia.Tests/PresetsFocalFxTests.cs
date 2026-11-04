@@ -66,6 +66,9 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
+        // Start a fresh entrance, then turn motion off while it owns the row transform.
+        view.IsVisible = false;
+        view.IsVisible = true;
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         var chip = view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(b => b.Tag is string);
@@ -86,6 +89,20 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(0.97, press.ScaleX);
         host.MouseMove(new Point(1, 1)); host.MouseUp(new Point(1, 1), MouseButton.Left, RawInputModifiers.None); Settle();
         Assert.Equal(1, press.ScaleX);
+    });
+
+    [Fact]
+    public Task TurningMotionOffCancelsTheActiveEntrance() => WithPresets((host, view) =>
+    {
+        view.IsVisible = false;
+        view.IsVisible = true;
+        var field = typeof(PresetsTabView).GetField("_entranceCancellation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var source = Assert.IsType<System.Threading.CancellationTokenSource>(field.GetValue(view));
+        var token = source.Token;
+        Assert.False(token.IsCancellationRequested);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(token.IsCancellationRequested);
     });
 
     [Fact]

@@ -9,7 +9,10 @@ using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Services.Bark;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
@@ -65,6 +68,74 @@ public sealed class EmiBookSpeechTests
         }
         finally { desk.CloseBook(); desk.Close(); }
         return Task.CompletedTask;
+    });
+
+    private sealed class BarkClock : TimeProvider
+    {
+        public DateTimeOffset Now = DateTimeOffset.UnixEpoch;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    // WPF EmiBookWindow.xaml.cs:287,574 and EmiDeskWindow.Bubble.cs:519-522.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task BookSpeechStaggersAvatarBarksOnlyWhenAvatarIsNotMuted(bool muted) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current == null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldEngine = BarkHead.Engine;
+        var svc = EmiDeskService.Instance;
+        var s = CoreSettings.Current;
+        var oldSettings = (s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk, s.AvatarEnabled, s.BarkChatSuppressionMs);
+        var clock = new BarkClock();
+        var rule = new BarkRule { Id = "book-floor-test", Trigger = "BookFloorTest", VariantPool = new() { new BarkVariant("avatar") } };
+        var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Clock = clock, Speak = _ => { } };
+        try
+        {
+            (s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk, s.AvatarEnabled, s.BarkChatSuppressionMs) = (true, muted, muted, true, 0);
+            svc.ResetMutePrompt();
+            await svc.Summon();
+            Assert.Equal(muted, svc.AvatarMuted);
+            var desk = svc.Window!;
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (desk.InputLocked && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(20);
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.False(desk.InputLocked);
+            engine.Start();
+            BarkHead.Engine = engine;
+            EmiState.Current.BookCard = EmiBookCards.All[0].Id;
+            desk.FindControl<Button>("BtnHelp")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(".", desk.BubbleText);
+            if (muted)
+            {
+                Assert.True(engine.Raise("BookFloorTest")); // no stamp when the avatar is muted
+            }
+            else
+            {
+                clock.Now += TimeSpan.FromSeconds(59);
+                Assert.False(engine.Raise("BookFloorTest"));
+                desk.Book!.FindControl<Button>("BtnNext")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(".", desk.BubbleText);
+                clock.Now += TimeSpan.FromMilliseconds(59999);
+                Assert.False(engine.Raise("BookFloorTest")); // navigation restarted the floor
+                clock.Now += TimeSpan.FromMilliseconds(1);
+                Assert.True(engine.Raise("BookFloorTest"));
+            }
+        }
+        finally
+        {
+            svc.Window?.ShutDown();
+            svc.ResetMutePrompt();
+            BarkHead.Engine = oldEngine;
+            (s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk, s.AvatarEnabled, s.BarkChatSuppressionMs) = oldSettings;
+        }
     });
 
     [Fact]

@@ -22,11 +22,12 @@ public partial class EmiDeskWindow
     internal TimeSpan SpeechHold => _speechTimer?.Interval ?? TimeSpan.Zero;
 
     // WPF EmiBookWindow.xaml.cs:976 and EmiDeskWindow.Bubble.cs:503.
-    // Offers and the service's NoteEmiSpoke bus are still part B.
+    // Offers and channel ownership are still part B.
     internal void SpeakBookMargin(EmiBookCard card)
     {
         if (PresentationActive || string.IsNullOrWhiteSpace(card.MarginEn)) return;
         EmiLineEngine.Instance.Ack("book.margin." + card.Id);
+        EmiDeskService.Instance.NoteEmiSpoke();
         Say(card.MarginEn, string.IsNullOrEmpty(card.MarginFace) ? "^_^" : card.MarginFace);
     }
 

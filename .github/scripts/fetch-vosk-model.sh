@@ -10,7 +10,18 @@ if [ ! -d "$dir/$name/am" ]; then
   mkdir -p "$dir"
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
-  curl -fsSL --retry 3 --retry-delay 5 --max-time 300 -o "$tmp/m.zip" "https://alphacephei.com/vosk/models/$name.zip"
+  # Keep partial bytes across retries. A slow upstream should not restart a 40 MB transfer.
+  for attempt in 1 2 3 4 5; do
+    if curl -fsSL --continue-at - --max-time 300 -o "$tmp/m.zip" "https://alphacephei.com/vosk/models/$name.zip"; then
+      break
+    else
+      code=$?
+      # A server that rejects ranges needs a clean download on the next attempt.
+      if [ "$code" -eq 33 ]; then rm -f "$tmp/m.zip"; fi
+      if [ "$attempt" -eq 5 ]; then exit "$code"; fi
+      sleep 5
+    fi
+  done
   echo "$sha256  $tmp/m.zip" | sha256sum -c --quiet -
   unzip -q "$tmp/m.zip" -d "$dir"
 fi
