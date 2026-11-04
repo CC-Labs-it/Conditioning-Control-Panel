@@ -51,6 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static IFrameSource? _source;
         private static TimeSpan? _last;
         private static Point _origin;
+        private static Point _canvasOffset;
         private static readonly Dictionary<ChaosDvdLogo, OutlinedTextBlock> Labels = new();
         private static readonly Action<TimeSpan> OnFrameAction = OnFrame;
 
@@ -98,6 +99,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Flock.Bottom = wa.Height / k;
             Flock.Measure = Measure;
 
+            var stage = primary.Bounds;
+            if (CoreSettings.Current.DualMonitorEnabled)
+                foreach (var screen in screens) stage = stage.Union(screen.Bounds);
+            _canvasOffset = new Point((wa.X - stage.X) / k, (wa.Y - stage.Y) / k);
             _canvas = new Canvas { IsHitTestVisible = false };
             if (!_shared) return true;
             var w = new Window
@@ -111,11 +116,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 CanResize = false,
                 Focusable = false,
                 IsHitTestVisible = false,
-                Width = Flock.Right,
-                Height = Flock.Bottom,
+                Width = stage.Width / k,
+                Height = stage.Height / k,
                 Content = _canvas,
             };
-            if (!PrepareWindow(w, wa))
+            if (!PrepareWindow(w, stage))
             {
                 Log.Warning("ChaosDvd: the platform refused a click-through topmost overlay window; skipped");
                 w.Close();
@@ -149,8 +154,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var t = Label(l.Text, ChaosDvdFlock.BaseFont * l.FontScale);
             Recolor(t, l);
             t.Opacity = l.Opacity;
-            Canvas.SetLeft(t, l.X);
-            Canvas.SetTop(t, l.Y);
+            Canvas.SetLeft(t, l.X + _canvasOffset.X);
+            Canvas.SetTop(t, l.Y + _canvasOffset.Y);
             bool clickable = SpankerRedirect(); // WPF samples the gate per launch, not per click.
             if (_shared && !clickable) _canvas.Children.Add(t);
             else
@@ -219,7 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (Windows.TryGetValue(l, out var w))
                     w.Position = new PixelPoint((int)Math.Round((_origin.X + l.X) * _scaling),
                         (int)Math.Round((_origin.Y + l.Y) * _scaling));
-                else { Canvas.SetLeft(t, l.X); Canvas.SetTop(t, l.Y); }
+                else { Canvas.SetLeft(t, l.X + _canvasOffset.X); Canvas.SetTop(t, l.Y + _canvasOffset.Y); }
                 t.Opacity = l.Opacity;
                 // WPF ChaosDvdOverlay.cs:388-390: collide after moving, never while retiring.
                 if (l.FadeOutSec < 0 && !f.Spawned.Contains(l))
