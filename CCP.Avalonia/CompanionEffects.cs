@@ -117,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia
                 return true;
             });
             MediaCommand.VideoSurface = path => Start(() =>
-                CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+                CoreEngine.Video?.Trigger(path == null ? null : false, path, userEarned: path != null) == true);
             MediaCommand.AudioSurface = PlayAudio;
             GetBackToMeCommand.AiProvider = () => App.Ai;
             GetBackToMeCommand.SaySurface = (text, aiGenerated) =>
