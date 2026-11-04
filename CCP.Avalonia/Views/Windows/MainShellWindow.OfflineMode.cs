@@ -5,9 +5,11 @@
 using System;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -92,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (loading != null)
                     {
                         loading.IsVisible = true;
-                        loading.Text = Loc.Get("label_browser_disabled_in_offline_mode");
+                        loading.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension("label_browser_disabled_in_offline_mode").ProvideValue(null!));
                     }
                     if (container != null) container.Opacity = 0.3;
                 }
@@ -102,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (container != null) container.Opacity = 1.0;
                     // WPF reloads the selected site only when the browser was already up.
                     if (host?.Source != null) NavigateBrowser(SiteHomeUrl());
+                    page?.SetBrowserPoppedOut(_browserPopoutWindow != null);
                 }
 
                 UpdateBannerWelcomeMessage();

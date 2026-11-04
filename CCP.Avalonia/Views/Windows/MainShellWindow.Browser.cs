@@ -37,9 +37,8 @@
 //     script channel (AutoPlayAndFullscreenVideoAsync,
 //     AutoPlayBambiCloudPlaylistAsync, EndWebVideoTakeover, OnBrowserWebMessageReceived,
 //     HandleBrowserMediaMessage, the four HandleAudioSync* members, HookHapticAudioSyncRearm,
-//     OnHapticConnectionChangedForAudioSync, _hapticAudioSyncConnHooked); the pop-out and
-//     fullscreen rig (BtnPopOutBrowser_Click, FocusBrowserSurface's pop-out half,
-//     HandleBrowserFullscreenChanged, Arm/DisarmFullscreenEscapes, Enter/ExitBrowserFullscreen,
+//     OnHapticConnectionChangedForAudioSync, _hapticAudioSyncConnHooked); the
+//     fullscreen rig (HandleBrowserFullscreenChanged, Arm/DisarmFullscreenEscapes, Enter/ExitBrowserFullscreen,
 //     ExitBrowserFullscreenForTeardown, the four _browserFs* fields); the remote video pair
 //     (PlayHypnotubeFromRemote, StopBrowserVideoFromRemote, _remoteBrowserVideoActive); the
 //     refused mute pair above.
@@ -48,8 +47,8 @@
 //     TrainerCardText. Still missing: BtnDiscordTabLogin_Click, UpdateDiscordTabUI,
 //     ResolveProfilePictureUnavailable, LoadPatreonBadgeImage, ProfileDiscordHandle_Click,
 //     BtnProfileDiscord_Click (art). Change name / delete profile are ported below.
-//   * CoreMods (1): SyncSiteRadiosToActiveMod needs ShowBambiCloudOption() and
-//     GetDefaultBrowserUrl(); CCP.Core/CoreMods.cs carries neither yet. Its IsBrowserShowingKnownSite
+//   * SyncSiteRadiosToActiveMod remains unported. App.Mods already exposes
+//     ShowBambiCloudOption() and GetDefaultBrowserUrl(). Its IsBrowserShowingKnownSite
 //     helper is NOT restored either: WebHost.CurrentUrl now answers it, but its only caller is
 //     SyncSiteRadiosToActiveMod, so write it with that caller.
 
@@ -172,11 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (string.IsNullOrWhiteSpace(url)) return false;
             if (BrowserBlockedOffline(userInitiated)) return false;
 
-            // WPF's FocusBrowserSurface, minus the pop-out branch: there is no browser pop-out
-            // window on this head, so the embedded surface is always the one to bring forward.
-            ShowTab("settings");
-            RevealDashboardBrowser("focus-surface");   // WPF Browser.cs:349
-            Activate();
+            FocusBrowserSurface();
 
             // Move the radios to match the URL, deselecting both for an external link so that
             // clicking either one afterwards navigates back to it. Safe to write: the handlers

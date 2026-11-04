@@ -155,6 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
             Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled) InitializeAvatarTube(); };
             Closed += (_, _) => _avatarTubeWindow?.Close();
+            Closed += (_, _) => _browserPopoutWindow?.Close(); // WPF MainWindow.xaml.cs:1983-1988 shutdown
             // WPF MainWindow.xaml.cs:674: catalogue downloads open in the player.
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
             Closed += (_, _) =>
