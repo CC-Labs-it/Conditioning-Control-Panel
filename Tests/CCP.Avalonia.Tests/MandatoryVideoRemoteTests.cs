@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
@@ -36,6 +38,95 @@ public sealed class MandatoryVideoRemoteTests
         Assert.True(MandatoryVideoOverlay.CreditFor(cdn, _ => new ScrolllerCacheMeta("clip", "test")).Shown);
         Assert.False(MandatoryVideoOverlay.CreditFor("/local.mp4").Shown);
     });
+    [Fact]
+    public void CreditLinkOpensForFloatingAndWaitsForFullscreenEnd() => AvaloniaTestDispatcher.Run(() =>
+    {
+        const string path = "https://v.scrolller.com/credit-link-test.mp4";
+        ScrolllerItemIndex.Remember(path, new ScrolllerCacheMeta("clip", "test_sub"));
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var scheduler = new MandatoryVideoScheduler(o, new StillTime(), Array.Empty<string>); o.Scheduler = scheduler;
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        typeof(MandatoryVideoOverlay).GetField("_path", flags)!.SetValue(o, path);
+        var floating = typeof(MandatoryVideoOverlay).GetProperty("Floating", flags)!;
+        var old = MandatoryVideoOverlay.CreditOpener;
+        var opened = new List<string>();
+        MandatoryVideoOverlay.CreditOpener = url => { opened.Add(url); return true; };
+        try
+        {
+            CoreSettings.Current.StrictLockEnabled = false;
+            Assert.True(scheduler.Trigger(path: path));
+            var button = o.CreditButton(path);
+            Assert.True(button.IsHitTestVisible);
+            Assert.False(o.CreditButton("/local.mp4").IsHitTestVisible);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs(); Assert.Empty(opened);
+            o.OpenQueuedCreditLink(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "https://scrolller.com/r/test_sub" }, opened);
+            o.OpenQueuedCreditLink(); Dispatcher.UIThread.RunJobs(); Assert.Single(opened);
+            floating.SetValue(o, true);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(2, opened.Count);
+            floating.SetValue(o, false);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            scheduler.ForceCleanup(); // panic/stop does not open a queued link
+            o.OpenQueuedCreditLink(); Dispatcher.UIThread.RunJobs(); Assert.Equal(2, opened.Count);
+        }
+        finally { scheduler.ForceCleanup(); MandatoryVideoOverlay.CreditOpener = old; }
+    });
+
+    [Fact]
+    public void CreditLinkRefusesLocksAtPressAndBeforeDispatch() => AvaloniaTestDispatcher.Run(() =>
+    {
+        const string path = "https://v.scrolller.com/credit-lock-test.mp4";
+        ScrolllerItemIndex.Remember(path, new ScrolllerCacheMeta("clip", "test_sub"));
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var scheduler = new MandatoryVideoScheduler(o, new StillTime(), Array.Empty<string>); o.Scheduler = scheduler;
+        typeof(MandatoryVideoOverlay).GetField("_path", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, path);
+        var old = MandatoryVideoOverlay.CreditOpener;
+        var opened = 0; MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; };
+        var previousLockdown = LockdownService.Current;
+        var lockdown = LockdownService.Current = new LockdownService();
+        try
+        {
+            Assert.True(scheduler.Trigger(strictOverride: true, path: path));
+            o.CreditPressed(path); o.OpenQueuedCreditLink(); Dispatcher.UIThread.RunJobs(); Assert.Equal(0, opened);
+            scheduler.ForceCleanup();
+            Assert.True(scheduler.Trigger(strictOverride: false, path: path));
+            o.CreditPressed(path);
+            lockdown.Activate(TimeSpan.FromMinutes(30));
+            o.OpenQueuedCreditLink(); Dispatcher.UIThread.RunJobs(); Assert.Equal(0, opened);
+            lockdown.Deactivate();
+            o.CreditPressed(path); o.OpenQueuedCreditLink();
+            lockdown.Activate(TimeSpan.FromMinutes(30)); // changes after queue release, before dispatch
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(0, opened);
+        }
+        finally { lockdown.Deactivate(); LockdownService.Current = previousLockdown; scheduler.ForceCleanup(); MandatoryVideoOverlay.CreditOpener = old; }
+    });
+
+    [Fact]
+    public void DurationCapReleasesQueuedCreditLink() => AvaloniaTestDispatcher.Run(() =>
+    {
+        const string path = "https://v.scrolller.com/credit-cap-test.mp4";
+        ScrolllerItemIndex.Remember(path, new ScrolllerCacheMeta("clip", "test_sub"));
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var host = new Host(); var scheduler = new MandatoryVideoScheduler(host, new StillTime(), Array.Empty<string>); o.Scheduler = scheduler;
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        typeof(MandatoryVideoOverlay).GetField("_path", flags)!.SetValue(o, path);
+        typeof(MandatoryVideoOverlay).GetProperty("FirstFrameMs", flags)!.SetValue(o, 0L);
+        var surfaces = (List<MandatoryVideoOverlay.Surface>)o.Surfaces;
+        surfaces.Add(new(null!, null!, null!, null!, null!, null!, null!, null!));
+        var old = MandatoryVideoOverlay.CreditOpener; var oldCap = CoreSettings.Current.VideoMaxDurationSeconds;
+        var opened = 0; MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; };
+        try
+        {
+            CoreSettings.Current.StrictLockEnabled = false; CoreSettings.Current.VideoMaxDurationSeconds = 1;
+            Assert.True(scheduler.Trigger(path: path)); o.CreditPressed(path); o.PlayedSkew = 2;
+            o.GuardTick(2); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, opened); Assert.False(scheduler.IsPlaying);
+        }
+        finally { surfaces.Clear(); scheduler.ForceCleanup(); CoreSettings.Current.VideoMaxDurationSeconds = oldCap; MandatoryVideoOverlay.CreditOpener = old; }
+    });
+
     private sealed class Host : IMandatoryVideoHost
     {
         public int Closed;

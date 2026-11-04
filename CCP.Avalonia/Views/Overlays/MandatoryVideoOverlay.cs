@@ -38,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
     /// attention input, no-activate z-order, the remote-media offer after the "no videos" dialog,
-    /// and the remote video credit link and end card.
+    /// and the remote video credit end card.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -68,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal long FrameTs;
         private bool _healUsed, _strict;
         private string _path = "";
+        private string? _queuedCreditPath;
         private readonly Stopwatch _sinceFrame = new();
         /// <summary>Max-length cap seconds this clip spent before its one heal replay.</summary>
         private double _capSpent;
@@ -135,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
+            _queuedCreditPath = null;
             _sinceShow.Restart();
             _guardStartedAt = 0;
             _sinceFrame.Reset();
@@ -220,6 +222,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (len > 0) Interlocked.Exchange(ref _watchedMs, len);
                 Dispatcher.UIThread.Post(() =>   // never tear down on LibVLC's own thread
                 {
+                    if (_player != live || !Scheduler.IsPlaying) return;
+                    OpenQueuedCreditLink();
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
                     Scheduler.Ended();
@@ -256,6 +260,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 || ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.LinkFor(meta?.Sub) != null);
             return credit;
         }
+
+        // WPF VideoService.Browser.cs:634-650,674-684: only a known subreddit can be opened;
+        // fullscreen presses wait for this clip's end, and every lock is checked again at dispatch.
+        internal static Func<string, bool> CreditOpener = ExternalOpener.Open;
+        private bool CreditLinkAllowed() => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.CanOpenLink(
+            _strict || Scheduler.IsStrict,
+            ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true,
+            global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+
+        private static string? CreditLink(string path) => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.LinkFor(
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerItemIndex.MetaFor(path)?.Sub);
+
+        internal Button CreditButton(string path)
+        {
+            var mark = CreditFor(path);
+            var button = new Button { Content = mark, Padding = new Thickness(0), BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Right,
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom,
+                IsVisible = mark.Shown, IsHitTestVisible = CreditLink(path) != null && CreditLinkAllowed() };
+            button.Click += (_, _) => CreditPressed(path);
+            return button;
+        }
+
+        internal void CreditPressed(string path)
+        {
+            var link = CreditLink(path);
+            if (!Scheduler.IsPlaying || path != _path || link == null || !CreditLinkAllowed()) return;
+            if (!Floating) { _queuedCreditPath = path; return; }
+            PostCreditLink(link, _strict);
+        }
+
+        internal void OpenQueuedCreditLink()
+        {
+            var path = _queuedCreditPath;
+            _queuedCreditPath = null;
+            if (!Scheduler.IsPlaying || path == null || path != _path || !CreditLinkAllowed()) return;
+            var link = CreditLink(path);
+            if (link != null) PostCreditLink(link, _strict);
+        }
+
+        private void PostCreditLink(string link, bool strict) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!strict && CreditLinkAllowed()) CreditOpener(link);
+        });
 
         /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
         internal bool Floating { get; private set; }
@@ -305,7 +353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var (grace, countdown) = GraceCard();
             var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
             // The WPF browser player credits Scrolller during playback (VideoService.Browser.cs:158).
-            var credit = CreditFor(_path);
+            var credit = CreditButton(_path);
             var w = new Window
             {
                 Title = "CCP Video",
@@ -535,6 +583,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, elapsed);
+            // WPF VideoService.cs:6759-6762: the duration cap also releases a queued credit link.
+            if (why == "max length") OpenQueuedCreditLink();
             Scheduler.End();
         }
 
@@ -919,6 +969,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 _attention = _gracePaused = false;
+                _queuedCreditPath = null;
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
                 _userMuted = false;
