@@ -100,13 +100,19 @@ internal static class AccountSeed
         MergedAccountRecovery.StopSync = () => Sync?.Reset();
         MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
         MergedAccountRecovery.Reauthenticate = ReauthenticateMergedAsync;
-        MergedAccountRecovery.ReloadProfile = async () => { await LoadProfileAsync(); };
+        MergedAccountRecovery.ReloadProfile = async () =>
+        {
+            var id = CoreSettings.Current.UnifiedId;
+            if (await LoadProfileAsync() || await LoadProfileAsync()) return;   // one retry; pushes stay off until a load lands
+            // WPF MergedAccountRecoveryHead.cs:26-27 restarts the heartbeat even when the read failed.
+            if (!string.IsNullOrEmpty(id) && id == CoreSettings.Current.UnifiedId) Sync?.StartHeartbeat();
+        };
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
             var shell = (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow;
             shell?.UpdateQuickLoginUI();
             shell?.AppSettingsPage?.RefreshSections();
-            if (!reauthed)
+            if (!reauthed && CoreSettings.Current.UnifiedId == canonical)   // not after a logout or switch mid-swap
             {
                 var item = new InboxItem
                 {
@@ -126,6 +132,7 @@ internal static class AccountSeed
 
     private static async Task<bool> ReauthenticateMergedAsync()
     {
+        var expected = CoreSettings.Current.UnifiedId;
         foreach (var provider in new[] { "patreon", "discord", "substar" })
         {
             try
@@ -145,6 +152,8 @@ internal static class AccountSeed
                     "substar" => await v2.AuthenticateWithSubstarAsync(token),
                     _ => await v2.AuthenticateWithPatreonAsync(token),
                 };
+                // A reply that lands after a logout or account switch must not sign anyone back in.
+                if (string.IsNullOrEmpty(expected) || CoreSettings.Current.UnifiedId != expected) return false;
                 if (!result.Success || result.User == null) continue;
                 ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, DateTime.UtcNow);
                 Services.Invites.InviteRules.ApplyGrant(CoreSettings.Current, Services.Invites.InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), DateTime.UtcNow);
@@ -232,6 +241,7 @@ internal static class AccountSeed
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         var user = await v2.GetUserProfileAsync(id);
+        if (s.UnifiedId != id) return false;   // signed out or switched while the read was in flight
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);

@@ -94,7 +94,7 @@ namespace ConditioningControlPanel.Services
         private readonly SemaphoreSlim _gate = new(1, 1);
         private string[]? _serverAchievements;   // null: the profile carried none, so achievements are not known
         private Timer? _heartbeat;
-        private int _nudgePending;
+        private int _nudgePending, _nudgeEpoch;   // Reset bumps the epoch so a queued nudge from before it never fires
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
 
@@ -154,6 +154,8 @@ namespace ConditioningControlPanel.Services
         public void Reset()
         {
             StopHeartbeat();
+            Interlocked.Increment(ref _nudgeEpoch);   // WPF StopTimersForAccountSwap stops the nudge timer
+            Interlocked.Exchange(ref _nudgePending, 0);
             DescentReader?.Reset();
             Loaded = false;
             _serverAchievements = null;
@@ -320,10 +322,12 @@ namespace ConditioningControlPanel.Services
         public void Nudge(string reason)
         {
             if (!Loaded || Interlocked.Exchange(ref _nudgePending, 1) == 1) return;
+            var epoch = Volatile.Read(ref _nudgeEpoch);
             var wait = NudgeSettle;
             if (LastSyncTime is { } last && UtcNow() - last < Cooldown) wait = Cooldown - (UtcNow() - last) + NudgeCooldownSlack;
             _ = Task.Delay(wait).ContinueWith(async _ =>
             {
+                if (epoch != Volatile.Read(ref _nudgeEpoch)) return;
                 Interlocked.Exchange(ref _nudgePending, 0);
                 await PushAsync(reason);
             }, TaskScheduler.Default);

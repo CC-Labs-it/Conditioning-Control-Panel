@@ -77,40 +77,31 @@ public sealed class CloudDataExportTests : IDisposable
         Assert.Equal(JToken.Parse("{\"profile\":{\"name\":\"Ada\"},\"items\":[1,2]}").ToString(), json);
     }
 
-    [Fact]
-    public async Task ExportRequiresIdentity()
-    {
-        var loc = LocalizationManager.Instance;
-        var previous = loc.CurrentLanguage;
-        try
-        {
-            loc.SetLanguage("en");
-            _settings.UnifiedId = null;
-            var result = await new CloudSettingsBackup(_server).ExportDataAsync(_settings);
-            Assert.False(result.Success);
-            Assert.Equal("You must be logged in to export your data", result.Error);
-            Assert.Empty(_server.Calls);
-        }
-        finally { loc.SetLanguage(previous); }
-    }
-
+    // WPF ProfileSyncService.cs:4257-4301; an empty error body falls back to the status (4296-4301).
+    // Status -1: no identity, nothing sent. Null body: no reply queued, which throws like a failed connection.
     [Theory]
-    [InlineData("identity", "Debes iniciar sesión para exportar tus datos")]
-    [InlineData("server", "Error del servidor: Forbidden")]
-    [InlineData("connection", "La exportación de datos requiere conexión a Internet")]
-    public async Task ExportErrorsUseTheSelectedLanguage(string scenario, string expected)
+    [InlineData("en", -1, null, "You must be logged in to export your data")]
+    [InlineData("es", -1, null, "Debes iniciar sesión para exportar tus datos")]
+    [InlineData("es", 403, "{}", "Error del servidor: Forbidden")]
+    [InlineData("es", 0, null, "La exportación de datos requiere conexión a Internet")]
+    [InlineData("en", 500, "", "Server error: InternalServerError")]
+    [InlineData("en", 500, "  ", "Server error: InternalServerError")]
+    [InlineData("en", 500, "null", "Server error: InternalServerError")]
+    [InlineData("en", 403, "{\"error\":\"denied\"}", "denied")]
+    public async Task ExportErrorsAreReportedInTheSelectedLanguage(string language, int status, string? body, string expected)
     {
         var loc = LocalizationManager.Instance;
         var previous = loc.CurrentLanguage;
         try
         {
-            loc.SetLanguage("es");
-            if (scenario == "identity") _settings.UnifiedId = null;
-            if (scenario == "server") _server.Replies.Enqueue((HttpStatusCode.Forbidden, "{}"));
-            // An empty reply queue throws, like a failed connection.
+            loc.SetLanguage(language);
+            if (status < 0) _settings.UnifiedId = null;
+            if (body != null) _server.Replies.Enqueue(((HttpStatusCode)status, body));
             var result = await new CloudSettingsBackup(_server).ExportDataAsync(_settings);
             Assert.False(result.Success);
             Assert.Equal(expected, result.Error);
+            Assert.Null(result.JsonData);
+            Assert.Equal(status < 0 ? 0 : 1, _server.Calls.Count);
         }
         finally { loc.SetLanguage(previous); }
     }
@@ -127,39 +118,6 @@ public sealed class CloudDataExportTests : IDisposable
             foreach (var key in keys) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]), $"{code}: {key}");
             Assert.Contains("{0}", (string)strings["cloud_export_server_error"]!);
         }
-    }
-
-    // WPF ProfileSyncService.cs:4296-4301 falls back to the status when deserialization returns null.
-    [Theory]
-    [InlineData("")]
-    [InlineData("  ")]
-    [InlineData("null")]
-    public async Task ExportWithEmptyErrorBodyReportsServerStatus(string body)
-    {
-        var loc = LocalizationManager.Instance;
-        var previous = loc.CurrentLanguage;
-        try
-        {
-            loc.SetLanguage("en");
-            _server.Replies.Enqueue((HttpStatusCode.InternalServerError, body));
-            var result = await new CloudSettingsBackup(_server).ExportDataAsync(_settings);
-            Assert.False(result.Success);
-            Assert.Equal("Server error: InternalServerError", result.Error);
-            Assert.Null(result.JsonData);
-            Assert.Single(_server.Calls);
-        }
-        finally { loc.SetLanguage(previous); }
-    }
-
-    [Fact]
-    public async Task ExportReportsServerError()
-    {
-        _server.Replies.Enqueue((HttpStatusCode.Forbidden, "{\"error\":\"denied\"}"));
-        var result = await new CloudSettingsBackup(_server).ExportDataAsync(_settings);
-        Assert.False(result.Success);
-        Assert.Equal("denied", result.Error);
-        Assert.Null(result.JsonData);
-        Assert.Single(_server.Calls);
     }
 
     [Fact]

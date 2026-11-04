@@ -21,9 +21,12 @@
 //   internal async void BtnExportData_Click(…)
 //       ExportDataAsync and the save picker live in AccountSettingsSection.
 //   internal void BtnPrivacyPolicy_Click(…)
-//       Opens the privacy-policy URL from AccountSettingsSection.
+//       Process.Start(UseShellExecute) on the privacy-policy URL. No browser launcher on this head
+//       (WPF's is ConditioningControlPanel/Helpers/BrowserLauncher.cs, whose no-default-browser
+//       prompt is its whole point). Cheap once one exists - in AccountSettingsSection, per (1).
 //   private async Task UpdateBackupStatus()
-//       Writes TxtCloudBackupStatus from GetInfoAsync in AccountSettingsSection.
+//       Writes TxtCloudBackupStatus from GetSettingsBackupInfoAsync. Same blocker; that TextBlock
+//       is in AccountSettingsSection.axaml too.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
