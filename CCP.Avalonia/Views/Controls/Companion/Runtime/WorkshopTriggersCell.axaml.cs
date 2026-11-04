@@ -11,8 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     ///
     /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
     /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// Manage Phrases forwards to the owning shell. Edit Phrases is wired by the Workshop host
+    /// (WorkshopAccordion.TriggerEditor.cs); the live avatar trigger timer still awaits its runtime.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
