@@ -16,6 +16,7 @@ internal static partial class SpiralOverlay
     internal static bool IsVideoPlaying => _videoPlayer != null;
     internal static int VideoFrames => (_videoPlayer as VideoPlayer)?.Frames ?? 0;
     internal static float VideoRate => (_videoPlayer as VideoPlayer)?.Rate ?? 0;
+    internal static long VideoTime => (_videoPlayer as VideoPlayer)?.Time ?? -1;
 
     // WPF CreateSpiralVideoWindow: muted, UniformToFill, MediaEnded -> restart. One decoder feeds all screens.
     internal static bool IsVideo(string path) => Path.GetExtension(path).ToLowerInvariant()
@@ -51,6 +52,7 @@ internal static partial class SpiralOverlay
         private readonly VlcFrameSink _sink;
         internal int Frames => _sink.FrameCount;
         internal float Rate => _player.Rate;
+        internal long Time => _player.Time;
         private bool _disposed;
 
         internal VideoPlayer(LibVLC vlc, string path, Action<Bitmap> show)
