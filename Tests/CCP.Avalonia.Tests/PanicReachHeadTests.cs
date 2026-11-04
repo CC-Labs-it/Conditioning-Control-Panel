@@ -129,13 +129,13 @@ public sealed class PanicReachHeadTests
             .ReplaceLineEndings("\n");
         var at = src.IndexOf("internal void HandlePanicKeyPress(DateTime now)", StringComparison.Ordinal);
         var body = src.Substring(at, src.IndexOf("\n        }\n", at, StringComparison.Ordinal) - at);
-        int gate = body.IndexOf("if (!VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))", StringComparison.Ordinal);
+        int gate = body.IndexOf("if (!fromStopButton && !VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))", StringComparison.Ordinal);
         int leash = body.IndexOf("if (LeashHoldLeashed) PanicKeyLeashOnly(fromKey: true);", StringComparison.Ordinal);
         Assert.True(gate > 0 && leash > gate);
-        Assert.True(leash < body.IndexOf("TryGamePauseOnEscape(now)", StringComparison.Ordinal));
+        Assert.True(leash < body.IndexOf("TryGamePauseOnEscape(now,", StringComparison.Ordinal));
         Assert.Contains("LeashTaskHost.OnPanicPress(this, panicRuns: false, fromKey: fromKey)", src);
         // The key's own leash call is the only one that may stand aside for the palette.
-        Assert.Contains("Platform.LeashTaskHost.OnPanicPress(this, fromKey: true);", body);
+        Assert.Contains("Platform.LeashTaskHost.OnPanicPress(this, fromKey: !fromStopButton);", body);
         // The voice's leash-only path never does ("red" is no Escape).
         var voice = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Windows", "MainShellWindow.VoiceCommands.cs"));
         Assert.Contains("PanicKeyLeashOnly();", voice);

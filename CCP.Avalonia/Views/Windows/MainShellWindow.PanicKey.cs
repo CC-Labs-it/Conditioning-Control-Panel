@@ -80,7 +80,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
-            if (TryGamePauseOnEscape(now)) return;
+            // A Stop button click is never a game's Escape (WPF MainWindow.xaml.cs:1548,1597-1607).
+            if (TryGamePauseOnEscape(now, fromPanicKey: !fromStopButton)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
             // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and
@@ -162,10 +163,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// closes the game through PanicSurfaces "games" / "intake"), and main 251b60807's frontGameReady: a game
         /// whose page is still booting (or on its way out) cannot pause, so its Escape is a full panic. The kept
         /// press is handed to the page as well (each page's host-escape.js), since its own keydown never comes
-        /// while the web view is out of focus. Only a real key press reaches here (the HUD and leash gate buttons
-        /// call PanicSurfaces directly), so fromPanicKey is always true on this head.
+        /// while the web view is out of focus. The Remote HUD Stop passes fromPanicKey false, so a click never pauses
+        /// the game under the non-activating pill (WPF MainWindow.xaml.cs:1548).
         /// Not hosted on this head yet, so never in front: the full Breakout, the Arcademy, the Back Room room, Goon.</summary>
-        internal bool TryGamePauseOnEscape(DateTime now)
+        internal bool TryGamePauseOnEscape(DateTime now, bool fromPanicKey = true)
         {
             try
             {
@@ -183,7 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
                     gameInFront: game != null || intake != null, engineRunning: CoreEngine.IsRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now,
-                    frontGameReady: Route(true) != PanicPolicy.KeptEscapePage.None, fromPanicKey: true);
+                    frontGameReady: Route(true) != PanicPolicy.KeptEscapePage.None, fromPanicKey: fromPanicKey);
                 if (!claim) { _lastGameEscapeClaim = null; return false; }
                 _lastGameEscapeClaim = now;
                 Serilog.Log.Information("Panic: Escape kept by {Game} as its pause (again within 2 s = full panic)",

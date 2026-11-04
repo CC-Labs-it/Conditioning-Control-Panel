@@ -86,7 +86,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (connected)
             {
                 ShowRemoteControlOverlay(); NotifyRemoteControllerJoined();
-                RemoteHud ??= new RemoteHudWindow(RemoteControlTabView.Relay.Value, StopFromRemoteHud);
+                RemoteHud ??= new RemoteHudWindow(RemoteControlTabView.Relay.Value, StopFromRemoteHud,
+                    () => (Screens?.ScreenFromWindow(this) ?? Screens?.Primary) is { } sc ? (sc.WorkingArea, sc.Scaling) : null);
                 RemoteHud.Refresh();
             }
             else { HideRemoteControlOverlay(); RemoteHud?.Refresh(); }

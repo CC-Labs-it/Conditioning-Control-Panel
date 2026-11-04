@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -47,7 +48,10 @@ public class RemoteHudTests
         using var relay = new RemoteRelay(() => "token", () => "uid", "1", (_, _) => null,
             force => { if (force) stops.Add("relay"); }, server) { AutoPoll = false };
         var clock = new Clock();
-        using var hud = new RemoteHudWindow(relay, () => stops.Add("panic")) { Clock = clock };
+        // A second monitor right of the first: WPF Place (:345) centres the pill on the main window's monitor.
+        var screen = (WorkingArea: new PixelRect(1920, 40, 2560, 1400), Scaling: 1.5);
+        using var hud = new RemoteHudWindow(relay, () => stops.Add("panic"), () => screen) { Clock = clock };
+        Assert.False(hud.ShowActivated);
         hud.Refresh();
         Assert.False(hud.IsVisible);
         await relay.StartAsync("light");
@@ -55,6 +59,10 @@ public class RemoteHudTests
         await relay.PollOnceAsync();
         hud.Refresh();
         Assert.True(hud.IsVisible);
+        Assert.Equal(40 + 15, hud.Position.Y);
+        var width = hud.Bounds.Width > 0 ? hud.Bounds.Width : 360;
+        Assert.Equal((int)(1920 + (2560 - width * 1.5) / 2), hud.Position.X);
+        Assert.InRange(hud.Position.X, 1920, 1920 + 1280);
         clock.Now = clock.Now.AddSeconds(65);
         hud.RecordAction("show_spiral");
         Assert.Contains("1:05", hud.Detail.Text);
@@ -66,6 +74,14 @@ public class RemoteHudTests
         await hud.SignalAsync("stop");
         Assert.Equal(new[] { "more", "stop" }, server.Signals);
         Assert.Equal(new[] { "panic", "relay" }, stops);
+        // WPF RemoteHudRules.ConfirmFor: the confirmation outlives the 1 s tick until 1.6 s have passed.
+        Assert.Equal(Loc.Get("remote_hud_stopped"), hud.Detail.Text);
+        clock.Now = clock.Now.AddMilliseconds(1599);
+        hud.Refresh();
+        Assert.Equal(Loc.Get("remote_hud_stopped"), hud.Detail.Text);
+        clock.Now = clock.Now.AddMilliseconds(1);
+        hud.Refresh();
+        Assert.StartsWith("1:06", hud.Detail.Text);
         clock.Now = clock.Now.AddMilliseconds(2500);
         await hud.SignalAsync("stop");
         Assert.Equal(3, server.Signals.Count);
