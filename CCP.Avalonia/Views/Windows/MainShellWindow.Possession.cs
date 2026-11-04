@@ -62,6 +62,8 @@ public partial class MainShellWindow : IPossessionHost
                     () => CoreSettings.Current.LockdownPhotosafe
                         || global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != global::ConditioningControlPanel.Models.MotionLevel.Full),
         });
+        PossessionAudio.Install(lockdown, PossessionDirector);
+        if (lockdown.IsActive) PossessionAudio.Arm();
         PossessionDirector.AttachHost(this);
         var lockdownTab = Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView>("LockdownTab");
         lockdownTab?.SetPossessionReadoutDirector(PossessionDirector);
@@ -74,6 +76,7 @@ public partial class MainShellWindow : IPossessionHost
             _possessionClosed = true;
             RemoveHandler(InputElement.PointerPressedEvent, OnPossessionPressed);
             lockdownTab?.SetPossessionReadoutDirector(null);
+            PossessionAudio.Uninstall();
             PossessionDirector.Dispose();
             runtime.UndoAll();
         };

@@ -77,6 +77,7 @@ public sealed class PossessionAudioTests : IDisposable
     [Fact]
     public void OnlyABigEffectTicks_AtMostEvery1500ms_AtTheMasterVolume()
     {
+        _settings.LockdownPhotosafe = true; // Photosafe affects visuals, not the cues.
         PossessionAudio.OnEffectStarted("nudge", "TxtTitle", isBig: false);
         Assert.Empty(_played);
 

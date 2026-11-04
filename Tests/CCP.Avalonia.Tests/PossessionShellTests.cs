@@ -52,8 +52,39 @@ public sealed class PossessionShellTests
             var director = Assert.IsType<PossessionDirector>(shell.PossessionDirector);
             typeof(MainShellWindow).GetMethod("InitializePossessionHost", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(shell, null);
             Assert.Same(director, shell.PossessionDirector);
+            lockdown.Activate(TimeSpan.FromMinutes(5));
+            Assert.True(PossessionAudio.IsArmed);
+            lockdown.Deactivate();
+            Assert.False(PossessionAudio.IsArmed);
+            shell.Close();
+            lockdown.Activate(TimeSpan.FromMinutes(5));
+            Assert.False(PossessionAudio.IsArmed);
+            lockdown.Deactivate();
         }
-        finally { shell.Close(); LockdownService.Current = previous; }
+        finally { lockdown.Deactivate(); shell.Close(); LockdownService.Current = previous; }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task AudioArmsWhenShellAttachesDuringLockdown() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = LockdownService.Current;
+        using var lockdown = new LockdownService();
+        LockdownService.Current = lockdown;
+        lockdown.Activate(TimeSpan.FromMinutes(5));
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.True(PossessionAudio.IsArmed);
+            lockdown.Deactivate();
+            Assert.False(PossessionAudio.IsArmed);
+            shell.Close();
+            lockdown.Activate(TimeSpan.FromMinutes(5));
+            Assert.False(PossessionAudio.IsArmed);
+            lockdown.Deactivate();
+        }
+        finally { lockdown.Deactivate(); shell.Close(); LockdownService.Current = previous; }
         return Task.CompletedTask;
     });
     [Fact]

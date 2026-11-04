@@ -120,7 +120,7 @@ public static class PossessionAudio
 
     private static void OnLockdownDeactivated() => Disarm();
 
-    private static void Arm()
+    internal static void Arm()
     {
         try
         {
