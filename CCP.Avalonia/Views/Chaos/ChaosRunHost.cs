@@ -460,7 +460,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         // Deferred until their WPF effects are implemented in this head.
-        internal static bool IsAvailableBoon(ChaosBoon b) => b.Id is "defuse_chain" or "golden_touch" or "extra_shield" or "welcome_shower" or "size_queen" or "hair_trigger" or "playing_fire" or "bright_colors" or "the_urge" or "double_or_nothing";
+        internal static bool IsAvailableBoon(ChaosBoon b) => b.Id is "defuse_chain" or "golden_touch" or "extra_shield" or "welcome_shower" or "size_queen" or "hair_trigger" or "the_urge" or "double_or_nothing";
 
         // WPF ChaosModeService.cs:1475-1483,1507-1526: deal eligible cards and persist each sighting.
         private static List<ChaosBoon> DealDraft()

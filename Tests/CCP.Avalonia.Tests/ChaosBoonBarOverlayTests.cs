@@ -133,8 +133,8 @@ public sealed class ChaosBoonBarOverlayTests
             try {
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 6, AllowCurses = true, SinChance = 0 }); var state = ChaosRunHost.State!; state.MaxedBoons.Add("surrender");
                 var deal = typeof(ChaosRunHost).GetMethod("DealDraft", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
-                for (int i = 0; i < 5; i++) { var cards = (System.Collections.Generic.List<ChaosBoon>)deal.Invoke(null, null)!; var sin = Assert.Single(cards.Where(b => b.IsCurse)); Assert.DoesNotContain(state.ActiveCurses, b => b.Id == sin.Id); state.ApplyBoon(sin); }
-                Assert.Equal(5, state.ActiveCurses.Count); Assert.Equal(0.75, state.FuseTimeMult); Assert.Equal(1.5, state.DetonationDurationMult); Assert.True(state.LastSecondGoldEnabled); Assert.Equal(0.05, state.PrismChance); Assert.True(state.ActivesDisabled); Assert.Equal(3, state.UrgeMult); Assert.Equal(ChaosToyRules.UseResult.Denied, ChaosToyRules.Use(state, new ChaosToyState { Id = "snap_field" }, true));
+                for (int i = 0; i < 3; i++) { var cards = (System.Collections.Generic.List<ChaosBoon>)deal.Invoke(null, null)!; var sin = Assert.Single(cards.Where(b => b.IsCurse)); Assert.DoesNotContain(state.ActiveCurses, b => b.Id == sin.Id); state.ApplyBoon(sin); }
+                Assert.Equal(3, state.ActiveCurses.Count); foreach (var id in new[] { "playing_fire", "bright_colors" }) state.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == id)); Assert.Equal(0.75, state.FuseTimeMult); Assert.Equal(1.5, state.DetonationDurationMult); Assert.True(state.LastSecondGoldEnabled); Assert.Equal(0.05, state.PrismChance); Assert.True(state.ActivesDisabled); Assert.Equal(3, state.UrgeMult); Assert.Equal(ChaosToyRules.UseResult.Denied, ChaosToyRules.Use(state, new ChaosToyState { Id = "snap_field" }, true));
                 int gold = ChaosMeta.State.Gold; ChaosRunHost.OnDefused(new AmbientBubble { Spec = new EffectBubbleSpec { IsLive = true }, FuseRemainingMs = 500 }); Assert.InRange(ChaosMeta.State.Gold - gold, 5, 9);
                 var safe = new ChaosRunState(new ChaosRunConfig()); safe.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == "bright_colors"), true); var prism = ChaosBubbleVariants.BuildPrism(0.5, 1, safe.PrismTreatOnly); Assert.False(ChaosBubbleVariants.All.First(v => v.Id == prism.MimicVariantId).IsLive);
                 var shielded = new ChaosRunState(new ChaosRunConfig()); shielded.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == "double_or_nothing"), true); Assert.True(shielded.RelapseLoopArmed); Assert.Equal(ChaosRunEngine.EndCheck.Relapse, ChaosRunEngine.CheckEnd(shielded, shielded.RunDurationSec)); Assert.Equal(14, ChaosRunEngine.GoldScaled(shielded, 7));
@@ -144,6 +144,7 @@ public sealed class ChaosBoonBarOverlayTests
             } finally { ChaosRunHost.ForceShutdown(); ChaosMeta.State.EquippedStartBoon = old; ChaosMeta.State.Gold = oldGold; ChaosMeta.State.SeenGoldFirst = oldSeenGold; }
             return Task.CompletedTask; });
     }
+    [Fact] public void Payload_dependent_sins_are_deferred() { Assert.All(ChaosBoonPool.All.Where(b => b.Id is "playing_fire" or "bright_colors"), b => Assert.False(ChaosRunHost.IsAvailableBoon(b))); }
     [Fact] public async Task Draft_does_not_deal_unimplemented_effects() {
         await AvaloniaTestDispatcher.RunAsync(() => {
             Setup(); var old = ChaosMeta.State.EquippedStartBoon;
