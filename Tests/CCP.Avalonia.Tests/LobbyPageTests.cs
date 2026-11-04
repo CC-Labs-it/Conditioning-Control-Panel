@@ -4,6 +4,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls.Templates;
+using Avalonia.Controls.Shapes;
+using Avalonia.Media;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -168,10 +175,97 @@ public sealed class LobbyPageTests
         }
     });
 
+    [Fact]
+    public void HostLookBindsFaceAndFrameOnGameArtAndClearsForBareRow() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var template = Assert.IsAssignableFrom<IDataTemplate>(page.Resources["LobbyRowTemplate"]);
+        var gates = LobbyGates.From(true, true, true);
+        var host = new LobbyRow { Game = LobbyGame.Chess, HostName = "ann",
+            Look = new PlayerLook("profile.avatar.emi-pixel", "profile.frame.lace") };
+        var worn = new LobbyCardView(host, gates);
+        Assert.True(worn.HasLook);
+        Assert.NotNull(worn.Art);
+        Assert.IsType<ImageBrush>(worn.FaceBrush);
+        Assert.NotNull(worn.FrameArt);
+        Assert.Equal(22 / ShopCosmeticsRegistry.FrameWindowRatio, worn.FrameSize, 6);
+        Assert.Equal(-(worn.FrameSize - 22) / 2, worn.FrameMargin.Left, 6);
+        var card = template.Build(worn)!;
+        card.DataContext = worn;
+        var textPanel = card.GetVisualDescendants().OfType<StackPanel>().Single(c => Grid.GetColumn(c) == 1);
+        Assert.Equal(VerticalAlignment.Center, textPanel.VerticalAlignment);
+        var face = card.GetVisualDescendants().OfType<Grid>().Single(c => Equals(c.Tag, "lobby-face"));
+        var frame = face.Children.OfType<Image>().Single();
+        Assert.True(face.IsVisible);
+        Assert.False(face.IsHitTestVisible);
+        Assert.False(face.ClipToBounds);
+        Assert.Equal(22d, face.Width);
+        Assert.Equal(22d, face.Height);
+        var circle = face.Children.OfType<Ellipse>().Single();
+        Assert.Equal(Color.Parse("#1C1233"), Assert.IsAssignableFrom<ISolidColorBrush>(circle.Stroke).Color);
+        Assert.Equal(1.5, circle.StrokeThickness);
+        Assert.IsType<ImageBrush>(circle.Fill);
+        Assert.Same(worn.FrameArt, frame.Source);
+        Assert.Equal(worn.FrameSize, frame.Width);
+        Assert.Equal(worn.FrameMargin, frame.Margin);
+        Assert.Equal(new Thickness(0, 0, -7, -7), face.Margin);
+
+        var bare = new LobbyCardView(host with { Look = PlayerLook.None }, gates);
+        card.DataContext = bare;
+        Assert.False(face.IsVisible);
+        Assert.Null(frame.Source);
+        Assert.Null(face.Children.OfType<Ellipse>().Single().Fill);
+        Assert.False(bare.HasLook);
+        Assert.Null(bare.FaceBrush);
+        Assert.Null(bare.FrameArt);
+
+        var missing = new LobbyCardView(host with { Look = new PlayerLook("missing", "missing") }, gates);
+        Assert.IsType<LinearGradientBrush>(missing.FaceBrush);
+        Assert.Null(missing.FrameArt);
+        Assert.Null(ModArt.ShopFrame("profile.avatar.emi-pixel"));
+        Assert.Null(ModArt.AvatarPreset("profile.frame.lace"));
+    });
+
+    [Fact]
+    public void GameArtCacheSharesHitsAndMissesPerGame()
+    {
+        var calls = new System.Collections.Generic.Dictionary<LobbyGame, int>();
+        var image = new DrawingImage();
+        var cache = new LobbyArtCache(game =>
+        {
+            calls[game] = (calls.TryGetValue(game, out var count) ? count : 0) + 1;
+            return game == LobbyGame.Chess ? image : null;
+        });
+        foreach (var game in Enum.GetValues<LobbyGame>())
+        {
+            var first = cache.Get(game);
+            var second = cache.Get(game);
+            if (game == LobbyGame.Chess) Assert.Same(image, first);
+            else Assert.Null(first);
+            Assert.Same(first, second);
+            Assert.Equal(1, calls[game]);
+        }
+    }
+
+    [Fact]
+    public void GameArtIsSharedAcrossRepeatedBindingsAndReplacementRows() => Run(() =>
+    {
+        var gates = LobbyGates.From(true, true, true);
+        foreach (var game in Enum.GetValues<LobbyGame>())
+        {
+            var row = new LobbyRow { Game = game, HostName = "ann" };
+            var first = new LobbyCardView(row, gates);
+            var art = first.Art;
+            Assert.NotNull(art);
+            Assert.Same(art, first.Art);
+            Assert.Same(art, new LobbyCardView(row with { HostName = "bo" }, gates).Art);
+        }
+    });
+
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         body();

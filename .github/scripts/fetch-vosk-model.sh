@@ -10,7 +10,15 @@ if [ ! -d "$dir/$name/am" ]; then
   mkdir -p "$dir"
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
-  curl -fsSL --retry 3 --retry-delay 5 --max-time 300 -o "$tmp/m.zip" "https://alphacephei.com/vosk/models/$name.zip"
+  # Keep partial data across timeouts. If a server cannot resume, restart the next attempt.
+  for attempt in 1 2 3 4; do
+    status=0
+    curl -fsSL --continue-at - --max-time 600 -o "$tmp/m.zip" "https://alphacephei.com/vosk/models/$name.zip" || status=$?
+    [ "$status" -ne 0 ] || break
+    [ "$status" -ne 33 ] || rm -f "$tmp/m.zip"
+    [ "$attempt" -lt 4 ] || exit "$status"
+    sleep 5
+  done
   echo "$sha256  $tmp/m.zip" | sha256sum -c --quiet -
   unzip -q "$tmp/m.zip" -d "$dir"
 fi

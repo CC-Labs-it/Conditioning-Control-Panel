@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -19,6 +22,8 @@ public partial class AvailableSubjectsTabView : UserControl
     internal int SelectedColumn { get; private set; }
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
+    // ponytail: no live feed yet. WPF hooks App.Lobby.Changed and leases its poll (MainWindow.Lobby.cs:83);
+    // this head has no LobbyService, so rows (and their host looks) only appear through PaintSnapshot.
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
     public AvailableSubjectsTabView()
@@ -112,6 +117,7 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Row = row;
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
@@ -120,6 +126,27 @@ public sealed class LobbyCardView
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
+    private LobbyRow Row { get; }
+    public const double FaceSize = 22;
+    public double FrameSize => FaceSize / ShopCosmeticsRegistry.FrameWindowRatio;
+    public Thickness FrameMargin => new(-(FrameSize - FaceSize) / 2);
+    public bool HasLook => !Row.Look.IsEmpty;
+    public IBrush? FaceBrush => !HasLook ? null :
+        ModArt.AvatarPreset(Row.Look.AvatarId) is { } image
+            ? new ImageBrush(image) { Stretch = Stretch.UniformToFill }
+            : LeaderboardRow.BuildAvatarBrush(Row.HostName);
+    public IImage? FrameArt => HasLook ? ModArt.ShopFrame(Row.Look.FrameId) : null;
+    private static readonly LobbyArtCache GameArt = new(LoadArt);
+    public IImage? Art => GameArt.Get(Row.Game);
+
+    private static IImage? LoadArt(LobbyGame game) => ModArt.TryLoadBuiltIn(game switch
+    {
+        LobbyGame.Chess => "features/piecebypiece.png",
+        LobbyGame.Goon => "features/goon_game_tile.png",
+        LobbyGame.Race => "features/race.png",
+        _ => "features/lobby_remote.png"
+    }, 96);
+
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }
@@ -127,4 +154,22 @@ public sealed class LobbyCardView
     public bool Locked { get; }
     public string ButtonText { get; }
     public double ButtonOpacity { get; }
+}
+
+
+// WPF LobbyRowView.ArtFor: the game thumbnail is shared across rows and polls, including a missing file.
+internal sealed class LobbyArtCache(Func<LobbyGame, IImage?> load)
+{
+    private readonly Dictionary<LobbyGame, IImage?> _art = new();
+
+    internal IImage? Get(LobbyGame game)
+    {
+        lock (_art)
+        {
+            if (_art.TryGetValue(game, out var hit)) return hit;
+            var art = load(game);
+            _art[game] = art;
+            return art;
+        }
+    }
 }

@@ -105,6 +105,28 @@ public sealed partial class AccountSeedTests
     }
 
     [Fact]
+    public void ProductionSyncFactorySanitizesTheOutgoingLoadout() => WithFreshInstall(async () =>
+    {
+        var settings = CoreSettings.Current;
+        var original = settings.ProfileCosmetics;
+        try
+        {
+            settings.ProfileCosmetics = new ProfileCosmetics
+            {
+                AvatarDeco = "bambi_silk_bow",
+                Charms = { "bambi_plush_bunny", "not_a_real_charm" }
+            };
+            var (wire, _, _) = SignIn("u1", L40Profile("u1"));
+            Assert.True(await AccountSeed.LoadProfileAsync());
+            var cosmetics = Assert.IsType<JObject>(Assert.Single(wire.Syncs)["cosmetics"]);
+            Assert.Equal("bambi_silk_bow", (string?)cosmetics["avatar_deco"]);
+            Assert.Equal(new[] { "bambi_plush_bunny" }, cosmetics["charms"]!.Values<string>());
+            Assert.Contains("not_a_real_charm", settings.ProfileCosmetics.Charms);
+        }
+        finally { settings.ProfileCosmetics = original; }
+    });
+
+    [Fact]
     public void NoPush_BeforeASuccessfulLoad_NorAfterLogout_UntilTheNextLoad() => WithFreshInstall(async () =>
     {
         var (wire, sync, _) = SignIn("u1", profile: null);
