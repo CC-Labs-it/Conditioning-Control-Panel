@@ -29,9 +29,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Dictionary<AudioLayerTrack, ILayerPlayer> _players = new();
         private float _duckFactor = 1f;
         private bool _disposed;
-        private Task _volumeWork = Task.CompletedTask;
-        private readonly Dictionary<AudioLayerTrack, long> _volumeVersions = new();
-        private long _volumeVersion;
 
         internal static LayeredAudio? Instance { get; set; }
 
@@ -103,26 +100,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock) { _duckFactor = 1f; SetMasterVolumeLive(); }
         }
 
-        // Native volume retries can take 500 ms per copy. Keep them off the caller (including
-        // panic teardown), but serialize every gain change so a later duck wins over an unduck.
+        // Players record targets immediately; native writes and retries run independently.
         private void QueueVolumes((AudioLayerTrack Track, ILayerPlayer Player, int Volume)[] updates)
         {
-            var pending = updates.Select(update => (update.Track, update.Player, update.Volume, Version: ++_volumeVersion)).ToArray();
-            foreach (var item in pending) _volumeVersions[item.Track] = item.Version;
-            _volumeWork = _volumeWork.ContinueWith(_ =>
-            {
-                foreach (var (track, player, volume, version) in pending)
-                {
-                    lock (_lock)
-                        if (!_players.TryGetValue(track, out var current) || !ReferenceEquals(current, player)
-                            || !_volumeVersions.TryGetValue(track, out var latest) || latest != version) continue;
-                    try { player.Volume = volume; }
-                    catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
-                }
-            }, TaskScheduler.Default);
+            foreach (var (_, player, volume) in updates)
+                try { player.Volume = volume; }
+                catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
         }
 
-        internal Task VolumeUpdates { get { lock (_lock) return _volumeWork; } }
+        internal Task VolumeUpdates => Task.CompletedTask;
 
         /// <summary>LibVLC volume 0-100 for a track, from WPF's linear gain chain.</summary>
         private int VolumeFor(int trackPercent, AppSettings s)
@@ -138,7 +124,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             foreach (var p in _players.Values) { try { p.Dispose(); } catch { } }
             _players.Clear();
-            _volumeVersions.Clear();
         }
 
         public void Dispose()
@@ -170,7 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 public readonly MediaPlayer Player = player;
                 public readonly Media Media = media;
-                public bool Playing, Disposed;
+                public bool Playing, Disposed, VolumeWorker;
             }
 
             private readonly LibVLC _vlc;
@@ -252,7 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (c) { if (c.Disposed) return; LibVlcAudio.ApplyPreferredDevice(c.Player); }
                 bool configured;
                 lock (_gate) configured = !_disposed && _volumeConfigured;
-                if (configured) ApplyVolume(c);
+                if (configured) QueueVolume(c);
             }
 
             /// <summary>Start the next pass <see cref="OverlapMs"/> before this one ends, measured from its
@@ -312,28 +297,50 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         _volumeConfigured = true;
                         playing = _live.Where(c => c.Playing).ToArray();
                     }
-                    foreach (var c in playing) ApplyVolume(c);
+                    foreach (var c in playing) QueueVolume(c);
                 }
             }
 
-            // ponytail: the pulse output drops a volume set too soon after the stream opens, so re-apply
-            // until libvlc reports it (bounded, 20 x 25 ms). Never sleeps holding _gate: that would hold
-            // up the next pass's start and reopen the gap.
+            private void QueueVolume(Copy c)
+            {
+                lock (_gate)
+                {
+                    if (_disposed || c.VolumeWorker || !_live.Contains(c)) return;
+                    c.VolumeWorker = true;
+                    ThreadPool.QueueUserWorkItem(_ =>
+                    {
+                        while (true)
+                        {
+                            int target; lock (_gate) target = _volume;
+                            ApplyVolume(c);
+                            lock (_gate)
+                                if (_disposed || !_live.Contains(c) || target == _volume)
+                                { c.VolumeWorker = false; return; }
+                        }
+                    });
+                }
+            }
+
+            // Retry until the output accepts the current target or playback stops.
             private void ApplyVolume(Copy c)
             {
-                for (var i = 0; i < 20; i++)
+                RetryVolume(() =>
                 {
                     lock (c)
                     {
-                        if (_disposed || c.Disposed) return;
+                        if (_disposed || c.Disposed) return true;
                         var v = _volume;
                         c.Player.Volume = v;
-                        if (c.Player.Volume == v && _volume == v) { c.Player.Mute = false; return; }
+                        if (c.Player.Volume == v && _volume == v) { c.Player.Mute = false; return true; }
                         c.Player.Mute = true;
+                        return false;
                     }
-                    Thread.Sleep(25);
-                }
-                Log.Debug("LayeredAudio: volume {V} did not stick", _volume);
+                });
+            }
+
+            internal static void RetryVolume(Func<bool> attempt)
+            {
+                while (!attempt()) Thread.Sleep(25);
             }
 
             public void Dispose()

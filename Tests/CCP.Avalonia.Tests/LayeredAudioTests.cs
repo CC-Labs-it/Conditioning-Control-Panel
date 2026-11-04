@@ -21,6 +21,13 @@ public sealed class LayeredAudioTests
     }
 
     [Fact]
+    public void GainRetriesBeyondInitialWindowUntilOutputRecovers()
+    {
+        var attempts = 0;
+        LayeredAudio.VlcLayerPlayer.RetryVolume(() => ++attempts == 22);
+        Assert.Equal(22, attempts);
+    }
+    [Fact]
     public void StartVolumeDuckStopFollowWpfRules()
     {
         var s = CoreSettings.Current;
