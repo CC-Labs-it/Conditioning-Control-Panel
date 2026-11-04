@@ -393,14 +393,14 @@ public static class ChaosBoonPool
     /// roll (<c>ChaosRunConfig.SinChance</c> — the happy path ramps it in over the early runs).
     /// </summary>
     public static List<ChaosBoon> Draft(bool allowCurses = true, int choices = 3, bool guaranteeCurse = false,
-                                        IReadOnlyCollection<string>? takenIds = null, double sinChance = 0.5)
+                                        IReadOnlyCollection<string>? takenIds = null, double sinChance = 0.5, Func<ChaosBoon, bool>? eligible = null)
     {
         choices = Math.Clamp(choices, 2, 4);
         // A requirement id may name a lifetime boon (skill/accessory/charm) OR a trained habit
         // (e.g. Focus here → the pendulum_swing habit).
         static bool ReqMet(string id) => ChaosMeta.IsBoonActive(id) || ChaosMeta.IsUpgradeActive(id);
         bool Draftable(ChaosBoon b) =>
-            (b.RequiresAny == null || b.RequiresAny.Any(ReqMet))
+            (eligible == null || eligible(b)) && (b.RequiresAny == null || b.RequiresAny.Any(ReqMet))
             && (b.RequiresAll == null || b.RequiresAll.All(ReqMet))
             && !(b.Unique && takenIds != null && takenIds.Contains(b.Id));
         var boons = All.Where(b => !b.IsCurse && Draftable(b)).OrderBy(_ => _rng.Next()).ToList();

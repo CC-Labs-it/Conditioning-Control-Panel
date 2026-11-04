@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Avalonia;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -181,9 +182,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 VerticalAlignment = VerticalAlignment.Top,
             };
             label.Build();
+            // WPF ChaosModeService.cs:435 prefixes the mantra with a diamond; render it as a control.
+            Control content = label;
+            if (a.Kind == ChaosAnnounceKind.Mantra)
+                content = new StackPanel {
+                    Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center,
+                    Children = { new IconGlyph { Kind = IconKind.Diamond, Variant = IconVariant.Filled,
+                        Size = FontSizeDip, Foreground = fill, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) }, label }
+                };
             _scale = new ScaleTransform(ChaosAnnounceTiming.PopFrom, ChaosAnnounceTiming.PopFrom);
-            label.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            label.RenderTransform = _scale;
+            content.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            content.RenderTransform = _scale;
 
             // Anchored just under the effect-banner strip, centred over the primary work area.
             var anchor = new Grid
@@ -194,7 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 IsHitTestVisible = false,
             };
             if (!double.IsNaN(wa.width)) anchor.Width = wa.width;
-            anchor.Children.Add(label);
+            anchor.Children.Add(content);
             _host.Children.Clear();
             _host.Children.Add(anchor);
         }

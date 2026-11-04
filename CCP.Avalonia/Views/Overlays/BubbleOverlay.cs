@@ -232,6 +232,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosOpenedWindows = _running;
         }
 
+        // WPF BubbleService.cs:1640-1646,1669-1680,1704-1717: Size Queen's 430px/550ms fronts.
+        private static readonly List<(Point Center, double Age)> SizeQueenRipples = new();
+        private static double ScaleOf(AmbientBubble b) => b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+        internal static void TriggerSizeQueenRipple(AmbientBubble b)
+        {
+            double scale = ScaleOf(b);
+            var center = new Point(b.CenterX * scale, b.CenterY * scale);
+            SizeQueenRipples.Add((center, 0));
+            if (Chaos.ChaosSkiaFxOverlay.Enabled) Chaos.ChaosSkiaFxOverlay.Ripple(center, 430, 550);
+            else ChaosFieldFxOverlay.Ripple(center, 430, 550);
+            RequestFrame();
+        }
+        internal static void StepSizeQueenRipples()
+        {
+            if (Field.HoldChaos || SizeQueenRipples.Count == 0) return;
+            var bubbles = Field.Bubbles.ToArray();
+            for (int i = SizeQueenRipples.Count - 1; i >= 0 && i < SizeQueenRipples.Count; i--)
+            {
+                var (center, age) = SizeQueenRipples[i];
+                age += 32;
+                double radius = 430 * Math.Min(1, age / 550);
+                foreach (var b in bubbles)
+                {
+                    if (b.Popping || b.Spec == null || b.Spec.IsLive || b.Spec.IsDarter || b.Spec.IsFreeze) continue;
+                    double scale = ScaleOf(b), dx = b.CenterX * scale - center.X, dy = b.CenterY * scale - center.Y;
+                    if (dx * dx + dy * dy <= radius * radius) PopChaos(b);
+                }
+                if (i >= SizeQueenRipples.Count) continue; // a pop may shut down the run
+                if (age >= 550) SizeQueenRipples.RemoveAt(i); else SizeQueenRipples[i] = (center, age);
+            }
+        }
+
         /// <summary>WPF SetChaosFrozen + SetChaosInputLocked (manual pause): chaos bubbles hold
         /// still and a click on one is swallowed, so a paused field cannot be farmed.</summary>
         internal static void HoldChaos(bool held)
@@ -240,9 +272,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF ChaosModeService.cs:1462-1464 clears the field before a draft.</summary>
+        internal static void ClearForDraft()
+        {
+            Field.Bubbles.Clear(); SizeQueenRipples.Clear(); Field.Held = false;
+            foreach (var w in Windows) w.Sync();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
+            SizeQueenRipples.Clear();
             Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
@@ -253,7 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble, FloatUp/RainDown. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
@@ -298,6 +338,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CoreAudio.PlayOneShot(Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "bubbles", pop), Math.Min(vol, 1f), "bubble-pop");
         }
 
+        /// <summary>WPF BubbleService.cs:2060-2072: a random chime at the bubble volume and scale.</summary>
+        internal static void PlayChime(float scale)
+        {
+            var name = $"chime{Field.Random.Next(1, 4)}.mp3";
+            // WPF ModResourceResolver.cs:374-377: mod override (including WAV), then content.
+            var path = CoreModArt.AudioOverridePath(name) ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", name));
+            if (!File.Exists(path)) return;
+            var s = CoreSettings.Current;
+            var volume = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5) * scale;
+            CoreAudio.PlayOneShot(path, volume, "bubble-chime");
+        }
+
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
@@ -331,9 +383,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 Field.Step();
+                StepSizeQueenRipples();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-                if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
+                if (Field.Bubbles.Count == 0 && SizeQueenRipples.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
             }
             RequestFrame();
         }

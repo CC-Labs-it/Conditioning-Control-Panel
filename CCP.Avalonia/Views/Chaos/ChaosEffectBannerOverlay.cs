@@ -235,12 +235,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try { Close(); } catch (Exception ex) { Log.Debug("ChaosEffectBanner close: {E}", ex.Message); }
         }
 
-        /// <summary>WPF ChaosArt.Resolve("announce", key): user assets first, then the app folder.</summary>
-        private static Bitmap? ResolveArt(string key)
+        /// <summary>WPF ChaosArt.cs:58-69: user assets first, then bundled art, cached by path (:27-50).</summary>
+        internal static Bitmap? ResolveArt(string key, string folder = "announce")
         {
             foreach (var root in new[] { Path.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory })
             {
-                var p = Path.Combine(root, "assets", "Chaos", "announce", key + ".png");
+                var p = Path.Combine(root, "assets", "Chaos", folder, key + ".png");
                 if (!ArtCache.TryGetValue(p, out var bmp))
                 {
                     try { bmp = File.Exists(p) ? new Bitmap(p) : null; }

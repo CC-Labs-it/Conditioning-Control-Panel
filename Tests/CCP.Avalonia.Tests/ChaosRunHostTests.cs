@@ -30,7 +30,7 @@ public sealed class ChaosRunHostTests
                 .SetupWithoutStarting();
     }
 
-    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
+    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false };
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
@@ -415,6 +415,7 @@ public sealed class ChaosRunHostTests
             try
             {
                 hub = new ChaosHubWindow();
+                var service = new SettingsService(); CoreSettings.ServiceProvider = () => service; hub.FindControl<CheckBox>("ChkBoonDraft")!.IsChecked = false; // this payout test runs without pauses
                 hub.FindControl<Button>("BtnMenuFallIn")!
                     .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();

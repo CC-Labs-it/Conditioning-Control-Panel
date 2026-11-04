@@ -11,6 +11,28 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class AmbientBubblesTests
 {
+    // WPF BubbleService.cs:3329,3340-3342,4095-4099: scaled start, downward steps, bottom exit.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Rain_starts_above_scaled_work_area_moves_down_and_exits_below(bool live)
+    {
+        var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec
+            { SizePx = 100, Motion = ConditioningControlPanel.Services.Chaos.ChaosMotion.RainDown, IsLive = live, FuseMs = int.MaxValue };
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 200, 300, 1920, 1080, 2, spec);
+        Assert.Equal(150 - b.Size, b.Y);
+        for (int i = 0; i < 20; i++)
+        {
+            var before = b.Y; Assert.Equal(AmbientBubble.Result.Alive, b.Step()); Assert.True(b.Y > before);
+        }
+        var result = AmbientBubble.Result.Alive;
+        for (int i = 0; i < 5000 && result == AmbientBubble.Result.Alive; i++) result = b.Step();
+        Assert.True(b.Y > (300 + 1080) / 2 + 50);
+        Assert.Equal(live ? AmbientBubble.Result.Detonated : AmbientBubble.Result.Missed, result);
+        var field = new AmbientBubbleField(); field.Bubbles.Add(b);
+        for (int i = 0; i < 20 && field.Bubbles.Count > 0; i++) field.Step(); Assert.Empty(field.Bubbles);
+    }
+
     [Fact]
     public void Bucket_pays_up_to_300_a_day_then_the_remainder_then_nothing()
     {
