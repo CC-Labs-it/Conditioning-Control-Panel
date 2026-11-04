@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Localization;
@@ -276,6 +277,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal Button CreditButton(string path)
         {
             var mark = CreditFor(path);
+            var label = mark.Child!;
+            mark.Child = null;
+            var tick = new IconGlyph { Kind = IconKind.Checkmark, Size = 11, Foreground = Brushes.White,
+                Margin = new Thickness(3, 0, 0, 0), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, IsVisible = false };
+            mark.Child = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal, Children = { label, tick } };
             _creditBadges.Add(mark);
             if (_queuedCreditPath == path) SetCreditQueued(mark, true);
             var button = new Button { Content = mark, Padding = new Thickness(0), BorderThickness = new Thickness(0),
@@ -303,8 +309,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void SetCreditQueued(ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge badge, bool queued)
         {
-            if (badge.Child is TextBlock label)
-                label.Text = ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.Mark + (queued ? " ✓" : "");
+            if (badge.Child is StackPanel { Children.Count: > 1 } panel && panel.Children[1] is IconGlyph tick)
+                tick.IsVisible = queued;
         }
 
         private void ResetCreditBadges()

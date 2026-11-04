@@ -14,6 +14,8 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.Haptics.Core;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
 
@@ -82,7 +84,9 @@ public sealed class MandatoryVideoRemoteTests
         var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
         var scheduler = new MandatoryVideoScheduler(o, new StillTime(), Array.Empty<string>); o.Scheduler = scheduler;
         typeof(MandatoryVideoOverlay).GetField("_path", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, path);
-        static string? Text(Button button) => ((TextBlock)((Border)button.Content!).Child!).Text;
+        static StackPanel BadgeContent(Button button) => (StackPanel)((Border)button.Content!).Child!;
+        static string? Text(Button button) => ((TextBlock)BadgeContent(button).Children[0]).Text;
+        static IconGlyph Tick(Button button) => (IconGlyph)BadgeContent(button).Children[1];
         var floating = typeof(MandatoryVideoOverlay).GetProperty("Floating", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var oldOpener = MandatoryVideoOverlay.CreditOpener;
         var opened = 0; MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; };
@@ -90,30 +94,33 @@ public sealed class MandatoryVideoRemoteTests
         {
             Assert.True(scheduler.Trigger(strictOverride: true, path: path));
             var locked = o.CreditButton(path); o.CreditPressed(path);
-            Assert.Equal("via Scrolller", Text(locked));
+            Assert.Equal("via Scrolller", Text(locked)); Assert.False(Tick(locked).IsVisible);
             scheduler.ForceCleanup();
             Assert.True(scheduler.Trigger(strictOverride: false, path: path));
             var first = o.CreditButton(path); var second = o.CreditButton(path);
             Assert.Equal("via Scrolller", Text(first)); Assert.Equal("via Scrolller", Text(second));
+            Assert.Equal(IconKind.Checkmark, Tick(first).Kind); Assert.False(Tick(first).IsVisible); Assert.False(Tick(second).IsVisible);
             floating.SetValue(o, true);
             o.CreditPressed(path); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, opened); Assert.Equal("via Scrolller", Text(first));
+            Assert.Equal(1, opened); Assert.Equal("via Scrolller", Text(first)); Assert.False(Tick(first).IsVisible);
             o.CreditPressed("/local.mp4"); // unrelated or uncredited presses do not change the badge
             Assert.Equal("via Scrolller", Text(first));
             floating.SetValue(o, false);
             first.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal("via Scrolller ✓", Text(first)); Assert.Equal("via Scrolller ✓", Text(second));
+            Assert.Equal("via Scrolller", Text(first)); Assert.Equal("via Scrolller", Text(second));
+            Assert.True(Tick(first).IsVisible); Assert.True(Tick(second).IsVisible);
             scheduler.ForceCleanup();
             Assert.Equal("via Scrolller", Text(first)); Assert.Equal("via Scrolller", Text(second));
+            Assert.False(Tick(first).IsVisible); Assert.False(Tick(second).IsVisible);
 
             Assert.True(scheduler.Trigger(strictOverride: false, path: path));
             var next = o.CreditButton(path);
-            Assert.Equal("via Scrolller", Text(next));
+            Assert.Equal("via Scrolller", Text(next)); Assert.False(Tick(next).IsVisible);
             next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal("via Scrolller ✓", Text(next));
+            Assert.Equal("via Scrolller", Text(next)); Assert.True(Tick(next).IsVisible);
             // A new clip whose cache entry has vanished tears down the old run and its feedback.
             o.Show($"https://v.scrolller.com/missing-{Guid.NewGuid():N}.mp4", false);
-            Assert.Equal("via Scrolller", Text(next));
+            Assert.Equal("via Scrolller", Text(next)); Assert.False(Tick(next).IsVisible);
             Assert.False(scheduler.IsPlaying);
         }
         finally { scheduler.ForceCleanup(); MandatoryVideoOverlay.CreditOpener = oldOpener; }
