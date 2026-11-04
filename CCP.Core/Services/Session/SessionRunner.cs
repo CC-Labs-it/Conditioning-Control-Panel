@@ -255,9 +255,11 @@ namespace ConditioningControlPanel.Services
             _timer?.Change(Timeout.Infinite, Timeout.Infinite);
             CoreFlash.Stop();
             CoreSubliminal.Stop();
+            CoreBubbles.Stop();
             LockCardScheduler.Instance.Stop();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
+            CoreMindWipe.Stop();
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
