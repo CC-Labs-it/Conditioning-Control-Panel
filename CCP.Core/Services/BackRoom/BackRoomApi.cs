@@ -146,6 +146,7 @@ public sealed class BackRoomApi : IBackRoomRelay
     public async Task<BackRoomStationResult> RelayAsync(string station, string op, string? idem, JObject? body, CancellationToken ct = default)
     {
         if (!TryResolve(station, op, out var method, out var path)) return BackRoomStationResult.Refuse("bad_op");
+        var prizeSession = CoreAccount.SessionVersion;
         var id = _identity();
         if (id == null) return BackRoomStationResult.Refuse("offline");
 
@@ -161,7 +162,9 @@ public sealed class BackRoomApi : IBackRoomRelay
                 var text = await res.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
                 if (_identity()?.UnifiedId != id.Value.UnifiedId) return BackRoomStationResult.Refuse("closed");
                 MergedReply?.Invoke((int)res.StatusCode, text);   // contract D
-                return Read(station, op, id.Value.UnifiedId, (int)res.StatusCode, res.IsSuccessStatusCode, text);
+                var result = BackRoomStationResult.Refuse("closed");
+                CoreAccount.ForSession(prizeSession, () => result = Read(station, op, id.Value.UnifiedId, (int)res.StatusCode, res.IsSuccessStatusCode, text));
+                return result;
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {

@@ -84,6 +84,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "intake",
+        "rain-look-sync",
         "leash-task",
         "tour",
         "games",

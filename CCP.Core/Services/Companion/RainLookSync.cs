@@ -64,6 +64,8 @@ internal sealed class RainLookSync
         _h = hooks ?? throw new ArgumentNullException(nameof(hooks));
     }
 
+    internal RainLookSync Fork() => new(_http, _h);
+
     // ------------------------------------------------------------------ pure
 
     /// <summary>The Rain copy from a reply body, or null when the body is not an ok equip reply.</summary>
