@@ -135,6 +135,55 @@ public sealed class CompanionPickerCardTests
         }
     });
 
+    [Fact]
+    public Task AnimatedModPreviewsUseIdleAndMissingClipFallsBackToPose() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-preview-" + Guid.NewGuid());
+        var resources = System.IO.Path.Combine(root, "resources");
+        var emotes = System.IO.Path.Combine(resources, "emotes", "set1");
+        System.IO.Directory.CreateDirectory(emotes);
+        var assets = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Here())!, "..", "..", "Assets"));
+        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar0_emotes", "idle.gif"), System.IO.Path.Combine(emotes, "idle.gif"));
+        System.IO.File.WriteAllText(System.IO.Path.Combine(emotes, "emotes.json"), "{}");
+        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar_pose1.png"), System.IO.Path.Combine(resources, "avatar_pose1.png"));
+        var mod = new ModPackage(new ModManifest { Id = "preview-test", Name = "Preview" }, root, false);
+        var old = (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider, CoreSettings.Current.SelectedAvatarSet);
+        try
+        {
+            CoreMods.ActiveModPackageProvider = () => mod;
+            CoreMods.ActiveModIdProvider = () => mod.Id;
+            CoreSettings.Current.SelectedAvatarSet = 1;
+            var card = new CompanionPickerCard();
+            using var idleStream = System.IO.File.OpenRead(System.IO.Path.Combine(emotes, "idle.gif"));
+            using var idle = global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(idleStream, 240);
+            global::Avalonia.PixelSize Picture() => ((global::Avalonia.Media.Imaging.Bitmap)card.FindControl<Image>("ImgPreview")!.Source!).PixelSize;
+            Assert.Equal(idle.PixelSize, Picture()); // active
+            card.ShowPreview(mod, global::Avalonia.Media.Colors.HotPink);
+            Assert.Equal(idle.PixelSize, Picture()); // inactive
+            System.IO.File.Delete(System.IO.Path.Combine(emotes, "idle.gif"));
+            card.ShowPreview(mod, global::Avalonia.Media.Colors.HotPink);
+            using var poseStream = System.IO.File.OpenRead(System.IO.Path.Combine(resources, "avatar_pose1.png"));
+            using var pose = global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(poseStream, 240);
+            Assert.NotEqual(idle.PixelSize, pose.PixelSize);
+            Assert.Equal(pose.PixelSize, Picture());
+            // Built-in registry assets must be packaged too.
+            card.ShowPreview(new ModPackage(new ModManifest { Id = BuiltInMods.CCPDefaultId, Name = "Default" }, null, true), global::Avalonia.Media.Colors.HotPink);
+            Assert.Equal(idle.PixelSize, Picture());
+        }
+        finally
+        {
+            (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider, CoreSettings.Current.SelectedAvatarSet) = old;
+            System.IO.Directory.Delete(root, true);
+        }
+        return Task.CompletedTask;
+    });
+
+    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+
     /// <summary>WPF AvatarSetTitle (AvatarTubeWindow.Avatar.cs:940-941): the Look label is the
     /// companion's name, not the tube's upper-cased caption.</summary>
     [Fact]

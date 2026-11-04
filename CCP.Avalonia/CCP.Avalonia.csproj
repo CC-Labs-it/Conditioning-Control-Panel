@@ -241,6 +241,11 @@
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
     <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <AvaloniaResource Include="..\Assets\avatar0_emotes\idle.gif" Link="Resources\avatar0_emotes\idle.gif" />
+    <AvaloniaResource Include="..\Assets\circe_emotes\idle.gif" Link="Resources\circe_emotes\idle.gif" />
+    <AvaloniaResource Include="..\Assets\circe_emotes_p2\idle.gif" Link="Resources\circe_emotes_p2\idle.gif" />
+    <AvaloniaResource Include="..\Assets\circe_emotes_p3\idle.gif" Link="Resources\circe_emotes_p3\idle.gif" />
+    <AvaloniaResource Include="..\Assets\circe_emotes_p4\idle.gif" Link="Resources\circe_emotes_p4\idle.gif" />
     <AvaloniaResource Include="..\Assets\avatar_emotes_registry.json" Link="Resources\avatar_emotes_registry.json" />
     <AvaloniaResource Include="..\Assets\*.png"
                       Link="Resources\%(Filename)%(Extension)" />
