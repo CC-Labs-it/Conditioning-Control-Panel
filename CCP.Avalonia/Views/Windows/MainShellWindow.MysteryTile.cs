@@ -22,10 +22,13 @@ public partial class MainShellWindow
         dash.CardMystery.Title = Loc.Get("mosaic_free_today");
         dash.CardMystery.TierBadge = null;
         dash.MysteryRevealName.Text = MysteryName(key) ?? Loc.Get("mosaic_daily_gift");
+        var art = ModArt.TryLoad(MysteryArtPath(key), 512) ?? ModTileVariant("mysterybox", 512);
+        dash.MysteryRevealArt.Background = art == null ? null : new ImageBrush(art) { Stretch = Stretch.UniformToFill };
         var badge = dash.MysteryRevealBadge;
         badge.Tier = !premium && MysteryName(key) != null ? 1 : 0;
         badge.FreeToday = badge.Tier > 0;
         EnsureMysteryFlip();
+        ApplyMysteryBreath();
     }
 
     // WPF DashboardFx.cs:384-666. The host keeps an untransformed hit area so
@@ -44,9 +47,11 @@ public partial class MainShellWindow
         host.PointerExited += (_, _) => RequestMysteryFace(false);
         dash.PropertyChanged += (_, e) =>
         {
-            if (e.Property == IsVisibleProperty && !dash.IsVisible) SettleMysteryFace(false);
+            if (e.Property != IsVisibleProperty) return;
+            if (!dash.IsVisible) SettleMysteryFace(false);
+            ApplyMysteryBreath();
         };
-        Closed += (_, _) => SettleMysteryFace(false);
+        Closed += (_, _) => { SettleMysteryFace(false); StopMysteryBreath(); };
     }
 
     private void RequestMysteryFace(bool reveal)
@@ -63,6 +68,7 @@ public partial class MainShellWindow
                 settings.Save();
             }
             dash.MysteryBadge.IsVisible = false;
+            StopMysteryBreath();
         }
         _mysteryFlip?.Stop();
         if (!AmbientFxCanvas.Env.AllowTransitions) { SettleMysteryFace(reveal); return; }
@@ -115,6 +121,46 @@ public partial class MainShellWindow
         }
         SetMysteryFace(reveal);
     }
+
+    // WPF DashboardFx.cs:340-371, 676-727: the ring and badge share a 900 ms beat.
+    private BeatLoop? _mysteryBreath;
+    private void ApplyMysteryBreath()
+    {
+        if (SettingsPage is not { } dash || dash.MysteryBadge.RenderTransform is not
+            TransformGroup { Children: [ScaleTransform scale, ..] }) return;
+        bool run = dash.MysteryBadge.IsVisible && dash.IsEffectivelyVisible && IsActive &&
+            WindowState != WindowState.Minimized && AmbientFxCanvas.Env.AllowAmbientLoops;
+        if (!run) { StopMysteryBreath(); return; }
+        if (_mysteryBreath?.IsRunning == true) return;
+        _mysteryBreath = new BeatLoop(dash.MysteryGlow, t =>
+        {
+            var b = BeatLoop.Breath(t, 0.9);
+            dash.MysteryGlow.Opacity = 0.55 + 0.4 * b;
+            scale.ScaleX = scale.ScaleY = 1 + 0.12 * b;
+        });
+        _mysteryBreath.OnParked = StopMysteryBreath;
+        _mysteryBreath.Start();
+    }
+
+    private void StopMysteryBreath()
+    {
+        _mysteryBreath?.Stop();
+        if (SettingsPage is not { } dash) return;
+        dash.MysteryGlow.Opacity = 0.55;
+        if (dash.MysteryBadge.RenderTransform is TransformGroup { Children: [ScaleTransform scale, ..] })
+            scale.ScaleX = scale.ScaleY = 1;
+    }
+
+    private static string MysteryArtPath(string? key) => key switch
+    {
+        "takeover" => "features/takeover.png",
+        "awareness" => "features/awareness.png",
+        "haptics" => "features/vibe.png",
+        "fyp" => "features/fyp.png",
+        "remote" => "features/remote_control.png",
+        "dtrh" => "features/dtrh.png",
+        _ => "features/mysterybox.png",
+    };
 
     // The service signals both day rollovers and server overrides off the UI thread.
     internal void InitializeDailyFreeRefresh(DailyFreeService dailyFree)

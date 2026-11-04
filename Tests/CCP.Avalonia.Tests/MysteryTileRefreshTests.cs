@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
@@ -9,6 +10,7 @@ using Avalonia.Headless;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -73,9 +75,34 @@ public class MysteryTileRefreshTests
         try
         {
             shell.Show();
+            shell.Activate();
             shell.ShowTab("settings");
             Dispatcher.UIThread.RunJobs();
             var dash = shell.SettingsPage!;
+            var badgeScale = (ScaleTransform)((TransformGroup)dash.MysteryBadge.RenderTransform!).Children[0];
+            shell.RefreshMysteryTile();
+            time.Advance(TimeSpan.FromMilliseconds(900));
+            BeatLoop.StepAll();
+            Assert.Equal(0.95, dash.MysteryGlow.Opacity, 3);
+            Assert.Equal(1.12, badgeScale.ScaleX, 3);
+            Assert.Equal(badgeScale.ScaleX, badgeScale.ScaleY);
+            settings.Current.MotionLevel = MotionLevel.Off;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.Equal(0.55, dash.MysteryGlow.Opacity, 3);
+            Assert.Equal(1, badgeScale.ScaleX);
+            Assert.True(dash.MysteryBadge.IsVisible);
+            settings.Current.MotionLevel = MotionLevel.Full;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            time.Advance(TimeSpan.FromMilliseconds(900));
+            BeatLoop.StepAll();
+            Assert.Equal(0.95, dash.MysteryGlow.Opacity, 3);
+            dash.IsVisible = false;
+            Assert.Equal(0.55, dash.MysteryGlow.Opacity, 3);
+            Assert.Equal(1, badgeScale.ScaleX);
+            dash.IsVisible = true;
+            time.Advance(TimeSpan.FromMilliseconds(900));
+            BeatLoop.StepAll();
+            Assert.Equal(0.95, dash.MysteryGlow.Opacity, 3);
             var host = dash.FindControl<Grid>("MysteryFlipHost")!;
             var plate = dash.FindControl<Grid>("MysteryFlipPlate")!;
             var scale = (ScaleTransform)((TransformGroup)plate.RenderTransform!).Children[0];
@@ -85,6 +112,8 @@ public class MysteryTileRefreshTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(DateTime.Now.ToString("yyyy-MM-dd"), settings.Current.DailyGiftLastRevealDate);
             Assert.False(dash.MysteryBadge.IsVisible);
+            Assert.Equal(0.55, dash.MysteryGlow.Opacity, 3);
+            Assert.Equal(1, badgeScale.ScaleX);
             time.Advance(TimeSpan.FromMilliseconds(75));
             BeatLoop.StepAll();
             Assert.InRange(scale.ScaleX, 0.01, 0.99);
@@ -115,6 +144,64 @@ public class MysteryTileRefreshTests
             shell.Close();
             BeatLoop.Time = TimeProvider.System;
             CoreSettings.ServiceProvider = previous;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task RevealArtTracksGiftAndModChanges() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var dir = Directory.CreateTempSubdirectory("ccp-gift-art-");
+        var first = Path.Combine(dir.FullName, "first.png");
+        var second = Path.Combine(dir.FullName, "second.png");
+        using (var image = new WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96))) image.Save(first);
+        using (var image = new WriteableBitmap(new PixelSize(6, 2), new Vector(96, 96))) image.Save(second);
+        var previous = CoreModArt.OverridePathProvider;
+        var property = typeof(AvApp).GetProperty("DailyFree", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var oldDaily = property.GetValue(null);
+        property.SetValue(null, new DailyFreeService(fetchOverride: false));
+        CoreModArt.OverridePathProvider = p => p == "features/fyp.png" ? second : p.StartsWith("features/") ? first : null;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var dash = shell.SettingsPage!;
+            PixelSize Size() => Assert.IsType<Bitmap>(Assert.IsType<ImageBrush>(dash.MysteryRevealArt.Background).Source).PixelSize;
+            shell.RefreshMysteryTile("takeover", false);
+            var box = Size();
+            shell.RefreshMysteryTile("fyp", false);
+            Assert.NotEqual(box, Size());
+            shell.RefreshMysteryTile("voice", false);
+            Assert.Equal(box, Size());
+            shell.RefreshMysteryTile("unknown", false);
+            Assert.Equal(box, Size());
+            string? requested = null;
+            CoreModArt.OverridePathProvider = p => { requested = p; return first; };
+            foreach (var (key, path) in new[] { ("takeover", "takeover"), ("awareness", "awareness"),
+                ("haptics", "vibe"), ("fyp", "fyp"), ("remote", "remote_control"),
+                ("dtrh", "dtrh"), ("voice", "mysterybox"), ("unknown", "mysterybox") })
+            {
+                shell.RefreshMysteryTile(key, false);
+                Assert.Equal("features/" + path + ".png", requested);
+            }
+            CoreModArt.OverridePathProvider = p => p.StartsWith("features/") ? first : null;
+            shell.RefreshMysteryTile();
+            Assert.Equal(box, Size());
+            CoreModArt.OverridePathProvider = p => p.StartsWith("features/") ? second : null;
+            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual(box, Size());
+        }
+        finally
+        {
+            shell.Close();
+            property.SetValue(null, oldDaily);
+            CoreModArt.OverridePathProvider = previous;
+            dir.Delete(true);
         }
         return Task.CompletedTask;
     });
