@@ -194,6 +194,15 @@ public sealed class DeeperEditorTestFireTests
             Directory.Delete(dir, true);
         }
     });
+    // These tests start the preview directly. A later framework Loaded event must not start a
+    // second preview and supersede the task they are controlling; the normal Loaded path is
+    // exercised by LocalAudioDrawsItsWaveform.
+    private static void DisableAutomaticPreview(DeeperEditorWindow editor)
+    {
+        var method = typeof(DeeperEditorWindow).GetMethod("DeeperEditorWindow_Loaded", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        editor.Loaded -= (EventHandler<RoutedEventArgs>)method.CreateDelegate(typeof(EventHandler<RoutedEventArgs>), editor);
+    }
+
     private sealed class DurationAudio : IDeeperLocalAudio
     {
         public double DurationSeconds => 29;
@@ -226,11 +235,13 @@ public sealed class DeeperEditorTestFireTests
             return new() { DurationSeconds = 12, Peaks = new float[] { 0.5f } };
         };
         var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        DisableAutomaticPreview(editor);
         try
         {
             var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
             var preview = (Task)typeof(DeeperEditorWindow).GetMethod("InitializePreviewAsync", flags)!.Invoke(editor, null)!;
             await decodeStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            editor.RaiseEvent(new RoutedEventArgs(Control.LoadedEvent));
             if (waveformFirst)
             {
                 releaseDecode.Set();
@@ -286,6 +297,7 @@ public sealed class DeeperEditorTestFireTests
             throw new InvalidOperationException("decode failed");
         };
         var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        DisableAutomaticPreview(editor);
         try
         {
             var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
@@ -293,6 +305,7 @@ public sealed class DeeperEditorTestFireTests
             await ((Task)initialize.Invoke(editor, null)!).WaitAsync(TimeSpan.FromSeconds(10));
             var oldLoad = editor.WaveformLoad;
             await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            editor.RaiseEvent(new RoutedEventArgs(Control.LoadedEvent));
             await ((Task)initialize.Invoke(editor, null)!).WaitAsync(TimeSpan.FromSeconds(10));
             await editor.WaveformLoad.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal("0:29", editor.TxtTotalTime.Text);
