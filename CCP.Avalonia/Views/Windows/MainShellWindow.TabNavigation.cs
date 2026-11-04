@@ -267,7 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "leash": Named<Tabs.LeashTabView>("LeashTab")?.OnShown(); break;
 
                     // WPF MainWindow.Exclusives.cs RefreshExclusivesTab "on tab show": gates can move between visits.
-                    case "premium": RefreshExclusivesTab(); break;
+                    case "premium": Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.RefreshJustSubscribed(); RefreshExclusivesTab(); break;
                     // WPF MainWindow.TabNavigation.cs:588-593 (AnimateTabIn is the header's ponytail).
                     case "chaster": Named<Tabs.ChasterTabView>("ChasterTab")?.OnTabShown(); break;
                     // WPF MainWindow.TabNavigation.cs:433-438: rescan the library, re-sync presets, AssetsFx entrance.

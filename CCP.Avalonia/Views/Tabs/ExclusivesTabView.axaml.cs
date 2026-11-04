@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -97,6 +98,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Source = LocalizationManager.Instance,
                 Mode = BindingMode.OneWay,
             });
+
+        // WPF ExclusivesTabView.xaml.cs:55-79. Re-read visibility on entry; keep the
+        // result on screen after a successful check until the next visit.
+        internal void RefreshJustSubscribed() => this.FindControl<Control>("JustSubscribedRow")!.IsVisible = AccountSeed.EffectivePaidTier() < 2;
+
+        private async void JustSubscribed_Click(object? sender, RoutedEventArgs e)
+        {
+            var button = this.FindControl<Button>("BtnJustSubscribed")!;
+            var text = this.FindControl<TextBlock>("TxtJustSubscribed")!;
+            try
+            {
+                button.IsEnabled = false;
+                text.Text = Loc.Get("plans_just_subscribed_checking");
+                text.Text = Loc.Get(JustSubscribedRule.LocKey(await AccountSeed.CheckSubscriptionNowAsync()));
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug("Just-subscribed check failed: {E}", ex.Message);
+                text.Text = Loc.Get("plans_just_subscribed_unreachable");
+            }
+            finally { button.IsEnabled = true; }
+        }
 
         private bool _plansMode;
         private bool _plansActive;

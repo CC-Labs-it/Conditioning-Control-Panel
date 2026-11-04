@@ -79,6 +79,32 @@ public sealed class PlansHostingTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task PlansRowRefreshesWhenSettingsOpensAtAnotherSection() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        var lab = true;
+        ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed();
+        CoreAccount.HasLabAccessProvider = () => lab;
+        var shell = new MainShellWindow { Width = 1400, Height = 900 };
+        try
+        {
+            shell.Show();
+            shell.OpenAppSettingsSection("general");
+            Dispatcher.UIThread.RunJobs();
+            var row = shell.PlansVaultView!.FindControl<Control>("JustSubscribedRow")!;
+            Assert.False(row.IsVisible);
+            shell.ShowTab("settings");
+            lab = false;
+            shell.ShowTab("appsettings");
+            Assert.Equal("general", shell.Named<AppSettingsTabView>("AppSettingsTab")!.CheckedSectionKey);
+            Assert.True(row.IsVisible);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

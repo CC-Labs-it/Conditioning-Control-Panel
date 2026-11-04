@@ -173,6 +173,9 @@ namespace ConditioningControlPanel.Services
             TierChanged?.Invoke(this, minTier);
         }
 
+        private int _sessionGeneration;
+        internal int SessionGeneration => Volatile.Read(ref _sessionGeneration);
+
         public void Logout()
         {
             ClearTokens();
@@ -200,7 +203,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Validate subscription status with the proxy. Never throws: any failure keeps
         /// the current (cached or None) tier.</summary>
-        public async Task<PatreonTier> ValidateSubscriptionAsync(bool forceRefresh = false)
+        public async Task<PatreonTier> ValidateSubscriptionAsync(bool forceRefresh = false, Func<bool>? canApply = null, Action? onApplied = null)
         {
             if (IsVerifying && !forceRefresh) return CurrentTier;
 
@@ -227,7 +230,8 @@ namespace ConditioningControlPanel.Services
 
                 if (tokens.IsExpired)
                 {
-                    var refreshed = await RefreshTokensAsync(tokens.RefreshToken, tokens.ExpiresAt);
+                    var refreshed = await RefreshTokensAsync(tokens.RefreshToken, tokens.ExpiresAt, canApply);
+                    if (canApply?.Invoke() == false) return CurrentTier;
                     if (!refreshed)
                     {
                         // Patreon keeps the cached tier (#585: usually transient; cache + grace time-box it).
@@ -256,14 +260,18 @@ namespace ConditioningControlPanel.Services
                 if (!string.IsNullOrEmpty(settings?.AuthToken)) request.Headers.Add("X-Auth-Token", settings.AuthToken);
 
                 var response = await Http.SendAsync(request);
+                if (canApply?.Invoke() == false) return CurrentTier;
 
                 // Contract D: a merge tombstone; the swap re-signs in on the canonical. Keep the tier.
                 if (V2AuthService.MergedRecovery is { } merged && await merged(response, null)) return CurrentTier;
+                if (canApply?.Invoke() == false) return CurrentTier;
 
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
                 {
-                    if (await RefreshTokensAsync(tokens.RefreshToken, tokens.ExpiresAt))
-                        return await ValidateSubscriptionAsync(forceRefresh: true);
+                    var refreshed = await RefreshTokensAsync(tokens.RefreshToken, tokens.ExpiresAt, canApply);
+                    if (canApply?.Invoke() == false) return CurrentTier;
+                    if (refreshed)
+                        return await ValidateSubscriptionAsync(forceRefresh: true, canApply: canApply, onApplied: onApplied);
                     ClearTokens();
                     return Drop();
                 }
@@ -275,13 +283,14 @@ namespace ConditioningControlPanel.Services
                 }
 
                 var sub = await response.Content.ReadFromJsonAsync<PatreonSubscriptionResponse>();
+                if (canApply?.Invoke() == false) return CurrentTier;
                 if (sub == null || !string.IsNullOrEmpty(sub.Error))
                 {
                     Log.Warning("{Provider} validation error: {Error}", _label, sub?.Error);
                     return CurrentTier;
                 }
 
-                return ApplyValidated(sub, settings, prizesFor);
+                var result = ApplyValidated(sub, settings, prizesFor); onApplied?.Invoke(); return result;
             }
             catch (Exception ex)
             {
@@ -383,7 +392,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <param name="expiresAtUtc">Tells a revoked grant from a proxy outage (<see cref="PatreonGrantHealth"/>).</param>
-        private async Task<bool> RefreshTokensAsync(string refreshToken, DateTime? expiresAtUtc)
+        private async Task<bool> RefreshTokensAsync(string refreshToken, DateTime? expiresAtUtc, Func<bool>? canApply = null)
         {
             // Patreon: a grant already refused this session is not asked about again (release/6.11.5,
             // WPF PatreonService.RefreshTokensAsync); the Reconnect row is already lit.
@@ -395,15 +404,18 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var response = await Http.PostAsJsonAsync($"/{_prefix}/refresh", new { refresh_token = refreshToken });
+                if (canApply?.Invoke() == false) return false;
                 if (!response.IsSuccessStatusCode)
                 {
                     string? body = null;
                     try { body = await response.Content.ReadAsStringAsync(); } catch { /* verdict from status alone */ }
+                    if (canApply?.Invoke() == false) return false;
                     Log.Warning("{Provider} token refresh failed with status {Status}", _label, response.StatusCode);
                     return NoteRefresh(PatreonGrantHealth.Classify(response.StatusCode, null, threw: false, expiresAtUtc, DateTime.UtcNow, body), refreshToken);
                 }
 
                 var tokenResponse = await response.Content.ReadFromJsonAsync<PatreonTokenResponse>();
+                if (canApply?.Invoke() == false) return false;
                 if (tokenResponse == null || !string.IsNullOrEmpty(tokenResponse.Error))
                 {
                     Log.Warning("{Provider} token refresh error: {Error}", _label, tokenResponse?.ErrorDescription);
@@ -414,14 +426,14 @@ namespace ConditioningControlPanel.Services
                         refreshToken);
                 }
 
-                StoreTokens(tokenResponse.AccessToken, tokenResponse.RefreshToken, DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn));
+                WriteTokens(tokenResponse.AccessToken, tokenResponse.RefreshToken, DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn));
                 Log.Information("{Provider} tokens refreshed successfully", _label);
                 return NoteRefresh(PatreonRefreshOutcome.Refreshed);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to refresh {Provider} tokens", _label);
-                return NoteRefresh(PatreonGrantHealth.Classify(null, null, threw: true, expiresAtUtc, DateTime.UtcNow));
+                return canApply?.Invoke() == false ? false : NoteRefresh(PatreonGrantHealth.Classify(null, null, threw: true, expiresAtUtc, DateTime.UtcNow));
             }
         }
 
@@ -478,7 +490,13 @@ namespace ConditioningControlPanel.Services
         public string? GetAccessToken() => RetrieveTokens()?.AccessToken;
 
         /// <summary>Throws on a store fault, as WPF StoreTokens did (else a failed save reads as Refreshed).</summary>
-        public void StoreTokens(string accessToken, string refreshToken, DateTime expiresAt) =>
+        public void StoreTokens(string accessToken, string refreshToken, DateTime expiresAt)
+        {
+            Interlocked.Increment(ref _sessionGeneration);
+            WriteTokens(accessToken, refreshToken, expiresAt);
+        }
+
+        private void WriteTokens(string accessToken, string refreshToken, DateTime expiresAt) =>
             CoreSecrets.StoreOrThrow(_prefix + "_auth", JsonConvert.SerializeObject(new PatreonTokenData
             { AccessToken = accessToken, RefreshToken = refreshToken, ExpiresAt = expiresAt }));
 
@@ -486,7 +504,7 @@ namespace ConditioningControlPanel.Services
             CoreSecrets.Store(_prefix + "_cache", JsonConvert.SerializeObject(state));
 
         /// <summary>As SecureTokenStorage.ClearTokens: the cache goes with the tokens.</summary>
-        public void ClearTokens() { CoreSecrets.Store(_prefix + "_auth", null); ClearCachedState(); }
+        public void ClearTokens() { Interlocked.Increment(ref _sessionGeneration); CoreSecrets.Store(_prefix + "_auth", null); ClearCachedState(); }
         public void ClearCachedState() => CoreSecrets.Store(_prefix + "_cache", null);
 
         private static T? Read<T>(string name) where T : class

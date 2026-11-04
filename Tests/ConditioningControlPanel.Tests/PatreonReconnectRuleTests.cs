@@ -306,7 +306,7 @@ public class PatreonReconnectRuleTests
 
         // The staleness rung is useless without the expiry, and both refresh call sites have the
         // stored tokens in hand: pass it, never null.
-        Assert.Equal(2, Regex.Matches(source, @"RefreshTokensAsync\(tokens\.RefreshToken, tokens\.ExpiresAt\)").Count);
+        Assert.Equal(2, Regex.Matches(source, @"RefreshTokensAsync\(tokens\.RefreshToken, tokens\.ExpiresAt, canApply\)").Count);
     }
 
     // ------------------------------------------------------------------ 3. the two 409s

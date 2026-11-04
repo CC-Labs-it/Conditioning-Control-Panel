@@ -1,5 +1,8 @@
 using System;
 using System.Threading.Tasks;
+using System.Threading;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Startup.Conversion;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -181,6 +184,78 @@ internal static class AccountSeed
             await sync.PushAsync("after load");
         }
         return true;
+    }
+
+    // WPF EntitlementTierSync.cs:257-296: the button reads the profile and forces Patreon
+    // validation, then reports the effective paid tier. A lower reading never removes grace.
+    internal static int EffectivePaidTier()
+    {
+        if (Patreon == null) return 0;
+        if (CoreAccount.HasLabAccess) return 2;
+        return CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, CoreSettings.Current) ? 1 : 0;
+    }
+
+    internal static event Action<int>? SubscriptionTierRaised;
+    internal static bool EntitlementServerAnswered;
+    private static int _subscriptionReadInFlight;
+
+    internal static async Task<JustSubscribedOutcome> CheckSubscriptionNowAsync()
+    {
+        var before = EffectivePaidTier();
+        var s = CoreSettings.Current;
+        var patreon = Patreon;
+        var idAtStart = s.UnifiedId;
+        var tokenAtStart = s.AuthToken;
+        var generation = patreon?.SessionGeneration;
+        bool SameSession() => ReferenceEquals(s, CoreSettings.Current) && s.UnifiedId == idAtStart
+            && s.AuthToken == tokenAtStart && ReferenceEquals(patreon, Patreon) && patreon?.SessionGeneration == generation;
+        var signedInV2 = !string.IsNullOrEmpty(s.UnifiedId) && !string.IsNullOrEmpty(s.AuthToken);
+        var signedIn = signedInV2 || patreon?.IsAuthenticated == true;
+        bool reached = false;
+        try
+        {
+            if (signedInV2 && !s.OfflineMode && Interlocked.Exchange(ref _subscriptionReadInFlight, 1) == 0)
+            {
+                var id = s.UnifiedId!;
+                try
+                {
+                    var node = await NewV2().GetUserProfileNodeAsync(id);
+                    // A late response must not apply to a different account or a signed-out session.
+                    if (node != null && SameSession())
+                    {
+                        reached = true;
+                        var tier = EntitlementTierRule.ParseTier(node["effective_tier"]); if (tier.HasValue) EntitlementServerAnswered = true;
+                        var verdict = EntitlementTierRule.Decide(s.PatreonTier, tier);
+                        var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, tier, s.ServerTierSeen);
+                        bool changed = seen != s.ServerTierSeen;
+                        s.ServerTierSeen = seen;
+                        bool rose = EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
+                        changed |= rose;
+                        int accessBeforeRestamp = EffectivePaidTier();
+                        changed |= PatreonActiveRule.Restamp(s, PatreonActiveRule.Parse(node), DateTime.UtcNow);
+                        bool extras = ProfileExtras.Apply(s, ProfileExtras.Parse(node));
+                        if (changed || extras) CoreSettings.Save();
+                        if (extras) App.DailyFree?.NotifyInputsChanged();
+                        int afterRestamp = EffectivePaidTier();
+                        if (rose || afterRestamp > accessBeforeRestamp)
+                        {
+                            CheckoutWatch.Disarm();
+                            if (rose) { try { SubscriptionTierRaised?.Invoke(tier!.Value); } catch (Exception ex) { Log.Warning(ex, "Tier rise handler failed"); } }
+                            patreon?.NotifyEntitlementRaised((rose ? tier!.Value : afterRestamp) >= 2 ? PatreonTier.Level2 : PatreonTier.Level1);
+                        }
+                    }
+                }
+                catch (Exception ex) { Log.Debug("Just-subscribed profile read failed: {E}", ex.Message); }
+                finally { Interlocked.Exchange(ref _subscriptionReadInFlight, 0); }
+            }
+            if (SameSession() && patreon?.IsAuthenticated == true)
+            {
+                try { await patreon.ValidateSubscriptionAsync(forceRefresh: true, canApply: SameSession, onApplied: () => reached = true); reached |= SameSession(); }
+                catch (Exception ex) { Log.Debug("Just-subscribed validation failed: {E}", ex.Message); }
+            }
+        }
+        catch (Exception ex) { Log.Debug("Just-subscribed check failed: {E}", ex.Message); }
+        return JustSubscribedRule.Decide(signedIn, reached, before, EffectivePaidTier());
     }
 
     /// <summary>Signs a provider out (WPF AccountService.LogoutProvider).</summary>
