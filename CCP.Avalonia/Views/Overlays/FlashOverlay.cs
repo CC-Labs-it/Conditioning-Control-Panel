@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
-    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
+    /// <para>ponytail: not here yet, each a later branch - ducking and sound-linked lifetime/XP,
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// GIF animation (first frame only), remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
 
+                FlashVoice.Play(s);
                 var clickable = s.FlashClickable;
                 var lifetime = Lifetime(s, ambient, durationMs);
                 var cap = Cap(s, ambient);
@@ -352,6 +353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void CloseAll(bool final = true)
         {
             _generation++;
+            FlashVoice.Stop();
             _busy = false;
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
