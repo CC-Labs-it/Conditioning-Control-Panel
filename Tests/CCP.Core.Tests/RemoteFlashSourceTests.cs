@@ -133,26 +133,17 @@ public sealed class RemoteFlashSourceTests
         }, clipConsumer: false);
     }
     [Fact]
-    public Task FailedClipDownloadKeepsAnOwnedPoster() => WithSource(async () =>
+    public Task FailedClipDownloadSkipsTheEntryAsWpf() => WithSource(async () =>
     {
-        var dir = Directory.CreateTempSubdirectory("ccp-flash-fallback-").FullName;
-        try
-        {
-            var poster = Path.Combine(dir, "poster.jpg");
-            File.WriteAllBytes(poster, new byte[] { 4, 5, 6 });
-            RemoteFlashSource.Download = (url, _, _) => Task.FromResult<string?>(url == Clip.Url ? null : poster);
-            RemoteFlashSource.EnsurePrefetch();
-            await RemoteFlashSource.Prefetching;
-            var item = RemoteFlashSource.TryTake(new Random(1))!.Value;
-            Assert.Equal("", item.ClipPath);
-            Assert.Null(RemoteFlashSource.ClipPath(Clip.Url));
-            Assert.NotEqual(poster, item.PosterPath);
-            File.Delete(poster);
-            Assert.Equal(new byte[] { 4, 5, 6 }, File.ReadAllBytes(item.PosterPath));
-            RemoteFlashSource.CleanupCache();
-            Assert.False(File.Exists(item.PosterPath));
-        }
-        finally { Directory.Delete(dir, recursive: true); }
+        // WPF FlashService.cs:3982 `if (path == null) continue;`: no poster-only fallback item.
+        var urls = new List<string>();
+        RemoteFlashSource.Download = (url, _, _) => { urls.Add(url); return Task.FromResult<string?>(null); };
+        RemoteFlashSource.EnsurePrefetch();
+        await RemoteFlashSource.Prefetching;
+        Assert.Contains(Clip.Url, urls);
+        Assert.DoesNotContain(Clip.PosterUrl, urls);
+        Assert.Null(RemoteFlashSource.TryTake(new Random(1)));
+        Assert.Null(RemoteFlashSource.ClipPath(Clip.Url));
     });
     [Theory]
     [InlineData(0)] // poster failed
