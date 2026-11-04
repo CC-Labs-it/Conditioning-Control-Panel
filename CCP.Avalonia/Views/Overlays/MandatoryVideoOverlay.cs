@@ -6,8 +6,12 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -277,6 +281,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal Button CreditButton(string path)
         {
             var mark = CreditFor(path);
+            // WPF player.css:165-166,169-171 fades the badge and hover over 600 ms.
+            mark.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(600)) } };
             var label = mark.Child!;
             mark.Child = null;
             var tick = new IconGlyph { Kind = IconKind.Checkmark, Size = 11, Foreground = Brushes.White,
@@ -284,10 +290,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             mark.Child = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal, Children = { label, tick } };
             _creditBadges.Add(mark);
             if (_queuedCreditPath == path) SetCreditQueued(mark, true);
+            var clickable = CreditLink(path) != null && CreditLinkAllowed();
+            // WPF player.css:169-171: no button chrome, a hand, and only the badge brightens on hover.
             var button = new Button { Content = mark, Padding = new Thickness(0), BorderThickness = new Thickness(0),
                 Background = Brushes.Transparent, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Right,
-                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom,
-                IsVisible = mark.Shown, IsHitTestVisible = CreditLink(path) != null && CreditLinkAllowed() };
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom, IsVisible = mark.Shown,
+                IsHitTestVisible = clickable, Cursor = clickable ? new Cursor(StandardCursorType.Hand) : null,
+                Template = new FuncControlTemplate<Button>((b, _) => new ContentPresenter
+                    { Background = Brushes.Transparent, [!ContentPresenter.ContentProperty] = b[!ContentControl.ContentProperty] }) };
+            AutomationProperties.SetName(button, ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.Mark);
+            if (clickable)
+            {
+                button.PointerEntered += (_, _) => mark.Opacity = 1;
+                button.PointerExited += (_, _) => mark.Opacity = ScrolllerCreditBadge.ShownOpacity;
+            }
             button.Click += (_, _) => CreditPressed(path);
             return button;
         }

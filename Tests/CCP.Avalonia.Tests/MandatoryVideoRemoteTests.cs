@@ -4,7 +4,15 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Automation;
+using Avalonia.Controls.Presenters;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
@@ -124,6 +132,125 @@ public sealed class MandatoryVideoRemoteTests
             Assert.False(scheduler.IsPlaying);
         }
         finally { scheduler.ForceCleanup(); MandatoryVideoOverlay.CreditOpener = oldOpener; }
+    });
+
+    private static void PrepareBadgeFont(Border mark)
+    {
+        // Use installed test fonts where the headless app's Inter composite font is unavailable.
+        var family = OperatingSystem.IsLinux() ? "DejaVu Sans" : OperatingSystem.IsWindows() ? "Arial" : null;
+        if (family != null)
+            ((TextBlock)((StackPanel)mark.Child!).Children[0]).FontFamily = new FontFamily(family);
+    }
+
+    [Fact]
+    public void CreditBadgeUsesBarePresenterAccessibleNameAndHandCursor() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        const string path = "https://v.scrolller.com/credit-style-test.mp4";
+        ScrolllerItemIndex.Remember(path, new ScrolllerCacheMeta("clip", "test_sub"));
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var scheduler = new MandatoryVideoScheduler(o, new StillTime(), Array.Empty<string>); o.Scheduler = scheduler;
+        typeof(MandatoryVideoOverlay).GetField("_path", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, path);
+        var button = o.CreditButton(path); var mark = (Border)button.Content!;
+        PrepareBadgeFont(mark);
+        var window = new Window { Width = 320, Height = 180, Content = new Panel { Background = Brushes.Black, Children = { button } } };
+        try
+        {
+            Assert.True(scheduler.Trigger(strictOverride: false, path: path));
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            var presenter = Assert.IsType<ContentPresenter>(Assert.Single(button.GetVisualChildren()));
+            Assert.Same(mark, presenter.Content);
+            var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(point); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Brushes.Transparent, presenter.Background);
+            Assert.Equal("via Scrolller", AutomationProperties.GetName(button));
+            Assert.Equal(new Cursor(StandardCursorType.Hand).ToString(), button.Cursor?.ToString());
+            window.MouseDown(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Brushes.Transparent, presenter.Background);
+            window.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            Assert.True(((IconGlyph)((StackPanel)mark.Child!).Children[1]).IsVisible); // real press queues the link
+            scheduler.ForceCleanup();
+            Assert.True(scheduler.Trigger(strictOverride: true, path: path));
+            var locked = o.CreditButton(path);
+            Assert.False(locked.IsHitTestVisible); Assert.Null(locked.Cursor);
+            Assert.Equal("via Scrolller", AutomationProperties.GetName(locked));
+        }
+        finally { window.Close(); scheduler.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void CreditBadgeHasHandCursorOnlyWhenClickable() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        const string path = "https://v.scrolller.com/credit-cursor-test.mp4";
+        ScrolllerItemIndex.Remember(path, new ScrolllerCacheMeta("clip", "test_sub"));
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var scheduler = new MandatoryVideoScheduler(o, new StillTime(), Array.Empty<string>); o.Scheduler = scheduler;
+        try
+        {
+            Assert.Equal(new Cursor(StandardCursorType.Hand).ToString(), o.CreditButton(path).Cursor?.ToString());
+            Assert.True(scheduler.Trigger(strictOverride: true, path: path));
+            Assert.Null(o.CreditButton(path).Cursor);
+        }
+        finally { scheduler.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void CreditBadgeHoverChangesOpacityOnlyWhenClickable() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        const string path = "https://v.scrolller.com/credit-hover-test.mp4";
+        ScrolllerItemIndex.Remember(path, new ScrolllerCacheMeta("clip", "test_sub"));
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var scheduler = new MandatoryVideoScheduler(o, new StillTime(), Array.Empty<string>); o.Scheduler = scheduler;
+        var button = o.CreditButton(path); var mark = (Border)button.Content!;
+        PrepareBadgeFont(mark);
+        var fade = Assert.IsType<DoubleTransition>(Assert.Single(mark.Transitions!));
+        Assert.Equal(TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(600)), fade.Duration);
+        mark.Transitions = null; mark.Opacity = 0.75;
+        var panel = new Panel { Background = Brushes.Black, Children = { button } };
+        var window = new Window { Width = 320, Height = 180, Content = panel };
+        try
+        {
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(point); Dispatcher.UIThread.RunJobs(); Assert.Equal(1, mark.Opacity);
+            window.MouseMove(new Point(1, 1)); Dispatcher.UIThread.RunJobs(); Assert.Equal(0.75, mark.Opacity);
+            Assert.True(scheduler.Trigger(strictOverride: true, path: path));
+            panel.Children.Clear();
+            var locked = o.CreditButton(path); var lockedMark = (Border)locked.Content!;
+            PrepareBadgeFont(lockedMark);
+            lockedMark.Transitions = null; lockedMark.Opacity = 0.75;
+            panel.Children.Add(locked); Dispatcher.UIThread.RunJobs();
+            point = locked.TranslatePoint(new Point(locked.Bounds.Width / 2, locked.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(point); Dispatcher.UIThread.RunJobs(); Assert.Equal(0.75, lockedMark.Opacity);
+        }
+        finally { window.Close(); scheduler.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void CreditBadgeKeepsLongerGentleVisualsFade() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var old = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        settings.Current.GentleVisuals = false; settings.Current.GentleFadeSeconds = 2;
+        CoreSettings.ServiceProvider = () => settings;
+        try
+        {
+            var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+            var normal = (Border)o.CreditButton("/local.mp4").Content!;
+            Assert.Equal(TimeSpan.FromMilliseconds(600), Assert.IsType<DoubleTransition>(Assert.Single(normal.Transitions!)).Duration);
+            settings.Current.GentleVisuals = true;
+            var mark = (Border)o.CreditButton("/local.mp4").Content!;
+            Assert.Equal(TimeSpan.FromSeconds(2), Assert.IsType<DoubleTransition>(Assert.Single(mark.Transitions!)).Duration);
+        }
+        finally { CoreSettings.ServiceProvider = old; }
     });
 
     [Fact]
