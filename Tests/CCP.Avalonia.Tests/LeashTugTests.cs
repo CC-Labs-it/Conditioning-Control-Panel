@@ -77,6 +77,10 @@ public class LeashTugTests
             tug.Step(156);
             group = Assert.IsType<TransformGroup>(root.RenderTransform);
             Assert.Equal(-9.6, group.Children.OfType<TranslateTransform>().Single().X, 3);
+            tug.Step(416);
+            // 0.8 x 5 x (1 - 1.0765): the WPF BezierEase overshoots rest; a linear return would sit at +2.
+            Assert.Equal(-0.306, group.Children.OfType<TranslateTransform>().Single().X, 3);
+            Assert.Equal(0.44, group.Children.OfType<RotateTransform>().Single().Angle, 3);
             tug.Step(520);
             Assert.Same(prior, root.RenderTransform);
             launcher.Hide();

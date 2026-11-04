@@ -1,18 +1,16 @@
 // WPF MainWindow.Leash.cs:440-450 and LeashFx.cs:68-73,88-114.
 using System;
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 internal sealed class LeashTug
 {
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
-    private readonly Stopwatch _clock = new();
+    private BeatLoop? _loop;
     private Control? _target;
     private ITransform? _prior;
     private TransformGroup? _group;
@@ -20,8 +18,6 @@ internal sealed class LeashTug
     private readonly TranslateTransform _move = new();
     private RelativePoint _origin;
     private double _amount;
-
-    internal LeashTug() => _timer.Tick += (_, _) => Step(_clock.Elapsed.TotalMilliseconds);
 
     internal bool Play(Window? panel, Window? launcher, MotionLevel motion)
     {
@@ -40,8 +36,9 @@ internal sealed class LeashTug
         target.RenderTransformOrigin = RelativePoint.Center;
         target.RenderTransform = _group;
         _amount = (motion == MotionLevel.Reduced ? 0.5 : 1) * 0.8;
-        _clock.Restart();
-        _timer.Start();
+        // One-shot on the window's shared beat (AmbientBeatLoopsTests.NoNewFrameTimerLoop); a hide ends it at rest.
+        _loop = new BeatLoop(target, t => Step(t * 1000)) { OnParked = Stop };
+        _loop.Start();
         return true;
     }
 
@@ -68,17 +65,34 @@ internal sealed class LeashTug
         else
         {
             var t = (u - 0.6) / 0.4;
-            x = 5 * (1 - t);
+            x = 5 * (1 - Thud(t));
             angle = 1.1 * (1 - t);
         }
         _move.X = x * _amount;
         _turn.Angle = angle * _amount;
     }
 
+    // WPF LeashFx.cs:16-46 BezierEase, cubic-bezier(.2, 1.5, .4, 1). Not SplineEasing: Avalonia's
+    // KeySpline clamps Y to [0, 1], which drops the overshoot past rest.
+    private static double Thud(double x)
+    {
+        double t = x = Math.Clamp(x, 0, 1);
+        for (int i = 0; i < 8; i++)
+        {
+            double cx = Bez(t, 0.2, 0.4) - x;
+            double d = 3 * 0.2 * (1 - t) * (1 - t) + 6 * (0.4 - 0.2) * t * (1 - t) + 3 * (1 - 0.4) * t * t;
+            if (Math.Abs(cx) < 1e-5 || Math.Abs(d) < 1e-6) break;
+            t = Math.Clamp(t - cx / d, 0, 1);
+        }
+        return Bez(t, 1.5, 1.0);
+    }
+
+    private static double Bez(double t, double a, double b) => 3 * a * t * (1 - t) * (1 - t) + 3 * b * t * t * (1 - t) + t * t * t;
+
     internal void Stop()
     {
-        _timer.Stop();
-        _clock.Reset();
+        _loop?.Stop();
+        _loop = null;
         if (_target != null && ReferenceEquals(_target.RenderTransform, _group))
         {
             _target.RenderTransform = _prior;
