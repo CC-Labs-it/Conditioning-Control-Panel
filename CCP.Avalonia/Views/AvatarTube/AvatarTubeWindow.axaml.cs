@@ -268,10 +268,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // ponytail: GIF/emote/portrait playback and non-awareness service reactions remain
             // in the WPF reference. Look selection and ModChanged repaint use AvatarSets.cs.
 
-            // ponytail: the WPF ctor also started four timers here - a 2s greeting, the idle-giggle,
-            // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
-            // calls into a partial this layer does not have, and --render-all constructs ~180 windows
-            // in one process, where a stray timer firing at a closed window is a flaky failure.
+            // The greeting, idle-giggle and random-bubble loops remain unported. The trigger
+            // timer starts on open and stops on close in AvatarTubeWindow.Trigger.cs.
 
             // WPF did this from Loaded on this window; same here. See ApplyChatShortcutTo for why
             // the binding on THIS window is the lesser half.
@@ -311,6 +309,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            StartTriggerMode();
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
             InitTakeoverCountdownBar();
@@ -335,6 +334,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // in one process, and a tick against a torn-down visual tree is exactly the flaky
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
+            StopTriggerMode();
             _poseTimer.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
