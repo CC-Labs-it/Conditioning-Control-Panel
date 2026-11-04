@@ -24,6 +24,11 @@ public sealed class WorkshopPhrasePresetTests
     public Task SaveButtonOpensTheWpfNamePromptAndStoresAnIndependentSnapshot() => Run(async (drawer, parts, owner, s) =>
     {
         s.DisabledPhraseIds.Add("original");
+        s.CustomCompanionPhrases.Clear();
+        var baseline = ConditioningControlPanel.Avalonia.Views.Dialogs.CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled);
+        s.CustomCompanionPhrases.Add(new CustomCompanionPhrase { Id = "enabled", Text = "Enabled", Enabled = true });
+        s.CustomCompanionPhrases.Add(new CustomCompanionPhrase { Id = "disabled", Text = "Disabled", Enabled = false });
+        var expectedCount = baseline + 1;
         Click(CellButton(parts.Triggers, "Save"));
         Dispatcher.UIThread.RunJobs();
         var dialog = Assert.Single(owner.OwnedWindows);
@@ -33,10 +38,12 @@ public sealed class WorkshopPhrasePresetTests
         var input = dialog.GetVisualDescendants().OfType<TextBox>().Single();
         Assert.Equal("Preset 1", input.Text);
         input.Text = "  My phrases  ";
+        s.CustomCompanionPhrases[0].Enabled = false;
         Click(CellButton(dialog, "Save"));
         await Task.Yield(); Dispatcher.UIThread.RunJobs();
         var preset = Assert.Single(s.PhrasePresets);
         Assert.Equal("My phrases", preset.Name);
+        Assert.Equal(expectedCount, preset.ActivePhraseCount);
         Assert.Equal(preset.Id, s.CurrentPhrasePresetId);
         Assert.Contains("original", preset.DisabledPhraseIds);
         s.DisabledPhraseIds.Add("later");
