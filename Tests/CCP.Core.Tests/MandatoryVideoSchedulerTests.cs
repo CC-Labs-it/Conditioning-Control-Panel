@@ -508,4 +508,28 @@ public sealed class MandatoryVideoSchedulerTests
             ConditioningControlPanel.Services.UI.DndGuard.ResetCacheForTests();
         }
     });
+
+    [Fact]   // Linux deletes an open file, so a reload sweep mid-clip would break the heal replay of its path
+    public void Reload_keeps_the_playing_pack_clip_for_a_heal_replay() => With(20, false, () =>
+    {
+        var root = System.IO.Directory.CreateTempSubdirectory("ccp-reload-").FullName;
+        ContentPackStoreTests.WritePack(root, "p1", "One", ("v.mp4", "video"));
+        var settings = new ConditioningControlPanel.Models.AppSettings(); var store = new ContentPackStore(() => root, () => settings, () => { });
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, Array.Empty<string>)
+            { PackVideos = new PackMediaPool(ContentPackStore.VideoType, new Random(1), () => store) };
+        try
+        {
+            Assert.True(v.Trigger());
+            v.ReloadAssets();                                       // pending, in the pre-roll
+            clock.Advance(TimeSpan.FromSeconds(1.3));
+            var clip = host.Shown.Single().Path;
+            using (System.IO.File.OpenRead(clip)) v.ReloadAssets();   // on screen, the player holds it
+            using (System.IO.File.OpenRead(clip)) { }                 // the heal replays the same path
+            v.End();
+            Assert.True(v.Trigger());                               // the next pick's refill sweeps it
+            Assert.False(System.IO.File.Exists(clip));
+        }
+        finally { v.Stop(); System.IO.Directory.Delete(root, true); }
+    });
 }

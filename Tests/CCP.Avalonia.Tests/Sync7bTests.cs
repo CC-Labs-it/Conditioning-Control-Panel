@@ -144,33 +144,11 @@ public class Sync7bTests
         public int Volume { set => Last = value; }
         public void Dispose() => Disposed = true;
     }
-    [Fact]
-    public Task MantraMasterChangesDroneAndToneAndUnhooks() => Run(() =>
-    {
-        var opener = MantraWindow.DroneOpener; var play = CoreAudio.PlayOneShotProvider; var drone = new Drone();
-        MantraWindow.DroneOpener = _ => drone;
-        var w = new MantraWindow();
-        void Call(string name) => typeof(MantraWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w,null);
-        try
-        {
-            CoreSettings.Current.MasterVolume = 100; Call("StartDrone"); Assert.True(drone.Last > 0);
-            CoreSettings.Current.MasterVolume = 0; Assert.Equal(0,drone.Last); CoreSettings.Current.MasterVolume = 25;
-            Assert.Equal(ToneWav.VlcVolume(0.05 * CoreSettings.Current.MantraDroneVolume / 100 * 0.25 * ToneWav.DronePeak), drone.Last);
-            float gain = -1;
-            CoreAudio.PlayOneShotProvider = (_, v, _, _, _) => gain = v;
-            typeof(MantraWindow).GetMethod("PlayTone", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null,new object[] { 400.0, 150 });
-            Assert.Equal(0.15f * 0.25f,gain); Call("StopDrone"); Assert.True(drone.Disposed);
-            var last = drone.Last; CoreSettings.Current.MasterVolume = 100; Assert.Equal(last,drone.Last);
-        }
-        finally { Call("Cleanup"); w.Close(); MantraWindow.DroneOpener = opener; CoreAudio.PlayOneShotProvider = play; }
-        return Task.CompletedTask;
-    });
-    [Fact]
+    [Fact]   // the drone follows master in every phase, the tone obeys it, StopDrone unhooks
     public Task MantraDroneFollowsMasterInEveryPhase() => Run(() =>
     {
-        var (opener, master, mantra) = (MantraWindow.DroneOpener, CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume);
-        var drone = new Drone();
-        MantraWindow.DroneOpener = _ => drone;
+        var (opener, play, master, mantra) = (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider, CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume);
+        var drone = new Drone(); MantraWindow.DroneOpener = _ => drone;
         var w = new MantraWindow();
         const BindingFlags F = BindingFlags.Instance | BindingFlags.NonPublic;
         void Call(string name) => typeof(MantraWindow).GetMethod(name, F)!.Invoke(w, null);
@@ -180,7 +158,7 @@ public class Sync7bTests
         try
         {
             CoreSettings.Current.MasterVolume = 50; CoreSettings.Current.MantraDroneVolume = 30; Call("StartDrone");
-            Assert.Equal(Expect(0.5), drone.Last);   // idle: level x drone dial x master
+            Assert.Equal(ToneWav.VlcVolume(0.05 * 0.3 * 0.5 * ToneWav.DronePeak), drone.Last);   // idle: level x drone dial x master
             typeof(MantraWindow).GetField("_droneTargetGain", F)!.SetValue(w, 0.4f);
             Tick(); Assert.Equal(Expect(0.5), drone.Last);
             // A master change keeps the ramped level (WPF :374 dropped it to idle).
@@ -190,12 +168,13 @@ public class Sync7bTests
             CoreSettings.Current.MasterVolume = 0; Assert.Equal(0, drone.Last);
             typeof(MantraWindow).GetField("_droneCurrentGain", F)!.SetValue(w, 0.2f);
             Tick(); Assert.Equal(0, drone.Last);
+            CoreSettings.Current.MasterVolume = 25; Assert.Equal(Expect(0.25), drone.Last);
+            float gain = -1; CoreAudio.PlayOneShotProvider = (_, v, _, _, _) => gain = v;
+            typeof(MantraWindow).GetMethod("PlayTone", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, new object[] { 400.0, 150 });
+            Assert.Equal(0.15f * 0.25f, gain); Call("StopDrone"); Assert.True(drone.Disposed);
+            var last = drone.Last; CoreSettings.Current.MasterVolume = 100; Assert.Equal(last, drone.Last);
         }
-        finally
-        {
-            Call("Cleanup"); w.Close(); MantraWindow.DroneOpener = opener;
-            (CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume) = (master, mantra);
-        }
+        finally { Call("Cleanup"); w.Close(); (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider, CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume) = (opener, play, master, mantra); }
         return Task.CompletedTask;
     });
 }

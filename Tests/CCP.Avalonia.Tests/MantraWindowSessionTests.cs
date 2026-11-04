@@ -75,9 +75,7 @@ public sealed class MantraWindowSessionTests
             win.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("/1", win.FindControl<TextBlock>("TxtTarget")!.Text);
-            // Idle drone: 0.05 x drone dial x master (not WPF's raw 0.05, PR #4080).
-            Assert.Equal(ConditioningControlPanel.Avalonia.Platform.ToneWav.VlcVolume(0.05 * settings.MantraDroneVolume / 100 * ConditioningControlPanel.Avalonia.Platform.ToneWav.DronePeak), Assert.Single(drone.Volumes));
-            Assert.Equal(28, Assert.Single(drone.Volumes));   // WPF DroneGain (#4080), with both dials seeded.
+            Assert.Equal(28, Assert.Single(drone.Volumes));   // WPF DroneGain (#4080): 0.05 x 30% drone dial x 100% master, from the first frame
             var box = win.FindControl<TextBox>("TxtInput")!;
             box.Focus();
 

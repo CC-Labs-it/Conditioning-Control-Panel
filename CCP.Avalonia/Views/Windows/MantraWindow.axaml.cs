@@ -475,7 +475,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>WPF StartDrone: 90 Hz fundamental + 180 Hz harmonic at 0.4 of its gain.</summary>
         private ConditioningControlPanel.Models.AppSettings? _volumeSettings;
         private SettingsService? _volumeService;
 
@@ -499,6 +498,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             level * (float)Math.Clamp(droneVolume / 100.0, 0.0, 1.0) * Math.Clamp(master / 100f, 0f, 1f);
         private float DroneGain() => DroneGain(_droneCurrentGain, CoreSettings.Current.MantraDroneVolume, CoreSettings.Current.MasterVolume);
 
+        /// <summary>WPF StartDrone: 90 Hz fundamental + 180 Hz harmonic at 0.4 of its gain.</summary>
         private void StartDrone()
         {
             try
@@ -543,11 +543,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _drone = null;
         }
 
-        private static float MasterGain() => Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f);
-
         private static void PlayTone(double frequency, int durationMs)
         {
-            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f * MasterGain(), "mantra"); }
+            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f * Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f), "mantra"); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to play mantra tone"); }
         }
 
