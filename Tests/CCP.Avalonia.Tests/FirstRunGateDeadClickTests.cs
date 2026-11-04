@@ -8,6 +8,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -38,6 +39,23 @@ public sealed class FirstRunGateDeadClickTests
         Assert.False(CoreSettings.Current.HasAcceptedAgeVerification);
         Assert.False(CoreSettings.Current.Welcomed);   // handed back to the next launch
     });
+
+    [Fact]
+    public Task WizardTimeoutHandsBackAndClosesTheUngatedShell() => Run(welcomed: false, accepted: false, async shell =>
+    {
+        var closed = false;
+        shell.Closed += (_, _) => closed = true;
+        var clock = (StartupLadder.TestClock)StartupLadder.Time;
+        for (var i = 0; i < 5; i++) await Task.Yield();
+        for (var i = 0; i < (int)(StartupLadder.ModalMaxWait / StartupLadder.ModalPoll); i++)
+        {
+            clock.Advance(StartupLadder.ModalPoll);
+            for (var j = 0; j < 5; j++) await Task.Yield();
+        }
+        Assert.True(closed);
+        Assert.False(CoreSettings.Current.Welcomed);
+        Assert.False(CoreSettings.Current.HasAcceptedAgeVerification);
+    }, blocked: true);
 
     [Fact]
     public Task EnterWithTheBoxTicked_RecordsAcceptanceAndCarriesOn() => Run(welcomed: false, accepted: false, async shell =>
@@ -76,10 +94,16 @@ public sealed class FirstRunGateDeadClickTests
     public Task WhatsNewWaitsForAgeAcceptance() => Run(welcomed: true, accepted: false, async shell =>
     {
         var dialog = await Owned<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(shell);
-        Assert.False(ConditioningControlPanel.Avalonia.Platform.StartupLadder.World(System.DateTime.UtcNow).LadderBusy);
+        Assert.Empty(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.WhatsNewDialog>());
+        Assert.Equal("old", CoreSettings.Current.LastSeenVersion);
         dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await WaitFor(() => CoreSettings.Current.HasAcceptedAgeVerification);
-        Assert.True(ConditioningControlPanel.Avalonia.Platform.StartupLadder.World(System.DateTime.UtcNow).LadderBusy);
+        for (var i = 0; i < 5; i++) await Task.Yield();
+        Dispatcher.UIThread.RunJobs();
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+        var notes = await Owned<ConditioningControlPanel.Avalonia.Views.Dialogs.WhatsNewDialog>(shell);
+        notes.Close();
+        await WaitFor(() => CoreSettings.Current.LastSeenVersion == "new");
     }, previousVersion: true);
 
     [Fact]
@@ -127,7 +151,7 @@ public sealed class FirstRunGateDeadClickTests
         Assert.True(condition(), "timed out");
     }
 
-    private static Task Run(bool welcomed, bool accepted, System.Func<MainShellWindow, Task> body, bool previousVersion = false) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task Run(bool welcomed, bool accepted, System.Func<MainShellWindow, Task> body, bool blocked = false, bool previousVersion = false) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -142,12 +166,17 @@ public sealed class FirstRunGateDeadClickTests
             CoreSettings.Current.HasAcceptedAgeVerification = accepted;
             if (previousVersion)
             {
-                ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
                 CoreReleaseContent.AppVersionProvider = () => "new";
                 CoreSettings.Current.LastSeenVersion = "old";
             }
+            StartupLadder.ModalWindowReady = () => !blocked && shell?.IsVisible == true;
             shell = new MainShellWindow();
             shell.Show();
+            if (!welcomed || !accepted)
+            {
+                Dispatcher.UIThread.RunJobs();
+                ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+            }
             await body(shell);
         }
         finally
@@ -157,7 +186,7 @@ public sealed class FirstRunGateDeadClickTests
             Dispatcher.UIThread.RunJobs();
             service.SaveImmediate();   // cancels the 500ms debounce so it cannot land in a later test's file
             CoreSettings.ServiceProvider = null;
-            if (previousVersion) ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+            if (previousVersion) StartupLadder.ResetForTests();
         }
     });
 }

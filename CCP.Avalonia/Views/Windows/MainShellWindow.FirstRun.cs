@@ -11,25 +11,24 @@
 //     exactly where WPF claims it, so the Welcomed / FirstRunAssetsPromptShown / LastSeenVersion
 //     latch happens at the same instant relative to everything else on the launch path.
 //   * The wizard opens LATER, once the window is actually on screen, and hands the first run back
-//     if it never gets there. WPF polls IsLoaded for up to 10s for the same reason; Avalonia gives
-//     us the Opened event instead, so the poll collapses into one handler.
+//     if it never gets there. The ladder waits for a visible shell and hands the first run back
+//     after five minutes, matching StartupPresenter's wait and hand-back.
 //   * The post is at DispatcherPriority.Normal, never Loaded. WPF's comment on that line is
 //     load-bearing: this app keeps the dispatcher busy enough that Loaded-priority work is starved
 //     and the first-launch tour silently never started.
 //
 // WHAT IS DELIBERATELY NOT PORTED:
-//   * The 30s `App.IsUpdateDialogActive` wait. That flag lives in ConditioningControlPanel/
-//     App.xaml.cs and this head never shows an update dialog at all (UpdateNotificationDialog has
-//     no caller here - see its own file for why), so waiting on it would be waiting on a constant.
 //   * `App.EmiDesk.Fire("firstLaunchEver") / ReleaseHold(...)`. There is no EmiDesk seam in Core -
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
 //   * TryPresentSeasonRecap and EMI Desk remain unported.
 
-
 using System;
 using Avalonia.Threading;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -38,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         /// <summary>
         /// Called once from the constructor. Claims the first-run flags if this is a fresh
-        /// install, and arms the one-shot that opens the wizard when the shell is on screen.
+        /// install, and queues the wizard until the shell is on screen.
         ///
         /// <para>On a render, a --nav-check or any other head that seeded no settings service,
         /// <see cref="FirstRunWizard.ShouldRunAndClaim"/> returns false and nothing is armed -
@@ -51,12 +50,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 bool fresh = FirstRunWizard.ShouldRunAndClaim();
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
                 OfferWhatMovedIfNeeded(freshInstall: fresh);
-                if (fresh) Opened += OnFirstRunShellOpened;
+                if (fresh)
+                {
+                    StartupLadder.EnqueueModal("first-run-wizard", 20, async () =>
+                    {
+                        if (!IsVisible)
+                        {
+                            FirstRunWizard.HandBackFirstRun("shell window is not visible");
+                            FirstRunWizard.AbortUngatedLaunch(this, "shell window is not visible");
+                            return;
+                        }
+                        await FirstRunWizard.Run(this);
+                        if (CoreSettings.Current.HasAcceptedAgeVerification && IsVisible)
+                            StartupLadder.EnqueueModal("first-show", 25, () =>
+                            {
+                                OfferWelcomeShowAfterFirstRun();
+                                return Task.CompletedTask;
+                            });
+                    }, () =>
+                    {
+                        FirstRunWizard.HandBackFirstRun("the ladder gave up on the wizard");
+                        FirstRunWizard.AbortUngatedLaunch(this, "the ladder gave up on the wizard");
+                    });
+                }
+                // WPF's else branch (MainWindow.xaml.cs:602-612) no longer opens a mod picker:
+                // mods are offered by the first-run wizard and the Mod Manager only.
                 else if (CoreSettings.Service != null && CoreSettings.Current.Welcomed
                          && !CoreSettings.Current.HasAcceptedAgeVerification)
-                    Opened += OnAgeGateShellOpened;
+                    StartupLadder.EnqueueModal("age-gate", 5, RunAgeGateAsync,
+                        () => Dispatcher.UIThread.Post(() => _ = RunAgeGateAsync(), DispatcherPriority.Normal));
                 else OfferCurrentWhatsNew();
-
             }
             catch (Exception ex)
             {
@@ -70,10 +93,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (CoreSettings.Service == null) return;
             var version = CoreReleaseContent.AppVersion;
             OfferWhatsNewIfNeeded(CoreSettings.Current, version, () => CoreSettings.Save(),
-                async () => await new Dialogs.WhatsNewDialog(
-                    $"What's New in v{version}", CoreReleaseContent.PatchNotes,
-                    () => CoreTutorial.Start("UpgradeTour"), "Show me around (60s)").ShowDialogSafe(this));
+                async () => await CreateWhatsNewDialog(version).ShowDialogSafe(this));
         }
+
+        internal static Dialogs.WhatsNewDialog CreateWhatsNewDialog(string version) => new(
+            Loc.GetF("set2_whats_new_title_0", version), CoreReleaseContent.PatchNotes,
+            () => CoreTutorial.Start("UpgradeTour"), Loc.Get("wb_tour"));
 
         /// <summary>
         /// WPF App.xaml.cs:3622-3664: an install already Welcomed but never accepted (a kill
@@ -85,17 +110,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "By clicking \"OK\", you confirm that you are at least 18 years old and that viewing adult content is legal in your jurisdiction.\n\n" +
             "Do you wish to continue?";
 
-        private void OnAgeGateShellOpened(object? sender, EventArgs e)
+        private async Task RunAgeGateAsync()
         {
-            Opened -= OnAgeGateShellOpened;
-            Dispatcher.UIThread.Post(async () =>
-            {
-                var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
-                if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
-                CoreSettings.Current.HasAcceptedAgeVerification = true;
-                CoreSettings.Save();
-                OfferCurrentWhatsNew();
-            }, DispatcherPriority.Normal);
+            var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
+            if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
+            CoreSettings.Current.HasAcceptedAgeVerification = true;
+            CoreSettings.Save();
+            OfferCurrentWhatsNew();
         }
 
         /// <summary>Test seam: stands in for <see cref="WelcomeShow.FirstShowService.Open"/>.</summary>
@@ -114,33 +135,5 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "[FirstShow] first-run show failed to open"); }
         }
 
-        private void OnFirstRunShellOpened(object? sender, EventArgs e)
-        {
-            Opened -= OnFirstRunShellOpened;   // one launch, one wizard
-
-            // Normal, never Loaded - see the header. Posting also gets us off the Opened callback
-            // before a modal takes the loop.
-            Dispatcher.UIThread.Post(async () =>
-            {
-                try
-                {
-                    // ShowDialog throws on an owner that is not VISIBLE, and "loaded" is not the
-                    // same question. If the shell never actually made it onto the screen, hand the
-                    // flags back rather than spending a first run nobody was shown.
-                    if (!IsVisible)
-                    {
-                        FirstRunWizard.AbortUngatedLaunch(this, "shell window never became visible");
-                        return;
-                    }
-
-                    await FirstRunWizard.Run(this);
-                    OfferWelcomeShowAfterFirstRun();
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "[FirstRun] The first-run wizard failed to run");
-                }
-            }, DispatcherPriority.Normal);
-        }
     }
 }

@@ -25,11 +25,10 @@
 // actually keeps it honest.
 //
 // STILL BLOCKED, each naming what it needs rather than guessing at "when X moves to Core":
-//   ShowOgWelcomePopup / TryPresentSeasonRecap / ShowWhatsNewIfNeeded - App.Achievements,
-//     App.Seasons and the startup dialog queue in ConditioningControlPanel/App.xaml.cs. The
+//   ShowOgWelcomePopup / TryPresentSeasonRecap - App.Achievements,
+//     App.Seasons and their startup decisions in ConditioningControlPanel/App.xaml.cs. The
 //     dialogs themselves DO exist here (CCP.Avalonia/Views/Dialogs/WhatsNewDialog.axaml.cs,
-//     Views/Controls/SeasonRecapCard); what is missing is the "has this launch already shown a
-//     modal" arbitration those read from App.
+//     Views/Controls/SeasonRecapCard); their startup decisions remain missing.
 //   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
 //     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
 //   _serverAnnouncementShownThisLaunch - only the intake nudge reads it.

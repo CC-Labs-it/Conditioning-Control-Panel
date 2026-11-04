@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Startup;
@@ -30,6 +33,24 @@ public sealed class StartupModalLadderTests
         ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
         for (var i = 0; i < 5; i++) await Task.Yield();
     }
+
+    [Fact]
+    public Task WhatsNewUsesLocalizedCopy() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var oldLanguage = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("fr");
+            var dialog = MainShellWindow.CreateWhatsNewDialog("2.0");
+            Assert.Equal("Quoi de neuf en v2.0", dialog.FindControl<global::Avalonia.Controls.TextBlock>("TxtTitle")!.Text);
+            Assert.Equal("Fais-moi visiter (60 secondes)", dialog.FindControl<global::Avalonia.Controls.TextBlock>("TourLabel")!.Text);
+            Assert.NotEqual("Show me around (60s)", dialog.FindControl<global::Avalonia.Controls.TextBlock>("TourLabel")!.Text);
+        }
+        finally { loc.SetLanguage(oldLanguage); StartupLadder.ResetForTests(); }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData("fresh")]
@@ -89,6 +110,100 @@ public sealed class StartupModalLadderTests
     });
 
     [Fact]
+    public Task ArrivalDuringSettleWaitsForTheSelectedTurn() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var order = new List<string>();
+            StartupLadder.EnqueueModal("selected", 30, () => { order.Add("selected"); return Task.CompletedTask; });
+            Dispatcher.UIThread.RunJobs(); // the pump has selected its turn
+            StartupLadder.EnqueueModal("later", 10, () => { order.Add("later"); return Task.CompletedTask; });
+            await Step();
+            Assert.Equal(new[] { "selected" }, order);
+            await Step();
+            Assert.Equal(new[] { "selected", "later" }, order);
+        }
+        finally { StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task DeferredAndInboxOffersDoNotDuplicateEachOther() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        try
+        {
+            var session = false;
+            var opened = 0;
+            CoreSession.IsSessionRunningProvider = () => session;
+            var item = new InboxItem { Key = "card", Open = () => opened++ };
+            StartupLadder.EnqueueModal("modal", 10, () => Task.CompletedTask);
+            StartupLadder.PresentOrInbox(item);
+            session = true;
+            StartupLadder.PresentOrInbox(item);
+            Assert.Equal(0, StartupLadder.Inbox.UnreadCount);
+            session = false;
+            await Step();
+            Assert.Equal(1, opened);
+            Assert.Equal(0, StartupLadder.Inbox.UnreadCount);
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupQueueCore.PassiveSettle);
+
+            session = true;
+            StartupLadder.PresentOrInbox(item);
+            Assert.Equal(1, StartupLadder.Inbox.UnreadCount);
+            session = false;
+            StartupLadder.PresentOrInbox(item); // A filed item must not open even when the route is now present.
+            Assert.Equal(1, opened);
+            StartupLadder.EnqueueModal("next", 10, () => Task.CompletedTask);
+            StartupLadder.PresentOrInbox(item);
+            await Step();
+            Assert.Equal(1, opened);
+            Assert.Equal(1, StartupLadder.Inbox.UnreadCount);
+        }
+        finally { CoreSession.IsSessionRunningProvider = oldSession; StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task WelcomeBackEntryWaitsBehindTheWizard() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var level = settings.PlayerLevel;
+        var user = CoreAccount.UnifiedUserId;
+        var dir = Directory.CreateTempSubdirectory("startup-welcome-").FullName;
+        try
+        {
+            WelcomeBackOffer.ResetForTests();
+            settings.PlayerLevel = 2;
+            CoreAccount.UnifiedUserId = "returning-user";
+            var closed = new TaskCompletionSource();
+            var shown = 0;
+            WelcomeBackOffer.ShowSheet = _ => { shown++; return Task.CompletedTask; };
+            StartupLadder.EnqueueModal("first-run-wizard", 20, () => closed.Task);
+            WelcomeBackOffer.Arm(true, dir);
+            await WelcomeBackOffer.TryOfferAsync("startup");
+            Assert.Equal(0, shown);
+            await Step();
+            Assert.True(MainShellWindow.IsStartupDialogShowing);
+            Assert.Equal(0, shown);
+            closed.SetResult();
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            await Step();
+            Assert.Equal(1, shown);
+        }
+        finally
+        {
+            MainShellWindow.IsStartupDialogShowing = false;
+            WelcomeBackOffer.ResetForTests();
+            settings.PlayerLevel = level;
+            CoreAccount.UnifiedUserId = user;
+            StartupLadder.ResetForTests();
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
     public Task DuplicateKeysAreOfferedOnceAndTheScreenGateIsRespected() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
@@ -128,6 +243,23 @@ public sealed class StartupModalLadderTests
             }
             Assert.False(shown);
             Assert.True(abandoned);
+            foreach (var game in new[] { false, true })
+            {
+                var panel = game ? null : new MainShellWindow();
+                global::Avalonia.Controls.Window surface = game ? new ConditioningControlPanel.Avalonia.Views.Games.GameWindow() : LauncherWindow.OpenFor(panel!);
+                if (game) surface.Show();
+                shown = abandoned = false; StartupLadder.Inbox.Items.Clear(); StartupLadder.ModalWindowReady = () => true;
+                StartupLadder.EnqueueModal("parked", 10, () => { shown = true; return Task.CompletedTask; }, () => abandoned = true);
+                StartupLadder.PresentOrInbox(new InboxItem { Key = "passive", Open = () => throw new InvalidOperationException() });
+                Assert.True(StartupLadder.Inbox.Contains("passive")); await Step();
+                for (var i = 0; i < 610; i++) { clock.Advance(StartupLadder.ModalPoll); for (var j = 0; j < 5; j++) await Task.Yield(); }
+                Assert.False(shown); Assert.False(abandoned);
+                if (!game) { surface.Hide(); StartupLadder.ModalWindowReady = () => false; Assert.True(StartupLadder.World(clock.Now.UtcDateTime).LauncherHolding); panel!.ShowFromTray(); }
+                if (game) surface.Close(); StartupLadder.ModalWindowReady = () => game || panel!.IsVisible; clock.Advance(StartupLadder.ModalPoll);
+                for (var i = 0; i < 5; i++) await Task.Yield();
+                Assert.True(shown); Assert.False(abandoned);
+                if (!game) surface.Close(); panel?.Close();
+            }
         }
         finally { StartupLadder.ResetForTests(); }
     });
