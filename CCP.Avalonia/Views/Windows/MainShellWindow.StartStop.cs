@@ -2,7 +2,7 @@
 // BtnStartMenu_Click, MenuStartNormal_Click, StartEngine (:294), StopEngine (:444) and
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
-// Still missing: Relapse, the lockdown dose keeper, Brain Drain and Takeover lifecycle,
+// Still missing: Relapse, the lockdown dose keeper and Brain Drain,
 // ramp and scheduler starts, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
@@ -11,6 +11,7 @@ using Avalonia.Data;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -93,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     parked.Resume();
                     parked.ReassertScheduleAfterEngineStart();
                 }
+                if (AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Start(); // WPF StartStop.cs:420
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
@@ -118,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            if (!AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Stop(); // WPF StartStop.cs:547
             // WPF StartStop.cs:533-547: keep a separately enabled bed, and restore ducked audio.
             if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
             Platform.LibVlcAudio.Instance?.ForceUnduck();
