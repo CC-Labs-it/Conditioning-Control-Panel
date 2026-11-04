@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -39,6 +40,132 @@ public sealed class ChaosSkiaFxOverlayTests
             }
         }
     }
+
+    [Fact]
+    public Task VideoRestackRaisesOnlyVisibleSparklesDuringPinnedRun() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var pin = settings.ChaosPinOnTop;
+        var enabled = settings.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var skip = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
+        var raise = ChaosSkiaFxOverlay.RaiseWindow;
+        var calls = 0;
+        try
+        {
+            settings.ChaosPinOnTop = true;
+            settings.ChaosSkiaFxEnabled = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.RaiseWindow = _ => calls++;
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.RaiseSparklesAboveVideo(); // idle prewarm is hidden
+            Assert.Equal(0, calls);
+            ChaosSkiaFxOverlay.Burst(new Point(400, 300), Colors.Cyan);
+            ChaosRunHost.RaiseSparklesAboveVideo(); // video shown
+            ChaosRunHost.RaiseSparklesAboveVideo(); // video clicked
+            Assert.Equal(2, calls);
+            settings.ChaosPinOnTop = false;
+            ChaosRunHost.RaiseSparklesAboveVideo();
+            Assert.Equal(2, calls);
+            ChaosRunHost.ForceShutdown();
+            ChaosRunHost.RaiseSparklesAboveVideo();
+            Assert.Equal(2, calls);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosSkiaFxOverlay.CloseActive();
+            ChaosSkiaFxOverlay.RaiseWindow = raise;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = skip;
+            settings.ChaosPinOnTop = pin;
+            settings.ChaosSkiaFxEnabled = enabled;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task VideoShowAndPointerPressScheduleRestacks() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var pin = settings.ChaosPinOnTop;
+        var enabled = settings.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var skip = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
+        var raise = ChaosSkiaFxOverlay.RaiseWindow;
+        var schedule = MandatoryVideoOverlay.ScheduleRestack;
+        var video = MandatoryVideoOverlay.Instance;
+        var scheduler = video.Scheduler;
+        // The show path creates its windows before checking LibVLC. Avoid a real decoder in this test.
+        var shared = typeof(ConditioningControlPanel.Avalonia.Platform.LibVlcAudio).GetField("<Shared>k__BackingField", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var vlc = shared.GetValue(null);
+        var pending = new List<(Action Work, TimeSpan Delay)>();
+        var calls = 0;
+        try
+        {
+            shared.SetValue(null, null);
+            video.Scheduler = new ConditioningControlPanel.Services.MandatoryVideoScheduler(video);
+            settings.ChaosPinOnTop = true;
+            settings.ChaosSkiaFxEnabled = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.RaiseWindow = _ => calls++;
+            MandatoryVideoOverlay.ScheduleRestack = (work, delay) => pending.Add((work, delay));
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosSkiaFxOverlay.Burst(new Point(400, 300), Colors.Cyan);
+            video.Show("unused.mp4", false);
+            var window = Assert.Single(video.Windows);
+            Assert.True(window.IsVisible);
+            Assert.Equal(1, calls); // show raises immediately
+            Assert.Single(pending);
+            Assert.Equal(TimeSpan.FromMilliseconds(50), pending[0].Delay);
+            pending[0].Work();
+            pending.Clear();
+            Assert.Equal(2, calls);
+
+            window.MouseDown(new Point(20, 20), MouseButton.Left);
+            window.MouseUp(new Point(20, 20), MouseButton.Left);
+            Assert.Equal(2, calls); // activation must settle first
+            Assert.Single(pending);
+            Assert.Equal(TimeSpan.FromMilliseconds(50), pending[0].Delay);
+            pending[0].Work();
+            pending.Clear();
+            Assert.Equal(3, calls);
+
+            settings.ChaosPinOnTop = false;
+            window.MouseDown(new Point(20, 20), MouseButton.Left);
+            window.MouseUp(new Point(20, 20), MouseButton.Left);
+            Assert.Single(pending);
+            pending[0].Work();
+            Assert.Equal(3, calls);
+        }
+        finally
+        {
+            video.CloseAll();
+            video.Scheduler = scheduler;
+            shared.SetValue(null, vlc);
+            MandatoryVideoOverlay.ScheduleRestack = schedule;
+            ChaosRunHost.ForceShutdown();
+            ChaosSkiaFxOverlay.CloseActive();
+            ChaosSkiaFxOverlay.RaiseWindow = raise;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = skip;
+            settings.ChaosPinOnTop = pin;
+            settings.ChaosSkiaFxEnabled = enabled;
+        }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task NativeRefusalDoesNotLeakAcrossSnapshots() => AvaloniaTestDispatcher.RunAsync(() =>

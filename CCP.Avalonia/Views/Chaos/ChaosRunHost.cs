@@ -94,6 +94,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests: stop the real 4 Hz timer so only stepped <see cref="Tick"/> calls move the clock (P08).</summary>
         internal static void StopTimerForTests() => _runTimer?.Stop();
 
+        internal static void RaiseSparklesAboveVideo()
+        {
+            if (_spawning && CoreSettings.Current.ChaosPinOnTop) ChaosSkiaFxOverlay.RaiseAboveVideo();
+        }
+
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
