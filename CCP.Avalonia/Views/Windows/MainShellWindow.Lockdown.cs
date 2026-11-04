@@ -90,12 +90,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 ld.LockdownActivated += Refresh;
                 ld.LockdownActivated += Flash;
+                ld.LockdownActivated += OfferPossessionRules;
                 ld.LockdownDeactivated += Refresh;
                 ld.CountdownTick += Tick;
                 ld.TimerRestarted += Restarted;
                 Closed += (_, _) =>
                 {
-                    ld.LockdownActivated -= Refresh; ld.LockdownActivated -= Flash; ld.LockdownDeactivated -= Refresh;
+                    ld.LockdownActivated -= Refresh; ld.LockdownActivated -= Flash; ld.LockdownActivated -= OfferPossessionRules; ld.LockdownDeactivated -= Refresh;
                     ld.CountdownTick -= Tick; ld.TimerRestarted -= Restarted;
                 };
             }
