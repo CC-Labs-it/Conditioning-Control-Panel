@@ -100,7 +100,7 @@ internal static class X11PanicKey
     internal static void ListenRawEvents(Func<(bool Press, int Code, int EscapeCode)?> next,
         Action onPanic, Action<int>? otherPress = null, Func<ulong>? eventTime = null, Func<int, (int, int)?>? repeatRate = null, Func<int, bool?>? isDown = null)
     {
-        bool escapeDown = false, videoOwnsPress = false, panicRouted = false;
+        bool panicRouted = false;
         var gate = new object();
         Timer? repeat = null;
         int generation = 0;
@@ -112,48 +112,34 @@ internal static class X11PanicKey
             {
                 lock (gate)
                 {
-                if (key.Code < 0) { StopRepeat(); escapeDown = videoOwnsPress = false; continue; }
-                if (key.EscapeCode != 0 && key.Code == key.EscapeCode)
-                {
-                    if (!key.Press)
+                    if (key.Code < 0) { StopRepeat(); continue; }
+                    if (key.EscapeCode != 0 && key.Code == key.EscapeCode)
                     {
-                        StopRepeat();
-                        escapeDown = videoOwnsPress = false;
-                        Route(false, key.Code, onPanic);
-                        continue;
-                    }
-                    if (!escapeDown)
-                    {
-                        escapeDown = true; panicRouted = false;
+                        if (!key.Press) { StopRepeat(); Route(false, key.Code, onPanic); continue; }
+                        // XI raw presses are physical downs. Repeats below are synthesized by the timer.
+                        StopRepeat(); panicRouted = false;
+                        bool videoOwnsPress = false;
                         try { videoOwnsPress = Win32Input.QueueVideoEscape(eventTime?.Invoke()); }
-                        catch (Exception ex)
+                        catch (Exception ex) { Log.Warning(ex, "Global Esc: ownership check failed; panic proceeds"); }
+                        (int, int) rate = default;
+                        try { rate = repeatRate == null ? (500, 33) : repeatRate(key.Code) ?? (0, 0); }
+                        catch (Exception ex) { Log.Warning(ex, "Global Esc: repeat rate unavailable"); }
+                        if (rate.Item1 > 0)
                         {
-                            // A failed ownership read must never prevent the configured panic key.
-                            videoOwnsPress = false;
-                            Log.Warning(ex, "Global Esc: ownership check failed; panic proceeds");
-                        }
-                        if ((repeatRate == null ? (500, 33) : repeatRate(key.Code) ?? (0, 0)) is var rate && rate.Item1 > 0)
-                        {
-                            lock (gate)
+                            int version = ++generation;
+                            repeat = new Timer(_ => { lock (gate) if (version == generation) try
                             {
-                                int version = ++generation;
-                                repeat = new Timer(_ => { lock (gate) if (version == generation) try
-                                {
-                                    if (isDown != null && isDown(key.Code) != true) { StopRepeat(); escapeDown = videoOwnsPress = false; return; }
-                                    videoOwnsPress = Win32Input.QueueVideoEscape();
-                                    if (!videoOwnsPress && !panicRouted) RouteEscape(key.Code);
-                                }
-                                catch (Exception ex) { Log.Warning(ex, "Global Esc: repeat failed"); } }, null, rate.Item1, rate.Item2);
+                                if (isDown != null && isDown(key.Code) != true) { StopRepeat(); return; }
+                                if (!Win32Input.QueueVideoEscape() && !panicRouted) RouteEscape(key.Code);
                             }
+                            catch (Exception ex) { Log.Warning(ex, "Global Esc: repeat failed"); } }, null, rate.Item1, rate.Item2);
                         }
+                        // Video ownership comes before panic and leash, including on repeats.
+                        if (videoOwnsPress) { otherPress?.Invoke(key.Code); continue; }
+                        RouteEscape(key.Code);
                     }
-                    // A video-owned press returns before WPF's panic and leash branches, including repeats.
-                    if (videoOwnsPress) { otherPress?.Invoke(key.Code); continue; }
-                }
-                if (key.Press && key.EscapeCode != 0 && key.Code == key.EscapeCode)
-                { if (!panicRouted) RouteEscape(key.Code); }
-                else Route(key.Press, key.Code, onPanic);
-                if (key.Press) otherPress?.Invoke(key.Code);
+                    else Route(key.Press, key.Code, onPanic);
+                    if (key.Press) otherPress?.Invoke(key.Code);
                 }
             }
             catch (Exception ex) { Log.Warning(ex, "Panic key: listener event failed"); }

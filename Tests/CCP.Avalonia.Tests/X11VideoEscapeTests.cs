@@ -73,8 +73,25 @@ public sealed class X11VideoEscapeTests
         X11PanicKey.ListenRawEvents(Next, () => { }, repeatRate: _ => (20, 30), isDown: _ => { checkedKey.Set(); return down; });
     }
 
+    [Theory]
+    [InlineData(0)] // repeat disabled
+    [InlineData(1)] // before the first repeat tick
+    [InlineData(2)] // repeat-rate lookup fails
+    public void Lost_release_does_not_swallow_next_panic(int mode)
+    {
+        using var hooks = new EscapeHooks(); X11PanicKey.BindKeycodeForTest(9);
+        Win32Input.EscapeState = () => (false, false, false);
+        int step = 0, panic = 0;
+        (bool, int, int)? Next() => step++ < 2 ? (true, 9, 9) : null;
+        X11PanicKey.ListenRawEvents(Next, () => panic++, repeatRate: _ => mode switch
+        {
+            0 => null, 1 => (10000, 33), _ => throw new InvalidOperationException("rate unavailable")
+        });
+        Assert.Equal(2, panic);
+    }
+
     [Fact]
-    public void Raw_escape_retains_ownership_until_release()
+    public void Raw_escape_presses_are_distinct_and_timer_repeats_do_not_panic()
     {
         using var hooks = new EscapeHooks(); var s = CoreSettings.Current;
         (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape"); X11PanicKey.BindKeycodeForTest(9);
@@ -87,13 +104,13 @@ public sealed class X11VideoEscapeTests
         (bool, int, int)? Next()
         {
             if (i == 3) Assert.Equal(0, deliveries);
-            if (i == 7) Assert.Equal(1, deliveries);
-            if (i == 8) { System.Threading.Thread.Sleep(650); Assert.Equal(1, deliveries); } // release stopped repeats
+            if (i == 7) Assert.Equal(3, deliveries);
+            if (i == 8) { System.Threading.Thread.Sleep(650); Assert.Equal(3, deliveries); } // release stopped repeats
             return i < events.Length ? events[i++] : null;
         }
         X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { panic++; leashTaskActive = false; }, Next);
-        Assert.Equal(2, deliveries); // one delivery per physical press
-        Assert.Equal(0, panic);      // video owns both, even when panic is bound to Escape
+        Assert.Equal(4, deliveries); // one delivery per physical press
+        Assert.Equal(0, panic);      // video owns the presses, even when panic is bound to Escape
         Assert.True(leashTaskActive); // the leash path was never invoked
 
         // When panic can run, WPF leaves Escape to panic instead of the video.
@@ -102,14 +119,14 @@ public sealed class X11VideoEscapeTests
         (bool, int, int)? PanicNext() => i++ switch
         {
             0 => (true, 9, 9),
-            1 => repeats.Wait(2000) ? (true, 9, 9) : throw new TimeoutException("repeat clock did not fire"),
+            1 => repeats.Wait(2000) && panic == 1 ? (true, 9, 9) : throw new InvalidOperationException("held key repeated panic"),
             2 => (false, 9, 9),
             3 => (true, 9, 9),
             _ => null
         };
         X11PanicKey.ListenRawEvents(PanicNext, () => { panic++; leashTaskActive = false; }, repeatRate: _ => (10, 10),
             isDown: _ => { if (repeats.CurrentCount > 0) repeats.Signal(); return true; });
-        Assert.Equal(2, panic); Assert.False(leashTaskActive); Assert.Equal(2, deliveries);
+        Assert.Equal(3, panic); Assert.False(leashTaskActive); Assert.Equal(4, deliveries);
     }
 
     [Fact]
@@ -120,10 +137,8 @@ public sealed class X11VideoEscapeTests
         X11PanicKey.BindKeycodeForTest(9);
         bool video = true, palette = true, card = false;
         int deliveries = 0, attempts = 0, panic = 0;
-        var pending = new System.Collections.Generic.Queue<Action>();
-        Win32Input.EscapeState = () => (video, card, palette);
-        Win32Input.PostEscape = pending.Enqueue;
-        Win32Input.TryVideoEscape = () => { attempts++; deliveries++; return true; };
+        var pending = new System.Collections.Generic.Queue<Action>(); Win32Input.EscapeState = () => (video, card, palette);
+        Win32Input.PostEscape = pending.Enqueue; Win32Input.TryVideoEscape = () => { attempts++; deliveries++; return true; };
         void Press()
         {
             var keys = new (bool, int, int)[] { (true, 9, 9), (false, 9, 9) };
@@ -167,8 +182,7 @@ public sealed class X11VideoEscapeTests
     {
         using var hooks = new EscapeHooks(); var settings = CoreSettings.Current;
         (settings.PanicKeyEnabled, settings.PanicKey) = (true, "F12");
-        bool video = true; int attempts = 0;
-        Action? pending = null;
+        bool video = true; int attempts = 0; Action? pending = null;
         Win32Input.EscapeState = () => (video, false, false);
         Win32Input.PostEscape = action => pending = action;
         Win32Input.TryVideoEscape = () => { attempts++; return true; };
