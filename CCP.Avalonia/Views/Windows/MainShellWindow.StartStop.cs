@@ -20,10 +20,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Bumped by every Stop, so a Start still waiting on the portal bind (up to 30 s) is dropped
         // if the user stopped or panicked meanwhile.
         private static int _engineGen;
-        internal static (int, int) OverlayGeneration => (_engineGen, _aiOverlayGen);
+        internal static int OverlayGeneration => _aiOverlayGen;
         private static int _aiOverlayGen;
         internal static void InvalidateAiOverlayStart() => _aiOverlayGen++;
-        internal static void InvalidateOverlayStart() => _engineGen++;
+        internal static void InvalidateOverlayStart() { _engineGen++; InvalidateAiOverlayStart(); }
 
         private void BtnStartMenu_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -100,7 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// A running session is paused first, not ended (panic, tray Stop): WPF MainWindow.xaml.cs:1726.</summary>
         internal static void StopEngine()
         {
-            _engineGen++;
+            InvalidateOverlayStart();
             App.Sessions?.Pause();
             CoreEngine.Stop();
         }

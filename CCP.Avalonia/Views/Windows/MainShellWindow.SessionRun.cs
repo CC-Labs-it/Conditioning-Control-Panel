@@ -125,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Loc.Get("title_pause_session_confirm"),
                 Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty));
             if (!confirmed || !runner.IsRunning) return;
-            _engineGen++;   // invalidate AI starts waiting for the portal bind
+            InvalidateOverlayStart();   // invalidate starts waiting for the portal bind
             runner.Pause();
             SpiralOverlay.CloseAll();   // WPF PauseSession stops OverlayService, including an AI start
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
