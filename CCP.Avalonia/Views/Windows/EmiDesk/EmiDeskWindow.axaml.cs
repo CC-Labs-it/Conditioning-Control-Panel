@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// chrome region.
     ///
     /// <para>Ported from WPF EmiDeskWindow and its partials. The frame clock drives the shared
-    /// chain table; pixel faces, art, body moves/FX, bubble/voice, alive and prop hosts remain
+    /// chain table; pixel faces, art, FX, bubble/voice, alive and prop hosts remain
     /// named ponytail stubs. EmiDeskService owns the real summon/dismiss path.</para>
     ///
     /// <para><b>Windowing.</b> WPF's recipe was AllowsTransparency + WindowStyle None + Topmost +
@@ -199,7 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>
         /// A chain asked for a one-shot body move (bounce, nod, droop, shiver, thud). The seam
-        /// exists so a later chunk can add art-driven moves.
+        /// drives the independent body transform slots.
         /// </summary>
         partial void OnBodyMoveCore(string move, ref bool handled);
 
@@ -223,9 +223,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // FindControl is constrained to Control and a Transform is not one. Order matters: the
         // rotate sits ABOVE the scales, or a squash applied after a rotation shears her.
         private readonly ScaleTransform _crtScale = new(1, 1);
+        private readonly ScaleTransform _bodyMoveScale = new(1, 1);
         private readonly ScaleTransform _squashScale = new(1, 1);
         private readonly RotateTransform _wobbleRotate = new(0);
         private readonly TranslateTransform _moveShift = new();
+        private readonly TranslateTransform _bodyMoveShift = new();
 
         // THE GAZE LEAN's own transform, private to the face so it composes with the body's rather
         // than fighting it.
@@ -300,7 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
             _bodyRoot.RenderTransform = new TransformGroup
             {
-                Children = { _crtScale, _squashScale, _landShift, _wobbleRotate, _moveShift }
+                Children = { _crtScale, _bodyMoveScale, _squashScale, _landShift, _wobbleRotate, _moveShift, _bodyMoveShift }
             };
             _faceView.RenderTransform = _gazeShift;
 
@@ -907,6 +909,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // ponytail: voice mood, prop teardown and pixel/art rendering still need their hosts.
             StopPatFeedback();
             CancelLandFace();
+            StopBodyMove();
             StopIdleBeats();
             _player.Play(chain, BuildHooks(done), bodyFrameOverride);
         }
@@ -919,6 +922,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void CancelChain()
         {
             StopPatFeedback();
+            StopBodyMove();
             try { _player.Cancel(); OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -944,7 +948,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             DrawFace(EmiChains.RestFace);
         }
 
-        // ponytail: canonical bounce/thud/nod/droop/shiver moves still need their transform tweens.
         private void RunBodyMove(string move)
         {
             bool handled = false;
@@ -2717,6 +2720,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 _closingForGood = true;
                 _player.Dispose();
+                StopBodyMove();
                 KillOptionsPanel();
                 CloseBook();
                 StopIdleBeats();
