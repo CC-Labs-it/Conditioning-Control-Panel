@@ -90,6 +90,48 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    // WPF ChaosModeService.cs:417-435: the equipped mantra enters after the countdown.
+    [Theory]
+    [InlineData("size_queen")]
+    [InlineData("aftermath")]
+    public async Task Equipped_start_boon_applies_to_the_run_and_resets(string id)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                ChaosMeta.State.EquippedStartBoon = id;
+                ChaosRunHost.StartRun(Cfg());
+                var state = ChaosRunHost.State!;
+                Assert.Empty(state.RunPickTiles);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Equal(id == "size_queen", state.RippleEnabled);
+                Assert.Equal(id == "aftermath", state.AftermathEnabled);
+                Assert.Equal(id, Assert.Single(state.RunPickTiles).Id);
+                Assert.Single(ChaosRunHost.BoonBar!.Row.Children);
+                Assert.True(ChaosMeta.IsDiscovered("boon:" + id));
+                ChaosRunHost.ForceShutdown();
+
+                ChaosMeta.State.EquippedStartBoon = null;
+                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.False(ChaosRunHost.State!.RippleEnabled);
+                Assert.False(ChaosRunHost.State!.AftermathEnabled);
+                Assert.Empty(ChaosRunHost.State!.RunPickTiles);
+                ChaosRunHost.ForceShutdown();
+
+                ChaosMeta.State.EquippedStartBoon = id;
+                var scripted = Cfg(); scripted.ScriptedFirstRun = true;
+                ChaosRunHost.StartRun(scripted); ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Empty(ChaosRunHost.State!.RunPickTiles);
+                Assert.False(ChaosRunHost.State!.RippleEnabled);
+                Assert.False(ChaosRunHost.State!.AftermathEnabled);
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
     /// toy (cooldown starts, the status counts down on the run clock); the toy key rides the panic
     /// key's listener; panic closes every button and unhooks the key.</summary>

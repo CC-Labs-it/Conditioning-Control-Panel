@@ -150,20 +150,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        /// <summary>The countdown's completion. WPF BeginRun also applies the start boon and
-        /// lifetime boons and builds the toys; the clock, lifetime boons and toy buttons are here.</summary>
+        /// <summary>The countdown's completion: apply the loadout, show its ribbon, and start the field.</summary>
         internal static void BeginRun()
         {
             if (!_active || _state == null || _spawning) return;
-            ChaosRunEffects.ApplyLifetimeBoons(_state);
-            _hud?.SetPreRunExpanded(false);
-            _hud?.SetClockVisible(_state.ShowWaveTimer);
             // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
             var picks = _state.RunPickTiles;
             _boonBar = ChaosBoonBarOverlay.ForRun();
             _boonBar.SetPicks(picks);
             _boonBar.Show();
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
+            // WPF ChaosModeService.cs:422-435: scripted first runs ignore a stale loadout.
+            var equipped = _state.Config.ScriptedFirstRun ? null : ChaosMeta.State.EquippedStartBoon;
+            var boon = ChaosBoonPool.All.FirstOrDefault(b => b.Id == equipped);
+            if (boon != null)
+            {
+                _state.ApplyBoon(boon);
+                ChaosMeta.MarkDiscovered("boon:" + boon.Id);
+                ChaosAnnouncerOverlay.Announce($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, artKey: boon.Id);
+            }
+            ChaosRunEffects.ApplyLifetimeBoons(_state);
+            _hud?.SetPreRunExpanded(false);
+            _hud?.SetClockVisible(_state.ShowWaveTimer);
             // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             _state.StartShields = _state.Shields;
