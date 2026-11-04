@@ -7,6 +7,9 @@ using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
+using SkiaSharp;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -123,6 +126,58 @@ public sealed class FlashAnimationTests
         File.WriteAllBytes(path, bytes);
         try { Assert.Empty(FlashAnimation.Decode(path, 8).Frames); }
         finally { File.Delete(path); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false, 2, false, 75)]
+    [InlineData(true, 2, false, 150)]
+    [InlineData(false, 4, true, 10)]
+    [InlineData(true, 4, true, 20)]
+    public Task Window_applies_gentle_speed_after_gif_speed(bool gentle, double gifSpeed, bool shortDelay, double expectedMs) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        service.Current.GentleVisuals = gentle;
+        service.Current.GentleSpeed = 0.5;
+        CoreSettings.ServiceProvider = () => service;
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gif");
+        var bytes = Convert.FromBase64String(Gif);
+        if (shortDelay)
+            for (int i = 0; i < bytes.Length - 5; i++)
+                if (bytes[i] == 0x21 && bytes[i + 1] == 0xf9 && bytes[i + 2] == 4)
+                    { bytes[i + 4] = 2; bytes[i + 5] = 0; }
+        File.WriteAllBytes(path, bytes);
+        var w = new FlashOverlayWindow();
+        try
+        {
+            w.Show();
+            await w.StartAnimation(path, 8, gifSpeed);
+            Assert.Equal(expectedMs, w.AnimationInterval!.Value.TotalMilliseconds);
+        }
+        finally { w.Close(); CoreSettings.ServiceProvider = oldProvider; File.Delete(path); }
+    });
+
+    [Fact]
+    public Task Long_animation_strides_by_total_frames_and_caps_decoding() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "flash-700.gif");
+        var (frames, delay) = FlashAnimation.Decode(path, 2);
+        try
+        {
+            Assert.Equal(50, frames.Count); // 0, 12, ... 588: decode at most 600 of 700
+            Assert.Equal(1200, delay.TotalMilliseconds);
+            using var png = new MemoryStream();
+            frames[49].Save(png);
+            using var image = SKBitmap.Decode(png.ToArray());
+            var pixel = image.GetPixel(0, 0);
+            Assert.Equal((byte)76, pixel.Red);   // frame 588
+            Assert.Equal((byte)2, pixel.Green);
+            Assert.Equal((byte)17, pixel.Blue);
+        }
+        finally { foreach (var frame in frames) frame.Dispose(); }
         return Task.CompletedTask;
     });
 

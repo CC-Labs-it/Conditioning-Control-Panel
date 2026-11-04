@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -54,12 +55,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _animationFrames = frames;
             _image.Source = frames[0];
-            _animationTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = FlashAnimation.Delay(delay, speed) };
+            var interval = FlashAnimation.Delay(delay, speed);
+            if (GentleVisuals.On)
+                interval = TimeSpan.FromMilliseconds(GentleVisuals.ScaleDelayMs(interval.TotalMilliseconds));
+            _animationTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = interval };
             _animationTimer.Tick += (_, _) => AdvanceAnimation();
             _animationTimer.Start();
         }
 
         internal object? PictureSource => _image.Source;
+        internal TimeSpan? AnimationInterval => _animationTimer?.Interval;
         internal int AnimationFrameCount => _animationFrames?.Count ?? 0;
         internal int AnimationIndex => _animationIndex;
 

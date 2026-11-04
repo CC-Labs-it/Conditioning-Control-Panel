@@ -37,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 int count = Math.Min(codec.FrameCount, 600);
                 int keep = (int)Math.Min(60, (30L * 1024 * 1024) / ((long)w * h * 4));
                 if (keep < 2) return (frames, TimeSpan.Zero);
-                int step = Math.Max(1, (int)Math.Ceiling(count / (double)keep));
+                int step = Math.Max(1, (int)Math.Ceiling(codec.FrameCount / (double)keep));
                 var info = codec.FrameInfo;
                 var full = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var canvas = new SKBitmap(full);
