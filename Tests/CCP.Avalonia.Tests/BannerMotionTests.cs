@@ -349,6 +349,107 @@ public sealed class BannerMotionTests
         finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previous; }
     });
 
+    [Fact]
+    public Task SupportSparklesShowHaloTwinkleSpinAndVariedFlights() => InShell(w =>
+    {
+        var previous = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        var clock = new BannerClock();
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = clock;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            typeof(MainShellWindow).GetMethod("PopBannerBeat", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(w, new object[] { w.Named<TextBlock>("TxtBannerPrimary")! });
+            var layer = w.Named<Canvas>("BannerSparkleLayer")!;
+            var stars = layer.Children.Cast<Grid>().ToArray();
+            Assert.Equal(7, stars.Length);
+            var halo = Assert.IsType<global::Avalonia.Controls.Shapes.Ellipse>(stars[0].Children[0]);
+            var brush = Assert.IsType<global::Avalonia.Media.RadialGradientBrush>(halo.Fill);
+            Assert.Equal(200, brush.GradientStops[0].Color.A);
+            Assert.Equal(0, brush.GradientStops[2].Color.A);
+            Assert.IsType<global::Avalonia.Controls.Shapes.Path>(stars[0].Children[1]);
+            double start0 = Canvas.GetLeft(stars[0]) + stars[0].Width / 2;
+            clock.Now += TimeSpan.FromSeconds(.09).Ticks;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            double start1 = Canvas.GetLeft(stars[1]) + stars[1].Width / 2;
+            Assert.NotEqual(start0, start1);
+            clock.Now += TimeSpan.FromSeconds(.21).Ticks;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            var group = Assert.IsType<global::Avalonia.Media.TransformGroup>(stars[0].RenderTransform);
+            var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(group.Children[0]);
+            var rotate = Assert.IsType<global::Avalonia.Media.RotateTransform>(group.Children[1]);
+            double before = scale.ScaleX, angle = rotate.Angle, x = Canvas.GetLeft(stars[0]);
+            Assert.True(before > 0); Assert.NotEqual(0, angle);
+            clock.Now += TimeSpan.FromSeconds(.3).Ticks;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.NotEqual(before, scale.ScaleX); Assert.NotEqual(angle, rotate.Angle);
+            Assert.True(Canvas.GetLeft(stars[0]) > x);
+            clock.Now += TimeSpan.FromSeconds(.65).Ticks;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            double end0 = Canvas.GetLeft(stars[0]) + stars[0].Width / 2;
+            clock.Now += TimeSpan.FromSeconds(.09).Ticks;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            double end1 = Canvas.GetLeft(stars[1]) + stars[1].Width / 2;
+            Assert.NotEqual(end0, end1);
+        }
+        finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previous; }
+    });
+
+    [Fact]
+    public Task BannerAmbientBreathAndSupportRepeatFollowTheGate() => InShell(w =>
+    {
+        var previous = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        var clock = new BannerClock();
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = clock;
+        var settings = CoreSettings.Current;
+        var performance = (settings.PerformanceMode, settings.AutoPerformanceMode);
+        try
+        {
+            settings.PerformanceMode = settings.AutoPerformanceMode = false;
+            void Gate(MotionLevel level) { settings.MotionLevel = level; ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged(); }
+            void Advance(double seconds) { clock.Now += TimeSpan.FromSeconds(seconds).Ticks; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll(); }
+            var layer = w.Named<Canvas>("BannerSparkleLayer")!;
+            var glowHost = w.Named<Border>("HeaderBannerGlowHost")!;
+            var glow = Assert.IsType<global::Avalonia.Media.DropShadowEffect>(glowHost.Effect);
+            Assert.Equal(w.Named<Border>("HeaderBannerHost")!.Bounds.Width, glowHost.Bounds.Width, 1);
+            Gate(MotionLevel.Reduced); Assert.Equal(.35, glow.Opacity, 3);
+            Gate(MotionLevel.Full); Assert.Equal(.25, glow.Opacity, 3);
+            Advance(3.2); Assert.Equal(.6, glow.Opacity, 3);
+            Advance(8.8); Assert.Equal(7, layer.Children.Count);
+            Advance(2); Assert.Empty(layer.Children);
+            Gate(MotionLevel.Reduced); Assert.Equal(.35, glow.Opacity, 3);
+            Advance(24); Assert.Empty(layer.Children); // support remains, Reduced does not repeat
+            Gate(MotionLevel.Full);
+            Tick(w); // support is no longer on screen
+            Advance(12); Assert.Empty(layer.Children);
+            Gate(MotionLevel.Off); Advance(12); Assert.Empty(layer.Children);
+            Gate(MotionLevel.Full);
+            settings.PerformanceMode = true;
+            ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.Equal(.35, glow.Opacity, 3); Advance(12); Assert.Empty(layer.Children);
+            settings.PerformanceMode = false;
+            Gate(MotionLevel.Full);
+            typeof(MainShellWindow).GetMethod("PopBannerBeat", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(w, new object[] { w.Named<TextBlock>("TxtBannerPrimary")! });
+            Assert.Equal(7, layer.Children.Count);
+            w.WindowState = WindowState.Minimized; Assert.Equal(.35, glow.Opacity, 3); Assert.Empty(layer.Children);
+            w.WindowState = WindowState.Normal;
+            w.Activate(); Dispatcher.UIThread.RunJobs();
+            typeof(MainShellWindow).GetMethod("PopBannerBeat", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(w, new object[] { w.Named<TextBlock>("TxtBannerPrimary")! });
+            Assert.Equal(7, layer.Children.Count);
+            typeof(WindowBase).GetMethod("HandleDeactivated", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, null);
+            Assert.False(w.IsActive); Assert.Equal(.35, glow.Opacity, 3); Assert.Empty(layer.Children);
+            w.Hide(); Assert.Equal(.35, glow.Opacity, 3); Assert.Empty(layer.Children);
+        }
+        finally
+        {
+            (settings.PerformanceMode, settings.AutoPerformanceMode) = performance;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previous;
+        }
+    });
+
     private sealed class BannerClock : TimeProvider
     {
         public long Now;

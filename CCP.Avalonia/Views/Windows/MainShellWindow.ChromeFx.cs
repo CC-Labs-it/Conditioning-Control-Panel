@@ -16,6 +16,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using System.Linq;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
@@ -31,14 +32,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool BannerSheenSweeping => _bannerSheenBeat?.IsRunning == true;
         private DateTime _lastBannerSheenUtc = DateTime.MinValue;
 
+        private BeatLoop? _bannerAmbient;
+        private long _bannerRepeatStart;
+        private long _bannerAmbientRun;
+
+        // WPF MainWindow.BannerFx.cs:166,205: breath and support repeat share the ambient gate.
+        private void ApplyBannerAmbient()
+        {
+            var host = this.FindControl<Border>("HeaderBannerGlowHost");
+            var glow = host?.Effect as DropShadowEffect;
+            if (host is null || glow is null) return;
+            if (!Pr4aAmbientAllowed || !IsVisible || !host.IsEffectivelyVisible)
+            {
+                ++_bannerAmbientRun;
+                _bannerAmbient?.Stop();
+                _bannerAmbient = null;
+                glow.Opacity = .35;
+                ClearBannerSparkles();
+                return;
+            }
+            if (_bannerAmbient != null) return;
+            _bannerRepeatStart = BeatLoop.Time.GetTimestamp();
+            long run = ++_bannerAmbientRun;
+            _bannerAmbient = new BeatLoop(host, seconds =>
+            {
+                if (run != _bannerAmbientRun) return;
+                if (!Pr4aAmbientAllowed || !IsVisible) { ApplyBannerAmbient(); return; }
+                glow.Opacity = .25 + .35 * BeatLoop.Breath(seconds, 3.2);
+                if (BeatLoop.Time.GetElapsedTime(_bannerRepeatStart).TotalSeconds < 12) return;
+                _bannerRepeatStart = BeatLoop.Time.GetTimestamp();
+                if (_bannerCurrentIndex >= 0 && _bannerCurrentIndex < _bannerBeats.Length
+                    && ReferenceEquals(_bannerBeats[_bannerCurrentIndex], BannerPrimary)) RunBannerSparkles();
+            }) { OnParked = () => { if (run == _bannerAmbientRun) ApplyBannerAmbient(); } };
+            _bannerAmbient.Start();
+        }
+
         private void InitializeChromeFx()
         {
-            // A message sheen is finite interaction motion, so Reduced and low performance
-            // retain it as WPF does. No ambient loop or animated Effect is introduced.
-            Deactivated += (_, _) => ParkBannerSheen();
+            // Message sheen is finite. The sibling glow and repeat use the ambient gate.
+            Activated += (_, _) => ApplyBannerAmbient();
+            Deactivated += (_, _) => { ParkBannerSheen(); ApplyBannerAmbient(); };
+            Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged += ApplyBannerAmbient; ApplyBannerAmbient(); };
+            Closed += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= ApplyBannerAmbient; ++_bannerAmbientRun; _bannerAmbient?.Stop(); _bannerAmbient = null; ClearBannerSparkles(); };
             Closed += (_, _) => ParkBannerSheen();
             PropertyChanged += (_, e) =>
             {
+                if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) ApplyBannerAmbient();
                 if ((e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
                     || (e.Property == IsVisibleProperty && !IsVisible)) ParkBannerSheen();
             };

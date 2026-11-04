@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Controls.Shapes;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -23,6 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 SweepBannerSheen(force: true);
                 RunBannerSparkles();
+                _bannerRepeatStart = BeatLoop.Time.GetTimestamp();
             }
             var scale = new ScaleTransform();
             incoming.RenderTransformOrigin = RelativePoint.Center;
@@ -43,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _bannerPop.Start();
         }
 
+        private static readonly (double At, double V)[] SparkleTwinkle =
+            { (0, 0), (.15, 1), (.4, .5), (.65, 1.1), (1, 0) };
         private BeatLoop? _bannerSparkles;
         private long _bannerSparkleRun;
 
@@ -50,31 +54,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void RunBannerSparkles()
         {
             ClearBannerSparkles();
+            if (!AmbientFxCanvas.Env.AllowTransitions) return;
             var layer = this.FindControl<Canvas>("BannerSparkleLayer");
             var text = BannerPrimary;
             if (layer is null || text is null || !layer.IsEffectivelyVisible || layer.Bounds.Width <= 4) return;
             var origin = text.TranslatePoint(new Point(0, 0), layer);
             if (origin is null || text.Bounds.Width <= 4) return;
             var random = new Random();
-            for (int i = 0; i < 7; i++)
+            var sprites = new (Grid Root, ScaleTransform Scale, RotateTransform Rotate, double From, double To, double Spin)[7];
+            var glow = this.TryFindResource("PinkColor", out var resource) && resource is Color color
+                ? color : Color.FromRgb(255, 105, 180);
+            for (int i = 0; i < sprites.Length; i++)
             {
                 double size = 11 + random.NextDouble() * 7;
-                var sprite = new Path
-                {
-                    Width = size, Height = size, Fill = Brushes.White, Stretch = Stretch.Fill,
-                    Data = Geometry.Parse("M .5,0 C .55,.4 .6,.45 1,.5 C .6,.55 .55,.6 .5,1 C .45,.6 .4,.55 0,.5 C .4,.45 .45,.4 .5,0 Z"),
-                    Opacity = 0, IsHitTestVisible = false
-                };
-                Canvas.SetTop(sprite, layer.Bounds.Height / 2 - size / 2 + (random.NextDouble() * 2 - 1) * 7);
+                double lane = (random.NextDouble() * 2 - 1) * Math.Min(7, layer.Bounds.Height * .3);
+                double from = origin.Value.X - 6 + random.NextDouble() * text.Bounds.Width * .12;
+                double to = origin.Value.X + text.Bounds.Width * (.82 + random.NextDouble() * .2);
+                double spin = (random.NextDouble() < .5 ? -1 : 1) * (90 + random.NextDouble() * 120);
+                var halo = new RadialGradientBrush();
+                halo.GradientStops.Add(new GradientStop(Color.FromArgb(200, glow.R, glow.G, glow.B), 0));
+                halo.GradientStops.Add(new GradientStop(Color.FromArgb(90, glow.R, glow.G, glow.B), .35));
+                halo.GradientStops.Add(new GradientStop(Color.FromArgb(0, glow.R, glow.G, glow.B), 1));
+                var scale = new ScaleTransform();
+                var rotate = new RotateTransform();
+                var transform = new TransformGroup();
+                transform.Children.Add(scale); transform.Children.Add(rotate);
+                var sprite = new Grid { Width = size, Height = size, Opacity = 0, IsHitTestVisible = false,
+                    RenderTransformOrigin = RelativePoint.Center, RenderTransform = transform };
+                sprite.Children.Add(new Ellipse { Fill = halo });
+                sprite.Children.Add(new Path { Width = size * .72, Height = size * .72, Fill = Brushes.White,
+                    Stretch = Stretch.Fill, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
+                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                    Data = Geometry.Parse("M .5,0 C .55,.4 .6,.45 1,.5 C .6,.55 .55,.6 .5,1 C .45,.6 .4,.55 0,.5 C .4,.45 .45,.4 .5,0 Z") });
+                Canvas.SetTop(sprite, layer.Bounds.Height / 2 + lane - size / 2);
                 layer.Children.Add(sprite);
+                sprites[i] = (sprite, scale, rotate, from, to, spin);
             }
-            var sprites = layer.Children.OfType<Path>().ToArray();
             long run = _bannerSparkleRun;
-            double left = origin.Value.X, width = text.Bounds.Width;
             _bannerSparkles = new BeatLoop(layer, seconds =>
             {
                 if (run != _bannerSparkleRun) return;
-                if (!IsActive || WindowState == WindowState.Minimized || CoreSettings.Current.MotionLevel == MotionLevel.Off || seconds >= 1.79)
+                if (!IsActive || WindowState == WindowState.Minimized || !AmbientFxCanvas.Env.AllowTransitions || seconds >= 1.79)
                 {
                     ClearBannerSparkles();
                     return;
@@ -83,8 +103,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     double t = Math.Clamp((seconds - i * .09) / 1.25, 0, 1);
                     double eased = (1 - Math.Cos(Math.PI * t)) / 2;
-                    Canvas.SetLeft(sprites[i], left - 6 + width * eased - sprites[i].Width / 2);
-                    sprites[i].Opacity = Math.Min(1, Math.Min(t / .12, (1 - t) / .2));
+                    var sprite = sprites[i];
+                    Canvas.SetLeft(sprite.Root, sprite.From + (sprite.To - sprite.From) * eased - sprite.Root.Width / 2);
+                    sprite.Root.Opacity = Math.Min(1, Math.Min(t / .12, (1 - t) / .2));
+                    double twinkle = BeatLoop.Keys(t, SparkleTwinkle);
+                    sprite.Scale.ScaleX = sprite.Scale.ScaleY = twinkle;
+                    sprite.Rotate.Angle = sprite.Spin * t;
                 }
             }) { OnParked = () => { if (run == _bannerSparkleRun) ClearBannerSparkles(); } };
             _bannerSparkles.Start();
