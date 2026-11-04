@@ -80,6 +80,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused;
         private static double _freezeRemainingSec;
         internal static double FreezeRemainingSec => _freezeRemainingSec;
+        private const double SlowFactor = 0.12;
+        private static double _slowRemainingSec, _pendulumFireAt;
+        private static int _pendulumWave;
+        private static bool _pendulumFired;
+        internal static double SlowRemainingSec => _slowRemainingSec;
+        internal static double PendulumMultiplier => _slowRemainingSec > 0 ? _state?.PendulumPayMult ?? 1 : 1;
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
@@ -153,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = 0;
+            _pendulumWave = 0;
             if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnEStimArc);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
@@ -204,7 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             if (_spawnTimer != null)
                 _spawnTimer.Interval = TimeSpan.FromMilliseconds(
-                    ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+                    ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, _slowRemainingSec > 0 ? SlowFactor : 1));
         }
 
         /// <summary>WPF OnBenignPopped (:1767): the prism and ordinary-treat branches.</summary>
@@ -233,7 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             spec.Payload.Fire();   // benign pop = a treat
             if (spec.VariantId == "subliminal") ChaosLessons.Tick("intrusive_thoughts");   // WPF OnTreatPopped
             bool focusWasLow = _state.FocusLow;
-            double pts = ChaosFieldMath.ApplyTreatPop(_state, spec, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
+            double pts = ChaosFieldMath.ApplyTreatPop(_state, spec, pendulum: PendulumMultiplier, ChaosFieldMath.ChanceFlip(_state, Rng));
             if (focusWasLow)
                 PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 34,
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
@@ -246,7 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
 
         /// <summary>WPF OnDefused (:1984): the core snap (cost, counts, score, Drip Feed), the Snap
-        /// Chain window and Playing with Fire's brink gold. Pendulum is 1.0 until its boon lands.</summary>
+        /// Chain window, Playing with Fire's brink gold and the Pendulum scoring window.</summary>
         internal static void OnDefused(AmbientBubble b)
         {
             var spec = b.Spec;
@@ -255,7 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
-                b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
+                b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: PendulumMultiplier, ChaosFieldMath.ChanceFlip(_state, Rng));
             ShowPopScore(pts);
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
@@ -387,6 +394,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static void EndField()
         {
+            EndSlow();
             EndFreeze();
             _spawnTimer?.Stop();
             _spawnTimer = null;
@@ -399,6 +407,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
+            if (_slowRemainingSec > 0 && (_slowRemainingSec -= ChaosRunEngine.TICK_SEC) <= 0) EndSlow();
             if (_freezeRemainingSec > 0 && (_freezeRemainingSec -= ChaosRunEngine.TICK_SEC) <= 0) EndFreeze();
             UpdateHeatTint();
             TickToys();
@@ -431,6 +440,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.WaveIndex = newWave;
                 _state.ActIndex = ChaosRunEngine.ActFor(newWave);
             }
+            if (_state.Config.PendulumSwing && _state.WaveIndex != _pendulumWave)
+            {
+                _pendulumWave = _state.WaveIndex;
+                _pendulumFireAt = 0.15 + Rng.NextDouble() * 0.65;
+                _pendulumFired = false;
+            }
+            if (_state.Config.PendulumSwing && !_pendulumFired && _state.WaveProgress >= _pendulumFireAt
+                && _freezeRemainingSec <= 0 && _slowRemainingSec <= 0)
+            {
+                _pendulumFired = true;
+                ActivatePendulum();
+            }
+        }
+
+        internal static void ActivatePendulum()
+        {
+            if (!_spawning) return;
+            _slowRemainingSec = 2.5;
+            BubbleOverlay.Field.ChaosTimeScale = SlowFactor;
+            EffectPayload.GlobalDurationMult = 1.0 / SlowFactor;
+            ChaosEffectBannerOverlay.Show("slowmo", Loc.Get("option_flash_motion_pendulum"),
+                Color.FromRgb(0x7A, 0xE0, 0xFF), artKey: "pendulum");
+        }
+
+        private static void EndSlow()
+        {
+            _slowRemainingSec = 0;
+            BubbleOverlay.Field.ChaosTimeScale = 1;
+            if (_freezeRemainingSec <= 0) EffectPayload.GlobalDurationMult = 1;
+            ChaosEffectBannerOverlay.End("slowmo");
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
@@ -715,7 +754,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             bool wasFrozen = _freezeRemainingSec > 0 || BubbleOverlay.Field.FreezeChaos;
             _freezeRemainingSec = 0;
             BubbleOverlay.Field.FreezeChaos = false;
-            EffectPayload.GlobalDurationMult = 1.0;
+            if (_slowRemainingSec <= 0) EffectPayload.GlobalDurationMult = 1.0;
             ChaosEffectBannerOverlay.End("freeze");
             if (wasFrozen) ChaosOverlayWindow.ChaosSfx.Play("freeze_shatter", 0.5f);
             _fx?.EndEdgeHold();
