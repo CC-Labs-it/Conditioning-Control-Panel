@@ -348,6 +348,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ? Loc.GetF("launcher_panel_running", (CoreEngine.StartedUtc ?? DateTime.UtcNow).ToLocalTime().ToString("HH:mm"))
                     : Loc.Get("launcher_panel_idle");
                 StopLink.IsVisible = running;
+                RefreshDot();
                 if (_ctaRunning == running) return;
                 _ctaRunning = running;
                 PanelCtaText.Bind(TextBlock.TextProperty,

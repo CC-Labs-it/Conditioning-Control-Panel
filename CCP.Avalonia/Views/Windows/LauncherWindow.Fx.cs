@@ -5,7 +5,7 @@
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
 // ponytail: not ported (docs/avalonia-parity.html win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
-// perimeter comets, wordmark sheen, wordmark drift, running-dot breath, title tint, embers layer.
+// perimeter comets, wordmark sheen, wordmark drift, title tint, embers layer.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -108,12 +108,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool FxLive => IsVisible && WindowState != WindowState.Minimized;
         private static bool PerfLow => Env.CurrentTier == ConditioningControlPanel.Models.PerformanceTier.Performance;
         private static bool TiltAllowed => Env.AllowTransitions && !PerfLow;   // Tiles.cs:52
+        private double _dotT;
+        private bool _dotBreathing;
         private bool SpiralsOn => _fxActive && Env.AllowAmbientLoops && !PerfLow;          // Backdrop.cs:183
 
         /// <summary>Called once from the constructor, after the first BuildTiles.</summary>
         private void HookFx()
         {
             HookSheens();
+            Env.MotionGateChanged += RefreshDot;
+            Closed += (_, _) => Env.MotionGateChanged -= RefreshDot;
             _fxClock.Tick += (_, _) =>
             {
                 long now = Stopwatch.GetTimestamp();
@@ -147,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (e.Property == IsVisibleProperty) { if (IsVisible) FxOnShown(); else FxPark(); }
                 else if (e.Property == WindowStateProperty)
                 {
-                    if (FxLive) EnsureFxClock(); else FxPark();
+                    if (FxLive) { RefreshDot(); EnsureFxClock(); } else FxPark();
                     // The DWM squares a maximised window's corners; the frame's clip follows.
                     WindowFrame.CornerRadius = new CornerRadius(WindowState == WindowState.Normal ? 8 : 0);
                 }
@@ -199,6 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (!first) WelcomeBack();
                 }, DispatcherPriority.Loaded);
                 StartSheens();
+                RefreshDot();
                 EnsureFxClock();
             }
             catch (Exception ex) { Log.Debug(ex, "[Launcher] FxOnShown failed"); }
@@ -210,6 +215,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _fxClock.Stop();
             StopSheens();
+            _dotBreathing = false;
+            RunningDot.Opacity = CoreEngine.IsRunning ? 1 : 0.35;
             try
             {
                 _edgeFlareT = _glintT = -1;
@@ -242,6 +249,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             bool busy = false;
             try
             {
+                if (_dotBreathing)
+                {
+                    busy = true;
+                    _dotT = (_dotT + dt) % 5.2;
+                    double u = _dotT / 2.6;
+                    if (u > 1) u = 2 - u;
+                    RunningDot.Opacity = 0.55 + 0.45 * (1 - Math.Cos(Math.PI * u)) / 2;
+                }
                 if (SpiralsOn)
                 {
                     busy = true;
@@ -322,7 +337,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _fxActive = active;
             if (active) StartSheens(); else StopSheens();
+            RefreshDot();
             if (active) { EnsureFxClock(); OnEdgeActivated(); }
+        }
+
+        // WPF LauncherWindow.Fx.cs:104-116 and MotionFx.cs:231-248.
+        private void RefreshDot()
+        {
+            bool running = CoreEngine.IsRunning;
+            bool breathe = running && FxLive && _fxActive && Env.AllowAmbientLoops;
+            if (breathe == _dotBreathing) { if (!breathe) RunningDot.Opacity = running ? 1 : 0.35; return; }
+            _dotBreathing = breathe;
+            _dotT = 0;
+            RunningDot.Opacity = breathe ? 0.55 : running ? 1 : 0.35;
+            if (breathe) EnsureFxClock();
         }
 
         /// <summary>WPF OnEdgeActivated: focus coming back runs the shimmer and the glint, at most every 4 s.</summary>

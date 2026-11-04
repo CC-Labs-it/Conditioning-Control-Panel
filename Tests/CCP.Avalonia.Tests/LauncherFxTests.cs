@@ -113,6 +113,27 @@ public sealed class LauncherFxTests
     });
 
     [Fact]
+    public void RunningDot_BreathesAndParksWithEngineAndMotion() => Run(MotionLevel.Full, (shell, launcher, _) =>
+    {
+        var dot = launcher.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("RunningDot")!;
+        shell.StartEngine();
+        launcher.RefreshStatus();
+        launcher.OnFxActivated(true);
+        Assert.Equal(0.55, dot.Opacity, 2);
+        Step(launcher, 2.6);
+        Assert.Equal(1, dot.Opacity, 2);
+        launcher.OnFxActivated(false);
+        Assert.Equal(1, dot.Opacity, 2);
+        launcher.OnFxActivated(true);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Equal(1, dot.Opacity, 2);
+        MainShellWindow.StopEngine();
+        launcher.RefreshStatus();
+        Assert.Equal(0.35, dot.Opacity, 2);
+    });
+
+    [Fact]
     public void Clock_RunsOnlyWhileShownAndNotMinimised() => Run(MotionLevel.Full, (_, launcher, _) =>
     {
         Assert.True(launcher.FxTicking);
