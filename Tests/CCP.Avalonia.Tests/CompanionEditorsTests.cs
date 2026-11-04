@@ -4,10 +4,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -204,9 +206,13 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                // BringIntoView changes the scroll offset; arrange it before translating the click.
+                shell.UpdateLayout();
                 button.BringIntoView();
                 Dispatcher.UIThread.RunJobs();
+                shell.UpdateLayout();
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
