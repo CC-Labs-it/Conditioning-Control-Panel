@@ -55,11 +55,11 @@ public sealed class FriendLeashOfferTests
         var card = new FriendLeashOffer(Friend(), service, sent);
         Click(card, "leash-offer");
         Assert.Equal(0, wire.Calls);
-        Click(card, "leash-explain-not-now");
+        Click(card.Intro!, "leash-explain-not-now");
         Assert.False(CoreSettings.Current.LeashIntroSeenHolder);
         Assert.Equal(0, wire.Calls);
         Click(card, "leash-offer");
-        Click(card, "leash-explain-offer");
+        Click(card.Intro!, "leash-explain-offer");
         Assert.True(CoreSettings.Current.LeashIntroSeenHolder);
         Assert.Equal(1, wire.Calls);
         Assert.Contains("friend", sent);
@@ -118,7 +118,8 @@ public sealed class FriendLeashOfferTests
         var drawer = new FriendsDrawer(friends);
         drawer.Toggle("u_on");
         Click(drawer, "leash-offer");
-        Assert.NotNull(Button(drawer, "leash-explain-not-now"));
+        Assert.NotNull(drawer.GetLogicalDescendants().OfType<FriendLeashOffer>().Single().Intro);
+        drawer.GetLogicalDescendants().OfType<FriendLeashOffer>().Single().Intro!.Close();
     });
 
     [Fact]
@@ -138,6 +139,59 @@ public sealed class FriendLeashOfferTests
         wire.Hold.SetResult(new JObject { ["ok"] = true, ["status"] = "sent" });
         await FriendsDrawerTests.Until(() => sent.Contains("friend"));
         Assert.Contains("friend", sent);
+    });
+
+    [Fact]
+    public Task DrawersShareOffersAndAnswersPermitAnotherOffer() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup(); CoreSettings.Current.UnifiedId = "account-a"; CoreSettings.Current.LeashIntroSeenHolder = true;
+        var (friends, _) = FriendsDrawerTests.Service(); await friends.RefreshAsync();
+        var wire = new Wire(); var service = new LeashService(wire, () => "me"); LeashHead.Service = service;
+        var first = new FriendsDrawer(friends); var second = new FriendsDrawer(friends, asPage: true);
+        var window = new Window { Content = new StackPanel { Children = { first, second } } };
+        window.Show(); first.Toggle("u_on"); second.Toggle("u_on");
+        try
+        {
+            Click(first, "leash-offer");
+            Assert.Equal(1, wire.Calls);
+            Assert.False(Button(second, "leash-offer").IsEnabled);
+            void Answer(string id, bool accepted) => service.ApplyBlock(new JObject
+            {
+                ["holding"] = new JArray(), ["offers"] = new JArray(), ["events"] = new JArray(new JObject
+                { ["id"] = id, ["kind"] = "answered", ["from"] = new JObject { ["id"] = "u_on", ["name"] = "Mia" }, ["at"] = DateTimeOffset.UtcNow.ToString("o"), ["accepted"] = accepted })
+            });
+            Answer("declined", false);
+            Assert.True(Button(second, "leash-offer").IsEnabled);
+            Click(second, "leash-offer"); Assert.Equal(2, wire.Calls);
+            Answer("accepted", true);
+            Assert.True(Button(first, "leash-offer").IsEnabled);
+            Click(first, "leash-offer"); Assert.Equal(3, wire.Calls);
+            var held = new JObject { ["who"] = new JObject { ["id"] = "u_on", ["name"] = "Mia" }, ["online"] = true, ["intensity"] = "soft", ["since"] = DateTimeOffset.UtcNow.ToString("o"), ["day"] = 1, ["week"] = new JArray(), ["pending"] = new JArray() };
+            service.ApplyBlock(new JObject { ["holding"] = new JArray { held }, ["events"] = new JArray() });
+            Assert.False(Button(first, "leash-offer").IsEnabled);
+            service.ApplyBlock(new JObject { ["holding"] = new JArray(), ["events"] = new JArray() });
+            Assert.True(Button(second, "leash-offer").IsEnabled);
+            Click(second, "leash-offer"); Assert.Equal(4, wire.Calls);
+            CoreSettings.Current.UnifiedId = "account-b";
+            LeashHead.CheckOfferAccount();
+            Assert.True(Button(first, "leash-offer").IsEnabled);
+        }
+        finally { window.Close(); LeashHead.Service = null; }
+    });
+
+    [Fact]
+    public void HelpShowsTheSameIllustratedExplanationWithoutSending() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var wire = new Wire(); var card = new FriendLeashOffer(Friend(), new LeashService(wire, () => "me"), new HashSet<string>());
+        Click(card, "leash-offer");
+        var intro = card.Intro!;
+        Assert.Equal(Loc.GetF("leash_explain_offer_title", "Mia"), intro.Title);
+        Assert.Equal(4, intro.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Path>().Count(p => ((string?)p.Tag)?.StartsWith("leash-explain-art:") == true));
+        Click(intro, "leash-explain-not-now"); Assert.Equal(0, wire.Calls); Assert.False(CoreSettings.Current.LeashIntroSeenHolder);
+        Click(card, "leash-offer-help"); intro = card.Intro!;
+        Assert.Equal(Loc.Get("leash_explain_title"), intro.Title);
+        Assert.Null(intro.GetLogicalDescendants().OfType<Button>().FirstOrDefault(b => (string?)b.Tag == "leash-explain-offer"));
+        Click(intro, "leash-explain-not-now"); Assert.Equal(0, wire.Calls);
     });
 
 }

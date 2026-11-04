@@ -55,7 +55,6 @@ public sealed partial class FriendsDrawer : Border
     private string? _openId;
     private (string Id, string What)? _confirm;
     private readonly Dictionary<string, (string Text, bool Good)> _results = new();
-    private readonly HashSet<string> _leashOffers = new(), _leashPending = new();
     private readonly Border _head = new(), _addBox = new(), _foot = new();
     private readonly Border _ask = new() { Tag = "friends-presence-ask", Margin = new Thickness(10, 8, 10, 0) };
     private readonly StackPanel _list = new();
@@ -431,7 +430,7 @@ public sealed partial class FriendsDrawer : Border
             return card;
         }
         card.Children.Add(CardActions(f));
-        if (FriendLeashOffer.Create(f, _leashOffers, _leashPending, Render) is { } offer) card.Children.Add(offer);
+        if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);
         var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
         more.HorizontalAlignment = HorizontalAlignment.Stretch;
         more.HorizontalContentAlignment = HorizontalAlignment.Center;
