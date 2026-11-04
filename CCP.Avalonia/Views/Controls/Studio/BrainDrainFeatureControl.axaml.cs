@@ -15,7 +15,7 @@ using SettingsModel = ConditioningControlPanel.Models.AppSettings;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 {
     // WPF BrainDrainFeatureControl.xaml.cs:37-48,88-106,121-198,200-380,417-429.
-    // Clip library, art and every editor are live. The desktop blur and melt visual remains unported.
+    // Clip library, art and every editor are live. The blur draws in Overlays/BrainDrainOverlay; the melt visual remains unported.
     public partial class BrainDrainFeatureControl : UserControl
     {
         public BrainDrainFeatureControl()
