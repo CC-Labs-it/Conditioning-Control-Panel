@@ -13,6 +13,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
@@ -40,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>A direct launch of the page needs the switch too.</summary>
         internal static bool GlassroadGate()
         {
-            if (GlassroadDoorOpen()) return true;
+            if (GlassroadDoorOpen()) return TierGate.DemandLab(Loc.Get("launcher_game_race_title"));
             Log.Information("GlassroadHost: launch refused, {Env} is not 1", GlassroadHostRules.DoorEnv);
             return false;
         }

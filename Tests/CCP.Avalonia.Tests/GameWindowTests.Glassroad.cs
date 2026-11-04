@@ -40,11 +40,13 @@ public sealed partial class GameWindowTests
     {
         var (oldDoor, oldOwns, oldHttp, oldBase) = (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
+        var oldLab = CoreEntitlement.HasLabProvider;
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
             GameWindow.GlassroadDoorEnv = () => door;
+            CoreEntitlement.HasLabProvider = () => true;
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
             GameWindow.PbpServerBase = () => GrBase;
@@ -57,10 +59,30 @@ public sealed partial class GameWindowTests
         }
         finally
         {
+            CoreEntitlement.HasLabProvider = oldLab;
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Glassroad_PreviewRequiresPrime(bool prime)
+    {
+        var old = (GameWindow.GlassroadDoorEnv, CoreEntitlement.HasLabProvider, CoreEntitlement.ShowDeniedHandler);
+        try
+        {
+            GameWindow.GlassroadDoorEnv = () => "1";
+            CoreEntitlement.HasLabProvider = () => prime;
+            CoreEntitlement.ShowDeniedHandler = _ => { };
+            Assert.Equal(prime, GameWindow.GlassroadGate());
+        }
+        finally
+        {
+            (GameWindow.GlassroadDoorEnv, CoreEntitlement.HasLabProvider, CoreEntitlement.ShowDeniedHandler) = old;
+        }
+    }
 
     // ---- pure rules ----
 
