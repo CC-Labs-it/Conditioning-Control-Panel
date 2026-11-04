@@ -119,7 +119,19 @@ public sealed class FirstShowPreviewBackendTests
     [Fact]
     public void NativeCueSelectsTheSavedDeviceBeforePlayingAndFallsBackForStaleIds()
     {
-        if (Environment.GetEnvironmentVariable("CCP_TEST_AUDIO_FIXTURE") != "1") Assert.Skip("Native routing requires an isolated audio fixture");
+        if (Environment.GetEnvironmentVariable("CCP_TEST_AUDIO_FIXTURE") != "1")
+        {
+            Assert.True(OperatingSystem.IsLinux(), "Native routing requires the isolated Windows CI audio fixture");
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root != null && !File.Exists(Path.Combine(root.FullName, ".github/scripts/with-test-pulse.sh"))) root = root.Parent;
+            Assert.NotNull(root);
+            var info = new System.Diagnostics.ProcessStartInfo("bash") { WorkingDirectory = root.FullName, RedirectStandardOutput = true };
+            foreach (var arg in new[] { ".github/scripts/with-test-pulse.sh", Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet", "test", typeof(FirstShowPreviewBackendTests).Assembly.Location, "--filter", "FullyQualifiedName=" + typeof(FirstShowPreviewBackendTests).FullName + "." + nameof(NativeCueSelectsTheSavedDeviceBeforePlayingAndFallsBackForStaleIds) }) info.ArgumentList.Add(arg);
+            using var child = System.Diagnostics.Process.Start(info)!;
+            var output = child.StandardOutput.ReadToEndAsync(); if (!child.WaitForExit(120000)) { child.Kill(true); Assert.Fail("Audio fixture timed out"); }
+            Assert.True(child.ExitCode == 0 && System.Text.RegularExpressions.Regex.IsMatch(output.Result, @"Passed:\s+1,\s+Skipped:\s+0\b"), output.Result);
+            return;
+        }
         RequireNativeVlc();
         var path = Path.Combine(Path.GetTempPath(), "ccp-cue-route-" + Guid.NewGuid().ToString("N") + ".wav");
         WriteConstantWav(path, 0);

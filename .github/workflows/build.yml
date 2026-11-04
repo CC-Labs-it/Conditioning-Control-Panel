@@ -332,6 +332,8 @@ jobs:
       - run: bash Tests/CCP.Avalonia.Tests/scripts/pulse-fixture-test.sh
         if: matrix.shard == 1
       - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
+      - if: matrix.shard == 1
+        run: 'set -e -o pipefail; dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build --filter FullyQualifiedName~NativeCueSelectsTheSavedDeviceBeforePlayingAndFallsBackForStaleIds | tee /tmp/ccp-routing-result; grep -Eq "Passed: +1, Skipped: +0" /tmp/ccp-routing-result'
       - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
         run: |
           if [ "${{ matrix.shard }}" = 1 ]; then
