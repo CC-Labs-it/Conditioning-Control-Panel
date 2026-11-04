@@ -113,9 +113,20 @@ public sealed class LeashHolderCard : Border
             var release = new MenuItem { Tag = "leash-release" };
             var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             heading.Children.Add(LeashCardUi.Text(Loc.GetF("leash_menu_release", h.Who.Name)));
-            heading.Children.Add(LeashCardUi.Text("?", "leash-slip-help:letgo", F.Lilac));
+            heading.Children.Add(new Border
+            {
+                Width = 14, Height = 14, CornerRadius = new CornerRadius(7), BorderBrush = F.Lilac, BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center, Tag = "leash-slip-help:" + LeashHelpCatalog.LetGoId,
+                Child = new TextBlock { Text = "?", FontSize = 9, FontWeight = FontWeight.Bold, Foreground = F.Lilac, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            });
             release.Header = heading;
-            ToolTip.SetTip(release, new LeashHelpSlip(LeashHelpCatalog.Get(LeashHelpCatalog.LetGoId)!, h.Who.Name));
+            // WPF LeashHelpSlip.cs:561-571 AsToolTip: the paper card with no tooltip chrome, to the right.
+            ToolTip.SetTip(release, new ToolTip
+            {
+                Content = new LeashHelpSlip(LeashHelpCatalog.Get(LeashHelpCatalog.LetGoId)!, h.Who.Name),
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0, 0, 8, 10),
+            });
+            ToolTip.SetPlacement(release, PlacementMode.Right);
             ToolTip.SetShowDelay(release, 250);
             ToolTip.SetBetweenShowDelay(release, -1);
             var tipTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };

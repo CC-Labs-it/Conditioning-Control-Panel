@@ -175,7 +175,11 @@ public sealed class LeashCardsTests
         Assert.Equal(250, ToolTip.GetShowDelay(release));
         Assert.Equal(-1, ToolTip.GetBetweenShowDelay(release));
         Assert.Equal(TimeSpan.FromSeconds(60), card.ReleaseHelpTimer!.Interval);
-        Assert.IsType<LeashHelpSlip>(ToolTip.GetTip(release));
+        var tip = Assert.IsType<ToolTip>(ToolTip.GetTip(release));
+        Assert.IsType<LeashHelpSlip>(tip.Content);
+        Assert.Equal((global::Avalonia.Media.Brushes.Transparent, new Thickness(0), new Thickness(0, 0, 8, 10), PlacementMode.Right),
+            (tip.Background, tip.BorderThickness, tip.Padding, ToolTip.GetPlacement(release)));
+        Assert.Equal("leash-slip-help:" + LeashHelpCatalog.LetGoId, Assert.IsType<Border>(((StackPanel)release.Header!).Children[1]).Tag);
     });
 
     [Fact]
@@ -472,7 +476,7 @@ public sealed class LeashCardsTests
         var menu = Find<Button>(card, "leash-holder-more").ContextMenu!;
         var release = Assert.IsType<MenuItem>(menu.Items[1]);
         Assert.Equal("leash-release", release.Tag);
-        Assert.IsType<LeashHelpSlip>(ToolTip.GetTip(release));
+        Assert.IsType<LeashHelpSlip>(Assert.IsType<ToolTip>(ToolTip.GetTip(release)).Content);
         release.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         Assert.Equal("punish:Video:7", svc.Calls.Last());   // WPF asks first
         LeashCutConfirmWindow.Current!.NoButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
