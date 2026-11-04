@@ -89,6 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     if (!_warnedEmpty) Log.Warning("Flash: no images found in {Path}", ImagesPath());
                     _warnedEmpty = true;
+                    // Outside the warn-once flag: the offer keeps its own once-per-launch budget (WPF FlashService.cs:971).
+                    Platform.RemoteMediaOfferHead.Offer("flashes");
                     return;
                 }
 

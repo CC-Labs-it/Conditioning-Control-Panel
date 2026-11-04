@@ -13,6 +13,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services.Startup;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -171,6 +172,43 @@ public sealed class FeatureIntroWiringTests
         ClickLockdown(shell);
         Assert.Equal(FeatureIntros.All["lockdown"].Title, CardTitle(opened));
     }, "lockdown");
+
+    [Fact]
+    public Task EmptyAssetsOfferTheRemoteCardOnlyWhenItsPoolPlaysAndNeverOverAModal() => Run((opened, shell) =>
+    {
+        // WPF App.OfferRemoteMediaSource (App.xaml.cs:898) and its flush (MainWindow.xaml.cs:3852).
+        var source = CoreSettings.Current.MediaSource;
+        RemoteMediaOffer.ResetForTests();
+        try
+        {
+            CoreSettings.Current.MediaSource = "local";
+            RemoteMediaOfferHead.Offer("flashes", shell);   // no remote flash pool on this head yet
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(opened.OfType<FeatureIntroPopup>());
+            Assert.False(StartupLadder.Inbox.Contains("intro:remotemedia"));
+
+            RemoteMediaOffer.FlashPoolLive = true;   // stands in for the pool lane
+            MainShellWindow.IsStartupDialogShowing = true;
+            RemoteMediaOfferHead.Offer("flashes", shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(opened.OfType<FeatureIntroPopup>());
+            Assert.False(StartupLadder.Inbox.Contains("intro:remotemedia"));
+            Assert.DoesNotContain(RemoteMediaOffer.IntroKey, CoreSettings.Current.SeenFeatureIntros);
+
+            MainShellWindow.IsStartupDialogShowing = false;
+            RemoteMediaOfferHead.Flush(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(FeatureIntros.All[RemoteMediaOffer.IntroKey].Title, CardTitle(opened));
+
+            ClickNav(shell, null, () => RemoteMediaOfferHead.Offer("flashes", shell));   // the launch's one offer is spent
+            Assert.Single(opened.OfType<FeatureIntroPopup>());
+        }
+        finally
+        {
+            CoreSettings.Current.MediaSource = source;
+            RemoteMediaOffer.ResetForTests();
+        }
+    }, RemoteMediaOffer.IntroKey);
 
     [Fact]
     public Task LongLockdownCardKeepsItsDismissButtonReachable() => Run((opened, shell) =>
