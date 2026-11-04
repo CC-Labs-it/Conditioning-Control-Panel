@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -25,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// ponytail: the corner notices (FriendNotices: poke toast, watch toast, request toast) are not on this head
 /// (row feat-friends-open-tables), so a watch, and a poke that cannot throw its word (over a game, or nothing of
 /// ours on screen), go to the Inbox as WPF does with the bell off (WPF :212); WPF's "Poke back" toast is dropped
-/// with them. Request rows/cues wait for row feat-friends-open-tables.
+/// with them. Request corner notices and cues wait for row feat-friends-open-tables.
 /// </summary>
 internal static class FriendsLanding
 {
@@ -212,12 +213,50 @@ internal static class FriendsLanding
             var (key, english) = LandingRules.SentWord(kind);
             FloatingWord.Throw(anchor, Str(key, english), pink: false, small: true);
         }
-        public void RequestRow(FriendRequest request) { }
+        public void RequestRow(FriendRequest request) => OnUi(() => StartupLadder.Inbox.File(new RowItem
+        {
+            Key = "friends-request:" + request.Id,
+            Title = request.Name,
+            Summary = Str("friends_land_request_line", "wants to be friends"),
+            Glyph = "💌",
+            Open = () => OpenFriends(),
+        }));
+
         public void RequestAnnounce(FriendRequest request, bool inGame) { }
         public void RequestCue() { }
-        public void RequestGone(string requestId) { }
-        public void RequestsWaiting(IReadOnlyList<FriendRequest> waiting, bool announce, bool inGame) { }
+        public void RequestGone(string requestId) => OnUi(() => StartupLadder.Inbox.Remove("friends-request:" + requestId));
+        public void RequestsWaiting(IReadOnlyList<FriendRequest> waiting, bool announce, bool inGame) => OnUi(() =>
+        {
+            const string key = "friends-requests-waiting";
+            // File deduplicates by key, so replace the row when the count changes.
+            StartupLadder.Inbox.Remove(key);
+            if (waiting.Count == 0) return;
+            var newest = waiting[0];
+            foreach (var request in waiting) if (request.At > newest.At) newest = request;
+            StartupLadder.Inbox.File(new RowItem
+            {
+                Key = key,
+                Title = waiting.Count == 1 ? newest.Name : string.Format(Str("friends_land_waiting_many", "{0} friend requests waiting"), waiting.Count),
+                Summary = waiting.Count == 1 ? Str("friends_land_request_line", "wants to be friends") : "",
+                Glyph = "💌",
+                Open = () => OpenFriends(),
+            });
+        });
     }
+
+    private static void OnUi(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess()) action();
+        else Dispatcher.UIThread.Post(action);
+    }
+
+    /// <summary>WPF OpenDrawer: show the panel, then open its friends drawer after layout.</summary>
+    internal static Action OpenFriends { get; set; } = () =>
+    {
+        if (MainShellWindow.Current is not { } panel) return;
+        LauncherWindow.OpenPanel(panel);
+        Dispatcher.UIThread.Post(() => panel.FindControl<FriendsRailChip>("FriendsChip")?.Open(), DispatcherPriority.Loaded);
+    };
 
     /// <summary>The drawer's bell (WPF NoticesOn :348). Off: Inbox rows only.</summary>
     private static bool NoticesOn => CoreSettings.Current.FriendNotificationsEnabled;

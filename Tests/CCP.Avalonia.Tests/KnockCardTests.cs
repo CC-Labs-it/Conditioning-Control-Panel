@@ -11,6 +11,7 @@ using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
@@ -34,9 +35,10 @@ public sealed class KnockCardTests
     {
         public readonly List<ReceiptReport> Receipts = new();
         public bool Available => true;
-        public FriendsSnapshot Snapshot => FriendsSnapshot.Empty;
+        public FriendsSnapshot Snapshot { get; private set; } = FriendsSnapshot.Empty;
         public bool PresenceShared { get; set; }
-        public event Action<FriendsSnapshot>? SnapshotChanged { add { } remove { } }
+        public event Action<FriendsSnapshot>? SnapshotChanged;
+        public void Publish(FriendsSnapshot snapshot) { Snapshot = snapshot; SnapshotChanged?.Invoke(snapshot); }
         public event Action<InboxItem>? Delivered;
         public event Action<SendKind, Friend>? Sent { add { } remove { } }
         public event Action<FriendRequest>? RequestArrived { add { } remove { } }
@@ -110,6 +112,68 @@ public sealed class KnockCardTests
     private static void Press(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static string Text(Control c) => string.Join("|", global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(c).OfType<TextBlock>().Select(t => t.Text));
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RequestRowsOpenAndAreRemovedRegardlessOfBell(bool bell) => Run((svc, host, _, _) =>
+    {
+        var previous = FriendsLanding.OpenFriends;
+        var opened = 0;
+        try
+        {
+            CoreSettings.Current.FriendNotificationsEnabled = bell;
+            FriendsLanding.OpenFriends = () => opened++;
+            var request = new FriendRequest("r1", "Mia", null, null, T0);
+            FriendsLanding.Router!.OnRequestArrived(request);
+            var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends-request:r1");
+            Assert.Equal("Mia", row.Title);
+            StartupLadder.Inbox.Open(row);
+            Assert.Equal(1, opened);
+            FriendsLanding.Router.OnRequestArrived(request);
+            FriendsLanding.Router.OnRequestGone("r1");
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "friends-request:r1");
+        }
+        finally { FriendsLanding.OpenFriends = previous; }
+    });
+
+    [Fact]
+    public Task OpeningTheFriendsChipTwiceKeepsTheDrawerOpen() => Run((svc, host, _, _) =>
+    {
+        var chip = new FriendsRailChip(svc);
+        host.Content = chip;
+        chip.Open();
+        Assert.True(chip.IsOpen);
+        chip.Open();
+        Assert.True(chip.IsOpen);
+        chip.Toggle();
+    });
+
+    [Fact]
+    public Task WaitingRequestRowTracksTheSnapshotAndOpens() => Run((svc, host, _, _) =>
+    {
+        var previous = FriendsLanding.OpenFriends;
+        var opened = 0;
+        try
+        {
+            FriendsLanding.OpenFriends = () => opened++;
+            var a = new FriendRequest("a", "Mia", null, null, T0);
+            var b = new FriendRequest("b", "Jo", null, null, T0.AddMinutes(1));
+            var snapshot = FriendsSnapshot.Empty with { Incoming = new[] { a, b }, MyCode = "code" };
+            svc.Publish(snapshot);
+            FriendsLanding.Router!.Release();
+            var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends-requests-waiting");
+            Assert.Contains("2", row.Title);
+            svc.Publish(snapshot with { Incoming = new[] { b } });
+            row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends-requests-waiting");
+            Assert.Equal("Jo", row.Title);
+            StartupLadder.Inbox.Open(row);
+            Assert.Equal(1, opened);
+            svc.Publish(snapshot with { Incoming = Array.Empty<FriendRequest>() });
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "friends-requests-waiting");
+        }
+        finally { FriendsLanding.OpenFriends = previous; }
+    });
 
     [Fact]
     public Task AnInviteKnocksWithANonActivatingCardThatFoldsToTheInboxAndReopens() => Run((svc, host, _, _) =>
