@@ -27,7 +27,8 @@ public sealed class ProgramsBrowseTests
 
     /// <summary>
     /// programs-3a test 7: a refused card renders the "needs X" reason as real text in the card,
-    /// never the raw loc key; Firmware Install needs the keyword engine.
+    /// never the raw loc key. Rituals are switched off so a card is refused on every OS: keyword
+    /// programs are enrollable on Windows (ProgramCapabilities.IsAvailable).
     /// </summary>
     [Fact]
     public async Task RefusedCardRendersTheMissingFeature()
@@ -37,9 +38,11 @@ public sealed class ProgramsBrowseTests
             EnsureAvalonia();
             Window? host = null;
             var previousLanguage = LocalizationManager.Instance.CurrentLanguage;
+            var previousRituals = ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.RitualsAvailable;
             try
             {
                 LocalizationManager.Instance.SetLanguage("en");
+                ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.RitualsAvailable = false;
                 var view = new ProgramsTabView { Width = 1200, Height = 900 };
                 host = new Window { Width = 1200, Height = 900, Content = view };
                 host.Show();
@@ -48,11 +51,12 @@ public sealed class ProgramsBrowseTests
 
                 var texts = view.FindControl<ListBox>("ProgramLibraryList")!
                     .GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
-                Assert.Contains("Not available on this build yet: needs Keyword Triggers.", texts);
+                Assert.Contains("Not available on this build yet: needs Rituals.", texts);
                 Assert.DoesNotContain(texts, t => t.Contains("programs_needs_feature"));
             }
             finally
             {
+                ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.RitualsAvailable = previousRituals;
                 LocalizationManager.Instance.SetLanguage(previousLanguage);
                 host?.Close();
                 Dispatcher.UIThread.RunJobs();
