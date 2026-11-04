@@ -59,7 +59,7 @@ public sealed class ChaosWaveDraftTests
         while (!pick.IsEnabled && DateTime.UtcNow < deadline) await Task.Delay(50);
         Assert.True(pick.IsEnabled);
         Click(pick);
-        await Task.Delay(1800);
+        deadline = DateTime.UtcNow.AddSeconds(10); while (state.WaveIndex == 1 && DateTime.UtcNow < deadline) await Task.Delay(50);
     }
     // WPF ChaosModeService.cs:1441-1483, 1577-1617 and ChaosOverlayWindow.xaml.cs:78-79.
     [Fact]
@@ -126,7 +126,7 @@ public sealed class ChaosWaveDraftTests
         Assert.True(pick.IsEnabled);
         Click(pick);
         Assert.Empty(state.ActiveBoons);
-        await Task.Delay(1800); // WPF's 1.5 s confirmation beat
+        var deadline = DateTime.UtcNow.AddSeconds(10); while (state.WaveIndex == 1 && DateTime.UtcNow < deadline) await Task.Delay(50);
         Assert.Single(state.ActiveBoons);
         Assert.Single(state.RunPickTiles);
         Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
