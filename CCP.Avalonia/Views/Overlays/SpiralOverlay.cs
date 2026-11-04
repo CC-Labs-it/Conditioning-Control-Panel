@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,14 +13,16 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services;                  // SpiralFrames
+using ConditioningControlPanel.Services.Compositor;
+using ConditioningControlPanel.Services.Safety;
 using Serilog;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
     /// <summary>
-    /// The Spiral overlay: one click-through, topmost <see cref="SpiralOverlayWindow"/> per targeted
-    /// monitor, all showing the same pre-decoded GIF frames. The Avalonia counterpart of
+    /// The Spiral overlay: shared per-screen GIF stages when enabled, otherwise one click-through
+    /// <see cref="SpiralOverlayWindow"/> per monitor, all showing the same pre-decoded frames. The Avalonia counterpart of
     /// <c>OverlayService</c>'s spiral region (ConditioningControlPanel/Services/Notifications/OverlayService.cs:
     /// StartSpiral, CreateSpiralGifWindow, GifFrameTimer_Tick, StopSpiral), shaped like
     /// <see cref="PinkFilterOverlay"/> (static, idempotent <see cref="Refresh"/>) and opening its windows
@@ -37,6 +40,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool SkipPlatformChecksForTests;
 
         private static readonly List<SpiralOverlayWindow> Windows = new();
+        private static readonly List<(SharedOverlayHost.Lease Lease, Grid Root, Image Image)> Hosted = new();
+        private static bool _hostMode, _hostActive;
+        private static double _visibility = 1;
+        private static TimeSpan _frameElapsed;
+        private static long _lastTick;
         private static int[] _shownOn = Array.Empty<int>();
         private static List<Bitmap> _frames = new();
         private static string _framesKey = "";
@@ -51,8 +59,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Refresh calls so far (tests: the session tick only refreshes on a change).</summary>
         internal static int Refreshes { get; private set; }
 
-        internal static bool IsShowing => Windows.Count > 0;
-        internal static bool IsAnimating => _timer is { IsEnabled: true };
+        internal static bool IsShowing => Windows.Count > 0 || (Hosted.Count > 0 && _hostActive);
+        internal static bool IsAnimating => _timer is { IsEnabled: true } && _frames.Count > 1 && IsShowing;
         internal static int FrameIndex => _index;
         internal static TimeSpan FrameDelay => _delay;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
@@ -118,9 +126,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var opacity = PaintedOpacity;
 
-            if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
+            var hostMode = s.UnifiedOverlayHost && Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase);
+            if ((IsShowing || Hosted.Count > 0) && Hosted.All(x => x.Lease.IsOpen) && hostMode == _hostMode && want.SequenceEqual(_shownOn)
+                && (_hostActive || Hosted.Count == 0 || Hosted.Count == want.Length))
             {
+                if (Hosted.Count > 0 && !_hostActive)
+                {
+                    _hostActive = true; // WPF BaseLayer.SetActive reverses an unfinished fade.
+                    _index = 0;
+                    _frameElapsed = TimeSpan.Zero;
+                    foreach (var item in Hosted) item.Image.Source = _frames[0];
+                    QuestMinutes.Follow(true);
+                }
                 foreach (var w in Windows) w.Spiral.Opacity = opacity;   // WPF UpdateSpiralOpacity
+                foreach (var item in Hosted) item.Image.Opacity = opacity;
                 return;
             }
 
@@ -132,8 +151,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
+            _visibility = hostMode && GentleVisuals.On ? 0 : 1;
+            _frameElapsed = TimeSpan.Zero;
             foreach (var i in want)
             {
+                if (hostMode && ShowHosted(screens[i].Bounds, _frames[_index % _frames.Count], opacity)) continue;
                 var w = new SpiralOverlayWindow();
                 if (!video) w.Spiral.Source = _frames[_index % _frames.Count];
                 w.Spiral.Opacity = opacity;
@@ -146,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Log.Warning("Spiral: the platform refused a click-through topmost overlay window, so the spiral is not shown");
                     _refused = true;
                     w.Close();
+                    CloseWindows(); // a partially created set must not enter a fade without a timer
                     CloseAll();
                     return;
                 }
@@ -153,29 +176,72 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Windows.Add(w);
             }
             _shownOn = want;
-            QuestMinutes.Follow(Windows.Count > 0);
+            _hostMode = hostMode;
+            _hostActive = Hosted.Count > 0;
+            QuestMinutes.Follow(IsShowing);
             if (video && Windows.Count > 0)
             {
                 try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
                 if (_videoPlayer == null) { CloseWindows(); return; }
             }
-            if (_frames.Count > 1 && Windows.Count > 0)
+            if (Hosted.Count > 0 || (_frames.Count > 1 && IsShowing))
             {
-                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = _delay };
-                _timer.Tick += (_, _) => Tick();
+                _timer = new DispatcherTimer(DispatcherPriority.Render)
+                    { Interval = Hosted.Count > 0 ? TimeSpan.FromMilliseconds(16) : _delay };
+                _lastTick = Stopwatch.GetTimestamp();
+                _timer.Tick += (_, _) =>
+                {
+                    if (Hosted.Count == 0) { Tick(); return; }
+                    var now = Stopwatch.GetTimestamp();
+                    var delta = Stopwatch.GetElapsedTime(_lastTick, now);
+                    _lastTick = now;
+                    AdvanceHosted(delta);
+                };
                 _timer.Start();
             }
-            Log.Debug("Spiral showing on {Count} screen(s) at {Opacity}%", Windows.Count, s.SpiralOpacity);
+            Log.Debug("Spiral showing on {Count} screen(s) at {Opacity}%", Windows.Count + Hosted.Count, s.SpiralOpacity);
         }
 
         /// <summary>WPF GifFrameTimer_Tick: next frame on every window. Allocation-free.</summary>
         internal static void Tick()
         {
-            if (_frames.Count == 0 || Windows.Count == 0) return;
+            if (_frames.Count == 0 || (!IsShowing && Hosted.Count == 0)) return;
             _index = (_index + 1) % _frames.Count;
             var frame = _frames[_index];
             for (var i = 0; i < Windows.Count; i++) Windows[i].Spiral.Source = frame;
+            foreach (var item in Hosted) item.Image.Source = frame;
+        }
+
+        // WPF SpiralLayer.Update and BaseLayer.AdvanceVisibility use elapsed time and live settings.
+        internal static void AdvanceHosted(TimeSpan delta)
+        {
+            if (Hosted.Count == 0) return;
+            if (delta < TimeSpan.Zero) delta = TimeSpan.Zero;
+            if (delta > TimeSpan.FromMilliseconds(100)) delta = TimeSpan.FromMilliseconds(100);
+            _frameElapsed += delta;
+            var delay = TimeSpan.FromMilliseconds(GentleVisuals.ScaleDelayMs(_delay.TotalMilliseconds));
+            if (_frames.Count > 1)
+                while (_frameElapsed >= delay) { _frameElapsed -= delay; Tick(); }
+            if (GentleVisuals.On)
+                _visibility = GentleFade.Step(_visibility, _hostActive ? 1 : 0, delta.TotalSeconds, GentleVisuals.FadeSeconds);
+            else
+                _visibility = _hostActive ? 1 : 0;
+            foreach (var item in Hosted) item.Root.Opacity = _visibility;
+            if (!_hostActive && _visibility <= 0) CloseWindows();
+        }
+
+        // WPF OverlayService.cs:1558-1569: GIFs share the compositor, with classic fallback.
+        internal static bool ShowHosted(PixelRect bounds, Bitmap frame, double opacity)
+        {
+            var lease = SharedOverlayHost.Acquire(bounds);
+            if (lease == null) return false;
+            var image = new Image { Source = frame, Opacity = opacity, Stretch = Stretch.UniformToFill };
+            var root = new Grid { ClipToBounds = true, IsHitTestVisible = false, ZIndex = CompositorLayers.Spiral, Opacity = _visibility };
+            root.Children.Add(image);
+            lease.Canvas.Children.Add(root);
+            Hosted.Add((lease, root, image));
+            return true;
         }
 
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
@@ -185,6 +251,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _configuredPath = null;
             _randomizeAtStart = null;
             _repicked = false;
+            if (Hosted.Count > 0 && GentleVisuals.On)
+            {
+                if (!_hostActive) return;
+                _hostActive = false;
+                foreach (var w in Windows.ToList()) w.Close();
+                Windows.Clear();
+                StopVideo();
+                QuestMinutes.Follow(false);
+                App.Sessions?.RefreshCornerGifPolicy();
+                return;
+            }
             CloseWindows();
         }
 
@@ -199,6 +276,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("Spiral: failed to close a window: {E}", ex.Message); }
             }
             Windows.Clear();
+            foreach (var (lease, root, _) in Hosted) { lease.Canvas.Children.Remove(root); lease.Dispose(); }
+            Hosted.Clear();
+            _hostActive = false;
+            _visibility = 1;
+            _frameElapsed = TimeSpan.Zero;
             _shownOn = Array.Empty<int>();
             QuestMinutes.Follow(false);
             // WPF OverlayService.cs:2094: the fullscreen spiral left, so a session may raise its corner GIF again.

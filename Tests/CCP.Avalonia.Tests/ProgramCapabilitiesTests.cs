@@ -89,7 +89,12 @@ public sealed class ProgramCapabilitiesTests
                 Assert.Matches(@"QuestMinutes\.Follow\(IsShowing\)", src);
                 Assert.Matches(@"IsShowing\s*=>\s*Windows\.Count > 0 \|\| Hosted\.Count > 0", src);
             }
-            else Assert.Matches(@"QuestMinutes\.Follow\(Windows\.Count > 0\)", src);
+            else
+            {
+                Assert.Matches(@"QuestMinutes\.Follow\(IsShowing\)", src);
+                Assert.Matches(@"IsShowing\s*=>\s*Windows\.Count\s*>\s*0\s*\|\|\s*\(\s*Hosted\.Count\s*>\s*0\s*&&\s*_hostActive\s*\)", src);
+                Assert.Matches(@"QuestMinutes\.Follow\(true\)", src);
+            }
             Assert.Matches(@"QuestMinutes\.Follow\(false\)", src);
         }
         Assert.Matches(@"LockdownDeactivated \+=[^;]*?TrackLockdownCompleted\(", Src("App.axaml.cs"));
