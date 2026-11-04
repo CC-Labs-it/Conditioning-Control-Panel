@@ -59,6 +59,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
+        private double _teaseLifeMs, _teaseCenterX, _teaseCenterY;
+        private bool _dissolving;
         private int _animType;
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
@@ -76,7 +78,7 @@ namespace ConditioningControlPanel.Services
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
 
-        public enum Result { Alive, Missed, Done, Detonated, Defused }
+        public enum Result { Alive, Missed, Done, Detonated, Defused, TeaseDenied }
 
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
@@ -171,6 +173,14 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;
+            if (spec.IsTease)
+            {
+                // WPF BubbleService.cs:3326-3344, 3993-4010: roam spawn and its own life.
+                b.Y = (areaY + r.Next(50, (int)Math.Max(100, areaH - b.Size - 50))) / scaling;
+                b._teaseCenterX = (areaX + areaW / 2) / scaling - b.Size / 2;
+                b._teaseCenterY = (areaY + areaH / 2) / scaling - b.Size / 2;
+                b._teaseLifeMs = Chaos.ChaosTuning.TEASE_LIFE_MS;
+            }
             return b;
         }
 
@@ -243,9 +253,9 @@ namespace ConditioningControlPanel.Services
             if (Popping)
             {
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
-                Scale += Deflating ? -0.03 : 0.04;
-                Fade -= Lucky ? 0.044 : 0.066;
-                Angle += 2;
+                Scale = _dissolving ? Math.Max(0.1, Scale - 0.02) : Scale + (Deflating ? -0.03 : 0.04);
+                Fade -= _dissolving ? 0.05 : Lucky ? 0.044 : 0.066;
+                if (!_dissolving) Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
@@ -256,6 +266,17 @@ namespace ConditioningControlPanel.Services
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
             _timeAlive += 0.02;
+            if (Spec?.IsTease == true)
+            {
+                double dx = _teaseCenterX - X, dy = _teaseCenterY - Y;
+                double d = Math.Sqrt(dx * dx + dy * dy);
+                if (d > 8) { X += dx / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP; Y += dy / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP; }
+                X += Math.Sin(_timeAlive * 9) * 1.6;
+                Y += Math.Cos(_timeAlive * 7) * 1.2;
+                _teaseLifeMs -= FuseStepMs;
+                if (_teaseLifeMs <= 0) { Popping = _dissolving = true; return Result.TeaseDenied; }
+                return Result.Alive;
+            }
             double offset = 0;
             switch (_animType)
             {
@@ -301,6 +322,7 @@ namespace ConditioningControlPanel.Services
         public Action<AmbientBubble>? ChaosDetonated;
         /// <summary>A live chaos bubble was snapped (held to the end, or swept).</summary>
         public Action<AmbientBubble>? ChaosDefused;
+        public Action<AmbientBubble>? ChaosTeaseDenied;
 
         /// <summary>A press on a live bubble (WPF OnPlayerPress): starts its channel, or sets it off.</summary>
         public void PressLive(AmbientBubble b, bool canChannel, double cursorX, double cursorY)
@@ -358,6 +380,7 @@ namespace ConditioningControlPanel.Services
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }
+                if (r == AmbientBubble.Result.TeaseDenied) { ChaosTeaseDenied?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Missed) missed++;
                 Bubbles.RemoveAt(i);
             }

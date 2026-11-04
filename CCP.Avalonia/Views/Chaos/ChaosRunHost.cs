@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -37,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
-    /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
+    /// (Echo/Chaperone/Bound) - SpawnTick also spawns Tease; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
@@ -149,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = 0;
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
@@ -165,35 +166,51 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
-                // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
-                IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
-                    .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
-                                 && v.PayloadKind != EffectBubblePayloadKind.BambiFreeze)).ToList();
-                double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
-                double waveLeft = waveLen - (_state.ElapsedSec % waveLen);
-                double runLeft = _state.RunDurationSec - _state.ElapsedSec;
-                if (enabled.Contains("video") && (waveLeft < 14 || runLeft < 18))
-                    enabled = enabled.Where(id => id != "video").ToList();
-
-                EffectBubbleSpec spec;
-                if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
-                    spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
+                // WPF ChaosModeService.cs:1238, 1301: a Tease replaces the ordinary spawn slot.
+                if (!cfg.ScriptedFirstRun && ChaosMeta.AtLeast(ChaosRank.Slipping)
+                    && Rng.NextDouble() < ChaosTuning.TEASE_SPAWN_CHANCE * (cfg.Difficulty == ChaosDifficulty.Easy ? 0.5 : 1.0))
+                {
+                    if (!ChaosMeta.State.SeenTease)
+                    {
+                        ChaosMeta.State.SeenTease = true;
+                        ChaosMeta.Save();
+                        ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_tease_debut_title"), ChaosAnnounceKind.Temptation, artKey: "tease", subText: Loc.Get("chaos_tease_debut_subtitle"));
+                    }
+                    ChaosMeta.MarkDiscovered("bubble:tease");
+                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildTease(effIntensity, cfg.EffectIntensity, _state.BubbleScale));
+                }
                 else
                 {
-                    double sideDrift = _ordinarySpawns < ChaosTuning.SIDE_DRIFT_GRACE_SPAWNS ? 0 : ChaosTuning.SIDE_DRIFT_CHANCE;
-                    spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
-                        enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
-                        cfg.EffectIntensity, _state.BubbleScale, sideDrift);
-                }
-                _ordinarySpawns++;
-                ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
-                BubbleOverlay.SpawnChaos(spec);
+                    // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
+                    IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
+                        .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
+                                     && v.PayloadKind != EffectBubblePayloadKind.BambiFreeze)).ToList();
+                    double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
+                    double waveLeft = waveLen - (_state.ElapsedSec % waveLen);
+                    double runLeft = _state.RunDurationSec - _state.ElapsedSec;
+                    if (enabled.Contains("video") && (waveLeft < 14 || runLeft < 18))
+                        enabled = enabled.Where(id => id != "video").ToList();
 
-                if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
-                {
-                    ChaosMeta.MarkDiscovered("bubble:prism");
-                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
-                        treatOnly: _state.PrismTreatOnly));
+                    EffectBubbleSpec spec;
+                    if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
+                        spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
+                    else
+                    {
+                        double sideDrift = _ordinarySpawns < ChaosTuning.SIDE_DRIFT_GRACE_SPAWNS ? 0 : ChaosTuning.SIDE_DRIFT_CHANCE;
+                        spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
+                            enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
+                            cfg.EffectIntensity, _state.BubbleScale, sideDrift);
+                    }
+                    _ordinarySpawns++;
+                    ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
+                    BubbleOverlay.SpawnChaos(spec);
+
+                    if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
+                    {
+                        ChaosMeta.MarkDiscovered("bubble:prism");
+                        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
+                            treatOnly: _state.PrismTreatOnly));
+                    }
                 }
             }
             if (_spawnTimer != null)
@@ -225,6 +242,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
             ShowPopScore(pts);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+        }
+
+        /// <summary>WPF ChaosModeService.cs:1329: a touch dirties the loop and halves the streak even when shielded.</summary>
+        internal static void OnTeaseTouched(AmbientBubble b)
+        {
+            var spec = b.Spec;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            Label(b, "✖", Color.FromRgb(0xFF, 0x3D, 0x5A));
+            _state.Detonated++;
+            ChaosRunLessons.OnDetonation();
+            if (_state.Shields > 0)
+            {
+                _state.Shields--;
+                _state.Heat = Math.Max(0, _state.Heat - 0.2);
+                ChaosOverlayWindow.ChaosSfx.Play(_state.Shields == 0 ? "resist_crumble" : "resist_absorb", 0.6f);
+            }
+            else
+            {
+                FireScaledPayload(spec.Payload);
+                _state.EffectsFired++;
+                ChaosOverlayWindow.ChaosSfx.Play("trigger", 0.55f);
+                Shake(0.3 + spec.Strength / 100.0 * 0.4, 320);
+                _hud?.FlashShields(false);
+            }
+            _state.Combo = _state.Combo > 1 ? _state.Combo / 2 : 0;
+            Pulse(Color.FromRgb(0xFF, 0x3D, 0x5A), 0.38);
+        }
+
+        /// <summary>WPF ChaosModeService.cs:1410: restraint awards gold, score and focus.</summary>
+        internal static void OnTeaseDenied(AmbientBubble b)
+        {
+            if (_state == null || _manualPaused || _lessonCardPaused) return;
+            Label(b, "DENIED", Color.FromRgb(0xFF, 0xD7, 0x00));
+            if (ChaosMeta.State.BubbleHintsLearned.Add("tease")) ChaosMeta.Save();
+            int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(ChaosTuning.TEASE_GOLD_MIN, ChaosTuning.TEASE_GOLD_MAX + 1));
+            BankGold(gold);
+            double pts = ChaosTuning.TEASE_DENIED_SCORE * _state.TotalMult * _state.BlindfoldPayMult;
+            _state.Score += pts;
+            _state.Focus += ChaosTuning.FOCUS_PER_DENIED;
+            ShowPopScore(pts);
+            Pulse(Color.FromRgb(0xFF, 0xD7, 0x00), 0.25);
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
