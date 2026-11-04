@@ -65,13 +65,17 @@ public sealed class IconGuardTests
         // Plain references only: {loc:Str K}, Loc.Get("K"), Loc.GetF("K", LabelKeys="..K..". IconLabel Key=,
         // {loc:StrBare K} and IconLabel.ForKey are the sanctioned forms and do not match these patterns.
         var refs = new Regex(@"\{loc:Str\s+(?:Key=)?([A-Za-z0-9_]+)\s*\}|\bLoc\.GetF?\(\s*""([A-Za-z0-9_]+)""|LabelKeys=""([^""]*)""");
+        // Content exceptions are exact literals; a second, unlisted key must still be counted.
+        var sample = "Loc.Get(\"chaos_estim_spent\"); Loc.Get(\"section_system\")";
+        var sampleRefs = refs.Matches(Allowed("Views/Chaos/ChaosRunHost.cs", sample, "emoji"));
+        Assert.Equal("section_system", Assert.Single(sampleRefs.Cast<Match>()).Groups[2].Value);
         var perFile = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var (rel, lines) in Sources())
         {
             if (Verbatim(rel)) continue;
             var code = StripComments(rel, string.Join("\n", lines)).Split('\n');
             for (int i = 0; i < code.Length; i++)
-                foreach (Match m in refs.Matches(code[i]))
+                foreach (Match m in refs.Matches(Allowed(rel, code[i], "emoji")))
                     foreach (var k in (m.Groups[1].Value + m.Groups[2].Value + " " + m.Groups[3].Value).Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
                         if (keys.Contains(k))
                             (perFile.TryGetValue(rel, out var l) ? l : perFile[rel] = new()).Add($"{rel}:{i + 1}: {k}{(GlyphOnly(en[k]) ? " (glyph-only)" : "")}");
@@ -173,7 +177,7 @@ public sealed class IconGuardTests
         .ToList();
 
     /// <summary>The line with every allow-listed literal of this file blanked. A "font:" reason scopes an entry to
-    /// NoIconFontCodepoints, "path:" to PathIconRatchet; any other reason is content for the emoji ratchet.</summary>
+    /// NoIconFontCodepoints, "path:" to PathIconRatchet; other reasons are content for emoji and prefixed-loc ratchets.</summary>
     private static string Allowed(string rel, string line, string kind)
     {
         foreach (var a in Allow)
