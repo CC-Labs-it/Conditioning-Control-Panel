@@ -107,6 +107,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _suppressDirty;
 
         private double[]? _waveformPeaks;
+        private bool _hasWaveformDuration;
+        private int _previewGeneration;
         internal Task WaveformLoad { get; private set; } = Task.CompletedTask;
         private IDeeperLocalAudio? _localAudio;
 
@@ -626,8 +628,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 // A swap from a URL to a local file must blank the old page first, or its audio
                 // keeps playing behind the waveform this method is about to show.
+                var generation = ++_previewGeneration;
                 StopBrowserPreview();
                 _waveformPeaks = null;
+                _hasWaveformDuration = false;
                 DisposeLocalAudio();
 
                 var source = _enhancement.MediaSource;
@@ -646,7 +650,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 }
 
                 if (_enhancement.MediaType == MediaTypes.Audio)
-                    await InitializeAudioAsync(source);
+                    await InitializeAudioAsync(source, generation);
                 else
                     InitializeVideo(source);
             }
@@ -919,20 +923,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Playback, duration, seek and end-of-clip
-        private async Task InitializeAudioAsync(string path)
+        private async Task InitializeAudioAsync(string path, int generation)
         {
             BrowserPreview.IsVisible = false;
             VideoPreview.IsVisible = false;
             PreviewPlaceholder.IsVisible = false;
             WaveformCanvas.IsVisible = true;
-            WaveformLoad = LoadWaveformAsync(path);
+            WaveformLoad = LoadWaveformAsync(path, generation);
 
             IDeeperLocalAudio? audio = null;
             try { audio = await DeeperLocalAudio.Open(path); }
             catch (Exception ex) { Log.Warning(ex, "DeeperEditor: audio playback init failed"); }
             if (audio == null) { Log.Debug("DeeperEditor: local audio unavailable: {Path}", path); return; }
             // Swapped or closed while the parse ran: this clip is no longer the project's.
-            if (_playbackDisposed || _localAudio != null || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
+            if (_playbackDisposed || generation != _previewGeneration || _localAudio != null || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
             {
                 audio.Dispose();
                 return;
@@ -949,7 +953,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 UpdatePlayheadPosition();
                 PlayPauseGlyph.Kind = IconKind.Play;
             });
-            _totalSeconds = audio.DurationSeconds;
+            if (!_hasWaveformDuration) _totalSeconds = audio.DurationSeconds;
             TxtTotalTime.Text = FormatTime(_totalSeconds);
             UpdateWaveformPath();
             RebuildTimelineRuler();
@@ -1018,13 +1022,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (!IOPath.IsPathRooted(source)) return false;
             return File.Exists(source);
         }
-        private async Task LoadWaveformAsync(string path)
+        private async Task LoadWaveformAsync(string path, int generation)
         {
             try
             {
                 var result = await AudioWaveformCache.LoadAsync(path);
-                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+                if (_playbackDisposed || generation != _previewGeneration || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
                 _waveformPeaks = Array.ConvertAll(result.Peaks, p => (double)p);
+                _hasWaveformDuration = true;
                 _totalSeconds = result.DurationSeconds;
                 TxtTotalTime.Text = FormatTime(_totalSeconds);
                 UpdateWaveformPath();
@@ -1113,7 +1118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (_localAudio == null) return;
             // The pre-play duration can be a header estimate; re-lay the timeline only on a change.
             var duration = _localAudio.DurationSeconds;
-            if (duration > 0 && Math.Abs(duration - _totalSeconds) > 0.05)
+            if (!_hasWaveformDuration && duration > 0 && Math.Abs(duration - _totalSeconds) > 0.05)
             {
                 _totalSeconds = duration;
                 TxtTotalTime.Text = FormatTime(_totalSeconds);
