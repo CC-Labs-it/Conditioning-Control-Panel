@@ -164,10 +164,15 @@ public sealed class ShellLabTabTests
             FlashOverlay.Multiply = (_, n, life, gen) => { multiplied += n; childLifetime = life; childGeneration = gen; };
             w.Show();
             FlashOverlay.Active.Add((w, new PixelRect(100, 100, 100, 100)));
-            w.Run(1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+            w.Lifetime = TimeSpan.FromSeconds(10);
+            w.Run(1, TimeSpan.FromSeconds(1), w.Lifetime);
             var originalDeadline = w.ExpiresAt;
             w.BoostLifetime(1);
             Assert.Equal(originalDeadline, w.ExpiresAt); // boosting never shortens a long lifetime
+            w.BoostLifetime(5000);
+            w.UpdateLifetime(TimeSpan.FromSeconds(2));
+            Assert.Equal(clock.GetTimestamp() + 5000 * clock.TimestampFrequency / 1000, w.ExpiresAt);
+            w.UpdateLifetime(TimeSpan.FromSeconds(10));
             clock.Advance(9500);
             gaze.EvaluateDesiredState();
             gaze.HandleGazeMove(new Point(150, 150));

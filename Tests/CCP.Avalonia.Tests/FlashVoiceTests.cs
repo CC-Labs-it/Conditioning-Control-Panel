@@ -16,7 +16,6 @@ public sealed class FlashVoiceTests
         public DateTimeOffset Now = new(2026, 10, 12, 12, 0, 0, TimeSpan.Zero);
         public override DateTimeOffset GetUtcNow() => Now;
     }
-
     [Fact]
     public void Pool_keeps_library_and_enabled_recursive_clips_without_duplicate_names()
     {
@@ -27,7 +26,6 @@ public sealed class FlashVoiceTests
         var extra = new[] { "/folder/ONE.mp3", "/folder/off.wav", "/folder/gone.ogg", "/folder/nested/two.wav", "/folder/no.txt" };
         Assert.Equal(new[] { "/library/one.mp3", "/folder/nested/two.wav" }, FlashOverlay.VoicePool(s, library, extra));
     }
-
     [Fact]
     public async Task Voice_honours_mutes_and_the_companion_volume_curve()
     {
@@ -60,7 +58,6 @@ public sealed class FlashVoiceTests
             File.Delete(path);
         }
     }
-
     [Fact]
     public async Task Voice_length_and_xp_follow_the_clip_and_stop_does_not_cancel_unduck()
     {
@@ -130,7 +127,6 @@ public sealed class FlashVoiceTests
         }
         finally { FlashOverlay.CloseAll(false); (CoreAudio.PlayStoppableProvider, CoreAudio.DuckProvider) = (play, duck); File.Delete(path); }
     }
-
     [Fact]
     public async Task Delayed_length_keeps_whisper_busy_and_sets_remaining_unduck_time()
     {
@@ -173,7 +169,6 @@ public sealed class FlashVoiceTests
             File.Delete(path);
         }
     }
-
     [Fact]
     public async Task Playback_failure_uses_five_seconds_and_still_marks_the_whisper()
     {
@@ -199,7 +194,6 @@ public sealed class FlashVoiceTests
             File.Delete(path);
         }
     }
-
     [Fact]
     public async Task StopWhileLengthIsUnknownReleasesTheDuckEvenIfBackendNeverFinishes()
     {
@@ -229,6 +223,5 @@ public sealed class FlashVoiceTests
             File.Delete(path);
         }
     }
-
 
 }
