@@ -23,7 +23,16 @@ public partial class MainShellWindow
         if (page == null || browser == null || container == null) return;
 
         // WPF InitializeBrowserAsync starts the default site if the browser has not loaded yet.
-        if (browser.Source == null) NavigateBrowser(App.Mods?.GetDefaultBrowserUrl() ?? BambiCloudHome);
+        if (browser.Source == null)
+        {
+            var url = App.Mods?.GetDefaultBrowserUrl() ?? BambiCloudHome;
+            // WPF MainWindow.Browser.cs:547-573 selects from the mod default before initialization.
+            var bambi = (App.Mods?.ShowBambiCloudOption() ?? true)
+                && url.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase);
+            if (page.FindControl<RadioButton>("RbBambiCloud") is { } bambiRadio) bambiRadio.IsChecked = bambi;
+            if (page.FindControl<RadioButton>("RbHypnoTube") is { } hypnoRadio) hypnoRadio.IsChecked = !bambi;
+            NavigateBrowser(url);
+        }
         RevealDashboardBrowser("browser-init");
         Window? window = null;
         try

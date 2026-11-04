@@ -102,6 +102,10 @@ public sealed class BrowserPopoutTests
             Assert.Null(browser.Source);
             page.FindControl<Button>("BtnPopOutBrowser")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal("https://hypnotube.com/", browser.Source!.ToString());
+            Assert.False(bambi.IsChecked);
+            Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+            shell.BtnReloadBrowser_Click(null, new RoutedEventArgs());
+            Assert.Equal("https://hypnotube.com/", browser.Source!.ToString());
         }
         finally
         {
