@@ -922,7 +922,16 @@ namespace ConditioningControlPanel.Services
         /// Writes settings to disk immediately (no debounce). Called by the debounce timer,
         /// on shutdown, and from RestoreFrom/Reset where the write must happen now.
         /// </summary>
-        public void SaveImmediate(bool suppressCloudBackup = false)
+        public void SaveImmediate(bool suppressCloudBackup = false) => SaveImmediateCore(suppressCloudBackup);
+
+        public bool TrySaveImmediate(bool suppressCloudBackup = false)
+        {
+            bool saved = false;
+            SaveImmediateCore(suppressCloudBackup, () => saved = true);
+            return saved;
+        }
+
+        private void SaveImmediateCore(bool suppressCloudBackup, Action? onSaved = null)
         {
             if (_sealed) return;   // factory reset in progress — see SealForReset
 
@@ -997,6 +1006,7 @@ namespace ConditioningControlPanel.Services
                     }
 
                     Interlocked.Exchange(ref _lastWrittenSaveSequence, sequence);
+                    onSaved?.Invoke();
                 }
 
                 Log.Debug("Settings saved to {Path} (Triggers: {TriggerCount}, ActivePacks: {PackCount})",
@@ -1028,6 +1038,7 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex)
             {
                 Log.Error(ex, "Could not save settings");
+                return;
             }
         }
 

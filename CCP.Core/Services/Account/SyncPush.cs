@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Services
     /// cut to what is known): the body carries ONLY <see cref="Sent"/>, achievements = server-loaded ∪ local. Gates, all
     /// required: signed in, loaded THIS session (<see cref="MarkLoaded"/>; stricter than WPF's defaults-guard), the 30 s
     /// cooldown and the XP watermark. Also the 120 s heartbeat and the coalesced XP nudge. No periodic push (WPF has none).
-    /// ponytail: no restore-from-backup reconcile, 401 recovery or heartbeat adopt - add with the features that need them.
+    /// ponytail: no 401 recovery or heartbeat adopt - add with the features that need them.
     /// </summary>
     public sealed class SyncPush
     {
@@ -222,6 +222,17 @@ namespace ConditioningControlPanel.Services
                 {
                     Log.Debug("Profile sync skipped - backing off after {Failures} failure(s)", _backoffFailures);
                     return false;
+                }
+                var settings = CoreSettings.Service;
+                if (settings?.RestoredFromBackup == true)
+                {
+                    var idBeforeRead = s.UnifiedId!;
+                    var user = await new V2AuthService(() => s, _handler).GetUserProfileAsync(idBeforeRead);
+                    if (user == null || !string.Equals(user.UnifiedId, idBeforeRead, StringComparison.Ordinal) || !Loaded || !SignedIn(s) || !ReferenceEquals(settings, CoreSettings.Service)
+                        || !ReferenceEquals(s, settings.Current) || !string.Equals(idBeforeRead, s.UnifiedId, StringComparison.Ordinal)) return false;
+                    RecoveredProfileReconcile.Apply(s, user, settings.RestoredSeason, UtcNow());
+                    if (!settings.TrySaveImmediate(suppressCloudBackup: true)) return false;
+                    settings.ClearRestoredFromBackupFlag();
                 }
                 var totalXp = ProfileAdopt.TotalXp(s);
                 var watermark = ProfileAdopt.ActiveXpWatermark(s);
