@@ -111,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);
+            BrowserPage?.ClearBrowserMediaClaim(); // WPF StartStop.cs:554: reset the queue, not playback.
             PopQuizHost.Instance.CloseAll();   // first: drops a queued quiz before cards close; WPF StartStop.cs:521
             LockCardWindow.ForceCloseAll();
             PinkFilterOverlay.Refresh(this);

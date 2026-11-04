@@ -21,6 +21,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ShowMessage: the attention-check verdict over every screen for
         /// <paramref name="ms"/>, then <paramref name="then"/> on the UI thread.</summary>
         void ShowMessage(AttentionVerdict verdict, int ms, Action then);
+        /// <summary>User browser media holds the fullscreen slot (WPF BrowserMediaService.cs:248-257).</summary>
+        bool BrowserMediaActive => false;
     }
 
     /// <summary>What an ended clip's attention checks come to (WPF EndCurrentVideo :5955).</summary>
@@ -42,7 +44,7 @@ namespace ConditioningControlPanel.Services
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
     /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
+    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
@@ -296,8 +298,10 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             try
             {
+                // WPF VideoService.cs:2948-2959: a browser clip defers the scheduled video by 30 s.
+                if (!_playing && _host.BrowserMediaActive) ScheduleNext(SkipRetrySeconds);
                 // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
-                if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
+                else if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
                 {
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);

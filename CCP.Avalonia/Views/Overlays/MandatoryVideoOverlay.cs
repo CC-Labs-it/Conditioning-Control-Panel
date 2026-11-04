@@ -115,6 +115,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal double FillMs { get; private set; }
         internal int FillCount { get; private set; }
 
+        // WPF VideoService.cs:2948 and BrowserMediaService.cs:248-257: even with protection off,
+        // user playback holds the interaction slot while it is playing.
+        public bool BrowserMediaActive => Views.Windows.MainShellWindow.Current?.BrowserMediaBlocksInterruptions == true;
+
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
