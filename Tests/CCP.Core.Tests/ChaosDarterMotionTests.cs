@@ -35,6 +35,30 @@ public sealed class ChaosDarterMotionTests
         Assert.Empty(field.Bubbles); // three reflections followed by exit, not a FloatUp miss
     }
 
+    [Fact]
+    public void Flare_size_and_quick_window_follow_the_darter_clock() {
+        var spec = new EffectBubbleSpec { IsDarter = true, SizePx = 80.6, TelegraphMs = 64,
+            LifetimeMs = 8000, QuickWindowMs = 64 }; var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec); Assert.Equal(81, b.Size); Assert.Equal(1, b.DarterFlareFraction);
+        Assert.False(b.WasQuickCatch); b.Step(); Assert.Equal(0.5, b.DarterFlareFraction); b.Step(); Assert.Equal(0, b.DarterFlareFraction); Assert.True(b.WasQuickCatch); b.Step(); b.Step(); Assert.True(b.WasQuickCatch);
+        b.Step(); Assert.False(b.WasQuickCatch); }
+    [Fact]
+    public void Slow_field_scales_travel_fuse_and_quick_catch() {
+        var spec = new EffectBubbleSpec { IsLive = true, SizePx = 80, FuseMs = 1000 }; var normal = AmbientBubble.SpawnChaos(new Random(9), 0, 0, 0, 1920, 1080, 1, spec);
+        var slow = AmbientBubble.SpawnChaos(new Random(9), 0, 0, 0, 1920, 1080, 1, spec); double start = normal.Y; normal.Step(); slow.Step(timeScale: 0.12); Assert.Equal((start - normal.Y) * 0.12, start - slow.Y, 6);
+        Assert.Equal(1000 - 32 * 0.12, slow.FuseRemainingMs, 6);
+        var rabbit = new EffectBubbleSpec { IsDarter = true, SizePx = 80, QuickWindowMs = 500,
+            DarterSpeed = 9, LifetimeMs = 8000, SpawnAtPxX = 500, SpawnAtPxY = 300 }; var fastRabbit = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, rabbit);
+        var slowRabbit = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, rabbit); fastRabbit.Step(); slowRabbit.Step(timeScale: 0.12);
+        Assert.Equal((fastRabbit.X - (500 - fastRabbit.Size / 2)) * 0.12,
+            slowRabbit.X - (500 - slowRabbit.Size / 2), 6); for (int i = 0; i < 103; i++) slowRabbit.Step(timeScale: 0.12); Assert.True(slowRabbit.WasQuickCatch); slowRabbit.Step(timeScale: 0.12);
+        Assert.False(slowRabbit.WasQuickCatch); }
+    [Fact]
+    public void Spank_growth_keeps_the_natural_bounce_bounds()
+    {
+        var spec = new EffectBubbleSpec { IsDarter = true, SizePx = 80, DarterSpeed = 9, LifetimeMs = 8000, SpawnAtPxX = 210, SpawnAtPxY = 130 };
+        var b = AmbientBubble.SpawnChaos(new HorizontalRandom(), 0, 0, 0, 260, 260, 1, spec); b.Spank(new HorizontalRandom(), 1.7); b.Step();
+        Assert.Equal(80, b.Size); Assert.Equal(180, b.X, 6); b.Step(); Assert.True(b.X < 180);
+    }
     private sealed class HorizontalRandom : Random
     {
         public override double NextDouble() => 0;

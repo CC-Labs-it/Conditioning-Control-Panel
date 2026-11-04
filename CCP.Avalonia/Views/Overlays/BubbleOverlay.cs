@@ -49,12 +49,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _running;
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
-        internal static Bitmap? Image;
+        internal static Bitmap? Image, DarterImage;
+        internal static bool SkipPlatformChecksForTests;
+        internal static Func<bool> LiveApplication = () => Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+        private static Visual? _chaosHost;
+        private static int _chaosTargetCount;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
         /// cache kept the first mod's art for the life of the process).</summary>
-        internal static void LoadBubbleImage() => Image = Helpers.ModArt.TryLoad("bubble.png");
+        internal static void LoadBubbleImage()
+        {
+            Image = Helpers.ModArt.TryLoad("bubble.png");
+            var user = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos", "bubbles", "darter.png");
+            var bundled = Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "bubbles", "darter.png");
+            try { DarterImage = File.Exists(user) ? new Bitmap(user) : File.Exists(bundled) ? new Bitmap(bundled) : Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/darter.png"); }
+            catch (Exception ex) { Log.Debug("Darter art: {E}", ex.Message); try { DarterImage = File.Exists(bundled) ? new Bitmap(bundled) : null; } catch { DarterImage = null; } DarterImage ??= Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/darter.png"); }
+        }
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
@@ -85,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             if (_running) return;
-            if (!X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
+            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
             var s = CoreSettings.Current;
@@ -93,24 +104,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             LoadBubbleImage();
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
-                var sc = screens[i];
-                var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
-                if (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds))
-                {
-                    Log.Warning("Bubbles: the platform refused a click-through topmost overlay window; skipped");
-                    w.Close();
-                    Stop();
-                    return;
-                }
-                w.Show();
-                Windows.Add(w);
-                Targets.Add(sc);
+                if (!OpenTarget(screens[i])) { Stop(); return; }
             }
             _running = true;
             _lastStep = null;
             if (ambient) StartSpawning(frequency);
         }
 
+        private static bool OpenTarget(Screen sc)
+        {
+            var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
+            if (!SkipPlatformChecksForTests && (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds)))
+            {
+                Log.Warning("Bubbles: the platform refused a click-through topmost overlay window; skipped");
+                w.Close(); return false;
+            }
+            w.Show(); Windows.Add(w); Targets.Add(sc); return true;
+        }
         private static void StartSpawning(int? frequency)
         {
             var s = CoreSettings.Current;
@@ -161,7 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var s = CoreSettings.Current;
             if (!_running || Targets.Count == 0 || DisplayChangeCoordinator.SpawnsSuppressed || !Field.CanSpawn(s)) return;
-            var i = Field.Random.Next(Targets.Count);
+            var i = Field.Random.Next(_chaosPopped != null ? Math.Max(1, _chaosTargetCount) : Targets.Count);
             var a = Targets[i].WorkingArea;
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
@@ -216,6 +226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
             Func<AmbientBubble, bool>? canChannel = null)
         {
+            _chaosHost = host;
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
             Field.Held = false;
@@ -227,9 +238,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 onDefuse(b);
             };
             Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); };
-            if (_running) return;
-            Start(host, null, ambient: false);
-            _chaosOpenedWindows = _running;
+            if (!_running)
+            {
+                Start(host, null, ambient: false);
+                _chaosOpenedWindows = _running;
+            }
+            _chaosTargetCount = Targets.Count;
         }
 
         /// <summary>WPF SetChaosFrozen + SetChaosInputLocked (manual pause): chaos bubbles hold
@@ -244,25 +258,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
+            bool hadChaos = _chaosPopped != null;
             _chaosPopped = null;
+            _chaosHost = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }
+            for (int i = Windows.Count - 1; hadChaos && i >= _chaosTargetCount; i--)
+            { Windows[i].Close(); Windows.RemoveAt(i); Targets.RemoveAt(i); }
             foreach (var w in Windows) w.Sync();
         }
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
-        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
+        internal static AmbientBubble? SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
             AmbientBubble b;
+            if (Targets.Count == 0 && _chaosHost != null && LiveApplication()) return null;
             if (Targets.Count == 0)
                 b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
             else
             {
-                var i = Field.Random.Next(Targets.Count);
+                var i = Math.Max(0, Targets.FindIndex(sc => sc.IsPrimary));
+                if (_chaosHost != null)
+                {
+                    var screens = ScreenList.Enumerate(_chaosHost);
+                    var point = new PixelPoint((int)(spec.SpawnAtPxX ?? 0), (int)(spec.SpawnAtPxY ?? 0));
+                    var screen = spec.SpawnAtPxX == null || spec.SpawnAtPxY == null ? screens.FirstOrDefault(sc => sc.IsPrimary) : screens.FirstOrDefault(sc => point.X >= sc.Bounds.X && point.X < sc.Bounds.Right && point.Y >= sc.Bounds.Y && point.Y < sc.Bounds.Bottom) ?? screens.OrderBy(sc =>
+                    {
+                        var r = sc.Bounds;
+                        double dx = Math.Max(Math.Max(r.X - (double)point.X, point.X - (double)r.Right), 0);
+                        double dy = Math.Max(Math.Max(r.Y - (double)point.Y, point.Y - (double)r.Bottom), 0);
+                        return dx * dx + dy * dy;
+                    }).FirstOrDefault();
+                    if (screen != null)
+                    {
+                        i = Targets.FindIndex(sc => sc.Bounds == screen.Bounds);
+                        if (i < 0) { if (!OpenTarget(screen)) return null; i = Targets.Count - 1; }
+                    }
+                }
                 var a = Targets[i].WorkingArea;
                 b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
             }
@@ -275,10 +311,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void PopChaos(AmbientBubble b)
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
+            var power = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.SpankerPower;
+            if (b.Spec.IsDarter && (power.HasValue || b.Spec.IsSweeper)) { bool first = !b.IsSpanked; b.Spank(Field.Random, power ?? 1); if (first && b.IsSpanked) Services.Chaos.ChaosLessons.Tick("rabbit_caller"); RequestFrame(); return; }
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
-            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
+            PlayChaosCue(b.Spec.IsDarter ? "rabbit_catch" : null, b.Spec.IsDarter ? 0.6f : 1f);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
@@ -320,6 +358,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
         }
 
+        // WPF BubbleService.cs:1897: an allied rabbit mows overlapping chaos bubbles.
+        internal static void SweepSpanked()
+        {
+            if (Field.HoldChaos) return;
+            foreach (var ally in Field.Bubbles.ToArray())
+                if (ally.IsSpanked && !ally.Popping)
+                    foreach (var victim in Field.Bubbles.ToArray())
+                        if (victim.Screen == ally.Screen && victim.Spec is { IsDarter: false, IsFreeze: false } && !victim.Popping
+                            && Math.Abs(victim.CenterX - ally.CenterX) * 2 < victim.Size + ally.Size * ally.SpankGrowth && Math.Abs(victim.CenterY - ally.CenterY) * 2 < victim.Size + ally.Size * ally.SpankGrowth)
+                        { if (victim.IsLiveThreat) { if (victim.Snap()) Field.ChaosDefused?.Invoke(victim); } else PopChaos(victim); }
+        }
+
         internal static void OnFrame(TimeSpan now)
         {
             _pending = false;
@@ -330,7 +380,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
-                Field.Step();
+                Field.Step(); SweepSpanked();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
                 if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
@@ -360,6 +410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        private static readonly DropShadowEffect DarterGlow = new() { Color = Color.FromRgb(255, 77, 196), BlurRadius = 26, OffsetX = 0, OffsetY = 0, Opacity = 0.9 };
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -492,13 +543,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
-                        if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
+                        var sprite = b.Spec?.IsDarter == true ? BubbleOverlay.DarterImage : null;
+                        if (b.Spec != null && sprite == null)   // WPF skips the tint for variant art
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         }
-                        if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                        var rect = new Rect(cx - size / 2, cy - size / 2, size, size);
+                        if (b.Spec?.IsDarter == true)
+                        {
+                            using (dc.PushEffect(DarterGlow, rect.Inflate(26)))
+                                if ((sprite ?? img) is { } art) dc.DrawImage(art, rect);
+                                else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        }
+                        else if (img != null) dc.DrawImage(img, rect);
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (b.DarterFlareFraction > 0 && !b.Popping) // WPF BubbleService.cs:3853-3859,5104-5120
+                        {
+                            var fraction = b.DarterFlareFraction;
+                            using (dc.PushOpacity(0.85 * fraction))
+                                dc.DrawEllipse(null, FusePen(b.Spec!.Tint | 0xff000000), new Point(cx, cy),
+                                    size / 2 * (1 + 0.3 * fraction), size / 2 * (1 + 0.3 * fraction));
+                        }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);

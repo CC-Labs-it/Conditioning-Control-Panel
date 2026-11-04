@@ -33,7 +33,28 @@ internal static class X11Pointer
     private static IntPtr _display, _root;
     private static byte _esc;
 
-    public static (PixelPoint At, bool Pressed, bool Escape)? Read()
+    public static (PixelPoint At, bool Pressed, bool Escape)? Read() => ReadCore(false);
+
+    [StructLayout(LayoutKind.Sequential)] private struct WinPoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out WinPoint point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    private static (bool Success, int X, int Y) WindowsPosition() { bool ok = GetCursorPos(out var p); return (ok, p.X, p.Y); }
+    internal static (PixelPoint At, bool Pressed, bool Escape)? ReadWindows(Func<(bool Success, int X, int Y)> position, Func<int, short> key)
+    {
+        var p = position();
+        return p.Success ? (new PixelPoint(p.X, p.Y), (key(1) & 0x8000) != 0, (key(0x1b) & 0x8000) != 0) : null;
+    }
+
+    // WPF RabbitAimTick reads VK_LBUTTON only.
+    public static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft() =>
+        OperatingSystem.IsWindows() ? ReadWindows(WindowsPosition, GetAsyncKeyState) : IsWaylandSession() ? null : ReadCore(true);
+
+    internal static bool IsWaylandSession() =>
+        string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)
+        || (!string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "x11", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")));
+
+    private static (PixelPoint At, bool Pressed, bool Escape)? ReadCore(bool leftOnly)
     {
         try
         {
@@ -55,7 +76,7 @@ internal static class X11Pointer
             XQueryKeymap(_display, ref MemoryMarshal.GetReference(keys));
             bool esc = _esc != 0 && (keys[_esc >> 3] & (1 << (_esc & 7))) != 0;
             keys.Clear();
-            return (new PixelPoint(x, y), (mask & (Button1Mask | Button3Mask)) != 0, esc);
+            return (new PixelPoint(x, y), (mask & (leftOnly ? Button1Mask : Button1Mask | Button3Mask)) != 0, esc);
         }
         catch (Exception ex)
         {

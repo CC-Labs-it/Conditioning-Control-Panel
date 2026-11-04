@@ -1,4 +1,7 @@
 {
+  "chaos_time_slow": "Замедление", "chaos_rabbit_extended": "🐇 пойман во время замедления. +0,8 с", "chaos_rabbit_quick": "⚡ быстрый улов. время замедляется",
+  "chaos_rabbit_caught": "🐇 белый кролик пойман. время замедляется", "chaos_rabbit_pointer": "Для призыва нужен указатель рабочего стола", "chaos_rabbit_whistle": "🐇 свист ждёт. следующий щелчок призовёт их", "chaos_first_play_award": "+{0} ✦ первая игра",
+  "chaos_rabbit_storm": "Кроличья буря", "chaos_rabbit_summoned_storm": "🐇 {0} у кончика пальца. нора пустеет", "chaos_rabbit_summoned": "🐇 {0} ответили на зов",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",
