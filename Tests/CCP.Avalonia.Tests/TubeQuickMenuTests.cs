@@ -23,6 +23,14 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    [Theory, InlineData("MenuRed"), InlineData("MenuGreen"), InlineData("MenuPatreon"), InlineData("MenuLocked")]
+    public async Task CachedMenuColoursAreDispatcherIndependent(string name)
+    {
+        var brush = await Task.Run(() => typeof(AvatarTubeWindow).GetField(name,
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null));
+        Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableBrush>(brush);
+    }
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 

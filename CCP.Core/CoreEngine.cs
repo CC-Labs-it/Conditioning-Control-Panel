@@ -29,6 +29,10 @@ namespace ConditioningControlPanel
         /// cards, the pink tint). Runs after every Stop, running or not.</summary>
         public static volatile Action? StoppedHook;
 
+        // Head-owned Brain Drain audio (WPF StartStop.cs:410-413,531).
+        public static volatile Action? StartBrainDrain;
+        public static volatile Action? StopBrainDrain;
+
         /// <summary>The head's pop-quiz scheduler (it owns the <see cref="IPopQuizHost"/>); null
         /// on a head with no pop-quiz window.</summary>
         public static volatile PopQuizScheduler? PopQuiz;
@@ -66,6 +70,8 @@ namespace ConditioningControlPanel
                 if (s.MindWipeLoop) CoreMindWipe.StartLoop(s.MindWipeVolume / 100.0);
             }
 
+            if (!audioOnly && s.BrainDrainEnabled) StartBrainDrain?.Invoke();
+
             _running = true;
             StartedUtc = DateTime.UtcNow;
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
@@ -89,6 +95,7 @@ namespace ConditioningControlPanel
                 CoreSubliminal.Stop();
                 LockCardScheduler.Instance.Stop();
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
+                StopBrainDrain?.Invoke();
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
                 _running = false;
                 StartedUtc = null;
@@ -123,6 +130,7 @@ namespace ConditioningControlPanel
             if (!_running) return;
             switch (key)
             {
+                case "braindrain": if (on) StartBrainDrain?.Invoke(); else StopBrainDrain?.Invoke(); break;
                 case "flash": if (on) CoreFlash.Start(); else CoreFlash.Stop(); break;
                 case "subliminal": if (on) CoreSubliminal.Start(); else CoreSubliminal.Stop(); break;
                 case "lockcard": if (on) LockCardScheduler.Instance.Start(); else LockCardScheduler.Instance.Stop(); break;

@@ -484,4 +484,25 @@ public sealed class SessionRunnerTests : IDisposable
 
     private static string Fixture([CallerFilePath] string here = "") =>
         Path.Combine(Path.GetDirectoryName(here)!, "Fixtures", "session_log_runner_wpf.json");
+    [Theory, InlineData(false), InlineData(true)]
+    public void Session_cancels_global_brain_drain_on_start_and_pause(bool sessionEnabled)
+    {
+        var s = CoreSettings.Current; var saved = (s.BrainDrainEnabled, s.AudioOnlySession, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain);
+        int starts = 0, stops = 0; bool playing = false;
+        try
+        {
+            CoreEngine.Stop(); s.BrainDrainEnabled = true; s.AudioOnlySession = false;
+            CoreEngine.StartBrainDrain = () => { starts++; playing = true; };
+            CoreEngine.StopBrainDrain = () => { stops++; playing = false; };
+            var session = OneMinute(); session.Settings.BrainDrainEnabled = sessionEnabled; session.Settings.BrainDrainStartMinute = 1;
+            _runner.Start(session); Assert.Equal(1, starts); Assert.Equal(1, stops); Assert.False(playing);
+            playing = true; _runner.Pause(); Assert.Equal(2, stops); Assert.False(playing);
+            _runner.Resume(); Assert.Equal(1, starts); Assert.False(playing); }
+        finally
+        {
+            _runner.Stop();
+            (s.BrainDrainEnabled, s.AudioOnlySession, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain) = saved;
+        }
+    }
+
 }

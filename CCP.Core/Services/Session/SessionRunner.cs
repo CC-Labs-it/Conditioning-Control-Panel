@@ -111,6 +111,7 @@ namespace ConditioningControlPanel.Services
             if (!CoreEngine.IsRunning) CoreEngine.Start();
             // SessionEngine.cs:207-230: the session owns Mind Wipe, including its delayed start.
             CoreMindWipe.Stop();
+            CoreEngine.StopBrainDrain?.Invoke(); // WPF SessionEngine.cs:1495; session audio remains part B.
 
             var s = CoreSettings.Current;
             CurrentSession = session;
@@ -263,6 +264,7 @@ namespace ConditioningControlPanel.Services
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
             CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
+            CoreEngine.StopBrainDrain?.Invoke(); // WPF SessionEngine.cs:529
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }

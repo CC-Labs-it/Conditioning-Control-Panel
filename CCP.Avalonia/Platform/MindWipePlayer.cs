@@ -11,13 +11,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <see cref="CoreMindWipe"/>. The deciding half (tick interval, per-tick probability, clip
     /// discovery) is <see cref="MindWipeSchedule"/> in Core; this is the playing half.
     ///
-    /// <para>The loop is one player on LibVLC's own repeat instead of WPF's two-player 120 ms
-    /// crossfade: the clip restarts in the decoder, so there is no rebuild between cycles to hide.</para>
+    /// <para>The loop uses overlapping LibVLC voices, with a 120 ms overlap as in WPF.</para>
     /// </summary>
     internal sealed class MindWipePlayer
     {
-        /// <summary>One playing clip; volume is 0..1 and can change while it plays.</summary>
-        internal interface IVoice : IDisposable { double Volume { set; } }
+        /// <summary>A prepared or playing clip; Play starts it, volume is 0..1.</summary>
+        internal interface IVoice : IDisposable { double Volume { set; } bool Play(); }
 
         private readonly Func<string, double, bool, Action, IVoice?> _play;
         private readonly TimeProvider _time;
@@ -28,6 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private ITimer? _tick, _cleanSlate;
         private IVoice? _oneShot, _loop;
         private bool _running, _sessionMode;
+        private long _loopGeneration, _playGeneration;
         private int _sessionBase;
         private DateTime _sessionStart;
         private double _frequency = 6, _volume = 0.5;
@@ -35,8 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Raised with the loop's length in seconds once it has played 60 s (WPF Clean Slate).</summary>
         internal Action<double>? CleanSlate;
 
-        /// <param name="play">Starts a clip (path, 0..1 volume, loop, called once when it ends or errors)
-        /// or returns null when it cannot.</param>
+        /// <param name="play">Creates a silent voice; the callback fires when it ends or errors.</param>
         internal MindWipePlayer(Func<string, double, bool, Action, IVoice?> play, TimeProvider? time = null, Func<double>? roll = null)
         {
             _play = play;
@@ -116,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             bool wasRunning;
             lock (_lock)
             {
-                wasRunning = _running;
+                ++_playGeneration; wasRunning = _running;
                 _running = false;
                 oneShot = _oneShot; _oneShot = null;
                 tick = _tick; _tick = null;
@@ -162,18 +161,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private void PlayOnce()
         {
-            string clip;
+            string clip; long generation;
             double volume;
             lock (_lock)
             {
                 if (_clips.Length == 0) return;
                 clip = _clips[_random.Next(_clips.Length)];
-                volume = _volume;
+                volume = _volume; generation = ++_playGeneration;
             }
             IVoice? voice = null;
             voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
             IVoice? displaced;
-            lock (_lock) { displaced = _oneShot; _oneShot = voice; }
+            lock (_lock) { displaced = voice; if (generation == _playGeneration && volume == _volume && voice?.Play() == true) { displaced = _oneShot; _oneShot = voice; } }
             displaced?.Dispose();
             Log.Debug("MindWipe: Playing {File} at volume {Vol}%", Path.GetFileName(clip), volume * 100);
         }
@@ -181,9 +180,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal void StartLoop(double volume)
         {
             StopLoop();
-            string clip;
+            string clip; long generation;
             lock (_lock)
             {
+                generation = ++_loopGeneration;
                 if (_clips.Length == 0) { Log.Warning("MindWipe: No audio files available for loop"); return; }
                 clip = _clips[_random.Next(_clips.Length)];
                 _volume = MindWipeSchedule.ClampVolume(volume);
@@ -203,7 +203,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_lock) if (!ReferenceEquals(_loop, voice)) return;
                 CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
             }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
-            lock (_lock) { _loop = voice; _cleanSlate = check; }
+            bool published;
+            lock (_lock) { published = generation == _loopGeneration; if (published) { _loop = voice; _cleanSlate = check; } }
+            if (!published) { check.Dispose(); voice.Dispose(); return; }
+            voice.Play();
             Log.Information("MindWipe: Loop started with {File} at {Vol}% volume", Path.GetFileName(clip), volume * 100);
         }
 
@@ -211,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             IVoice? loop;
             ITimer? check;
-            lock (_lock) { loop = _loop; _loop = null; check = _cleanSlate; _cleanSlate = null; }
+            lock (_lock) { _loopGeneration++; loop = _loop; _loop = null; check = _cleanSlate; _cleanSlate = null; }
             check?.Dispose();
             loop?.Dispose();
         }
