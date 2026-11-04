@@ -43,6 +43,7 @@ public class TestIsolationTests
     [Theory]
     [InlineData(typeof(LeashSound), nameof(LeashSound.Rules))]
     [InlineData(typeof(LeashSound), nameof(LeashSound.Time))]
+    [InlineData(typeof(LeashHead), "_iCut")]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
@@ -73,6 +74,35 @@ public class TestIsolationTests
         Assert.Same(previous, LeashSound.Rules);
         Assert.Same(clock, LeashSound.Time);
         Assert.False(LeashSound.Rules.TryPlay(LeashCue.Cut, now.AddSeconds(1), false, false));
+    }
+
+    // The gate cut changes private state without assigning a static seam in the test source.
+    [Fact]
+    public void RestoreClearsTheLocalCutEchoFlag()
+    {
+        var flag = typeof(LeashHead).GetField("_iCut", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var old = flag.GetValue(null);
+        var oldSuppressed = CoreAudio.IsOutputSuppressedProvider;
+        try
+        {
+            flag.SetValue(null, false);
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            var snapshot = ProcessStateSnapshot.Take();
+            LeashHead.NoteCut();
+            Assert.True((bool)flag.GetValue(null)!);
+            snapshot.Restore();
+            Assert.False((bool)flag.GetValue(null)!);
+            flag.SetValue(null, true);
+            snapshot = ProcessStateSnapshot.Take();
+            flag.SetValue(null, false);
+            snapshot.Restore();
+            Assert.True((bool)flag.GetValue(null)!);
+        }
+        finally
+        {
+            flag.SetValue(null, old);
+            CoreAudio.IsOutputSuppressedProvider = oldSuppressed;
+        }
     }
 
     [Fact]

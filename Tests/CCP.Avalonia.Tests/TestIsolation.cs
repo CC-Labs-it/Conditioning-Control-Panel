@@ -249,6 +249,9 @@ internal sealed class ProcessStateSnapshot
             .Where(t => !t.ContainsGenericParameters).ToList();
         var byName = types.ToLookup(t => t.Name);
         var found = new HashSet<MemberInfo>();
+        // Gate cuts set this private flag indirectly; it is not discoverable by the assignment scan.
+        found.Add(typeof(ConditioningControlPanel.Avalonia.Platform.LeashHead)
+            .GetField("_iCut", AnyStatic)!);
 
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
