@@ -125,7 +125,7 @@ public sealed class QuickRecalHotkeyTests
         Init();
         var s = CoreSettings.Current;
         var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { QuickRecalWayland = false };
         var registration = new Registration();
         int attempts = 0;
         shell.RegisterQuickRecal = (_, _) => { attempts++; return registration = new Registration(); };
@@ -166,7 +166,7 @@ public sealed class QuickRecalHotkeyTests
         Init();
         var s = CoreSettings.Current;
         var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { QuickRecalWayland = false };
         var registration = new Registration();
         try
         {
@@ -199,7 +199,7 @@ public sealed class QuickRecalHotkeyTests
         Init();
         var s = CoreSettings.Current;
         var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion);
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { QuickRecalWayland = false };
         var registration = new Registration();
         var tracker = WebcamTracker.Instance;
         var oldCal = tracker.Calibration;
@@ -289,7 +289,7 @@ public sealed class QuickRecalHotkeyTests
         Init();
         var s = CoreSettings.Current;
         var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { QuickRecalWayland = false };
         var registration = new Registration();
         int attempts = 0;
         shell.RegisterQuickRecal = (_, _) => { attempts++; return registration; };

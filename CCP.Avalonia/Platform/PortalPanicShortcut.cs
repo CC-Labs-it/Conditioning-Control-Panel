@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 using ConditioningControlPanel.Services.Leash;
@@ -19,8 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// </summary>
 internal static class PortalPanicShortcut
 {
-    private const string Portal = "org.freedesktop.portal.Desktop", DesktopPath = "/org/freedesktop/portal/desktop";
-    private const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
+    internal const string Portal = "org.freedesktop.portal.Desktop", DesktopPath = "/org/freedesktop/portal/desktop";
+    internal const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
 
     private static string? _session;
     private static IDisposable? _activated, _deactivated;
@@ -181,7 +182,7 @@ internal static class PortalPanicShortcut
     /// connection is <see cref="Program.AppId"/>, so KDE files the panic shortcut under the app rather
     /// than the launching terminal. Must precede every other portal call on the connection. False when
     /// refused (Flatpak: the portal already knows the id) or absent (xdg-desktop-portal before 1.19).</summary>
-    private static async Task<bool> RegisterAsync(DBusConnection bus)
+    internal static async Task<bool> RegisterAsync(DBusConnection bus)
     {
         try
         {
@@ -197,13 +198,13 @@ internal static class PortalPanicShortcut
     }
 
     /// <summary>trigger_description of our shortcut in a BindShortcuts result (a(sa{sv})).</summary>
-    private static string TriggerOf(Dictionary<string, VariantValue> results)
+    internal static string TriggerOf(Dictionary<string, VariantValue> results, string id = Id)
     {
         if (!results.TryGetValue("shortcuts", out var list)) return "";
         for (var i = 0; i < list.Count; i++)
         {
             var shortcut = list.GetItem(i);
-            if (shortcut.GetItem(0).GetString() != Id) continue;
+            if (shortcut.GetItem(0).GetString() != id) continue;
             var props = shortcut.GetItem(1);
             for (var j = 0; j < props.Count; j++)
             {
@@ -242,8 +243,8 @@ internal static class PortalPanicShortcut
 
     /// <summary>One portal Request round trip: subscribe to the Response on the predicted request
     /// path BEFORE calling (the portal may answer before the call returns), then call and await.</summary>
-    private static async Task<(uint Code, Dictionary<string, VariantValue> Results)> RequestAsync(
-        DBusConnection bus, string member, string signature, BodyWriter writeBody)
+    internal static async Task<(uint Code, Dictionary<string, VariantValue> Results)> RequestAsync(
+        DBusConnection bus, string member, string signature, BodyWriter writeBody, CancellationToken cancellation = default)
     {
         var token = "ccp" + Guid.NewGuid().ToString("N");
         var sender = bus.UniqueName!.TrimStart(':').Replace('.', '_');
@@ -260,17 +261,17 @@ internal static class PortalPanicShortcut
 
         await bus.CallMethodAsync(CallHeader(bus, DesktopPath, Iface, member, signature, (ref MessageWriter w) => writeBody(ref w, token)));
         // KDE may show the user a dialog for BindShortcuts; effects wait at most this long for it.
-        return await answer.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        return await answer.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellation);
     }
 
     // MessageWriter is a STRUCT: handing it to an Action<MessageWriter> writes the body into a copy,
     // and the original then serialises a header whose body length/offset do not match what was
     // written. dbus-broker answers "invalid body" by disconnecting ("Connection closed by peer").
     // By-ref delegates keep one writer.
-    private delegate void BodyWriter(ref MessageWriter w, string token);
-    private delegate void BodyWriterNoToken(ref MessageWriter w);
+    internal delegate void BodyWriter(ref MessageWriter w, string token);
+    internal delegate void BodyWriterNoToken(ref MessageWriter w);
 
-    private static MessageBuffer CallHeader(DBusConnection bus, string path, string iface, string member, string? signature,
+    internal static MessageBuffer CallHeader(DBusConnection bus, string path, string iface, string member, string? signature,
         BodyWriterNoToken? body = null)
     {
         var w = bus.GetMessageWriter();
