@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -40,16 +41,34 @@ public class UiThreadStackCaptureTests
         // caught in native code with no transition frame (MRES.Wait's spin phase), the DAC walk
         // starts at the next explicit frame and every frame above RuntimeMethodHandle.InvokeMethod
         // vanished. That failed twice on loaded Windows runners (flakes.md, 2026-10-13).
+        // WaitSleepJoin alone is set before the OS wait starts; snapshot only once Windows reports
+        // a user-requested kernel wait, so the target cannot be caught entering the wait.
         using var release = new ManualResetEvent(false);
-        var parked = new Thread(() => ParkedInAKnownFrame(release)) { IsBackground = true, Name = "ParkedTarget" };
+        int nativeThreadId = 0;
+        var parked = new Thread(() => ParkedInAKnownFrame(release, ref nativeThreadId))
+            { IsBackground = true, Name = "ParkedTarget" };
         parked.Start();
         try
         {
             var deadline = Stopwatch.StartNew();
-            while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
+            using var process = Process.GetCurrentProcess();
+            while (true)
             {
-                Assert.True(deadline.ElapsedMilliseconds < 10_000, "target thread never parked");
-                Thread.Yield();
+                var id = Volatile.Read(ref nativeThreadId);
+                process.Refresh();
+                bool waiting = false;
+                foreach (ProcessThread thread in process.Threads)
+                {
+                    using (thread)
+                    {
+                        if (thread.Id == id && thread.ThreadState == System.Diagnostics.ThreadState.Wait
+                            && thread.WaitReason == ThreadWaitReason.UserRequest)
+                            waiting = true;
+                    }
+                }
+                if (waiting) break;
+                Assert.True(deadline.ElapsedMilliseconds < 10_000, "target thread never reached a kernel wait");
+                Thread.Sleep(1);
             }
 
             var sw = Stopwatch.StartNew();
@@ -74,9 +93,17 @@ public class UiThreadStackCaptureTests
         }
     }
 
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
     // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    private static void ParkedInAKnownFrame(ManualResetEvent release, ref int nativeThreadId)
+    {
+        Volatile.Write(ref nativeThreadId, (int)GetCurrentThreadId());
+        release.WaitOne();
+        GC.KeepAlive(release);
+    }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()
