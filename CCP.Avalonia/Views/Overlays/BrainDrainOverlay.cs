@@ -19,9 +19,7 @@ using ConditioningControlPanel.Services.Compositor;
 using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.UI;
 using SkiaSharp;
-
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
-
 // WPF EffectPayloadFiring.cs:70-99, OverlayService.cs:900-917,2234-2250 and
 // BrainDrainLayer.cs:104-121,238-266,296-301. The unchanged WPF pump captures off-thread.
 internal static class BrainDrainOverlay
@@ -36,9 +34,8 @@ internal static class BrainDrainOverlay
     internal static bool IsShowing { get; private set; }
     // Test seams: the real path opens native windows and schedules a dispatcher timer.
     internal static Func<int, bool, bool>? ShowOverride;
-    internal static Func<bool> UserDrainRunning = () => CoreEngine.IsRunning && !CoreSettings.Current.AudioOnlySession && CoreSettings.Current.BrainDrainEnabled;
+    internal static Func<bool> UserDrainRunning = () => false; // No base visual consumer on this head yet.
     internal static Action<Action, TimeSpan> Schedule = (a, t) => DispatcherTimer.RunOnce(a, t);
-
     internal static void Seed() => EffectPayload.Firer = FirePayload;
     internal static void FirePayload(EffectPayload payload)
     {
@@ -62,7 +59,6 @@ internal static class BrainDrainOverlay
         int generation = System.Threading.Interlocked.Increment(ref _generation);
         Schedule(() => { if (generation == _generation) End(); }, TimeSpan.FromMilliseconds(BrainDrainBubble.OverlayMs));
     }
-
     private static bool Show(int strength, bool melt)
     {
         if (!OperatingSystem.IsWindows() || MainShellWindow.Current is not { } owner) return false;
@@ -97,7 +93,6 @@ internal static class BrainDrainOverlay
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Brain Drain overlay failed"); Stop(); return false; }
     }
-
     private static void End()
     {
         if (GentleVisuals.On && Windows.Count > 0) _ending = Stopwatch.GetTimestamp();
@@ -147,7 +142,6 @@ internal static class BrainDrainOverlay
         _owner = null;
     }
     [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr window, uint affinity);
-
     private sealed class DrainWindow : Window
     {
         private readonly Image _image;

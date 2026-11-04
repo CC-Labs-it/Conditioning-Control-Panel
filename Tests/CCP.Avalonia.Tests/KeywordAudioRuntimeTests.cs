@@ -367,6 +367,14 @@ public sealed class KeywordAudioRuntimeTests
         finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous; }
     });
 
+    [Fact]
+    public void EnabledEngineDoesNotClaimAnUnimplementedBaseDrain() => Run((_, s, _) =>
+    {
+        var running = typeof(CoreEngine).GetField("_running", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var saved = (running.GetValue(null), s.BrainDrainEnabled, s.AudioOnlySession);
+        try { running.SetValue(null, true); s.BrainDrainEnabled = true; s.AudioOnlySession = false; Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.UserDrainRunning()); }
+        finally { running.SetValue(null, saved.Item1); (s.BrainDrainEnabled, s.AudioOnlySession) = (saved.BrainDrainEnabled, saved.AudioOnlySession); }
+    });
     [Fact] // WPF KeywordTriggerService.cs:1805-1808, EffectPayloadFiring.cs:70-99
     public void KeywordUsesTimedDrainHandlerWithWpfGuardsAndPanicStop() => Run((engine, s, _) =>
     {
