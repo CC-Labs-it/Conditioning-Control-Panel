@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         // XWayland cannot see the pointer over native Wayland surfaces.
         internal static bool HasDesktopPointer(string? sessionType) =>
-            string.Equals(sessionType, "x11", StringComparison.OrdinalIgnoreCase);
+            !string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase);
 
         private static (PixelPoint At, bool Pressed, bool Escape)? ReadDesktopPointer() =>
             HasDesktopPointer(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")) ? X11Pointer.Read() : null;

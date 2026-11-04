@@ -92,8 +92,10 @@ public sealed class ChaosCursorGlowOverlayTests
     [InlineData("x11", true)]
     [InlineData("X11", true)]
     [InlineData("wayland", false)]
-    [InlineData(null, false)]
-    public void Only_X11_session_offers_desktop_pointer(string? session, bool expected) =>
+    [InlineData("WAYLAND", false)]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    public void Non_Wayland_session_can_try_desktop_pointer(string? session, bool expected) =>
         Assert.Equal(expected, ChaosCursorGlowOverlay.HasDesktopPointer(session));
 
     [Fact]
