@@ -128,13 +128,13 @@ public sealed partial class FriendsDrawer
             {
                 var hiddenNew = lines.Skip(show).Count(IsNew);
                 var more = FeedLink(hiddenNew > 0 ? Loc.GetF("friends_feed_more_new", hidden, hiddenNew) : Loc.GetF("friends_feed_more", hidden), "friends-feed-more");
-                more.Click += (_, _) => ShowMoreFeed();
+                more.Click += (_, _) => { FriendsLanding.SfxClick(); ShowMoreFeed(); };
                 foot.Children.Add(more);
             }
             if (_feedExtra > 0)
             {
                 var less = FeedLink(Loc.Get("friends_feed_less"), "friends-feed-less");
-                less.Click += (_, _) => ShowLessFeed();
+                less.Click += (_, _) => { FriendsLanding.SfxClick(); ShowLessFeed(); };
                 foot.Children.Add(less);
             }
             _feedBox.Children.Add(foot);
@@ -224,8 +224,8 @@ public sealed partial class FriendsDrawer
         (row.Cursor, row.Focusable) = (Hand(), true);
         row.PointerEntered += (_, _) => row.Background = Hover;
         row.PointerExited += (_, _) => row.Background = Brushes.Transparent;
-        row.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { e.Handled = true; OpenFromFeed(friendId); } };
-        row.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { e.Handled = true; OpenFromFeed(friendId); } };
+        row.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { e.Handled = true; FriendsLanding.SfxClick(); OpenFromFeed(friendId); } };
+        row.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { e.Handled = true; FriendsLanding.SfxClick(); OpenFromFeed(friendId); } };
     }
 
     /// <summary>Opens <paramref name="friendId"/>'s card (WPF OpenOn: never folds it) and scrolls it into view.</summary>

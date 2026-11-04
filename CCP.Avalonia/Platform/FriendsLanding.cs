@@ -282,7 +282,14 @@ internal static class FriendsLanding
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
     }
 
-    private static readonly FriendsSfxGate SfxGate = new();
+    /// <summary>Not readonly: a test swaps in a fresh gate so two cues inside the 130 ms gap both play.</summary>
+    internal static FriendsSfxGate SfxGate = new();
+
+    /// <summary>WPF FriendsSfx.Click / Accepted / Dismiss / Denied: the drawer's own cues (Services/Friends/FriendsSfx.cs:26-30).</summary>
+    internal static void SfxClick() => Sfx("chaos/ui_click.mp3", 0.12f, "friends-click");
+    internal static void SfxAccepted() => Sfx("chaos/ui_unlock.mp3", 0.18f, "friends-accepted");
+    internal static void SfxDismiss() => Sfx("chaos/sink.mp3", 0.10f, "friends-sink");
+    internal static void SfxDenied() => Sfx("chaos/ui_denied.mp3", 0.14f, "friends-denied");
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
     private static void Sfx(string rel, float scale, string tag, bool incoming = false)
@@ -290,7 +297,11 @@ internal static class FriendsLanding
         try
         {
             var s = CoreSettings.Current;
-            if (s.MasterVolume <= 0) return;
+            // WPF Services/Friends/FriendsSfx.cs:47-51: suppression precedes the gate,
+            // including a send/request result that arrives after its drawer folds.
+            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed
+                || CoreEngine.Video?.IsPlaying == true
+                || ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
             lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
