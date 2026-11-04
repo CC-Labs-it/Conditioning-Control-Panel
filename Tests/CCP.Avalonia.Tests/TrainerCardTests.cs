@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -156,6 +159,8 @@ public sealed partial class AccountSeedTests
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
                 w.Show();
                 w.ShowTab("leaderboard");
+                // Settle the entrance before measuring and clicking a moving, initially transparent row.
+                w.CompleteTabTransition();
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
                 Dispatcher.UIThread.RunJobs();
@@ -164,11 +169,24 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
-                {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                }
+                // Headless MouseDown/Up render between events, which can take longer than the
+                // double-click interval on CI. Preserve raw hit testing with event timestamps
+                // representing one double click, independent of rendering time.
+                var clicks = new List<int>();
+                list.AddHandler(InputElement.PointerPressedEvent, (_, e) => clicks.Add(e.ClickCount), RoutingStrategies.Tunnel);
+                // Avalonia 12 hides these platform members from its reference assembly.
+                var platform = w.PlatformImpl!;
+                var platformType = platform.GetType();
+                var mouse = (IInputDevice)platformType.GetProperty("MouseDevice")!.GetValue(platform)!;
+                var input = (Action<RawInputEventArgs>)platformType.GetProperty("Input")!.GetValue(platform)!;
+                var root = (IInputRoot)platformType.GetProperty("InputRoot")!.GetValue(platform)!;
+                void Send(ulong time, RawPointerEventType type) => input((RawInputEventArgs)Activator.CreateInstance(
+                    typeof(RawPointerEventArgs), mouse, time, root, type, at, RawInputModifiers.None)!);
+                Send(1000, RawPointerEventType.LeftButtonDown);
+                Send(1010, RawPointerEventType.LeftButtonUp);
+                Send(1100, RawPointerEventType.LeftButtonDown);
+                Send(1110, RawPointerEventType.LeftButtonUp);
+                Assert.Equal(new[] { 1, 2 }, clicks);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
