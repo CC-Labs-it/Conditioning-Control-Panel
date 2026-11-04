@@ -187,7 +187,7 @@ public sealed class FirstShowStageTests
     [Fact]
     public Task ShownOnceAfterTheFirstRunWizard() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup();
+        AmbientBeatLoopsTests.Setup();
         var service = new SettingsService();
         var old = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => service;
@@ -198,15 +198,18 @@ public sealed class FirstShowStageTests
             CoreSettings.Current.Welcomed = false;
             CoreSettings.Current.HasAcceptedAgeVerification = false;
             shell = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
+            Assert.Equal("firstLaunchEver", EmiLineEngine.Instance.HeldBy);
             shell.Show();
             await Until(() => shell.OwnedWindows.OfType<FirstRunWizard>().Any());
             var wizard = shell.OwnedWindows.OfType<FirstRunWizard>().Single();
             Assert.Equal(0, opened);
+            Assert.Equal("firstLaunchEver", EmiLineEngine.Instance.HeldBy);
             wizard.FindControl<CheckBox>("ChkAgeConfirm")!.IsChecked = true;
             wizard.FindControl<Button>("BtnNext")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             wizard.Close();
             await Until(() => opened > 0);
             Assert.Equal(1, opened);
+            Assert.Null(EmiLineEngine.Instance.HeldBy);
 
             second = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
             second.Show();
@@ -218,6 +221,7 @@ public sealed class FirstShowStageTests
         {
             foreach (var w in new[] { shell, second }) { foreach (var o in w?.OwnedWindows.ToList() ?? new()) o.Close(); w?.RequestExit(); }
             Dispatcher.UIThread.RunJobs();
+            EmiLineEngine.Instance.ResetForTests();
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
     });
