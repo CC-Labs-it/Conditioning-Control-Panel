@@ -157,4 +157,23 @@ public class SpeakPromptSessionTests
         Assert.Equal(1, hides);
     }
 
+    [Fact]
+    public async Task RecognitionExceptionRetriesWithoutReleasingCueOrPlayback()
+    {
+        var source = new Source();
+        int listens = 0, hides = 0;
+        var session = new SpeakPromptSession(new TriggerEffectAction
+        {
+            SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Persistent, SpeakHoldMode = SpeakHoldMode.Pause
+        }, source, () => true, () => Task.FromResult(true), () => false, () => { },
+        (_, _) => ++listens == 1 ? Task.FromException<PhraseResult>(new InvalidOperationException()) :
+            Task.FromResult(new PhraseResult { Matched = true }),
+        _ => { }, () => hides++);
+        await session.RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, listens);
+        Assert.Equal(1, hides);
+        Assert.Equal(1, source.Pauses);
+        Assert.Equal(1, source.Plays);
+    }
+
 }

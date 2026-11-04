@@ -77,7 +77,10 @@ internal sealed class SpeakPromptSession
                     await Task.Delay(400, ct);
                     continue;
                 }
-                var result = await _listen(_plan.Target, ct);
+                PhraseResult result;
+                try { result = await _listen(_plan.Target, ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception) { result = PhraseResult.NotAvailable; }
                 ct.ThrowIfCancellationRequested();
                 switch (SpeakPromptPlan.Classify(result))
                 {
