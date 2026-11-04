@@ -449,7 +449,7 @@ namespace ConditioningControlPanel.Services
             {
                 var enabled = _library();
                 var kept = KeepByLength(enabled, CoreSettings.Current.VideoMinDurationSeconds,
-                    CoreSettings.Current.VideoMaxDurationSeconds, DurationOf);
+                    0, DurationOf);
                 LastFunnelEnabled = enabled.Count;   // WPF _lastFunnelEnabled / _lastFunnelDuration (#1352)
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));

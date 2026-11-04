@@ -280,9 +280,9 @@ public sealed class MandatoryVideoSchedulerTests
             var host = new Host();
             var v = new MandatoryVideoScheduler(host, new FakeClock(), () => files)
                 { DurationOf = p => lengths.TryGetValue(p, out var d) ? d : null };
-            var picks = new HashSet<string> { v.PickNext()!, v.PickNext()! };
-            Assert.Equal(new HashSet<string> { "/v/mid.mp4", "/v/unparsed.mp4" }, picks);
-            Assert.Equal((4, 2), (v.LastFunnelEnabled, v.LastFunnelDuration));
+            var picks = new HashSet<string> { v.PickNext()!, v.PickNext()!, v.PickNext()! };
+            Assert.Equal(new HashSet<string> { "/v/mid.mp4", "/v/long.mp4", "/v/unparsed.mp4" }, picks);
+            Assert.Equal((4, 3), (v.LastFunnelEnabled, v.LastFunnelDuration));
 
             // The filter keeps none of the enabled clips: no pick, and the dialog can blame the filter.
             lengths["/v/unparsed.mp4"] = 30;
