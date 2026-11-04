@@ -21,6 +21,28 @@ namespace ConditioningControlPanel.Helpers
     /// </summary>
     internal static class SchedulerTime
     {
+        /// <summary>WPF MainWindow.StartStop.cs:885: today's enabled day and its time window.
+        /// For an overnight window WPF checks today, including after midnight.</summary>
+        internal static bool InWindow(Models.AppSettings settings, DateTime now)
+        {
+            bool day = now.DayOfWeek switch
+            {
+                DayOfWeek.Monday => settings.SchedulerMonday,
+                DayOfWeek.Tuesday => settings.SchedulerTuesday,
+                DayOfWeek.Wednesday => settings.SchedulerWednesday,
+                DayOfWeek.Thursday => settings.SchedulerThursday,
+                DayOfWeek.Friday => settings.SchedulerFriday,
+                DayOfWeek.Saturday => settings.SchedulerSaturday,
+                DayOfWeek.Sunday => settings.SchedulerSunday,
+                _ => false
+            };
+            if (!day) return false;
+            var start = ParseOrDefault(settings.SchedulerStartTime, new TimeSpan(16, 0, 0));
+            var end = ParseOrDefault(settings.SchedulerEndTime, new TimeSpan(22, 0, 0));
+            var time = now.TimeOfDay;
+            return end < start ? time >= start || time < end : time >= start && time < end;
+        }
+
         /// <summary>Last representable minute of a day; where an over-range hour clamps to.</summary>
         internal static readonly TimeSpan EndOfDay = new TimeSpan(23, 59, 0);
 
