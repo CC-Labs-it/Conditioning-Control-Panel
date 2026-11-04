@@ -51,10 +51,10 @@ public sealed class ChaosBoonDraftRunTests
         finally { loc.SetLanguage(language); }
     }
     // WPF ChaosModeService.cs:1441-1483, 1879-1888: incomplete rabbit effects cannot be offered.
-    [Fact] public async Task Draft_and_reroll_offer_only_implemented_cards() { await AvaloniaTestDispatcher.RunAsync(() => {
+    [Theory, InlineData("the_urge"), InlineData("playing_fire"), InlineData("bright_colors")] public async Task Draft_and_reroll_offer_only_implemented_cards(string deferredSin) { await AvaloniaTestDispatcher.RunAsync(() => {
             Setup(); var all = ChaosBoonPool.All.ToArray();
             try {
-                ChaosBoonPool.All.RemoveAll(b => b.Id is not ("golden_touch" or "extra_shield" or "gg_rabbits" or "the_urge"));
+                ChaosBoonPool.All.RemoveAll(b => b.Id is not ("golden_touch" or "extra_shield" or "gg_rabbits") && b.Id != deferredSin);
                 Assert.Contains(ChaosBoonPool.Draft(false), b => b.Id == "gg_rabbits"); // WPF retains the full pool
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, AllowCurses = true, SinChance = 1 });
                 ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests(); ChaosRunHost.State!.RerollsLeft = 1;
