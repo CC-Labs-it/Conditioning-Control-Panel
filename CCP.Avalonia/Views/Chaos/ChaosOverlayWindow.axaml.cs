@@ -434,13 +434,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else ChaosSfx.PlayBoonReveal(dc.Boon.Rarity == ChaosRarity.Rare);
         }
 
-        internal void CancelDraft()
-        {
-            _onBoonPick = null;
-            if (_draftPanel.IsVisible) HideDraft();
-            _countdownComplete = null;
-            FinishCountdown();
-        }
+        internal void CancelDraft() { _onBoonPick = null; if (_draftPanel.IsVisible) HideDraft(); _countdownComplete = null; FinishCountdown(); }
 
         private void HideDraft()
         {

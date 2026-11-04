@@ -426,22 +426,14 @@ public sealed class ChaosRunHostTests
             var xp = new System.Collections.Generic.List<(double Amount, string Source)>();
             CoreProgression.AddXPProvider = (a, src) => xp.Add((a, src));   // TestIsolation restores it
             ChaosHubWindow? hub = null;
-            var provider = CoreSettings.ServiceProvider; CoreSettings.ServiceProvider ??= () => null;
-            var enabled = CoreSettings.Current.ChaosEnabledVariants;
             try
             {
-                CoreSettings.Current.ChaosEnabledVariants = new() { "flash", "bambifreeze" };
-                Assert.Equal(new[] { "flash" }, ChaosRunHost.UserConfig().EnabledVariants);
-                CoreSettings.Current.ChaosEnabledVariants = null;
                 hub = new ChaosHubWindow();
-                var freeze = hub.FindControl<WrapPanel>("GrpPool")!.Children.OfType<global::Avalonia.Controls.Primitives.ToggleButton>().Single(t => Equals(t.Tag, "bambifreeze"));
-                Assert.False(freeze.IsVisible);
                 hub.FindControl<Button>("BtnMenuFallIn")!
                     .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.True(ChaosRunHost.IsActive);
                 Assert.Equal(ChaosPlayMode.Story, ChaosRunHost.State!.Config.PlayMode);
-                Assert.DoesNotContain("bambifreeze", ChaosRunHost.State.Config.EnabledVariants ?? ChaosBubbleVariants.AllIds());
 
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var state = ChaosRunHost.State!;
@@ -463,9 +455,8 @@ public sealed class ChaosRunHostTests
                 Assert.True(meta.Gold - gold0 >= state.WaveCount * 2 * (int)Math.Round(3 * diff),
                     $"gold {gold0} -> {meta.Gold}");
                 Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
-                ChaosRunHost.ForceShutdown(); ChaosRunHost.StartRun(isRestart: true); Assert.DoesNotContain("bambifreeze", ChaosRunHost.State!.Config.EnabledVariants!);
             }
-            finally { ChaosRunHost.ForceShutdown(); hub?.Close(); CoreSettings.Current.ChaosEnabledVariants = enabled; CoreSettings.ServiceProvider = provider; FreshMeta(); }
+            finally { ChaosRunHost.ForceShutdown(); hub?.Close(); FreshMeta(); }
             return Task.CompletedTask;
         });
     }
@@ -647,11 +638,8 @@ public sealed class ChaosRunHostTests
     }
 
     /// <summary>The run's juice hooks recorded in order: labels (PopText), cues (CoreAudio), pulses, shakes.</summary>
-    private static (Action<double, double, string, global::Avalonia.Media.Color>? pop, Action<global::Avalonia.Media.Color, double>? pulse,
-        Action<double, int>? shake, Action<string, float, string, Action<TimeSpan>?, Action?>? audio) _juiceOriginal;
     private static System.Collections.Generic.List<string> Juice()
     {
-        _juiceOriginal = (ChaosRunHost.PopText, ChaosRunHost.PulseFx, ChaosRunHost.ShakeFx, CoreAudio.PlayOneShotProvider);
         var log = new System.Collections.Generic.List<string>();
         ChaosRunHost.PopText = (_, y, w, _) => log.Add("label:" + w);
         ChaosRunHost.PulseFx = (c, s) => log.Add($"pulse:{c.R},{c.G},{c.B}@{s:0.00}");
@@ -662,7 +650,8 @@ public sealed class ChaosRunHostTests
 
     private static void Unjuice()
     {
-        (ChaosRunHost.PopText, ChaosRunHost.PulseFx, ChaosRunHost.ShakeFx, CoreAudio.PlayOneShotProvider) = _juiceOriginal;
+        ChaosRunHost.PopText = null; ChaosRunHost.PulseFx = null; ChaosRunHost.ShakeFx = null;
+        CoreAudio.PlayOneShotProvider = null;
     }
 
     /// <summary>WPF CompleteDefuse (SNAP, :4577) + the hiss (:1571) + OnDefused's green confirm (:2049);
@@ -736,44 +725,6 @@ public sealed class ChaosRunHostTests
                     log.Where(e => !e.StartsWith("label:+")).Select(e => e.StartsWith("sfx:Pop") ? "sfx:" : e));
             }
             finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
-            return Task.CompletedTask;
-        });
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task A_freeze_pickup_plays_its_catch_and_flashes_its_effect_word(bool mod)
-    {
-        await AvaloniaTestDispatcher.RunAsync(() =>
-        {
-            Setup();
-            FreshMeta();
-            var before = (pop: ChaosRunHost.PopText, audio: CoreAudio.PlayOneShotProvider, mod: CoreModArt.AudioOverridePathProvider,
-                master: CoreSettings.Current.MasterVolume, bubbles: CoreSettings.Current.BubblesVolume);
-            var log = Juice();
-            try
-            {
-                ChaosRunHost.StartRun(Cfg());
-                ChaosRunHost.Overlay!.FinishCountdown();
-                log.Clear();
-                CoreSettings.Current.MasterVolume = 100;
-                CoreSettings.Current.BubblesVolume = 100;
-                CoreModArt.AudioOverridePathProvider = p => mod && p == "chaos/freeze_catch.mp3" ? System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "chime2.mp3") : null;
-                string? played = null;
-                float volume = 0;
-                CoreAudio.PlayOneShotProvider = (p, v, _, _, _) => { played = p; volume = v; log.Add("sfx"); };
-                ChaosRunHost.PopText = (_, _, word, color) => log.Add($"label:{word}:{color.ToUInt32():X8}");
-                var b = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(ChaosBubbleVariants.All.Single(v => v.Id == "bambifreeze"), 1));
-                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
-                Assert.Equal((mod ? "chime2.mp3" : "freeze_catch.mp3", 0.6f), (System.IO.Path.GetFileName(played), volume));
-                Assert.Equal(new[] { "label:FREEZE:FF8AE6FF", "sfx" }, log.Take(2));
-            }
-            finally { Unjuice(); CoreModArt.AudioOverridePathProvider = before.mod;
-                (CoreSettings.Current.MasterVolume, CoreSettings.Current.BubblesVolume) = (before.master, before.bubbles);
-                ChaosRunHost.ForceShutdown(); FreshMeta(); }
-            Assert.Equal(before, (ChaosRunHost.PopText, CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider,
-                CoreSettings.Current.MasterVolume, CoreSettings.Current.BubblesVolume));
             return Task.CompletedTask;
         });
     }

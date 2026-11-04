@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
@@ -121,38 +120,6 @@ public sealed class ChaosHubStateTests
                 CoreSettings.Current.ChaosActiveSlot = old;
                 ChaosMeta.Init();
             }
-            return Task.CompletedTask;
-        });
-    }
-
-    [Fact]
-    public async Task Hidden_freeze_does_not_affect_pool_save_or_randomize()
-    {
-        await AvaloniaTestDispatcher.RunAsync(() =>
-        {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
-            var old = CoreSettings.Current.ChaosEnabledVariants;
-            var hub = new ChaosHubWindow();
-            try
-            {
-                var pool = hub.FindControl<WrapPanel>("GrpPool")!.Children.OfType<ToggleButton>().ToArray();
-                var hidden = pool.Single(t => (string?)t.Tag == "bambifreeze");
-                foreach (var t in pool) t.IsChecked = t == hidden;
-                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-                typeof(ChaosHubWindow).GetMethod("SaveToSettings", flags)!.Invoke(hub, null);
-                Assert.Null(CoreSettings.Current.ChaosEnabledVariants);
-                for (int i = 0; i < 100; i++)
-                {
-                    hidden.IsChecked = false;
-                    typeof(ChaosHubWindow).GetMethod("BtnRandomize_Click", flags)!.Invoke(hub, new object?[] { null, new global::Avalonia.Interactivity.RoutedEventArgs() });
-                    Assert.False(hidden.IsChecked);
-                    Assert.Contains(pool, t => t != hidden && t.IsChecked == true);
-                }
-            }
-            finally { hub.Close(); CoreSettings.Current.ChaosEnabledVariants = old; }
             return Task.CompletedTask;
         });
     }

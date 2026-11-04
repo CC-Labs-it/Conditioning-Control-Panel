@@ -36,19 +36,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// collar pay first, and a detonation makes the loop unclean (no doubled tip, no silk_touch).
     /// The run-end lessons go through Core ChaosRunLessons.</para>
     ///
-    /// <para>ponytail: still NOT here: darters, the Brittle,
+    /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
-    /// the perf backoff on the cadence; the payload firer is a logging no-op; the
+    /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). The wave draft and lesson handoff are wired;
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
     /// announcer callers remain missing even though the announcer overlay is now present.
     /// The FX window drives heat tint; colour pulse and screen shake calls retain WPF's values
     /// through the unseeded <see cref="PulseFx"/>/<see cref="ShakeFx"/> hooks
-    /// (chaos-payout-fallin-d). Freeze pickup shudder and per-bubble auras remain missing.
+    /// (chaos-payout-fallin-d). FreezeBurst and edge-hold callers remain missing.
     /// The hold and the Snap Chain window run on wall time (<c>BubbleOverlay.Field.Clock</c>),
     /// as WPF does (:4531, ChaosModeService :2000).</para>
     ///
@@ -67,8 +67,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
 
-        /// <summary>WPF ChaosPopText.Show; overrideable for tests.</summary>
-        internal static Action<double, double, string, Color>? PopText = ChaosPopText.Show;
+        /// <summary>WPF ChaosPopText.Show(xDip, yDip, text, color); seeded by the pop-text lane,
+        /// a no-op until then.</summary>
+        internal static Action<double, double, string, Color>? PopText;
         /// <summary>Optional observer for WPF <c>_fx.Pulse(color, strength)</c>; the window renders directly.</summary>
         internal static Action<Color, double>? PulseFx;
         /// <summary>WPF <c>App.ScreenShake.Shake(intensity, ms)</c>; unseeded until it lands.</summary>
@@ -79,7 +80,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static bool _draftPaused, _lessonCardsAfterDraft, _finalLoopAnnounced;
         private static int _pendingWave;
         private static readonly List<ChaosUnlockCardInfo> PendingLessonCards = new();
-        internal static double FreezeRemainingSec { get; private set; }
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
@@ -97,18 +97,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests: stop the real 4 Hz timer so only stepped <see cref="Tick"/> calls move the clock (P08).</summary>
         internal static void StopTimerForTests() => _runTimer?.Stop();
 
-        // The pickup stays in the internal model until its WPF field visuals and screen shake land.
-        internal static ChaosRunConfig UserConfig()
-        {
-            var cfg = ChaosRunConfig.FromSettings();
-            cfg.EnabledVariants = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds()).Where(id => id != "bambifreeze").ToList();
-            return cfg;
-        }
-
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
-            var cfg = config ?? UserConfig();
+            var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {
                 _state = new ChaosRunState(cfg);
@@ -169,17 +161,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void SpawnTick()
         {
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
-            if (_overlay is not { IsVisible: true } || FreezeRemainingSec > 0) return;   // WPF :1104
+            if (_overlay is not { IsVisible: true }) return;   // P01
             var cfg = _state.Config;
             double intensity = _state.RunIntensity;
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
-                // WPF ChaosModeService.cs:1149: cap simultaneous freeze pickups.
-                IReadOnlyCollection<string> enabled = cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds();
-                if (BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsFreeze == true && !b.Popping)
-                    >= ChaosTuning.FREEZE_MAX_ON_SCREEN)
-                    enabled = enabled.Where(id => id != "bambifreeze").ToList();
+                // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
+                IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
+                    .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
+                                 && v.PayloadKind != EffectBubblePayloadKind.BambiFreeze)).ToList();
                 double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
                 double waveLeft = waveLen - (_state.ElapsedSec % waveLen);
                 double runLeft = _state.RunDurationSec - _state.ElapsedSec;
@@ -218,7 +209,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
-            if (spec.IsFreeze) { BubbleOverlay.PlayChaosCue("freeze_catch", 0.6f); OnFreezeCaught(); return; } // WPF :1611,4710
             if (spec.IsPrism)
             {
                 FireScaledPayload(spec.Payload);
@@ -241,7 +231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
         private static bool CanChannelDefuse(AmbientBubble b) =>
-            _state != null && (FreezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
+            _state != null && _state.Focus >= ChaosTuning.DEFUSE_COST;
 
         /// <summary>WPF OnDefused (:1984): the core snap (cost, counts, score, Drip Feed), the Snap
         /// Chain window and Playing with Fire's brink gold. Pendulum is 1.0 until its boon lands.</summary>
@@ -253,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
-                b.DefusedViaChannel, free: FreezeRemainingSec > 0, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
+                b.DefusedViaChannel, free: false, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
             ShowPopScore(pts);
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
@@ -389,7 +379,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _spawnTimer?.Stop();
             _spawnTimer = null;
-            EndFreeze();
             BubbleOverlay.EndChaos();
         }
 
@@ -398,12 +387,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
-            // WPF ChaosModeService.cs:971: only the running clock spends the freeze.
-            if (FreezeRemainingSec > 0)
-            {
-                FreezeRemainingSec = Math.Max(0, FreezeRemainingSec - ChaosRunEngine.TICK_SEC);
-                if (FreezeRemainingSec == 0) EndFreeze();
-            }
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
             TickToys();
@@ -559,38 +542,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 artKey: "final_loop", subText: Loc.Get("Chaos_LastLoopSub"));
         }
 
-        // WPF ChaosModeService.cs:2382-2393,3030-3065: pickups refresh a 3.5 s window.
-        private static void OnFreezeCaught()
-        {
-            if (_state == null) return;
-            _state.Score += 140 * _state.TotalMult;
-            _state.Combo++;
-            _state.Heat = Math.Min(1, _state.Heat + 0.05);
-            ChaosLessons.Tick("freeze_trigger");
-            FreezeRemainingSec = 3.5;
-            BubbleOverlay.Field.FreezeChaos = true;
-            EffectPayload.GlobalDurationMult = 2.5;
-            var color = Color.FromRgb(150, 210, 255);
-            ChaosEffectBannerOverlay.Show("freeze", Loc.Get("Chaos_PickupFreeze"), color);
-            if (_state.Config.ColorFlashesEnabled)
-            {
-                _fx?.FreezeBurst(color);
-                _fx?.BeginEdgeHold(color, 0.5);
-            }
-            Shake(0.3, 200);
-        }
-
-        private static void EndFreeze()
-        {
-            if (FreezeRemainingSec > 0 || BubbleOverlay.Field.FreezeChaos)
-                ChaosOverlayWindow.ChaosSfx.Play("freeze_shatter", 0.5f);
-            FreezeRemainingSec = 0;
-            BubbleOverlay.Field.FreezeChaos = false;
-            EffectPayload.GlobalDurationMult = 1;
-            ChaosEffectBannerOverlay.End("freeze");
-            _fx?.EndEdgeHold();
-        }
-
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
         /// re-issued only when the quantized level moves. Honours the colour-flashes toggle.</summary>
         private static void UpdateHeatTint()
@@ -651,7 +602,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_lessonCardPaused || ChaosUnlockCardOverlay.IsShowing) return;
             _lessonCardPaused = false;
             BubbleOverlay.HoldChaos(_manualPaused);
-            BubbleOverlay.Field.FreezeChaos = FreezeRemainingSec > 0;
             if (_spawning && !_manualPaused) _spawnTimer?.Start();
             if (_lessonCardsAfterDraft)
             {

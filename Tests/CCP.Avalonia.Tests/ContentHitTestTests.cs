@@ -37,7 +37,7 @@ public sealed class ContentHitTestTests
                     .SetupWithoutStarting();
             var w = new MainShellWindow { TabClock = new FrozenClock() };
             ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
-            ConditioningControlPanel.CoreSettings.Current.PerformanceMode = false;
+            ConditioningControlPanel.CoreSettings.Current.PerformanceMode = false;   // TestIsolation.cs:164,179 restores CoreSettings.Current after every test
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.

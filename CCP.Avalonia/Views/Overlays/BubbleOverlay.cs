@@ -243,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
-            Field.HoldChaos = Field.FreezeChaos = false;
+            Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
@@ -278,13 +278,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
-            if (!b.Spec.IsFreeze) PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
+            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
 
         private static string ChaosCuePath(string name) =>
-            CoreModArt.AudioOverridePath("chaos/" + name + ".mp3") ??
             ContentLocator.Resolve(Path.Combine("Resources", "sounds", "chaos", name + ".mp3"));   // as ChaosSfx
 
         /// <summary>WPF PlayChaosCue/PlayCue (BubbleService.cs:2049, :2058): the chaos cue at

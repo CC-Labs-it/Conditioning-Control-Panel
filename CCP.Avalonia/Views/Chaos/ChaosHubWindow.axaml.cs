@@ -1691,7 +1691,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             s.ChaosMotionMode = GetSegment(_grpMotion) ?? "Mixed";
             s.ChaosWaveCount = _waves;
 
-            var pool = _grpPool.Children.OfType<ToggleButton>().Where(t => t.IsVisible).ToList();
+            var pool = _grpPool.Children.OfType<ToggleButton>().ToList();
             var checkd = pool.Where(t => t.IsChecked == true)
                              .Select(t => t.Tag?.ToString() ?? "").Where(x => x.Length > 0).ToList();
             s.ChaosEnabledVariants = (checkd.Count == 0 || checkd.Count == pool.Count) ? null : checkd;
@@ -1763,7 +1763,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SetSegment(_grpDifficulty, diffs[_rng.Next(diffs.Count)]);
             SetSegment(_grpLength, new[] { "120", "180", "300" }[_rng.Next(3)]);
             SetSegment(_grpMotion, new[] { "Mixed", "FloatUp", "RainDown", "RoamBounce" }[_rng.Next(4)]);
-            var pool = _grpPool.Children.OfType<ToggleButton>().Where(t => t.IsVisible).ToList();
+            var pool = _grpPool.Children.OfType<ToggleButton>().ToList();
             foreach (var t in pool) t.IsChecked = _rng.NextDouble() < 0.6;
             if (!pool.Any(t => t.IsChecked == true)) pool[0].IsChecked = true;
         }
@@ -1778,7 +1778,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ? ChaosPlayMode.FreeDesktop : ChaosPlayMode.Story;
             SaveToSettings();
             Close();
-            var cfg = ChaosRunHost.UserConfig();
+            var cfg = ChaosRunConfig.FromSettings();
             cfg.PlayMode = mode;
             Dispatcher.UIThread.Post(() => ChaosRunHost.StartRun(cfg));
         }
