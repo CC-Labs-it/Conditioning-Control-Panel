@@ -47,6 +47,34 @@ public sealed class RemoteRelayTests
     private static void Poll(FakeRelay f, string json) =>
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
 
+    [Fact]
+    public async Task Stop_signal_forces_local_teardown_even_when_post_fails_and_emote_was_recent()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        await r.StartAsync("light");
+        Assert.True((await r.SendEmoteAsync("hi", "", "custom")).ok);
+        f.Answer = _ => throw new HttpRequestException("offline");
+        Assert.False(await r.SendSignalAsync("stop"));
+        Assert.Contains(true, _stops);
+        var body = f.Seen.Last().Body;
+        Assert.Equal("signal", (string?)body["kind"]);
+        Assert.Equal("stop", (string?)body["text"]);
+    }
+
+    [Fact]
+    public async Task More_signal_posts_without_stopping_and_rejects_unknown_kinds()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        await r.StartAsync("light");
+        Assert.False(await r.SendSignalAsync("unknown"));
+        Assert.True(await r.SendSignalAsync(" MORE "));
+        Assert.Empty(_stops);
+        Assert.Equal("more", (string?)f.Seen.Last().Body["text"]);
+        Assert.Equal("signal", (string?)f.Seen.Last().Body["kind"]);
+    }
+
     [Theory]
     [InlineData("show_pink_filter", true, true)]
     [InlineData("stop_pink_filter", true, false)]
