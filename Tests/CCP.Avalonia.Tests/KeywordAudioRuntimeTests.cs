@@ -15,8 +15,10 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Xunit;
 using IconKind = FluentIcons.Common.Symbol;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -213,6 +215,21 @@ public sealed class KeywordAudioRuntimeTests
         view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked = false;
         }
         finally { KeywordTriggerHead.Engine.Now = realNow; }
+    });
+
+    [Fact]
+    public void TypedMatchCreditsTheActiveKeywordQuest() => Run((engine, s, played) =>
+    {
+        var old = AvApp.Quests;
+        using var quests = new QuestService();
+        try
+        {
+            AvApp.Quests = quests;
+            quests.Progress.DailyQuests = new List<ActiveQuest> { new("trigger_words_d") };
+            Type(engine, "sit");
+            Assert.Equal(1, quests.Progress.DailyQuests[0].CurrentProgress);
+        }
+        finally { AvApp.Quests = old; }
     });
 
     [Fact]   // WPF DispatchMergedAsync :1284 + DispatchActionAsync :1411 + RecordFire :135

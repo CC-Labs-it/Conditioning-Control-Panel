@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -23,8 +24,8 @@ public sealed class ProgramCapabilitiesTests
         ["first_week"] = new string[0],
         ["presentation"] = new string[0],
         ["the_takeover"] = new string[0],
-        ["kept"] = new[] { "KeywordTrigger" },
-        ["firmware_install"] = new[] { "KeywordTrigger" },
+        ["kept"] = OperatingSystem.IsWindows() ? Array.Empty<string>() : new[] { "KeywordTrigger" },
+        ["firmware_install"] = OperatingSystem.IsWindows() ? Array.Empty<string>() : new[] { "KeywordTrigger" },
     };
 
     [Fact]
@@ -39,8 +40,20 @@ public sealed class ProgramCapabilitiesTests
                 .Distinct().OrderBy(s => s);
             Assert.True(Needs[p.Id].OrderBy(s => s).SequenceEqual(missing), $"{p.Id}: {string.Join(",", missing)}");
         }
-        Assert.Equal(new[] { "first_week", "presentation", "the_takeover" },
+        Assert.Equal(all.Where(p => Needs[p.Id].Length == 0).Select(p => p.Id),
             all.Where(p => ProgramService.UnavailableTasks(p, ProgramCapabilities.IsAvailable).Count == 0).Select(p => p.Id));
+    }
+
+    [Fact]
+    public void KeywordProgramsAreAvailableOnlyWithAKeyboardSource()
+    {
+        foreach (var id in new[] { "kept", "firmware_install" })
+        {
+            var program = BuiltInPrograms.All().Single(p => p.Id == id);
+            Assert.Empty(ProgramService.UnavailableTasks(program, t => ProgramCapabilities.IsAvailable(t, true)));
+            Assert.Contains(ProgramService.UnavailableTasks(program, t => ProgramCapabilities.IsAvailable(t, false)),
+                t => t.Verifier == QuestCategory.KeywordTrigger);
+        }
     }
 
     /// <summary>The QuestService call that raises each category.</summary>
@@ -57,6 +70,7 @@ public sealed class ProgramCapabilitiesTests
         [QuestCategory.Autonomy] = "TrackAutonomyMinutes",
         [QuestCategory.Lockdown] = "TrackLockdownCompleted",
         [QuestCategory.BlinkTrainer] = "TrackBlinkTrainerBlink",
+        [QuestCategory.KeywordTrigger] = "TrackKeywordTrigger",
     };
 
     [Fact]
