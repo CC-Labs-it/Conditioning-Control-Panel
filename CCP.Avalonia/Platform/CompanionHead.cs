@@ -1,5 +1,10 @@
 using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Companion;
 using Serilog;
 
@@ -15,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class CompanionHead
 {
     private static IDisposable? _drainTimer, _activeTimer;
+    internal static Window? AdvisoryOwnerForTests;
 
     internal static bool Started => _drainTimer != null;
 
@@ -24,6 +30,7 @@ internal static class CompanionHead
         try { CompanionCore.Start(); } catch (Exception ex) { Log.Warning(ex, "CompanionCore start failed"); }
         CoreModsHooks.ActiveCompanionProvider = () => CompanionCore.ActiveCompanion;
         CoreModsHooks.SwitchCompanion = id => CompanionCore.SwitchCompanion(id);
+        CompanionCore.PromptValidationAdvisory += ShowPromptValidationAdvisory;
 
         // ponytail: WPF runs this timer only under Brain Parasite; here DrainTick returns at once for other perks.
         _drainTimer = DispatcherTimer.Run(() => { try { CompanionCore.DrainTick(DateTime.UtcNow); } catch (Exception ex) { Log.Debug("Drain tick: {E}", ex.Message); } return true; },
@@ -31,9 +38,24 @@ internal static class CompanionHead
         _activeTimer = DispatcherTimer.Run(() => { try { CompanionCore.UpdateActiveTime(); } catch { } return true; }, TimeSpan.FromMinutes(1));
     }
 
+    // WPF App.xaml.cs:2708-2713 posts an ownerless warning, including while the shell is hidden.
+    private static void ShowPromptValidationAdvisory(int count) => Dispatcher.UIThread.Post(async () =>
+    {
+        try
+        {
+            var owner = AdvisoryOwnerForTests ??
+                (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+            var dialog = new MessageDialog(Loc.Get("community_prompt_warning_title"),
+                Loc.GetF("community_prompt_warning_body", count), showCancel: false);
+            await dialog.ShowDialogSafe<bool?>(owner);
+        }
+        catch (Exception ex) { Log.Debug(ex, "Community prompt advisory failed"); }
+    });
+
     /// <summary>Stops both timers (tests; the hooks are the caller's to restore).</summary>
     internal static void Stop()
     {
+        CompanionCore.PromptValidationAdvisory -= ShowPromptValidationAdvisory;
         _drainTimer?.Dispose();
         _activeTimer?.Dispose();
         _drainTimer = _activeTimer = null;

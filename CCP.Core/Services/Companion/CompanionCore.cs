@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Services.Companion
 
         public static event Action<CompanionId, int>? LevelUp;   // WPF CompanionLevelUp, once per level
         public static event Action<CompanionId>? Switched;       // WPF CompanionSwitched
+        public static event Action<int>? PromptValidationAdvisory;
 
         private static DateTime _lastActiveTimeUpdate = DateTime.Now;
         private static DateTime? _lastDrainSaveUtc;
@@ -58,6 +59,7 @@ namespace ConditioningControlPanel.Services.Companion
                 if (!string.IsNullOrEmpty(promptId))
                 {
                     using var prompts = new CommunityPromptService();
+                    prompts.ValidationAdvisory += (_, count) => PromptValidationAdvisory?.Invoke(count);
                     prompts.ActivatePrompt(promptId);
                 }
             }
