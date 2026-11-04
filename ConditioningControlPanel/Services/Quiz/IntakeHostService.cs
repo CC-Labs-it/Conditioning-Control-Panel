@@ -504,7 +504,7 @@ namespace ConditioningControlPanel.Services.Quiz
             if (firstResult && !_testMode && _openedUtc != default)
             {
                 var slipHost = _host;
-                _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim("intake", "solo",
+                _ = Sparkles.SparklesSlipDelivery.Deliver(Sparkles.SparklesGameEnd.Claim("intake", "solo",
                     Sparkles.SparklesResult.ForMedal(
                         Sparkles.SparklesGameEnd.IntakeMedal(run.TotalScore, run.MaxScore, IntakeRun.TopMarksPercent)),
                     DateTime.UtcNow - _openedUtc), json => slipHost?.Post(new JRaw(json)));

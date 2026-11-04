@@ -407,7 +407,7 @@ internal static partial class PieceByPieceHostService
                     // claims online with its pbp match id. A watched, hotseat or left game claims nothing.
                     // The results slip (W6) lands on the game-over card that is up when the receipt comes in.
                     var slipHost = _host;
-                    _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.Chess(o)),
+                    _ = Sparkles.SparklesSlipDelivery.Deliver(Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.Chess(o)),
                         json => slipHost?.Post(new JRaw(json)));
                     break;
 

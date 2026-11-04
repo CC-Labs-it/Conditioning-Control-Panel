@@ -35,10 +35,6 @@
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
-    <!-- Shared pure WPF wire rules, kept byte-identical to the source. -->
-    <Compile Include="..\ConditioningControlPanel\Services\Glassroad\GlassroadRules.cs" Link="Services\Glassroad\GlassroadRules.cs" />
-    <Compile Include="..\ConditioningControlPanel\Services\Sparkles\SparklesClaim.cs" Link="Services\Sparkles\SparklesClaim.cs" />
-    <Compile Include="..\ConditioningControlPanel\Services\Sparkles\SparklesReceipt.cs" Link="Services\Sparkles\SparklesReceipt.cs" />
     <PackageReference Include="Avalonia" Version="12.1.2" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />

@@ -109,16 +109,16 @@ public class SparklesSlipTests
     public async Task Deliver_posts_once_and_never_throws()
     {
         var posted = new List<string>();
-        await SparklesSlip.DeliverCore(Task.FromResult<SparklesClaimOutcome?>(SparklesClaimOutcome.Refused("offline")),
+        await SparklesSlipDelivery.DeliverCore(Task.FromResult<SparklesClaimOutcome?>(SparklesClaimOutcome.Refused("offline")),
             posted.Add, null, o => SparklesSlip.Build(o, false, Loc));
         Assert.Single(posted);
         Assert.Contains("\"sparkles-receipt\"", posted[0]);
 
-        await SparklesSlip.DeliverCore(Task.FromResult<SparklesClaimOutcome?>(Receipt("{\"credited\":0,\"shadow\":true}")),
+        await SparklesSlipDelivery.DeliverCore(Task.FromResult<SparklesClaimOutcome?>(Receipt("{\"credited\":0,\"shadow\":true}")),
             posted.Add, null, o => SparklesSlip.Build(o, false, Loc));
-        await SparklesSlip.DeliverCore(Task.FromException<SparklesClaimOutcome?>(new InvalidOperationException()),
+        await SparklesSlipDelivery.DeliverCore(Task.FromException<SparklesClaimOutcome?>(new InvalidOperationException()),
             posted.Add, null, o => SparklesSlip.Build(o, false, Loc));
-        await SparklesSlip.DeliverCore(Task.FromResult<SparklesClaimOutcome?>(SparklesClaimOutcome.Refused("offline")),
+        await SparklesSlipDelivery.DeliverCore(Task.FromResult<SparklesClaimOutcome?>(SparklesClaimOutcome.Refused("offline")),
             _ => throw new InvalidOperationException("host gone"), null, o => SparklesSlip.Build(o, false, Loc));
         Assert.Single(posted);
     }

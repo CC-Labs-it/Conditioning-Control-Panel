@@ -210,7 +210,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 try
                 {
-                    var outcome = await SparklesClaimService.ClaimAsync(claim, identity, url, http).ConfigureAwait(false);
+                    var outcome = identity == null ? SparklesClaimOutcome.Refused("signin")
+                        : url == null ? SparklesClaimOutcome.Refused("unreachable")
+                        : await new SparklesClaimService(http, () => identity, url).ClaimAsync(claim).ConfigureAwait(false);
                     Dispatcher.UIThread.Post(() =>
                     {
                         try { DeliverGlassroadReceipt(outcome, identity?.UnifiedId); }
@@ -223,18 +225,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private void DeliverGlassroadReceipt(SparklesClaimOutcome outcome, string? account)
         {
-            var r = outcome.Receipt;
             var s = CoreSettings.Current;
-            if (r is { Shadow: false, Credited: > 0, Sp: >= 0 } && account != null &&
-                V2WalletAdoption.Decide(FriendsHead.Identity()?.UnifiedId == account, false, r.Sp.Value, s.SkillPoints, out var next))
+            if (SparklesClaimService.DecideWallet(account != null && FriendsHead.Identity()?.UnifiedId == account,
+                    outcome.Receipt, s.SkillPoints, out var next))
             {
                 int before = s.SkillPoints;
                 s.SkillPoints = next;
                 CoreSettings.Save();
                 SparklePointRewards.PublishCredit(before, next, SparklePointSource.Place);
             }
-            var slip = SparklesSlip.Build(outcome, GentleVisuals.On, Loc.Get);
-            if (slip?["sp"]?.Type == JTokenType.Integer && s.SkillPoints > (long)slip["sp"]!) slip["sp"] = s.SkillPoints;
+            var slip = SparklesSlip.WithWallet(SparklesSlip.Build(outcome, GentleVisuals.On, Loc.Get), s.SkillPoints);
             if (!_closing && slip != null) Post(slip);
         }
 

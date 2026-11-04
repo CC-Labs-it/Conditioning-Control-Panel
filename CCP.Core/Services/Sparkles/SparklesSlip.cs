@@ -1,4 +1,3 @@
-// Pure slip rendering copied from WPF Services/Sparkles/SparklesSlip.cs:23-132.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,7 +5,15 @@ using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Sparkles;
 
-internal static class SparklesSlip
+/// <summary>
+/// SPARKLES BY PLACE (B1 W5): the results slip. Turns what a claim came to into the one page
+/// message every web tree's <c>sparkles-slip.js</c> draws: <c>{ type: "sparkles-receipt", paid,
+/// credited, online, taper, fee, reason, shadow, place, of, medal?, outcome?, sp, stamp, gentle,
+/// lines }</c>. The HOST localises the lines, so no page carries ten language tables.
+/// SENDS NOTHING for a shadow receipt (the rollout day), no claim service, or a refusal the slip
+/// has no line for (signed-out hosts get one line; a busy or pending server gets none).
+/// </summary>
+public static class SparklesSlip
 {
     public const string MessageType = "sparkles-receipt";
 
@@ -117,6 +124,15 @@ internal static class SparklesSlip
     {
         try { return string.Format(CultureInfo.InvariantCulture, template, args); }
         catch (FormatException) { return template; }
+    }
+
+    /// <summary>The chip counts up to the wallet the app shows: the server's balance can sit below it
+    /// (raise-only adoption keeps unsynced local credit), so the higher of the two wins.</summary>
+    internal static JObject? WithWallet(JObject? msg, int? local)
+    {
+        if (msg != null && local is int sp && msg["sp"]?.Type == JTokenType.Integer && sp > (long)msg["sp"]!)
+            msg["sp"] = sp;
+        return msg;
     }
 
 }
