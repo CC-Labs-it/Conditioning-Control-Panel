@@ -97,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private WebHost? _pendingVideoHost;
         private WebHost? _playlistHost;
         private string? _playlistToken;
-        private bool _playlistClaimed, _playlistLoaded, _playlistPassive, _playlistScriptInjected;
+        private bool _playlistClaimed, _playlistLoaded, _playlistPassive, _playlistScriptInjected, _playlistTakeover;
         private volatile bool _playlistPlaying, _playlistSlotHeld;
         private DateTime _playlistHeartbeat;
         private DispatcherTimer? _playlistWatchdog;
@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _playlistHost = host;
             _playlistToken = Guid.NewGuid().ToString("N");
             _playlistLoaded = _playlistPassive = _playlistScriptInjected = false;
-            _playlistClaimed = true;
+            _playlistClaimed = _playlistTakeover = true;
             _playlistPlaying = false;
             _playlistSlotHeld = !Autonomy.IsBusy();
             _playlistHeartbeat = PlaylistClock();
@@ -164,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case "playing":
                     if (!_playlistClaimed)
                     {
-                        _playlistClaimed = true;
+                        _playlistClaimed = true; _playlistTakeover = false;
                         _playlistSlotHeld = !Autonomy.IsBusy();
                         _playlistWatchdog?.Start();
                     }
@@ -191,8 +191,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnPlaylistWatchdog(object? sender, EventArgs e) => CheckPlaylistTimeout();
         internal void CheckPlaylistTimeout()
         {
-            if (_playlistClaimed && (PlaylistClock() - _playlistHeartbeat).TotalSeconds >= (_playlistPlaying ? 20 : 60))
-                StopBrowserMediaForPanic();
+            if (!_playlistClaimed || (PlaylistClock() - _playlistHeartbeat).TotalSeconds < (_playlistPlaying ? 20 : 60)) return;
+            if (_playlistTakeover) StopBrowserMediaForPanic();
+            else { _playlistClaimed = _playlistPlaying = _playlistSlotHeld = false; _playlistWatchdog?.Stop(); }
         }
 
         // WPF MainWindow.Browser.cs:793-815 arms once before navigation, and :835-837

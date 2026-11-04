@@ -80,31 +80,33 @@ public sealed class CompanionPlaylistSessionTests
             Assert.True(shell.Autonomy.IsBusy());
             Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.BrowserMediaActive);
             Assert.True(BubbleCountHost.Instance.OtherInteractionActive);
-            Send("stale", "ended");
-            Assert.True(shell.Autonomy.IsBusy());
+            Send("stale", "ended"); Assert.True(shell.Autonomy.IsBusy());
             Send(first, "ended"); Assert.False(shell.Autonomy.IsBusy());
             Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.BrowserMediaActive);
             Assert.False(BubbleCountHost.Instance.OtherInteractionActive);
             Send(first, "playing"); // WPF opens a user session if audio resumes
             Assert.True(shell.Autonomy.IsBusy());
+            scripts.Clear(); now = now.AddSeconds(21); shell.CheckPlaylistTimeout();
+            Assert.False(shell.Autonomy.IsBusy());
+            Assert.DoesNotContain(MainShellWindow.PanicBrowserMediaScript, scripts);
+            Send(first, "playing"); Assert.True(shell.Autonomy.IsBusy());
             host.OnNavigationCompleted(new Uri("https://127.0.0.1/bambicloud.com/other"));
             Assert.False(shell.Autonomy.IsBusy());
-            Send(first, "playing");
-            Assert.False(shell.Autonomy.IsBusy());
+            Send(first, "playing"); Assert.False(shell.Autonomy.IsBusy());
 
             var second = await Open();
-            Send(first, "ended");
-            Assert.True(shell.Autonomy.IsBusy());
-            Send(second, "failed");
-            Assert.False(shell.Autonomy.IsBusy());
+            Send(first, "ended"); Assert.True(shell.Autonomy.IsBusy());
+            Send(second, "failed"); Assert.False(shell.Autonomy.IsBusy());
             Send(second, "playing"); Assert.True(shell.Autonomy.IsBusy()); Send(second, "ended");
 
             var third = await Open();
             shell.StopBrowserMediaForPanic();
             Assert.False(shell.Autonomy.IsBusy());
-            Send(third, "playing");
-            Assert.False(shell.Autonomy.IsBusy());
+            Send(third, "playing"); Assert.False(shell.Autonomy.IsBusy());
             var resumed = Regex.Match(Assert.Single(scripts, s => s.Contains("'yes' === 'yes'")), "const token = '([0-9a-f]{32})';").Groups[1].Value;
+            Send(resumed, "playing"); Assert.True(shell.Autonomy.IsBusy());
+            scripts.Clear(); now = now.AddSeconds(21); shell.CheckPlaylistTimeout();
+            Assert.False(shell.Autonomy.IsBusy()); Assert.DoesNotContain(MainShellWindow.PanicBrowserMediaScript, scripts);
             Send(resumed, "playing"); Assert.True(shell.Autonomy.IsBusy());
             Send(resumed, "ended"); Assert.False(shell.Autonomy.IsBusy());
             scripts.Clear();
@@ -129,10 +131,8 @@ public sealed class CompanionPlaylistSessionTests
             shell.CheckPlaylistTimeout();
             Assert.False(shell.Autonomy.IsBusy());
             var resumedAfterTimeout = Regex.Match(Assert.Single(scripts, s => s.Contains("'yes' === 'yes'")), "const token = '([0-9a-f]{32})';").Groups[1].Value;
-            Send(resumedAfterTimeout, "playing");
-            Assert.True(shell.Autonomy.IsBusy());
-            Send(resumedAfterTimeout, "ended");
-            Assert.False(shell.Autonomy.IsBusy());
+            Send(resumedAfterTimeout, "playing"); Assert.True(shell.Autonomy.IsBusy());
+            Send(resumedAfterTimeout, "ended"); Assert.False(shell.Autonomy.IsBusy());
             scripts.Clear();
 
             // WPF's queue claim is best effort. If it was busy, playback protection still applies.
@@ -141,8 +141,7 @@ public sealed class CompanionPlaylistSessionTests
             var fifth = await Open();
             shell.Autonomy.IsBusy = schedulerBusy;
             Assert.False(shell.Autonomy.IsBusy());
-            Send(fifth, "playing");
-            Assert.True(shell.Autonomy.IsBusy());
+            Send(fifth, "playing"); Assert.True(shell.Autonomy.IsBusy());
             settings.Current.ProtectBrowserVideoPlayback = false;
             Assert.False(shell.Autonomy.IsBusy());
             settings.Current.ProtectBrowserVideoPlayback = true;
