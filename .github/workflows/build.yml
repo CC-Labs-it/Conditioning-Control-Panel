@@ -285,6 +285,7 @@ jobs:
             Write-Host $output
             if ($code -eq 0 -or $output -notmatch 'document-start listener missing') { throw 'Missing listener did not fail the native assertion' }
           } finally { [IO.File]::WriteAllText($path, $source) }
+          $LASTEXITCODE = 0
       # CCP.Avalonia.Tests (sharded, one testhost per shard) runs in the avalonia-windows matrix job below.
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release
