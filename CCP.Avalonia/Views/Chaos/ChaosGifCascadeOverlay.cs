@@ -36,11 +36,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool ManualFramesForTests;
         internal static bool Refused;
         private static ChaosGifCascadeOverlay? _active;
+        private static long _pickGeneration;
 
         internal static ChaosGifCascadeOverlay? Active => _active;
         internal static Task? LastPick { get; private set; }
-        /// <summary>The newest clip decode (tests await it, then run the posted attach).</summary>
+        /// <summary>The newest worker; use PendingDecodes before releasing input files.</summary>
         internal static Task? LastDecode { get; private set; }
+        /// <summary>All outstanding decode workers, including earlier clips and closed windows.</summary>
+        internal static Task? PendingDecodes { get; private set; }
+        internal static Action? BeforeDecodeForTests;
 
         /// <summary>WPF IsRaining: a cascade is spawning or clips are still falling.</summary>
         public static bool IsRaining => _active?._cascade.IsRaining == true;
@@ -48,10 +52,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Show: draws a batch from the enabled flash pool off the UI thread, then rains it.</summary>
         public static void Show(double spawnRatePerSec, double durationSec, double gifSize, double fallSpeed, double opacity, double startScale = 1.0)
         {
+            long generation = _pickGeneration;
             int batch = GifCascade.BatchSize(spawnRatePerSec, durationSec);
             var s = CoreSettings.Current;
             LastPick = Task.Run(() => PickFiles(batch, s)).ContinueWith(t => Dispatcher.UIThread.Post(() =>
             {
+                if (generation != _pickGeneration) return; // panic or run teardown won
                 try { ShowWithFiles(t.IsCompletedSuccessfully ? t.Result : new List<string>(), spawnRatePerSec, durationSec, gifSize, fallSpeed, opacity, startScale); }
                 catch (Exception ex) { Log.Debug("GifCascade.ShowWithFiles: {E}", ex.Message); }
             }), TaskScheduler.Default);
@@ -91,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Close any cascade immediately (run teardown, panic). Safe when idle.</summary>
         public static void CloseActive()
         {
+            ++_pickGeneration; // a pending pool fetch must not reopen after run teardown or panic
             Refused = false;
             try { _active?.CloseNow(); } catch (Exception ex) { Log.Debug("GifCascade.CloseActive: {E}", ex.Message); }
         }
@@ -280,9 +287,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             bool animate = f.Animated;
             int px = (int)Math.Round(size * _scale);
             if (RenderProof.Rendering) { Attach(f, clip, Decode(path, px, animate)); return; }
-            LastDecode = Task.Run(() => Decode(path, px, animate)).ContinueWith(t =>
+            var pending = PendingDecodes;
+            LastDecode = Task.Run(() =>
+            {
+                BeforeDecodeForTests?.Invoke();
+                return Decode(path, px, animate);
+            }).ContinueWith(t =>
                 Dispatcher.UIThread.Post(() => Attach(f, clip, t.IsCompletedSuccessfully ? t.Result : (new List<Bitmap>(), default))),
                 TaskScheduler.Default);
+            PendingDecodes = pending is { IsCompleted: false } ? Task.WhenAll(pending, LastDecode) : LastDecode;
         }
 
         private static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate)
