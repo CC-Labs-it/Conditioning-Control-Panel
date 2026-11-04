@@ -214,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (progress < 1) return;
             _faucetCharging = false;
             HideChargeRing();
-            if (!_vatArmed || VatGlass is not { } glass || _faucetHold.HeldXp <= 0) { UpdateFaucetPresentation(); return; }
+            if (!_vatArmed || VatGlass is not { } glass || _faucetHold.HeldXp <= 0) { AnimateFaucetScale(1); UpdateFaucetPresentation(); return; }
             bool wasOver = glass.IsPastBrim(glass.Fill);
             var step = _faucetHold.PourAll();
             AnimateFaucetScale(1, .12);

@@ -94,6 +94,55 @@ public sealed class ProfileFaucetIntegrationTests
         }
     });
 
+    private sealed class ChargeClock : TimeProvider
+    {
+        public double Seconds;
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => (long)(Seconds * 1000);
+    }
+
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Off)]
+    public Task CorrectionDuringKeyboardChargeRestoresTheTap(MotionLevel motion) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var old = (CoreSettings.ServiceProvider, CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, AvApp.Descent, CoreAudio.PlayOneShotProvider, BeatLoop.Time);
+        var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        var s = CoreSettings.Current; s.UnifiedId = "faucet-correction"; s.OfflineMode = false; s.MotionLevel = motion;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        CoreSecrets.RetrieveProvider = _ => "test-token"; CoreSecrets.StoreProvider = (_, _) => { };
+        var sounds = new System.Collections.Generic.List<string>();
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => sounds.Add(System.IO.Path.GetFileName(path));
+        var clock = new ChargeClock(); BeatLoop.Time = clock;
+        var reply = DescentReader.ParseWire("{\"descent\":{\"devotion_days\":3,\"vat\":{\"cap\":4000,\"today_xp\":1000,\"fill_lip_pct\":120}}}")!;
+        var service = new DescentService(_ => Task.FromResult<JObject?>(reply)); AvApp.Descent = service;
+        MainShellWindow? shell = null;
+        try
+        {
+            await service.RefreshAsync("seed", force: true);
+            shell = new MainShellWindow(); shell.Show(); shell.Activate(); shell.ShowTab("discord"); Dispatcher.UIThread.RunJobs();
+            var tap = shell.ProfilePage!.FindControl<Grid>("ProfileVatFaucet")!;
+            var scale = (ScaleTransform)((TransformGroup)tap.RenderTransform!).Children[1];
+            tap.Focus(); tap.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space });
+            clock.Seconds = .1; BeatLoop.StepAll();
+            Assert.True(shell.FaucetCharging); Assert.Equal(.94, scale.ScaleX, 3);
+            reply["descent"]!["vat"]!["today_xp"] = 0;
+            await service.RefreshAsync("correction", force: true); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, shell.FaucetHeldXp); Assert.True(shell.FaucetCharging);
+            shell.AdvanceFaucetCharge(1); clock.Seconds = .3; BeatLoop.StepAll();
+            Assert.False(shell.FaucetCharging); Assert.Equal(1, scale.ScaleX, 3); Assert.Equal(1, scale.ScaleY, 3);
+            Assert.Equal(0, s.VatPouredTodayXp); Assert.DoesNotContain("faucet_pour.wav", sounds);
+        }
+        finally
+        {
+            try { shell?.Close(); s.OfflineMode = true; service.Reset(); }
+            finally { (CoreSettings.ServiceProvider, CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, AvApp.Descent, CoreAudio.PlayOneShotProvider, BeatLoop.Time) = old; }
+        }
+    });
+
     private static string LocReadout(int shown, int cap, int pct) => ConditioningControlPanel.Localization.Loc.GetF("profile_vat_readout", shown.ToString("N0"), cap.ToString("N0"), pct);
 
     [Fact]
