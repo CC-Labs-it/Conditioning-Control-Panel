@@ -6089,6 +6089,7 @@
   "lockdown_badge_label": "ENCIERRO",
   "lockdown_badge_end": "Terminar",
   "lockdown_badge_tooltip": "Lockdown está activo. Haz clic para abrir la pestaña Lockdown.",
+  "lockdown_dose_recovery_error": "No se pudo iniciar el bloqueo porque no se pudo completar la recuperación de Dose. Revisa {0} y tu configuración e inténtalo de nuevo.",
   "lockdown_dose_engine_warning": "Cuando hay funciones disponibles, el bloqueo inicia o reinicia el motor y elige funciones si todas están apagadas.",
   "lockdown_poss_safety_dose": "¿Nada en marcha? El bloqueo elige por ti",
   "lockdown_poss_safety_dose_tip": "Un bloqueo se niega a correr vacío. Motor apagado al empezar: se enciende por ti. Nada activado (o lo apagas todo a mitad): la guardiana activa funciones, una más cada vez, y lo devuelve todo cuando acaba el temporizador.",

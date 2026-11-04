@@ -104,6 +104,17 @@ public sealed class PackMediaPoolTests : IDisposable
     }
 
     [Fact]
+    public void MissingOrCorruptPackVideoIsNotPlayable()
+    {
+        var (guid, _) = ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
+        var store = NewStore();
+        var video = new MandatoryVideoScheduler(null!, null, () => Array.Empty<string>()) { PackVideos = new PackMediaPool(ContentPackStore.VideoType, store: () => store) };
+        var encrypted = Directory.GetFiles(Path.Combine(_root, ".packs", guid, "content")).Single();
+        File.Delete(encrypted); Assert.False(video.HasPlayableContent());
+        File.WriteAllText(encrypted, "invalid ciphertext"); Assert.False(video.HasPlayableContent());
+    }
+
+    [Fact]
     public void QueueCallers_WeighThePackClipsLeftThisCycle()
     {
         ContentPackStoreTests.WritePack(_root, "p1", "One", Enumerable.Range(0, 10).Select(i => ($"{i}.png", "image")).ToArray());

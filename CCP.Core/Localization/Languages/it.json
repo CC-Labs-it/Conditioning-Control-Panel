@@ -6376,6 +6376,7 @@
   "lockdown_badge_label": "LOCKDOWN",
   "lockdown_badge_end": "Termina",
   "lockdown_badge_tooltip": "Il Lockdown è in corso. Clicca per aprire la scheda Lockdown.",
+  "lockdown_dose_recovery_error": "Il blocco non può iniziare perché il ripristino Dose non è riuscito. Controlla {0} e le impostazioni, poi riprova.",
   "lockdown_dose_engine_warning": "Se sono disponibili funzioni, il lockdown avvia o riavvia il motore e ne sceglie alcune se sono tutte disattivate.",
   "lockdown_poss_safety_dose": "Niente in corso? Ci pensa il Lockdown",
   "lockdown_poss_safety_dose_tip": "Un lockdown non parte mai a vuoto. Se il motore è spento all'avvio, viene avviato per te. Se non c'è niente attivo (o spegni tutto durante il lockdown), il secondino accende le funzioni, una in più ogni volta, e te le restituisce tutte quando il timer finisce.",

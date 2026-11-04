@@ -23,7 +23,8 @@ public partial class MainShellWindow
     private readonly HashSet<string> _doseFlipped = new(StringComparer.OrdinalIgnoreCase);
     private static readonly string[] DoseStarter = { "flash", "subliminal", "spiral", "pinkfilter", "bouncingtext", "bubbles" };
     private static readonly string[] DoseWall = { "flash", "subliminal", "spiral", "pinkfilter", "bouncingtext", "bubbles", "video", "mindwipe", "lockcard", "bubblecount", "braindrain" };
-    private static string DoseRecoveryPath => Path.Combine(CorePaths.UserData, "lockdown-dose.json");
+    private static bool _doseRecoveryApplied;
+    internal static string DoseRecoveryPath => Path.Combine(CorePaths.UserData, "lockdown-dose.json");
     // Headless tests can exercise a desktop-capable backend without opening real overlays.
     internal bool? DoseOverlaySupportForTests, DoseVideoReadyForTests;
 
@@ -72,6 +73,7 @@ public partial class MainShellWindow
             foreach (var key in _doseFlipped.Where(key => !_doseSnapshot.Contains(key)).ToArray())
                 SetWallFeature(key, false);
             // SetWallFeature saves on a debounce. Keep the journal until the restored flags reach disk.
+            _doseRecoveryApplied = true;
             if (CoreSettings.Service?.TrySaveImmediate() != false)
             {
                 foreach (var key in _doseFlipped.ToArray())
@@ -202,7 +204,7 @@ public partial class MainShellWindow
 
     private static void DeleteDoseRecovery()
     {
-        try { if (File.Exists(DoseRecoveryPath)) File.Delete(DoseRecoveryPath); }
+        try { if (File.Exists(DoseRecoveryPath)) File.Delete(DoseRecoveryPath); _doseRecoveryApplied = false; }
         catch (Exception ex) { Log.Warning(ex, "Lockdown dose recovery delete failed"); }
     }
 
@@ -212,7 +214,8 @@ public partial class MainShellWindow
         var delete = false;
         try
         {
-            if (!File.Exists(DoseRecoveryPath)) return;
+            if (!File.Exists(DoseRecoveryPath)) { _doseRecoveryApplied = false; return; }
+            if (_doseRecoveryApplied) { delete = CoreSettings.Service?.TrySaveImmediate() != false; return; }
             var state = JsonConvert.DeserializeObject<Dictionary<string, string[]>>(File.ReadAllText(DoseRecoveryPath));
             if (state == null || !state.TryGetValue("Flipped", out var flipped)) return;
             var s = CoreSettings.Current;
@@ -227,6 +230,7 @@ public partial class MainShellWindow
                     case "bubbles": s.BubblesEnabled = false; break;
                     case "video": s.MandatoryVideosEnabled = false; break;
                 }
+            _doseRecoveryApplied = true;
             delete = CoreSettings.Service?.TrySaveImmediate() != false;
             if (!delete) Log.Warning("Lockdown dose recovery: settings could not be saved; recovery retained");
         }

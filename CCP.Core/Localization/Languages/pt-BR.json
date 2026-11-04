@@ -6089,6 +6089,7 @@
   "lockdown_badge_label": "CONFINAMENTO",
   "lockdown_badge_end": "Encerrar",
   "lockdown_badge_tooltip": "Lockdown em andamento. Clique para abrir a aba Lockdown.",
+  "lockdown_dose_recovery_error": "O bloqueio não pôde começar porque a recuperação do Dose falhou. Verifique {0} e suas configurações e tente novamente.",
   "lockdown_dose_engine_warning": "Quando há recursos disponíveis, o lockdown inicia ou reinicia o motor e escolhe recursos se todos estiverem desligados.",
   "lockdown_poss_safety_dose": "Nada rodando? O Lockdown escolhe por você",
   "lockdown_poss_safety_dose_tip": "Um lockdown se recusa a rodar vazio. Motor desligado no início: ele é ligado por você. Nada ativado (ou você desliga tudo no meio): a guardiã liga recursos, um a mais a cada vez, e devolve tudo quando o tempo acaba.",

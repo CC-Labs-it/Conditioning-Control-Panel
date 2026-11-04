@@ -6089,6 +6089,7 @@
   "lockdown_badge_label": "LOCKDOWN",
   "lockdown_badge_end": "Beenden",
   "lockdown_badge_tooltip": "Lockdown läuft. Klick, um den Lockdown-Tab zu öffnen.",
+  "lockdown_dose_recovery_error": "Lockdown konnte nicht gestartet werden, da die Dose-Wiederherstellung fehlgeschlagen ist. Prüfe {0} und deine Einstellungen und versuche es erneut.",
   "lockdown_dose_engine_warning": "Wenn Funktionen verfügbar sind, startet Lockdown den Motor und wählt Funktionen, falls alle aus sind.",
   "lockdown_poss_safety_dose": "Nichts läuft? Lockdown wählt für dich",
   "lockdown_poss_safety_dose_tip": "Ein Lockdown läuft nie leer. Engine aus beim Start: sie wird für dich gestartet. Nichts eingeschaltet (oder du schaltest mittendrin alles aus): die Wärterin schaltet Features ein, jedes Mal eins mehr, und gibt am Ende alles zurück.",

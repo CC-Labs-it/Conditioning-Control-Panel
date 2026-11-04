@@ -315,6 +315,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if ((CmbLockdownDuration.SelectedItem as ComboBoxItem)?.Tag is not string tag || !int.TryParse(tag, out var minutes))
                 return;
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
+            if (CoreSettings.Current.LockdownDoseKeeperEnabled)
+            {
+                Windows.MainShellWindow.RecoverLockdownDose();
+                if (System.IO.File.Exists(Windows.MainShellWindow.DoseRecoveryPath))
+                {
+                    await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_error"), Loc.GetF("lockdown_dose_recovery_error", Windows.MainShellWindow.DoseRecoveryPath));
+                    return;
+                }
+            }
             var confirmed = await Dialogs.WarningDialog.ShowDoubleWarningAsync(owner, "Lockdown Mode", LockdownWarning(minutes, CoreSettings.Current));
             if (!confirmed) return;
             ld.Activate(TimeSpan.FromMinutes(minutes));

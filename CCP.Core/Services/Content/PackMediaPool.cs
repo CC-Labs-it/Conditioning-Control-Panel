@@ -39,8 +39,21 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Decrypts on record (tests, diagnostics).</summary>
         public int TempCount { get { lock (_lock) return _temps.Count; } }
-        /// <summary>Whether the active, enabled pack pool has entries, without drawing or decrypting.</summary>
-        public bool HasEntries { get { lock (_lock) return Entries().Count > 0; } }
+        /// <summary>Whether at least one active entry can be decrypted to a playable path.</summary>
+        public bool HasEntries
+        {
+            get { lock (_lock)
+                {
+                    var store = _store();
+                    if (store == null) return false;
+                    foreach (var entry in Entries())
+                    {
+                        var temp = store.GetPackFileTempPath(entry.PackId, entry.File);
+                        if (temp != null) { store.DeleteTempFile(temp); return true; }
+                    }
+                    return false;
+                } }
+        }
 
         /// <summary>
         /// WPF GetNextImages (FlashService.cs:3555-3563), GetNextVideo (VideoService.cs:8017-8026) and
@@ -73,7 +86,13 @@ namespace ConditioningControlPanel.Services
                 var packCount = remaining && list.Count > 0 && _bag.Remaining > 0 ? Math.Min(_bag.Remaining, list.Count) : list.Count;
                 if (!ShouldDrawPack(localCount, packCount, _rng) || !_bag.TryNext(list, out entry)) return null;
             }
-            return Decrypt(entry);
+            var result = Decrypt(entry);
+            // With no local fallback, visit the rest of the bag before giving up.
+            for (var attempts = 1; result == null && localCount == 0 && attempts < list.Count * 2; attempts++) {
+                lock (_lock) { if (!_bag.TryNext(list, out entry)) break; }
+                result = Decrypt(entry);
+            }
+            return result;
         }
 
         /// <summary>
