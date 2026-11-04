@@ -263,7 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Height = WorkAreaDip().Height * 0.6;
             if (double.IsNaN(Height) || Height < 200) Height = 780;   // headless, or no screen yet
             ApplySide(CoreSettings.Current.ChaosHudOnRight);
-            LoadPortrait();
+            LoadPortrait(Path.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory);
             AttachHudTips();
         }
 
@@ -380,9 +380,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         // WPF ChaosHudWindow.xaml.cs:193-200 and ChaosArt.cs:59-70, 138-144.
-        private void LoadPortrait()
+        internal void LoadPortrait(string userRoot, string bundleRoot)
         {
-            _portrait.Source = ResolvePortrait(Path.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory);
+            _portrait.Source = ResolvePortrait(userRoot, bundleRoot);
             _portraitHost.IsVisible = _portrait.Source != null;
         }
 
