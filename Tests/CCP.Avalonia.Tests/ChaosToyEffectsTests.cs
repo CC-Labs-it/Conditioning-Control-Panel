@@ -277,6 +277,18 @@ public sealed class ChaosToyEffectsTests
         ChaosRunHost.Overlay.Show(); ChaosRunHost.UseToyById(toy.Id); ChaosRunHost.Overlay.Hide(); ChaosRunHost.SweepToyPointer();
         Assert.False(live.Popping);
     });
+    [Theory][InlineData("e_stim")][InlineData("freeze_trigger")][InlineData("porn_dvd")][InlineData("rabbit_caller")][InlineData("unknown")]
+    public Task Unavailable_toys_do_not_spend_or_award(string id) => Run(() =>
+    {
+        ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+        var toy = Equip(id, 3);
+        toy.ChargesLeft = 3;
+        ChaosRunHost.UseToyById(id);
+        Assert.Equal(3, toy.ChargesLeft);
+        Assert.Equal(0, toy.CooldownRemainingSec);
+        Assert.False(toy.IsEffectActive);
+        Assert.False(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+    });
     [Fact] public Task Toy_tooltip_has_wpf_chrome_delay_and_capstone_copy() => Run(() =>
     {
         var w = new ChaosToyButtonWindow(new ChaosToyState
