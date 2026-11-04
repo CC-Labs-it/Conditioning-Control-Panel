@@ -180,6 +180,23 @@ public sealed class StartupModalLadderTests
             }
             Assert.False(shown);
             Assert.True(abandoned);
+            foreach (var game in new[] { false, true })
+            {
+                var panel = game ? null : new MainShellWindow();
+                global::Avalonia.Controls.Window surface = game ? new ConditioningControlPanel.Avalonia.Views.Games.GameWindow() : LauncherWindow.OpenFor(panel!);
+                if (game) surface.Show();
+                shown = abandoned = false; StartupLadder.Inbox.Items.Clear(); StartupLadder.ModalWindowReady = () => true;
+                StartupLadder.EnqueueModal("parked", 10, () => { shown = true; return Task.CompletedTask; }, () => abandoned = true);
+                StartupLadder.PresentOrInbox(new InboxItem { Key = "passive", Open = () => throw new InvalidOperationException() });
+                Assert.True(StartupLadder.Inbox.Contains("passive")); await Step();
+                for (var i = 0; i < 610; i++) { clock.Advance(StartupLadder.ModalPoll); for (var j = 0; j < 5; j++) await Task.Yield(); }
+                Assert.False(shown); Assert.False(abandoned);
+                if (!game) { surface.Hide(); StartupLadder.ModalWindowReady = () => false; Assert.True(StartupLadder.World(clock.Now.UtcDateTime).LauncherHolding); panel!.ShowFromTray(); }
+                if (game) surface.Close(); StartupLadder.ModalWindowReady = () => game || panel!.IsVisible; clock.Advance(StartupLadder.ModalPoll);
+                for (var i = 0; i < 5; i++) await Task.Yield();
+                Assert.True(shown); Assert.False(abandoned);
+                if (!game) surface.Close(); panel?.Close();
+            }
         }
         finally { StartupLadder.ResetForTests(); }
     });

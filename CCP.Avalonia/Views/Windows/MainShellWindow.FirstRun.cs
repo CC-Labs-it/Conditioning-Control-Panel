@@ -18,7 +18,6 @@
 //     and the first-launch tour silently never started.
 //
 // WHAT IS DELIBERATELY NOT PORTED:
-//   * The launcher's hold and game-host park are not wired to this head's startup ladder yet.
 //   * `App.EmiDesk.Fire("firstLaunchEver") / ReleaseHold(...)`. There is no EmiDesk seam in Core -
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.

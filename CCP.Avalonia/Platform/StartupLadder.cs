@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// Modal offers share the Core priority queue. Launcher hold and game-host park are not wired yet.
+    /// Modal offers share the Core priority queue and park while the launcher or a game is up.
     /// </summary>
     internal static class StartupLadder
     {
@@ -57,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private static bool CanStartModal() => StartupQueueCore.CanStartModal(
             Views.Windows.MainShellWindow.IsStartupDialogShowing, AppUpdater.IsUpdateDialogActive,
-            CoreTutorial.IsActive, ModalWindowReady());
+            CoreTutorial.IsActive, ModalWindowReady(), StartupQueueCore.IsParked(World(UtcNow)));
 
         private static async Task PumpModalsAsync(CancellationToken token)
         {
@@ -73,7 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     while (!CanStartModal() && waited < ModalMaxWait)
                     {
                         await Task.Delay(ModalPoll, Time, token);
-                        waited += ModalPoll;
+                        if (!StartupQueueCore.IsParked(World(UtcNow))) waited += ModalPoll;
                     }
                     _modalQueue.Remove(key);
                     if (!_modalShows.Remove(key, out var surface)) continue;
@@ -136,6 +136,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             LadderBusy = _modalPumpRunning || !_modalQueue.IsEmpty,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
+            LauncherHolding = Views.Windows.LauncherWindow.Instance is { } launcher && (launcher.IsVisible || !ModalWindowReady()),
+            GameHostUp = Views.Games.GameWindow.IsAnyStartupGameOpen() || Views.Windows.IntakeHostWindow.IsAnyOpen(),
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
             NowUtc = nowUtc,
         };
