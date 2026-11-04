@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
     /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
-    /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
+    /// detonation), other dashboard trigger variants, Bubbles v2 motions (Rain/Spiral In) and
     /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
     /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
     /// (no AchievementService on this head; quests are credited).</para>
@@ -50,11 +50,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
+        internal static Bitmap? GifRainImage;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
         /// cache kept the first mod's art for the life of the process).</summary>
-        internal static void LoadBubbleImage() => Image = Helpers.ModArt.TryLoad("bubble.png");
+        internal static void LoadBubbleImage()
+        {
+            Image = Helpers.ModArt.TryLoad("bubble.png");
+            // WPF ChaosArt: user assets first, then the shipped sprite.
+            var path = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos", "bubbles", "htlink.png");
+            try { GifRainImage = File.Exists(path) ? new Bitmap(path) : null; }
+            catch (Exception ex) { Log.Debug("Gif Rain art: {E}", ex.Message); GifRainImage = null; }
+            GifRainImage ??= Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/htlink.png");
+        }
+
+        internal static Bitmap? SpriteFor(AmbientBubble b) =>
+            b.Spec?.VariantId == "htlink" ? GifRainImage ?? Image : Image;
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
@@ -132,7 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // The ambient game stops mid-run: its bubbles go, the run keeps the windows.
                 _spawnTimer?.Stop();
                 _spawnTimer = null;
-                Field.Bubbles.RemoveAll(b => b.Spec == null);
+                Field.Bubbles.RemoveAll(b => b.Spec == null || b.IsAmbientTrigger);
                 _chaosOpenedWindows = true;
                 foreach (var w in Windows) w.Sync();
                 if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:853
@@ -166,7 +178,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable));
+            var spec = Field.RollGifRain(s);
+            var bubble = spec == null
+                ? AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable)
+                : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+            bubble.Clickable = clickable;
+            Field.Bubbles.Add(bubble);
             RequestFrame();
         }
 
@@ -207,7 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Live (not popping) chaos bubbles: WPF ActiveBubbles during a run.</summary>
         internal static int ChaosCount
         {
-            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.Popping) n++; return n; }
+            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.IsAmbientTrigger && !b.Popping) n++; return n; }
         }
 
         /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
@@ -248,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
-            Field.Bubbles.RemoveAll(b => b.Spec != null);
+            Field.Bubbles.RemoveAll(b => b.Spec != null && !b.IsAmbientTrigger);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
@@ -301,7 +318,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
-            if (b.Spec != null) { PopChaos(b); return; }
+            if (b.Spec != null && !b.IsAmbientTrigger) { PopChaos(b); return; }
+            if (b.Popping) return;
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
@@ -318,6 +336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+            if (b.IsAmbientTrigger) b.Spec?.Payload?.Fire();
         }
 
         internal static void OnFrame(TimeSpan now)
@@ -480,7 +499,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var k = _w.K;
                 double ox = _w.Bounds.X / _w.Scaling, oy = _w.Bounds.Y / _w.Scaling;
-                var img = BubbleOverlay.Image;
                 var bubbles = BubbleOverlay.Field.Bubbles;
                 for (var i = 0; i < bubbles.Count; i++)
                 {
@@ -492,7 +510,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
-                        if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
+                        var img = BubbleOverlay.SpriteFor(b);
+                        if (b.Spec != null && !(b.Spec.VariantId == "htlink" && BubbleOverlay.GifRainImage != null))
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);

@@ -422,6 +422,8 @@ namespace ConditioningControlPanel.Avalonia
         /// (tests, PanicCheck, VideoCheck) starts synchronously without one, as before.</summary>
         internal static bool SplashOnStartup;
 
+        internal static double GifRainDuration => Services.Chaos.GifCascade.PayloadDurationSec * Services.Chaos.EffectPayload.GlobalDurationMult;
+
         public override void OnFrameworkInitializationCompleted()
         {
             // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
@@ -519,10 +521,16 @@ namespace ConditioningControlPanel.Avalonia
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
-                // P31: WPF seeds EffectPayloadFiring. ponytail: no chaos payload effects on this head yet
-                // (next lane chaos-bubble-field-b); log so a fired payload is never silently dropped.
+                // WPF seeds EffectPayloadFiring; Gif Rain uses the shared cascade and other payloads log until ported.
                 Services.Chaos.EffectPayload.Firer = p =>
-                    Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
+                {
+                    if (p is Services.Chaos.GifCascadePayload)
+                        Views.Chaos.ChaosGifCascadeOverlay.Show(
+                            Services.Chaos.GifCascade.PayloadSpawnRatePerSec, GifRainDuration,
+                            Services.Chaos.GifCascade.PayloadGifSize, Services.Chaos.GifCascade.PayloadFallSpeed,
+                            Services.Chaos.GifCascade.PayloadOpacity, Services.Chaos.GifCascade.PayloadStartScale);
+                    else Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
+                };
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.

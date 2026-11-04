@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services
@@ -58,6 +60,7 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
+        public bool IsAmbientTrigger => Spec?.Payload?.Ambient == true;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
 
@@ -73,6 +76,9 @@ namespace ConditioningControlPanel.Services
         public string? BrokenReason { get; private set; }
         /// <summary>The bubble deflates (a snap) instead of bursting.</summary>
         public bool Deflating { get; private set; }
+        /// <summary>An expired ambient treat shrinks and fades without firing its payload.</summary>
+        public bool Dissolving { get; private set; }
+        private double _treatLifeRemainingMs;
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
 
@@ -162,6 +168,7 @@ namespace ConditioningControlPanel.Services
             double scaling, Chaos.EffectBubbleSpec spec)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            if (b.IsAmbientTrigger) b._treatLifeRemainingMs = spec.TreatLifeMs > 0 ? spec.TreatLifeMs : 5000;
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
@@ -195,6 +202,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
+                if (Dissolving) return Scale;
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
             }
@@ -242,6 +250,12 @@ namespace ConditioningControlPanel.Services
         {
             if (Popping)
             {
+                if (Dissolving)
+                {
+                    Scale = Math.Max(0.1, Scale - 0.02);
+                    Fade -= 0.05;
+                    return Fade <= 0 ? Result.Done : Result.Alive;
+                }
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
                 Scale += Deflating ? -0.03 : 0.04;
                 Fade -= Lucky ? 0.044 : 0.066;
@@ -254,6 +268,11 @@ namespace ConditioningControlPanel.Services
             {
                 FuseRemainingMs -= FuseStepMs;
                 if (FuseRemainingMs <= 0) return GoOff(null);
+            }
+            if (IsAmbientTrigger && (_treatLifeRemainingMs -= FuseStepMs) <= 0)
+            {
+                Popping = Dissolving = true;
+                return Result.Alive;
             }
             _timeAlive += 0.02;
             double offset = 0;
@@ -317,6 +336,21 @@ namespace ConditioningControlPanel.Services
                 if (b.Snap()) ChaosDefused?.Invoke(b);
         }
 
+        /// <summary>WPF BubbleService.RollTriggerSpec: select from the persisted pool. Only Gif Rain
+        /// is wired here; unsupported selections remain plain bubbles until their payloads are ported.</summary>
+        public EffectBubbleSpec? RollGifRain(AppSettings s)
+        {
+            if (!s.BubbleTriggersEnabled || s.BubbleTriggerVariants == null) return null;
+            var ids = s.BubbleTriggerVariants.Where(id => id != MagnetBubble.VariantId).ToArray();
+            if (ids.Length == 0 || Random.Next(100) >= Math.Clamp(s.BubbleTriggerChance, 0, 100)) return null;
+            if (ids[Random.Next(ids.Length)] != "htlink") return null;
+            if (Bubbles.Count(b => b.Spec != null) >= 4) return null;
+            var variant = ChaosBubbleVariants.All.First(v => v.Id == "htlink");
+            var spec = ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true);
+            spec.Payload!.DurationMult = 2.5;
+            return spec;
+        }
+
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
 
         /// <summary>WPF AwardAmbientPop's pure half: roll lucky (5% for 20x with the lucky_bubbles
@@ -353,7 +387,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (HoldChaos && b.Spec != null && !b.IsAmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
