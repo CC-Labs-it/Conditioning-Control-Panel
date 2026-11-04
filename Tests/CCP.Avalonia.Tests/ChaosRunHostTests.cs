@@ -42,6 +42,61 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task Ripple_cast_uses_the_selected_effect()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var settings = CoreSettings.Current;
+            var enabled = settings.ChaosSkiaFxEnabled;
+            var composited = ChaosSkiaFxOverlay.Composited;
+            try
+            {
+                ChaosSkiaFxOverlay.Composited = () => true;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                settings.ChaosSkiaFxEnabled = true;
+                BubbleOverlay.TriggerPlayerRipple(new Point(10, 10), 50, 500);
+                Assert.NotNull(ChaosSkiaFxOverlay.Active);
+                Assert.Null(ChaosFieldFxOverlay.Active);
+                settings.ChaosSkiaFxEnabled = false;
+                BubbleOverlay.TriggerPlayerRipple(new Point(10, 10), 50, 500);
+                Assert.NotNull(ChaosFieldFxOverlay.Active);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosSkiaFxOverlay.CloseActive();
+                ChaosFieldFxOverlay.CloseActive();
+                settings.ChaosSkiaFxEnabled = enabled;
+                ChaosSkiaFxOverlay.Composited = composited;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public void Ripple_copy_exists_and_formats_in_every_language()
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            foreach (var (code, _, _) in ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+            {
+                loc.Initialize(code);
+                foreach (var key in new[] { "Chaos_Ripple_Denied", "Chaos_Ripple_Gathering", "Chaos_Ripple_Teach", "Chaos_Ripple_Skips", "Chaos_Ripple_Cast" })
+                    Assert.NotEqual(key, ConditioningControlPanel.Localization.Loc.GetF(key, "15s"));
+            }
+        }
+        finally { loc.SetLanguage(previous); }
+    }
+
+    [Fact]
     public async Task Ripple_gathers_only_during_an_active_unpaused_run()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -105,7 +160,7 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(state.RippleRechargeSec, state.RippleCooldown);
                 Assert.True(ChaosRunHost.OnRippleRightDown(new PixelPoint(400, 100)));
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                Assert.Contains("gathering… 15s", words);
+                Assert.Contains("gathering... 15s", words);
                 ChaosRunHost.ToggleManualPause();
                 Assert.False(ChaosRunHost.OnRippleRightDown(new PixelPoint(100, 100)));
                 ChaosRunHost.ToggleManualPause();
@@ -161,7 +216,7 @@ public sealed class ChaosRunHostTests
                 Assert.False(bubble.Popping);
                 Assert.True(ChaosRunHost.OnBubbleRightDown(new Point(200, 100), 2));
                 var word = Assert.Single(words);
-                Assert.Equal((100, 20, "gathering… 15s", global::Avalonia.Media.Color.FromRgb(0x7A, 0xE0, 0xFF)), word);
+                Assert.Equal((100, 20, "gathering... 15s", global::Avalonia.Media.Color.FromRgb(0x7A, 0xE0, 0xFF)), word);
                 Assert.Contains(("toy_denied", 0.45f), cues);
                 Assert.Contains(state.RecentEvents, x => x.Contains("still water"));
                 state.RippleCooldown = 0.25;
@@ -387,7 +442,11 @@ public sealed class ChaosRunHostTests
                 await ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.ShowPath(
                     new[] { new PixelRect(0, 0, 1920, 1080) }, gif, 60000, 0.30);
                 Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosFieldFxOverlay.SnapRipple(new Point(10, 10), 50, 60000);
+                Assert.NotNull(ChaosFieldFxOverlay.Active);
                 Ticks(244);   // past the 60 s run
+                Assert.Null(ChaosFieldFxOverlay.Active);
                 Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
                 Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
             }
@@ -397,6 +456,8 @@ public sealed class ChaosRunHostTests
                 ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.CloseActive();
                 ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.SkipPlatformChecksForTests = false;
                 ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule = schedule;
+                ChaosFieldFxOverlay.CloseActive();
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
                 System.IO.Directory.Delete(dir, true);
             }
         });

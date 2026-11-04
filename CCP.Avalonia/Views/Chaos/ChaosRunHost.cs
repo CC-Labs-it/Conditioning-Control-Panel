@@ -8,6 +8,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
@@ -118,9 +119,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!run.RippleReady)
             {
                 RippleCue("toy_denied", 0.45f);
-                run.PushEvent($"🌊 still water... gathering {run.RippleText}");
+                run.PushEvent(Loc.GetF("Chaos_Ripple_Denied", run.RippleText));
                 double scale = primaryScale > 0 ? primaryScale : 1;
-                PopText?.Invoke(px.X / scale, px.Y / scale - 30, $"gathering… {run.RippleText}",
+                PopText?.Invoke(px.X / scale, px.Y / scale - 30, Loc.GetF("Chaos_Ripple_Gathering", run.RippleText),
                     Color.FromRgb(0x7A, 0xE0, 0xFF));
                 return true;
             }
@@ -129,7 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 ChaosMeta.State.SeenRippleTeach = true;
                 ChaosMeta.Save();
-                ChaosAnnouncerOverlay.Announce("🌊 that's the ripple. it gathers back on its own", ChaosAnnounceKind.PowerUp);
+                ChaosAnnouncerOverlay.Announce(Loc.Get("Chaos_Ripple_Teach"), ChaosAnnounceKind.PowerUp);
             }
             bool skips = run.MaxedBoons.Contains("skipping_stone");
             void Wave()
@@ -142,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (skips)
                 for (int i = 1; i <= 2; i++)
                     DispatcherTimer.RunOnce(Wave, TimeSpan.FromMilliseconds(i * ChaosTuning.RIPPLE_WAVE_GAP_MS));
-            run.PushEvent(skips ? "🌊 the stone skips - three waves" : "🌊 ripple");
+            run.PushEvent(Loc.Get(skips ? "Chaos_Ripple_Skips" : "Chaos_Ripple_Cast"));
             return true;
         }
         /// <summary>WPF <c>_fx.Pulse(color, strength)</c> (ChaosFxWindow); unseeded until it lands.</summary>
@@ -682,6 +683,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
             ChaosVibeTrailOverlay.CloseActive();   // WPF EndRun :3237
             ChaosEStimOverlay.CloseActive();   // WPF EndRun :3238
+            ChaosFieldFxOverlay.CloseActive();   // WPF ChaosModeService.cs:3239
             ChaosSkiaFxOverlay.CloseActive();   // WPF EndRun
             CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned, rankUp);

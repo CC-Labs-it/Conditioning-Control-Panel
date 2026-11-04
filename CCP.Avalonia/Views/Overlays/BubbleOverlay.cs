@@ -197,7 +197,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (_chaosPopped == null) return;
             PlayerRipples.Add(new PlayerRipple { Center = centerPx, Radius = radiusPx, Life = Math.Max(100, lifeMs) });
-            ChaosFieldFxOverlay.SnapRipple(centerPx, radiusPx, lifeMs);
+            if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.Ripple(centerPx, radiusPx, lifeMs, strong: true);
+            else ChaosFieldFxOverlay.SnapRipple(centerPx, radiusPx, lifeMs);
             RequestFrame();
         }
 
