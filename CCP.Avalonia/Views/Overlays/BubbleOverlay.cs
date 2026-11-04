@@ -50,11 +50,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
+        internal static Bitmap? GifRainImage;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
         /// cache kept the first mod's art for the life of the process).</summary>
-        internal static void LoadBubbleImage() => Image = Helpers.ModArt.TryLoad("bubble.png");
+        internal static void LoadBubbleImage()
+        {
+            Image = Helpers.ModArt.TryLoad("bubble.png");
+            // WPF ChaosArt: user assets first, then the shipped sprite.
+            var path = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos", "bubbles", "htlink.png");
+            try { GifRainImage = File.Exists(path) ? new Bitmap(path) : null; }
+            catch (Exception ex) { Log.Debug("Gif Rain art: {E}", ex.Message); GifRainImage = null; }
+            GifRainImage ??= Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/htlink.png");
+        }
+
+        internal static Bitmap? SpriteFor(AmbientBubble b) =>
+            b.Spec?.VariantId == "htlink" ? GifRainImage ?? Image : Image;
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
@@ -487,7 +499,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var k = _w.K;
                 double ox = _w.Bounds.X / _w.Scaling, oy = _w.Bounds.Y / _w.Scaling;
-                var img = BubbleOverlay.Image;
                 var bubbles = BubbleOverlay.Field.Bubbles;
                 for (var i = 0; i < bubbles.Count; i++)
                 {
@@ -499,7 +510,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
-                        if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
+                        var img = BubbleOverlay.SpriteFor(b);
+                        if (b.Spec != null && !(b.Spec.VariantId == "htlink" && BubbleOverlay.GifRainImage != null))
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);

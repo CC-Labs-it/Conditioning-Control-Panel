@@ -50,4 +50,26 @@ public class GifRainTriggerTests
         field.Step();
         Assert.True(bubble.Y < y);
     }
+    [Fact]
+    public void Unpopped_gif_rain_expires_after_seven_seconds_and_dissolves_without_a_payload()
+    {
+        var variant = System.Linq.Enumerable.First(ChaosBubbleVariants.All, v => v.Id == "htlink");
+        var spec = ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true);
+        var field = new AmbientBubbleField();
+        var bubble = AmbientBubble.SpawnChaos(new System.Random(1), 0, 0, 0, 1920, 100000, 1, spec);
+        field.Bubbles.Add(bubble);
+        for (int i = 0; i < 218; i++) field.Step();
+        Assert.False(bubble.Popping);
+        field.Step();
+        Assert.True(bubble.Dissolving);
+        Assert.Null(field.HitTest(0, bubble.CenterX, bubble.CenterY));
+        var x = bubble.X; var y = bubble.Y; var angle = bubble.Angle;
+        field.Step();
+        Assert.Equal((x, y, angle), (bubble.X, bubble.Y, bubble.Angle));
+        Assert.Equal(0.98, bubble.Scale, 8);
+        Assert.Equal(0.95, bubble.Fade, 8);
+        for (int i = 0; i < 30; i++) field.Step();
+        Assert.Empty(field.Bubbles);
+    }
+
 }

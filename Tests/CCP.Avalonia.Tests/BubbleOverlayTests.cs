@@ -120,6 +120,45 @@ public sealed class BubbleOverlayTests
         });
     }
 
+    [Fact]
+    public async Task Gif_rain_uses_its_shipped_variant_art_and_other_bubbles_use_the_generic_art()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var oldImage = BubbleOverlay.Image;
+            var oldRainImage = BubbleOverlay.GifRainImage;
+            try
+            {
+                BubbleOverlay.LoadBubbleImage();
+                Assert.NotNull(BubbleOverlay.GifRainImage);
+                var rain = new AmbientBubble { Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { VariantId = "htlink" } };
+                Assert.Same(BubbleOverlay.GifRainImage, BubbleOverlay.SpriteFor(rain));
+                Assert.Same(BubbleOverlay.Image, BubbleOverlay.SpriteFor(new AmbientBubble()));
+                BubbleOverlay.GifRainImage = null;
+                Assert.Same(BubbleOverlay.Image, BubbleOverlay.SpriteFor(rain));
+            }
+            finally { BubbleOverlay.Image = oldImage; BubbleOverlay.GifRainImage = oldRainImage; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public void Gif_rain_duration_tracks_the_global_multiplier()
+    {
+        var old = ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult;
+        try
+        {
+            ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult = 1.5;
+            Assert.Equal(9.0, global::ConditioningControlPanel.Avalonia.App.GifRainDuration);
+            ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult = 0.5;
+            Assert.Equal(3.0, global::ConditioningControlPanel.Avalonia.App.GifRainDuration);
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult = old; }
+    }
+
     /// <summary>Windows input region: the window takes clicks only while the cursor is inside a
     /// live bubble rect (Win32Overlay.SetInputRects toggles WS_EX_TRANSPARENT on this answer).</summary>
     [Fact]

@@ -422,6 +422,8 @@ namespace ConditioningControlPanel.Avalonia
         /// (tests, PanicCheck, VideoCheck) starts synchronously without one, as before.</summary>
         internal static bool SplashOnStartup;
 
+        internal static double GifRainDuration => Services.Chaos.GifCascade.PayloadDurationSec * Services.Chaos.EffectPayload.GlobalDurationMult;
+
         public override void OnFrameworkInitializationCompleted()
         {
             // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
@@ -524,7 +526,7 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     if (p is Services.Chaos.GifCascadePayload)
                         Views.Chaos.ChaosGifCascadeOverlay.Show(
-                            Services.Chaos.GifCascade.PayloadSpawnRatePerSec, Services.Chaos.GifCascade.PayloadDurationSec,
+                            Services.Chaos.GifCascade.PayloadSpawnRatePerSec, GifRainDuration,
                             Services.Chaos.GifCascade.PayloadGifSize, Services.Chaos.GifCascade.PayloadFallSpeed,
                             Services.Chaos.GifCascade.PayloadOpacity, Services.Chaos.GifCascade.PayloadStartScale);
                     else Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);

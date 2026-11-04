@@ -76,6 +76,9 @@ namespace ConditioningControlPanel.Services
         public string? BrokenReason { get; private set; }
         /// <summary>The bubble deflates (a snap) instead of bursting.</summary>
         public bool Deflating { get; private set; }
+        /// <summary>An expired ambient treat shrinks and fades without firing its payload.</summary>
+        public bool Dissolving { get; private set; }
+        private double _treatLifeRemainingMs;
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
 
@@ -165,6 +168,7 @@ namespace ConditioningControlPanel.Services
             double scaling, Chaos.EffectBubbleSpec spec)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            if (b.IsAmbientTrigger) b._treatLifeRemainingMs = spec.TreatLifeMs > 0 ? spec.TreatLifeMs : 5000;
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
@@ -198,6 +202,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
+                if (Dissolving) return Scale;
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
             }
@@ -245,6 +250,12 @@ namespace ConditioningControlPanel.Services
         {
             if (Popping)
             {
+                if (Dissolving)
+                {
+                    Scale = Math.Max(0.1, Scale - 0.02);
+                    Fade -= 0.05;
+                    return Fade <= 0 ? Result.Done : Result.Alive;
+                }
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
                 Scale += Deflating ? -0.03 : 0.04;
                 Fade -= Lucky ? 0.044 : 0.066;
@@ -257,6 +268,11 @@ namespace ConditioningControlPanel.Services
             {
                 FuseRemainingMs -= FuseStepMs;
                 if (FuseRemainingMs <= 0) return GoOff(null);
+            }
+            if (IsAmbientTrigger && (_treatLifeRemainingMs -= FuseStepMs) <= 0)
+            {
+                Popping = Dissolving = true;
+                return Result.Alive;
             }
             _timeAlive += 0.02;
             double offset = 0;
