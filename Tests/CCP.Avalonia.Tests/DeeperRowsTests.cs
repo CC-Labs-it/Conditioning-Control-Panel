@@ -25,7 +25,7 @@ public sealed class DeeperRowsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -76,6 +76,45 @@ public sealed class DeeperRowsTests
         }
         finally { editor.Close(); player.Close(); }
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PreviewAudioStopsPreviousVideoAndIgnoresLatePoll() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var player = new EnhancementPlayerWindow(null, null);
+        var audio = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "/tmp/preview.mp3" };
+        var editor = new DeeperEditorWindow(audio, null);
+        var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+        var scripts = new System.Collections.Generic.List<string>();
+        var pending = new TaskCompletionSource<string?>();
+        web.ScriptInvoker = script =>
+        {
+            scripts.Add(script);
+            return script.Contains("l.currentTime+") ? pending.Task : Task.FromResult<string?>("ok");
+        };
+        try
+        {
+            player.Show();
+            editor.Show(player);
+            player.LoadEnhancementFromMemory(new Enhancement
+            {
+                MediaType = MediaTypes.Video, MediaSource = "https://www.tiktok.com/@a/video/1"
+            }, "video");
+            var poll = (Task)typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(player, null)!;
+            Click(editor.FindControl<Button>("BtnPreview")!);
+            Assert.Contains(scripts, s => s.Contains("querySelectorAll('video,audio')") && s.Contains("v.pause()"));
+            Assert.Equal("about:blank", web.Source!.AbsoluteUri);
+            Assert.True(web.AllowNavigation!(new Uri("about:blank")));
+            Assert.False(web.AllowNavigation!(new Uri("https://www.tiktok.com/@a/video/1")));
+            pending.SetResult("42|100|1");
+            await poll;
+            Assert.Equal("0:00", player.FindControl<TextBlock>("TxtCurrent")!.Text);
+            Assert.Equal(IconKind.Play, ((ConditioningControlPanel.Avalonia.Controls.IconGlyph)
+                player.FindControl<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtPlayPauseGlyph")!).Kind);
+        }
+        finally { editor.Close(); player.Close(); }
     });
 
     [Fact]
