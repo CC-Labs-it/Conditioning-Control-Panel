@@ -46,15 +46,18 @@ public sealed class MediaTempFileLedger
         }
         DeleteOrHold(sweep);
     }
-    public void SweepAll()
+    public void SweepAll() => SweepAll(null);
+    public void SweepAll(string? keep)
     {
         List<string> sweep;
         lock (_gate)
         {
+            bool Keep(string path) => keep != null && string.Equals(path, keep, StringComparison.OrdinalIgnoreCase);
             sweep = new List<string>(_live);
             sweep.AddRange(_held);
-            _live.Clear();
-            _held.Clear();
+            sweep.RemoveAll(Keep);
+            _live.RemoveAll(path => !Keep(path));
+            _held.RemoveAll(path => !Keep(path));
         }
         DeleteOrHold(sweep);
     }

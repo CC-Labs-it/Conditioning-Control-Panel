@@ -126,6 +126,67 @@ public sealed class ContentPacksWireTests : IDisposable
     }
 
     [Fact]
+    public void Stopping_during_decrypt_cleans_late_file_without_touching_a_new_burst()
+    {
+        StoreWithPack(("a.png", "image"));
+        using var entered = new System.Threading.ManualResetEventSlim();
+        using var release = new System.Threading.ManualResetEventSlim();
+        var calls = 0;
+        ContentPackStore.Current = new ContentPackStore(() => _root, () => _settings, () => { },
+            decryptFile: path =>
+            {
+                if (System.Threading.Interlocked.Increment(ref calls) == 1) { entered.Set(); release.Wait(); }
+                return PackEncryptionService.DecryptFile(path);
+            }, tempDir: () => Path.Combine(_root, ".temp"));
+        var generation = FlashOverlay.Generation;
+        var worker = System.Threading.Tasks.Task.Run(() => FlashOverlay.WithLoadCleanup(generation,
+            owned => FlashOverlay.NextFlashPath(Array.Empty<string>(), generation, owned)));
+        try
+        {
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            FlashOverlay.CloseAll(final: false);
+            var fresh = FlashOverlay.NextFlashPath(Array.Empty<string>());
+            Assert.NotNull(fresh);
+            release.Set();
+            Assert.Null(worker.GetAwaiter().GetResult());
+            Assert.Equal(1, FlashOverlay.PackImages.TempCount);
+            Assert.True(File.Exists(fresh));
+        }
+        finally { release.Set(); worker.Wait(TimeSpan.FromSeconds(10)); }
+    }
+
+    [Fact]
+    public void Canceled_worker_retries_a_file_held_during_close()
+    {
+        ContentPackStore.Current = StoreWithPack(("a.png", "image"));
+        using var entered = new System.Threading.ManualResetEventSlim();
+        using var release = new System.Threading.ManualResetEventSlim();
+        var generation = FlashOverlay.Generation;
+        var worker = System.Threading.Tasks.Task.Run(() => FlashOverlay.WithLoadCleanup(generation, owned =>
+        {
+            var path = FlashOverlay.NextFlashPath(Array.Empty<string>(), generation, owned)!;
+            File.Delete(path);
+            Directory.CreateDirectory(path);
+            entered.Set();
+            release.Wait();
+            Directory.Delete(path);
+            File.WriteAllText(path, "released");
+            return path;
+        }));
+        try
+        {
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            FlashOverlay.CloseAll(final: false);
+            Assert.Equal(1, FlashOverlay.PackImages.TempCount);
+            release.Set();
+            var path = worker.GetAwaiter().GetResult();
+            Assert.False(File.Exists(path));
+            Assert.Equal(0, FlashOverlay.PackImages.TempCount);
+        }
+        finally { release.Set(); worker.Wait(TimeSpan.FromSeconds(10)); }
+    }
+
+    [Fact]
     public void NoVideosMessage_CountsInstalledAndActivePacks_FromTheStore()
     {
         var store = StoreWithPack(("a.png", "image"));

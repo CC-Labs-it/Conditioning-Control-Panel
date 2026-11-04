@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -84,7 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
                 var occupied = Active.Select(a => a.Rect).ToList();
-                var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
+                var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size, generation));
+                if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
                 if (flashes.Count == 0)
                 {
                     if (!_warnedEmpty) Log.Warning("Flash: no images found in {Path}", ImagesPath());
@@ -324,7 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// re-enabled flash can show again.</summary>
         public static void CloseAll(bool final = true)
         {
-            _generation++;
+            Interlocked.Increment(ref _generation);
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
@@ -427,7 +429,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var s = CoreSettings.Current;
                 var occupied = Active.Select(a => a.Rect).ToList();
-                var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
+                var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null, generation));
                 if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
                 Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
@@ -450,7 +452,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF GetNextImages (FlashService.cs:3553-3583): active content-pack images are the second
         /// local source, weighted by count; a pack pick decrypts to a temp file kept on PackImages'
         /// record, and a failed decrypt falls back to the folder.</summary>
-        internal static string? NextFlashPath(IReadOnlyList<string> files) => PackImages.TryDraw(files.Count) ?? NextPath(files);
+        internal static string? NextFlashPath(IReadOnlyList<string> files, int? generation = null, List<string>? owned = null)
+        {
+            var current = generation ?? Volatile.Read(ref _generation);
+            if (current != Volatile.Read(ref _generation)) return null;
+            var path = PackImages.TryDraw(files.Count);
+            if (path != null) owned?.Add(path);
+            if (current == Volatile.Read(ref _generation)) return path ?? NextPath(files);
+            if (path != null && owned == null) PackImages.ReleaseTemp(path);
+            return null;
+        }
+
+        internal static T WithLoadCleanup<T>(int generation, Func<List<string>, T> load)
+        {
+            var owned = new List<string>();
+            try { return load(owned); }
+            finally
+            {
+                if (generation != Volatile.Read(ref _generation))
+                    foreach (var path in owned) PackImages.ReleaseTemp(path);
+            }
+        }
 
         private static string ImagesPath() => Path.Combine(CorePaths.EffectiveAssets, "images");
 
@@ -462,39 +484,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// decode-at-display-size - never a full-resolution source held per window.
         /// </summary>
         private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
-            int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
+            int[] targets, AppSettings s, List<PixelRect> occupied, int? size, int generation)
         {
-            var root = CorePaths.EffectiveAssets;
-            var dir = Path.Combine(root, "images");
-            var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
-            if (targets.Length == 0) return result;
-
-            var files = Directory.Exists(dir)
-                ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
-                    .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                    .ToList(), root, s)
-                : new List<string>();
-
-            for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
+            return WithLoadCleanup(generation, owned =>
             {
-                if (NextFlashPath(files) is not { } path) break;
-                try
+                var root = CorePaths.EffectiveAssets;
+                var dir = Path.Combine(root, "images");
+                var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
+                if (targets.Length == 0) return result;
+
+                var files = Directory.Exists(dir)
+                    ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                        .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                        .ToList(), root, s)
+                    : new List<string>();
+
+                for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
                 {
-                    SkiaSharp.SKImageInfo info;
-                    using (var codec = SkiaSharp.SKCodec.Create(path))
+                    if (NextFlashPath(files, generation, owned) is not { } path || generation != Volatile.Read(ref _generation)) break;
+                    try
                     {
-                        if (codec is null) continue;
-                        info = codec.Info;
+                        SkiaSharp.SKImageInfo info;
+                        using (var codec = SkiaSharp.SKCodec.Create(path))
+                        {
+                            if (codec is null) continue;
+                            info = codec.Info;
+                        }
+                        var screen = screens[targets[Rng.Next(targets.Length)]];
+                        var rect = Place(screen.Bounds, screen.Scaling, info.Width, info.Height, s, Rng, occupied, size);
+                        using var stream = File.OpenRead(path);
+                        result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, path, screen));
+                        occupied.Add(rect);
                     }
-                    var screen = screens[targets[Rng.Next(targets.Length)]];
-                    var rect = Place(screen.Bounds, screen.Scaling, info.Width, info.Height, s, Rng, occupied, size);
-                    using var stream = File.OpenRead(path);
-                    result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, path, screen));
-                    occupied.Add(rect);
+                    catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
                 }
-                catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
-            }
-            return result;
+                return result;
+            });
         }
     }
 }

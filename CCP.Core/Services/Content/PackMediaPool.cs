@@ -101,6 +101,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF CleanupTempPackFiles: delete every decrypt this pool has on record.</summary>
         public void CleanupTemps() => _temps.SweepAll();
+        internal void CleanupTemps(string? keep) => _temps.SweepAll(keep);
+
+        internal void ReleaseTemp(string path) => _temps.Release(path);
 
         // Caller holds _lock.
         private List<(string PackId, PackFileEntry File)> Entries()

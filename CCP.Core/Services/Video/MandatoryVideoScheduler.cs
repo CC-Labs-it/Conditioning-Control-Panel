@@ -63,6 +63,8 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
+        private readonly object _packGate = new();
+        private string? _playingPath;
         private ITimer? _scheduler, _preroll;
         private volatile bool _running, _playing;
         private int _retryGeneration, _noVideosShown;
@@ -274,7 +276,7 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;   // WPF CancelPendingRetry: a verdict message must not replay after a stop
             Dispose(ref _scheduler);
             ForceCleanup();
-            PackVideos?.CleanupTemps();
+            lock (_packGate) PackVideos?.CleanupTemps(_playingPath);
             Log.Debug("VideoService stopped");
         }
 
@@ -319,17 +321,21 @@ namespace ConditioningControlPanel.Services
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
-            if (_playing) return false;
-            path ??= PickNext();
-            if (path == null)
+            lock (_packGate)
             {
-                Log.Warning("VideoService: no videos found in the library");
-                // WPF #1124: the guidance dialog once per launch, never per tick.
-                if (Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
-                return false;
+                if (_playing) return false;
+                path ??= PickNext();
+                if (path == null)
+                {
+                    Log.Warning("VideoService: no videos found in the library");
+                    // WPF #1124: the guidance dialog once per launch, never per tick.
+                    if (Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
+                    return false;
+                }
+                IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
+                _playingPath = path;
+                _playing = true;
             }
-            IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
-            _playing = true;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
             CoreFlash.Stop();   // WPF PlayVideo: App.Flash?.Stop()
@@ -426,12 +432,17 @@ namespace ConditioningControlPanel.Services
         {
             Dispose(ref _preroll);
             if (!_playing) return false;
+            var finishedPath = _playingPath;
             _playing = false;
             IsStrict = false;
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
-            PackVideos?.CleanupTemps();
+            lock (_packGate)
+            {
+                if (_playingPath == finishedPath) _playingPath = null;
+                PackVideos?.CleanupTemps(_playingPath);
+            }
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
@@ -444,8 +455,11 @@ namespace ConditioningControlPanel.Services
         /// enabled library (an untick or preset switch takes effect on the very next video, #130).</summary>
         public void ReloadAssets()
         {
-            _queue = new Queue<string>();
-            PackVideos?.CleanupTemps();
+            lock (_packGate)
+            {
+                _queue = new Queue<string>();
+                PackVideos?.CleanupTemps(_playingPath);
+            }
         }
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>

@@ -73,7 +73,9 @@ public sealed class PackTempRetryTests
     private sealed class ClosingHost : IMandatoryVideoHost, IBubbleCountHost
     {
         public Action? Closed;
-        public void Show(string path, bool strict) { }
+        public string? Shown;
+        public bool ExistedAtShow;
+        public void Show(string path, bool strict) { Shown = path; ExistedAtShow = File.Exists(path); }
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) { }
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
         public void ShowMessage(string text, int ms, Action then) { }
@@ -106,6 +108,42 @@ public sealed class PackTempRetryTests
             Assert.False(File.Exists(path));
             Assert.Equal(0, pool.TempCount);
             Assert.False(store.TryGetSourceKey(path, out _));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Reload_during_preroll_preserves_selected_pack_video_until_finish(bool stop)
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-preroll-").FullName;
+        try
+        {
+            ContentPackStoreTests.WritePack(root, "p1", "One", ("v.mp4", "video"));
+            var settings = new AppSettings();
+            var store = new ContentPackStore(() => root, () => settings, () => { }, tempDir: () => Path.Combine(root, ".temp"));
+            var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+            var old = pool.TryDraw(0)!;
+            var host = new ClosingHost();
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            var video = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>()) { PackVideos = pool };
+            Assert.True(video.Trigger(strictOverride: false));
+            var files = Directory.GetFiles(Path.Combine(root, ".temp"));
+            var selected = Assert.Single(files, file => file != old);
+            video.ReloadAssets();
+            Assert.False(File.Exists(old));
+            Assert.True(File.Exists(selected));
+            if (stop) video.Stop();
+            else
+            {
+                clock.Advance(MandatoryVideoScheduler.PreRoll);
+                Assert.Equal(selected, host.Shown);
+                Assert.True(host.ExistedAtShow);
+                video.End();
+            }
+            Assert.False(File.Exists(selected));
+            Assert.Equal(0, pool.TempCount);
         }
         finally { Directory.Delete(root, true); }
     }
