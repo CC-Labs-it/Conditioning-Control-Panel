@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -296,7 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 BubbleOverlay.SnapHazards.Residue(center.X, center.Y, BubbleOverlay.Field.Clock());
                 ChaosFieldFxOverlay.Residue(center, ChaosSnapHazards.ResidueRadius, ChaosSnapHazards.ResidueLifeMs);
-                _state.PushEvent("⚡ aftermath: the air still crackles");
+                _state.PushEvent(Loc.Get("chaos_aftermath_event"));
             }
             if (_state.RippleEnabled)
             {
