@@ -123,6 +123,10 @@ public sealed partial class ChasterService
         {
             var bytes = Encoding.UTF8.GetBytes(html);
             context.Response.ContentType = "text/html; charset=utf-8";
+            // The one-shot listener closes immediately after a matching callback. Ask HTTP.sys
+            // to finish this response and disconnect, rather than leaving a keep-alive socket
+            // for listener teardown to reset while the browser is reading the page.
+            context.Response.KeepAlive = false;
             context.Response.ContentLength64 = bytes.Length;
             await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
             context.Response.Close();
