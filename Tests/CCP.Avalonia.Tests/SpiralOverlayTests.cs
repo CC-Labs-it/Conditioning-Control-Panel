@@ -102,6 +102,99 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task Hosted_gif_uses_live_gentle_speed() => await WithGentleHosted((root, settings, owner) =>
+    {
+        var first = SpiralOverlay.FrameIndex;
+        SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(30));
+        Assert.Equal(first, SpiralOverlay.FrameIndex);
+        SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(30));
+        Assert.NotEqual(first, SpiralOverlay.FrameIndex);
+        var second = SpiralOverlay.FrameIndex;
+        settings.GentleSpeed = 0.25;
+        SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
+        Assert.Equal(second, SpiralOverlay.FrameIndex);
+        SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(20));
+        Assert.NotEqual(second, SpiralOverlay.FrameIndex);
+        var third = SpiralOverlay.FrameIndex;
+        settings.GentleVisuals = false;
+        SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(30));
+        Assert.NotEqual(third, SpiralOverlay.FrameIndex);
+    });
+
+    [Fact]
+    public async Task Hosted_gif_fades_and_reverses_a_hide() => await WithGentleHosted((root, settings, owner) =>
+    {
+        Assert.Equal(0, root.Opacity, 3);
+        for (var i = 0; i < 5; i++) SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
+        Assert.Equal(0.5, root.Opacity, 3);
+        SpiralOverlay.CloseAll();
+        Assert.False(SpiralOverlay.IsShowing);
+        SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
+        Assert.Equal(0.4, root.Opacity, 3);
+        SpiralOverlay.Refresh(owner);
+        Assert.True(SpiralOverlay.IsShowing);
+        SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
+        Assert.Equal(0.5, root.Opacity, 3);
+        for (var i = 0; i < 5; i++) SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
+        Assert.Equal(1, root.Opacity, 3);
+        SpiralOverlay.CloseAll();
+        for (var i = 0; i < 11; i++) SpiralOverlay.AdvanceHosted(TimeSpan.FromMilliseconds(100));
+        Assert.Null(root.Parent);
+        Assert.False(SpiralOverlay.IsShowing);
+    });
+
+    private static async Task WithGentleHosted(Action<Grid, AppSettings, Window> check)
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-spiral-gentle-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            SubliminalSilentHintTests.EnsureAvalonia();
+            var configure = SharedOverlayHost.Configure;
+            var transparent = SharedOverlayHost.IsTransparent;
+            var provider = CoreSettings.ServiceProvider;
+            var engine = CoreSession.IsEngineRunningProvider;
+            var settings = new SettingsService();
+            var s = settings.Current;
+            s.GentleVisuals = true;
+            s.GentleFadeSeconds = 1;
+            s.GentleSpeed = 0.5;
+            (s.SpiralEnabled, s.SpiralPath, s.SpiralOpacity, s.SpiralTargetMonitor, s.UnifiedOverlayHost) = (true, gif, 40, -1, true);
+            CoreSettings.ServiceProvider = () => settings;
+            CoreSession.IsEngineRunningProvider = () => true;
+            SpiralOverlay.SkipPlatformChecksForTests = true;
+            Window? stage = null;
+            SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
+            SharedOverlayHost.IsTransparent = _ => true;
+            var owner = new Window();
+            owner.Show();
+            try
+            {
+                await Settle();
+                SpiralOverlay.CloseAll();
+                SpiralOverlay.Refresh(owner);
+                await Settle();
+                var canvas = Assert.IsType<Grid>(stage!.Content);
+                var root = Assert.Single(canvas.Children.OfType<Grid>());
+                check(root, s, owner);
+            }
+            finally
+            {
+                s.GentleVisuals = false;
+                SpiralOverlay.CloseAll();
+                SpiralOverlay.SkipPlatformChecksForTests = false;
+                SharedOverlayHost.Configure = configure;
+                SharedOverlayHost.IsTransparent = transparent;
+                CoreSettings.ServiceProvider = provider;
+                CoreSession.IsEngineRunningProvider = engine;
+                owner.Close();
+                Directory.Delete(dir, true);
+            }
+        });
+    }
+
+    [Fact]
     public void Frame_plan_caps_size_frames_and_scales_the_delay()
     {
         Assert.Equal((1280, 853, 32, 1, 30), SpiralFrames.Plan(2400, 1600, 32, 30));     // the shipped spiral
