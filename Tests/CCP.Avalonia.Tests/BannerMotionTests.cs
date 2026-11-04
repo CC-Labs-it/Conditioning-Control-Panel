@@ -307,6 +307,48 @@ public sealed class BannerMotionTests
         finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previous; }
     });
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public Task SupportSparklesAreFiniteAndParkOnHide(MotionLevel motion) => InShell(w =>
+    {
+        var previous = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        var clock = new BannerClock();
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = clock;
+        try
+        {
+            CoreSettings.Current.MotionLevel = motion;
+            var layer = w.Named<Canvas>("BannerSparkleLayer")!;
+            var primary = w.Named<TextBlock>("TxtBannerPrimary")!;
+            var pop = typeof(MainShellWindow).GetMethod("PopBannerBeat", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            void Arrive() => pop.Invoke(w, new object[] { primary });
+            Arrive();
+            if (motion == MotionLevel.Off) { Assert.Empty(layer.Children); return; }
+            Assert.Equal(7, layer.Children.Count);
+            var oldSprite = layer.Children[0];
+            var oldLoop = typeof(MainShellWindow).GetField("_bannerSparkles", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
+            Arrive(); // superseding a run replaces its sprites
+            Assert.Equal(7, layer.Children.Count);
+            Assert.DoesNotContain(oldSprite, layer.Children);
+            clock.Now += TimeSpan.FromSeconds(2).Ticks;
+            oldLoop.GetType().GetMethod("Step", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(oldLoop, null);
+            Assert.Equal(7, layer.Children.Count); // a queued tick from the old run cannot clear the new one
+            clock.Now -= TimeSpan.FromSeconds(2).Ticks;
+            clock.Now += TimeSpan.FromSeconds(.5).Ticks;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Contains(layer.Children, child => child.Opacity > 0);
+            clock.Now += TimeSpan.FromSeconds(2).Ticks;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Empty(layer.Children);
+            Arrive();
+            Assert.Equal(7, layer.Children.Count);
+            w.Hide();
+            Assert.Empty(layer.Children);
+        }
+        finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previous; }
+    });
+
     private sealed class BannerClock : TimeProvider
     {
         public long Now;
