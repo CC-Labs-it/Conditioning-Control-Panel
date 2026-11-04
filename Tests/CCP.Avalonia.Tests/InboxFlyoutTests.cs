@@ -38,6 +38,30 @@ public sealed class InboxFlyoutTests
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     [Fact]
+    public Task LauncherAndGameRoutePassiveSurfacesToInbox() => Run(() =>
+    {
+        int opened = 0;
+        var launcher = LauncherWindow.Open();
+        try
+        {
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "launcher", Open = () => opened++ });
+            Assert.True(StartupLadder.Inbox.Contains("launcher"));
+            Assert.Equal(0, opened);
+        }
+        finally { launcher.Hide(); }
+
+        var game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
+        try
+        {
+            game.Show();
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "game", Open = () => opened++ });
+            Assert.True(StartupLadder.Inbox.Contains("game"));
+            Assert.Equal(0, opened);
+        }
+        finally { game.Close(); launcher.Close(); }
+    });
+
+    [Fact]
     public Task QuietWindowParksARowAndOpenRunsIt() => Run(() =>
     {
         int opened = 0;
