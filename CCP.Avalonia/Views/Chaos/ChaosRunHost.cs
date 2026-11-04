@@ -41,8 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
-    /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
-    /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
+    /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane).
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
     /// announcer callers remain missing even though the announcer overlay is now present.
@@ -76,7 +75,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Action<double, int>? ShakeFx;
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
-        private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused;
+        private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused;
+        private static int _pendingWave;
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
@@ -157,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
         internal static void SpawnTick()
         {
-            if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
+            if (!_spawning || _state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01
             var cfg = _state.Config;
             double intensity = _state.RunIntensity;
@@ -204,7 +204,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnBubblePopped(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
             if (spec.IsPrism)
             {
@@ -380,7 +380,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>
         internal static void Tick()
         {
-            if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
+            if (!_spawning || _state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
@@ -411,9 +411,69 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosRunLessons.OnLoopCompleted();
                 AwardLoopTip();
                 _state.AllLiveNextWave = false;
-                _state.WaveIndex = newWave;
-                _state.ActIndex = ChaosRunEngine.ActFor(newWave);
+                if (_state.Config.BoonDraftEnabled)
+                {
+                    _draftPaused = true;
+                    _pendingWave = newWave;
+                    _spawnTimer?.Stop();
+                    ChaosWaveTimerWindow.Clear();
+                    BubbleOverlay.ClearChaos();
+                    var options = DealDraft();
+                    _overlay!.ShowBoonDraft(_state.WaveIndex, options, ChooseBoon,
+                        _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
+                }
+                else
+                {
+                    _state.WaveIndex = newWave;
+                    _state.ActIndex = ChaosRunEngine.ActFor(newWave);
+                }
             }
+        }
+
+        private static List<ChaosBoon> DealDraft()
+        {
+            var s = _state!;
+            var taken = s.ActiveBoons.Concat(s.ActiveCurses).Select(b => b.Id).ToHashSet();
+            var options = ChaosBoonPool.Draft(s.Config.AllowCurses, s.Config.DraftChoices,
+                s.MaxedBoons.Contains("surrender"), taken, s.Config.SinChance);
+            foreach (var option in options) ChaosMeta.MarkDiscovered("boon:" + option.Id);
+            return options;
+        }
+
+        internal static (List<ChaosBoon> options, int rerollsLeft)? RerollDraft()
+        {
+            if (!_draftPaused || _pendingWave == 0 || _state == null || _state.RerollsLeft <= 0) return null;
+            _state.RerollsLeft--;
+            _state.PushEvent("🎲 tempted fate again");
+            return (DealDraft(), _state.RerollsLeft);
+        }
+
+        internal static void ChooseBoon(ChaosBoon? boon)
+        {
+            if (!_draftPaused || _pendingWave == 0 || _state == null) return;
+            if (boon == null) _state.Shields++;
+            else
+            {
+                bool shield = boon.IsCurse && _state.MaxedBoons.Contains("surrender") && !_state.SurrenderShieldUsed;
+                if (shield) _state.SurrenderShieldUsed = true;
+                _state.ApplyBoon(boon, shield);
+                if (boon.IsCurse)
+                {
+                    _state.BoonMult += _state.SinExtraMult;
+                    if (_state.MaxedBoons.Contains("surrender")) _state.Shields++;
+                }
+            }
+            _state.WaveIndex = _pendingWave;
+            _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);
+            _pendingWave = 0;
+            _overlay?.ShowReadyGo(ResumeAfterDraft);
+        }
+
+        private static void ResumeAfterDraft()
+        {
+            if (!_draftPaused || !_spawning) return;
+            _draftPaused = false;
+            if (!_manualPaused && !_lessonCardPaused) _spawnTimer?.Start();
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
@@ -437,7 +497,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF ToggleManualPause (:257), the clock half: paused holds the clock.</summary>
         public static void ToggleManualPause()
         {
-            if (!_spawning || _lessonCardPaused) return;
+            if (!_spawning || _lessonCardPaused || _draftPaused) return;
             _manualPaused = !_manualPaused;
             BubbleOverlay.HoldChaos(_manualPaused);   // WPF :267-268 freeze + input lock
             _state?.PushEvent(_manualPaused ? "⏸ held. the hole waits." : "▶ sinking again");
@@ -457,7 +517,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 var card = ChaosUnlockCardRules.ForLesson(id);
                 if (card == null) return;
                 _state.PushEvent($"lesson learned — {card.Title}");
-                bool claimPause = _spawning && !_manualPaused && !_lessonCardPaused;
+                bool claimPause = _spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused;
                 if (claimPause)
                 {
                     _lessonCardPaused = true;
@@ -473,7 +533,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_lessonCardPaused || ChaosUnlockCardOverlay.IsShowing) return;
             _lessonCardPaused = false;
             BubbleOverlay.HoldChaos(_manualPaused);
-            if (_spawning && !_manualPaused) _spawnTimer?.Start();
+            if (_spawning && !_manualPaused && !_draftPaused) _spawnTimer?.Start();
         }
 
         public static void RequestStop()
@@ -542,6 +602,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
             ChaosRunLessons.OnRunCompleted(_state.Shields, _state.Config.Difficulty, ranFullCourse);
             _spawning = false;
+            _draftPaused = false;
+            _pendingWave = 0;
+            _overlay?.CancelDraftAndCountdown();
             _runTimer?.Stop();
             EndField();
             StopToys();
@@ -704,6 +767,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _active = false;
             _spawning = false;
             _manualPaused = false;
+            _draftPaused = false;
+            _pendingWave = 0;
             _endingSoonFired = false;
         }
     }

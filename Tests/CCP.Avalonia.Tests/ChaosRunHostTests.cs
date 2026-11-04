@@ -30,7 +30,7 @@ public sealed class ChaosRunHostTests
                 .SetupWithoutStarting();
     }
 
-    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
+    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false };
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
@@ -84,6 +84,79 @@ public sealed class ChaosRunHostTests
                 Assert.Contains(overlay.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "BEST STREAK");
                 Assert.Equal(1, meta.RunsCompleted);   // the run counted (payout: see the FALL IN test)
                 Assert.Same(meta, ChaosMeta.State);
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Wave_draft_holds_clears_rerolls_picks_and_resumes()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = false;
+                ChaosRunHost.StartRun(cfg);
+                var overlay = ChaosRunHost.Overlay!;
+                overlay.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                state.RerollsLeft = 1;
+                state.AllLiveNextWave = true;
+                ChaosRunHost.SpawnTick();
+                Assert.True(BubbleOverlay.ChaosCount > 0);
+                Ticks(80);
+                Assert.Equal(1, state.WaveIndex);
+                Assert.False(state.AllLiveNextWave);
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                double elapsed = state.ElapsedSec;
+                Ticks(4); ChaosRunHost.SpawnTick();
+                Assert.Equal(elapsed, state.ElapsedSec);
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                overlay.FindControl<Button>("BtnReroll")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(0, state.RerollsLeft);
+                Assert.Null(ChaosRunHost.RerollDraft());
+                var cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+                var card = cards[0]!;
+                var boon = (ChaosBoon)card.GetType().GetField("Boon")!.GetValue(card)!;
+                typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(overlay, new object?[] { boon });
+                Assert.Single(state.ActiveBoons);
+                Assert.Equal(2, state.WaveIndex);
+                Ticks(4); Assert.Equal(elapsed, state.ElapsedSec);
+                overlay.FinishCountdown(); Ticks(4);
+                Assert.True(state.ElapsedSec > elapsed);
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Wave_draft_skip_and_panic_are_safe()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+                ChaosRunHost.StartRun(cfg);
+                var overlay = ChaosRunHost.Overlay!; overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!; Ticks(80);
+                int shields = state.Shields;
+                typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(overlay, new object?[] { null });
+                Assert.Equal(shields + 1, state.Shields);
+                overlay.FinishCountdown(); Ticks(80);
+                Assert.Equal(2, state.WaveIndex);
+                ChaosRunHost.ForceShutdown();
+                Assert.False(ChaosRunHost.IsActive);
+                Assert.Null(ChaosRunHost.State);
+                Assert.Equal(0, ChaosMeta.State.RunsCompleted);
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                Assert.Null(ChaosRunHost.RerollDraft());
             }
             finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
             return Task.CompletedTask;
@@ -414,6 +487,7 @@ public sealed class ChaosRunHostTests
             ChaosHubWindow? hub = null;
             try
             {
+                CoreSettings.Current.ChaosBoonDraftEnabled = false;
                 hub = new ChaosHubWindow();
                 hub.FindControl<Button>("BtnMenuFallIn")!
                     .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
