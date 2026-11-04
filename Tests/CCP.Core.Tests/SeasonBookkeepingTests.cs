@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -45,6 +47,40 @@ public sealed class SeasonBookkeepingTests
         SeasonBookkeeping.Update(s);
         Assert.Equal("1901-02", s.SeasonStatsSeason);
         Assert.Equal(3, s.SeasonConditioningMinutes);
+    }
+
+    [Fact]
+    public void ConcurrentSeasonAdoptionWaitsForTrackerGate()
+    {
+        var s = new AppSettings { CurrentSeason = "1908-01" };
+        using var started = new ManualResetEventSlim();
+        Task adoption;
+        bool completedWhileLocked;
+        lock (SeasonBookkeeping.Gate)
+        {
+            adoption = Task.Run(() => { started.Set(); s.CurrentSeason = "1908-02"; });
+            Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+            completedWhileLocked = adoption.Wait(TimeSpan.FromMilliseconds(500));
+        }
+        Assert.True(adoption.Wait(TimeSpan.FromSeconds(5)));
+        Assert.False(completedWhileLocked);
+        Assert.Equal("1908-02", s.CurrentSeason);
+    }
+
+    [Fact]
+    public void TrackerReconcilesAdoptedSeasonBeforeCreditingMinutes()
+    {
+        var s = new AppSettings { CurrentSeason = "1909-01", SeasonStatsSeason = "1909-01",
+            LastSeasonResetSeen = "1909-01", SeasonConditioningMinutes = 5, TotalConditioningMinutes = 10 };
+        Task.Run(() => s.CurrentSeason = "1909-02").GetAwaiter().GetResult();
+        ConditioningTimeTracker.AddConditioningTime(s, 3);
+        var snapshot = SeasonRecapStore.Load("1909-01");
+        Assert.NotNull(snapshot);
+        Assert.Equal(5, snapshot.SeasonMinutes);
+        Assert.Equal(10, snapshot.AllTimeMinutes);
+        Assert.Equal("1909-02", s.SeasonStatsSeason);
+        Assert.Equal(3, s.SeasonConditioningMinutes);
+        Assert.Equal(13, s.TotalConditioningMinutes);
     }
 
     [Fact]

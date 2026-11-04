@@ -7522,7 +7522,11 @@ namespace ConditioningControlPanel.Models
         public string? CurrentSeason
         {
             get => _currentSeason;
-            set { _currentSeason = value; OnPropertyChanged(); }
+            set
+            {
+                lock (Services.SeasonBookkeeping.Gate) _currentSeason = value;
+                OnPropertyChanged();
+            }
         }
 
         private int _highestLevelEver = 0;

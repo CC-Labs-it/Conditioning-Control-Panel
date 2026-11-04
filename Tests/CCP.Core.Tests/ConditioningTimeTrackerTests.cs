@@ -67,11 +67,12 @@ public sealed class ConditioningTimeTrackerTests
     [Fact]
     public void SeasonMinutesUseExistingBucketAndInitializeOnlyWhenEmpty()
     {
-        var s = new AppSettings { CurrentSeason = "2026-09", SeasonStatsSeason = "2026-08", SeasonConditioningMinutes = 3 };
+        var s = new AppSettings { CurrentSeason = "2026-08", SeasonStatsSeason = "2026-08", SeasonConditioningMinutes = 3 };
         ConditioningTimeTracker.AddConditioningTime(s, 1.5);
         Assert.Equal("2026-08", s.SeasonStatsSeason);
         Assert.Equal(4.5, s.SeasonConditioningMinutes);
         s.SeasonStatsSeason = null;
+        s.CurrentSeason = "2026-09";
         ConditioningTimeTracker.AddConditioningTime(s, 0.5);
         Assert.Equal("2026-09", s.SeasonStatsSeason);
         Assert.Equal(5, s.SeasonConditioningMinutes);

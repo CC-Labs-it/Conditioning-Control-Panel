@@ -69,6 +69,8 @@ namespace ConditioningControlPanel.Services
             if (!(minutes > 0)) return;
             lock (SeasonBookkeeping.Gate)
             {
+                // The change notification can be delayed behind this write after adoption.
+                SeasonBookkeeping.Update(s);
                 s.TotalConditioningMinutes += minutes;
                 if (s.PendingSeasonSnapshot != null && !string.IsNullOrEmpty(s.PendingSeasonTarget))
                 {
