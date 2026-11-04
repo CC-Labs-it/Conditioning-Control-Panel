@@ -12,6 +12,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -896,6 +898,8 @@ public sealed partial class GameWindowTests
         var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var metaPath = ChaosMetaStore.SlotFilePath(ChaosMetaStore.ActiveSlot);
+        var savedMeta = File.Exists(metaPath) ? File.ReadAllBytes(metaPath) : null;
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
         var xp = new List<double>();
         var runs = new List<bool>();
@@ -922,6 +926,7 @@ public sealed partial class GameWindowTests
             (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
+            if (savedMeta == null) File.Delete(metaPath); else File.WriteAllBytes(metaPath, savedMeta);
             GameWindow.CloseAllForPanic();
             Directory.Delete(lib, true);
         }
@@ -994,6 +999,209 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { true, true }, runs);
         });
     }
+
+    // WPF LauncherCatalogue.cs:242-247 -> DtrhHostService.cs:923-954 ->
+    // ChaosHubWindow.xaml.cs:1718-1730 -> BubbleService.cs:4685/:4918.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void Dtrh_boot_error_reaches_a_run_and_its_pooled_pop_text(int completed) => RunDtrh(true, (_, _, _, _) =>
+    {
+        var oldBeatTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
+        var prepare = ChaosPopText.Prepare;
+        var canShow = ChaosPopText.PlatformCanShow;
+        var enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+        ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+        ChaosPopText.PlatformCanShow = () => true;
+        CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        try
+        {
+            ChaosMeta.Init();
+            ChaosMeta.State.RunsCompleted = completed;
+            ChaosMeta.Save();
+            LauncherWindow.Instance!.Play(LauncherCards.Find("dtrh")!);
+            Assert.True(GameWindow.IsAnyOpen()); // the launcher, not the next lookup, opened it
+            var game = GameWindow.Launch("dtrh")!; // focuses the same host
+            game.Web.OnNavigationCompleted(game.PageUrl!);
+            game.Web.OnWebMessage("{\"type\":\"boot-error\",\"msg\":\"renderer\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(game.IsVisible);
+            if (completed == 0)
+            {
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.True(ChaosRunHost.State!.Config.ScriptedFirstRun);
+                Assert.Null(ChaosHubWindow.Current);
+                // A second failed launch must not start another run.
+                var state = ChaosRunHost.State;
+                var meta = ChaosMeta.State;
+                var retry = GameWindow.Launch("dtrh")!;
+                retry.HandleMessage("{\"type\":\"boot-error\"}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(state, ChaosRunHost.State);
+                Assert.Same(meta, ChaosMeta.State);
+            }
+            else
+            {
+                var hub = Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current);
+                Assert.True(hub.IsVisible);
+                Assert.False(ChaosRunHost.IsActive);
+                var retry = GameWindow.Launch("dtrh")!;
+                retry.HandleMessage("{\"type\":\"boot-error\"}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(hub, ChaosHubWindow.Current);
+                hub.FallIn();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(ChaosHubWindow.Current);
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.False(ChaosRunHost.State!.Config.ScriptedFirstRun);
+            }
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            ChaosRunHost.State!.Config.EnabledVariants = new List<string> { "flash" };
+            ChaosRunHost.State.ShowPopScores = false;
+            ChaosRunHost.State.Focus = 100;
+            ChaosRunHost.SpawnTick();
+            var bubble = BubbleOverlay.Field.Bubbles.First(b => b.Spec?.VariantId == "flash");
+            BubbleOverlay.Press(bubble, bubble.CenterX, bubble.CenterY);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("FLASH", Assert.Single(ChaosPopText.Pool.All).LabelText);
+            ChaosRunHost.ForceShutdown();
+            Assert.Empty(ChaosPopText.Pool.All);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosRunHost.ForceShutdown();
+            ChaosPopText.ShutdownPool();
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldBeatTime;
+            ChaosPopText.Prepare = prepare;
+            ChaosPopText.PlatformCanShow = canShow;
+            CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+        }
+    });
+
+    // WPF DtrhHostService.cs:949-952 owns the returning player's hub by the main window.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Dtrh_returning_hub_closes_with_the_shell_even_when_hidden(bool hiddenAtOpen, bool hideAfterOpen) => RunDtrh(true, (shell, _, _, _) =>
+    {
+        shell.TrayHostPresent = () => false; // closing is a real exit, not a tray hide
+        try
+        {
+            ChaosMeta.Init();
+            ChaosMeta.State.RunsCompleted = 2;
+            ChaosMeta.State.SeenIntroGuide = true;
+            ChaosMeta.Save();
+            if (hiddenAtOpen) shell.Hide(); else shell.Show();
+            LauncherWindow.Instance!.Play(LauncherCards.Find("dtrh")!);
+            Assert.True(GameWindow.IsAnyOpen());
+            var game = GameWindow.Launch("dtrh")!;
+            game.Web.OnNavigationCompleted(game.PageUrl!);
+            game.Web.OnWebMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            var hub = Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current);
+            Assert.True(hub.IsVisible);
+            if (!hiddenAtOpen) Assert.Same(shell, hub.Owner);
+            bool closed = false;
+            hub.Closed += (_, _) => closed = true;
+            if (hideAfterOpen) shell.Hide();
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(closed);
+            Assert.False(hub.IsVisible);
+            Assert.Null(ChaosHubWindow.Current);
+            Assert.False(ChaosRunHost.IsActive);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosRunHost.ForceShutdown();
+        }
+    });
+
+    [Fact]
+    public void Dtrh_reuses_recap_hub_and_closes_it_with_shell() => RunDtrh(true, (shell, _, _, _) =>
+    {
+        shell.TrayHostPresent = () => false;
+        try
+        {
+            ChaosMeta.Init();
+            ChaosMeta.State.RunsCompleted = 2;
+            ChaosMeta.State.SeenIntroGuide = true;
+            ChaosMeta.Save();
+            var recap = new ChaosOverlayWindow();
+            recap.Show();
+            typeof(ChaosOverlayWindow).GetMethod("OpenHubAt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(recap, new object?[] { null });
+            Dispatcher.UIThread.RunJobs();
+            var hub = Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current);
+            Assert.True(hub.IsVisible);
+            var game = GameWindow.Launch("dtrh")!;
+            game.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(hub, ChaosHubWindow.Current);
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(hub.IsVisible);
+            Assert.Null(ChaosHubWindow.Current);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosRunHost.ForceShutdown();
+        }
+    });
+
+    // WPF DtrhHostService.cs:923-934 dispatches disposal and the fallback together;
+    // GameSurfaces.cs:50-51 stops the run and the web host on panic.
+    // Stop route: full panic, Chaos shutdown, or the games surface alone.
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(2, 0)]
+    [InlineData(0, 1)]
+    [InlineData(2, 1)]
+    [InlineData(0, 2)]
+    [InlineData(2, 2)]
+    public void Dtrh_pending_boot_fallback_is_cancelled_by_panic_or_shutdown(int completed, int stop) => RunDtrh(true, (shell, _, _, _) =>
+    {
+        try
+        {
+            ChaosMeta.Init();
+            ChaosMeta.State.RunsCompleted = completed;
+            ChaosMeta.Save();
+            LauncherWindow.Instance!.Play(LauncherCards.Find("dtrh")!);
+            Assert.True(GameWindow.IsAnyOpen());
+            var game = GameWindow.Launch("dtrh")!;
+            game.Web.OnNavigationCompleted(game.PageUrl!);
+            game.Web.OnWebMessage("{\"type\":\"boot-error\"}");
+            Assert.True(GameWindow.IsAnyOpen()); // the queued handoff still owns the screen
+            Assert.False(ChaosRunHost.IsActive);
+            Assert.Null(ChaosHubWindow.Current);
+
+            if (stop == 0) PanicSurfaces.StopAll("test", shell);
+            else if (stop == 1) ChaosRunHost.ForceShutdown();
+            else PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(ChaosRunHost.IsActive);
+            Assert.Null(ChaosHubWindow.Current);
+
+            // A later, deliberate launch is still allowed to fall back.
+            var retry = GameWindow.Launch("dtrh")!;
+            retry.HandleMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            if (completed == 0) Assert.True(ChaosRunHost.IsActive);
+            else Assert.True(Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current).IsVisible);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosRunHost.ForceShutdown();
+        }
+    });
 
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
     /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in

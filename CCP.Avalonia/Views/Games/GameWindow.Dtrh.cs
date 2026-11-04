@@ -4,8 +4,8 @@
 // DtrhRunWire), run-started / run-progress / run-ended with the one-payout latch (:360, :583) and the
 // close-mid-run booking (:1002 DtrhRunCloseRule). The kept Escape (:119) is posted by the panic key's pause
 // claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh); a full panic closes it with
-// every other game (PanicSurfaces "games"). Shell frames (boot-error, exit's 1200 ms close, exit-done)
-// stay in GameWindow.HandleMessage.
+// every other game (PanicSurfaces "games"). Exit's 1200 ms close and exit-done stay in
+// GameWindow.HandleMessage; boot-error falls back to the classic run or hub.
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
@@ -19,6 +19,8 @@ using System.IO;
 using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -30,6 +32,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     internal sealed partial class GameWindow
     {
         internal const string DtrhId = "dtrh";
+        private static int _dtrhFallbackGeneration;
+
+        // ForceShutdown also runs on app exit and when no run exists yet.
+        internal static void CancelPendingDtrhFallbacks() => System.Threading.Interlocked.Increment(ref _dtrhFallbackGeneration);
 
         /// <summary>WPF LauncherCatalogue.cs:241: Lab tier, or the server's daily-free DtRH drop; refused with
         /// the tier toast (TierGate.DemandLab).</summary>
@@ -91,12 +97,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "run-ended":
                     OnDtrhRunEnded(o, fromTeardown: false);
                     return true;
+                case "boot-error":
+                    // WPF DtrhHostService.cs:923-954 queues disposal and fallback together.
+                    // Closing the host on panic, or ForceShutdown on exit, cancels the handoff.
+                    int generation = System.Threading.Volatile.Read(ref _dtrhFallbackGeneration);
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (_closing) return;
+                        Close();
+                        if (generation == System.Threading.Volatile.Read(ref _dtrhFallbackGeneration))
+                            LaunchDtrhFallback();
+                    });
+                    return true;
                 case "exit":
                     _dtrhExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
                     return false;
                 default:
                     return false;
             }
+        }
+
+        private static void LaunchDtrhFallback()
+        {
+            try
+            {
+                if (ChaosRunHost.IsActive) return;   // WPF :943
+                // WPF loads meta at app startup (App.xaml.cs:2746); this head loads it on the hub.
+                if (ChaosHubWindow.Current == null) ChaosMeta.Init();
+                if (ChaosMeta.State.RunsCompleted == 0)
+                {
+                    ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());   // WPF :944-946
+                    return;
+                }
+                var shell = MainShellWindow.Current ?? LauncherWindow.Instance?.Panel;
+                if (ChaosHubWindow.Current is { } current)
+                {
+                    current.BindShell(shell);
+                    current.Activate();
+                    return;
+                }
+                var hub = new ChaosHubWindow();
+                hub.ShowForShell(shell);
+            }
+            catch (Exception ex) { Log.Error(ex, "Dtrh fallback failed"); }
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>

@@ -5,6 +5,7 @@ using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
@@ -485,6 +486,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            GameWindow.CancelPendingDtrhFallbacks();   // before the idle return: panic and app exit cancel queued handoffs
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183

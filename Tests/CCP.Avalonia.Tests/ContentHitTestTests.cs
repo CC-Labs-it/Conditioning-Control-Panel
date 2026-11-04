@@ -13,6 +13,8 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -31,10 +33,12 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.GentleVisuals = false;
+            var w = new MainShellWindow { TabClock = new SteppedTime() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -87,9 +91,14 @@ public sealed class ContentHitTestTests
     /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
     /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
+    internal static void RenderLiveTree(MainShellWindow w)
     {
         Dispatcher.UIThread.RunJobs();
+        // A rendered batch is still stale as soon as an entrance moves its live geometry.
+        // The frozen test clock makes an unfinished entrance deterministic on every platform.
+        w.CompleteTabTransition();
+        Assert.Null(w.EnteringTab);
+        w.UpdateLayout();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
         while (!batch.Rendered.IsCompleted)

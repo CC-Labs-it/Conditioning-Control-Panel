@@ -106,6 +106,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private T Part<T>(string name) where T : Control => this.FindControl<T>(name)
             ?? throw new InvalidOperationException($"ChaosHubWindow: no '{name}' in the XAML");
 
+        internal static ChaosHubWindow? Current { get; private set; }
+
+        private Window? _shell;
+
+        // WPF DtrhHostService.cs:950-952 and ChaosOverlayWindow.xaml.cs:880-882.
+        internal void BindShell(Window? shell)
+        {
+            if (_shell == shell) return;
+            if (_shell != null) _shell.Closed -= ShellClosed;
+            _shell = shell;
+            if (_shell != null) _shell.Closed += ShellClosed;
+        }
+
+        private void ShellClosed(object? sender, EventArgs e) => Close();
+
+        internal void ShowForShell(Window? shell)
+        {
+            BindShell(shell);
+            if (shell is { IsVisible: true }) Show(shell); else Show();
+        }
+
         public ChaosHubWindow()
         {
             // Init runs WPF's on-load refunds/sanitize, which can save. A render draws the
@@ -115,7 +136,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => UnlockCards.Stop();
+            Current = this;
+            Closed += (_, _) => { BindShell(null); UnlockCards.Stop(); if (Current == this) Current = null; };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");
