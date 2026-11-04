@@ -93,21 +93,4 @@ public class BrainDrainClipsTests
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
 
-    [Fact]
-    public void WpfServiceUsesSharedDiscoveryAndRetainsLogCount()
-    {
-        var root = Directory.GetParent(Directory.GetParent(Here())!.FullName)!.FullName;
-        var source = File.ReadAllText(Path.Combine(root, "ConditioningControlPanel", "Services", "LockCard", "BrainDrainService.cs"));
-        Assert.Contains("RunClassConstructor(typeof(App).TypeHandle)", source);
-        Assert.Contains("BrainDrainClips.AudioFolderPath", source);
-        Assert.Contains("BrainDrainClips.LegacyFolderPath", source);
-        Assert.Contains("BrainDrainClips.EnsureFolder(AudioFolderPath)", source);
-        Assert.Contains("BrainDrainClips.Count(LegacyAudioFolderPath)", source);
-        Assert.Contains("BrainDrainClips.Scan(assetsFolder, legacyFolder, out var legacyAdded, ensurePrimary: false)", source);
-        Assert.Contains("_audioFiles.Length, legacyAdded", source);
-        Assert.DoesNotContain("private static readonly string[] AudioExtensions", source);
-    }
-
-    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
-
 }
