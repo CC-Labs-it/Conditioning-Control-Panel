@@ -192,4 +192,115 @@ public sealed class ChaosVideoRestackTests
         });
     }
 
+    [Theory]
+    [InlineData(false, false)] // a target arrives after an ordinary video started
+    [InlineData(false, true)]  // attention setup is refused before gameplay is raised
+    [InlineData(true, true)]   // an input region fails after creation
+    public async Task Video_entry_preserves_fallback_target_order_and_cancels_fades(bool regionFails, bool attentionEnabled)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var s = CoreSettings.Current;
+            var saved = (s.ChaosPinOnTop, s.AudioDuckingEnabled, s.AttentionChecksEnabled);
+            var oldRaise = ChaosRunHost.RaiseGameWindow;
+            var oldAttentionRaise = MandatoryVideoOverlay.RaiseAttentionWindow;
+            var oldSchedule = MandatoryVideoOverlay.ScheduleGameRestack;
+            var oldPrepare = MandatoryVideoOverlay.PrepareAttentionWindow;
+            var oldRegion = MandatoryVideoOverlay.SetAttentionRegion;
+            var oldPlayback = MandatoryVideoOverlay.StartPlaybackForTests;
+            var raises = new List<Window>();
+            var scheduled = new List<(Action Action, TimeSpan Delay)>();
+            var o = MandatoryVideoOverlay.Instance;
+            var regionCalls = 0;
+            var starts = 0;
+            try
+            {
+                (s.ChaosPinOnTop, s.AudioDuckingEnabled, s.AttentionChecksEnabled) = (true, false, attentionEnabled);
+                ChaosRunHost.RaiseGameWindow = raises.Add;
+                MandatoryVideoOverlay.RaiseAttentionWindow = raises.Add;
+                MandatoryVideoOverlay.ScheduleGameRestack = (a, d) => scheduled.Add((a, d));
+                MandatoryVideoOverlay.StartPlaybackForTests = () => starts++;
+                MandatoryVideoOverlay.PrepareAttentionWindow = (_, _) => regionFails;
+                MandatoryVideoOverlay.SetAttentionRegion = (_, _) => { regionCalls++; return regionFails; };
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                o.Show("fake-video", false);  // same public host entry used by the scheduler
+                Assert.Equal(1, starts);
+                if (attentionEnabled && !regionFails) Assert.DoesNotContain(ChaosRunHost.Hud!, raises);
+                else Assert.Contains(ChaosRunHost.Hud!, raises);
+                Assert.Equal(TimeSpan.FromMilliseconds(60), Assert.Single(scheduled).Delay);
+                var surface = Assert.Single(o.Surfaces);
+                var video = surface.Window;
+                raises.Clear(); scheduled.Clear();
+                o.Spawn(0);
+                if (regionFails)
+                {
+                    Assert.NotNull(surface.AttentionWindow);
+                    raises.Clear();
+                    MandatoryVideoOverlay.SetAttentionRegion = (_, _) => { regionCalls++; return false; };
+                    o.Step(0, 0); // region fails after a target is already visible
+                }
+                Assert.Null(surface.AttentionWindow);
+                Assert.Equal(video, raises[^1]);
+                Assert.Contains(surface.Layer, ((Panel)video.Content!).Children);
+                raises.Clear();
+                video.MouseDown(new Point(2, 2), MouseButton.Left);
+                video.MouseUp(new Point(2, 2), MouseButton.Left);
+                var click = Assert.Single(scheduled);
+                Assert.Equal(TimeSpan.FromMilliseconds(50), click.Delay);
+                click.Action();
+                Assert.DoesNotContain(ChaosRunHost.Hud!, raises);
+                Assert.Equal(video, raises[^1]);
+                raises.Clear();
+                o.Step(s.AttentionLifespan + 1, 0);
+                if (attentionEnabled) Assert.DoesNotContain(ChaosRunHost.Hud!, raises);
+                else Assert.Contains(ChaosRunHost.Hud!, raises);
+                Assert.DoesNotContain(video, raises);
+
+                // Exercise a pending fade from a separate surface, then tear down immediately.
+                o.CloseAll();
+                MandatoryVideoOverlay.PrepareAttentionWindow = (_, _) => true;
+                MandatoryVideoOverlay.SetAttentionRegion = (_, _) => { regionCalls++; return true; };
+                o.Show("fake-video", false);
+                o.Spawn(0);
+                surface = Assert.Single(o.Surfaces);
+                var attention = Assert.IsType<Window>(surface.AttentionWindow);
+                raises.Clear(); scheduled.Clear();
+                surface.Window.MouseDown(new Point(2, 2), MouseButton.Left);
+                surface.Window.MouseUp(new Point(2, 2), MouseButton.Left);
+                Assert.Single(scheduled).Action();
+                Assert.Contains(ChaosRunHost.Hud!, raises);
+                Assert.Equal(attention, raises[^1]);
+                var target = Assert.Single(o.GazeTargets);
+                target.Hit();
+                Assert.Equal(0, o.LiveTargets);
+                Assert.NotNull(target.OnRemoved);
+                o.CloseAll();
+                Assert.Null(target.OnRemoved);
+                var callsAfterClose = regionCalls;
+                var childrenAfterClose = surface.Layer.Children.Count;
+                target.Remove(); // simulates a timer callback already queued during shutdown
+                await Task.Delay(400);
+                Assert.Equal(callsAfterClose, regionCalls);
+                Assert.Equal(childrenAfterClose, surface.Layer.Children.Count);
+            }
+            finally
+            {
+                o.CloseAll(); ChaosRunHost.ForceShutdown();
+                (s.ChaosPinOnTop, s.AudioDuckingEnabled, s.AttentionChecksEnabled) = saved;
+                ChaosRunHost.RaiseGameWindow = oldRaise;
+                MandatoryVideoOverlay.RaiseAttentionWindow = oldAttentionRaise;
+                MandatoryVideoOverlay.ScheduleGameRestack = oldSchedule;
+                MandatoryVideoOverlay.PrepareAttentionWindow = oldPrepare;
+                MandatoryVideoOverlay.SetAttentionRegion = oldRegion;
+                MandatoryVideoOverlay.StartPlaybackForTests = oldPlayback;
+            }
+        });
+    }
+
 }

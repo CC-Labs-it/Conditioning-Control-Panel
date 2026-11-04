@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
+        private readonly List<Target> _fadingTargets = new();
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
@@ -136,13 +137,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             && X11Overlay.SetWindowInputRegion(w, Array.Empty<PixelRect>());
         internal static Func<Window, PixelRect[], bool> SetAttentionRegion = X11Overlay.SetWindowInputRegion;
         internal static Action<Window> RaiseAttentionWindow = w => X11Overlay.RaiseWithoutActivation(w);
+        // Test seam: surface creation and restack still take the production path without a decoder.
+        internal static Action? StartPlaybackForTests;
 
         private void RestackGameAndTargets()
         {
-            ChaosRunHost.RaiseGameLayerAboveVideo();
+            // Without a separate attention surface, the opaque video must remain above gameplay.
+            if (!_surfaces.Any(x => x.AttentionWindow == null && (_attention || x.Layer.Children.Count > 0)))
+                ChaosRunHost.RaiseGameLayerAboveVideo();
             foreach (var x in _surfaces)
-                if (x.AttentionWindow is { IsVisible: true } w && x.Layer.Children.Count > 0)
-                    try { RaiseAttentionWindow(w); } catch (Exception ex) { Log.Debug("Attention raise: {E}", ex.Message); }
+                if (x.Layer.Children.Count > 0)
+                {
+                    // A fallback target shares the opaque video window, so the whole video must
+                    // sit above gameplay until that target retires (WPF VideoService.cs:5822).
+                    var w = x.AttentionWindow ?? x.Window;
+                    if (w.IsVisible)
+                        try { RaiseAttentionWindow(w); } catch (Exception ex) { Log.Debug("Attention raise: {E}", ex.Message); }
+                }
         }
 
         private void EnsureAttentionWindow(Surface x)
@@ -184,6 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ((Panel)x.Window.Content!).Children.Insert(3, x.Layer);
             x.AttentionWindow = null;
             w.Close();
+            if (x.Layer.Children.Count > 0 && x.Window.IsVisible) RaiseAttentionWindow(x.Window);
         }
 
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
@@ -216,7 +228,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
 
             var vlc = LibVlcAudio.Shared;
-            if (vlc == null)
+            if (vlc == null && StartPlaybackForTests == null)
             {
                 Log.Warning("VideoService: LibVLC is not available - cannot play {Path}", path);
                 Dispatcher.UIThread.Post(Scheduler.End);
@@ -227,9 +239,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
             _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
+            // Know whether targets can be raised separately before lifting gameplay over the video.
+            if (_attention) foreach (var x in _surfaces) EnsureAttentionWindow(x);
 
+            if (StartPlaybackForTests is { } startPlayback) startPlayback();
+            else
+            {
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
-            _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
+            _player = new MediaPlayer(vlc!) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
             _sink = new VlcFrameSink(_player, () => _media, bmp =>
@@ -289,9 +306,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
-            _media = new Media(vlc, path, FromType.FromPath);
+            _media = new Media(vlc!, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
+            }
             RestackOnVideoStart();
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
@@ -725,6 +743,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 PlayPop();
                 Scheduler.NoteHit();
                 foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
+                _fadingTargets.Add(t);
                 t.FadeOut();
                 ReleaseToyBatches();
                 Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
@@ -734,12 +753,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 EnsureAttentionWindow(x);
                 var t = new Target(x.Layer, text, Math.Max(40, s.AttentionSize), elapsed + s.AttentionLifespan, _random);
                 t.OnHit = () => Hit(t);   // gaze and pointer share the one batch catch
-                t.OnRemoved = () => SyncAttentionRegion(x);
+                t.OnRemoved = () =>
+                {
+                    _fadingTargets.Remove(t);
+                    SyncAttentionRegion(x);
+                    if (x.AttentionWindow == null && x.Layer.Children.Count == 0) RestackGameAndTargets();
+                };
                 t.Root.PointerPressed += (_, e) => { e.Handled = true; t.Hit(); };
                 batch.Add(t);
                 _targets.Add(t);
                 SyncAttentionRegion(x);
-                if (x.AttentionWindow is { } w) RaiseAttentionWindow(w);
+                RaiseAttentionWindow(x.AttentionWindow ?? x.Window);
             }
             var binding = AttentionToyButtonBinding.Arm(CoreHaptics.Service,
                 () => batch.Any(t => _targets.Contains(t)),
@@ -763,7 +787,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             private readonly Canvas _layer;
             internal Action? OnHit;
             internal Action? OnRemoved;
-            private bool _hit;
+            private bool _hit, _detached;
+            private IDisposable? _fadeTimer;
+            internal void Detach()
+            {
+                _detached = true;
+                _fadeTimer?.Dispose();
+                _fadeTimer = null;
+                OnHit = OnRemoved = null;
+            }
             internal void Hit() { if (_hit || !_layer.Children.Contains(Root)) return; _hit = true; OnHit?.Invoke(); }
             internal Rect GazeBounds
             {
@@ -843,7 +875,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             private void Place() { Canvas.SetLeft(Root, _x); Canvas.SetTop(Root, _y); }
 
-            public void Remove() { _layer.Children.Remove(Root); OnRemoved?.Invoke(); }
+            public void Remove() { if (_detached) return; _layer.Children.Remove(Root); OnRemoved?.Invoke(); }
 
             /// <summary>WPF: the caught target fades out over 300 ms.</summary>
             public void FadeOut()
@@ -854,7 +886,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(300) },
                 };
                 Root.Opacity = 0;
-                DispatcherTimer.RunOnce(Remove, TimeSpan.FromMilliseconds(320));
+                _fadeTimer = DispatcherTimer.RunOnce(Remove, TimeSpan.FromMilliseconds(320));
             }
         }
 
@@ -972,7 +1004,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _guard?.Stop();
                 _graceTimer = _guard = null;
                 _spawnTimes.Clear();
+                foreach (var t in _targets) t.Detach();
+                foreach (var t in _fadingTargets) t.Detach();
                 _targets.Clear();
+                _fadingTargets.Clear();
                 ReleaseToyBatches();
                 // Stop joins the decoder thread, so after it no callback touches the frame buffer.
                 if (_player != null)
