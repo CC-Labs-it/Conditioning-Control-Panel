@@ -553,7 +553,7 @@ public sealed class LauncherWindowTests
         Assert.False(w.FindControl<Button>("SignInPill")!.IsVisible);
         Assert.Equal("bambi", Text(w, "AccountName"));
         Assert.Equal("B", Text(w, "AvatarInitial"));
-        Assert.True(w.FindControl<StackPanel>("SpChip")!.IsVisible);
+        Assert.True(w.FindControl<Border>("SpChip")!.IsVisible);
         Assert.Equal(1234.ToString("N0"), Text(w, "SpReadout"));
         Assert.False(w.FindControl<Image>("TierBadge")!.IsVisible);   // no Patreon tier here
 
@@ -561,7 +561,29 @@ public sealed class LauncherWindowTests
         w.RefreshAccount();
         Assert.False(w.FindControl<Button>("AccountChipButton")!.IsVisible);
         Assert.True(w.FindControl<Button>("SignInPill")!.IsVisible);
-        Assert.False(w.FindControl<StackPanel>("SpChip")!.IsVisible);
+        Assert.False(w.FindControl<Border>("SpChip")!.IsVisible);
+    });
+
+    [Fact]
+    public void WalletChip_TracksBalanceAndSignIn() => Run(shell =>
+    {
+        CoreAccount.IsLoggedInProvider = () => false;
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        var chip = w.FindControl<Border>("SpChip")!;
+        Assert.False(chip.IsVisible);
+        CoreSettings.Current.SkillPoints = 1234;
+        CoreAccount.IsLoggedInProvider = () => true;
+        w.RefreshAccount();
+        Assert.True(chip.IsVisible);
+        Assert.Equal(1234.ToString("N0"), Text(w, "SpReadout"));
+        CoreSettings.Current.SkillPoints = 5678;
+        w.RefreshAccount();
+        Assert.Equal(5678.ToString("N0"), Text(w, "SpReadout"));
+        CoreAccount.IsLoggedInProvider = () => false;
+        w.RefreshAccount();
+        Assert.False(chip.IsVisible);
     });
 
     [Fact]
