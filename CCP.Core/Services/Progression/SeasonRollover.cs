@@ -8,7 +8,8 @@ namespace ConditioningControlPanel.Services;
 public static class SeasonRollover
 {
     /// <summary>WPF MainWindow.Marquee:270: silent monthly bookkeeping for a confirmed server key.</summary>
-    public static bool UpdateBookkeeping(AppSettings s, Func<SeasonRecapSnapshot, bool>? save = null)
+    public static bool UpdateBookkeeping(AppSettings s, Func<SeasonRecapSnapshot, bool>? save = null,
+        string? handle = null, bool isSupporter = false, long lifetimePointsSpent = 0, int fallbackPercentile = 0)
     {
         var month = s.CurrentSeason;
         if (string.IsNullOrWhiteSpace(month) || !ProfileAdopt.LooksLikeMonthKey(month)) return false;
@@ -17,7 +18,7 @@ public static class SeasonRollover
             if (string.IsNullOrEmpty(s.SeasonStatsSeason)) s.SeasonStatsSeason = month;
             else
             {
-                CaptureAndRollover(s, month, save);
+                CaptureAndRollover(s, month, save, handle, isSupporter, lifetimePointsSpent, fallbackPercentile);
                 // A failed snapshot save must leave the rollover eligible for retry.
                 if (string.CompareOrdinal(s.SeasonStatsSeason, month) < 0) return false;
             }
@@ -29,7 +30,8 @@ public static class SeasonRollover
     }
 
     public static SeasonRecapSnapshot? CaptureAndRollover(AppSettings s, string? serverSeason,
-        Func<SeasonRecapSnapshot, bool>? save = null)
+        Func<SeasonRecapSnapshot, bool>? save = null, string? handle = null, bool isSupporter = false,
+        long lifetimePointsSpent = 0, int fallbackPercentile = 0)
     {
         if (string.IsNullOrWhiteSpace(serverSeason) || !ProfileAdopt.LooksLikeMonthKey(serverSeason)
             || !string.Equals(s.CurrentSeason, serverSeason, StringComparison.Ordinal)) return null;
@@ -37,18 +39,20 @@ public static class SeasonRollover
             ? SeasonNumbering.Previous(serverSeason) : s.SeasonStatsSeason;
         if (!ProfileAdopt.LooksLikeMonthKey(ended) || string.CompareOrdinal(serverSeason, ended) <= 0) return null;
 
+        var percentile = EnhancementAnalytics.PercentileFor(s.SeasonPeakRank, s.SeasonPeakRankTotal);
         var snap = new SeasonRecapSnapshot
         {
-            SeasonKey = ended, CapturedAtUtc = DateTime.UtcNow,
+            SeasonKey = ended, CapturedAtUtc = DateTime.UtcNow, Handle = handle ?? "you",
             SeasonMinutes = s.SeasonConditioningMinutes, AllTimeMinutes = s.TotalConditioningMinutes,
             SessionCount = s.SeasonSessionsStarted, PeakRank = s.SeasonPeakRank,
             PeakRankTotal = s.SeasonPeakRankTotal,
-            Percentile = EnhancementAnalytics.PercentileFor(s.SeasonPeakRank, s.SeasonPeakRankTotal),
+            Percentile = percentile == 0 ? fallbackPercentile : percentile,
             DaysActive = s.SeasonActiveDays.Count, SeasonLengthDays = SeasonNumbering.LengthDays(ended),
             LongestStreak = s.SeasonPeakStreak, HighestLevelEver = s.HighestLevelEver,
-            IsOg = s.IsSeason0Og, FeatureUse = new Dictionary<string, int>(s.SeasonFeatureUse),
+            IsSupporter = isSupporter, IsOg = s.IsSeason0Og, FeatureUse = new Dictionary<string, int>(s.SeasonFeatureUse),
             FeaturesTotal = SeasonFeatureKeys.TotalCount, PeakLevel = Math.Max(s.SeasonPeakLevel, s.PlayerLevel),
-            PointsSpentSeason = s.SeasonPointsSpent, SkillsOwned = s.UnlockedSkills?.Count ?? 0,
+            PointsSpentSeason = s.SeasonPointsSpent, LifetimePointsSpent = lifetimePointsSpent,
+            SkillsOwned = s.UnlockedSkills?.Count ?? 0,
             ActiveDays = new List<string>(s.SeasonActiveDays)
         };
         bool meaningful = snap.SeasonMinutes > 0 || snap.SessionCount > 0 || snap.FeatureUse.Count > 0

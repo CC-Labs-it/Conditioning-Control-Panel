@@ -51,6 +51,59 @@ public sealed class FirstRunGateDeadClickTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task StartupPersistsHeadValuesInTheRollover() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        var achievementProperty = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldAchievements = achievementProperty.GetValue(null);
+        var path = System.IO.Path.Combine(CorePaths.UserData, "season-recaps", "2098-07.json");
+        CoreSettings.ServiceProvider = () => service;
+        MainShellWindow? shell = null;
+        try
+        {
+            var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(CorePaths.UserData, "recap-test-achievements.json")));
+            engine.Progress.LifetimeSkillPointsSpent = 12345;
+            achievementProperty.SetValue(null, engine);
+            CoreAccount.DisplayNameProvider = () => "Tester";
+            CoreAccount.HasPremiumAccessProvider = () => true;
+            MainShellWindow.NoteLeaderboardPage(new LeaderboardPage<LeaderboardEntryData> { YourRank = 17, YourTotal = 100 });
+            service.Current.Welcomed = true;
+            service.Current.HasAcceptedAgeVerification = true;
+            service.Current.CurrentSeason = "2098-08";
+            service.Current.LastSeasonResetSeen = "2098-07";
+            service.Current.SeasonStatsSeason = "2098-07";
+            service.Current.SeasonSessionsStarted = 3;
+            shell = new MainShellWindow();
+            var saved = SeasonRecapStore.Load("2098-07");
+            Assert.NotNull(saved);
+            Assert.Multiple(
+                () => Assert.Equal("Tester", saved.Handle),
+                () => Assert.True(saved.IsSupporter),
+                () => Assert.Equal(12345, saved.LifetimePointsSpent),
+                () => Assert.Equal(17, saved.Percentile),
+                () => Assert.Equal(3, saved.SessionCount),
+                () => Assert.Equal(0, service.Current.SeasonSessionsStarted));
+            Assert.Empty(shell.OwnedWindows);
+        }
+        finally
+        {
+            shell?.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = null;
+            achievementProperty.SetValue(null, oldAchievements);
+            MainShellWindow.NoteLeaderboardPage(new LeaderboardPage<LeaderboardEntryData>());
+            System.IO.File.Delete(path);
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

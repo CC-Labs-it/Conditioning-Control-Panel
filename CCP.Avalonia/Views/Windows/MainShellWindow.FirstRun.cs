@@ -52,7 +52,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.Marquee.cs:290 catches bookkeeping errors independently.
             try
             {
-                if (CoreSettings.Service != null && Services.SeasonRollover.UpdateBookkeeping(CoreSettings.Current))
+                if (CoreSettings.Service != null && Services.SeasonRollover.UpdateBookkeeping(CoreSettings.Current,
+                    handle: CoreAccount.DisplayName, isSupporter: CoreAccount.HasPremiumAccess,
+                    lifetimePointsSpent: App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0,
+                    fallbackPercentile: _lbPercentile))
                     CoreSettings.Save();
             }
             catch (Exception ex) { Log.Warning(ex, "Failed to update monthly bookkeeping"); }
