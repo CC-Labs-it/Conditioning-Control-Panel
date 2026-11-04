@@ -123,7 +123,6 @@ internal sealed class KeywordAudioRuntime
     private Action? _stop;
     private long? _duckGeneration;
     private readonly System.Collections.Generic.HashSet<object> _ducks = new();
-    private Action? _releaseVoice;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
@@ -234,7 +233,6 @@ internal sealed class KeywordAudioRuntime
         ++_voiceGeneration;
         var stop = _stop; _stop = null;
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
-        var release = _releaseVoice; _releaseVoice = null; release?.Invoke();
     }
 
     private async Task<bool> Play(PlayAudioAction audio)
@@ -267,14 +265,20 @@ internal sealed class KeywordAudioRuntime
                 StopCurrentAudio();
                 var generation = ++_voiceGeneration;
                 var last = i == count - 1;
-                _releaseVoice = last ? Release : null;
+                int scheduled = 0;
+                void FinishAfter(int ms)
+                {
+                    if (!last || Interlocked.Exchange(ref scheduled, 1) != 0) return;
+                    Dispatcher.UIThread.Post(async () =>
+                    {
+                        try { await Delay(ms, token); if (!token.IsCancellationRequested && generation == _voiceGeneration) StopCurrentAudio(); Release(); }
+                        catch (OperationCanceledException) { }
+                    });
+                }
                 _stop = CoreAudio.PlayStoppable(path,
                     KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
-                    onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
-                    {
-                        try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _voiceGeneration) StopCurrentAudio(); else Release(); }
-                        catch (OperationCanceledException) { }
-                    }); });
+                    onStarted: duration => { if (duration > TimeSpan.Zero) FinishAfter((int)Math.Clamp(duration.TotalMilliseconds + 500, 500, int.MaxValue)); },
+                    onFinished: () => FinishAfter(500));
             }
             return true;
         }
