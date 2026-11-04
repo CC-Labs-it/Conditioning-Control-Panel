@@ -187,8 +187,18 @@ public sealed class ProgramTodayCardTests
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            // A forced timer tick only requests composition; wait for the window's frame callback
+            // before reading the nudge, keeping the stepped clock fixed during the wait.
+            bool frameDelivered = false;
+            shell.RequestAnimationFrame(_ => frameDelivered = true);
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (!frameDelivered)
+            {
+                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the banner frame was not delivered");
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                System.Threading.Thread.Yield();
+            }
             return ((TranslateTransform)art.RenderTransform!).X;
         }
         var p = 0.13 / 0.26;

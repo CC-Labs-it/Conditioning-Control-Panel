@@ -21,14 +21,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///
     /// <para>Mapping: WPF's DoubleAnimations become one 16 ms follow tick that reads every dot
     /// from Core (P82: no Animation on a Transform), so nothing ticks while hidden (P01).
-    /// <c>GetCursorPos</c> becomes <see cref="X11Pointer"/> (physical pixels; <c>Position</c> is
+    /// <c>GetCursorPos</c> goes through <see cref="X11Pointer"/> on Windows and X11 (physical pixels; <c>Position</c> is
     /// physical too, only the offset is divided by scaling). <c>WS_EX_TRANSPARENT</c> becomes
     /// <see cref="X11Overlay.SetClickThrough"/>; a platform that refuses click-through or
     /// per-pixel transparency gets no trail rather than a full-screen block (PinkFilterOverlay.Accept).</para>
     ///
     /// <para>ponytail: nothing calls <see cref="Start"/> yet - the VibePopping vibe window (WPF
-    /// ChaosModeService.cs:2709/:2946) and EnsureCreated at run start (:455) need the bubble field,
-    /// which <see cref="ChaosRunHost"/> does not have. Teardown and panic already close it.</para>
+    /// ChaosModeService.cs:2706/:2943) and EnsureCreated at run start (:455) are not wired. The
+    /// bubble field exists but does not yet implement the vibe sweep. Teardown and panic close it.</para>
     /// </summary>
     internal sealed class ChaosVibeTrailOverlay : Window
     {
