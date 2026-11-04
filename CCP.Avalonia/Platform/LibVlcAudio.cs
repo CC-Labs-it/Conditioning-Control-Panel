@@ -402,6 +402,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal void Drain() => _duckWork.Wait(2000);
 
+        // Tests can await the actual queue rather than treating shutdown's bounded wait as completion.
+        internal Task DrainAsync() { lock (_duckLock) return _duckWork; }
+
         internal bool IsDucked { get { lock (_duckLock) return _isDucked; } }
 
         private void Enqueue(Action work) => _duckWork = _duckWork.ContinueWith(_ =>
