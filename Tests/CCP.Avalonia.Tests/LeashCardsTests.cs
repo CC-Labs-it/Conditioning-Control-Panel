@@ -45,6 +45,7 @@ public sealed class LeashCardsTests
         public event Action<LeashEvent>? EventArrived { add { } remove { } }
         public Punishment? GateDue => null;
         public void Push(MyLeash? me, params HeldLeash[] held) { Snapshot = new(me, held, Array.Empty<LeashOffer>()); SnapshotChanged?.Invoke(Snapshot); }
+        public void PushOffers(params LeashOffer[] offers) { Snapshot = new(null, Array.Empty<HeldLeash>(), offers); SnapshotChanged?.Invoke(Snapshot); }
         public void Receipts() => ReceiptsChanged?.Invoke();
         public void NoteShown(string? id) { if (id != null) Seen.Add(id); }
         public IReadOnlyList<LeashSentItem> SentTo(string id) => new[] { new LeashSentItem("l1", LeashItemKind.Tug, id, null, LeashStep.Seen, Now, Now) };
@@ -66,7 +67,7 @@ public sealed class LeashCardsTests
     }
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current == null) AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+        if (Application.Current == null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
             .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         body();
     });
@@ -111,6 +112,49 @@ public sealed class LeashCardsTests
         Assert.NotNull(Find<TextBlock>(snap, "leash-snap-title"));
         Assert.Equal(6, Find<Canvas>(snap, "leash-snap-chain").Children.Count);
         Click(snap, "leash-snap-ok"); Assert.Null(card.SnapWindow);
+    });
+
+    [Fact]
+    public void ReorderedOfferResumesItsReadClock() => Run(() =>
+    {
+        var svc = new Service();
+        var a = new LeashOffer(Person, Now, Now.AddDays(1));
+        var b = new LeashOffer(new LeashPerson("other", "Other", null), Now, Now.AddDays(1));
+        svc.PushOffers(a, b);
+        var page = new LeashTabView(() => svc);
+        var window = new Window { Width = 600, Height = 700, Content = page };
+        using var cleanup = new WindowCleanup(window);
+        page.OnShown();
+        var card = Find<LeashOfferCard>(page, "leash-offer-row:other");
+        Click(card, "leash-offer-look");
+        Assert.True(card.ReadClockRunning);
+        svc.PushOffers(b, a); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        Assert.Same(card, Find<LeashOfferCard>(page, "leash-offer-row:other"));
+        Assert.True(card.ReadClockRunning);
+        for (int i = 0; i < 25; i++) card.AdvanceReadClock();
+        Assert.True(Find<Button>(card, "leash-ask-yes").IsEnabled);
+    });
+
+    [Fact]
+    public void ReadClockPausesWhenExplanationScrollsOutOfView() => Run(() =>
+    {
+        var svc = new Service();
+        var card = new LeashOfferCard(new LeashOffer(Person, Now, Now.AddDays(1)), () => svc);
+        var content = new StackPanel { Children = { card, new Border { Height = 700 } } };
+        var scroll = new ScrollViewer { Height = 450, Content = content };
+        var window = new Window { Width = 440, Height = 500, Content = scroll };
+        using var cleanup = new WindowCleanup(window);
+        Click(card, "leash-offer-look"); window.UpdateLayout();
+        scroll.Height = 180; window.UpdateLayout();
+        for (int i = 0; i < 25; i++) card.AdvanceReadClock();
+        Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
+        scroll.Height = 450; window.UpdateLayout();
+        scroll.Offset = new Vector(0, 600); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        for (int i = 0; i < 25; i++) card.AdvanceReadClock();
+        Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
+        scroll.Offset = default; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        for (int i = 0; i < 25; i++) card.AdvanceReadClock();
+        Assert.True(Find<Button>(card, "leash-ask-yes").IsEnabled);
     });
 
     [Fact]

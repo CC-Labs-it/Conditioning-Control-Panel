@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Action<MainShellWindow>? PresentLeashGateProvider;
 
         private LeashGateCard? _leashGate;
+        internal LeashOfferSurfaces? OfferSurfaces { get; private set; }
         private DateTime _leashSnoozeUntilUtc = DateTime.MinValue;
         private bool _leashHidBrowser;
         private ILeashTaskRunner? _leashRunner;
@@ -79,6 +80,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _leashGate.CutRequested += () => _ = CutLeashAsync();
                 _leashGate.LaterRequested += () => { _leashUnplayablePid = null; HideLeashGate(); };
 
+                OfferSurfaces = new LeashOfferSurfaces(() => IsVisible && WindowState != WindowState.Minimized ? this :
+                    LauncherWindow.Instance is { IsVisible: true, WindowState: not WindowState.Minimized } launcher ? launcher : null);
+                OfferSurfaces.Rebind();
+                Closed += (_, _) => OfferSurfaces.Dispose();
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
                 timer.Tick += (_, _) => CheckLeashGate();
                 timer.Start();
@@ -91,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                OfferSurfaces?.Rebind();
                 var svc = LeashHead.Service;
                 BindLeashRunner();
                 GuardLeashRunner(svc);

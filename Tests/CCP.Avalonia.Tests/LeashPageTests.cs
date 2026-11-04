@@ -53,10 +53,11 @@ public sealed class LeashPageTests
     private sealed class Wire : ILeashApi
     {
         public readonly List<(string Op, JObject Body)> Calls = new();
+        public string AnswerStatus = "declined";
         public Task<JObject?> CallAsync(string op, JObject body, CancellationToken ct = default)
         {
             Calls.Add((op, (JObject)body.DeepClone()));
-            return Task.FromResult<JObject?>(new JObject { ["ok"] = true, ["status"] = op == "answer" ? "declined" : null });
+            return Task.FromResult<JObject?>(new JObject { ["ok"] = true, ["status"] = op == "answer" ? AnswerStatus : null });
         }
     }
 
@@ -117,6 +118,41 @@ public sealed class LeashPageTests
             Assert.Single(seen);
             shell.ShowTab("leash"); Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { id, "0123456789abcdef" }, seen);
+        });
+
+    [Fact]
+    public void OffersQueueWhileHiddenAndOpenOverAnotherTabWhenTheShellReturns() =>
+        Run(false, (shell, _, _) =>
+        {
+            var seen = new List<string>(); var wire = new Wire();
+            var service = new LeashService(wire, () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
+            LeashHead.Service = service; shell.CheckLeashGate();
+            shell.Hide();
+            var at = DateTimeOffset.UtcNow.ToString("o");
+            var block = new JObject { ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+                ["offers"] = new JArray {
+                    new JObject { ["id"] = "abcdef0123456789", ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = at },
+                    new JObject { ["id"] = "0123456789abcdef", ["from"] = new JObject { ["id"] = "u_b", ["name"] = "B" }, ["at"] = at } } };
+            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(seen); Assert.Null(shell.OfferSurfaces!.AskWindow);
+            shell.Show(); shell.ShowTab("friends"); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+            var first = Assert.IsType<Window>(shell.OfferSurfaces.AskWindow);
+            Assert.Equal("leash-auto-ask", first.Tag); Assert.Equal(new[] { "abcdef0123456789" }, seen);
+            first.UpdateLayout();
+            var card = first.GetLogicalDescendants().OfType<LeashOfferCard>().Single();
+            for (int i = 0; i < 25; i++) card.AdvanceReadClock();
+            wire.AnswerStatus = "on";
+            LeashGateCardTests.Click(Find(first, "leash-ask-yes"));
+            var snap = Assert.IsType<Window>(shell.OfferSurfaces.AskWindow);
+            Assert.Equal("leash-snap", snap.Tag); Assert.Single(seen);
+            LeashGateCardTests.Click(Find(snap, "leash-snap-ok"));
+            var second = Assert.IsType<Window>(shell.OfferSurfaces.AskWindow);
+            Assert.NotSame(first, second); Assert.Equal(new[] { "abcdef0123456789", "0123456789abcdef" }, seen);
+            second.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            block["offers"] = new JArray(((JArray)block["offers"]!).Reverse().Select(o => o.DeepClone()));
+            service.ApplyBlock(block); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+            Assert.Null(shell.OfferSurfaces.AskWindow); Assert.Equal(2, seen.Count);
         });
 
     private sealed class Runner : ILeashTaskRunner

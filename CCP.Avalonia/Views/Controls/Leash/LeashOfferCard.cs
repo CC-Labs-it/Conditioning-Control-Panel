@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Leash;
@@ -30,12 +31,15 @@ public sealed class LeashOfferCard : Border
     private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap, Tag = "leash-ask-error" };
     private readonly StackPanel _levels = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
     private readonly Border _guide = new();
+    private readonly StackPanel _intro = new() { Spacing = 6, Tag = "leash-ask-intro" };
     private readonly WrapPanel _allowed = new();
     private DispatcherTimer? _readTimer;
     private TimeSpan _readTime;
     private LeashIntensity _level = LeashIntensity.Standard;
     private bool _ready, _busy, _gone;
     internal Window? SnapWindow { get; private set; }
+    internal bool ReadClockRunning => _readTimer?.IsEnabled == true;
+    internal event Action? AskClosed;
 
     internal LeashOfferCard() : this(new LeashOffer(new LeashPerson("sample", "Juno", null), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1)), () => null) { }
 
@@ -54,13 +58,14 @@ public sealed class LeashOfferCard : Border
         var dismiss = new Button { Content = Loc.Get("btn_close"), Tag = "leash-ask-dismiss", HorizontalAlignment = HorizontalAlignment.Right };
         dismiss.Click += (_, _) => { if (!_busy) Dismiss(); };
         _ask.Children.Add(dismiss);
-        var intro = new UniformGrid { Columns = 2, Tag = "leash-ask-intro" };
+        var panels = new UniformGrid { Columns = 2 };
         foreach (var key in new[] { "leash_explain_step1_leashed", "leash_explain_step2_leashed", "leash_explain_step3_leashed", "leash_explain_step4_leashed" })
-            intro.Children.Add(new Border { Margin = new Thickness(3), Padding = new Thickness(8), CornerRadius = new CornerRadius(8), Background = F.Raised,
+            panels.Children.Add(new Border { Margin = new Thickness(3), Padding = new Thickness(8), CornerRadius = new CornerRadius(8), Background = F.Raised,
                 Child = new TextBlock { Text = Loc.Get(key), TextWrapping = TextWrapping.Wrap } });
-        _ask.Children.Add(intro);
+        _intro.Children.Add(panels);
         foreach (var key in new[] { "leash_ask_p_sees", "leash_ask_p_rewards", "leash_ask_p_tasks", "leash_ask_p_cut", "leash_ask_b_level", "leash_ask_b_quiet" })
-            _ask.Children.Add(new TextBlock { Text = Loc.Get(key), TextWrapping = TextWrapping.Wrap });
+            _intro.Children.Add(new TextBlock { Text = Loc.Get(key), TextWrapping = TextWrapping.Wrap });
+        _ask.Children.Add(_intro);
         _ask.Children.Add(new TextBlock { Text = Loc.Get("leash_ask_level") });
         _ask.Children.Add(_levels); _ask.Children.Add(_guide); _ask.Children.Add(_allowed);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _no, _yes } };
@@ -69,10 +74,11 @@ public sealed class LeashOfferCard : Border
         _yes.Click += async (_, _) => await AnswerAsync(true);
         KeyDown += (_, e) => { if (e.Key == Key.Escape && _ask.IsVisible && !_busy) { Dismiss(); e.Handled = true; } };
         DetachedFromVisualTree += (_, _) => { _readTimer?.Stop(); _readTimer = null; };
+        AttachedToVisualTree += (_, _) => StartReadClock();
         PaintLevel();
     }
 
-    private void OpenAsk()
+    internal void OpenAsk()
     {
         _ask.IsVisible = true; _look.IsVisible = false; _error.Text = ""; _gone = false;
         _readTime = TimeSpan.Zero;
@@ -80,18 +86,34 @@ public sealed class LeashOfferCard : Border
         _yes.IsEnabled = _ready;
         ToolTip.SetTip(_yes, _ready ? null : Loc.Get("leash_explain_read_first"));
         _readTimer?.Stop();
-        if (!_ready)
+        StartReadClock();
+    }
+
+    private void StartReadClock()
+    {
+        if (_ready || !_ask.IsVisible || _readTimer != null) return;
+        _readTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _readTimer.Tick += (_, _) => AdvanceReadClock();
+        _readTimer.Start();
+    }
+
+    // Count only while the explanation fits inside every clipping viewport.
+    private bool IntroOnScreen()
+    {
+        if (!_intro.IsEffectivelyVisible || _intro.Bounds.Width <= 0 || _intro.Bounds.Height <= 0) return false;
+        foreach (var ancestor in _intro.GetVisualAncestors())
         {
-            _readTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
-            _readTimer.Tick += (_, _) => AdvanceReadClock();
-            _readTimer.Start();
+            if (!ancestor.ClipToBounds && ancestor is not Window) continue;
+            if (_intro.TranslatePoint(default, ancestor) is not { } p || p.X < -0.5 || p.Y < -0.5 ||
+                p.X + _intro.Bounds.Width > ancestor.Bounds.Width + 0.5 || p.Y + _intro.Bounds.Height > ancestor.Bounds.Height + 0.5) return false;
         }
+        return true;
     }
 
     // WPF LeashExplainCard.StartReadClock counts only time the explanation is visible.
     internal void AdvanceReadClock()
     {
-        if (!_ask.IsEffectivelyVisible || _ready) return;
+        if (!IntroOnScreen() || _ready) return;
         _readTime += TimeSpan.FromMilliseconds(100);
         if (!LeashIntroRule.PutItOnEnabled(false, _readTime)) return;
         _ready = true; _readTimer?.Stop(); _readTimer = null;
@@ -104,7 +126,9 @@ public sealed class LeashOfferCard : Border
     private void Dismiss()
     {
         _readTimer?.Stop(); _readTimer = null;
+        var wasOpen = _ask.IsVisible;
         _ask.IsVisible = false; _look.IsVisible = true;
+        if (wasOpen) AskClosed?.Invoke();
     }
 
     private void PaintLevel()
@@ -130,6 +154,7 @@ public sealed class LeashOfferCard : Border
         if (_gone) { Dismiss(); return; }
         _busy = true; _yes.IsEnabled = false; _no.IsEnabled = false;
         var owner = TopLevel.GetTopLevel(this) as Window;
+        if (owner?.Tag as string == "leash-auto-ask") owner = owner.Owner as Window;
         var result = LeashAnswerResult.Failed;
         try { if (_service() is { } s) result = await s.AnswerAsync(_offer.From.Id, accept, _level); } catch { }
         _busy = false; _no.IsEnabled = true;
@@ -139,6 +164,7 @@ public sealed class LeashOfferCard : Border
             if (LeashIntroRule.Record(CoreSettings.Service?.Current, LeashIntroMoment.AskAnswered)) CoreSettings.Save();
             _ask.IsVisible = false; IsVisible = false;
             if (accept) ShowSnap(owner);
+            AskClosed?.Invoke();
             return;
         }
         _gone = result == LeashAnswerResult.Gone;
