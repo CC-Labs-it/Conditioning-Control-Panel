@@ -97,7 +97,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Width = 1280;
             Height = 800;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            Content = Web;
+            if (spec.Id == JustDropId) BuildJustDropChrome();
+            else Content = Web;
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
@@ -131,6 +132,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF ChaosWebViewHost.OnWebMessage's same-document guard.</summary>
         private void OnPageMessage(string json)
         {
+            // Escape only leaves host fullscreen, including before the page finishes loading.
+            if (Spec.Id == JustDropId && IsJustDropEscape(json)) { LeaveJustDropFullscreen(); return; }
             if (PageUrl == null || Web.CurrentUrl == null || !SameOrigin(Web.CurrentUrl, PageUrl)) return;
             HandleMessage(json);
         }

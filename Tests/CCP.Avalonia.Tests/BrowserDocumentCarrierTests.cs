@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using Xunit;
@@ -61,6 +62,44 @@ public sealed class BrowserDocumentCarrierTests
         host.NewScrolllerEngine()(true);
         Assert.True(host.ScrolllerGate);
         Assert.Equal(0, calls);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FullscreenHostBlocksEarlyNavigation() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var host = new WebHost { InjectCarrier = true, ConfinePageFullscreen = true };
+        var e = new WebViewNavigationStartingEventArgs { Request = new Uri("http://127.0.0.1/") };
+        host.OnNavigationStarted(null, e);
+        Assert.True(e.Cancel);
+        var withoutCarrier = new WebHost { ConfinePageFullscreen = true, CarrierWindowsOverride = false };
+        withoutCarrier.NewScrolllerEngine()(true);
+        Assert.Null(withoutCarrier.ScrolllerGate);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FullscreenHostHoldsNavigationUntilNativeInstallSucceeds() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var host = new WebHost { InjectCarrier = true, ConfinePageFullscreen = true, CarrierWindowsOverride = false };
+        bool Cancelled()
+        {
+            var e = new WebViewNavigationStartingEventArgs { Request = new Uri("http://127.0.0.1/") };
+            host.OnNavigationStarted(null, e);
+            return e.Cancel;
+        }
+        host.NativeCarrierInvoker = _ => Task.FromResult(false);
+        host.NewScrolllerEngine()(true);
+        Assert.Null(host.ScrolllerGate);
+        Assert.True(Cancelled());
+        host.CarrierWindowsOverride = true; host.NewScrolllerEngine()(true);
+        Assert.True(host.ScrolllerGate); host.CarrierWindowsOverride = false;
+        host.NativeCarrierInvoker = _ => Task.FromResult(true);
+        host.NewScrolllerEngine()(true);
+        Assert.True(host.ScrolllerGate);
+        Assert.False(Cancelled());
         return Task.CompletedTask;
     });
 

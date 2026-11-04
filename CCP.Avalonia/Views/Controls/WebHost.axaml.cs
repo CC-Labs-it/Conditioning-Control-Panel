@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (url is null) return;
             CurrentUrl = url;
-            if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
+            if (InjectCarrier) _ = InvokeScriptAsync(DocumentStartScript);
             NavigationCompleted?.Invoke(url);
             NavigationFinished?.Invoke(url, success);
         }
@@ -190,6 +190,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Install the carrier before navigation where supported, with a completed-navigation fallback.
         /// Set before attaching the host or navigating.</summary>
         public bool InjectCarrier { get; set; }
+
+        // Optional host input alongside the carrier, installed before the first page script.
+        internal string? CarrierExtension { get; set; }
+        internal bool ConfinePageFullscreen { get; set; }
+        private string DocumentStartScript => CarrierShim + (CarrierExtension ?? "");
 
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
         /// event on <c>chrome.webview</c>. Every hosted page shares this one carrier script.</summary>
@@ -376,6 +381,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            // Hold early navigation while the engine and confinement are being prepared.
+            if (ConfinePageFullscreen && _scrolllerGate is null && target is not { IsAbsoluteUri: true, Scheme: "about" }) { e.Cancel = true; return; }
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
@@ -445,6 +452,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private bool _loadedOnThisEngine;
         private Task<bool>? _carrierInstall;
         internal Func<string, Task<bool>>? NativeCarrierInvoker { get; set; }
+        internal bool? CarrierWindowsOverride { get; set; }
 
         /// <summary>A new engine behind this view, or the old one gone (UI thread). Avalonia.Controls.WebView destroys
         /// the native control on every detach (nothing here calls BeginReparenting), so a view that is unloaded and
@@ -472,8 +480,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (InjectCarrier)
             {
                 _carrierInstall ??= InstallCarrierAsync();
-                await _carrierInstall;
+                if (!await _carrierInstall && ConfinePageFullscreen && !(CarrierWindowsOverride ?? OperatingSystem.IsWindows())) { Log.Warning("WebHost: fullscreen confinement unavailable"); return; }
             }
+            else if (ConfinePageFullscreen) return;
             if (engine != _scrolllerEngine || report != _gateReport) return;
             _scrolllerGate = gated;
             var src = Source;
@@ -490,8 +499,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             try
             {
-                return await (NativeCarrierInvoker?.Invoke(CarrierShim)
-                    ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), CarrierShim));
+                return await (NativeCarrierInvoker?.Invoke(DocumentStartScript)
+                    ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), DocumentStartScript, ConfinePageFullscreen));
             }
             catch (Exception ex) { Log.Debug("WebHost: carrier install failed: {E}", ex.Message); return false; }
         }
