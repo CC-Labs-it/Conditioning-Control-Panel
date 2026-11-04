@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Drone audio (WPF: two SignalGenerators; here one looping synthesised layer)
         /// <summary>Opens the looping drone file. Tests swap it; null when libvlc did not load.</summary>
         internal static Func<string, Platform.LayeredAudio.ILayerPlayer?> DroneOpener =
-            path => Platform.LibVlcAudio.Shared is { } vlc ? new Platform.LayeredAudio.VlcLayerPlayer(vlc, path, startMuted: true) : null;
+            path => Platform.LibVlcAudio.Shared is { } vlc ? new Platform.LayeredAudio.VlcLayerPlayer(vlc, path) : null;
         private Platform.LayeredAudio.ILayerPlayer? _drone;
         private float _droneTargetGain = 0.05f;
         private float _droneCurrentGain = 0.05f;

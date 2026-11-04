@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartSession: the engine start (through the portal wrapper, so the panic key is
-        /// bound first) and the runner start in one step - SessionRunner.Start starts CoreEngine itself.</summary>
+        /// bound first) before applying session settings.</summary>
         internal void StartSession(Session session)
         {
             var gen = ++_engineGen;
@@ -59,6 +59,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try
                 {
                     Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
+                    // WPF Presets.cs:1617-1625 starts the engine before applying session settings.
+                    if (!CoreEngine.IsRunning)
+                    {
+                        CoreEngine.Start();
+                        if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
+                    }
                     runner.Start(session);
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
