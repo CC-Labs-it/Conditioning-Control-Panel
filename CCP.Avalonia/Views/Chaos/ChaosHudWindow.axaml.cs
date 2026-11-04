@@ -65,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///  - <b>Settings.</b> The persisted edge (<c>ChaosHudOnRight</c>) and the panic-key hint
     ///    read and write <c>CoreSettings.Current</c>, one for one with the <c>App.Settings</c>
     ///    pair WPF used, so the side switch survives a restart again.
-    ///  - The X11 pointer probe supplies desktop coordinates for the collapse grace on Linux.
+    ///  - Win32 and X11 pointer probes supply desktop coordinates for the collapse grace.
     ///  - <c>SystemParameters.WorkArea</c> -> <c>Screens</c>; <c>Left</c>/<c>Top</c> ->
     ///    <c>Position</c> (physical pixels, so the DIP sizes are scaled by <c>screen.Scaling</c>).
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>IsMouseOver</c> -> <c>IsPointerOver</c>;
@@ -409,7 +409,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private DispatcherTimer? _collapseRecheck;
         private DispatcherTimer? _openDwell;
         private Point _lastPointer;
-        internal Func<PixelPoint?> ReadPointer = () => X11Pointer.Read()?.At;
+        internal Func<PixelPoint?> ReadPointer = () => OperatingSystem.IsWindows()
+            ? Win32Overlay.CursorPosition() : X11Pointer.Read()?.At;
 
         // Opening is intent-gated: a brush-past on the way to a bubble near the edge shouldn't fling
         // the panel open. Hovering the strip ARMS a ~1s dwell; it expands only if the cursor is still
@@ -460,6 +461,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void Hud_MouseLeave(object? sender, PointerEventArgs e)
         {
             _lastPointer = e.GetPosition(this);
+            ScheduleCollapseRecheck();
+        }
+
+        private void ScheduleCollapseRecheck()
+        {
             if (_pinnedOpen || !_expanded) return;
             double sinceOpen = (DateTime.UtcNow - _expandedAt).TotalMilliseconds;
             double wait = Math.Max(LEAVE_RECHECK_MS, EXPAND_GRACE_MS - sinceOpen);
