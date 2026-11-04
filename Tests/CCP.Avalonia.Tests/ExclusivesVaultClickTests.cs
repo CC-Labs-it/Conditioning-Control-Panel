@@ -123,4 +123,50 @@ public sealed class ExclusivesVaultClickTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task UnavailableCardClickDoesNotBurstOrScheduleAnOpen() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var old = (settings.MotionLevel, settings.PerformanceMode);
+        var shell = new MainShellWindow { Width = 1400, Height = 900 };
+        try
+        {
+            (settings.MotionLevel, settings.PerformanceMode) = (MotionLevel.Full, false);
+            shell.Show();
+            shell.ShowTab("premium");
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            var view = shell.Named<ExclusivesTabView>("ExclusivesTab")!;
+            var card = view.GetVisualDescendants().OfType<Control>().First(c => c.Name == "ExCard" &&
+                c.DataContext is ExclusiveCardRow row && row.Feature.Key == "backroom");
+            card.BringIntoView();
+            shell.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            var canvas = view.FindControl<AmbientFxCanvas>("ExclusivesAmbientFx")!;
+            Assert.True(AmbientFxCanvas.Env.AllowParticles);
+            Assert.Equal(0, canvas.BurstCount);
+            bool scheduled = false;
+            view.VaultClickDelay = (_, _) => scheduled = true;
+            var point = card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), shell)!.Value;
+            shell.MouseDown(point, MouseButton.Left);
+            shell.MouseUp(point, MouseButton.Left);
+            Assert.False(scheduled);
+            Assert.Equal(0, canvas.BurstCount);
+            Assert.Equal("premium", shell.CurrentTab);
+        }
+        finally
+        {
+            shell.Close();
+            (settings.MotionLevel, settings.PerformanceMode) = old;
+        }
+        return Task.CompletedTask;
+    });
+
 }
