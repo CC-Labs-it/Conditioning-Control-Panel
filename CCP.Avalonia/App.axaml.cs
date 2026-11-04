@@ -683,7 +683,11 @@ namespace ConditioningControlPanel.Avalonia
                     {
                         await Platform.AccountSeed.InitializeAsync();
                         await Platform.AccountSeed.ValidateRestoredSessionAsync();
-                        (desktop.MainWindow as Views.Windows.MainShellWindow)?.UpdateQuickLoginUI();
+                        if (desktop.MainWindow is Views.Windows.MainShellWindow readyShell)
+                        {
+                            readyShell.UpdateQuickLoginUI();
+                            Platform.KeywordTriggerHead.ReconcileEntitlement();
+                        }
                         await Platform.WelcomeBackOffer.TryOfferAsync("startup");
                     });
                 }
@@ -968,14 +972,15 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF MainWindow.xaml.cs:484 (the ? box rolled over or its override landed) and
                 // OnPatreonTierChanged: both move the veils, the Play bands and the lapse pass.
                 // WPF MainWindow.xaml.cs:486 / UpdatePatreonUI also repaint the vault (RefreshExclusivesTab).
-                void RepaintVeils() => Dispatcher.UIThread.Post(() =>
+                void RepaintVeils(bool tierChanged = false) => Dispatcher.UIThread.Post(() =>
                 {
                     shell.RefreshEntitlementVeils(persist: true);
+                    if (tierChanged) Platform.KeywordTriggerHead.ReconcileEntitlement();
                     shell.RefreshExclusivesTab();
                     shell.RefreshNavPremiumTags();
                     shell.RefreshProfileBubble();   // WPF OnPatreonTierChanged
                 });
-                dailyFree.TodayChanged += RepaintVeils;
+                dailyFree.TodayChanged += () => RepaintVeils();
                 // WPF NavPremiumTags.cs:118 / Lab.cs:435: a spent or refunded pass moves the star and the vault.
                 // Not RepaintVeils: that persists the lapse pass, and sign-in/out raises this at startup.
                 IntakePass.PassStateChanged += (_, _) => Dispatcher.UIThread.Post(() =>
@@ -983,8 +988,8 @@ namespace ConditioningControlPanel.Avalonia
                     shell.RefreshExclusivesTab();
                     shell.RefreshNavPremiumTags();
                 });
-                if (Platform.AccountSeed.Patreon is { } patreonSub) patreonSub.TierChanged += (_, _) => RepaintVeils();
-                if (Platform.AccountSeed.SubscribeStar is { } substarSub) substarSub.TierChanged += (_, _) => RepaintVeils();
+                if (Platform.AccountSeed.Patreon is { } patreonSub) patreonSub.TierChanged += (_, _) => RepaintVeils(true);
+                if (Platform.AccountSeed.SubscribeStar is { } substarSub) substarSub.TierChanged += (_, _) => RepaintVeils(true);
                 Views.Controls.Invites.InvitePanel.ArmExpiry(); // WPF MainWindow.Patreon.cs: a running invite week's end repaints
                 // OnLastWindowClose counts overlay windows too: closing the shell must take the
                 // desktop overlays and their schedules down, or the process lives on UI-less.

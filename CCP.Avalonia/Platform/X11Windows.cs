@@ -38,11 +38,21 @@ internal static class X11Windows
     private static bool _failed;
 
     /// <summary>Normalised process name owning the active window, or "" (no X, no EWMH, or Wayland-native).</summary>
-    internal static string ForegroundProcess()
+    internal static string ForegroundProcess() => Foreground().Process ?? "";
+
+    internal static (string? Process, bool Own) Foreground()
     {
-        if (!Connect()) return "";
+        if (!Connect()) return (null, false);
         var w = Read(_root, _active, 1);
-        return w.Count == 0 || w[0] == 0 ? "" : NameOf(w[0]);
+        if (w.Count == 0 || w[0] == 0) return (null, false);
+        var pid = Read(w[0], _pid, 1);
+        if (pid.Count == 0 || pid[0] == 0) return (null, false);
+        try
+        {
+            using var p = Process.GetProcessById((int)pid[0]);
+            return (DndProcessList.Normalize(p.ProcessName), pid[0] == (uint)Environment.ProcessId);
+        }
+        catch { return (null, false); }
     }
 
     /// <summary>Process names of every managed top-level window, de-duplicated, sorted, without

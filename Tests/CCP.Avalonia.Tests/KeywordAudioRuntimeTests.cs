@@ -29,7 +29,7 @@ public sealed class KeywordAudioRuntimeTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
-            s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
+            s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume, s.KeywordBufferTimeoutMs,
             CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
@@ -52,12 +52,50 @@ public sealed class KeywordAudioRuntimeTests
         {
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
-                s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
+                s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume, s.KeywordBufferTimeoutMs,
                 CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
         }
     });
 
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
+
+    [Fact]
+    public void LapseTestRestoresCooldownsBeforeAwarenessTest()
+    {
+        var field = typeof(KeywordAudioRuntime).GetField("_cooldowns", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var runtime = KeywordTriggerHead.Engine; var old = field.GetValue(runtime); var cooldowns = new ConditioningControlPanel.Services.KeywordCooldowns();
+        cooldowns.Mute("preserved", 1000, DateTime.MinValue); field.SetValue(runtime, cooldowns);
+        try
+        {
+            EntitlementLapseStopsActiveClipAndClearsInput();
+            Assert.Equal(DateTime.MinValue, cooldowns.LastGlobal); Assert.True(cooldowns.IsMuted("preserved", DateTime.MinValue));
+            Assert.False(cooldowns.IsMuted("sit", DateTime.MinValue)); AwarenessSwitchStartsRuntimeAndPanicCutsOnlyTheClip();
+        }
+        finally { field.SetValue(runtime, old); }
+    }
+
+    [Fact]
+    public void EntitlementLapseStopsActiveClipAndClearsInput() => Run((_, s, played) =>
+    {
+        var shell = new MainShellWindow();
+        var runtime = KeywordTriggerHead.Engine; var oldNow = runtime.Now; var now = new DateTime(2026, 10, 14, 12, 0, 0);
+        var cooldownField = typeof(KeywordAudioRuntime).GetField("_cooldowns", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var oldCooldowns = cooldownField.GetValue(runtime);
+        try
+        {
+            cooldownField.SetValue(runtime, new ConditioningControlPanel.Services.KeywordCooldowns());
+            runtime.Now = () => now; s.KeywordBufferTimeoutMs = 3000; s.AwarenessLoopProtectionEnabled = false;
+            KeywordTriggerHead.Start(); Type(KeywordTriggerHead.Engine, "sit");
+            Assert.Single(played); Type(KeywordTriggerHead.Engine, "s");
+            CoreEntitlement.HasPremiumProvider = () => false; shell.RefreshEntitlementVeils();
+            Assert.False(s.KeywordTriggersEnabled); Assert.False(KeywordTriggerHead.Engine.IsActive);
+            Assert.Equal("stopped", played.Last().Path);
+            CoreEntitlement.HasPremiumProvider = () => true; s.KeywordTriggersEnabled = true;
+            now = now.AddSeconds(2); KeywordTriggerHead.Start(); Type(KeywordTriggerHead.Engine, "it");
+            Assert.Equal(2, played.Count);
+        }
+        finally { cooldownField.SetValue(runtime, oldCooldowns); runtime.Now = oldNow; shell.Close(); }
+    });
 
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
@@ -69,6 +107,19 @@ public sealed class KeywordAudioRuntimeTests
         engine.Stop();
         Assert.Equal("stopped", played.Last().Path);
         Type(engine, "sit"); Assert.Equal(2, played.Count);
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:233-235, :1933-1938 keeps ToUnicode control characters.
+    public void WindowsControlCharacterPreventsJoiningTextAcrossAShortcut() => Run((engine, _, played) =>
+    {
+        Type(engine, "s");
+        var control = KeywordTriggerHead.WindowsTranslatedChar(1, new System.Text.StringBuilder("\u0003"));
+        if (control is { } c) engine.Character(c);
+        Type(engine, "it");
+        Assert.Empty(played);
+        engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+        Type(engine, "sit");
+        Assert.Single(played);
     });
 
     [Fact]
