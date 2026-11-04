@@ -15,8 +15,11 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Program;
 using Xunit;
 using IconKind = FluentIcons.Common.Symbol;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -213,6 +216,64 @@ public sealed class KeywordAudioRuntimeTests
         view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked = false;
         }
         finally { KeywordTriggerHead.Engine.Now = realNow; }
+    });
+
+    [Fact]
+    public void TypedMatchCreditsTheActiveKeywordQuest() => Run((engine, s, played) =>
+    {
+        var old = AvApp.Quests;
+        using var quests = new QuestService();
+        try
+        {
+            AvApp.Quests = quests;
+            quests.Progress.DailyQuests = new List<ActiveQuest> { new("trigger_words_d") };
+            Type(engine, "sit");
+            Assert.Equal(1, quests.Progress.DailyQuests[0].CurrentProgress);
+        }
+        finally { AvApp.Quests = old; }
+    });
+
+    [Fact]
+    public void TypedMatchAdvancesTheActiveKeywordProgramTask() => Run((engine, s, played) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-keyword-program-").FullName;
+        var oldQuests = AvApp.Quests;
+        var oldPrograms = AvApp.Programs;
+        var oldTrack = CoreQuests.TrackProgramVerifierProvider;
+        var oldAvailable = CoreProgram.TaskAvailableProvider;
+        var oldPremium = CoreProgram.HasPremiumProvider;
+        try
+        {
+            CoreProgram.HasPremiumProvider = () => true;
+            // Exercise the Windows capability on Linux, where the real keyboard hook is unavailable.
+            CoreProgram.TaskAvailableProvider = t => ProgramCapabilities.IsAvailable(t, true);
+            using var programs = new ProgramService(Path.Combine(dir, "programs.json"), readOnly: false);
+            using var quests = new QuestService(null, dir);
+            AvApp.Programs = programs;
+            AvApp.Quests = quests;
+            // Same bridge as App startup. ProgramServiceStartupTests also checks the startup assignment.
+            CoreQuests.TrackProgramVerifierProvider = (category, amount) => AvApp.Programs?.TrackVerifier(category, amount);
+            var enrollment = Assert.IsType<ConditioningControlPanel.Models.Program.ProgramEnrollment>(
+                programs.Enroll(programs.Library.Single(p => p.Id == "kept")));
+            enrollment.CurrentDay = 16; // Kept's first keyword task, without advancing the day clock.
+            var task = Assert.Single(programs.Today!.Tasks, t => t.Verifier == QuestCategory.KeywordTrigger);
+            Assert.False(programs.IsTaskBlocked(task));
+            Assert.Null(programs.TodayRecord);
+
+            Type(engine, "sit");
+
+            Assert.Equal(1, programs.TodayRecord!.TaskProgress[task.Id]);
+            Assert.DoesNotContain(task.Id, programs.TodayRecord.CompletedTaskIds);
+        }
+        finally
+        {
+            AvApp.Quests = oldQuests;
+            AvApp.Programs = oldPrograms;
+            CoreQuests.TrackProgramVerifierProvider = oldTrack;
+            CoreProgram.TaskAvailableProvider = oldAvailable;
+            CoreProgram.HasPremiumProvider = oldPremium;
+            Directory.Delete(dir, recursive: true);
+        }
     });
 
     [Fact]   // WPF DispatchMergedAsync :1284 + DispatchActionAsync :1411 + RecordFire :135
