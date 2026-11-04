@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private ITimer? _tick, _cleanSlate;
         private IVoice? _oneShot, _loop;
         private bool _running, _sessionMode;
-        private long _loopGeneration;
+        private long _loopGeneration, _playGeneration;
         private int _sessionBase;
         private DateTime _sessionStart;
         private double _frequency = 6, _volume = 0.5;
@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Raised with the loop's length in seconds once it has played 60 s (WPF Clean Slate).</summary>
         internal Action<double>? CleanSlate;
 
-        /// <param name="play">Starts a one-shot or creates a silent loop; the callback fires when it ends or errors.</param>
+        /// <param name="play">Creates a silent voice; the callback fires when it ends or errors.</param>
         internal MindWipePlayer(Func<string, double, bool, Action, IVoice?> play, TimeProvider? time = null, Func<double>? roll = null)
         {
             _play = play;
@@ -115,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             bool wasRunning;
             lock (_lock)
             {
-                wasRunning = _running;
+                ++_playGeneration; wasRunning = _running;
                 _running = false;
                 oneShot = _oneShot; _oneShot = null;
                 tick = _tick; _tick = null;
@@ -161,18 +161,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private void PlayOnce()
         {
-            string clip;
+            string clip; long generation;
             double volume;
             lock (_lock)
             {
                 if (_clips.Length == 0) return;
                 clip = _clips[_random.Next(_clips.Length)];
-                volume = _volume;
+                volume = _volume; generation = ++_playGeneration;
             }
             IVoice? voice = null;
             voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
             IVoice? displaced;
-            lock (_lock) { displaced = _oneShot; _oneShot = voice; }
+            lock (_lock) { displaced = voice; if (generation == _playGeneration && volume == _volume && voice?.Play() == true) { displaced = _oneShot; _oneShot = voice; } }
             displaced?.Dispose();
             Log.Debug("MindWipe: Playing {File} at volume {Vol}%", Path.GetFileName(clip), volume * 100);
         }

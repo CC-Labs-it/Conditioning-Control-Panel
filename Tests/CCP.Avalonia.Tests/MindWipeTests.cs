@@ -106,13 +106,13 @@ public sealed class MindWipeTests
             return Task.CompletedTask;
         }).GetAwaiter().GetResult();
 
-    [Fact]
-    public void Stop_during_loop_creation_rejects_the_late_voice() => Run((_, _, _) =>
+    [Theory, InlineData(false), InlineData(true)]
+    public void Stop_during_voice_creation_rejects_the_late_voice(bool loop) => Run((_, _, _) =>
     {
         using var entered = new ManualResetEventSlim(); using var release = new ManualResetEventSlim();
         var voice = new Voice();
         var player = new MindWipePlayer((_, _, _, _) => { entered.Set(); release.Wait(); return voice; });
-        var start = Task.Run(() => player.StartLoop(.5));
+        var start = Task.Run(() => { if (loop) player.StartLoop(.5); else player.TriggerOnce(); });
         try { Assert.True(entered.Wait(5000)); player.Stop(); }
         finally { release.Set(); Assert.True(start.Wait(5000)); }
         Assert.False(player.IsLooping); Assert.True(voice.Disposed); Assert.Equal(0, voice.Starts);

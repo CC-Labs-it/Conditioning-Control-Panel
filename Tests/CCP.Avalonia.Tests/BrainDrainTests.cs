@@ -136,7 +136,7 @@ public class BrainDrainTests {
         var service = CoreSettings.Service!; var old = service.Current; var voice = new Voice();
         Func<int> listeners = () => ((Delegate?)typeof(SettingsService).GetField(nameof(SettingsService.CurrentReplaced),
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(service))?.GetInvocationList().Length ?? 0; var before = listeners(); old.MasterVolume = 50; old.BrainDrainVolume = 40;
-        var player = new BrainDrainPlayer((_, _, _, _) => voice, new Clock(), () => 0); player.Seed(); player.Start(); player.Tick(); Assert.Equal(.2, voice.Gain, 6);
+        var player = new BrainDrainPlayer((_, volume, _, _) => { voice.Volume = volume; return voice; }, new Clock(), () => 0); player.Seed(); player.Start(); player.Tick(); Assert.Equal(.2, voice.Gain, 6);
         var restored = new ConditioningControlPanel.Models.AppSettings { MasterVolume = 80, BrainDrainVolume = 50, BrainDrainEnabled = true }; service.RestoreFrom(restored); Assert.True(player.IsRunning); Assert.Equal(.4, voice.Gain, 6);
         var writes = voice.VolumeWrites; old.MasterVolume = 0; Assert.Equal(writes, voice.VolumeWrites); restored.MasterVolume = 0; Assert.Equal(0, voice.Gain); restored.MasterVolume = 40; Assert.Equal(.2, voice.Gain, 6);
         Assert.Equal(before + 1, listeners()); player.Stop(); Assert.True(voice.Disposed); Assert.Equal(before, listeners()); writes = voice.VolumeWrites; restored.MasterVolume = 0; service.Reset(); Assert.Equal(writes, voice.VolumeWrites);

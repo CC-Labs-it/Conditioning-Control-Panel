@@ -56,7 +56,7 @@ public sealed class LayeredAudioLoopTests
             p.OutputDevice, ["headphones"]); routed.Set(); };
         using var voice = audio.CreateVoice(wav, .5, false, () => { });
         try {
-            Assert.NotNull(voice); Assert.False(routed.IsSet);
+            Assert.NotNull(voice); Assert.True(routed.IsSet);
             Assert.True(voice.Play()); Assert.True(routed.Wait(5000)); Assert.Equal("headphones", selected); Assert.False(wasPlaying);
         }
         finally { voice?.Dispose(); try { dir.Delete(true); } catch { } }

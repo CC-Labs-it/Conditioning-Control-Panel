@@ -74,15 +74,14 @@ internal sealed class BrainDrainPlayer {
         MindWipePlayer.IVoice? voice = null;
         bool ended = false, published = false;
         try {
-            voice = _create(path, Volume, false, () => {
+            var volume = Volume; voice = _create(path, volume, false, () => {
                 lock (_gate) {
                     ended = true;
                     if (ReferenceEquals(_voice, voice)) _voice = null; }
             });
             lock (_gate) {
                 // WPF BrainDrainService.cs:383-397: Stop and the actual start share this lock.
-                if (_running && generation == _generation && !ended && voice != null) {
-                    voice.Volume = Volume;
+                if (_running && generation == _generation && !ended && voice != null && volume == Volume) {
                     if (voice.Play() && !ended) { _voice = voice; published = true; } }
             }
         }

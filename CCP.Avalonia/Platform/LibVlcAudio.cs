@@ -206,7 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal MindWipePlayer.IVoice? PlayVoice(string path, double volume, bool loop, Action onEnded)
         {
             var voice = CreateVoice(path, volume, loop, onEnded);
-            return loop ? voice : voice?.Play() == true ? voice : null;
+            return voice;
         }
 
         // WPF BrainDrainService.cs:345-387: creation is silent; Play belongs to the stop arbitration.
@@ -215,6 +215,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
             MindWipePlayer.IVoice voice = loop ? new LoopVoice(this, path, onEnded) : NewVoice(path, onEnded);
             voice.Volume = volume;
+            try { if (voice is Voice v) v.Prepare(); } catch { voice.Dispose(); throw; }
             return voice;
         }
 
@@ -247,6 +248,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             private void Apply() => ThreadPool.QueueUserWorkItem(_ =>
             { lock (player) if (_done == 0 && player.IsPlaying) player.Volume = _vol; });
+            internal void Prepare() { if (ready) { setVolume(player, _vol); route(player); } }
             public bool Play()
             {
                 var started = 0;
@@ -262,8 +264,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     // WPF BrainDrainService.cs:342-345,387: set gain and device before Play.
                     if (_done == 0 && ready)
                     {
-                        setVolume(player, _vol);
-                        route(player);
                         if (player.Play()) return true;
                     }
                 }
@@ -300,11 +300,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             public bool Play() => Start();
             public bool Start()
             {
+                double volume; lock (_gate) { if (_done) return false; volume = _vol; }
                 Voice v = null!;
-                v = audio.NewVoice(path, () => Retire(v));
+                v = audio.NewVoice(path, () => Retire(v)); try { v.Volume = volume; v.Prepare(); } catch { v.Failed = true; v.Dispose(); return false; }
                 lock (_gate)
                 {
-                    if (_done) { v.Dispose(); return false; }
+                    if (_done || volume != _vol) { v.Dispose(); return false; }
                     v.Volume = _vol;
                     v.Started = Schedule;
                     _live.Add(v);
