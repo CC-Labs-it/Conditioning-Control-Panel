@@ -98,8 +98,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Show(), so it is called from the constructor. Where the platform refuses (Wayland,
         /// headless) the window is still placed and ShowActivated="False" is the remaining half.
         /// </summary>
-        internal static void PlacePassive(Window window, double bottomDip)
+        internal static void PlacePassive(Window window, double bottomDip, Action<Window>? raise = null)
         {
+            window.Loaded += (_, _) => (raise ?? (w => Platform.X11Overlay.Raise(w)))(window);
             try
             {
                 var screen = window.Screens.Primary ?? throw new InvalidOperationException("no primary screen");
