@@ -147,7 +147,14 @@ internal static class AccountSeed
         }
     }
 
-    /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
+    // WPF EntitlementTierSync.cs:28-33: remembered lower tiers alone are never a current reading.
+    // Tie the answer to the account so a response for another sign-in cannot authorize a notice.
+    internal static string? TierAnswerAccount;
+    internal static bool ServerAnsweredThisRun => !string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
+        && !string.IsNullOrEmpty(CoreSettings.Current.UnifiedId)
+        && TierAnswerAccount == CoreSettings.Current.UnifiedId;
+
+    /// <summary>The push, seeded by the app at startup only: unseeded nothing is pushed.</summary>
     internal static SyncPush? Sync;
 
     /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
@@ -160,6 +167,7 @@ internal static class AccountSeed
     {
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
+        var token = s.AuthToken;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
@@ -168,9 +176,15 @@ internal static class AccountSeed
             return false;
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
-        // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
-        if (!string.IsNullOrEmpty(s.AuthToken))
-            EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
+        // WPF EntitlementTierSync.cs:60-90: only a valid authenticated answer counts.
+        var tier = EntitlementTierRule.ParseTier(user.EffectiveTierRaw);
+        if (s.UnifiedId == id && !string.IsNullOrEmpty(token) && token == s.AuthToken && tier.HasValue)
+        {
+            TierAnswerAccount = id;
+            var verdict = EntitlementTierRule.Decide(s.PatreonTier, tier);
+            s.ServerTierSeen = EntitlementTierRule.ServerTierSeenAfter(verdict, tier, s.ServerTierSeen);
+            EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
+        }
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
@@ -211,6 +225,7 @@ internal static class AccountSeed
         Discord?.Logout();
         SubscribeStar?.Logout();
         CoreAccount.UnifiedUserId = null;
+        TierAnswerAccount = null;
         var s = CoreSettings.Current;
         s.UnifiedId = null;
         s.AuthToken = null;

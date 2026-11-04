@@ -95,10 +95,13 @@ public sealed partial class AccountSeedTests
     {
         public readonly List<string> Seen = new();
         public string Profile = "{}";
+        public Action? OnProfile;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             Seen.Add($"{r.Method} {r.RequestUri!.AbsolutePath}");
-            var body = r.RequestUri.AbsolutePath == "/v2/user/profile" ? Profile : "{\"auth_token\":\"tok\"}";
+            var isProfile = r.RequestUri.AbsolutePath == "/v2/user/profile";
+            var body = isProfile ? Profile : "{\"auth_token\":\"tok\"}";
+            if (isProfile) OnProfile?.Invoke();
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
         }
     }
@@ -154,6 +157,60 @@ public sealed partial class AccountSeedTests
             foreach (var n in Touched) Set(s, n, saved[n]);
             s.AuthToken = oldToken;
             CoreAccount.UnifiedUserId = null;
+        }
+    }
+
+    [Fact]
+    public async Task ProfileTierAnswer_RequiresValidCurrentAccountAndRecordsOrClearsLowerReading()
+    {
+        var oldService = CoreSettings.ServiceProvider;
+        var oldSync = AccountSeed.Sync;
+        var service = new SettingsService();
+        var s = service.Current;
+        var wire = new Wire();
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            AccountSeed.Sync = null;
+            AccountSeed.TierAnswerAccount = null;
+            s.UnifiedId = "lapse-test"; s.AuthToken = "token"; s.PatreonTier = 2; s.ServerTierSeen = 0;
+            Assert.False(AccountSeed.ServerAnsweredThisRun); // remembered state cannot authorize a notice
+            var v2 = new V2AuthService(() => s, wire);
+            wire.Profile = "{\"user\":{\"effective_tier\":\"0\"}}";
+            Assert.True(await AccountSeed.LoadProfileAsync(v2));
+            Assert.False(AccountSeed.ServerAnsweredThisRun);
+            Assert.Equal(0, s.ServerTierSeen);
+            wire.Profile = "{\"user\":{\"effective_tier\":1}}";
+            wire.OnProfile = () => s.UnifiedId = "another-account";
+            Assert.True(await AccountSeed.LoadProfileAsync(v2));
+            Assert.False(AccountSeed.ServerAnsweredThisRun);
+            Assert.Equal(0, s.ServerTierSeen);
+            wire.OnProfile = null;
+            s.UnifiedId = "lapse-test";
+            s.AuthToken = null;
+            Assert.True(await AccountSeed.LoadProfileAsync(v2));
+            Assert.False(AccountSeed.ServerAnsweredThisRun);
+            Assert.Equal(0, s.ServerTierSeen);
+            s.AuthToken = "token";
+            Assert.True(await AccountSeed.LoadProfileAsync(v2));
+            Assert.True(AccountSeed.ServerAnsweredThisRun);
+            Assert.Equal(1, s.ServerTierSeen);
+            Assert.Equal(2, s.PatreonTier); // lower never takes access away
+            wire.Profile = "{\"user\":{\"effective_tier\":2}}";
+            Assert.True(await AccountSeed.LoadProfileAsync(v2));
+            Assert.Null(s.ServerTierSeen);
+            s.UnifiedId = "another-account";
+            Assert.False(AccountSeed.ServerAnsweredThisRun);
+            s.UnifiedId = "lapse-test";
+            await AccountSeed.Logout();
+            s.UnifiedId = "lapse-test"; s.AuthToken = "token";
+            Assert.False(AccountSeed.ServerAnsweredThisRun);
+        }
+        finally
+        {
+            await AccountSeed.Logout();
+            AccountSeed.Sync = oldSync;
+            CoreSettings.ServiceProvider = oldService;
         }
     }
 
