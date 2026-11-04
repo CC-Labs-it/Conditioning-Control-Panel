@@ -339,6 +339,7 @@ namespace ConditioningControlPanel.Services
             _playing = true;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
+            var flashWasRunning = CoreFlash.IsRunning;
             CoreFlash.Stop();   // WPF PlayVideo: App.Flash?.Stop()
             var strict = IsStrict;
             Dispose(ref _preroll);
@@ -351,6 +352,8 @@ namespace ConditioningControlPanel.Services
                 if (IsCascadeRaining())
                 {
                     _playing = false;
+                    // Pre-roll never reached playback. Return the flash schedule we interrupted.
+                    if (flashWasRunning && CoreSettings.Current.FlashEnabled) CoreFlash.Start();
                     DeferCascade(strict, path);
                     return;
                 }
@@ -384,13 +387,7 @@ namespace ConditioningControlPanel.Services
             timer = _time.CreateTimer(_ => CoreDispatch.Post(() =>
             {
                 if (!ReferenceEquals(timer, _cascadeTimer)) return;
-                if (_time.GetUtcNow() >= _cascadeDeadline)
-                {
-                    Dispose(ref _cascadeTimer);
-                    _cascadeDeadline = null;
-                    if (_running) ScheduleNext();
-                }
-                else if (!IsCascadeRaining())
+                if (!IsCascadeRaining())
                 {
                     Dispose(ref _cascadeTimer);
                     if (!Trigger(_cascadeStrict, _cascadePath))
@@ -398,6 +395,12 @@ namespace ConditioningControlPanel.Services
                         _cascadeDeadline = null;
                         if (_running) ScheduleNext();
                     }
+                }
+                else if (_time.GetUtcNow() >= _cascadeDeadline)
+                {
+                    Dispose(ref _cascadeTimer);
+                    _cascadeDeadline = null;
+                    if (_running) ScheduleNext();
                 }
                 else timer!.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
             }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
