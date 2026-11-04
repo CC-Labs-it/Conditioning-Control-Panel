@@ -36,6 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool ManualFramesForTests;
         internal static bool Refused;
         private static ChaosGifCascadeOverlay? _active;
+        private static int _showGeneration;
+        internal static Func<int, AppSettings, List<string>> PickForTests = PickFiles;
 
         internal static ChaosGifCascadeOverlay? Active => _active;
         internal static Task? LastPick { get; private set; }
@@ -50,8 +52,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             int batch = GifCascade.BatchSize(spawnRatePerSec, durationSec);
             var s = CoreSettings.Current;
-            LastPick = Task.Run(() => PickFiles(batch, s)).ContinueWith(t => Dispatcher.UIThread.Post(() =>
+            int generation = _showGeneration;
+            LastPick = Task.Run(() => PickForTests(batch, s)).ContinueWith(t => Dispatcher.UIThread.Post(() =>
             {
+                if (generation != _showGeneration) return;
                 try { ShowWithFiles(t.IsCompletedSuccessfully ? t.Result : new List<string>(), spawnRatePerSec, durationSec, gifSize, fallSpeed, opacity, startScale); }
                 catch (Exception ex) { Log.Debug("GifCascade.ShowWithFiles: {E}", ex.Message); }
             }), TaskScheduler.Default);
@@ -91,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Close any cascade immediately (run teardown, panic). Safe when idle.</summary>
         public static void CloseActive()
         {
+            ++_showGeneration; // Cancel picks that have not reached the UI thread yet.
             Refused = false;
             try { _active?.CloseNow(); } catch (Exception ex) { Log.Debug("GifCascade.CloseActive: {E}", ex.Message); }
         }

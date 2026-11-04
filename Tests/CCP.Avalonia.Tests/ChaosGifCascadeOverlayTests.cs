@@ -101,6 +101,45 @@ public sealed class ChaosGifCascadeOverlayTests
         try { Directory.Delete(dir, true); } catch { }
     }
 
+    [Fact]
+    public void ClosingCancelsPendingImagePick()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-rain-close-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        try
+        {
+            AvaloniaTestDispatcher.Run(() =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                ChaosGifCascadeOverlay.CloseActive();
+                ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                ChaosGifCascadeOverlay.PickForTests = (_, _) => new() { gif };
+                try
+                {
+                    ChaosGifCascadeOverlay.Show(1, 3, 400, 3.6, 0.9, 0.45);
+                    ChaosGifCascadeOverlay.LastPick!.GetAwaiter().GetResult();
+                    // The pick has posted the show, but it has not run on the UI thread.
+                    ChaosGifCascadeOverlay.CloseActive();
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Null(ChaosGifCascadeOverlay.Active);
+                }
+                finally
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.PickForTests = ChaosGifCascadeOverlay.PickFiles;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
         GifCascade.PayloadSpawnRatePerSec, GifCascade.PayloadDurationSec, GifCascade.PayloadGifSize,
         GifCascade.PayloadFallSpeed, GifCascade.PayloadOpacity, GifCascade.PayloadStartScale);
