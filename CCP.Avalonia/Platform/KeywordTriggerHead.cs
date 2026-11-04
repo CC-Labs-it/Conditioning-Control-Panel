@@ -223,7 +223,6 @@ internal sealed class KeywordAudioRuntime
             actions = fired.SelectMany(t => t.Actions ?? new()).Where(a => a is { Enabled: true } &&
                 seen.Add(a is VisualEffectAction ve ? $"VisualEffect:{ve.Effect}" : a.GetType().Name)).ToList();
         }
-        var played = false;
         foreach (var action in actions)
         {
             if (!IsActive || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
@@ -231,8 +230,7 @@ internal sealed class KeywordAudioRuntime
             {
                 switch (action)
                 {
-                    case PlayAudioAction audio when !played:
-                        played = true;
+                    case PlayAudioAction audio:
                         if (!await PlayAsync(audio)) return;
                         break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
@@ -285,6 +283,7 @@ internal sealed class KeywordAudioRuntime
 
     private async Task<bool> PlayAsync(PlayAudioAction audio)
     {
+        if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) return true;
         if (string.IsNullOrEmpty(audio.FilePath)) return true;
         var path = audio.FilePath;
         if (!Path.IsPathRooted(path))

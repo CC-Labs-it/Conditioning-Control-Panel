@@ -33,7 +33,7 @@ public sealed class KeywordAudioRuntimeTests
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider);
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -44,6 +44,7 @@ public sealed class KeywordAudioRuntimeTests
             s.KeywordTriggersEnabled = true; s.KeywordTriggerIgnoreOwnFocus = false;
             s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
             s.KeywordGlobalCooldownSeconds = 0; s.KeywordPerKeywordCooldownSeconds = 0; s.MasterVolume = 50;
+            CoreSession.IsEngineRunningProvider = () => true;
             CoreEntitlement.HasPremiumProvider = () => true;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
@@ -56,11 +57,39 @@ public sealed class KeywordAudioRuntimeTests
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
+                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider) = saved;
         }
     });
 
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
+
+    [Fact] // WPF KeywordTriggerService.cs:1366,1398,1847
+    public void EngineHoldSkipsAudioButKeepsLaterActionsAndSessionAllowsIt() => Run((engine, s, played) =>
+    {
+        var calls = 0;
+        engine.Haptic = (_, _) => calls++;
+        s.KeywordTriggers[0].Actions.Add(new HapticAction());
+        var session = CoreSession.IsSessionRunningProvider;
+        try
+        {
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            Type(engine, "sit"); Assert.Empty(played); Assert.Equal(1, calls);
+            CoreSession.IsSessionRunningProvider = () => true;
+            engine.Now = () => new DateTime(2026, 10, 14, 14, 0, 0);
+            Type(engine, "sit"); Assert.Single(played); Assert.Equal(2, calls);
+        }
+        finally { CoreSession.IsSessionRunningProvider = session; }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1366 dispatches every action for one trigger
+    public void SingleTriggerDispatchesBothAudioActionsInOrder() => Run((engine, s, played) =>
+    {
+        var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = first.FilePath, Volume = 100, DuckSystemAudio = false });
+        Type(engine, "sit");
+        Assert.Equal(new[] { 0.125f, (float)Math.Pow(0.5, 1.5) }, played.Where(p => p.Path != "stopped").Select(p => p.Volume));
+    });
 
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
