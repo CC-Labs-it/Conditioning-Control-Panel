@@ -40,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly PopQuizQuestion _question;
         private readonly bool _isTest;
+        private readonly bool _wasAvatarMuted = true;
         private bool _answered;
         private static readonly Random _random = new();
 
@@ -59,11 +60,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             IsOpen = true;
 
-            // ponytail: needs App.AvatarWindow.IsMuted / SetMuteAvatar - the type is
-            // AvatarTubeWindow, ConditioningControlPanel/AvatarTube/AvatarTubeWindow.*.cs (there is
-            // no AvatarWindow.xaml.cs; App.xaml.cs:952 is where the name comes from). WPF muted the
-            // avatar for the whole quiz so her z-order work could not cover this window, and
-            // restored it in OnClosed.
+            // Mute avatar while quiz is open (WPF PopQuizWindow.xaml.cs:44-48); restored in OnClosed.
+            var avatar = AvatarTube.AvatarTubeWindow.Live;
+            _wasAvatarMuted = avatar?.IsMuted ?? true;
+            if (avatar != null && !_wasAvatarMuted)
+                avatar.SetMuteAvatar(true);
 
             AvaloniaXamlLoader.Load(this);
             _question = question;
@@ -326,9 +327,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _shown.Remove(this);
             Log.Information("PopQuizWindow closed (answered: {Answered}, reason: {Reason})", _answered, _closeReason);
 
-            // ponytail: restoring the avatar mute state needs App.AvatarWindow (AvatarTubeWindow,
-            // ConditioningControlPanel/AvatarTube/), head-side. The WPF
+            // Restore avatar mute state (WPF PopQuizWindow.xaml.cs:307-312). The WPF
             // queue safety net has nothing to release here (PopQuizHost holds no slot).
+            if (!_wasAvatarMuted)
+            {
+                try { AvatarTube.AvatarTubeWindow.Live?.SetMuteAvatar(false); }
+                catch { }
+            }
 
             base.OnClosed(e);
             if (_shown.Count == 0) AllClosed?.Invoke();

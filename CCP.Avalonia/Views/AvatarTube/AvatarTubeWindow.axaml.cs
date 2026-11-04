@@ -362,7 +362,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// "live". Null on a headless render and before the shell builds one, which every caller
         /// treats as "there is nothing to refresh".
         /// </summary>
-        public static AvatarTubeWindow? Live =>
+        public static AvatarTubeWindow? Live => TestLive ??
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)
                 ?.Windows.OfType<AvatarTubeWindow>().FirstOrDefault();
 
@@ -1377,7 +1377,19 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private bool _windowMuted;
         /// <summary>Saved voice mute plus the shell's temporary attached-minimize mute.</summary>
-        public bool IsMuted => CoreSettings.Current.AvatarMuted || _windowMuted;
+        public bool IsMuted => _windowMuted || (_muteOverride ?? CoreSettings.Current.AvatarMuted);
+
+        private bool? _muteOverride;
+        // Headless tests have no desktop lifetime. Restored by process-state isolation.
+        internal static AvatarTubeWindow? TestLive;
+
+        /// <summary>WPF AvatarTubeWindow.ChatInput.cs:1537: in-memory mute, never persisted.
+        /// The shell's temporary mute remains independent.</summary>
+        public void SetMuteAvatar(bool muted) => RunOnAvatar(() =>
+        {
+            _muteOverride = muted == CoreSettings.Current.AvatarMuted ? null : muted;
+            UpdateQuickMenuState();
+        });
 
         internal void SetWindowMute(bool muted)
         {
