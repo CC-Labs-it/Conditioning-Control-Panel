@@ -275,7 +275,7 @@ public sealed class FlashAnimationTests
             s.ImageScale = 250;
             CorePaths.EffectiveAssetsProvider = () => root;
             ConditioningControlPanel.Services.ContentPackStore.Current = null;
-            var screen = MakeScreen(2.5, new PixelRect(0, 0, 3840, 2160), new PixelRect(0, 0, 3840, 2160), true);
+            var screen = MultiMonitorResultTests.MakeScreen(2.5, new PixelRect(0, 0, 3840, 2160), new PixelRect(0, 0, 3840, 2160), true);
             flashes = FlashOverlay.LoadPictures(5, new[] { screen }, new[] { 0 }, s, new(), null, FlashOverlay.DecodeMax(s, PerformanceTier.Quality));
             Assert.Equal(5, flashes.Count);
             Assert.True(flashes[0].Rect.Width > 2048);
@@ -301,17 +301,6 @@ public sealed class FlashAnimationTests
         bytes.Position = 0;
         using var decoded = SKBitmap.Decode(bytes);
         return decoded.GetPixel(x, y);
-    }
-    private static Screen MakeScreen(double scaling, PixelRect bounds, PixelRect workingArea, bool primary)
-    {
-        // Synthetic Avalonia 12.1 handles never reach a native backend; update this factory if its internals change.
-        var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen),
-            new object[] { new PlatformHandle(new IntPtr(bounds.X), "headless-test") })!;
-        typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(screen, scaling);
-        typeof(Screen).GetProperty(nameof(Screen.Bounds))!.SetValue(screen, bounds);
-        typeof(Screen).GetProperty(nameof(Screen.WorkingArea))!.SetValue(screen, workingArea);
-        typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, primary);
-        return screen;
     }
     private const int Size = 16;
     private static byte[] Gif(int count) => Gif(Enumerable.Range(0, count).Select(i => i == 0 ? 1 : 3).ToArray());
