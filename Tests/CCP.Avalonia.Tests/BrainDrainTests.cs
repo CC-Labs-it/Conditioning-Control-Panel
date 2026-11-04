@@ -89,6 +89,13 @@ public class BrainDrainTests {
             enable.IsChecked = true; Assert.True(player.IsRunning);
             card.FindControl<Slider>("SliderIntensity")!.Value = 32; Assert.Equal(32, s.BrainDrainIntensity);
             player.Tick(); Assert.NotNull(current);
+            var volume = card.FindControl<Slider>("SliderVolume")!;
+            volume.Value = 37; Assert.Equal(37, s.BrainDrainVolume);
+            Assert.Equal(s.MasterVolume / 100.0 * .37, current!.Gain, 6);
+            Assert.Equal("37%", card.FindControl<TextBlock>("TxtVolume")!.Text);
+            var reloaded = new BrainDrainFeatureControl();
+            Assert.Equal(37, reloaded.FindControl<Slider>("SliderVolume")!.Value);
+            Assert.True(reloaded.FindControl<ConditioningControlPanel.Avalonia.Views.Features.MoreFold>("FoldMore")!.IsOpen);
             card.FindControl<CheckBox>("ChkHighRefresh")!.IsChecked = true; Assert.True(s.BrainDrainHighRefresh);
             Assert.True(current!.Disposed); Assert.True(player.IsRunning);
             Assert.Equal(TimeSpan.FromMilliseconds(500), clock.Period);

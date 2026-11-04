@@ -195,6 +195,18 @@
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
 
+                            <sessionLock:MoreFold x:Name="FoldMore">
+                                <Grid Height="36" ToolTip.Tip="{loc:Str st4_braindrain_volume_hint}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{loc:Str st4_braindrain_volume}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <Slider Grid.Column="1" x:Name="SliderVolume" Minimum="0" Maximum="100" Value="100" VerticalAlignment="Center" Margin="10,0"/>
+                                    <TextBlock Grid.Column="2" x:Name="TxtVolume" Text="100%" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
+                                </Grid>
+                            </sessionLock:MoreFold>
                         </StackPanel>
                     </Grid>
                 </Border>

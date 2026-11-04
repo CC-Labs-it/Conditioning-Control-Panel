@@ -13,6 +13,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         {
             AvaloniaXamlLoader.Load(this);
 
+            SliderLabel.Wire(this, "SliderVolume", "TxtVolume", v => $"{(int)v}%");
             SliderLabel.Wire(this, "SliderIntensity", "TxtIntensity", v => $"{(int)v}%");
             SliderLabel.Wire(this, "SliderBlurStrength", "TxtBlurStrength", v => $"{(int)v}%");
 
@@ -21,11 +22,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             var enable = this.FindControl<CheckBox>("ChkEnable")!;
             var intensity = this.FindControl<Slider>("SliderIntensity")!;
             var refresh = this.FindControl<CheckBox>("ChkHighRefresh")!;
+            var volume = this.FindControl<Slider>("SliderVolume")!;
+            var more = this.FindControl<MoreFold>("FoldMore")!;
             void LoadAudio()
             {
                 _loading = true;
                 enable.IsChecked = CoreSettings.Current.BrainDrainEnabled;
                 intensity.Value = CoreSettings.Current.BrainDrainIntensity;
+                volume.Value = CoreSettings.Current.BrainDrainVolume;
+                if (CoreSettings.Current.BrainDrainVolume != 100) more.IsOpen = true;
                 refresh.IsChecked = CoreSettings.Current.BrainDrainHighRefresh;
                 _loading = false;
             }
@@ -44,6 +49,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                 CoreSettings.Current.BrainDrainIntensity = (int)intensity.Value;
                 if (CoreEngine.IsRunning) CoreEngine.SetBrainDrainIntensity?.Invoke(CoreSettings.Current.BrainDrainIntensity); // WPF BrainDrainFeatureControl.xaml.cs:254-258
                 CoreSettings.Save();
+            };
+            volume.PropertyChanged += (_, e) =>
+            {
+                if (_loading || e.Property != Slider.ValueProperty) return;
+                CoreSettings.Current.BrainDrainVolume = (int)volume.Value;
+                CoreSettings.Save(); // WPF BrainDrainFeatureControl.xaml.cs:268-282; player observes this setting.
             };
             refresh.IsCheckedChanged += (_, _) =>
             {
