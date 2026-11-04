@@ -243,9 +243,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 DetachCardSheen();
                 DetachRowSweep();
-                SessionRackPanel.Children.Clear();
-                foreach (var session in shown)
-                    SessionRackPanel.Children.Add(rows.TryGetValue(session, out var row) ? row : RackRow(session));
+                var wanted = shown.ToHashSet();
+                for (var i = SessionRackPanel.Children.Count - 1; i >= 0; i--)
+                    if (SessionRackPanel.Children[i] is not Border { Tag: Session session } || !wanted.Contains(session))
+                        SessionRackPanel.Children.RemoveAt(i);
+                for (var i = 0; i < shown.Count; i++)
+                {
+                    if (!rows.TryGetValue(shown[i], out var row))
+                        SessionRackPanel.Children.Insert(i, RackRow(shown[i]));
+                    else
+                    {
+                        var index = SessionRackPanel.Children.IndexOf(row);
+                        if (index != i) SessionRackPanel.Children.Move(index, i);
+                    }
+                }
                 if (shown.Count == 0)
                     SessionRackPanel.Children.Add(new TextBlock { Theme = TabTheme("SdRackEmpty"), Text = Loc.Get("rack_empty") });
                 RefreshSessionRackSelection();

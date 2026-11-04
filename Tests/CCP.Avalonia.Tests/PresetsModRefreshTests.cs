@@ -216,6 +216,46 @@ public sealed class PresetsModRefreshTests
         finally { host.Close(); LocalizationManager.Instance.SetLanguage("en"); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LanguageQueryChangeKeepsFocusOnRetainedRow(bool sortByName) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var builtIn = Session.MorningDrift;
+        var custom = new Session { Id = "focus-query", Name = "Zzz", Description = builtIn.GetModeAwareName(), Source = SessionSource.Custom, IsAvailable = true };
+        var manager = new SessionManager();
+        manager.AllSessions.Add(builtIn);
+        manager.AllSessions.Add(custom);
+        var view = new PresetsTabView();
+        view.UseSessionManager(manager);
+        var host = new Window { Width = 1200, Height = 900, Content = view };
+        try
+        {
+            host.Show(); Settle();
+            var panel = view.FindControl<StackPanel>("SessionRackPanel")!;
+            if (sortByName)
+            {
+                var sort = view.FindControl<ComboBox>("CmbRackSort")!;
+                sort.SelectedItem = sort.Items.OfType<ComboBoxItem>().Single(i => (string?)i.Tag == "name");
+            }
+            else view.FindControl<TextBox>("TxtRackSearch")!.Text = builtIn.GetModeAwareName();
+            Settle();
+            var before = panel.Children.OfType<Border>().ToArray();
+            Assert.Equal(2, before.Length);
+            var kept = before.Single(r => ReferenceEquals(r.Tag, custom));
+            kept.Focus();
+            Assert.True(kept.IsFocused);
+            LocalizationManager.Instance.SetLanguage("zh-CN"); Settle();
+            var after = panel.Children.OfType<Border>().ToArray();
+            Assert.Same(kept, after.Single(r => ReferenceEquals(r.Tag, custom)));
+            Assert.True(kept.IsFocused);
+            if (sortByName) Assert.NotEqual(Array.IndexOf(before, kept), Array.IndexOf(after, kept));
+            else Assert.Single(after);
+        }
+        finally { host.Close(); LocalizationManager.Instance.SetLanguage("en"); }
+    });
+
     private static void Setup()
     {
         if (Application.Current is null)
