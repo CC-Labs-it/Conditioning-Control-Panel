@@ -24,7 +24,10 @@ public sealed class RemoteWearerWiringTests
     public void The_relay_runs_cores_executor_and_stop_so_every_end_path_hands_back()
     {
         var tab = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Tabs", "RemoteControlTabView.axaml.cs"));
-        Assert.Contains("RemoteCommands.Execute, RemoteCommands.StopEffects", tab);
+        Assert.Contains("Relay = NewRelay();", tab);
+        Assert.Contains("ExecuteRemoteCommand, RemoteCommands.StopEffects", tab);
+        var dispatch = tab.Substring(tab.IndexOf("internal static string? ExecuteRemoteCommand", StringComparison.Ordinal));
+        Assert.Contains("return RemoteCommands.Execute(action, parameters);", dispatch);
         var commands = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "RemoteControl", "RemoteCommands.cs"));
         var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force)", StringComparison.Ordinal));
         Assert.Contains("Remote.RemoteWearer.ReleaseSafetyState();", stop);
