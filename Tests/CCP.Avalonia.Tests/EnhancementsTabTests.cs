@@ -45,6 +45,39 @@ public sealed class EnhancementsTabTests
     private static IconKind[] Kinds(Control c) => c.GetLogicalDescendants().OfType<IconGlyph>().Select(g => g.Kind).ToArray();
 
     [Fact]
+    public Task LocalizedBaseAppearsWithActiveBonusLikeWpf() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        Window? window = null;
+        try
+        {
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var settings = CoreSettings.Current;
+            settings.UnlockedSkills = new List<string> { "sparkle_boost_1" };
+            LocalizationManager.Instance.SetLanguage("de");
+            Assert.Equal("Basis", Loc.Get("skill_mult_base"));
+            var tab = new EnhancementsTabView();
+            window = new Window { Width = 1400, Height = 700, Content = tab };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var canvas = tab.FindControl<Canvas>("SkillTreeCanvas")!;
+            Assert.Contains($"Basis: +{1.0:P0}", Texts(canvas));
+            var list = tab.FindControl<WrapPanel>("ActiveBonusesList")!;
+            Assert.Contains($"Basis: +{1.0:P0}", Texts(list));
+        }
+        finally
+        {
+            window?.Close();
+            CoreSettings.ServiceProvider = oldSettings;
+            LocalizationManager.Instance.SetLanguage(language);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TreeDrawsWpfStatesHeaderAndSecretRailAndBreathesOnlyOnScreen() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
