@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private double _alpha = 1;
         private DispatcherTimer? _lifetimeTimer;
         private TimeSpan _fade;
-        private long _expiresAt;
+        private long _expiresAt, _gazeExpiresAt;
         internal long ExpiresAt => _expiresAt;
         internal bool IsFadingOut { get; private set; }
         internal double DwellScale => (_card.RenderTransform as ScaleTransform)?.ScaleX ?? 1;
@@ -55,14 +55,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (extraMs <= 0 || IsFadingOut || Exit != null || _lifetimeTimer == null) return;
             var deadline = FlashOverlay.Clock.GetTimestamp() + (long)(extraMs / 1000.0 * FlashOverlay.Clock.TimestampFrequency);
             if (deadline <= _expiresAt) return; // WPF: never shorten a stay-until-popped lifetime
-            _expiresAt = deadline;
+            _expiresAt = _gazeExpiresAt = deadline;
             ScheduleExpiry();
         }
         internal void SetVoiceLifetime(TimeSpan lifetime)
         {
             if (IsFadingOut || Exit != null || _lifetimeTimer == null) return;
             Lifetime = lifetime;
-            _expiresAt = SpawnedAt + (long)(lifetime.TotalSeconds * FlashOverlay.Clock.TimestampFrequency);
+            _expiresAt = Math.Max(_gazeExpiresAt, SpawnedAt + (long)(lifetime.TotalSeconds * FlashOverlay.Clock.TimestampFrequency));
             ScheduleExpiry();
         }
         private void ScheduleExpiry()

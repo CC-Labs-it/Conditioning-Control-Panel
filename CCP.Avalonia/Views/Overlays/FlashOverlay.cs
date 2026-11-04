@@ -118,10 +118,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
             finally { if (!scheduled) FinishBurst(generation); }
         }
-
         internal static TimeSpan VoiceLifetime(AppSettings s, bool ambient, int? durationMs, double? voiceSeconds) =>
             Lifetime(s, ambient, voiceSeconds is > 0 ? (int)(voiceSeconds.Value * 1000) : durationMs);
-
         internal sealed class BurstLifetime
         {
             private readonly AppSettings _settings;
@@ -180,7 +178,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Func<Task> VoiceLead = () => Task.Delay(1000);
         internal static TimeProvider VoiceClock = TimeProvider.System;
         internal static Action<int, Action> AfterVoice = (ms, action) => _ = Task.Delay(ms).ContinueWith(_ => action());
-
         internal static string? NextVoice(AppSettings s)
         {
             var enabled = VoicePool(s);
@@ -190,7 +187,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var file in enabled.OrderBy(_ => Rng.Next())) VoiceQueue.Enqueue(file);
             return VoiceQueue.Count == 0 ? null : VoiceQueue.Dequeue();
         }
-
         internal static async Task<double?> VoiceAfterLead(AppSettings s, int generation, string? path = null, Action<double>? durationChanged = null)
         {
             await VoiceLead();
