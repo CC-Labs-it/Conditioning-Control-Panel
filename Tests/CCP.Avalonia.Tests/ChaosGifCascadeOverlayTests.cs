@@ -101,6 +101,28 @@ public sealed class ChaosGifCascadeOverlayTests
         try { Directory.Delete(dir, true); } catch { }
     }
 
+    [Fact]
+    public void WebpAnimationFlagDistinguishesStillsAndMissingFiles()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".webp");
+        try
+        {
+            var head = new byte[21];
+            System.Text.Encoding.ASCII.GetBytes("RIFF").CopyTo(head, 0);
+            System.Text.Encoding.ASCII.GetBytes("WEBPVP8X").CopyTo(head, 8);
+            File.WriteAllBytes(path, head);
+            Assert.False(ChaosGifCascadeOverlay.IsAnimatedWebp(path));
+            head[20] = 2;
+            File.WriteAllBytes(path, head);
+            Assert.True(ChaosGifCascadeOverlay.IsAnimatedWebp(path));
+            head[0] = 0;
+            File.WriteAllBytes(path, head);
+            Assert.False(ChaosGifCascadeOverlay.IsAnimatedWebp(path));
+        }
+        finally { File.Delete(path); }
+        Assert.False(ChaosGifCascadeOverlay.IsAnimatedWebp(path));
+    }
+
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
         GifCascade.PayloadSpawnRatePerSec, GifCascade.PayloadDurationSec, GifCascade.PayloadGifSize,
         GifCascade.PayloadFallSpeed, GifCascade.PayloadOpacity, GifCascade.PayloadStartScale);
