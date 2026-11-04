@@ -81,7 +81,6 @@ public sealed class EmiRingSpeechTests
             desk.CloseBook();
         }
     });
-
     [Fact]
     public Task SayUsesCoreCadenceAndCancellationDropsTheContinuation() => WithDesk(desk =>
     {
@@ -104,7 +103,6 @@ public sealed class EmiRingSpeechTests
         desk.Say("hidden"); desk.Hide();
         Assert.False(desk.ChainLive);
     });
-
     [Fact]
     public Task HoldCutsSpeechAndReturnsToRest() => WithDesk(desk =>
     {
@@ -116,7 +114,6 @@ public sealed class EmiRingSpeechTests
         Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
         desk.EndHold(); Assert.Equal(EmiChains.RestFace, desk.Face);
     });
-
     private sealed class BarkClock : TimeProvider { public DateTimeOffset Now = DateTimeOffset.UtcNow; public override DateTimeOffset GetUtcNow() => Now; }
     [Theory, InlineData(false, false), InlineData(true, false), InlineData(false, true)]
     public Task RingSpeechStaggersAvatarUnlessMutedOrHolding(bool muted, bool hold) => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -152,6 +149,8 @@ public sealed class EmiRingSpeechTests
         (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar) = (true, false);
         EmiState.Current.RingIgnoreStreak = 0;
         service.LineEngine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
+        var audio = CoreAudio.PlayOneShotProvider; var volume = CoreSettings.Current.MasterVolume; var clockBefore = EmiSfx.Clock; var clock = new BarkClock(); var played = new List<string>();
+        CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => played.Add(tag); CoreSettings.Current.MasterVolume = 50; EmiSfx.Clock = clock;
         var moments = new List<string>(); EventHandler<EmiMoment> observer = (_, m) => moments.Add(m.Id);
         service.MomentFired += observer;
         try
@@ -167,18 +166,15 @@ public sealed class EmiRingSpeechTests
             Assert.Equal(3, moments.Count(m => m == "ringDismissed"));
             Assert.Single(moments.Where(m => m == "suggestionIgnored3x"));
             Assert.Equal(0, EmiState.Current.RingIgnoreStreak);
-            service.LineEngine = EmiLineEngine.FromJson("""
-                {"moments":{"ringOpen":{"pools":["ring"],"priority":3,"cooldownMs":60000},
-                "panicPressed":{"hold":true,"pools":["quiet"],"tailMs":300000}},
-                "pools":{"ring":[{"id":"ring.1","t":"a card stays","face":"^_^","spice":0}],
-                "quiet":[{"id":"quiet.1","t":"","face":"-_-"}]}}
-                """);
+            service.LineEngine = EmiLineEngine.FromJson("""{"moments":{"ringOpen":{"pools":["ring"],"priority":3,"cooldownMs":60000},"panicPressed":{"hold":true,"pools":["quiet"],"tailMs":300000}},"pools":{"ring":[{"id":"ring.1","t":"a card stays","face":"^_^","spice":0}],"quiet":[{"id":"quiet.1","t":"","face":"-_-"}]}}""");
             service.Fire("ringOpen");
             Assert.True(desk.ChainLive);
             Assert.Null(service.LineEngine.Draw("ringOpen")); // first dot acknowledged the cooldown
             desk.StepSpeech(); desk.StepSpeech(); desk.StepSpeech();
             Assert.Contains(desk.BubbleHost.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "a card stays");
+            clock.Now = clock.Now.AddSeconds(10); played.Clear(); EmiSfx.Pat(); Assert.Contains("emi-sfx-pat", played); played.Clear();
             ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.StopAll("test");
+            clock.Now = clock.Now.AddSeconds(1); played.Clear(); EmiSfx.Pat(); Assert.Empty(played);
             Assert.Equal("-_-", desk.Face);
             desk.EndHold();
             Assert.Equal(EmiChains.RestFace, desk.Face);
@@ -192,7 +188,7 @@ public sealed class EmiRingSpeechTests
         }
         finally
         {
-            service.MomentFired -= observer; service.Window?.ShutDown(); service.LineEngine = oldEngine; (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar) = oldSettings;
+            service.MomentFired -= observer; service.Window?.ShutDown(); service.LineEngine = oldEngine; (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar) = oldSettings; CoreAudio.PlayOneShotProvider = audio; CoreSettings.Current.MasterVolume = volume; EmiSfx.Clock = clockBefore;
         }
     });
 }

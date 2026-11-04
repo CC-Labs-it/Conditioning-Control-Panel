@@ -22,7 +22,6 @@ internal sealed partial class EmiDeskService
         if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => DrawRingMoment(id, context)); return; }
         DrawRingMoment(id, context);
     }
-
     private void DrawRingMoment(string id, object? context)
     {
         try
@@ -35,6 +34,5 @@ internal sealed partial class EmiDeskService
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring moment {Moment} failed", id); }
     }
-
     public void StopRingSpeechForPanic() { _window?.CancelChain(); Fire("panicPressed"); }
 }

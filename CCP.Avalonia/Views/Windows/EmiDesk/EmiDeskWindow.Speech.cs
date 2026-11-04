@@ -35,7 +35,6 @@ public partial class EmiDeskWindow
         HookSpeechLifetime();
         AdvanceSpeech(null, EventArgs.Empty);
     }
-
     private void HookSpeechLifetime()
     {
         if (_speechHooked) return;
@@ -45,7 +44,6 @@ public partial class EmiDeskWindow
         Resized += (_, _) => PlaceSpeechBubble();
         Moved += (_, _) => PlaceSpeechBubble();
     }
-
     private void AdvanceSpeech(object? sender, EventArgs args)
     {
         _speechTimer?.Stop();
