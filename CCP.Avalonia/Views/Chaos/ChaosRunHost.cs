@@ -140,7 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF ChaosModeService.cs:422-435: the loadout pick enters before wave 1.
             // Scripted first descents ignore even a stale equipped id.
             var equipped = _state.Config.ScriptedFirstRun ? null : ChaosMeta.State.EquippedStartBoon;
-            var boon = ChaosBoonPool.All.FirstOrDefault(b => b.Id == equipped);
+            var boon = ChaosBoonPool.All.FirstOrDefault(b => b.Id == equipped && !b.IsCurse && IsAvailableBoon(b));
             if (boon != null)
             {
                 _state.ApplyBoon(boon);
@@ -453,10 +453,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _spawnTimer?.Stop();
                 if (ChaosWaveTimerWindow.Active is { } clock) clock.Pill.IsVisible = false;
                 BubbleOverlay.ClearForDraft();
-                _overlay.ShowBoonDraft(_state.WaveIndex, DealDraft(), OnBoonChosen, _state.Config.DraftAutoResumeSec,
-                    _state.RerollsLeft, RerollDraft);
+                var run = _state;
+                _overlay.ShowBoonDraft(run.WaveIndex, DealDraft(), b => { if (ReferenceEquals(run, _state)) OnBoonChosen(b); }, run.Config.DraftAutoResumeSec,
+                    run.RerollsLeft, () => ReferenceEquals(run, _state) ? RerollDraft() : null);
             }
         }
+
+        // Deferred until their WPF effects are implemented in this head.
+        internal static bool IsAvailableBoon(ChaosBoon b) => b.Id is "defuse_chain" or "golden_touch" or "extra_shield" or "welcome_shower" or "size_queen" or "hair_trigger";
 
         // WPF ChaosModeService.cs:1475-1483,1507-1526: deal eligible cards and persist each sighting.
         private static List<ChaosBoon> DealDraft()
@@ -464,7 +468,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var state = _state!;
             var taken = state.ActiveBoons.Concat(state.ActiveCurses).Select(b => b.Id).ToHashSet();
             var options = ChaosBoonPool.Draft(state.Config.AllowCurses, state.Config.DraftChoices,
-                state.MaxedBoons.Contains("surrender"), taken, state.Config.SinChance);
+                state.MaxedBoons.Contains("surrender"), taken, state.Config.SinChance, IsAvailableBoon);
             foreach (var b in options) ChaosMeta.MarkDiscovered("boon:" + b.Id);
             return options;
         }
@@ -490,7 +494,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.ApplyBoon(boon, shielded);
                 if (boon.IsCurse && _state.SinExtraMult > 0) _state.BoonMult += _state.SinExtraMult;
                 if (boon.IsCurse && _state.MaxedBoons.Contains("surrender")) _state.Shields++;
-                ChaosAnnouncerOverlay.Announce(boon.Name, boon.IsCurse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, artKey: boon.Id);
+                ChaosAnnouncerOverlay.Announce(boon.IsCurse ? "☠ " + boon.Name : boon.Name, boon.IsCurse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             else
             {
@@ -501,7 +505,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             _state.WaveIndex = _pendingWave;
             _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);
-            if (_overlay != null) _overlay.ShowReadyGo(ResumeAfterDraft); else ResumeAfterDraft();
+            var run = _state;
+            if (_overlay != null) _overlay.ShowReadyGo(() => { if (ReferenceEquals(run, _state)) ResumeAfterDraft(); }); else ResumeAfterDraft();
         }
 
         // WPF ChaosModeService.cs:1598-1621: hold for queued lesson cards, then restart and shower.

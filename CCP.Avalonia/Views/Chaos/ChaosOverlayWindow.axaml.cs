@@ -1102,6 +1102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         protected override void OnClosed(EventArgs e)
         {
+            _onBoonPick = null; HideDraft();
             base.OnClosed(e);
             _closed = true;
             // The three forever tweens (the boon pulse, the two ken-burns drifts) would otherwise

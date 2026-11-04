@@ -1336,7 +1336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF ChaosHubWindow.xaml.cs:1271-1273: discovery gates the start pick.
             bool seen = ChaosMeta.IsDiscovered("boon:" + b.Id);
             bool isStart = ChaosMeta.State.EquippedStartBoon == b.Id;
-            bool pickable = seen && !b.IsCurse;
+            bool pickable = seen && !b.IsCurse && ChaosRunHost.IsAvailableBoon(b);
             var accent = b.IsCurse ? Color.FromRgb(0xFF, 0x8A, 0x8A) : Color.FromRgb(0x9C, 0xE8, 0xA0);
 
             var row = new Grid();
@@ -1390,6 +1390,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             var card = new Border
             {
+                IsVisible = ChaosRunHost.IsAvailableBoon(b),
                 Child = row,
                 Background = RowBg,
                 BorderBrush = isStart
