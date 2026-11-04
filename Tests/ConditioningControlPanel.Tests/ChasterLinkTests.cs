@@ -135,6 +135,19 @@ public class ChasterLinkTests : IDisposable
     }
 
     [Fact]
+    public async Task Final_response_closes_the_connection_after_the_page()
+    {
+        var (flow, state) = Start();
+        using var response = await _browser.GetAsync(Callback + "?error=denied&state=" + state,
+            HttpCompletionOption.ResponseHeadersRead);
+        Assert.True(response.Headers.ConnectionClose);
+        Assert.Equal(LinkOutcome.Denied, await flow); // listener has closed before the browser reads the body
+        Assert.Contains("Not linked", await response.Content.ReadAsStringAsync());
+        Assert.False(_service.IsLinked);
+        Assert.Empty(_broker.Bodies);
+    }
+
+    [Fact]
     public async Task One_flow_at_a_time_and_a_cancel_reads_as_a_cancel()
     {
         var (flow, _) = Start();
