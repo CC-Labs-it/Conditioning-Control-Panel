@@ -14,8 +14,9 @@ const panic = extract('PanicBrowserMediaScript');
 
 function page(availableAfter, manual = false) {
     let queries = 0, clicks = 0;
-    const waits = [], timers = [], messages = [], windowEvents = {}, audioEvents = {}, intervals = [];
-    const audio = { paused: false, ended: false, addEventListener: (event, handler) => { audioEvents[event] = handler; } };
+    const waits = [], timers = [], messages = [], windowEvents = {}, audioEvents = {}, docEvents = {}, intervals = [];
+    let disconnected = 0, cleared = 0;
+    const audio = { tagName: 'AUDIO', paused: false, ended: false, addEventListener: (event, handler) => { audioEvents[event] = handler; } };
     const audios = [audio], observers = [];
     const button = { click: () => clicks++ };
     const document = {
@@ -25,14 +26,18 @@ function page(availableAfter, manual = false) {
         },
         querySelectorAll: selector => selector === 'audio' ? audios : [],
         body: {},
+        addEventListener: (event, handler) => { docEvents[event] = handler; },
+        removeEventListener: event => { delete docEvents[event]; },
     };
     const window = { invokeCSharpAction: m => messages.push(m), addEventListener: (event, handler) => { windowEvents[event] = handler; } };
     const context = { window, document,
-        MutationObserver: class { constructor(callback) { observers.push(callback); } observe() {} },
+        MutationObserver: class { constructor(callback) { observers.push(callback); } observe() {} disconnect() { disconnected++; } },
         setTimeout: (f, ms) => { waits.push(ms); if (manual || ms !== 250) timers.push(f); else f(); },
-        setInterval: (f, ms) => { assert.equal(ms, 1000); intervals.push(f); } };
-    return { run: () => runInNewContext(playlist, context), stop: () => runInNewContext(panic, context),
-        timers, waits, messages, windowEvents, audioEvents, intervals, audio, audios, observers, button, window, counts: () => [queries, clicks] };
+        setInterval: (f, ms) => { assert.equal(ms, 1000); intervals.push(f); return intervals.length; },
+        clearInterval: id => { if (id) cleared++; }, clearTimeout: () => {} };
+    return { run: (passive = false) => runInNewContext(passive ? playlist.replace('__CCP_PLAYLIST_PASSIVE__', 'yes') : playlist, context), stop: () => runInNewContext(panic, context),
+        timers, waits, messages, windowEvents, audioEvents, docEvents, intervals, audio, audios, observers, button, window,
+        cleanup: () => [disconnected, cleared], counts: () => [queries, clicks] };
 }
 
 test('clicks the playlist play button once after hydration', async () => {
@@ -112,9 +117,11 @@ test('reports a failed click and stops reporting after panic or replacement', as
     failed.button.click = () => { throw new Error('blocked'); };
     await failed.run();
     assert.deepEqual(failed.messages, [message('failed')]);
+    assert.deepEqual(failed.cleanup(), [1, 1]);
     const p = page(0);
     await p.run();
     p.stop();
+    assert.deepEqual(p.cleanup(), [1, 1]);
     p.timers[0]();
     p.audioEvents.playing();
     p.intervals[0]();
@@ -125,4 +132,14 @@ test('reports a failed click and stops reporting after panic or replacement', as
     replaced.audioEvents.playing();
     replaced.windowEvents.pagehide();
     assert.deepEqual(replaced.messages, []);
+});
+test('a later user play reactivates reporting after panic', async () => {
+    const p = page(0);
+    await p.run();
+    p.stop();
+    await p.run(true);
+    p.docEvents.playing({ target: p.audio });
+    assert.deepEqual(p.messages, [message('playing')]);
+    p.intervals[1]();
+    assert.deepEqual(p.messages, [message('playing'), message('progress')]);
 });

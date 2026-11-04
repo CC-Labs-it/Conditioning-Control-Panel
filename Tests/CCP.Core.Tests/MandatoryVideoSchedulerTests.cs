@@ -16,6 +16,7 @@ public sealed class MandatoryVideoSchedulerTests
     private sealed class Host : IMandatoryVideoHost
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
+        public bool BrowserMediaActive { get; set; }
         public int Closes;
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
@@ -67,6 +68,20 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Equal(2, host.Shown.Count);
     });
 
+    [Fact]
+    public void Browser_media_defers_scheduled_video_then_retries() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BrowserMediaActive = true };
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        video.Start();
+        clock.Advance(TimeSpan.FromSeconds(240));
+        Assert.False(video.IsPlaying);
+        Assert.Empty(host.Shown);
+        host.BrowserMediaActive = false;
+        clock.Advance(TimeSpan.FromSeconds(31.3));
+        Assert.Single(host.Shown);
+        video.Stop();
+    });
     [Fact]   // WPF VideoStarted (VideoService.cs:3370): once the clip is on screen, not at the trigger
     public void VideoStarted_fires_when_the_clip_is_shown() => With(20, false, () =>
     {

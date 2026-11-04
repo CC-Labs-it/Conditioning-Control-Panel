@@ -29,6 +29,9 @@ public sealed class CompanionPlaylistSessionTests
             settings.Current.WhatMovedCardShown, settings.Current.AvatarEnabled) = (true, true, 1, false);
         var previousNavigate = CompanionLinkLauncher.Navigate;
         var shell = new MainShellWindow();
+        var app = global::Avalonia.Application.Current!; var lifetimeField = typeof(global::Avalonia.Application).GetField("_applicationLifetime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var lifetime = lifetimeField.GetValue(app);
+        lifetimeField.SetValue(app, new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime { MainWindow = shell });
         var now = DateTime.UtcNow;
         shell.PlaylistClock = () => now;
         shell.BrowserAutoPlayDelay = () => Task.CompletedTask;
@@ -64,13 +67,25 @@ public sealed class CompanionPlaylistSessionTests
             host.OnNavigationCompleted(url, success: false);
             Assert.False(shell.Autonomy.IsBusy());
 
+            await CompanionLinkLauncher.OpenAsync(url.ToString());
+            shell.StopBrowserMediaForPanic();
+            host.OnNavigationCompleted(url);
+            var passive = Assert.Single(scripts, s => s.Contains("'yes' === 'yes'"));
+            Send(Regex.Match(passive, "const token = '([0-9a-f]{32})';").Groups[1].Value, "playing");
+            Assert.True(shell.Autonomy.IsBusy());
+            shell.StopBrowserMediaForPanic();
+            scripts.Clear();
             var first = await Open();
             Send(first, "playing");
             Assert.True(shell.Autonomy.IsBusy());
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.BrowserMediaActive);
+            Assert.True(BubbleCountHost.Instance.OtherInteractionActive);
             Send("stale", "ended");
             Assert.True(shell.Autonomy.IsBusy());
             Send(first, "ended");
             Assert.False(shell.Autonomy.IsBusy());
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.BrowserMediaActive);
+            Assert.False(BubbleCountHost.Instance.OtherInteractionActive);
             Send(first, "playing"); // WPF opens a user session if audio resumes
             Assert.True(shell.Autonomy.IsBusy());
             host.OnNavigationCompleted(new Uri("https://127.0.0.1/bambicloud.com/other"));
@@ -83,11 +98,17 @@ public sealed class CompanionPlaylistSessionTests
             Assert.True(shell.Autonomy.IsBusy());
             Send(second, "failed");
             Assert.False(shell.Autonomy.IsBusy());
+            Assert.Contains("window.__ccpPlaylistCleanup?.();", scripts);
 
             var third = await Open();
             shell.StopBrowserMediaForPanic();
             Assert.False(shell.Autonomy.IsBusy());
             Send(third, "playing");
+            Assert.False(shell.Autonomy.IsBusy());
+            var resumed = Regex.Match(Assert.Single(scripts, s => s.Contains("'yes' === 'yes'")), "const token = '([0-9a-f]{32})';").Groups[1].Value;
+            Send(resumed, "playing");
+            Assert.True(shell.Autonomy.IsBusy());
+            Send(resumed, "ended");
             Assert.False(shell.Autonomy.IsBusy());
             scripts.Clear();
 
@@ -110,6 +131,11 @@ public sealed class CompanionPlaylistSessionTests
             now = now.AddSeconds(1);
             shell.CheckPlaylistTimeout();
             Assert.False(shell.Autonomy.IsBusy());
+            var resumedAfterTimeout = Regex.Match(Assert.Single(scripts, s => s.Contains("'yes' === 'yes'")), "const token = '([0-9a-f]{32})';").Groups[1].Value;
+            Send(resumedAfterTimeout, "playing");
+            Assert.True(shell.Autonomy.IsBusy());
+            Send(resumedAfterTimeout, "ended");
+            Assert.False(shell.Autonomy.IsBusy());
             scripts.Clear();
 
             // WPF's queue claim is best effort. If it was busy, playback protection still applies.
@@ -130,6 +156,7 @@ public sealed class CompanionPlaylistSessionTests
         finally
         {
             CompanionLinkLauncher.Navigate = previousNavigate;
+            lifetimeField.SetValue(app, lifetime);
             shell.Close();
             Dispatcher.UIThread.RunJobs();
         }

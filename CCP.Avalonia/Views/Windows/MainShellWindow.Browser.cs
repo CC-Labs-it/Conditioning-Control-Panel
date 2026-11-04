@@ -97,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private WebHost? _pendingVideoHost;
         private WebHost? _playlistHost;
         private string? _playlistToken;
-        private bool _playlistClaimed, _playlistLoaded;
+        private bool _playlistClaimed, _playlistLoaded, _playlistPassive, _playlistScriptInjected;
         private volatile bool _playlistPlaying, _playlistSlotHeld;
         private DateTime _playlistHeartbeat;
         private DispatcherTimer? _playlistWatchdog;
@@ -105,14 +105,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF BrowserMediaService.cs:196-223 claims before navigation, best effort if busy.
         // This head has no shared interaction queue; the slot here protects Takeover only.
-        private bool PlaylistBlocksAutonomy => _playlistSlotHeld ||
+        internal bool PlaylistBlocksAutonomy => _playlistSlotHeld ||
             (_playlistPlaying && CoreSettings.Current.ProtectBrowserVideoPlayback);
 
         private void ClaimPlaylist(WebHost host)
         {
             _playlistHost = host;
             _playlistToken = Guid.NewGuid().ToString("N");
-            _playlistLoaded = false;
+            _playlistLoaded = _playlistPassive = _playlistScriptInjected = false;
             _playlistClaimed = true;
             _playlistPlaying = false;
             _playlistSlotHeld = !Autonomy.IsBusy();
@@ -130,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 host.WebMessage -= OnPlaylistMessage;
                 host.NavigationFinished -= OnPlaylistNavigation;
+                _ = host.InvokeScriptAsync("window.__ccpPlaylistCleanup?.();");
             }
             _playlistHost = null;
             _playlistToken = null;
@@ -144,7 +145,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnPlaylistNavigation(Uri url, bool success)
         {
-            if (!_playlistLoaded && success) { _playlistLoaded = true; return; }
+            if (!_playlistLoaded && success)
+            {
+                _playlistLoaded = true;
+                if (_playlistPassive && !_playlistScriptInjected) InstallPassivePlaylist();
+                return;
+            }
             CancelVideoAutoPlay(); // failed first load or a later navigation, including an in-page link
         }
 
@@ -191,29 +197,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // waits 1.5 seconds before injection. WebHost has completion but no DOM-ready event.
         internal Func<Task> BrowserAutoPlayDelay = () => Task.Delay(1500);
 
-        private void CancelVideoAutoPlay()
+        private void InstallPassivePlaylist()
+        {
+            if (_playlistHost == null || _playlistToken == null) return;
+            _playlistScriptInjected = true;
+            _ = _playlistHost.InvokeScriptAsync(PlaylistAutoPlayScript.Replace("__CCP_PLAYLIST_TOKEN__", _playlistToken)
+                .Replace("__CCP_PLAYLIST_PASSIVE__", "yes"));
+        }
+
+        private void CancelVideoAutoPlay(bool keepPlaylist = false)
         {
             ++_browserRequestGeneration;
             if (_pendingVideoHost != null && _pendingVideoAutoPlay != null)
                 _pendingVideoHost.NavigationFinished -= _pendingVideoAutoPlay;
             _pendingVideoHost = null;
             _pendingVideoAutoPlay = null;
-            ReleasePlaylist();
+            if (keepPlaylist && _playlistHost != null)
+            {
+                _playlistClaimed = _playlistPlaying = _playlistSlotHeld = false;
+                (_playlistPassive, _playlistScriptInjected, _playlistToken) = (true, false, Guid.NewGuid().ToString("N"));
+                _playlistWatchdog?.Stop();
+            }
+            else ReleasePlaylist();
         }
 
         // WPF MainWindow.xaml.cs:2042-2045 and MainWindow.Browser.cs:973-990.
         // Invalidate the delayed injection before asking the current page to stop.
         internal void StopBrowserMediaForPanic()
         {
-            CancelVideoAutoPlay();
+            CancelVideoAutoPlay(keepPlaylist: true);
             if (BrowserView is { HasEngine: true } host)
                 _ = host.InvokeScriptAsync(PanicBrowserMediaScript);
+            if (_playlistLoaded && !_playlistScriptInjected) InstallPassivePlaylist();
         }
 
         internal const string PanicBrowserMediaScript = """
             (function() {
                 window._ccpForcedFs = false;
                 window._ccpTakeoverStopped = true;
+                if (window.__ccpPlaylistCleanup) window.__ccpPlaylistCleanup();
                 document.querySelectorAll('video,audio').forEach(v => { try { v.pause(); } catch (e) {} });
                 try {
                     const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
@@ -244,6 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
+            if (playlist) _playlistScriptInjected = true;
             var script = playlist ? PlaylistAutoPlayScript.Replace("__CCP_PLAYLIST_TOKEN__", _playlistToken!) : VideoAutoPlayScript;
             await host.InvokeScriptAsync(script);
         }
@@ -305,15 +328,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         else if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(message);
                     } catch (_) {}
                 };
-                window.addEventListener('pagehide', () => post('navigated'), { once: true });
-                let btn = document.querySelector('button.play-action');
-                for (let i = 0; i < 20 && !btn; i++) {
-                    await new Promise(r => setTimeout(r, 250));
-                    if (!current()) return;
-                    btn = document.querySelector('button.play-action');
-                }
-                if (!btn) { post('failed'); return; }
-                let active = null, notified = false;
+                let active = null, notified = false, beat = null, fallback = null;
+                const observer = new MutationObserver(() => scan());
+                const cleanup = () => { observer.disconnect(); clearInterval(beat); clearTimeout(fallback); document.removeEventListener('playing', wake, true); beat = fallback = null; };
+                window.__ccpPlaylistCleanup = cleanup;
                 const bind = audio => {
                     if (!audio || audio.__ccpPlaylistBound === token) return;
                     audio.__ccpPlaylistBound = token;
@@ -324,12 +342,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }, 2000));
                 };
                 const scan = () => document.querySelectorAll('audio').forEach(bind);
-                scan();
-                new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
-                setInterval(() => { if (active && !active.paused && !active.ended) post('progress'); }, 1000);
+                const start = () => {
+                    scan();
+                    observer.observe(document.body, { childList: true, subtree: true });
+                    if (beat === null) beat = setInterval(() => { if (active && !active.paused && !active.ended) post('progress'); }, 1000);
+                };
+                const wake = e => {
+                    if (window.__ccpPlaylistToken !== token || !window._ccpTakeoverStopped || e.target?.tagName !== 'AUDIO') return;
+                    window._ccpTakeoverStopped = false;
+                    active = e.target; notified = true; post('playing'); start();
+                };
+                document.addEventListener('playing', wake, true);
+                window.addEventListener('pagehide', () => { post('navigated'); cleanup(); document.removeEventListener('playing', wake, true); }, { once: true });
+                if ('__CCP_PLAYLIST_PASSIVE__' === 'yes') { window._ccpTakeoverStopped = true; return; }
+                start();
+                let btn = document.querySelector('button.play-action');
+                for (let i = 0; i < 20 && !btn; i++) {
+                    await new Promise(r => setTimeout(r, 250));
+                    if (!current()) return;
+                    btn = document.querySelector('button.play-action');
+                }
+                if (!btn) { cleanup(); post('failed'); return; }
                 if (!current()) return;
-                try { btn.click(); } catch (_) { post('failed'); return; }
-                setTimeout(() => { if (!notified) { notified = true; post('playing'); } }, 3000);
+                try { btn.click(); } catch (_) { cleanup(); post('failed'); return; }
+                fallback = setTimeout(() => { if (!notified) { notified = true; post('playing'); } }, 3000);
             })();
             """;
 
