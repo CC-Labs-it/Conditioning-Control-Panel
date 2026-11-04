@@ -163,6 +163,15 @@ namespace ConditioningControlPanel.Avalonia
             definitions.QuestDefinitionsUpdated += () => Quests?.CheckAndGenerateQuests();
             // WPF ProgressionService.AddXP:120 feeds every award to the "earn X XP" quests.
             ProgressionBank.Awarded += (amount, _) => Quests?.TrackXPEarned((int)amount);
+            CreditBankedLoginStreak(Quests, Achievements?.Progress, DateTime.Today);
+        }
+
+        /// <summary>Credit only a day already banked by the login streak writer. A stale local
+        /// streak may have a gap or a newer cloud value and must not complete a quest yet.</summary>
+        internal static void CreditBankedLoginStreak(QuestService quests, Models.AchievementProgress? progress, DateTime today)
+        {
+            if (progress != null && progress.LastLaunchDate.Date == today.Date && !progress.PendingStreakBreak)
+                quests.TrackStreak(progress.ConsecutiveDays);
         }
 
         /// <summary>WPF App.xaml.cs:414. WPF plays SystemSounds.Exclamation; Linux has no stock
