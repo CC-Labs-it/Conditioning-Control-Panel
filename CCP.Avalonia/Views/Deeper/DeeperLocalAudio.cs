@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using LibVLCSharp.Shared;
 
@@ -24,19 +25,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// <summary>Null when libvlc did not load or the file will not parse. Tests swap it.</summary>
         internal static Func<string, Task<IDeeperLocalAudio?>> Open { get; set; } = OpenVlcAsync;
 
-        private static async Task<IDeeperLocalAudio?> OpenVlcAsync(string path)
+        internal static Func<string, Image, Task<IDeeperLocalAudio?>> OpenVideo { get; set; } = OpenVideoAsync;
+
+        private static Task<IDeeperLocalAudio?> OpenVlcAsync(string path) => OpenVlcAsync(path, null);
+        private static Task<IDeeperLocalAudio?> OpenVideoAsync(string path, Image image) => OpenVlcAsync(path, image);
+
+        private static async Task<IDeeperLocalAudio?> OpenVlcAsync(string path, Image? image)
         {
             var vlc = LibVlcAudio.Shared;
             if (vlc == null) return null;
             var media = new Media(vlc, path, FromType.FromPath);
-            media.AddOption(LibVlcAudio.NoVideo);
+            if (image == null) media.AddOption(LibVlcAudio.NoVideo);
             // AudioFileReader.TotalTime: the parse gives the duration before anything plays.
             var status = await media.Parse(MediaParseOptions.ParseLocal, 5000);
             if (status != MediaParsedStatus.Done || media.Duration <= 0) { media.Dispose(); return null; }
             var mp = new MediaPlayer(media);
+            var sink = image == null ? null : new VlcFrameSink(mp, () => media, bmp => image.Source = bmp, image.InvalidateVisual);
             var audio = new Transport(new VlcEngine(mp), media.Duration, () =>
             {
-                try { mp.Stop(); mp.Dispose(); media.Dispose(); }
+                try { mp.Stop(); sink?.Free(); mp.Dispose(); media.Dispose(); }
                 catch (Exception ex) { Serilog.Log.Debug(ex, "DeeperEditor: local audio dispose"); }
             });
             // Never act inside libvlc's own event (deadlock; device and seek do not stick there).

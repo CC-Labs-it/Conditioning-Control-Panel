@@ -69,6 +69,46 @@ public sealed class DeeperRowsTests
         public void Dispose() => Disposed = true;
     }
 
+    [Theory]
+    [InlineData("mkv")]
+    [InlineData("avi")]
+    public Task EditorLocalVideoUsesTransport(string extension) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-video-").FullName;
+        var path = Path.Combine(dir, "clip." + extension);
+        File.WriteAllBytes(path, new byte[16]);
+        var fake = new FakeAudio();
+        var original = DeeperLocalAudio.OpenVideo;
+        DeeperLocalAudio.OpenVideo = (p, image) => Task.FromResult<IDeeperLocalAudio?>(p == path ? fake : null);
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Video, MediaSource = path }, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(editor.LocalVideoImage.IsVisible);
+            Assert.False(editor.BrowserPreview.IsVisible);
+            Assert.False(fake.Playing);
+            Assert.Equal("1:35", editor.TxtTotalTime.Text);
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
+            Invoke(editor, "SeekToFraction", 0.5);
+            Assert.Equal(47.5, fake.PositionSeconds);
+            fake.End();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            Assert.Equal("0:00", editor.TxtCurrentTime.Text);
+        }
+        finally
+        {
+            editor.Close();
+            DeeperLocalAudio.OpenVideo = original;
+            Directory.Delete(dir, true);
+        }
+        Assert.True(fake.Disposed);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task EditorLocalAudioPlaysSeeksEndsAndStopsOnPanic() => AvaloniaTestDispatcher.RunAsync(() =>
     {
