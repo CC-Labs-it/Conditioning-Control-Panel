@@ -191,6 +191,7 @@ namespace ConditioningControlPanel.Services
             ["rack.subliminal"] = Cover("features/subliminal.png"),
             ["rack.spiral"] = Cover("features/spiral_overlay.png"),
             ["rack.pinkfilter"] = Cover("features/Pink_filter.png"),
+            ["rack.wallpaper"] = Cover("features/wallpaper.png"),
             ["rack.bubbles"] = Cover("features/Bubble_pop.png"),
             ["rack.bubblecount"] = Cover("features/Bubble_count.png"),
             ["rack.lockcard"] = Cover("features/Phrase_Lock.png"),
