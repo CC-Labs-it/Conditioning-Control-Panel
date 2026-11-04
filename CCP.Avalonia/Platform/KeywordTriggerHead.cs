@@ -122,6 +122,8 @@ internal sealed class KeywordAudioRuntime
     private long _voiceGeneration;
     private Action? _stop;
     private long? _duckGeneration;
+    private readonly System.Collections.Generic.HashSet<object> _ducks = new();
+    private Action? _releaseVoice;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
@@ -222,6 +224,9 @@ internal sealed class KeywordAudioRuntime
         _pendingAudio = new CancellationTokenSource();
         pending.Cancel(); pending.Dispose();
         StopCurrentAudio();
+        _ducks.Clear();
+        if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
+        _duckGeneration = null;
     }
 
     private void StopCurrentAudio()
@@ -229,8 +234,7 @@ internal sealed class KeywordAudioRuntime
         ++_voiceGeneration;
         var stop = _stop; _stop = null;
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
-        if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
-        _duckGeneration = null;
+        var release = _releaseVoice; _releaseVoice = null; release?.Invoke();
     }
 
     private async Task<bool> Play(PlayAudioAction audio)
@@ -246,11 +250,13 @@ internal sealed class KeywordAudioRuntime
         if (!File.Exists(path)) return true;
         StopCurrentAudio();
         var token = _pendingAudio.Token;
+        var owner = new object();
         if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
         {
-            CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
-            _duckGeneration = CoreAudio.DuckGeneration;
+            if (_ducks.Count == 0) { CoreAudio.Duck(CoreSettings.Current.DuckingLevel); _duckGeneration = CoreAudio.DuckGeneration; }
+            _ducks.Add(owner);
         }
+        void Release() { if (_ducks.Remove(owner) && _ducks.Count == 0 && _duckGeneration is { } g) { CoreAudio.Unduck(g); _duckGeneration = null; } }
         try
         {
             var count = Math.Max(1, audio.PlayCount);
@@ -258,20 +264,21 @@ internal sealed class KeywordAudioRuntime
             {
                 if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
                 token.ThrowIfCancellationRequested();
-                _stop?.Invoke();
+                StopCurrentAudio();
                 var generation = ++_voiceGeneration;
                 var last = i == count - 1;
+                _releaseVoice = last ? Release : null;
                 _stop = CoreAudio.PlayStoppable(path,
                     KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                     onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
                     {
-                        try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _voiceGeneration) StopCurrentAudio(); }
+                        try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _voiceGeneration) StopCurrentAudio(); else Release(); }
                         catch (OperationCanceledException) { }
                     }); });
             }
             return true;
         }
-        catch (OperationCanceledException) { return false; }
-        catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopCurrentAudio(); return false; }
+        catch (OperationCanceledException) { Release(); return false; }
+        catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopCurrentAudio(); Release(); return false; }
     }
 }
