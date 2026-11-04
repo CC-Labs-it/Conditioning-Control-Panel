@@ -133,6 +133,47 @@ public sealed class PrivacySyncTests
         }
     }
 
+    // WPF ProfileSyncService.StopTimersForAccountSwap stops the nudge: a reset forgets the old one, new ones still queue.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResetDropsAQueuedNudgeAndAcceptsTheNext(bool nudgeAgain)
+    {
+        var (oldSettings, oldLogin, settings, handler) = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, new SettingsService(), new FakeSync());
+        (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider) = (() => settings, () => true);
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler);
+        try
+        {
+            (settings.Current.UnifiedId, settings.Current.AuthToken, settings.Current.LastConfirmedServerXp, settings.Current.OfflineMode) = ("nudge-test", "fake", 0, false);
+            sync.MarkLoaded(null); sync.Nudge("old account");
+            sync.Reset(); sync.MarkLoaded(null);   // the next account's profile loaded
+            if (nudgeAgain) sync.Nudge("new account");
+            await Task.Delay(TimeSpan.FromSeconds(4.5));
+            Assert.Equal(nudgeAgain ? 1 : 0, handler.Bodies.Count);
+        }
+        finally { sync.Reset(); (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider) = (oldSettings, oldLogin); }
+    }
+
+    [Fact]
+    public async Task ResetWaitsForNudgeSchedulingToFinish()
+    {
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false);
+        using var claimed = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        sync.MarkLoaded(null);
+        sync.NudgeClaimedForTest = () => { claimed.Set(); release.Wait(); };
+        var nudge = Task.Run(() => sync.Nudge("old"));
+        try
+        {
+            Assert.True(claimed.Wait(TimeSpan.FromSeconds(5)));
+            var reset = Task.Run(() => sync.Reset());
+            Assert.NotSame(reset, await Task.WhenAny(reset, Task.Delay(300)));
+            release.Set();
+            await Task.WhenAll(nudge, reset);
+        }
+        finally { release.Set(); await nudge; sync.Reset(); }
+    }
+
     private sealed class FakeSync : HttpMessageHandler
     {
         internal readonly List<JObject> Bodies = new();

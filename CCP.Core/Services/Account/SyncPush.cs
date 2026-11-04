@@ -94,7 +94,9 @@ namespace ConditioningControlPanel.Services
         private readonly SemaphoreSlim _gate = new(1, 1);
         private string[]? _serverAchievements;   // null: the profile carried none, so achievements are not known
         private Timer? _heartbeat;
-        private int _nudgePending;
+        private readonly object _nudgeLock = new();
+        internal Action? NudgeClaimedForTest;
+        private int _nudgePending, _nudgeEpoch;   // Reset bumps the epoch so a queued nudge from before it never fires
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
 
@@ -146,19 +148,27 @@ namespace ConditioningControlPanel.Services
         /// <summary>The profile load succeeded: the baseline pushes are allowed against.</summary>
         public void MarkLoaded(IEnumerable<string>? serverAchievements)
         {
-            _serverAchievements = serverAchievements?.ToArray();
-            Loaded = true;
+            lock (_nudgeLock)
+            {
+                _serverAchievements = serverAchievements?.ToArray();
+                Loaded = true;
+            }
         }
 
         /// <summary>Logout: nothing is pushed until the next load.</summary>
         public void Reset()
         {
             StopHeartbeat();
+            lock (_nudgeLock)
+            {
+                _nudgeEpoch++;   // WPF StopTimersForAccountSwap stops the nudge timer
+                _nudgePending = 0;
+                Loaded = false;
+                _serverAchievements = null;
+                _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
+                LastSyncTime = null;
+            }
             DescentReader?.Reset();
-            Loaded = false;
-            _serverAchievements = null;
-            _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
-            LastSyncTime = null;
         }
 
         private static bool SignedIn(AppSettings s) => !s.OfflineMode && !string.IsNullOrEmpty(s.UnifiedId) && CoreAccount.IsLoggedIn;
@@ -319,14 +329,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF NudgeSyncSoon: one coalesced push, 3 s out or just past the cooldown.</summary>
         public void Nudge(string reason)
         {
-            if (!Loaded || Interlocked.Exchange(ref _nudgePending, 1) == 1) return;
-            var wait = NudgeSettle;
-            if (LastSyncTime is { } last && UtcNow() - last < Cooldown) wait = Cooldown - (UtcNow() - last) + NudgeCooldownSlack;
-            _ = Task.Delay(wait).ContinueWith(async _ =>
+            lock (_nudgeLock)
             {
-                Interlocked.Exchange(ref _nudgePending, 0);
-                await PushAsync(reason);
-            }, TaskScheduler.Default);
+                if (!Loaded || _nudgePending == 1) return;
+                _nudgePending = 1;
+                NudgeClaimedForTest?.Invoke();
+                var epoch = _nudgeEpoch;
+                var wait = NudgeSettle;
+                if (LastSyncTime is { } last && UtcNow() - last < Cooldown) wait = Cooldown - (UtcNow() - last) + NudgeCooldownSlack;
+                _ = Task.Delay(wait).ContinueWith(completed =>
+                {
+                    lock (_nudgeLock)
+                    {
+                        if (epoch != _nudgeEpoch) return;
+                        _nudgePending = 0;
+                        _ = PushAsync(reason);
+                    }
+                }, TaskScheduler.Default);
+            }
         }
 
         /// <summary>WPF StartHeartbeat: one now, then every 120 s.</summary>

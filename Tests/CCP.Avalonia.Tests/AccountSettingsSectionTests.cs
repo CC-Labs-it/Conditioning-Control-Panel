@@ -12,6 +12,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -102,6 +103,30 @@ public sealed class AccountSettingsSectionTests
         }
     }
 
+    private sealed class MergedExportServer(AppSettings settings) : HttpMessageHandler
+    {
+        public readonly List<string> Paths = new();
+        public bool ClearedAndStopped, FailProfile;
+        public TaskCompletionSource? AuthSeen, Hold;   // set: the provider reply waits until the test releases it
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            lock (Paths) Paths.Add(path);
+            if (path == "/v2/user/export-data")
+                return new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") };
+            if (path.StartsWith("/v2/auth/"))
+            {
+                ClearedAndStopped = settings.AuthToken == null && AccountSeed.Sync?.Loaded == false && AccountSeed.Sync?.HeartbeatRunning == false;
+                AuthSeen?.TrySetResult();
+                if (Hold != null) await Hold.Task;
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"success\":true,\"auth_token\":\"fresh\",\"user\":{\"unified_id\":\"u_canon123\",\"display_name\":\"Bambi\"}}") };
+            }
+            if (path == "/v2/user/profile" && FailProfile) return new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") };
+            var body = path == "/v2/user/profile" ? "{\"user\":{\"unified_id\":\"u_canon123\",\"display_name\":\"Bambi\"}}" : "{\"backup\":null}";
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
+        }
+    }
+
     private static string Packed(AppSettings settings)
     {
         using var output = new MemoryStream();
@@ -170,6 +195,157 @@ public sealed class AccountSettingsSectionTests
             AccountSettingsSection.NewBackup = oldBackup;
             AccountSettingsSection.Tell = oldTell;
             AccountSettingsSection.Confirm = oldConfirm;
+        }
+    });
+
+    // AccountSeed.Seed is the production startup path (App.axaml.cs:665); only HTTP is faked.
+    [Theory]
+    [InlineData("patreon")] [InlineData("discord")]
+    [InlineData("substar")] [InlineData("none")] [InlineData("none-early")]
+    [InlineData("patreon-logout")] [InlineData("patreon-noprofile")]
+    public Task MergedExportUsesStartupRecoveryAndPreservesQuests(string provider) => RunAsync(async (_, section, s, secrets) =>
+    {
+        var oldSync = AccountSeed.Sync; var oldV2 = AccountSeed.NewV2;
+        var oldBackup = AccountSettingsSection.NewBackup; var oldTell = AccountSettingsSection.Tell;
+        var oldSession = CoreSession.IsSessionRunningProvider; var oldQuests = global::ConditioningControlPanel.Avalonia.App.Quests; var oldTour = CoreTutorial.IsActiveProvider; var oldModal = MainShellWindow.IsStartupDialogShowing;
+        using var quests = new QuestService(null, CorePaths.UserData);
+        var server = new MergedExportServer(s); var sync = new SyncPush(() => Array.Empty<string>(), () => false, server);
+        var dialogs = new List<string>();
+        MergedAccountRecovery.ResetForTest(); StartupLadder.ResetForTests();
+        try
+        {
+            var mode = provider.Split('-').Skip(1).FirstOrDefault(); provider = provider.Split('-')[0];
+            if (mode == "logout") (server.AuthSeen, server.Hold) = (new(TaskCreationOptions.RunContinuationsAsynchronously), new(TaskCreationOptions.RunContinuationsAsynchronously));
+            server.FailProfile = mode == "noprofile";
+            if (provider != "none") secrets[provider + "_auth"] = JsonConvert.SerializeObject(new PatreonTokenData { AccessToken = "a", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+            s.UnifiedId = CoreAccount.UnifiedUserId = "u_tombstone1"; s.AuthToken = "old"; s.PlayerLevel = 9;
+            quests.StampOwner(s.UnifiedId); global::ConditioningControlPanel.Avalonia.App.Quests = quests;
+            sync.MarkLoaded(Array.Empty<string>()); sync.StartHeartbeat(); AccountSeed.Sync = sync;
+            AccountSeed.NewV2 = () => new V2AuthService(() => s, server);
+            AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(server);
+            AccountSettingsSection.Tell = (_, _, body) => { dialogs.Add(body); return Task.CompletedTask; };
+            CoreSession.IsSessionRunningProvider = () => mode != "early"; CoreTutorial.IsActiveProvider = () => false; MainShellWindow.IsStartupDialogShowing = false;
+            if (mode == "early") Assert.False(StartupLadder.IsQuiet);
+            await section.ExportDataAsync();
+            if (mode == "logout")
+            {
+                // The provider answers only after the user signed out: nobody is signed back in.
+                await server.AuthSeen!.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await AccountSeed.Logout();
+                server.Hold!.SetResult();
+                await MergedAccountRecovery.LastSwap.WaitAsync(TimeSpan.FromSeconds(10)); Dispatcher.UIThread.RunJobs();
+                Assert.Null(s.UnifiedId); Assert.Null(s.AuthToken); Assert.Null(CoreAccount.UnifiedUserId);
+                Assert.DoesNotContain("/v2/user/profile", server.Paths);
+                Assert.False(sync.Loaded); Assert.False(sync.HeartbeatRunning);
+                Assert.DoesNotContain(StartupLadder.Inbox.Items, item => item.Key == "merged-account-signin:u_canon123");
+                return;
+            }
+            await MergedAccountRecovery.LastSwap.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(Loc.Get("account_merged_retry_hint"), dialogs);
+            Assert.Equal("u_canon123", s.UnifiedId); Assert.Equal("u_canon123", CoreAccount.UnifiedUserId);
+            Assert.Equal("u_canon123", quests.Progress.OwnerUnifiedId); Assert.Equal(9, s.PlayerLevel);
+            if (provider != "none")
+            {
+                Assert.Contains("/v2/auth/" + provider, server.Paths);
+                Assert.True(server.ClearedAndStopped); Assert.Equal("fresh", s.AuthToken);
+                // A failed read is retried once; pushes stay off, the heartbeat restarts as WPF.
+                lock (server.Paths) Assert.Equal(mode == "noprofile" ? 2 : 1, server.Paths.Count(p => p == "/v2/user/profile"));
+                Assert.Equal(mode != "noprofile", sync.Loaded);
+                Assert.True(sync.HeartbeatRunning);
+            }
+            else
+            {
+                Assert.Null(s.AuthToken);
+                Assert.False(sync.Loaded); Assert.False(sync.HeartbeatRunning);
+                Assert.Contains(StartupLadder.Inbox.Items, item => item.Key == "merged-account-signin:u_canon123");
+            }
+        }
+        finally
+        {
+            sync.Reset(); AccountSeed.Sync = oldSync; AccountSeed.NewV2 = oldV2;
+            AccountSettingsSection.NewBackup = oldBackup; AccountSettingsSection.Tell = oldTell;
+            CoreSession.IsSessionRunningProvider = oldSession; CoreTutorial.IsActiveProvider = oldTour; MainShellWindow.IsStartupDialogShowing = oldModal;
+            global::ConditioningControlPanel.Avalonia.App.Quests = oldQuests;
+            MergedAccountRecovery.ResetForTest(); StartupLadder.ResetForTests();
+        }
+    });
+
+    [Fact]
+    public Task ExportButtonFetchesThenSavesAndRestoresItsLabel() => RunAsync(async (shell, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        var server = new CannedBackup("{\"data\":{\"name\":\"Ada\"}}");
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var (oldBackup, oldPick, oldTell) = (AccountSettingsSection.NewBackup, AccountSettingsSection.PickExport, AccountSettingsSection.Tell);
+        var picked = new TaskCompletionSource<string?>();
+        var told = new TaskCompletionSource<(string Title, string Body)>();
+        var path = Path.Combine(CorePaths.UserData, "export-test.json");
+        FilePickerSaveOptions? options = null;
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(server);
+        AccountSettingsSection.PickExport = (owner, o) => { Assert.Same(shell, owner); options = o; return picked.Task; };
+        AccountSettingsSection.Tell = (_, title, body) => { Dispatcher.UIThread.Post(() => told.TrySetResult((title, body))); return Task.CompletedTask; };
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("es");
+            section.Refresh();
+            Click(section, "BtnExportData");
+            Assert.False(section.FindControl<Button>("BtnExportData")!.IsEnabled);
+            Assert.Equal(Loc.Get("btn_exporting"), Text(section, "TxtBtnExportData"));
+            Assert.Contains("/v2/user/export-data", server.Paths);
+            Assert.NotNull(options);
+            Assert.Equal(Loc.Get("title_save_data_export"), options!.Title);
+            Assert.Equal($"my-data-export-{DateTime.Now:yyyy-MM-dd}.json", options.SuggestedFileName);
+            var fileType = Assert.Single(options.FileTypeChoices!);
+            Assert.Equal("Archivos JSON", fileType.Name);
+            Assert.Contains("*.json", fileType.Patterns!);
+            picked.SetResult(path);
+            var dialog = await told.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(Loc.Get("title_export_complete"), dialog.Title);
+            Assert.Contains(path, dialog.Body);
+            Assert.Equal(Newtonsoft.Json.Linq.JToken.Parse("{\"data\":{\"name\":\"Ada\"}}").ToString(), File.ReadAllText(path));
+            Assert.True(section.FindControl<Button>("BtnExportData")!.IsEnabled);
+            Assert.Equal(Loc.Get("btn_export_my_data"), Text(section, "TxtBtnExportData"));
+        }
+        finally
+        {
+            File.Delete(path);
+            (AccountSettingsSection.NewBackup, AccountSettingsSection.PickExport, AccountSettingsSection.Tell) = (oldBackup, oldPick, oldTell);
+            LocalizationManager.Instance.SetLanguage(language);
+        }
+    });
+
+    [Fact]
+    public Task ExportCancellationAndFailureDoNotSave() => RunAsync(async (_, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        var (oldBackup, oldPick, oldTell) = (AccountSettingsSection.NewBackup, AccountSettingsSection.PickExport, AccountSettingsSection.Tell);
+        var picks = 0;
+        var dialogs = new List<string>();
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup("{}"));
+        AccountSettingsSection.PickExport = (_, _) => { picks++; return Task.FromResult<string?>(null); };
+        AccountSettingsSection.Tell = (_, title, _) => { dialogs.Add(title); return Task.CompletedTask; };
+        try
+        {
+            await section.ExportDataAsync();
+            Assert.Equal(1, picks);
+            Assert.Empty(dialogs);
+            // Saving to a directory fails after the picker, and reports the write error.
+            AccountSettingsSection.PickExport = (_, _) => Task.FromResult<string?>(CorePaths.UserData);
+            await section.ExportDataAsync();
+            Assert.Equal(Loc.Get("title_export_error"), Assert.Single(dialogs));
+            dialogs.Clear();
+            s.UnifiedId = null;
+            await section.ExportDataAsync();
+            Assert.Equal(1, picks);
+            Assert.Equal(Loc.Get("title_export_failed"), Assert.Single(dialogs));
+            Assert.True(section.FindControl<Button>("BtnExportData")!.IsEnabled);
+            Assert.Equal(Loc.Get("btn_export_my_data"), Text(section, "TxtBtnExportData"));
+        }
+        finally
+        {
+            (AccountSettingsSection.NewBackup, AccountSettingsSection.PickExport, AccountSettingsSection.Tell) = (oldBackup, oldPick, oldTell);
         }
     });
 
@@ -263,7 +439,7 @@ public sealed class AccountSettingsSectionTests
             Assert.True(Shown(section, "BtnLinkDiscord"));
             Assert.False(Shown(section, "BtnLinkPatreon"));         // the grant works
             Assert.True(Shown(section, "DataPrivacySection"));
-            Assert.False(Shown(section, "BtnExportData"));          // not ported: hidden, not inert
+            Assert.True(Shown(section, "BtnExportData"));           // available inside the signed-in privacy section
 
             Click(section, "BtnPatreonLogin");     // the only provider: the whole account goes
 

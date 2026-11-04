@@ -495,6 +495,41 @@ namespace ConditioningControlPanel.Services
             return reader.ReadToEnd();
         }
 
+        /// <summary>WPF ProfileSyncService.ExportDataAsync: request the account export and return formatted JSON.</summary>
+        public async Task<(bool Success, string? Error, string? JsonData)> ExportDataAsync(AppSettings settings)
+        {
+            var id = settings.UnifiedId;
+            if (string.IsNullOrEmpty(id)) return (false, Localization.Loc.Get("cloud_export_sign_in_required"), null);
+            try
+            {
+                using var response = await PostAsync("/v2/user/export-data", settings, new { unified_id = id });
+                var result = (Status: response.StatusCode, Body: await response.Content.ReadAsStringAsync());
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, result.Body))
+                        return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
+                    if (await AuthRecovery.HandleUnauthorizedAsync(response)
+                        && !string.IsNullOrEmpty(settings.AuthToken) && settings.UnifiedId == id)
+                    {
+                        // Retry once (WPF ProfileSyncService.cs:4285-4293).
+                        using var retry = await PostAsync("/v2/user/export-data", settings, new { unified_id = id });
+                        result = (retry.StatusCode, await retry.Content.ReadAsStringAsync());
+                    }
+                }
+                if ((int)result.Status < 200 || (int)result.Status >= 300)
+                {
+                    var error = (string?)JsonConvert.DeserializeObject<JObject>(result.Body)?["error"] ?? Localization.Loc.GetF("cloud_export_server_error", result.Status);
+                    return (false, error, null);
+                }
+                return (true, null, JToken.Parse(result.Body).ToString(Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Export data request failed");
+                return (false, Localization.Loc.Get("cloud_export_connection_required"), null);
+            }
+        }
+
         private async Task<JObject?> FetchAsync(AppSettings settings) => (await FetchSlotAsync(settings)).Backup;
 
         /// <summary>Ok = the server answered (Backup null: there is no backup yet); not Ok = refused or failed.</summary>
