@@ -40,8 +40,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var status = await media.Parse(MediaParseOptions.ParseLocal, 5000);
             if (status != MediaParsedStatus.Done || media.Duration <= 0) { media.Dispose(); return null; }
             var mp = new MediaPlayer(media);
-            var sink = image == null ? null : new VlcFrameSink(mp, () => media, bmp => image.Source = bmp, image.InvalidateVisual);
-            var audio = new Transport(new VlcEngine(mp), media.Duration, () =>
+            Transport? audio = null;
+            var sink = image == null ? null : new VlcFrameSink(mp, () => media, bmp => image.Source = bmp,
+                () => { image.InvalidateVisual(); audio?.OnVideoFrame(); });
+            audio = new Transport(new VlcEngine(mp), media.Duration, () =>
             {
                 try { mp.Stop(); sink?.Free(); mp.Dispose(); media.Dispose(); }
                 catch (Exception ex) { Serilog.Log.Debug(ex, "DeeperEditor: local audio dispose"); }
@@ -49,10 +51,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // Never act inside libvlc's own event (deadlock; device and seek do not stick there).
             mp.Playing += (_, _) => ThreadPool.QueueUserWorkItem(_ =>
             {
-                lock (audio.Gate) if (!audio.IsDisposed) LibVlcAudio.ApplyPreferredDevice(mp);
                 audio.OnPlaying();
+                lock (audio.Gate) if (!audio.IsDisposed) LibVlcAudio.ApplyPreferredDevice(mp);
             });
+            mp.Paused += (_, _) => ThreadPool.QueueUserWorkItem(_ => audio.OnPaused());
             mp.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => audio.OnEndReached());
+            if (image != null) audio.PrimeVideo();
             return audio;
         }
 
@@ -84,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             internal readonly object Gate = new();
             private long _pendingMs;   // a seek made before playback could take it; consumed once
+            private bool _primingVideo, _primePlaying, _primePauseRequested, _playAfterPrime;
             private int _disposed;
             internal bool IsDisposed => _disposed != 0;
 
@@ -127,6 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 lock (Gate)
                 {
+                    if (_primingVideo) { _playAfterPrime = true; return; }
                     if (player.State == VLCState.Paused) player.SetPause(false);
                     else player.Play();
                 }
@@ -138,26 +144,66 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 lock (Gate)
                 {
+                    if (_primingVideo) { _playAfterPrime = false; return; }
                     if (player.State == VLCState.Playing) player.SetPause(true);
                     else if (player.State != VLCState.Paused) player.Stop();
                 }
             }
 
-            /// <summary>Raised on every start AND every resume: a pending seek is applied once.</summary>
+            // WPF starts the video once and pauses it to render the first frame.
+            internal void PrimeVideo()
+            {
+                lock (Gate)
+                {
+                    if (IsDisposed) return;
+                    _primingVideo = true;
+                    _primePlaying = false;
+                    _primePauseRequested = false;
+                    _playAfterPrime = false;
+                    player.Play();
+                }
+            }
+
+            /// <summary>Apply a pending seek off the VLC thread.</summary>
             internal void OnPlaying()
             {
                 lock (Gate)
                 {
-                    if (IsDisposed || _pendingMs <= 0) return;
-                    player.Time = _pendingMs;
-                    _pendingMs = 0;
+                    if (IsDisposed) return;
+                    if (_pendingMs > 0) { player.Time = _pendingMs; _pendingMs = 0; }
+                    if (_primingVideo) _primePlaying = true;
+                }
+            }
+
+            // Playing can fire before a frame exists. Pause only after the sink has delivered one.
+            internal void OnVideoFrame()
+            {
+                lock (Gate)
+                {
+                    if (IsDisposed || !_primingVideo || !_primePlaying || _primePauseRequested) return;
+                    _primePauseRequested = true;
+                    player.SetPause(true);
+                }
+            }
+
+            // A click during Opening must survive the asynchronous initial pause.
+            internal void OnPaused()
+            {
+                lock (Gate)
+                {
+                    if (IsDisposed || !_primingVideo) return;
+                    _primingVideo = false;
+                    _primePlaying = false;
+                    _primePauseRequested = false;
+                    if (_playAfterPrime) player.SetPause(false);
+                    _playAfterPrime = false;
                 }
             }
 
             /// <summary>WPF OnVlcEndReached: Stop + rewind so the next Play replays.</summary>
             internal void OnEndReached()
             {
-                lock (Gate) { if (IsDisposed) return; player.Stop(); _pendingMs = 0; }
+                lock (Gate) { if (IsDisposed) return; player.Stop(); _pendingMs = 0; _primingVideo = false; _playAfterPrime = false; }
                 Ended?.Invoke();
             }
 

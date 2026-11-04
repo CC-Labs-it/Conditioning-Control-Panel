@@ -173,6 +173,39 @@ public sealed class DeeperRowsTests
     }
 
     [Fact]
+    public void VideoPrimesPausedAndAcceptsSeeksAndPlayDuringOpening()
+    {
+        var e = new FakeEngine();
+        var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
+        t.PrimeVideo();
+        Assert.Equal(LibVLCSharp.Shared.VLCState.Opening, e.State);
+        t.PositionSeconds = 3;
+        e.State = LibVLCSharp.Shared.VLCState.Playing;
+        t.OnPlaying();
+        Assert.Equal(3000, e.Time);
+        Assert.Equal(LibVLCSharp.Shared.VLCState.Playing, e.State);
+        t.OnVideoFrame();
+        Assert.Equal(LibVLCSharp.Shared.VLCState.Paused, e.State);
+        t.OnPaused();
+        t.PositionSeconds = 5;
+        Assert.Equal(5000, e.Time);
+        Assert.Equal(LibVLCSharp.Shared.VLCState.Paused, e.State);
+        t.Play();
+        Assert.Equal(LibVLCSharp.Shared.VLCState.Playing, e.State);
+
+        var opening = new FakeEngine();
+        var second = new DeeperLocalAudio.Transport(opening, 12000, () => { });
+        second.PrimeVideo();
+        second.Play();
+        opening.State = LibVLCSharp.Shared.VLCState.Playing;
+        second.OnPlaying();
+        second.OnVideoFrame();
+        Assert.Equal(LibVLCSharp.Shared.VLCState.Paused, opening.State);
+        second.OnPaused();
+        Assert.Equal(LibVLCSharp.Shared.VLCState.Playing, opening.State);
+    }
+
+    [Fact]
     public void TransportAppliesASeekOnceAndStopsAClipStillOpening()
     {
         var e = new FakeEngine();
