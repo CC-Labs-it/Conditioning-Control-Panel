@@ -177,7 +177,8 @@ public sealed class BlinkTrainerSessionTests
     private static System.Threading.Tasks.Task WithSessionAsync(Func<string, List<BlinkTrainerSession.OverlayWindow>, System.Threading.Tasks.Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -310,6 +311,39 @@ public sealed class BlinkTrainerSessionTests
             {
                 (s.PanicKeyEnabled, s.PanicKey) = oldPanic;
                 shell.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FypPanicLadder_StopsTrainerAndCamera()
+    {
+        WithSession((_, _) =>
+        {
+            var s = CoreSettings.Current;
+            var old = (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll);
+            var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            var feed = new ConditioningControlPanel.Avalonia.Views.Games.GameWindow(
+                ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Games["fyp"]);
+            try
+            {
+                s.PanicKeyEnabled = true;
+                s.PanicKey = "F8";
+                s.PanicOverridesAll = false;
+                feed.Show();
+                Assert.True(WebcamTracker.Instance.Start());
+                Assert.True(BlinkTrainerSession.Start(shell));
+                shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
+                Assert.False(feed.IsVisible);
+                Assert.False(BlinkTrainerSession.IsRunning);
+                Assert.Empty(BlinkTrainerSession.Windows);
+                Assert.True(WaitUntil(() => !WebcamTracker.Instance.IsRunning));
+            }
+            finally
+            {
+                feed.Close();
+                shell.Close();
+                (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll) = old;
             }
         });
     }
