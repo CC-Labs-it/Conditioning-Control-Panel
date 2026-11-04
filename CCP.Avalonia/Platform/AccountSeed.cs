@@ -1,5 +1,8 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Startup.Conversion;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -181,6 +184,66 @@ internal static class AccountSeed
             await sync.PushAsync("after load");
         }
         return true;
+    }
+
+    // WPF PatreonActivation.cs:59-103 and EntitlementTierSync.cs:199-247: watch a checkout
+    // for 30 minutes, with at most one activation read every 20 seconds.
+    internal static DateTime? CheckoutOpenedUtc;
+    internal static DateTime CheckoutLastCheckUtc = DateTime.MinValue;
+    private static int _checkoutInFlight;
+
+    internal static void NoteCheckoutOpened(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps) return;
+        var host = u.Host.ToLowerInvariant();
+        var path = u.AbsolutePath.ToLowerInvariant();
+        if ((host is "patreon.com" or "www.patreon.com") && (path == "/checkout" || path.StartsWith("/checkout/"))
+            || (host is "app.cclabs.app" or "cclabs.app") && (path == "/subscribe" || path.StartsWith("/subscribe/")))
+            CheckoutOpenedUtc = DateTime.UtcNow;
+    }
+
+    internal static async Task OnCheckoutActivatedAsync(DateTime now)
+    {
+        var s = CoreSettings.Current;
+        if (s.OfflineMode || CheckoutOpenedUtc is not DateTime opened || now < opened || now - opened > TimeSpan.FromMinutes(30)
+            || (now >= CheckoutLastCheckUtc && now - CheckoutLastCheckUtc < TimeSpan.FromSeconds(20))) return;
+        CheckoutLastCheckUtc = now;
+        var patreon = Patreon;
+        if (patreon?.IsAuthenticated == true)
+            _ = Task.Run(async () => { try { await patreon.ValidateSubscriptionAsync(forceRefresh: true); } catch (Exception ex) { Log.Debug("Checkout validation failed: {E}", ex.Message); } });
+        var id = s.UnifiedId;
+        var token = s.AuthToken;
+        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(token) || Interlocked.Exchange(ref _checkoutInFlight, 1) != 0) return;
+        try
+        {
+            var node = await NewV2().GetUserProfileNodeAsync(id);
+            if (node == null || !ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.AuthToken != token || s.OfflineMode) return;
+            var hadLab = s.HasCachedLabAccess;
+            var hadPremium = s.HasCachedPremiumAccess;
+            var tier = EntitlementTierRule.ParseTier(node["effective_tier"]);
+            var verdict = EntitlementTierRule.Decide(s.PatreonTier, tier);
+            var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, tier, s.ServerTierSeen);
+            bool changed = seen != s.ServerTierSeen;
+            s.ServerTierSeen = seen;
+            bool rise = EntitlementTierRule.ApplyRise(s, tier, now);
+            changed |= rise;
+            // WPF PatreonActivation.cs:25-51: a fresh Patreon confirmation renews grace from its timestamp.
+            var at = ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(node["patreon_confirmed_at"]);
+            var pt = EntitlementTierRule.ParseTier(node["patreon_tier"]) ?? 0;
+            if (node["patreon_is_active"]?.Type == Newtonsoft.Json.Linq.JTokenType.Boolean && (bool)node["patreon_is_active"]!
+                && pt > 0 && at is DateTime confirmed && confirmed <= now.AddMinutes(10) && now - confirmed < TimeSpan.FromHours(72))
+            {
+                var before = (s.PatreonPremiumValidUntil, s.PatreonLabValidUntil);
+                EntitlementTierRule.ExtendGrace(s, pt, confirmed > now ? now : confirmed);
+                changed |= before != (s.PatreonPremiumValidUntil, s.PatreonLabValidUntil);
+            }
+            changed |= ProfileExtras.Apply(s, ProfileExtras.Parse(node));
+            if (changed) CoreSettings.Save();
+            if (rise || (!hadLab && s.HasCachedLabAccess) || (!hadPremium && s.HasCachedPremiumAccess))
+            { CheckoutOpenedUtc = null; patreon?.NotifyEntitlementRaised(s.HasCachedLabAccess ? PatreonTier.Level2 : PatreonTier.Level1); }
+        }
+        catch (Exception ex) { Log.Debug("Checkout refresh failed: {E}", ex.Message); }
+        finally { Interlocked.Exchange(ref _checkoutInFlight, 0); }
     }
 
     /// <summary>Signs a provider out (WPF AccountService.LogoutProvider).</summary>

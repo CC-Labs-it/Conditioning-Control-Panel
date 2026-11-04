@@ -708,6 +708,7 @@ export async function mount(ctx) {
     on(window, 'br-media-changed', () => { sourceChanged = true; });
     on(ui.play, 'click', pressStart);
     if (ctx.onSettings) off.push(ctx.onSettings(frame => {
+      if (frame.plans) ui.demoCard.querySelector('.bo-demo-plan')?.replaceWith(buildEndCard({ plan: planOf(ctx.plans, 'prime'), feature: 'breakout_demo', cls: 'bo-demo-plan' }));
       if (frame.audio) for (const key of Object.keys(audioLevels)) {
         const value = frame.audio[key]; if (Number.isFinite(value)) applyAudioLevel(key,Math.max(0,Math.min(1,value)));
       }

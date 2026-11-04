@@ -112,9 +112,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Content = Web;
             Web.WebMessage += OnPageMessage;
+            Web.NavigationStarting += () => { if (IsBreakout) { IsReady = false; _breakoutNavigationOkay = false; _earlyBreakoutReady = false; _earlyBreakoutGates.Clear(); } };
+            Web.NavigationFinished += (url, success) =>
+            {
+                if (!IsBreakout) return;
+                _breakoutNavigationOkay = success && PageUrl != null && SameOrigin(url, PageUrl) && url.AbsolutePath == PageUrl.AbsolutePath;
+                if (_breakoutNavigationOkay)
+                {
+                    if (_earlyBreakoutReady) HandleMessage("{\"type\":\"ready\"}");
+                    foreach (var message in _earlyBreakoutGates) HandleMessage(message);
+                }
+                _earlyBreakoutReady = false;
+                _earlyBreakoutGates.Clear();
+            };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); StartBreakoutAccessWatch(); };
+            PropertyChanged += (_, e) => { if (IsBreakout && e.Property == WindowStateProperty) UpdateBreakoutSuspension(); };
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); StopBreakoutAccessWatch(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
@@ -134,17 +148,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
             if (Spec.Id == "loom") DirectoryForLoom();
-            PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
+            PageUrl = new Uri(server.Url(Spec.Page, IsBreakout ? Spec.Query + "&avalonia=1" : Spec.Query));
             Web.Navigate(PageUrl);
         }
 
         internal static bool SameOrigin(Uri a, Uri b) =>
             a.IsAbsoluteUri && b.IsAbsoluteUri && a.Scheme == b.Scheme && a.Authority == b.Authority;
 
+        private bool _earlyBreakoutReady, _breakoutNavigationOkay;
+        private readonly List<string> _earlyBreakoutGates = new();
+
         /// <summary>WPF ChaosWebViewHost.OnWebMessage's same-document guard.</summary>
         private void OnPageMessage(string json)
         {
-            if (PageUrl == null || Web.CurrentUrl == null || !SameOrigin(Web.CurrentUrl, PageUrl)) return;
+            if (PageUrl == null) return;
+            if (Web.CurrentUrl == null || (IsBreakout && !_breakoutNavigationOkay))
+            {
+                // Never queue a checkout. At most eight non-opening gate notices wait for the expected document.
+                try
+                {
+                    var m = JObject.Parse(Unwrap(json));
+                    if (IsBreakout && (string?)m["type"] == "ready") _earlyBreakoutReady = true;
+                    else if (IsBreakout && (string?)m["type"] == "funnel" && (string?)m["event"] == "gate_shown" && _earlyBreakoutGates.Count < 8)
+                        _earlyBreakoutGates.Add(json);
+                }
+                catch { }
+                return;
+            }
+            if (!SameOrigin(Web.CurrentUrl, PageUrl) || (IsBreakout && (!_breakoutNavigationOkay || Web.CurrentUrl.AbsolutePath != PageUrl.AbsolutePath))) return;
             HandleMessage(json);
         }
 
@@ -162,11 +193,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (IsDtrh && HandleDtrh(o)) return;
             if (IsGlassroad && HandleGlassroad(o)) return;
             if (IsBreakout && (string?)o["type"] == "room-option") { HandleBreakoutOption(o); return; }
+            if (IsBreakout && (string?)o["type"] == "funnel") { HandleBreakoutFunnel(o); return; }
             switch ((string?)o["type"])
             {
                 case "ready":
+                    if (IsBreakout && IsReady) break;
                     IsReady = true;
-                    Post(InitMessage());   // WPF BackRoomHostService.BuildInit (:566); no manifest frame for Breakout
+                    Post(InitMessage());   // WPF BackRoomHostService.BuildInit (:589)
+                    if (IsBreakout && WindowState == WindowState.Minimized) Post(new { type = "suspend", on = true, reason = "minimise" });
                     break;
                 case "media-request":
                     // WPF BackRoomBridge.cs:208 -> OnMediaRequestAsync: the station's pictures for this sit-down.
@@ -253,6 +287,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             frame["motion"] = motion.ToString().ToLowerInvariant();
             frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
             frame["audio"] = JObject.FromObject(BreakoutAudio());
+            // WPF BackRoomHostService.cs:614-616: the demo end card uses the cached plan list.
+            frame["plans"] = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current);
             // WPF BackRoomHostService.cs:32-38,589-609: English keys, resolved in the active language.
             var loc = LocalizationManager.Instance;
             frame["lex"] = JObject.FromObject(loc.KeysWithPrefix("br_").ToDictionary(k => k, loc.Get));
