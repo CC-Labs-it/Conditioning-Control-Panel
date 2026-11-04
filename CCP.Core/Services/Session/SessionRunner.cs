@@ -196,8 +196,7 @@ namespace ConditioningControlPanel.Services
 
             // WPF SessionEngine.cs:1484-1496,969-980: sessions own the visual flag, including delayed starts.
             s.BrainDrainEnabled = ss.BrainDrainEnabled && ss.BrainDrainStartMinute == 0;
-            if (ss.BrainDrainEnabled && ss.BrainDrainStartMinute > 0)
-                _deferred.Defer("brain drain", ss.BrainDrainStartMinute, () => CoreSettings.Current.BrainDrainEnabled = true);
+            if (ss.BrainDrainEnabled && ss.BrainDrainStartMinute > 0) _deferred.Defer("brain drain", ss.BrainDrainStartMinute, () => CoreSettings.Current.BrainDrainEnabled = true);
             // Whispers are flag-driven: a delayed start holds the flag off until its minute.
             s.SubAudioEnabled = ss.AudioWhispersEnabled && ss.AudioWhispersStartMinute == 0;
             if (ss.AudioWhispersEnabled)
@@ -301,7 +300,7 @@ namespace ConditioningControlPanel.Services
         {
             var session = CurrentSession;
             if (!IsRunning || IsPaused || session == null) return;
-            _lastElapsed = elapsed;
+            var previousMinutes = _lastElapsed.TotalMinutes; _lastElapsed = elapsed;
             var minutes = elapsed.TotalMinutes;
             if (minutes >= session.DurationMinutes) { Stop(true, elapsed); return; }
 
@@ -340,8 +339,7 @@ namespace ConditioningControlPanel.Services
                     Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
                 }
             }
-            // WPF SessionEngine.cs:984-993: an end minute releases the visual even after a delayed start.
-            if (session.Settings.BrainDrainEnabled && session.Settings.BrainDrainEndMinute > 0 && minutes >= session.Settings.BrainDrainEndMinute) s.BrainDrainEnabled = false;
+            if (session.Settings.BrainDrainEnabled && session.Settings.BrainDrainEndMinute > 0 && minutes >= session.Settings.BrainDrainEndMinute && (session.Settings.BrainDrainStartMinute > 0 || previousMinutes < session.Settings.BrainDrainEndMinute)) s.BrainDrainEnabled = false; // WPF SessionEngine.cs:972-993
             TickCornerGif(session.Settings, minutes);
             Ticked?.Invoke();
         }

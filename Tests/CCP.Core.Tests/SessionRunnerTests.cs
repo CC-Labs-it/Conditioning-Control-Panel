@@ -123,7 +123,7 @@ public sealed class SessionRunnerTests : IDisposable
             _runner.Pause(); _runner.Tick(TimeSpan.FromMinutes(1)); Assert.Equal(enabled && start == 0, s.BrainDrainEnabled);
             _runner.Resume(); _runner.Tick(TimeSpan.FromMinutes(1)); Assert.Equal(enabled, s.BrainDrainEnabled);
             _runner.Tick(TimeSpan.FromMinutes(2)); Assert.False(s.BrainDrainEnabled);
-            _runner.Tick(TimeSpan.FromSeconds(150)); Assert.False(s.BrainDrainEnabled);
+            if (enabled && start == 0) s.BrainDrainEnabled = true; _runner.Tick(TimeSpan.FromSeconds(150)); Assert.Equal(enabled && start == 0, s.BrainDrainEnabled);
             _runner.Stop(); Assert.True(s.BrainDrainEnabled);
         }
         finally { _runner.Stop(); s.BrainDrainEnabled = old; }
