@@ -44,7 +44,7 @@ public partial class MainShellWindow
                 Background = new SolidColorBrush(Color.FromRgb(0x1a, 0x1a, 0x2e))
             };
             _browserPopoutWindow = window;
-            window.Closing += (_, _) => ReturnBrowserFromPopout(window, browser, container);
+            window.Closing += (_, _) => { ExitBrowserFullscreen(); ReturnBrowserFromPopout(window, browser, container); };
             window.Closed += (_, _) =>
             {
                 _browserPopoutWindow = null;
