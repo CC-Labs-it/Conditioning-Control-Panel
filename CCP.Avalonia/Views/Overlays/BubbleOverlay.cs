@@ -12,6 +12,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -182,6 +183,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static Action<AmbientBubble>? _chaosPopped;
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
 
+        // WPF BubbleService.cs:1640-1664, 1722-1736: expanding player wavefronts.
+        private sealed class PlayerRipple
+        {
+            public Point Center;
+            public double Radius, Life, Age;
+            public readonly HashSet<AmbientBubble> Hit = new();
+        }
+        private static readonly List<PlayerRipple> PlayerRipples = new();
+        internal static int PlayerRippleCount => PlayerRipples.Count;
+
+        internal static void TriggerPlayerRipple(Point centerPx, double radiusPx, double lifeMs)
+        {
+            if (_chaosPopped == null) return;
+            PlayerRipples.Add(new PlayerRipple { Center = centerPx, Radius = radiusPx, Life = Math.Max(100, lifeMs) });
+            ChaosFieldFxOverlay.SnapRipple(centerPx, radiusPx, lifeMs);
+            RequestFrame();
+        }
+
+        internal static void StepPlayerRipples()
+        {
+            if (Field.HoldChaos) return;
+            for (int i = PlayerRipples.Count - 1; i >= 0; i--)
+            {
+                var wave = PlayerRipples[i];
+                wave.Age += 32;
+                double reach = wave.Radius * Math.Min(1, wave.Age / wave.Life);
+                foreach (var b in Field.Bubbles.ToArray())
+                {
+                    if (b.Popping || b.Spec is not { } spec || wave.Hit.Contains(b)) continue;
+                    if (spec.IsFreeze || spec.IsTease || spec.IsBrittle || spec.IsDarter) continue;
+                    double scale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                    double dx = b.CenterX * scale - wave.Center.X, dy = b.CenterY * scale - wave.Center.Y;
+                    if (dx * dx + dy * dy > reach * reach) continue;
+                    wave.Hit.Add(b);
+                    if (b.IsLiveThreat)
+                    {
+                        if (b.Snap()) Field.ChaosDefused?.Invoke(b);
+                    }
+                    else PopChaos(b);
+                    // A pop callback may end the run and clear the field reentrantly.
+                    if (i >= PlayerRipples.Count || !ReferenceEquals(PlayerRipples[i], wave)) return;
+                }
+                if (wave.Age >= wave.Life) PlayerRipples.RemoveAt(i);
+            }
+        }
+
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
         private static void AnchorPop(AmbientBubble b) { ChaosLastPopX = b.CenterX; ChaosLastPopY = b.CenterY; }
 
@@ -208,6 +255,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static int ChaosCount
         {
             get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.Popping) n++; return n; }
+        }
+
+        // Immutable physical-pixel snapshot for the input hook (WPF BubbleService.cs:560-569).
+        internal static Point[] ChaosCenters()
+        {
+            var centers = new List<Point>();
+            foreach (var b in Field.Bubbles)
+            {
+                if (b.Spec == null || b.Popping) continue;
+                double scale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                centers.Add(new Point(b.CenterX * scale, b.CenterY * scale));
+            }
+            return centers.ToArray();
         }
 
         /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
@@ -237,6 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void HoldChaos(bool held)
         {
             Field.HoldChaos = held;
+            ChaosRunHost.RefreshRippleInput();
             RequestFrame();
         }
 
@@ -248,6 +309,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
+            PlayerRipples.Clear();
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
@@ -267,6 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
             }
             Field.Bubbles.Add(b);
+            ChaosRunHost.RefreshRippleInput();
             RequestFrame();
             return b;
         }
@@ -331,9 +394,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 Field.Step();
+                StepPlayerRipples();
+                ChaosRunHost.RefreshRippleInput();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-                if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
+                if (Field.Bubbles.Count == 0 && PlayerRipples.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
             }
             RequestFrame();
         }
@@ -434,6 +499,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var p = e.GetPosition(this);
             var b = BubbleOverlay.Field.HitTest(Index, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
             if (b == null) return;
+            if (b.Spec != null && e.GetCurrentPoint(this).Properties.IsRightButtonPressed &&
+                ChaosRunHost.OnBubbleRightDown(new Point(Bounds.X + p.X * RenderScaling, Bounds.Y + p.Y * RenderScaling),
+                    Screens.Primary?.Scaling ?? 1))
+            {
+                e.Handled = true;
+                return;
+            }
             BubbleOverlay.Press(b, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
             e.Handled = true;
         }
