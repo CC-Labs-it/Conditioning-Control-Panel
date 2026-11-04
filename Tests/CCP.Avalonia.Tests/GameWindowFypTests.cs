@@ -303,11 +303,9 @@ public sealed class GameWindowFypTests
     public void EyeControl_ConsentCameraGesturesGazeCalibrationAndCleanup() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
-        var settings = CoreSettings.Current; settings.WebcamConsentGiven = false;
-        settings.FypEyeControl = false; settings.FypEyeGaze = true;
+        var settings = CoreSettings.Current; settings.WebcamConsentGiven = false; settings.FypEyeControl = false; settings.FypEyeGaze = true;
         var tracker = WebcamTracker.Instance; var oldCalibration = tracker.Calibration;
-        tracker.Calibration = null; var w = GameWindow.Launch(GameWindow.FypId)!;
-        var sent = new List<JObject>();
+        tracker.Calibration = null; var w = GameWindow.Launch(GameWindow.FypId)!; var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         int prompts = 0, starts = 0, stops = 0, calibrations = 0; bool running = false;
         w.FypConsentOverride = () => { prompts++; return Task.FromResult(true); };
@@ -320,14 +318,11 @@ public sealed class GameWindowFypTests
             w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}"); Wait(w.FypEyeTask!);
             Assert.Equal(1, prompts); Assert.Equal(1, starts);
             Assert.Equal("starting", (string?)sent[0]["reason"]); Assert.True((bool)sent.Last()["running"]!);
-            Assert.False((bool)sent.Last()["calibrated"]!); sent.Clear();
-            tracker.RaiseBlinkForTest(); tracker.RaiseEyesClosedLongForTest();
+            Assert.False((bool)sent.Last()["calibrated"]!); sent.Clear(); tracker.RaiseBlinkForTest(); tracker.RaiseEyesClosedLongForTest();
             tracker.RaiseGazeForTest(new Point(10, 10)); // no calibration yet
             Assert.Equal(new[] { "blink", "eyesClosed" }, sent.Select(x => (string?)x["type"]));
-            sent.Clear(); w.HandleMessage("{\"type\":\"calibrate\"}");
-            Wait(w.FypCalibrationTask!); Assert.Equal(1, calibrations);
-            Assert.True((bool)sent.Last()["calibrated"]!); sent.Clear();
-            var origin = w.Web.PointToScreen(new Point(0, 0));
+            sent.Clear(); w.HandleMessage("{\"type\":\"calibrate\"}"); Wait(w.FypCalibrationTask!); Assert.Equal(1, calibrations);
+            Assert.True((bool)sent.Last()["calibrated"]!); sent.Clear(); var origin = w.Web.PointToScreen(new Point(0, 0));
             tracker.RaiseGazeForTest(new Point((origin.X + 10 - 100) / 2.0, (origin.Y + 10 - 200) / 2.0));
             tracker.RaiseGazeForTest(new Point((origin.X + 20 - 100) / 2.0, (origin.Y + 20 - 200) / 2.0)); var gaze = Assert.Single(sent);
             Assert.Equal("gaze", (string?)gaze["type"]); Assert.True((bool)gaze["inside"]!);
@@ -335,12 +330,9 @@ public sealed class GameWindowFypTests
             System.Threading.Thread.Sleep(120); tracker.RaiseGazeForTest(new Point((origin.X - 200) / 2.0, (origin.Y - 300) / 2.0));
             Assert.False((bool)sent.Single()["inside"]!); Assert.Equal(0, (double)sent.Single()["x"]!);
             sent.Clear(); w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeGaze\",\"value\":false}");
-            sent.Clear(); System.Threading.Thread.Sleep(120);
-            tracker.RaiseGazeForTest(new Point(10, 10)); Assert.Empty(sent);
-            GameWindow.CloseAllForPanic(); Wait(GameWindow.FypCameraStopTask);
-            Assert.Equal(1, stops); sent.Clear();
-            tracker.RaiseBlinkForTest(); tracker.RaiseEyesClosedLongForTest();
-            Assert.Empty(sent);
+            sent.Clear(); System.Threading.Thread.Sleep(120); tracker.RaiseGazeForTest(new Point(10, 10)); Assert.Empty(sent);
+            GameWindow.CloseAllForPanic(); Wait(GameWindow.FypCameraStopTask); Assert.Equal(1, stops); sent.Clear();
+            tracker.RaiseBlinkForTest(); tracker.RaiseEyesClosedLongForTest(); Assert.Empty(sent);
         }
         finally { tracker.Calibration = oldCalibration; }
     });
@@ -349,8 +341,7 @@ public sealed class GameWindowFypTests
     public void EyeControl_PreservesExistingCamera_AndReleasesLateStartAfterClose() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
-        var s = CoreSettings.Current; s.WebcamConsentGiven = true;
-        s.WebcamConsentVersion = WebcamConsent.ConsentVersion; s.FypEyeControl = true;
+        var s = CoreSettings.Current; s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion; s.FypEyeControl = true;
         var w = GameWindow.Launch(GameWindow.FypId)!; bool running = true;
         int starts = 0, stops = 0;
         w.FypCameraRunningOverride = () => running;
@@ -576,13 +567,19 @@ public sealed class GameWindowFypTests
     [Fact] public void EyeControl_CloseDoesNotStopReplacementCamera() => Run((_, _) => {
         CoreEntitlement.HasPremiumProvider = () => true; var s = CoreSettings.Current;
         s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion; s.FypEyeControl = true;
-        var tracker = WebcamTracker.Instance; var factory = WebcamTracker.SourceFactory; var source = new WebcamCalibrationTests.GatedSource();
+        var tracker = WebcamTracker.Instance; var factory = WebcamTracker.SourceFactory; var source = new WebcamCalibrationTests.GatedSource { ReadRelease = new(false) };
         try {
-            source.Release.Set(); tracker.Stop(); WebcamTracker.SourceFactory = () => source;
+            source.Release.Set(); tracker.Stop();
+            Assert.True(System.Threading.SpinWait.SpinUntil(() => !tracker.IsClosing && !tracker.IsStarting, TimeSpan.FromSeconds(20)));
+            WebcamTracker.SourceFactory = () => source;
             var w = GameWindow.Launch(GameWindow.FypId)!; w.HandleMessage("{\"type\":\"ready\"}"); Wait(w.FypEyeTask!);
-            Assert.True(tracker.IsRunning); tracker.Stop(); source = new WebcamCalibrationTests.GatedSource(); var external = tracker.StartAsync();
-            Assert.True(source.Entered.Wait(TimeSpan.FromSeconds(30))); w.Close(); Wait(GameWindow.FypCameraStopTask); source.Release.Set(); Wait(external); Assert.True(external.Result && tracker.IsRunning);
-        } finally { source.Release.Set(); tracker.Stop(); WebcamTracker.SourceFactory = factory; }
+            Assert.False(System.Threading.SpinWait.SpinUntil(() => !tracker.IsRunning, TimeSpan.FromSeconds(3)));
+            Assert.True(tracker.IsRunning); source.ReadRelease!.Set(); tracker.Stop();
+            source = new WebcamCalibrationTests.GatedSource { ReadRelease = new(false) }; var external = tracker.StartAsync();
+            Assert.True(source.Entered.Wait(TimeSpan.FromSeconds(30))); w.Close(); Wait(GameWindow.FypCameraStopTask); source.Release.Set(); Wait(external);
+            Assert.False(System.Threading.SpinWait.SpinUntil(() => !tracker.IsRunning, TimeSpan.FromSeconds(3)));
+            Assert.True(external.Result && tracker.IsRunning);
+        } finally { source.Release.Set(); source.ReadRelease!.Set(); tracker.Stop(); WebcamTracker.SourceFactory = factory; }
     });
     private static void Wait(Task t)
     {

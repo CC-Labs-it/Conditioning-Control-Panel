@@ -503,7 +503,8 @@ public sealed class WebcamCalibrationTests
     {
         public readonly ManualResetEventSlim Entered = new(), Release = new();
         public bool Open() { Entered.Set(); Release.Wait(TimeSpan.FromSeconds(30)); return true; }
-        public bool Read(Mat bgr) => false;
+        public ManualResetEventSlim? ReadRelease;
+        public bool Read(Mat bgr) { ReadRelease?.Wait(); return false; }
         public void Dispose() { }
     }
 
