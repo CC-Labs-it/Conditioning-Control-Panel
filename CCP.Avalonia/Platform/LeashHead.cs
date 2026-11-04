@@ -8,6 +8,7 @@ using System.IO;
 using Avalonia.Controls;
 using ConditioningControlPanel.Controls.Leash;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
@@ -25,6 +26,7 @@ internal static class LeashHead
     private static bool _iCut;
     private static LeashEventNotices? _notices;
     private static Window? _panel;
+    private static LeashTug? _tug;
 
     /// <summary>WPF App.LeashedChanged: the account went on or off a leash.</summary>
     internal static event Action<bool>? LeashedChanged;
@@ -105,9 +107,23 @@ internal static class LeashHead
         Dispatcher.UIThread.Post(() =>
         {
             if (!ReferenceEquals(notices, _notices)) return;
-            try { notices?.Arrived(e, PanelShowing()); }
+            try
+            {
+                var settings = CoreSettings.Current;
+                var motion = UiMotionPreference.ResolveLevel(settings.MotionLevel, UiMotionPreference.AnimationsEnabled, settings.GentleVisuals);
+                if (notices != null) PresentEvent(notices, e, _panel, Views.Windows.LauncherWindow.Instance, motion);
+            }
             catch (Exception ex) { Serilog.Log.Debug("Leash notice failed: {E}", ex.Message); }
         });
+    }
+
+    internal static void PresentEvent(LeashEventNotices notices, LeashEvent e, Window? panel, Window? launcher, MotionLevel motion)
+    {
+        bool showing = panel is { IsVisible: true, WindowState: not WindowState.Minimized };
+        bool wobble = false;
+        try { wobble = e.Kind == LeashEventKind.Tug && (_tug ??= new LeashTug()).Play(panel, launcher, motion); }
+        catch (Exception ex) { Serilog.Log.Debug("Leash tug failed: {E}", ex.Message); }
+        notices.Arrived(e, showing, wobble);
     }
 
     private static void ShowNotice(LeashEvent e)
@@ -162,6 +178,13 @@ internal static class LeashHead
     {
         if (_soundService != null) { _soundService.EventArrived -= OnSoundEvent; _soundService.EventArrived -= OnNoticeEvent; }
         if (_panel != null) _panel.PropertyChanged -= OnPanelChanged;
+        var tug = _tug;
+        _tug = null;
+        if (tug != null)
+        {
+            if (Dispatcher.UIThread.CheckAccess()) tug.Stop();
+            else Dispatcher.UIThread.Post(tug.Stop);
+        }
         _panel = null;
         _notices = null;
         _soundService = null;

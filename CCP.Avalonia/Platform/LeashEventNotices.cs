@@ -18,16 +18,16 @@ internal sealed class LeashEventNotices
         _seen = seen;
     }
 
-    internal void Arrived(LeashEvent e, bool panel)
+    internal void Arrived(LeashEvent e, bool panel, bool tugWobbles = false)
     {
         if (!LeashUiRules.CarriesReceipt(e.Kind)) return;
-        // This head has no tug wobble yet, so it cannot report a motion-only receipt.
-        var (toast, seen, hold) = LeashUiRules.EventNotice(e.Kind, panel, false);
+        var (toast, seen, hold) = LeashUiRules.EventNotice(e.Kind, panel, tugWobbles);
         if (toast && panel && LeashUiRules.EventKey(e) != null)
         {
             _show(e);
             if (seen) _seen(e.Id);
         }
+        else if (seen && tugWobbles) _seen(e.Id);
         if (hold && !_held.Exists(item => item.Id == e.Id))
         {
             _held.Add(e);
