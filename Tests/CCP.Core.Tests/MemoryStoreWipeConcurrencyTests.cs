@@ -5,14 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Companion.Brain;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "ccp-wipe-tests", Guid.NewGuid().ToString("N"));
     private string PathToMemory => Path.Combine(_dir, "companion", "memory.json");
-
     [Fact]
     public async Task Wipe_cancels_a_pending_debounce_and_later_shutdown_saves()
     {
@@ -20,7 +17,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         store.UpdateProfileSignal(MemoryStore.KeyFirstSeen, "2025-11-02");
         store.AddFact("private", MemoryFactKind.Event);
         store.SaveNow();
-
         store.Wipe();
         Assert.False(File.Exists(PathToMemory));
         Assert.Equal("2025-11-02", store.Profile[MemoryStore.KeyFirstSeen]);
@@ -31,7 +27,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         store.Dispose();
         Assert.False(File.Exists(PathToMemory));
     }
-
     [Fact]
     public async Task A_save_queued_before_wipe_cannot_restore_the_old_snapshot()
     {
@@ -56,7 +51,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         Assert.False(File.Exists(PathToMemory));
         Assert.Empty(store.GetFacts());
     }
-
     [Fact]
     public async Task Wipe_waits_for_an_in_progress_file_write()
     {
@@ -75,7 +69,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         await wipe.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.False(File.Exists(PathToMemory));
     }
-
     [Fact]
     public async Task A_new_debounced_change_after_wipe_is_saved()
     {
@@ -90,7 +83,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         using var reloaded = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
         Assert.Equal("after", Assert.Single(reloaded.GetFacts()).Text);
     }
-
     [Fact]
     public void A_no_op_name_removal_does_not_recreate_a_wiped_file()
     {
@@ -101,7 +93,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         store.SaveNow();
         Assert.False(File.Exists(PathToMemory));
     }
-
     [Theory]
     [InlineData("profile")]
     [InlineData("relationship")]
@@ -131,7 +122,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
             case "fact": Assert.Equal("after", Assert.Single(reloaded.GetFacts()).Text); break;
         }
     }
-
     [Fact]
     public void Wipe_shutdown_and_reload_preserves_only_first_seen()
     {
@@ -153,7 +143,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         Assert.Empty(reloaded.GetFacts());
         Assert.Empty(reloaded.Relationships);
     }
-
     [Fact]
     public void Failed_delete_is_retried_before_new_memory_is_saved()
     {
@@ -179,7 +168,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         Assert.Equal("2025-11-02", reloaded.Profile[MemoryStore.KeyFirstSeen]);
         Assert.Equal("new memory", Assert.Single(reloaded.GetFacts()).Text);
     }
-
     [Fact]
     public void An_unremovable_path_is_not_treated_as_missing()
     {
@@ -191,7 +179,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         store.SaveNow();
         Assert.False(File.Exists(PathToMemory + ".wipe"));
     }
-
     [Fact]
     public void Wipe_reports_when_neither_the_marker_nor_deletion_succeeds()
     {
@@ -203,7 +190,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         Assert.Throws<IOException>(store.Wipe);
         Assert.True(File.Exists(PathToMemory));
     }
-
     [Fact]
     public async Task Failed_delete_retries_after_the_lock_is_released()
     {
@@ -219,7 +205,6 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         while (File.Exists(PathToMemory) && DateTime.UtcNow < deadline) await Task.Delay(50);
         Assert.False(File.Exists(PathToMemory));
     }
-
     [Fact]
     public void Pending_wipe_recovers_after_shutdown_without_resurrecting_memory()
     {
@@ -243,7 +228,18 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         Assert.False(File.Exists(PathToMemory));
         Assert.Equal("new session", File.ReadAllText(newSession));
     }
-
+    [Fact]
+    public void Marker_failure_preserves_first_seen_source()
+    {
+        using var store = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        store.UpdateProfileSignal(MemoryStore.KeyFirstSeen, "2025-11-02");
+        store.SaveNow();
+        Directory.CreateDirectory(PathToMemory + ".wipe");
+        Assert.Throws<IOException>(store.Wipe);
+        Assert.True(File.Exists(PathToMemory));
+        using var reloaded = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        Assert.Equal("2025-11-02", reloaded.Profile[MemoryStore.KeyFirstSeen]);
+    }
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch (DirectoryNotFoundException) { }

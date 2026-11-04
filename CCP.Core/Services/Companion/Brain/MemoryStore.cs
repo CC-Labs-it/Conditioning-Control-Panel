@@ -769,7 +769,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 AtomicWrite(WipeMarkerPath, PendingMarker()); recorded = true;
             }
-            catch (Exception ex) { failed = true; Log.Warning(ex, "MemoryStore: failed to record wipe"); }
+            catch (Exception ex) { _wipePending = true; RequestSave(); throw new IOException("Memory wipe could not be recorded.", ex); }
 
             foreach (var file in _wipeFiles.ToArray())
             {
