@@ -53,6 +53,10 @@ public class FlashVoiceTests
             FlashOverlay.Paid(file, s, generation, lucky);
             Assert.Equal(expected, awarded);
             FlashOverlay.FinishBurst(burst);
+            FlashOverlay.CloseAll(false);   // WPF FlashService.cs:5118 clears the voiced flag on close
+            awarded = 0;
+            FlashOverlay.Paid(file, s, 0, 1);
+            Assert.Equal(4, awarded);
         } finally {
             FlashOverlay.CloseAll(false); CoreAudio.PlayStoppableProvider = oldPlay;
             CoreProgression.AddXPProvider = oldXp; File.Delete(file);

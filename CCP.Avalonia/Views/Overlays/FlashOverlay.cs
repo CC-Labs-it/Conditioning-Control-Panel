@@ -505,7 +505,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void RetireBurst()
         {
-            lock (BurstGate) { Interlocked.Increment(ref _generation); _busy = false; }
+            lock (BurstGate) { Interlocked.Increment(ref _generation); _busy = false; Volatile.Write(ref _voiceAttempted, 0); }   // WPF FlashService.cs:5118
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
         }
 
