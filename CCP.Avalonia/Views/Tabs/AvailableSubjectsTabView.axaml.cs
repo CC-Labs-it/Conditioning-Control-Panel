@@ -79,7 +79,7 @@ public partial class AvailableSubjectsTabView : UserControl
         AvailableSubjectsList.ItemsSource = snapshot.Open.Select(r => new LobbyCardView(r, gates)).ToList();
         LobbyPlayingList.ItemsSource = snapshot.Playing.Select(r => new LobbyCardView(r, gates)).ToList();
         LobbyFriendsList.ItemsSource = snapshot.Friends.Select(r => new LobbyCardView(r, gates)).ToList();
-        LobbyFirstFill(snapshot.Open.Count + snapshot.Playing.Count + snapshot.Friends.Count);
+        LobbyRowsArrived(snapshot);
         LobbyOpenCount.Text = snapshot.Open.Count.ToString(CultureInfo.InvariantCulture);
         LobbyPlayingCount.Text = snapshot.Playing.Count.ToString(CultureInfo.InvariantCulture);
         LobbyFriendsCount.Text = snapshot.Friends.Count.ToString(CultureInfo.InvariantCulture);
@@ -113,6 +113,7 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Id = LobbyPageRules.Id(row);
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
@@ -121,6 +122,7 @@ public sealed class LobbyCardView
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
+    public string Id { get; }
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }

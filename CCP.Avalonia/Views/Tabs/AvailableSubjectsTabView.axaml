@@ -46,7 +46,8 @@
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
-   <Border Margin="0,0,6,8" CornerRadius="14" Padding="10,9" Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1">
+   <Grid Margin="0,0,6,8">
+   <Border Tag="lobby-card" CornerRadius="14" Padding="10,9" Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" RenderTransformOrigin="50%,50%">
     <Grid ColumnDefinitions="*,Auto">
      <StackPanel>
       <StackPanel Orientation="Horizontal">
@@ -61,6 +62,8 @@
      </Button>
     </Grid>
    </Border>
+   <Border Tag="lobby-ring" CornerRadius="14" BorderBrush="#80FFFFFF" BorderThickness="2" Opacity="0" IsHitTestVisible="False"/>
+   </Grid>
   </DataTemplate>
  </UserControl.Resources>
  <Grid>
