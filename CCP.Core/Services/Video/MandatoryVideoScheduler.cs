@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Services
         void Show(string path, bool strict);
         /// <summary>Close every video window; returns the seconds of the clip that were watched.</summary>
         double CloseAll();
+        bool DeferScheduledVideo => false;
         /// <summary>WPF ShowMessage: the attention-check verdict over every screen for
         /// <paramref name="ms"/>, then <paramref name="then"/> on the UI thread.</summary>
         void ShowMessage(AttentionVerdict verdict, int ms, Action then);
@@ -297,7 +298,8 @@ namespace ConditioningControlPanel.Services
             try
             {
                 // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
-                if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
+                if (!_playing && _host.DeferScheduledVideo) ScheduleNext(SkipRetrySeconds); // WPF VideoService.cs:2948-2959
+                else if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
                 {
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);

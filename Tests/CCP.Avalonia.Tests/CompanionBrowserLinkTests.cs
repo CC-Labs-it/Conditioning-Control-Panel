@@ -91,6 +91,8 @@ public sealed class CompanionBrowserLinkTests
         await CompanionLinkLauncher.OpenAsync("https://127.0.0.1/timeout");
         shell.CheckBrowserHeartbeat(DateTime.UtcNow.AddSeconds(61));
         Assert.False(shell.AvatarBrowserSessionActive);
+        shell.ClaimAvatarBrowserSession(); var navGen = (int)typeof(MainShellWindow).GetField("_browserAutoplayGeneration", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell)!; host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{navGen},\"state\":\"playing\"}}");
+        Assert.True(shell.NavigateToUrlInBrowser("https://127.0.0.1/new")); Assert.False(shell.AvatarBrowserSessionActive);
     }));
 
     [Fact]
@@ -165,7 +167,7 @@ public sealed class CompanionBrowserLinkTests
         host.OnNavigationCompleted(video);
         var script = Assert.Single(scripts, x => x.Contains("ccpAvatarMedia"));
         Assert.Contains("document.querySelector('video')", script);
-        Assert.Contains("v.play()", script);
+        Assert.Contains("v.play()", script); Assert.Contains("duration:v?.duration", script);
         Assert.Contains("requestFullscreen", script);
         var gen = int.Parse(Regex.Match(script, @"const gen=(\d+)").Groups[1].Value);
         host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{gen},\"state\":\"playing\"}}");
@@ -186,7 +188,7 @@ public sealed class CompanionBrowserLinkTests
         await shell.StartBrowserAutoplay(host, bambi, (int)field.GetValue(shell)!);
         var playlistScript = Assert.Single(scripts, x => x.Contains("ccpAvatarMedia"));
         Assert.Contains("button.play-action", playlistScript);
-        Assert.Contains("b.click()", playlistScript);
+        Assert.Contains("b.click()", playlistScript); Assert.Contains("duration:a?.duration", playlistScript);
         scripts.Clear();
         var canceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         shell.BrowserAutoplayDelay = () => canceled.Task;
@@ -196,5 +198,21 @@ public sealed class CompanionBrowserLinkTests
         canceled.SetResult();
         await Task.Yield();
         Assert.DoesNotContain(scripts, x => x.Contains("ccpAvatarMedia"));
+        shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        await CompanionLinkLauncher.OpenAsync(video.AbsoluteUri); host.OnNavigationCompleted(video);
+        var loopGen = (int)field.GetValue(shell)!;
+        host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{loopGen - 1},\"state\":\"playing\",\"duration\":10}}");
+        var hard = typeof(MainShellWindow).GetField("_avatarBrowserHardStop", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        Assert.Null(hard.GetValue(shell)); // a stale page cannot arm the new claim
+        host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{loopGen},\"state\":\"playing\",\"duration\":10}}");
+        var timer = Assert.IsType<DispatcherTimer>(hard.GetValue(shell));
+        Assert.Equal(TimeSpan.FromSeconds(25), timer.Interval);
+        host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{loopGen},\"state\":\"progress\",\"duration\":10}}");
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.ScriptInvoker = text => { if (text.Contains("_ccpTakeoverStopped=true")) stopped.TrySetResult(); return Task.FromResult<string?>("ok"); };
+        timer.Interval = TimeSpan.FromMilliseconds(1);
+        Assert.Same(stopped.Task, await Task.WhenAny(stopped.Task, Task.Delay(5000))); Assert.False(shell.AvatarBrowserSessionActive);
+        shell.ClaimAvatarBrowserSession(); var navGen = (int)field.GetValue(shell)!; host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{navGen},\"state\":\"navigated\"}}"); Assert.True(shell.AvatarBrowserSessionActive);
+        host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{navGen},\"state\":\"playing\"}}"); host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{navGen},\"state\":\"navigated\"}}"); Assert.False(shell.AvatarBrowserSessionActive);
     }));
 }

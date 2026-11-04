@@ -18,6 +18,7 @@ public sealed class MandatoryVideoSchedulerTests
         public readonly List<(string Path, bool Strict)> Shown = new();
         public int Closes;
         public double Watched;
+        public bool DeferScheduledVideo { get; set; }
         public void Show(string path, bool strict) => Shown.Add((path, strict));
         public double CloseAll() { Closes++; return Watched; }
         public readonly List<AttentionVerdict> Messages = new();
@@ -478,6 +479,16 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.False(v.Trigger(path: "/ai/other.mp4"));      // one already playing
     });
 
+    [Fact] public void Browser_media_defers_the_scheduled_video_and_retries() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { DeferScheduledVideo = true };
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        video.Start(); clock.Advance(TimeSpan.FromSeconds(217));
+        Assert.False(video.IsPlaying); Assert.Empty(host.Shown);
+        host.DeferScheduledVideo = false;
+        clock.Advance(TimeSpan.FromSeconds(MandatoryVideoScheduler.SkipRetrySeconds + 2));
+        Assert.Single(host.Shown); video.Stop();
+    });
     [Fact]   // WPF VideoService :3007: a do-not-disturb app in front reschedules (SkipRetrySeconds), never drops
     public void Dnd_app_in_front_reschedules_the_scheduled_clip() => With(60, false, () =>
     {

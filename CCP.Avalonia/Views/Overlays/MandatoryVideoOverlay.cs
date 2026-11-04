@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
         public static MandatoryVideoOverlay Instance { get; } = new();
+        public bool DeferScheduledVideo => global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.Current?.AvatarBrowserBusy == true;
         private MandatoryVideoScheduler _scheduler = null!;
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library
         {

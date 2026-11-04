@@ -106,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var host = BrowserView;
                 if (host == null) return false;
                 var issued = host.Navigate(new Uri(url));   // equal URLs still reload
-                if (issued) Log.Information("Browser navigated to {Url}", url);
+                if (issued) { if (_avatarBrowserPlaying) EndAvatarBrowserSession(); Log.Information("Browser navigated to {Url}", url); }
                 return issued;
             }
             catch (Exception ex)
@@ -200,7 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _browserAutoplayGeneration;
         private volatile bool _avatarBrowserPlaying, _avatarBrowserSessionActive, _avatarBrowserTakeover;
         private DateTime _avatarBrowserHeartbeat;
-        private DispatcherTimer? _avatarBrowserWatchdog;
+        private DispatcherTimer? _avatarBrowserWatchdog, _avatarBrowserHardStop;
         internal bool AvatarBrowserSessionActive { get => _avatarBrowserSessionActive; private set => _avatarBrowserSessionActive = value; }
         internal bool AvatarBrowserTakeover { get => _avatarBrowserTakeover; private set => _avatarBrowserTakeover = value; }
         internal bool AvatarBrowserBusy => AvatarBrowserTakeover || _avatarBrowserPlaying;
@@ -211,7 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ++_browserAutoplayGeneration;
             _pendingBrowserAutoplay = null;
             AvatarBrowserSessionActive = AvatarBrowserTakeover = true;
-            _avatarBrowserPlaying = false;
+            _avatarBrowserPlaying = false; _avatarBrowserHardStop?.Stop(); _avatarBrowserHardStop = null;
             _avatarBrowserHeartbeat = DateTime.UtcNow;
             _avatarBrowserWatchdog ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _avatarBrowserWatchdog.Tick -= BrowserWatchdogTick;
@@ -224,7 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ++_browserAutoplayGeneration;
             _pendingBrowserAutoplay = null;
             AvatarBrowserSessionActive = AvatarBrowserTakeover = _avatarBrowserPlaying = false;
-            _avatarBrowserWatchdog?.Stop();
+            _avatarBrowserWatchdog?.Stop(); _avatarBrowserHardStop?.Stop(); _avatarBrowserHardStop = null;
         }
 
         private void BrowserWatchdogTick(object? sender, EventArgs e) => CheckBrowserHeartbeat(DateTime.UtcNow);
@@ -293,8 +293,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     case "playing": _avatarBrowserPlaying = true; _avatarBrowserHeartbeat = DateTime.UtcNow; break;
                     case "progress": if (_avatarBrowserPlaying) _avatarBrowserHeartbeat = DateTime.UtcNow; break;
-                    case "ended": EndAvatarBrowserSession(); break;
+                    case "navigated" when !_avatarBrowserPlaying: break;
+                    case "navigated": case "ended": EndAvatarBrowserSession(); break;
                     case "fsExit": AvatarBrowserTakeover = false; break;
+                }
+                if (_avatarBrowserPlaying && AvatarBrowserTakeover && _avatarBrowserHardStop == null && // WPF BrowserMediaService.cs:230-273,455-490
+                    root.TryGetProperty("duration", out var duration) && duration.ValueKind == System.Text.Json.JsonValueKind.Number &&
+                    duration.TryGetDouble(out var seconds) && double.IsFinite(seconds) && seconds > 0)
+                {
+                    var timer = _avatarBrowserHardStop = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Math.Min(seconds + 15, 3600)) };
+                    timer.Tick += (_, _) => { timer.Stop(); if (value == _browserAutoplayGeneration && AvatarBrowserTakeover) StopAvatarBrowserSession(); };
+                    timer.Start();
                 }
             }
             catch (System.Text.Json.JsonException) { }
@@ -304,8 +313,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Adapted from WPF Browser.cs:839-954 and :1028-1075. The carrier is WebView2 on Windows
         // and invokeCSharpAction on WebKit; heartbeat keeps a live session distinct from a stalled load.
         private const string BrowserVideoScript = """
-            (async function(){const gen=__GEN__; const send=s=>{const m=JSON.stringify({type:'ccpAvatarMedia',generation:gen,state:s});if(window.chrome?.webview?.postMessage)window.chrome.webview.postMessage(m);else if(window.invokeCSharpAction)window.invokeCSharpAction(m);};
-            window._ccpTakeoverStopped=false;let v=document.querySelector('video');
+            (async function(){const gen=__GEN__; const send=s=>{const m=JSON.stringify({type:'ccpAvatarMedia',generation:gen,state:s,duration:v?.duration});if(window.chrome?.webview?.postMessage)window.chrome.webview.postMessage(m);else if(window.invokeCSharpAction)window.invokeCSharpAction(m);};
+            window._ccpTakeoverStopped=false;let v=document.querySelector('video');window.addEventListener('pagehide',()=>send('navigated'),{once:true});
             for(let i=0;i<20&&!v;i++){await new Promise(r=>setTimeout(r,500));if(window._ccpTakeoverStopped)return;v=document.querySelector('video');}
             if(!v){send('fsExit');return;}let timer;const beat=()=>{if(!v.paused&&!v.ended)send('progress');};
             v.addEventListener('playing',()=>{send('playing');clearInterval(timer);timer=setInterval(beat,1000);});
@@ -316,10 +325,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             })();
             """;
         private const string BrowserPlaylistScript = """
-            (async function(){const gen=__GEN__;const send=s=>{const m=JSON.stringify({type:'ccpAvatarMedia',generation:gen,state:s});if(window.chrome?.webview?.postMessage)window.chrome.webview.postMessage(m);else if(window.invokeCSharpAction)window.invokeCSharpAction(m);};
-            window._ccpTakeoverStopped=false;let b=document.querySelector('button.play-action');
+            (async function(){const gen=__GEN__;const send=(s,a)=>{const m=JSON.stringify({type:'ccpAvatarMedia',generation:gen,state:s,duration:a?.duration});if(window.chrome?.webview?.postMessage)window.chrome.webview.postMessage(m);else if(window.invokeCSharpAction)window.invokeCSharpAction(m);};
+            window._ccpTakeoverStopped=false;let b=document.querySelector('button.play-action');window.addEventListener('pagehide',()=>send('navigated'),{once:true});
             for(let i=0;i<20&&!b;i++){await new Promise(r=>setTimeout(r,250));if(window._ccpTakeoverStopped)return;b=document.querySelector('button.play-action');}if(!b){send('ended');return;}
-            const bind=a=>{if(a.__ccpAvatarBound)return;a.__ccpAvatarBound=true;let timer;a.addEventListener('playing',()=>{send('playing');clearInterval(timer);timer=setInterval(()=>{if(!a.paused&&!a.ended)send('progress');},1000);});a.addEventListener('ended',()=>{clearInterval(timer);send('ended');});};
+            const bind=a=>{if(a.__ccpAvatarBound)return;a.__ccpAvatarBound=true;let timer;a.addEventListener('playing',()=>{send('playing',a);clearInterval(timer);timer=setInterval(()=>{if(!a.paused&&!a.ended)send('progress',a);},1000);});a.addEventListener('ended',()=>{clearInterval(timer);send('ended');});};
             const scan=()=>document.querySelectorAll('audio').forEach(bind);scan();new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});b.click();setTimeout(()=>{if(!window._ccpTakeoverStopped)send('playing');},3000);
             })();
             """;
