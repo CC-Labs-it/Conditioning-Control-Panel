@@ -45,32 +45,56 @@ internal static class Win32Overlay
     // CS_OWNDC host cannot use layering for that purpose; use display affinity.
     [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
     [DllImport("user32.dll")] internal static extern bool GetWindowDisplayAffinity(IntPtr hwnd, out uint affinity);
+    [DllImport("dwmapi.dll")] private static extern int DwmIsCompositionEnabled([MarshalAs(UnmanagedType.Bool)] out bool enabled);
     internal const uint ExcludeFromCapture = 0x11;
+    private static readonly ConditionalWeakTable<TopLevel, CaptureLayerLease> CaptureLeases = new();
+    private static (bool Ok, uint Value) ReadAffinity(IntPtr hwnd) =>
+        GetWindowDisplayAffinity(hwnd, out var value) ? (true, value) : (false, 0);
     internal static IDisposable? CaptureLayer(TopLevel window)
     {
-        if (!OperatingSystem.IsWindows()) return null;
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) ||
+            DwmIsCompositionEnabled(out var composed) != 0 || !composed) return null;
         var handle = window.TryGetPlatformHandle();
-        if (handle?.HandleDescriptor != "HWND" || handle.Handle == IntPtr.Zero) return null;
-        var hwnd = handle.Handle;
-        if (!GetWindowDisplayAffinity(hwnd, out var before)) return null;
-        if (!SetWindowDisplayAffinity(hwnd, ExcludeFromCapture)) return null;
-        if (!GetWindowDisplayAffinity(hwnd, out var actual) || actual != ExcludeFromCapture)
+        return handle?.HandleDescriptor == "HWND" && handle.Handle != IntPtr.Zero
+            ? CaptureLayer(window, handle.Handle, ReadAffinity, SetWindowDisplayAffinity) : null;
+    }
+    internal static IDisposable? CaptureLayer(TopLevel window, IntPtr hwnd,
+        Func<IntPtr, (bool Ok, uint Value)> read, Func<IntPtr, uint, bool> set)
+    {
+        if (CaptureLeases.TryGetValue(window, out _)) return null;
+        // This app owns these three windows and has no other affinity writer. Readback
+        // is unavailable for non-layered hosts; restore WDA_NONE when it is unknown.
+        var before = read(hwnd);
+        if (!set(hwnd, ExcludeFromCapture)) return null;
+        var actual = read(hwnd);
+        if (actual.Ok && actual.Value != ExcludeFromCapture)
         {
-            SetWindowDisplayAffinity(hwnd, before);
+            set(hwnd, before.Ok ? before.Value : 0);
             return null;
         }
-        return new CaptureLayerLease(window, hwnd, before);
+        var lease = new CaptureLayerLease(window, hwnd, before.Ok ? before.Value : 0, read, set);
+        CaptureLeases.Add(window, lease);
+        return lease;
     }
-    private sealed class CaptureLayerLease(TopLevel window, IntPtr hwnd, uint before) : IDisposable
+    internal static bool CaptureExcluded(TopLevel window, IntPtr hwnd) =>
+        CaptureLeases.TryGetValue(window, out var lease) && lease.Excluded(hwnd);
+    private sealed class CaptureLayerLease(TopLevel window, IntPtr hwnd, uint before,
+        Func<IntPtr, (bool Ok, uint Value)> read, Func<IntPtr, uint, bool> set) : IDisposable
     {
         private bool _disposed;
+        internal bool Excluded(IntPtr current)
+        {
+            if (_disposed || current != hwnd) return false;
+            var value = read(hwnd);
+            return !value.Ok || value.Value == ExcludeFromCapture;
+        }
         public void Dispose()
         {
             if (_disposed) return;
-            _disposed = true;
-            if (window.TryGetPlatformHandle()?.Handle == hwnd &&
-                GetWindowDisplayAffinity(hwnd, out var current) && current == ExcludeFromCapture)
-                SetWindowDisplayAffinity(hwnd, before);
+            _disposed = true; CaptureLeases.Remove(window);
+            var current = read(hwnd);
+            if (window.TryGetPlatformHandle()?.Handle == hwnd && (!current.Ok || current.Value == ExcludeFromCapture))
+                set(hwnd, before);
         }
     }
 

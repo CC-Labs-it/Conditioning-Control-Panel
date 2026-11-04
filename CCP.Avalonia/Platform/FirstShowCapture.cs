@@ -31,7 +31,7 @@ internal sealed class FirstShowCapture
         if (!OperatingSystem.IsWindows()) return false;
         var handle = stage.TryGetPlatformHandle();
         return handle?.HandleDescriptor == "HWND" && handle.Handle != IntPtr.Zero &&
-            Win32Overlay.GetWindowDisplayAffinity(handle.Handle, out var affinity) && CanCaptureAffinity(affinity);
+            Win32Overlay.CaptureExcluded(stage, handle.Handle);
     }
     internal static bool CanCapture(Window? stage, Window? emi, Window? speech, Func<Window, bool>? excluded = null)
     {

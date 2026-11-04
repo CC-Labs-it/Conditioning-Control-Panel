@@ -424,6 +424,36 @@ public sealed class FirstShowStageTests
     });
 
     [Fact]
+    public Task NonLayeredCaptureLeaseDoesNotRequireReadback() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup(); var window = new Window(); window.Show();
+        var hwnd = window.TryGetPlatformHandle()!.Handle;
+        var calls = new List<uint>();
+        (bool, uint) Read(IntPtr _) => (false, 0);
+        bool Set(IntPtr _, uint value) { calls.Add(value); return true; }
+        using (var lease = Win32Overlay.CaptureLayer(window, hwnd, Read, Set))
+        {
+            Assert.NotNull(lease);
+            Assert.True(Win32Overlay.CaptureExcluded(window, hwnd));
+            Assert.False(Win32Overlay.CaptureExcluded(window, new IntPtr(hwnd.ToInt64() + 1)));
+        }
+        Assert.False(Win32Overlay.CaptureExcluded(window, hwnd));
+        Assert.Equal(new uint[] { 0x11, 0 }, calls);
+        Assert.Null(Win32Overlay.CaptureLayer(window, hwnd, Read, (_, _) => false));
+        Assert.False(Win32Overlay.CaptureExcluded(window, hwnd));
+        uint affinity = 0;
+        (bool, uint) Known(IntPtr _) => (true, affinity);
+        bool Change(IntPtr _, uint value) { affinity = value; return true; }
+        using (var lease = Win32Overlay.CaptureLayer(window, hwnd, Known, Change))
+        {
+            Assert.NotNull(lease); Assert.True(Win32Overlay.CaptureExcluded(window, hwnd));
+            affinity = 1; Assert.False(Win32Overlay.CaptureExcluded(window, hwnd));
+        }
+        Assert.Equal(1u, affinity); // do not overwrite another owner's change
+        window.Close(); return Task.CompletedTask;
+    });
+
+    [Fact]
     public void CaptureWorkerRetriesSetupAndStops()
     {
         int attempts = 0, delays = 0;
