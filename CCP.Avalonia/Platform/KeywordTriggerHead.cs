@@ -10,6 +10,8 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Content;
+using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Safety;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -116,9 +118,11 @@ internal sealed class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
     private readonly KeywordCooldowns _cooldowns = new();
-    private CancellationTokenSource? _audio;
+    private CancellationTokenSource _pendingAudio = new();
+    private long _voiceGeneration;
     private Action? _stop;
     private long? _duckGeneration;
+    private readonly System.Collections.Generic.HashSet<object> _ducks = new();
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
@@ -162,33 +166,78 @@ internal sealed class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
-        // WPF merge: preset first, and only the first enabled PlayAudio action wins.
-        var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
-        if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+        // WPF KeywordTriggerService.cs:1257-1267: record the match, but do not dispatch
+        // effects or audio during the five-minute post-panic quiet.
+        if (PanicAftermath.TriggersSilenced()) return;
+
+        _ = Dispatch(fired);
+    }
+
+    // WPF KeywordTriggerService.cs:1250-1255,1283-1294,1361-1367,1490-1518,
+    // 1674-1713: preserve action order and wait for repeat gaps, including legacy fields.
+    private async Task Dispatch(System.Collections.Generic.List<KeywordTrigger> fired)
+    {
+        try
         {
-            var t = fired[0];
-            audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
-                PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
+            var legacy = fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0);
+            if (legacy)
+            {
+                var t = fired[0];
+                var audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
+                    PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
+                if (!await Play(audio) || !IsActive || PanicAftermath.TriggersSilenced()) return;
+                if (t.VisualEffect == KeywordVisualEffect.BrainDrain) new BrainDrainMeltPayload().Fire();
+                return;
+            }
+
+            bool audioSeen = false, drainSeen = false;
+            var actions = fired.SelectMany(t => t.Actions ?? new()).Where(a => a != null && a.Enabled).ToList();
+            foreach (var action in actions)
+            {
+                if (!IsActive || PanicAftermath.TriggersSilenced()) return;
+                if (action is PlayAudioAction audio && (fired.Count == 1 || !audioSeen))
+                {
+                    audioSeen = true;
+                    if (!await Play(audio)) return;
+                }
+                else if (action is VisualEffectAction { Effect: KeywordVisualEffect.BrainDrain }
+                    && (fired.Count == 1 || !drainSeen))
+                {
+                    drainSeen = true;
+                    new BrainDrainMeltPayload().Fire();
+                }
+            }
         }
-        if (audio != null) Play(audio);
+        catch (Exception ex) { Log.Warning(ex, "Keyword action dispatch failed"); }
     }
 
     // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
     // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
     internal void FireDemo(string keyword, string source) { }
 
+    // WPF KeywordTriggerService.cs:1512-1517,1859-1865: replacing the playing clip
+    // must not cancel another match waiting between repeats. Panic/stop cancels all of them.
     internal void StopAudio()
     {
-        _audio?.Cancel(); _audio?.Dispose(); _audio = null;
-        var stop = _stop; _stop = null;
-        try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
+        var pending = _pendingAudio;
+        _pendingAudio = new CancellationTokenSource();
+        pending.Cancel(); pending.Dispose();
+        StopCurrentAudio();
+        _ducks.Clear();
         if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio)
+    private void StopCurrentAudio()
     {
-        if (string.IsNullOrEmpty(audio.FilePath)) return;
+        ++_voiceGeneration;
+        var stop = _stop; _stop = null;
+        try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
+    }
+
+    private async Task<bool> Play(PlayAudioAction audio)
+    {
+        if (string.IsNullOrEmpty(audio.FilePath)) return true;
         var path = audio.FilePath;
         if (!Path.IsPathRooted(path))
         {
@@ -196,38 +245,44 @@ internal sealed class KeywordAudioRuntime
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return;
-        StopAudio();
-        var cancellation = _audio = new CancellationTokenSource();
-        var token = cancellation.Token;
+        if (!File.Exists(path)) return true;
+        StopCurrentAudio();
+        var token = _pendingAudio.Token;
+        var owner = new object();
         if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
         {
-            CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
-            _duckGeneration = CoreAudio.DuckGeneration;
+            if (_ducks.Count == 0) { CoreAudio.Duck(CoreSettings.Current.DuckingLevel); _duckGeneration = CoreAudio.DuckGeneration; }
+            _ducks.Add(owner);
         }
-        _ = Repeat();
-        async Task Repeat()
+        void Release() { if (_ducks.Remove(owner) && _ducks.Count == 0 && _duckGeneration is { } g) { CoreAudio.Unduck(g); _duckGeneration = null; } }
+        try
         {
-            try
+            var count = Math.Max(1, audio.PlayCount);
+            for (var i = 0; i < count; i++)
             {
-                var count = Math.Max(1, audio.PlayCount);
-                for (var i = 0; i < count; i++)
+                if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
+                token.ThrowIfCancellationRequested();
+                StopCurrentAudio();
+                var generation = ++_voiceGeneration;
+                var last = i == count - 1;
+                int scheduled = 0;
+                void FinishAfter(int ms)
                 {
-                    if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
-                    token.ThrowIfCancellationRequested();
-                    _stop?.Invoke();
-                    var last = i == count - 1;
-                    _stop = CoreAudio.PlayStoppable(path,
-                        KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
-                        onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
-                        {
-                            try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
-                            catch (OperationCanceledException) { }
-                        }); });
+                    if (!last || Interlocked.Exchange(ref scheduled, 1) != 0) return;
+                    Dispatcher.UIThread.Post(async () =>
+                    {
+                        try { await Delay(ms, token); if (!token.IsCancellationRequested && generation == _voiceGeneration) StopCurrentAudio(); Release(); }
+                        catch (OperationCanceledException) { }
+                    });
                 }
+                _stop = CoreAudio.PlayStoppable(path,
+                    KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
+                    onStarted: duration => { if (duration > TimeSpan.Zero) FinishAfter((int)Math.Clamp(duration.TotalMilliseconds + 500, 500, int.MaxValue)); },
+                    onFinished: () => FinishAfter(500));
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); }
+            return true;
         }
+        catch (OperationCanceledException) { Release(); return false; }
+        catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopCurrentAudio(); Release(); return false; }
     }
 }
