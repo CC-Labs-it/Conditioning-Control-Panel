@@ -1,4 +1,6 @@
 using System;
+using System.Runtime.CompilerServices;
+using ConditioningControlPanel.Services.Audio;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Microsoft.Web.WebView2.Core;
 using Serilog;
@@ -17,6 +19,28 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// </summary>
 internal static class ScrolllerWebView2Gate
 {
+    private static readonly ConditionalWeakTable<CoreWebView2, object> Hooked = new();
+
+    internal static void WatchAudio(CoreWebView2 core)
+    {
+        try
+        {
+            if (Hooked.TryGetValue(core, out _)) return;
+            Hooked.Add(core, new object());
+            core.IsDocumentPlayingAudioChanged += (sender, _) =>
+            {
+                try
+                {
+                    if (sender is not CoreWebView2 page || !page.IsDocumentPlayingAudio) return;
+                    var (player, file) = WebPageSound.Describe(page.Source, page.IsMuted);
+                    RecentSounds.Shared.Note(player, file, CoreEngine.IsRunning, false, DateTime.Now);
+                }
+                catch { }
+            };
+        }
+        catch { }
+    }
+
     /// <summary>Hooks one raw ICoreWebView2. False when there is none (the caller retries until the core exists).</summary>
     public static bool Attach(IntPtr coreWebView2)
     {
@@ -27,6 +51,7 @@ internal static class ScrolllerWebView2Gate
         }
         try
         {
+            ScrolllerWebGate.AttachHook = WatchAudio;
             ScrolllerWebGate.Attach(CoreWebView2.CreateFromComICoreWebView2(coreWebView2));
             return true;
         }

@@ -45,16 +45,7 @@ namespace ConditioningControlPanel.Services.Audio
         /// (ccp.race3d, ccp.backroom, ...); the last path segment names the page.</summary>
         public static (string Player, string File) Describe(string? source, bool muted)
         {
-            string host = "page", file = "";
-            if (Uri.TryCreate(source, UriKind.Absolute, out var uri))
-            {
-                host = string.IsNullOrEmpty(uri.Host) ? uri.Scheme : uri.Host;
-                var path = uri.AbsolutePath.TrimEnd('/');
-                var slash = path.LastIndexOf('/');
-                file = slash >= 0 ? path.Substring(slash + 1) : path;
-            }
-            if (string.IsNullOrEmpty(file)) file = "(page)";
-            return ("web:" + host + (muted ? ":muted" : ""), file);
+            return WebPageSound.Describe(source, muted);
         }
     }
 }
