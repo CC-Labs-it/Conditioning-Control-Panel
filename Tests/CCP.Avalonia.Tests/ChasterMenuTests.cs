@@ -54,7 +54,7 @@ public sealed class ChasterMenuTests
             });
     }
 
-    private static async Task Run(Func<ChasterService, FakeChaster, ChasterTabView, Window, Task> body)
+    private static async Task Run(Func<ChasterService, FakeChaster, ChasterTabView, Window, Task> body, double height = 3000)
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -79,7 +79,7 @@ public sealed class ChasterMenuTests
                 new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>())));
         ChasterHead.Service = chaster;
         var tab = new ChasterTabView();
-        var w = new Window { Width = 1200, Height = 3000, Content = tab };
+        var w = new Window { Width = 1200, Height = height, Content = tab };
         try
         {
             w.Show();
@@ -210,7 +210,6 @@ public sealed class ChasterMenuTests
         settings.AutoPerformanceMode = false;
         settings.GentleVisuals = false;
         settings.MotionLevel = MotionLevel.Full;
-        w.Height = 700;
         tab.Refresh();
         Dispatcher.UIThread.RunJobs();
         var hint = tab.FindControl<TextBlock>("SetupHint")!;
@@ -222,6 +221,10 @@ public sealed class ChasterMenuTests
         Assert.IsType<DropShadowEffect>(keys.Effect);
         Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
 
+        w.UpdateLayout();
+        using (w.CaptureRenderedFrame()) { } // hit testing uses the rendered viewport
+        Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+        Assert.Equal(0, scroll.Offset.Y);
         Click(w, hint);
         Dispatcher.UIThread.RunJobs();
         Assert.True(scroll.Offset.Y > 0);
@@ -229,6 +232,8 @@ public sealed class ChasterMenuTests
         var row = tab.PriceRows["attention"];
         row.BringIntoView();
         Dispatcher.UIThread.RunJobs();
+        w.UpdateLayout();
+        using (w.CaptureRenderedFrame()) { }
         Click(w, row);
         Assert.Contains("attention", settings.ChasterPrices!);
         Assert.False(hint.IsVisible);
@@ -256,7 +261,7 @@ public sealed class ChasterMenuTests
         tab.IsVisible = true;
         Dispatcher.UIThread.RunJobs();
         Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
-    }));
+    }, height: 700));
 
     // WPF FxNudgeKeys puts the shadow on the four key shapes, including the gaps.
     [Fact]
