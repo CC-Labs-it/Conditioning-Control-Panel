@@ -8,8 +8,8 @@ namespace ConditioningControlPanel.Services.Companion
     /// The settings half of WPF 7.1.5 <c>Services/Companion/CompanionService.cs</c>, same numbers: switching
     /// (:185), the perk XP modifier (:226), companion XP and its level loop (:276), the Brain Parasite drain
     /// (:393) and active time (:429). The head owns the timers and the reactions. Named apart from WPF's type.
-    /// ponytail: ApplyCompanionPrompt (:476) and the autonomy bonus's IsActionInProgress wait for a community-prompt
-    /// service and an autonomy service on this head; XPDrained for the drain flash's ported view.
+    /// ponytail: the autonomy bonus's IsActionInProgress waits for an autonomy service on this head;
+    /// XPDrained waits for the drain flash's ported view.
     /// </summary>
     public static class CompanionCore
     {
@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Services.Companion
 
         public static event Action<CompanionId, int>? LevelUp;   // WPF CompanionLevelUp, once per level
         public static event Action<CompanionId>? Switched;       // WPF CompanionSwitched
+        public static event Action<int>? PromptValidationAdvisory;
 
         private static DateTime _lastActiveTimeUpdate = DateTime.Now;
         private static DateTime? _lastDrainSaveUtc;
@@ -51,6 +52,18 @@ namespace ConditioningControlPanel.Services.Companion
             CoreSettings.Save();
             var progress = CoreSettings.Current.ActiveCompanionProgress;
             if (progress.FirstActivated == DateTime.MinValue) progress.FirstActivated = DateTime.Now;
+            // WPF CompanionService.cs:211-214,424-446: apply before announcing the switch.
+            try
+            {
+                var promptId = CoreSettings.Current.GetCompanionPromptId((int)newCompanion);
+                if (!string.IsNullOrEmpty(promptId))
+                {
+                    using var prompts = new CommunityPromptService();
+                    prompts.ValidationAdvisory += (_, count) => PromptValidationAdvisory?.Invoke(count);
+                    prompts.ActivatePrompt(promptId);
+                }
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to apply companion prompt"); }
             try { Switched?.Invoke(newCompanion); } catch (Exception ex) { Log.Debug("CompanionSwitched handler: {E}", ex.Message); }
             Log.Information("Switched companion: {Old} -> {New}",
                 CompanionDefinition.GetById(old).Name, CompanionDefinition.GetById(newCompanion).Name);
