@@ -241,7 +241,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _awarenessV2ConsentAsked = true;
 
             if (!await AwarenessConsentDialog.EnsureConsentAsync(this, s))
+            {
                 Log.Information("Awareness: v2 consent declined by an upgrader — staying on the legacy pipeline");
+                return;
+            }
+
+            RestartAwarenessAfterV2Consent();
+        }
+
+        // WPF MainWindow.CompanionRoom.cs:62-69: re-arm the single on/off call site after consent.
+        internal static void RestartAwarenessAfterV2Consent()
+        {
+            try
+            {
+                App.WindowAwareness.Stop();
+                App.WindowAwareness.Start();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Awareness: restart after v2 consent failed"); }
         }
 
         /// <summary>
