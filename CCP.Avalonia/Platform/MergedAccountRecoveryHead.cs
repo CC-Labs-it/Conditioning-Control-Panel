@@ -19,7 +19,13 @@ internal static class MergedAccountRecoveryHead
         MergedAccountRecovery.StopSync = () => AccountSeed.Sync?.Reset();
         MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
         MergedAccountRecovery.Reauthenticate = ReauthenticateAsync;
-        MergedAccountRecovery.ReloadProfile = async () => { await AccountSeed.LoadProfileAsync(); };
+        MergedAccountRecovery.ReloadProfile = () => Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            await AccountSeed.LoadProfileAsync();
+            // WPF restarts the heartbeat after the attempt, even if the profile could not be read.
+            // Only a successful read marks the profile loaded and permits pushes.
+            if (AccountSeed.Sync is { HeartbeatRunning: false } sync) sync.StartHeartbeat();
+        });
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
             var shell = MainShellWindow.Current;
