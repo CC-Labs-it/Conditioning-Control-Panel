@@ -173,13 +173,22 @@ public sealed class LeashHolderCard : Border
             }
             _body.Children.Add(panel);
         }
-        // WPF LeashHolderCard.cs:310: letting go asks first; it ends the leash for both and sets a 24 h cooldown.
-        _body.Children.Add(LeashCardUi.Action(Loc.GetF("leash_menu_release", h.Who.Name), "leash-release", () =>
-        {
-            LeashCutConfirmWindow.Confirm(Loc.GetF("leash_release_confirm_title", h.Who.Name), Loc.GetF("leash_release_confirm_body", h.Who.Name),
-                Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-release-confirm", () => _ = Release(h.Who));
-            return Task.CompletedTask;
-        }, IconKind.Link));
+        // WPF LeashHolderCard.cs:264-318: holder menu and Let go help.
+        var release = new MenuItem { Tag = "leash-release" };
+        var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        heading.Children.Add(LeashCardUi.Text(Loc.GetF("leash_menu_release", h.Who.Name)));
+        heading.Children.Add(LeashCardUi.Text("?", "leash-slip-help:letgo", F.Lilac));
+        release.Header = heading;
+        ToolTip.SetTip(release, new LeashHelpSlip(LeashHelpCatalog.Get(LeashHelpCatalog.LetGoId)!, h.Who.Name));
+        release.Click += (_, _) => LeashCutConfirmWindow.Confirm(
+            Loc.GetF("leash_release_confirm_title", h.Who.Name), Loc.GetF("leash_release_confirm_body", h.Who.Name),
+            Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-release-confirm", () => _ = Release(h.Who));
+        var menu = new ContextMenu();
+        menu.Items.Add(release);
+        var more = LeashCardUi.Action("…", "leash-holder-more", () => Task.CompletedTask);
+        more.ContextMenu = menu;
+        more.Click += (_, _) => menu.Open(more);
+        _body.Children.Add(more);
         if (LeashSentList.For(_service(), h.Who.Id) is { } receipts) _body.Children.Add(receipts);
         if (_result != null) _body.Children.Add(LeashCardUi.Text(_result, "leash-holder-result", _resultGood ? F.Mint : F.Gold));
     }
@@ -247,6 +256,7 @@ public sealed class LeashHolderCard : Border
         var ok = false;
         try { ok = _service() is { } s && await s.ReleaseAsync(who.Id); }
         catch (Exception ex) { Serilog.Log.Debug("[Leash] release failed: {E}", ex.Message); }
+        LeashSound.Release(ok);
         App.Notifications?.Show(Loc.GetF(ok ? "leash_release_done" : "leash_release_failed", who.Name),
             ok ? Helpers.NotificationType.Info : Helpers.NotificationType.Warning);
     }

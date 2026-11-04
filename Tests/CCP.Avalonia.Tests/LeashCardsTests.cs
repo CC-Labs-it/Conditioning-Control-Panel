@@ -37,6 +37,7 @@ public sealed class LeashCardsTests
         public LeashSnapshot Snapshot { get; private set; } = LeashSnapshot.Empty;
         public readonly List<string> Calls = new(), Seen = new();
         public LeashSendStatus Reply = LeashSendStatus.Sent;
+        public bool ReleaseOk = true;
         public LeashWatch? Watch;
         public bool ReceiptsSupported { get; set; }
         public event Action<LeashSnapshot>? SnapshotChanged;
@@ -53,7 +54,7 @@ public sealed class LeashCardsTests
         public Task<LeashSendResult> PunishAsync(string id, PunishKind k, int size, LeashWatch? watch = null) => Send($"punish:{k}:{size}", watch);
         public Task<LeashSendResult> RewardAsync(string id, RewardKind k, string? token = null, int? size = null) => Send($"reward:{k}:{token}:{size}");
         public Task<LeashSendResult> TugAsync(string id) => Send("tug");
-        public Task<bool> ReleaseAsync(string id) { Calls.Add("release"); return System.Threading.Tasks.Task.FromResult(true); }
+        public Task<bool> ReleaseAsync(string id) { Calls.Add("release"); return System.Threading.Tasks.Task.FromResult(ReleaseOk); }
         public Task CutAsync() { Calls.Add("cut"); Push(null); return System.Threading.Tasks.Task.CompletedTask; }
         public Task SetIntensityAsync(LeashIntensity i) { Calls.Add("level:" + i); return System.Threading.Tasks.Task.CompletedTask; }
         public Task SetDndAsync(LeashDnd d) { Calls.Add("dnd:" + d); return System.Threading.Tasks.Task.CompletedTask; }
@@ -77,6 +78,49 @@ public sealed class LeashCardsTests
         b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
     }
+    [Theory]
+    [InlineData(true, "leash-cut", "leash_release_done")]
+    [InlineData(false, "leash-denied", "leash_release_failed")]
+    public void ReleaseFeedbackMatchesReply(bool ok, string cue, string message) => Run(() =>
+    {
+        var audio = ConditioningControlPanel.CoreAudio.PlayOneShotProvider;
+        var suppressed = ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider;
+        var art = ConditioningControlPanel.CoreModArt.AudioOverridePathProvider;
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var volume = settings.MasterVolume;
+        var notifications = global::ConditioningControlPanel.Avalonia.App.Notifications;
+        var hostField = notifications.GetType().GetField("_host", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var oldHost = hostField.GetValue(notifications);
+        var host = new StackPanel();
+        var path = System.IO.Path.GetTempFileName();
+        var sounds = new List<string>();
+        try
+        {
+            notifications.AttachHost(host);
+            settings.MasterVolume = 100;
+            ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider = () => false;
+            ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = _ => path;
+            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => sounds.Add(tag);
+            System.Threading.Thread.Sleep(200);
+            var svc = new Service { ReleaseOk = ok };
+            var card = new LeashHolderCard(Held(), () => svc);
+            var release = (MenuItem)Find<Button>(card, "leash-holder-more").ContextMenu!.Items[0]!;
+            release.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            LeashCutConfirmWindow.Current!.YesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { cue }, sounds);
+            Assert.Contains(host.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF(message, Person.Name));
+        }
+        finally
+        {
+            hostField.SetValue(notifications, oldHost);
+            settings.MasterVolume = volume;
+            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio;
+            ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider = suppressed;
+            ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = art;
+            System.IO.File.Delete(path);
+        }
+    });
     [Fact]
     public void PreviewIsReadOnlyAndHasNoInventedWeek() => Run(() =>
     {
@@ -174,11 +218,19 @@ public sealed class LeashCardsTests
         Find<TextBox>(card, "leash-ht-box").Text = "12x34";
         Assert.Equal("1234", Find<TextBox>(card, "leash-ht-box").Text);
         Click(card, "leash-video-send"); Assert.Equal("punish:Video:7", svc.Calls.Last()); Assert.Equal("1234", svc.Watch!.Id);
-        Click(card, "leash-release"); Assert.Equal("punish:Video:7", svc.Calls.Last());   // WPF asks first
+        var menu = Find<Button>(card, "leash-holder-more").ContextMenu!;
+        var release = Assert.IsType<MenuItem>(Assert.Single(menu.Items));
+        Assert.Equal("leash-release", release.Tag);
+        Assert.IsType<LeashHelpSlip>(ToolTip.GetTip(release));
+        release.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        Assert.Equal("punish:Video:7", svc.Calls.Last());   // WPF asks first
+        LeashCutConfirmWindow.Current!.NoButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.DoesNotContain("release", svc.Calls);
+        release.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         var confirm = LeashCutConfirmWindow.Current!;
         Assert.Equal(Loc.Get("leash_release_confirm_yes"), ((TextBlock)confirm.YesButton.Content!).Text);
         confirm.YesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
-        Assert.Equal("release", svc.Calls.Last()); Assert.Null(LeashCutConfirmWindow.Current);
+        Assert.Equal("release", svc.Calls.Last()); Assert.Single(svc.Calls, c => c == "release"); Assert.Null(LeashCutConfirmWindow.Current);
         Assert.Contains("assign:Minutes:30", svc.Calls); Assert.Contains("assign:Quests:2", svc.Calls);
         Assert.Contains("reward:Sticker:star:", svc.Calls); Assert.Contains("reward:Praise:proud:", svc.Calls);
         Assert.Contains("reward:Pardon::", svc.Calls); Assert.Contains("reward:Credit::900", svc.Calls);
