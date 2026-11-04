@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     /// <summary>
     /// PORTED from ConditioningControlPanel/Chaos/ChaosSkiaFxOverlay.cs (its legacy keep-alive window path):
-    /// one stage-wide, click-through, topmost window drawing the chaos sparkle field with additive bloom -
+    /// per-monitor, click-through, topmost windows drawing the chaos sparkle field with additive bloom -
     /// rabbit trails, pop bursts, E-Stim bolts, ripple shockwaves and the Rabbit-Caller cursor glow.
     ///
     /// <para>The sim and the painter are the Core <see cref="ChaosFxLayer"/> (the WPF compositor path's
@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Func<bool> Composited = () => X11Overlay.IsAvailable && X11Overlay.IsCompositing;
         /// <summary>Tests step frames (P08); the live source is the window's animation frame.</summary>
         internal static IFrameSource? FramesForTests;
+        internal static IReadOnlyList<PixelRect>? MonitorBoundsForTests;
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
         private static bool _refused;
 
@@ -63,9 +64,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void Burst(Point centerPx, Color color, double scale = 1.0) =>
             OnFx(w => w.Fx.EmitBurst(w.Local(centerPx), new SKColor(color.R, color.G, color.B), (float)scale));
 
-        /// <summary>WPF divides the px radius by the DPI scale: the window draws in DIPs.</summary>
+        /// <summary>Radius is in physical pixels, as on the WPF compositor path.</summary>
         public static void Ripple(Point centerPx, double radiusPx, double lifeMs, bool strong = false) =>
-            OnFx(w => w.Fx.EmitRipple(w.Local(centerPx), radiusPx / w._scale, lifeMs, strong));
+            OnFx(w => w.Fx.EmitRipple(w.Local(centerPx), radiusPx, lifeMs, strong));
 
         public static void ArmCursorGlow() => OnFx(w => w.Fx.ArmCursor());
 
@@ -90,7 +91,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             w.Fx.Clear();
             w.StopRendering();
             w._hideTimer.Stop();
-            try { w.Close(); } catch (Exception ex) { Log.Debug("ChaosSkiaFx close: {E}", ex.Message); }
+            foreach (var host in w._hosts)
+                try { host.Close(); } catch (Exception ex) { Log.Debug("ChaosSkiaFx close: {E}", ex.Message); }
         });
 
         private static void OnUi(Action act)
@@ -109,7 +111,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (Active == null && Create() is { } w) Active = w;
                     if (Active == null) return;
                     act(Active);
-                    if (Active.IsVisible) X11Overlay.Raise(Active);   // WPF StartActivity: ChaosWindowZ.RaiseAboveVideo on every effect
+                    foreach (var host in Active._hosts)
+                        if (host.IsVisible) X11Overlay.Raise(host);
                 }
                 catch (Exception ex) { Log.Debug("ChaosSkiaFx: {E}", ex.Message); }
             });
@@ -124,12 +127,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return null;
             }
             var w = new ChaosSkiaFxOverlay(live: true);
-            if (!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, w._stagePx) && !SkipPlatformChecksForTests)
+            var primary = w.Screens.Primary ?? w.Screens.All.FirstOrDefault();
+            if (primary == null) { w.Close(); return null; }
+            w._scale = primary.Scaling > 0 ? primary.Scaling : 1;
+            w.Fx.OnActivated(); // Sample the primary scale before the first emission.
+            var screens = MonitorBoundsForTests ?? ((CoreSettings.Current?.DualMonitorEnabled ?? true)
+                ? w.Screens.All.Select(s => s.Bounds).ToArray() : new[] { primary.Bounds });
+            foreach (var screen in screens)
             {
-                Log.Warning("ChaosSkiaFx: the platform refused a click-through topmost overlay, so no chaos sparkle field");
-                _refused = true;
-                try { w.Close(); } catch { }
-                return null;
+                var host = w._hosts.Count == 0 ? w : new ChaosSkiaFxOverlay(live: true, shared: w.Fx);
+                host._stagePx = screen;
+                w._hosts.Add(host);
+                if ((!X11Overlay.SetClickThrough(host, true) | !X11Overlay.SetOverrideRedirect(host, host._stagePx)) && !SkipPlatformChecksForTests)
+                {
+                    Log.Warning("ChaosSkiaFx: the platform refused a click-through topmost overlay, so no chaos sparkle field");
+                    _refused = true;
+                    foreach (var created in w._hosts) try { created.Close(); } catch { }
+                    return null;
+                }
             }
             return w;
         }
@@ -144,10 +159,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private int _idleFrames;
         private double _scale = 1;
         private PixelRect _stagePx;
+        private readonly List<ChaosSkiaFxOverlay> _hosts = new();
 
         /// <summary>True while the frame loop is subscribed (tests).</summary>
         internal bool IsRendering => _frames != null;
         internal bool HidePending => _hideTimer.IsEnabled;
+        internal IReadOnlyList<ChaosSkiaFxOverlay> Hosts => _hosts;
 
         /// <summary>Render-all sample: a burst, a strong ripple, a bolt and the cursor glow, mid-flight.</summary>
         internal ChaosSkiaFxOverlay() : this(live: false)
@@ -163,7 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Fx.Update(TimeSpan.FromSeconds(0.08));
         }
 
-        private ChaosSkiaFxOverlay(bool live)
+        private ChaosSkiaFxOverlay(bool live, ChaosFxLayer? shared = null)
         {
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -176,30 +193,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             IsHitTestVisible = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
 
-            Fx = new ChaosFxLayer(OnWake, rng: live ? null : new Random(7));
-            Content = new FxSurface(Fx);
+            Fx = shared ?? new ChaosFxLayer(OnWake, stageScale: live ? () => (float)_scale : null, rng: live ? null : new Random(7));
+            Content = new FxSurface(this);
             _onFrame = OnFrame;
             _hideTimer = new DispatcherTimer { Interval = HideGrace };
             _hideTimer.Tick += (_, _) => HideTick();
-            if (live) PlaceOnStage();
+            if (!live) _hosts.Add(this);
         }
 
-        /// <summary>WPF ChaosWindowZ.StageBounds: the virtual desktop when dual-monitor is on, else the primary.</summary>
-        private void PlaceOnStage()
-        {
-            var all = Screens.All;
-            var primary = Screens.Primary ?? all.FirstOrDefault();
-            if (primary == null) return;
-            _scale = primary.Scaling > 0 ? primary.Scaling : 1;
-            var b = primary.Bounds;
-            if (CoreSettings.Current?.DualMonitorEnabled ?? true)
-                foreach (var s in all) b = b.Union(s.Bounds);
-            _stagePx = b;   // geometry is applied by SetOverrideRedirect (X11Overlay: placing first lets KWin replay a stale size)
-        }
-
-        /// <summary>WPF Local(): physical px to this window's DIPs.</summary>
-        private SKPoint Local(Point px) =>
-            new((float)((px.X - _stagePx.X) / _scale), (float)((px.Y - _stagePx.Y) / _scale));
+        // Effects arrive in physical virtual-desktop pixels, as on the WPF compositor path.
+        private SKPoint Local(Point px) => new((float)px.X, (float)px.Y);
 
         /// <summary>The layer flips active on its first emit after idling: WPF StartActivity.</summary>
         private void OnWake()
@@ -210,10 +213,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void StartActivity()
         {
             _hideTimer.Stop();
-            if (!IsVisible)
-            {
-                try { Show(); } catch (Exception ex) { Log.Debug("ChaosSkiaFx show: {E}", ex.Message); }
-            }
+            foreach (var host in _hosts)
+                if (!host.IsVisible)
+                    try { host.Show(); } catch (Exception ex) { Log.Debug("ChaosSkiaFx show: {E}", ex.Message); }
             _idleFrames = 0;
             if (_frames != null) return;
             _frames = FramesForTests ?? TopLevelFrameSource.For(this);
@@ -242,7 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (dt > 0.1f) dt = 0.1f;
 
             Fx.Update(TimeSpan.FromSeconds(dt));
-            (Content as Control)?.InvalidateVisual();
+            foreach (var host in _hosts) (host.Content as Control)?.InvalidateVisual();
 
             if (!Fx.IsActive)
             {
@@ -254,15 +256,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal void HideTick()
         {
             _hideTimer.Stop();
-            if (!IsRendering) { try { Hide(); } catch { } }
+            if (!IsRendering) foreach (var host in _hosts) { try { host.Hide(); } catch { } }
         }
 
         /// <summary>Records the layer into an immutable picture on the UI thread; the render thread replays it.</summary>
         private sealed class FxSurface : Control
         {
-            private readonly ChaosFxLayer _fx;
+            private readonly ChaosSkiaFxOverlay _host;
 
-            public FxSurface(ChaosFxLayer fx) { _fx = fx; IsHitTestVisible = false; }
+            public FxSurface(ChaosSkiaFxOverlay host) { _host = host; IsHitTestVisible = false; }
 
             public override void Render(DrawingContext context)
             {
@@ -270,9 +272,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (b.Width <= 0 || b.Height <= 0) return;
                 using var rec = new SKPictureRecorder();
                 var canvas = rec.BeginRecording(new SKRect(0, 0, (float)b.Width, (float)b.Height));
-                _fx.Render(canvas, new SKRectI(0, 0, (int)b.Width, (int)b.Height), 1, TimeSpan.Zero);
+                RenderMonitor(canvas, _host.Fx, _host._stagePx, b.Size);
                 context.Custom(new PictureOp(rec.EndRecording(), b));
             }
+        }
+
+        // WPF CompositorEngine translates world pixels to each monitor surface. Scaling by the
+        // actual surface size also handles a DPI transition while the native surface catches up.
+        internal static void RenderMonitor(SKCanvas canvas, ChaosFxLayer fx, PixelRect screen, Size surface)
+        {
+            if (screen.Width <= 0 || screen.Height <= 0)
+                screen = new PixelRect(0, 0, (int)surface.Width, (int)surface.Height);
+            if (screen.Width <= 0 || screen.Height <= 0) return;
+            canvas.Save();
+            canvas.Scale((float)(surface.Width / screen.Width), (float)(surface.Height / screen.Height));
+            canvas.Translate(-screen.X, -screen.Y);
+            fx.Render(canvas, new SKRectI(screen.X, screen.Y, screen.Right, screen.Bottom), 1, TimeSpan.Zero);
+            canvas.Restore();
         }
 
         private sealed class PictureOp : ICustomDrawOperation
