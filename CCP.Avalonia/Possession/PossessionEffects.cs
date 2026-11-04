@@ -30,17 +30,21 @@ namespace ConditioningControlPanel.Avalonia.Possession
         /// <summary>The Core deck's view of this effect (WPF PossessionDeckMeta.MetaOf).</summary>
         public PossessionEffectMeta Meta => new(Id, MinRung, MinIntensity, UsesFlicker, Weight, Roles);
 
+        protected Control Element = null!;
         protected PossessionLease Lease = null!;
         private Random _rng = Random.Shared;
         protected Random Rng => _rng;
+        internal virtual bool UsesTransform => true;
         internal virtual bool CanApply(Control target) => true;
         internal virtual double UndoMs => PossessionRuntime.ReturnMs;
         internal virtual void Release() { }
         private bool _photosafe;
+        protected bool Photosafe => _photosafe;
 
-        internal void Begin(PossessionLease lease, Random rng, bool photosafe)
+        internal void Begin(Control element, PossessionLease? lease, Random rng, bool photosafe)
         {
-            Lease = lease;
+            Element = element;
+            Lease = lease!;
             _rng = rng;
             _photosafe = photosafe;
             Start();

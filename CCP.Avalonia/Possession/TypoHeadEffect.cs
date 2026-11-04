@@ -28,6 +28,7 @@ internal sealed class TypoHeadEffect : HeadEffect
     public override double Weight => 3;
     public override TimeSpan HoldFor => TimeSpan.FromSeconds(4);
     public override IReadOnlyList<PossessionRole> Roles => TargetRoles;
+    internal override bool UsesTransform => false;
     internal override double UndoMs => 0;
 
     // WPF PossessionEffectBase.cs:271-307: first TextBlock, unbound, at least three chars,
@@ -67,7 +68,7 @@ internal sealed class TypoHeadEffect : HeadEffect
 
     protected override void Start()
     {
-        _text = FindText(Lease.Element);
+        _text = FindText(Element);
         _original = _text!.Text!;
         var candidates = Candidates(_original);
         var swaps = candidates.FindAll(c => c.To != null);

@@ -21,6 +21,7 @@ internal sealed class RewriteHeadEffect : HeadEffect
     public override double Weight => 4;
     public override TimeSpan HoldFor => TimeSpan.FromSeconds(3);
     public override IReadOnlyList<PossessionRole> Roles => TargetRoles;
+    internal override bool UsesTransform => false;
     internal override double UndoMs => 0;
 
     internal override bool CanApply(Control target)
@@ -34,7 +35,7 @@ internal sealed class RewriteHeadEffect : HeadEffect
 
     protected override void Start()
     {
-        if (Lease.Element is ContentControl cc && cc.Content is string s)
+        if (Element is ContentControl cc && cc.Content is string s)
         {
             var line = RewritePools.Rewrite(s, RewritePools.ActiveModId, Rng);
             if (line == null || line == s) return;
@@ -45,7 +46,7 @@ internal sealed class RewriteHeadEffect : HeadEffect
             return;
         }
 
-        var tb = TypoHeadEffect.FindText(Lease.Element);
+        var tb = TypoHeadEffect.FindText(Element);
         if (!TypoHeadEffect.IsRewritable(tb, 2)) return;
         var rewritten = RewritePools.Rewrite(tb!.Text, RewritePools.ActiveModId, Rng);
         if (rewritten == null || rewritten == tb.Text) return;
