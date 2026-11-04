@@ -159,6 +159,62 @@ public sealed class BrowserMediaTakeoverTests
         finally { video.ForceCleanup(); CoreEngine.Video = oldVideo; }
     });
 
+    [Theory]
+    [InlineData("card")]
+    [InlineData("quiz")]
+    public void DeferredVideoWaitsForCompetingWindowAndCanBeCancelled(string competing) => WithDesktopBrowser(host =>
+    {
+        var video = new MandatoryVideoScheduler(MandatoryVideoOverlay.Instance, library: () => new[] { "/v/a.mp4" });
+        var oldVideo = CoreEngine.Video;
+        CoreEngine.Video = video;
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.True(video.Trigger(path: "/v/first.mp4"));
+            if (competing == "card") LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            else PopQuizHost.Instance.Open(isTest: true);
+            Assert.True(competing == "card" ? LockCardWindow.IsAnyOpen() : PopQuizWindow.IsAnyOpen());
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            Assert.False(video.IsPlaying);
+            Assert.True(video.Trigger(path: "/v/duplicate.mp4"));
+            Assert.False(video.IsPlaying);
+            // A close handler can show another interaction before the queued video runs.
+            if (competing == "card") PopQuizHost.Instance.Open(isTest: true);
+            else LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            if (competing == "card") LockCardWindow.ForceCloseAll();
+            else PopQuizWindow.ForceCloseAll();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(video.IsPlaying);
+            if (competing == "card") PopQuizWindow.ForceCloseAll();
+            else LockCardWindow.ForceCloseAll();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(video.IsPlaying);
+            video.ForceCleanup();
+
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.True(video.Trigger(path: "/v/cancel.mp4"));
+            if (competing == "card") LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            else PopQuizHost.Instance.Open(isTest: true);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            Assert.False(video.IsPlaying);
+            if (competing == "card") tab.StopBrowserMediaForPanic();
+            else tab.ClearBrowserMediaClaim();
+            LockCardWindow.ForceCloseAll();
+            PopQuizWindow.ForceCloseAll();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(video.IsPlaying);
+        }
+        finally
+        {
+            tab.ClearBrowserMediaClaim();
+            LockCardWindow.ForceCloseAll();
+            PopQuizWindow.ForceCloseAll();
+            video.ForceCleanup();
+            CoreEngine.Video = oldVideo;
+        }
+    });
+
     [Fact]
     public void BrowserPlaybackReachesScheduledVideoHost() => WithDesktopBrowser(host =>
     {

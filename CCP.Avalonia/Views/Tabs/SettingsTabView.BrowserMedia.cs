@@ -19,15 +19,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private IDisposable? _browserMediaRecovery;
         private int _browserMediaRecoveryGeneration;
         private Action? _browserDeferredVideo;
+        private bool _waitingForInteractionWindows;
 
         internal bool DeferVideoForBrowser(Action replay)
         {
-            if (!BrowserMediaOwnsSlot) return false;
+            if (!BrowserMediaOwnsSlot && _browserDeferredVideo == null) return false;
             _browserDeferredVideo ??= replay;
             return true;
         }
 
-        internal void CancelBrowserDeferredVideo() => _browserDeferredVideo = null;
+        internal void CancelBrowserDeferredVideo()
+        {
+            _browserDeferredVideo = null;
+            if (!_waitingForInteractionWindows) return;
+            _waitingForInteractionWindows = false;
+            Windows.LockCardWindow.AllClosed -= OnInteractionWindowsClosed;
+            Windows.PopQuizWindow.AllClosed -= OnInteractionWindowsClosed;
+        }
+
+        // Post so other close handlers can open their held interaction before we recheck.
+        private void OnInteractionWindowsClosed() => Dispatcher.UIThread.Post(TryReplayBrowserVideo);
+
+        private void TryReplayBrowserVideo()
+        {
+            if (_browserDeferredVideo == null || BrowserMediaOwnsSlot) return;
+            if (Windows.LockCardWindow.IsAnyOpen() || Windows.PopQuizWindow.IsAnyOpen())
+            {
+                if (!_waitingForInteractionWindows)
+                {
+                    _waitingForInteractionWindows = true;
+                    Windows.LockCardWindow.AllClosed += OnInteractionWindowsClosed;
+                    Windows.PopQuizWindow.AllClosed += OnInteractionWindowsClosed;
+                }
+                return;
+            }
+            var replay = _browserDeferredVideo;
+            CancelBrowserDeferredVideo();
+            replay();
+        }
         // Like the pulse timer seam, tests step this without waiting for a long clip.
         internal Func<Action, TimeSpan, IDisposable> ScheduleBrowserMediaRecovery =
             (action, delay) => DispatcherTimer.RunOnce(action, delay);
@@ -143,17 +172,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void StopBrowserMediaTracking()
         {
-            var replay = _browserDeferredVideo;
             BrowserMediaPlaying = false;
             _browserMediaDuration = 0;
-            ClearBrowserMediaClaim();
+            BrowserMediaOwnsSlot = false;
+            CancelBrowserMediaRecovery();
             if (_browserMediaWatchdog != null)
             {
                 _browserMediaWatchdog.Stop();
                 _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
                 _browserMediaWatchdog = null;
             }
-            replay?.Invoke();
+            TryReplayBrowserVideo();
         }
 
         // Adapted from WPF BrowserService.cs:340-457. The carrier uses the native WebHost
