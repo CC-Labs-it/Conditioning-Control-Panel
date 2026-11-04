@@ -43,6 +43,47 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task First_descent_teaches_threat_draft_and_rabbit_before_completion()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                var overlay = ChaosRunHost.Overlay!;
+                overlay.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                Ticks(216); // 30%: lone live threat
+                Assert.Contains(BubbleOverlay.Field.Bubbles, b => b.Spec?.VariantId == "pink");
+                Assert.True(ChaosMeta.State.SeenDefuseTutorial);
+                Ticks(288); // 70%: draft even if the threat was not defused
+                Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+                var cards = overlay.FindControl<StackPanel>("BoonCardHost")!;
+                Assert.Equal(3, cards.Children.Count);
+                var elapsed = state.ElapsedSec;
+                Ticks(8);
+                Assert.Equal(elapsed, state.ElapsedSec);
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                var offered = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", flags)!.GetValue(overlay)!;
+                var card = offered[0]!;
+                var boon = (ChaosBoon)card.GetType().GetField("Boon")!.GetValue(card)!;
+                typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", flags)!.Invoke(overlay, new object?[] { boon });
+                overlay.FinishCountdown();
+                Ticks(130); // 88%: the rabbit arrives
+                Assert.Contains(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
+                Ticks(86);
+                Assert.False(ChaosRunHost.IsDescending);
+                Assert.Equal(1, ChaosMeta.State.RunsCompleted);
+                Assert.Contains(state.RunPickTiles, tile => tile != null);
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task A_run_counts_down_ticks_and_ends_on_the_recap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

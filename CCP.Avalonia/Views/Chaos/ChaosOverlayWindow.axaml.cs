@@ -759,6 +759,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public void ShowResults(ChaosRunState s, double baseXp, double skillMult, double finalXp, long previousBest, int sparksEarned,
                                 ChaosRank? rankUp = null)
         {
+            HideDraft();
             SetClickThrough(false);
             _countdownBox.IsVisible = false;
             _draftPanel.IsVisible = false;
