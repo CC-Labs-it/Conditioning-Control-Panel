@@ -65,6 +65,21 @@ public sealed class ConditioningTimeTrackerTests
     }
 
     [Fact]
+    public void SeasonMinutesUseExistingBucketAndInitializeOnlyWhenEmpty()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-09", SeasonStatsSeason = "2026-08", SeasonConditioningMinutes = 3 };
+        ConditioningTimeTracker.AddConditioningTime(s, 1.5);
+        Assert.Equal("2026-08", s.SeasonStatsSeason);
+        Assert.Equal(4.5, s.SeasonConditioningMinutes);
+        s.SeasonStatsSeason = null;
+        ConditioningTimeTracker.AddConditioningTime(s, 0.5);
+        Assert.Equal("2026-09", s.SeasonStatsSeason);
+        Assert.Equal(5, s.SeasonConditioningMinutes);
+        ConditioningTimeTracker.AddConditioningTime(s, 0);
+        Assert.Equal(5, s.SeasonConditioningMinutes);
+    }
+
+    [Fact]
     public void EveryWriteSavesSettings()
     {
         var old = CoreSettings.ServiceProvider;
