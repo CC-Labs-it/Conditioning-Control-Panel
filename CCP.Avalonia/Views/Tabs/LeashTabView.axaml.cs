@@ -16,6 +16,7 @@ public partial class LeashTabView : UserControl
     private ILeashService? _service;
     private LeashSelfCard? _self;
     private readonly Dictionary<string, LeashHolderCard> _holders = new();
+    private readonly Dictionary<string, LeashOfferCard> _offers = new();
 
     public LeashTabView() : this(() => LeashHead.Service) { }
     internal LeashTabView(Func<ILeashService?> service)
@@ -42,6 +43,7 @@ public partial class LeashTabView : UserControl
     {
         if (_service != null) { _service.SnapshotChanged -= OnSnapshot; _service.ReceiptsChanged -= Render; }
         foreach (var card in _holders.Values) card.Fold();
+        foreach (var card in _offers.Values) card.Fold();
     }
     private void OnSnapshot(LeashSnapshot _) => Render();
 
@@ -51,7 +53,16 @@ public partial class LeashTabView : UserControl
         try { if (_service?.Available == true) me = _service.Snapshot.Me; } catch { }
         // WPF LeashDrawerSection.cs:113-150: keep each held card and its open sheet across polls.
         var holding = _service?.Available == true ? _service.Snapshot.Holding : Array.Empty<HeldLeash>();
+        var offers = _service?.Available == true ? _service.Snapshot.Offers : Array.Empty<LeashOffer>();
         var cards = new List<Control>();
+        foreach (var offer in offers)
+        {
+            var key = offer.From.Id + "@" + offer.At.ToUnixTimeSeconds() + "@" + offer.Id;
+            if (!_offers.TryGetValue(key, out var card))
+                _offers[key] = card = new LeashOfferCard(offer, () => _service);
+            cards.Add(card);
+        }
+        foreach (var key in _offers.Keys.Except(offers.Select(o => o.From.Id + "@" + o.At.ToUnixTimeSeconds() + "@" + o.Id)).ToArray()) _offers.Remove(key);
         if (me != null)
         {
             if (_self == null) _self = new LeashSelfCard(me, () => _service);
@@ -76,6 +87,9 @@ public partial class LeashTabView : UserControl
                 SectionHost.Children.Remove(cards[i]);
                 SectionHost.Children.Insert(i, cards[i]);
             }
-        EmptyPanel.IsVisible = me == null && holding.Count == 0;
+        EmptyPanel.IsVisible = me == null && holding.Count == 0 && offers.Count == 0;
+        // WPF LeashDrawerSection.NoteOnScreen: receipt only after the row is hosted and visible.
+        if (IsEffectivelyVisible)
+            foreach (var offer in offers) _service?.NoteShown(offer.Id);
     }
 }
