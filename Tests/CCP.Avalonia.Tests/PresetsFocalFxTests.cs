@@ -89,6 +89,22 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task MotionOffReleasesTheEntranceBeforePointerLift() => WithPresets((host, view) =>
+    {
+        view.EntranceDurationOverride = TimeSpan.FromMinutes(1);
+        view.IsVisible = false;
+        view.IsVisible = true; // start a fresh stagger instead of relying on runner speed
+        Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        Assert.True(row.Opacity < 1, "entrance is still active");
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, Assert.IsType<TransformGroup>(row.RenderTransform)
+            .Children.OfType<TranslateTransform>().Single().Y);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();

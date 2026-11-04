@@ -25,6 +25,8 @@ public partial class PresetsTabView
     private Control? _sheenHost;
     private Window? _fxWindow;
     private CancellationTokenSource? _entranceCancellation;
+    // P08: tests hold a real entrance open without sleeping or racing the render clock.
+    internal TimeSpan? EntranceDurationOverride { get; set; }
 
     private void InitializeFocalFx()
     {
@@ -45,7 +47,7 @@ public partial class PresetsTabView
             _fxWindow.PropertyChanged += OnFxWindowProperty;
         }
         CoreMods.ModChanged += OnFxModChanged;
-        Env.MotionGateChanged += RefreshCardSheen;
+        Env.MotionGateChanged += OnMotionGateChanged;
         RefreshCardSheen();
     }
 
@@ -60,10 +62,18 @@ public partial class PresetsTabView
         }
         _fxWindow = null;
         CoreMods.ModChanged -= OnFxModChanged;
-        Env.MotionGateChanged -= RefreshCardSheen;
+        Env.MotionGateChanged -= OnMotionGateChanged;
         CancelEntrances();
         DetachCardSheen();
         DetachRowSweep();
+    }
+
+    // WPF LiftSessionRow clears the Y animation before a Motion Off snap
+    // (MainWindow.TabFxPresetsQuestsAchievements.cs:437-440). Retire entrance clocks too.
+    private void OnMotionGateChanged()
+    {
+        if (!Env.AllowTransitions) CancelEntrances();
+        RefreshCardSheen();
     }
 
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();
@@ -201,14 +211,14 @@ public partial class PresetsTabView
             }
         }
     }
-    private static async Task EnterAsync(Control card, TimeSpan delay, int ms, AvaloniaProperty property,
+    private async Task EnterAsync(Control card, TimeSpan delay, int ms, AvaloniaProperty property,
                                          double from, double to, CancellationToken cancellation)
     {
         try
         {
             await new Animation
             {
-                Delay = delay, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut(), FillMode = FillMode.Backward,
+                Delay = delay, Duration = EntranceDurationOverride ?? TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut(), FillMode = FillMode.Backward,
                 Children =
                 {
                     new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } },

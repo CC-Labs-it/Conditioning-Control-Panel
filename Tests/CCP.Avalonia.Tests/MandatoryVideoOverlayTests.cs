@@ -375,20 +375,32 @@ public sealed class MandatoryVideoOverlayTests
     public async Task MuteAndCloseButtonsFollowTheMandatoryVideoRule()
     {
         var dir = Directory.CreateTempSubdirectory("ccp-mvbtn-").FullName;
-        var clip = Path.Combine(dir, "clip.y4m");
+        var clip = Path.Combine(dir, "clip.avi");
         try
         {
-            // A raw YUV4MPEG2 clip written here (CI has libvlc but no ffmpeg): 160x90, 25 fps, 10 s.
-            using (var f = File.Create(clip))
+            // Uncompressed AVI uses VLC's built-in AVI/raw-video modules, unlike Y4M's optional
+            // FFmpeg demuxer. Real 160x90 BGR frames at 25 fps for 10 s, without requiring ffmpeg.
+            using (var f = new BinaryWriter(File.Create(clip)))
             {
-                f.Write(System.Text.Encoding.ASCII.GetBytes("YUV4MPEG2 W160 H90 F25:1 Ip A1:1 C420jpeg\n"));
-                var frame = new byte[160 * 90 * 3 / 2];
-                for (var n = 0; n < 250; n++)
+                const uint width = 160, height = 90, count = 250, bytes = width * height * 3;
+                void Four(string tag) => f.Write(System.Text.Encoding.ASCII.GetBytes(tag));
+                void U(params uint[] values) { foreach (var value in values) f.Write(value); }
+                Four("RIFF"); U(216 + count * (8 + bytes)); Four("AVI ");
+                Four("LIST"); U(192); Four("hdrl");
+                Four("avih"); U(56, 40000, bytes * 25, 0, 0, count, 0, 1, bytes, width, height, 0, 0, 0, 0);
+                Four("LIST"); U(116); Four("strl");
+                Four("strh"); U(56); Four("vids"); Four("DIB "); U(0);
+                f.Write((ushort)0); f.Write((ushort)0);
+                U(0, 1, 25, 0, count, bytes, uint.MaxValue, 0);
+                f.Write((short)0); f.Write((short)0); f.Write((short)width); f.Write((short)height);
+                Four("strf"); U(40, 40, width, height);
+                f.Write((ushort)1); f.Write((ushort)24); U(0, bytes, 0, 0, 0, 0);
+                Four("LIST"); U(4 + count * (8 + bytes)); Four("movi");
+                var frame = new byte[bytes];
+                for (var n = 0; n < count; n++)
                 {
-                    Array.Fill(frame, (byte)(n % 200 + 30), 0, 160 * 90);
-                    Array.Fill(frame, (byte)128, 160 * 90, frame.Length - 160 * 90);
-                    f.Write(System.Text.Encoding.ASCII.GetBytes("FRAME\n"));
-                    f.Write(frame);
+                    Array.Fill(frame, (byte)(n % 200 + 30));
+                    Four("00db"); U(bytes); f.Write(frame);
                 }
             }
             try { _ = new LibVlcAudio("--aout=dummy"); }
@@ -407,7 +419,7 @@ public sealed class MandatoryVideoOverlayTests
                 await AvaloniaTestDispatcher.RunAsync(async () =>
                 {
                     if (Application.Current is null)
-                        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                             .UseSkia()
                             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                             .SetupWithoutStarting();
