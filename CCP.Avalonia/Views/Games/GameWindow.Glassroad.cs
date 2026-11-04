@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
@@ -44,6 +45,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Log.Information("GlassroadHost: launch refused, {Env} is not 1", GlassroadHostRules.DoorEnv);
             return false;
         }
+
+        // WPF GlassroadHostService.cs:57-82: Prime uses the Lab gate, independently of the preview switch.
+        internal static bool GlassroadPlayGate() => TierGate.DemandLab(Loc.Get("launcher_game_race_title"));
 
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;
