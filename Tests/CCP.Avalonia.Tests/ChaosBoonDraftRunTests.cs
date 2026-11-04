@@ -71,8 +71,8 @@ public sealed class ChaosBoonDraftRunTests
             finally { ChaosRunHost.ForceShutdown(); ChaosBoonPool.All.Clear(); ChaosBoonPool.All.AddRange(all); }
             return Task.CompletedTask;
         }); }
-    // WPF ChaosModeService.cs:1476-1479: four choices and a sin after earlier unique picks.
-    [Fact] public async Task Successive_four_card_drafts_keep_a_sin_and_the_full_boon_count() {
+    // WPF ChaosModeService.cs:1476-1479, ChaosModels.cs:412: a sin while one remains; the pool bounds both guarantees (hosted pool is smaller).
+    [Fact] public async Task Successive_four_card_drafts_offer_hosted_sins_until_the_pool_runs_short() {
         await AvaloniaTestDispatcher.RunAsync(async () => {
             Setup();
             try {
@@ -87,9 +87,10 @@ public sealed class ChaosBoonDraftRunTests
                 while (panel.IsVisible && DateTime.UtcNow < deadline) await Task.Delay(50);
                 Assert.False(panel.IsVisible); overlay.FinishCountdown();
                 while (ChaosUnlockCardOverlay.IsShowing) ChaosUnlockCardOverlay.Active!.Close();
-                Ticks(80); Assert.True(panel.IsVisible); Assert.Equal(4, cards.Children.Count); Assert.Contains(sins, b => b.Desc == Description(3) && state.ActiveCurses.All(c => c.Id != b.Id));
+                Ticks(80); Assert.True(panel.IsVisible); Assert.Equal(4, cards.Children.Count); Assert.DoesNotContain(Enumerable.Range(0, 4), i => sins.Any(b => b.Desc == Description(i)));
                 state.Config.AllowCurses = false; overlay.FindControl<Button>("BtnReroll")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(4, cards.Children.Count);
-                Assert.Contains(Enumerable.Range(0, 4), i => Description(i) == ChaosBoonPool.All.First(b => b.Id == "heavy_drop").Desc);
+                Assert.Contains(Enumerable.Range(0, 4), i => Description(i) == ChaosBoonPool.All.First(b => b.Id == "heavy_drop").Desc); state.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == "heavy_drop")); state.RerollsLeft = 1;
+                overlay.FindControl<Button>("BtnReroll")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(3, cards.Children.Count); // only the three repeatable boons remain
             }
             finally { ChaosRunHost.ForceShutdown(); }
         }); }
