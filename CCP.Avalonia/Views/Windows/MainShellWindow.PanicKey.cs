@@ -244,6 +244,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug(ex, "AI command cancel on panic failed"); }
         }
 
+        // The head posts to the UI after the portal answers; tests can hold that posted callback.
+        internal static Action<Action> PostPortalStart = start => Dispatcher.UIThread.Post(start);
+
         internal static void StartEffect(Action start)
         {
             if (!_portalAllowed || PortalPanicShortcut.IsBound || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
@@ -253,7 +256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             _portalBind ??= BindPortalAsync();
-            _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(start), TaskScheduler.Default);
+            _portalBind.ContinueWith(_ => PostPortalStart(start), TaskScheduler.Default);
         }
 
         private static async Task BindPortalAsync()
