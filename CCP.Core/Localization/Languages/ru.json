@@ -1,4 +1,10 @@
 {
+  "pulse_time_now": "только что",
+  "pulse_time_seconds": "{0} с назад",
+  "pulse_time_minutes": "{0} мин назад",
+  "pulse_time_hours": "{0} ч назад",
+  "pulse_count_one": "1 срабатывание сегодня",
+  "pulse_count_many": "Срабатываний сегодня: {0}",
   "pulse_tip_audio": "Воспроизводит аудио при обнаружении слова",
   "pulse_tip_highlight": "Обводит слово светящейся рамкой (только OCR)",
   "pulse_tip_haptic": "Запускает вибрацию подключённых устройств",

@@ -1,4 +1,10 @@
 {
+  "pulse_time_now": "just now",
+  "pulse_time_seconds": "{0}s ago",
+  "pulse_time_minutes": "{0}m ago",
+  "pulse_time_hours": "{0}h ago",
+  "pulse_count_one": "1 fire today",
+  "pulse_count_many": "{0} fires today",
   "pulse_tip_audio": "Plays an audio clip when the word is detected",
   "pulse_tip_highlight": "Draws a glowing box around the matched word on screen (OCR matches only)",
   "pulse_tip_haptic": "Fires a haptic vibration pattern on connected devices",

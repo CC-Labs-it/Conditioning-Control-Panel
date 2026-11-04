@@ -1,4 +1,10 @@
 {
+  "pulse_time_now": "たった今",
+  "pulse_time_seconds": "{0}秒前",
+  "pulse_time_minutes": "{0}分前",
+  "pulse_time_hours": "{0}時間前",
+  "pulse_count_one": "今日1回検出",
+  "pulse_count_many": "今日{0}回検出",
   "pulse_tip_audio": "単語を検出すると音声を再生",
   "pulse_tip_highlight": "一致した単語を光る枠で囲む（OCRのみ）",
   "pulse_tip_haptic": "接続デバイスで振動パターンを再生",

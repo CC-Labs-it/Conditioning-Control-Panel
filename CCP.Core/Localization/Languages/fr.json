@@ -1,4 +1,10 @@
 {
+  "pulse_time_now": "à l’instant",
+  "pulse_time_seconds": "il y a {0} s",
+  "pulse_time_minutes": "il y a {0} min",
+  "pulse_time_hours": "il y a {0} h",
+  "pulse_count_one": "1 déclenchement aujourd’hui",
+  "pulse_count_many": "{0} déclenchements aujourd’hui",
   "pulse_tip_audio": "Lit un extrait audio à la détection du mot",
   "pulse_tip_highlight": "Trace un cadre lumineux autour du mot (OCR uniquement)",
   "pulse_tip_haptic": "Lance une vibration sur les appareils connectés",

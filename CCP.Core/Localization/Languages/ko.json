@@ -1,4 +1,10 @@
 {
+  "pulse_time_now": "방금 전",
+  "pulse_time_seconds": "{0}초 전",
+  "pulse_time_minutes": "{0}분 전",
+  "pulse_time_hours": "{0}시간 전",
+  "pulse_count_one": "오늘 1회 감지",
+  "pulse_count_many": "오늘 {0}회 감지",
   "pulse_tip_audio": "단어가 감지되면 오디오 재생",
   "pulse_tip_highlight": "일치한 단어에 빛나는 테두리 표시 (OCR만)",
   "pulse_tip_haptic": "연결된 장치에서 진동 패턴 실행",

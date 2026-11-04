@@ -19,10 +19,16 @@ public partial class AwarenessTabView
     private void AttachPulse()
     {
         PulseEngine.TriggerFired += OnPulseFire;
+        LocalizationManager.Instance.LanguageChanged += OnPulseLanguageChanged;
         RefreshPulse();
     }
 
-    private void DetachPulse() => PulseEngine.TriggerFired -= OnPulseFire;
+    private void DetachPulse()
+    {
+        PulseEngine.TriggerFired -= OnPulseFire;
+        LocalizationManager.Instance.LanguageChanged -= OnPulseLanguageChanged;
+    }
+    private void OnPulseLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshPulse);
     private void OnPulseFire(KeywordTrigger _) => Dispatcher.UIThread.Post(RefreshPulse);
 
     internal void RefreshPulse()
@@ -65,8 +71,7 @@ public partial class AwarenessTabView
                 Child = new TextBlock { Text = fire.Source.ToUpperInvariant(), FontSize = 9, FontWeight = FontWeight.Bold,
                     Foreground = this.FindResource("TextDimBrush") as IBrush } };
             Grid.SetColumn(source, 4); grid.Children.Add(source);
-            var delta = DateTime.Now - fire.FiredAt;
-            var time = delta.TotalSeconds < 10 ? "just now" : delta.TotalSeconds < 60 ? $"{(int)delta.TotalSeconds}s ago" : delta.TotalMinutes < 60 ? $"{(int)delta.TotalMinutes}m ago" : delta.TotalHours < 24 ? $"{(int)delta.TotalHours}h ago" : fire.FiredAt.ToString("HH:mm");
+            var time = FormatPulseTime(fire.FiredAt, DateTime.Now);
             var timeBlock = new TextBlock { Text = time, FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(10, 0, 0, 0), Foreground = this.FindResource("TextMutedBrush") as IBrush };
             Grid.SetColumn(timeBlock, 5); grid.Children.Add(timeBlock);
@@ -74,7 +79,20 @@ public partial class AwarenessTabView
                 BorderBrush = new SolidColorBrush(Color.Parse("#2A2A40")), BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8), Margin = new Thickness(0, 0, 0, 6), Child = grid });
         }
-        TxtAwarenessFireCount.Text = fires.Count == 1 ? "1 fire today" : $"{fires.Count} fires today";
+        TxtAwarenessFireCount.Text = FormatPulseCount(fires.Count);
+    }
+
+    internal static string FormatPulseCount(int count) => count == 1
+        ? Loc.Get("pulse_count_one") : Loc.GetF("pulse_count_many", count);
+
+    internal static string FormatPulseTime(DateTime firedAt, DateTime now)
+    {
+        var delta = now - firedAt;
+        if (delta.TotalSeconds < 10) return Loc.Get("pulse_time_now");
+        if (delta.TotalSeconds < 60) return Loc.GetF("pulse_time_seconds", (int)delta.TotalSeconds);
+        if (delta.TotalMinutes < 60) return Loc.GetF("pulse_time_minutes", (int)delta.TotalMinutes);
+        if (delta.TotalHours < 24) return Loc.GetF("pulse_time_hours", (int)delta.TotalHours);
+        return firedAt.ToString("HH:mm");
     }
 
     internal static (string icon, string tooltip) PulseChip(string key)

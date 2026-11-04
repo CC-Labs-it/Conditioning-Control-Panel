@@ -1,4 +1,10 @@
 {
+  "pulse_time_now": "gerade eben",
+  "pulse_time_seconds": "vor {0} Sek.",
+  "pulse_time_minutes": "vor {0} Min.",
+  "pulse_time_hours": "vor {0} Std.",
+  "pulse_count_one": "heute 1 Treffer",
+  "pulse_count_many": "heute {0} Treffer",
   "pulse_tip_audio": "Spielt bei Erkennung des Wortes einen Audioclip ab",
   "pulse_tip_highlight": "Zeichnet einen leuchtenden Rahmen um das Wort (nur OCR)",
   "pulse_tip_haptic": "Startet ein Vibrationsmuster auf verbundenen Geräten",

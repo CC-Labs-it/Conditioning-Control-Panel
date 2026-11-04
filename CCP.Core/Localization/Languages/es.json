@@ -1,4 +1,10 @@
 {
+  "pulse_time_now": "ahora mismo",
+  "pulse_time_seconds": "hace {0} s",
+  "pulse_time_minutes": "hace {0} min",
+  "pulse_time_hours": "hace {0} h",
+  "pulse_count_one": "1 activación hoy",
+  "pulse_count_many": "{0} activaciones hoy",
   "pulse_tip_audio": "Reproduce un audio al detectar la palabra",
   "pulse_tip_highlight": "Dibuja un marco brillante alrededor de la palabra (solo OCR)",
   "pulse_tip_haptic": "Activa un patrón de vibración en los dispositivos conectados",
