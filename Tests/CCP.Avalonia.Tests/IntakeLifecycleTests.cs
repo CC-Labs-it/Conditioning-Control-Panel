@@ -78,6 +78,74 @@ public sealed class IntakeLifecycleTests
     });
 
     [Fact]
+    public Task VisibleEmiReceivesOpeningThenHoldCancelsSpeech() => WithCleanState(() =>
+    {
+        var service = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        var engine = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        var draw = service.DrawIntakeMoment;
+        var moments = new List<string>();
+        string? bubbleBeforeHold = null;
+        bool chainBeforeHold = false;
+        var window = service.BeginPresentation()!;
+        window.Show();
+        EventHandler<string> onMoment = (_, id) =>
+        {
+            moments.Add(id);
+            if (id == "intakeRunning")
+            {
+                bubbleBeforeHold = window.IntakeBubbleText;
+                chainBeforeHold = window.ChainLive;
+            }
+        };
+        service.IntakeMomentFired += onMoment;
+        service.DrawIntakeMoment = id => id == "intakeOpened"
+            ? new ConditioningControlPanel.Services.EmiDesk.LineDraw("test.open", "test", "Hello", "^_^", null, 1, false, 0)
+            : engine.Draw(id) is { } hold ? hold with { Face = "-_-" } : null;
+        try
+        {
+            var intake = GradedIntakeTabView.OpenIntake(null, duckMain: false);
+            Assert.Equal(new[] { "intakeOpened", "intakeRunning" }, moments);
+            Assert.Equal(".", bubbleBeforeHold);
+            Assert.True(chainBeforeHold);
+            Assert.Equal("-_-", window.Face);
+            Assert.False(window.ChainLive);
+            Assert.Null(window.IntakeBubbleText);
+            Assert.Equal("intakeRunning", engine.HeldBy);
+            Assert.Same(intake, GradedIntakeTabView.OpenIntake(null, duckMain: false));
+            Assert.Equal(2, moments.Count);
+            intake.Close();
+            Assert.Null(engine.HeldBy);
+        }
+        finally
+        {
+            service.IntakeMomentFired -= onMoment;
+            service.DrawIntakeMoment = draw;
+            window.ShutDown();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task IntakeLineAdvancesAndCanBeCancelled() => WithCleanState(async () =>
+    {
+        var window = new ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskWindow();
+        window.Show();
+        try
+        {
+            window.SpeakIntakeLine(new ConditioningControlPanel.Services.EmiDesk.LineDraw(
+                "test.line", "test", "Hello", "^_^", null, 1, false, 0));
+            Assert.Equal(".", window.IntakeBubbleText);
+            await Task.Delay(1600);
+            Assert.Equal("Hello", window.IntakeBubbleText);
+            Assert.Equal("^_^", window.Face);
+            window.CancelChain();
+            Assert.False(window.ChainLive);
+            Assert.Null(window.IntakeBubbleText);
+        }
+        finally { window.ShutDown(); }
+    });
+
+    [Fact]
     public Task NativeDeathBeforeReadyRetriesWindowedOnceAndIgnoresClosedEngines() => WithCleanState(() =>
     {
         IntakeHostWindow.RelaunchedOnce = false;
