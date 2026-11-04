@@ -177,6 +177,7 @@ public sealed class BubbleCountQueueTests
             feed.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.True(host.FeedOwnsTheScreen);
+            Assert.False(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsAnyStartupGameOpen());
             var button = new BubbleCountFeatureControl().FindControl<Button>("BtnTest")!;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

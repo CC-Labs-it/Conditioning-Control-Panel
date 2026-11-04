@@ -18,9 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so
-    /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
-    /// pump when the startup modals move onto a shared ladder.
+    /// Modal offers share the Core priority queue and park while the launcher or a game is up.
     /// </summary>
     internal static class StartupLadder
     {
@@ -30,6 +28,85 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static DateTime? _lastPassiveUtc;
         private static readonly List<InboxItem> _held = new();
         private static ITimer? _passiveTimer;
+        private static readonly StartupQueueCore _modalQueue = new();
+        private static readonly Dictionary<string, (Func<Task> Show, Action? Abandoned)> _modalShows = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly List<InboxItem> _deferred = new();
+        private static bool _modalPumpRunning, _modalUp;
+        private static CancellationTokenSource _modalCancellation = new();
+        internal static Func<bool> ModalWindowReady = () => Views.Windows.MainShellWindow.Current?.IsVisible == true;
+        internal static readonly TimeSpan ModalSettle = TimeSpan.FromMilliseconds(750);
+        internal static readonly TimeSpan ModalPoll = TimeSpan.FromMilliseconds(500);
+        internal static readonly TimeSpan ModalMaxWait = TimeSpan.FromMinutes(5);
+
+        /// <summary>Queue a UI-thread modal. The task must complete only after the modal closes.</summary>
+        public static void EnqueueModal(string key, int priority, Func<Task> show, Action? onAbandoned = null)
+        {
+            if (string.IsNullOrWhiteSpace(key) || show == null) return;
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Post(() => EnqueueModal(key, priority, show, onAbandoned));
+                return;
+            }
+            if (!_modalQueue.Enqueue(key, priority)) return;
+            _modalShows[key] = (show, onAbandoned);
+            if (_modalPumpRunning) return;
+            _modalPumpRunning = true;
+            var token = _modalCancellation.Token;
+            Dispatcher.UIThread.Post(() => _ = PumpModalsAsync(token), DispatcherPriority.Normal);
+        }
+
+        private static bool CanStartModal() => StartupQueueCore.CanStartModal(
+            Views.Windows.MainShellWindow.IsStartupDialogShowing, AppUpdater.IsUpdateDialogActive,
+            CoreTutorial.IsActive, ModalWindowReady(), StartupQueueCore.IsParked(World(UtcNow)));
+
+        private static async Task PumpModalsAsync(CancellationToken token)
+        {
+            try
+            {
+                while (!_modalQueue.IsEmpty)
+                {
+                    var next = _modalQueue.Next();
+                    if (next == null) break;
+                    var key = next.Value.Key;
+                    await Task.Delay(ModalSettle, Time, token);
+                    var waited = TimeSpan.Zero;
+                    while (!CanStartModal() && waited < ModalMaxWait)
+                    {
+                        await Task.Delay(ModalPoll, Time, token);
+                        if (!StartupQueueCore.IsParked(World(UtcNow))) waited += ModalPoll;
+                    }
+                    _modalQueue.Remove(key);
+                    if (!_modalShows.Remove(key, out var surface)) continue;
+                    if (!CanStartModal())
+                    {
+                        if (surface.Abandoned != null) StartupInbox.RunSafely(surface.Abandoned, key, "abandon");
+                        continue;
+                    }
+                    _modalUp = true;
+                    Views.Windows.MainShellWindow.IsStartupDialogShowing = true;
+                    try { await surface.Show(); }
+                    catch (Exception ex) { Log.Warning(ex, "[Startup] '{Key}' failed to show", key); }
+                    finally
+                    {
+                        _modalUp = false;
+                        Views.Windows.MainShellWindow.IsStartupDialogShowing = false;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
+            catch (Exception ex) { Log.Warning(ex, "[Startup] modal pump failed"); }
+            finally
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    _modalPumpRunning = false;
+                    var deferred = _deferred.ToArray();
+                    _deferred.Clear();
+                    foreach (var item in deferred) PresentOrInbox(item);
+                }
+            }
+        }
+
 
         /// <summary>WPF's 1 s re-check of the held surfaces (Services/Startup/StartupPresenter.cs:541).</summary>
         internal static readonly TimeSpan PassiveRecheck = TimeSpan.FromSeconds(1);
@@ -55,9 +132,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
-            ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
+            ModalUp = _modalUp || Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
+            LadderBusy = _modalPumpRunning || !_modalQueue.IsEmpty,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
+            LauncherHolding = Views.Windows.LauncherWindow.Instance is { } launcher && (launcher.IsVisible || !ModalWindowReady()),
+            GameHostUp = Views.Games.GameWindow.IsAnyStartupGameOpen() || Views.Windows.IntakeHostWindow.IsAnyOpen(),
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
             NowUtc = nowUtc,
         };
@@ -68,7 +148,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (item == null) return;
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => PresentOrInbox(item)); return; }
 
-            if (StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow)) == StartupRouting.Present)
+            var route = StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow));
+            if (route != StartupRouting.Present &&
+                (Inbox.Contains(item.Key) || _deferred.Any(h => string.Equals(h.Key, item.Key, StringComparison.OrdinalIgnoreCase)) ||
+                 _held.Any(h => string.Equals(h.Key, item.Key, StringComparison.OrdinalIgnoreCase)))) return;
+            if (route == StartupRouting.Defer)
+            {
+                _deferred.Add(item);
+                return;
+            }
+            if (route == StartupRouting.Present)
             {
                 // One passive surface on screen at a time: the next one waits for it to close.
                 if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp()))
@@ -126,6 +215,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: forget the quiet window, the passive pacing, the passive windows up and every row.</summary>
         internal static void ResetForTests()
         {
+            _modalCancellation.Cancel();
+            _modalCancellation = new CancellationTokenSource();
+            _modalQueue.Clear();
+            _modalShows.Clear();
+            _deferred.Clear();
+            _modalPumpRunning = _modalUp = false;
+            ModalWindowReady = () => Views.Windows.MainShellWindow.Current?.IsVisible == true;
             _firstLaunchUntilUtc = null;
             _lastPassiveUtc = null;
             _held.Clear();
