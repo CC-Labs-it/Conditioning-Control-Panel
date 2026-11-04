@@ -271,13 +271,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializePremiumCelebration()
         {
             Opened += (_, _) => MaybeShowPremiumCelebration();
-            System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(MaybeShowPremiumCelebration);
+            bool pendingRise = false;
+            System.Action<int> rise = _ => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => pendingRise = true);
+            Platform.AccountSeed.TierRaised += rise;
+            System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                var onRise = pendingRise;
+                pendingRise = false;
+                MaybeShowPremiumCelebration(onRise);
+            });
             var patreon = Platform.AccountSeed.Patreon;
             var substar = Platform.AccountSeed.SubscribeStar;
             if (patreon != null) patreon.TierChanged += tier;
             if (substar != null) substar.TierChanged += tier;
             Closed += (_, _) =>
             {
+                Platform.AccountSeed.TierRaised -= rise;
                 if (patreon != null) patreon.TierChanged -= tier;
                 if (substar != null) substar.TierChanged -= tier;
             };
@@ -285,9 +294,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1118): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
-        /// is spent at open time. ponytail: no live-rise path (EntitlementTierSync.TierRaised, the immediate card and the
-        /// profile-bubble fanfare) on this head yet, so every grant takes the presenter route.</summary>
-        internal void MaybeShowPremiumCelebration()
+        /// is spent at open time. Live server rises bypass the launch quiet window when the user is free.</summary>
+        internal void MaybeShowPremiumCelebration(bool onRise = false)
         {
             try
             {
@@ -295,16 +303,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
                 var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false)) return;
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise)) return;
                 var key = TierCelebration.KeyFor(tier)!;
-                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                var item = new Services.Startup.InboxItem
                 {
                     Key = "intro:" + key,
                     Glyph = "💖",
                     Title = Loc.Get(tier >= 2 ? "premium_celebration_inbox_t2" : "premium_celebration_inbox_t1"),
                     Summary = Loc.Get("premium_celebration_inbox_summary"),
                     Open = () => FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key),
-                });
+                };
+                if (onRise)
+                {
+                    if (IsVisible && WindowState != WindowState.Minimized && !CoreSession.IsSessionRunning
+                        && !CoreEngine.IsRunning && !global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsAnyOpen()
+                        && !CoreTutorial.IsActive && !Platform.AppUpdater.IsUpdateDialogActive && !IsStartupDialogShowing)
+                        item.Open();
+                    else
+                        Platform.StartupLadder.Inbox.File(item);
+                }
+                else Platform.StartupLadder.PresentOrInbox(item);
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Premium celebration hook failed"); }
         }

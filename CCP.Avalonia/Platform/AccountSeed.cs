@@ -160,6 +160,9 @@ internal static class AccountSeed
     /// celebration, which is why it is not TierChanged (WPF EntitlementTierSync.GraceClosed).</summary>
     internal static event Action? GraceClosed;
 
+    /// <summary>WPF EntitlementTierSync.TierRaised, before the provider repaint event.</summary>
+    internal static event Action<int>? TierRaised;
+
     private static readonly EntitlementReadings Readings = new();
 
     /// <summary>WPF EntitlementTierSync.HoldGraceClose: the window closes after a session or a game,
@@ -203,6 +206,7 @@ internal static class AccountSeed
             if (!reading.Rose && after <= before) return;
             var tier = reading.Rose ? serverTier!.Value : after;
             Log.Information("[Entitlement] {Source}: access now tier {Tier}", source, tier);
+            TierRaised?.Invoke(tier);
             Patreon?.NotifyEntitlementRaised(tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
         }
         catch (Exception ex) { Log.Warning(ex, "[Entitlement] apply failed ({Source})", source); }
