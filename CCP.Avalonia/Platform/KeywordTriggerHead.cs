@@ -119,7 +119,7 @@ internal sealed class KeywordAudioRuntime
     private CancellationTokenSource? _audio;
     private Action? _stop;
     private int _playGeneration;
-    private long? _duckGeneration;
+    private readonly List<Action> _duckReleases = new();
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
@@ -223,25 +223,67 @@ internal sealed class KeywordAudioRuntime
             actions = fired.SelectMany(t => t.Actions ?? new()).Where(a => a is { Enabled: true } &&
                 seen.Add(a is VisualEffectAction ve ? $"VisualEffect:{ve.Effect}" : a.GetType().Name)).ToList();
         }
-        foreach (var action in actions)
+        // WPF KeywordTriggerService.cs:1351: one duck for the entire response, even
+        // when a later audio action does not request it. Each overlapping response owns its release.
+        var durations = new List<Task<TimeSpan>>();
+        Action? release = null;
+        CancellationToken token = default;
+        if (actions.OfType<PlayAudioAction>().Any(a => a.DuckSystemAudio) &&
+            (CoreSession.IsEngineRunning || CoreSession.IsSessionRunning) && CoreSettings.Current.AudioDuckingEnabled)
         {
-            if (!IsActive || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
-            try
+            token = (_audio ??= new CancellationTokenSource()).Token;
+            CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
+            var generation = CoreAudio.DuckGeneration;
+            var released = 0;
+            release = () =>
             {
-                switch (action)
-                {
-                    case PlayAudioAction audio:
-                        if (!await PlayAsync(audio)) return;
-                        break;
-                    case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
-                    case AddXpAction xp when xp.Amount > 0:
-                        AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));
-                        break;
-                    case ChasterAddTimeAction chaster: BookChaster(chaster, first); break;
-                }
-            }
-            catch (Exception ex) { Log.Warning(ex, "Keyword action {Action} failed", action.GetType().Name); }
+                if (Interlocked.Exchange(ref released, 1) != 0) return;
+                lock (_duckReleases) _duckReleases.Remove(release!);
+                CoreAudio.Unduck(generation);
+            };
+            lock (_duckReleases) _duckReleases.Add(release);
         }
+        try
+        {
+            foreach (var action in actions)
+            {
+                if (!IsActive || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+                try
+                {
+                    switch (action)
+                    {
+                        case PlayAudioAction audio:
+                            Task<TimeSpan>? duration = null;
+                            var completed = await PlayAsync(audio, clip => duration = clip);
+                            if (duration != null) durations.Add(duration);
+                            if (!completed) return;
+                            break;
+                        case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
+                        case AddXpAction xp when xp.Amount > 0:
+                            AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));
+                            break;
+                        case ChasterAddTimeAction chaster: BookChaster(chaster, first); break;
+                    }
+                }
+                catch (Exception ex) { Log.Warning(ex, "Keyword action {Action} failed", action.GetType().Name); }
+            }
+        }
+        finally
+        {
+            if (release != null) _ = ReleaseDuckAsync(durations, token, release);
+        }
+    }
+
+    private async Task ReleaseDuckAsync(List<Task<TimeSpan>> durations, CancellationToken token, Action release)
+    {
+        try
+        {
+            var lengths = await Task.WhenAll(durations).WaitAsync(token);
+            var longest = lengths.Length == 0 ? 0 : lengths.Max(d => d.TotalMilliseconds);
+            await Delay((int)Math.Clamp(longest, 0, int.MaxValue - 500) + 500, token);
+        }
+        catch (OperationCanceledException) { }
+        finally { release(); }
     }
 
     private void BookChaster(ChasterAddTimeAction chaster, KeywordTrigger trigger)
@@ -271,17 +313,18 @@ internal sealed class KeywordAudioRuntime
     {
         _audio?.Cancel(); _audio?.Dispose(); _audio = null;
         StopClip();
+        Action[] releases;
+        lock (_duckReleases) releases = _duckReleases.ToArray();
+        foreach (var release in releases) release();
     }
     private void StopClip()
     {
         _playGeneration++;
         var stop = _stop; _stop = null;
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
-        if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
-        _duckGeneration = null;
     }
 
-    private async Task<bool> PlayAsync(PlayAudioAction audio)
+    private async Task<bool> PlayAsync(PlayAudioAction audio, Action<Task<TimeSpan>> trackClip)
     {
         if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) return true;
         if (string.IsNullOrEmpty(audio.FilePath)) return true;
@@ -296,11 +339,6 @@ internal sealed class KeywordAudioRuntime
         StopClip();
         var cancellation = _audio ??= new CancellationTokenSource();
         var token = cancellation.Token;
-        if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
-        {
-            CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
-            _duckGeneration = CoreAudio.DuckGeneration;
-        }
         {
             try
             {
@@ -312,9 +350,12 @@ internal sealed class KeywordAudioRuntime
                     _stop?.Invoke();
                     var last = i == count - 1;
                     var generation = ++_playGeneration;
+                    var length = new TaskCompletionSource<TimeSpan>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    trackClip(length.Task);
                     _stop = CoreAudio.PlayStoppable(path,
                         KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
-                        onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
+                        onStarted: duration => length.TrySetResult(duration),
+                        onFinished: () => { length.TrySetResult(TimeSpan.Zero); if (last) Dispatcher.UIThread.Post(async () =>
                         {
                             try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _playGeneration) StopClip(); }
                             catch (OperationCanceledException) { }

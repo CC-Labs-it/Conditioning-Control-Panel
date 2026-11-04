@@ -91,6 +91,80 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(new[] { 0.125f, (float)Math.Pow(0.5, 1.5) }, played.Where(p => p.Path != "stopped").Select(p => p.Volume));
     });
 
+    [Theory] // WPF KeywordTriggerService.cs:1351-1388
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public Task BatchDuckSurvivesClipReplacementAndReleasesAfterLongestDuration(bool firstDuck, bool secondDuck) => RunAsync(async (engine, s, played) =>
+    {
+        var saved = (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider);
+        var done = new List<Action>();
+        var calls = new List<string>();
+        var delayStarted = new TaskCompletionSource();
+        var delayGate = new TaskCompletionSource();
+        var released = new TaskCompletionSource();
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => calls.Add("duck");
+            CoreAudio.DuckGenerationProvider = () => 42;
+            CoreAudio.UnduckProvider = gen => { calls.Add($"unduck:{gen}"); released.TrySetResult(); };
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, finish) =>
+            {
+                done.Add(finish!);
+                started!(TimeSpan.FromSeconds(done.Count == 1 ? 2 : 1));
+                return finish!;
+            };
+            engine.Delay = (ms, _) =>
+            {
+                if (ms == 500) return Task.CompletedTask; // stale clip cleanup
+                Assert.Equal(2500, ms); delayStarted.TrySetResult(); return delayGate.Task;
+            };
+            var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+            first.DuckSystemAudio = firstDuck;
+            s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = first.FilePath, DuckSystemAudio = secondDuck });
+            Type(engine, "sit");
+            Assert.Equal(2, done.Count); Assert.Equal(new[] { "duck" }, calls);
+            await delayStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(new[] { "duck" }, calls);
+            delayGate.SetResult();
+            await released.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(new[] { "duck", "unduck:42" }, calls);
+            engine.StopAudio(); Assert.Equal(2, calls.Count);
+        }
+        finally
+        {
+            engine.StopAudio();
+            (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider) = saved;
+        }
+    });
+
+    [Fact] // Independent batch references must each be released on panic or stop.
+    public void OverlappingBatchDucksReleaseOnceEachOnStop() => Run((engine, s, _) =>
+    {
+        var saved = (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider);
+        var calls = new List<string>();
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => calls.Add("duck");
+            CoreAudio.DuckGenerationProvider = () => 9;
+            CoreAudio.UnduckProvider = gen => calls.Add($"unduck:{gen}");
+            var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0]; first.DuckSystemAudio = true;
+            Type(engine, "sit");
+            engine.Now = () => new DateTime(2026, 10, 14, 14, 0, 0);
+            Type(engine, "sit");
+            Assert.Equal(new[] { "duck", "duck" }, calls);
+            engine.StopAudio();
+            Assert.Equal(new[] { "duck", "duck", "unduck:9", "unduck:9" }, calls);
+            engine.Stop(); Assert.Equal(4, calls.Count);
+        }
+        finally
+        {
+            engine.StopAudio();
+            (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider) = saved;
+        }
+    });
+
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
     {
