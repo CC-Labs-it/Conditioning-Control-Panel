@@ -17,6 +17,9 @@ public sealed class MandatoryVideoSchedulerTests
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
         public int Closes;
+        public bool FeedOwnsTheScreen { get; set; }
+        public int FeedNotices;
+        public void AnnounceFeedDefer() => FeedNotices++;
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
         public double CloseAll() { Closes++; return Watched; }
@@ -35,6 +38,291 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    private sealed class MinimumRandom : Random
+    {
+        public override double NextDouble() => 0;
+    }
+
+    [Fact]
+    public void Feed_coalesces_without_picking_or_playing_then_replays_first_request() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return new[] { "/v/first.mp4" }; });
+        v.Start();
+        Assert.False(v.Trigger(true, userInitiated: true));
+        Assert.False(v.Trigger(false));
+        clock.Advance(TimeSpan.FromSeconds(20));
+        Assert.False(v.IsPlaying);
+        Assert.Equal(0, picks);
+        Assert.Equal(1, host.FeedNotices);
+        Assert.Empty(host.Shown);
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromMilliseconds(499));
+        Assert.False(v.IsPlaying);
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.True(v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(("/v/first.mp4", true), Assert.Single(host.Shown));
+        Assert.Equal(1, picks);
+        v.End();
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void Opt_in_accepts_and_coalesces_feed_deferrals_but_not_failed_picks_or_playing() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; });
+        try
+        {
+            v.Start();
+            Assert.True(v.TriggerAccepted(null, null));
+            Assert.True(v.TriggerAccepted(null, null));
+            Assert.False(v.IsPlaying);
+            Assert.Equal(0, picks);
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(v.IsPlaying);
+            Assert.False(v.TriggerAccepted(null, null));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+            Assert.Equal(1, picks);
+            var empty = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>());
+            host.FeedOwnsTheScreen = true;
+            empty.Start();
+            Assert.True(empty.TriggerAccepted(null, null));
+            host.FeedOwnsTheScreen = false; // The old defer is still pending until the next poll.
+            Assert.False(empty.TriggerAccepted(null, null)); // This new pick failed.
+            empty.Stop();
+        }
+        finally { v.Stop(); }
+    });
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("panic")]
+    [InlineData("disabled")]
+    [InlineData("not-running")]
+    [InlineData("expired")]
+    public void Feed_replay_cannot_outlive_its_permission_or_deadline(string reason) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        if (reason != "not-running") v.Start();
+        v.Trigger();
+        if (reason == "stop") { v.Stop(); v.Start(); }
+        if (reason == "panic") v.ForceCleanup();
+        if (reason == "disabled") CoreSettings.Current.MandatoryVideosEnabled = false;
+        if (reason == "expired")
+        {
+            clock.Advance(TimeSpan.FromSeconds(89));
+            v.Trigger(); // coalescing cannot renew the original ceiling
+            clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        Assert.Equal(0, host.FeedNotices);
+        // Expiry releases the latch so the next request can wait and replay normally.
+        if (reason == "expired")
+        {
+            host.FeedOwnsTheScreen = true;
+            v.Trigger();
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(v.IsPlaying);
+        }
+        v.Stop();
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Feed_expiry_drops_old_request_but_next_interval_plays_after_feed_closes(bool testPress) => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; }, new MinimumRandom());
+        try
+        {
+            v.Start();
+            // The controlled roll makes every normal interval exactly 144 s at 20/hour.
+            clock.Advance(TimeSpan.FromSeconds(143));
+            if (testPress) Assert.False(v.Trigger(userInitiated: true));
+            clock.Advance(TimeSpan.FromSeconds(1)); // the real scheduled tick
+            Assert.False(v.IsPlaying);
+            Assert.Equal(0, picks);
+            // The Test press began one second before the scheduled tick.
+            clock.Advance(TimeSpan.FromSeconds(testPress ? 89 : 90));
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            Assert.Equal(0, picks);
+            Assert.True(v.IsRunning);
+            Assert.Equal(testPress ? 1 : 0, host.FeedNotices);
+            // No playback up to 500 ms before the next interval measured from expiry.
+            clock.Advance(TimeSpan.FromSeconds(143));
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            Assert.Equal(0, picks);
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(v.IsPlaying);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+            Assert.Equal(1, picks);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Fact]
+    public void Empty_feed_replay_rearms_so_a_clip_added_mid_session_can_play() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var available = false; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return available ? Clips : Array.Empty<string>(); });
+        try
+        {
+            v.Start();
+            clock.Advance(TimeSpan.FromSeconds(216));
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.Equal(1, picks);
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            available = true;
+            clock.Advance(TimeSpan.FromSeconds(217.3));
+            Assert.True(v.IsPlaying);
+            Assert.Single(host.Shown);
+            Assert.Equal(2, picks);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Fact]
+    public void Throwing_feed_replay_is_contained_and_next_scheduled_pick_can_play() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
+        var pending = new Queue<Action>();
+        var oldPost = CoreDispatch.PostProvider;
+        CoreDispatch.PostProvider = pending.Enqueue;
+        void Drain() { while (pending.TryDequeue(out var action)) action(); }
+        var v = new MandatoryVideoScheduler(host, clock,
+            () => ++picks == 1 ? throw new System.IO.IOException("unreadable video folder") : Clips);
+        try
+        {
+            v.Start();
+            clock.Advance(TimeSpan.FromSeconds(216));
+            Drain();
+            Assert.Equal(0, picks);
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            // Run the queued UI action outside CoreDispatch's provider catch, as Avalonia does.
+            Assert.Null(Record.Exception(Drain));
+            Assert.Equal(1, picks);
+            Assert.True(v.IsRunning);
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            clock.Advance(TimeSpan.FromSeconds(216));
+            Drain();
+            Assert.True(v.IsPlaying);
+            Assert.Equal(2, picks);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Drain();
+            Assert.Single(host.Shown);
+        }
+        finally { v.Stop(); CoreDispatch.PostProvider = oldPost; }
+    });
+
+    [Fact]
+    public void Remote_video_acknowledges_feed_defer_and_refuses_only_an_actually_playing_video() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var oldVideo = CoreEngine.Video;
+        try
+        {
+            CoreEngine.Video = v;
+            v.Start();
+            Assert.Null(RemoteCommands.Execute("trigger_video", null));
+            Assert.False(v.IsPlaying);
+            Assert.Equal(0, host.FeedNotices);
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(v.IsPlaying);
+            Assert.Equal("a video is already playing", RemoteCommands.Execute("trigger_video", null));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+        }
+        finally { v.Stop(); CoreEngine.Video = oldVideo; }
+    });
+
+    [Fact]
+    public void Earned_video_plays_over_feed_without_a_notice() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        Assert.True(v.Trigger(userEarned: true, userInitiated: true));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        Assert.Equal(0, host.FeedNotices);
+        v.Stop();
+    });
+
+    [Fact]
+    public void Explicit_path_plays_over_feed_with_scheduler_stopped_and_feature_disabled() => With(6, false, () =>
+    {
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => throw new InvalidOperationException("No library pick"));
+        try
+        {
+            Assert.False(v.IsRunning);
+            Assert.True(v.Trigger(true, "/v/requested.mp4", userInitiated: true));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(("/v/requested.mp4", true), Assert.Single(host.Shown));
+            Assert.Equal(0, host.FeedNotices);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Fact]
+    public void Attention_retry_plays_over_new_feed_without_resetting_penalties_or_resuming_effects() => With(6, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.AttentionChecksEnabled, s.MercySystemEnabled, CoreBubbles.ResumeAction);
+        s.AttentionChecksEnabled = true;
+        s.MercySystemEnabled = false;
+        var resumes = 0;
+        CoreBubbles.ResumeAction = () => resumes++;
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            Assert.True(v.Trigger());
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            host.FeedOwnsTheScreen = true;
+            v.NoteSpawn();
+            v.Ended();
+            Assert.Equal(AttentionVerdict.Fail, Assert.Single(host.Messages));
+            host.Then!();
+            Assert.True(v.IsPlaying);
+            Assert.Equal(1, v.Penalties);
+            Assert.Equal(0, resumes);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(2, host.Shown.Count);
+            Assert.True(host.Shown[1].Strict);
+            Assert.Equal(0, host.FeedNotices);
+        }
+        finally
+        {
+            v.Stop();
+            (s.AttentionChecksEnabled, s.MercySystemEnabled, CoreBubbles.ResumeAction) = old;
+        }
+    });
 
     [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
@@ -106,11 +394,13 @@ public sealed class MandatoryVideoSchedulerTests
     [Fact]
     public void Empty_library_starts_nothing_and_keeps_the_schedule_alive() => With(60, false, () =>
     {
-        var clock = new FakeClock(); var host = new Host();
-        var v = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>());
+        var clock = new FakeClock(); var host = new Host(); var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Array.Empty<string>(); });
         v.Start();
         Assert.False(v.Trigger());
+        Assert.Equal(1, picks);
         clock.Advance(TimeSpan.FromHours(1));
+        Assert.True(picks > 1); // Failed picks still re-arm; only pending deferrals own their wait.
         Assert.Empty(host.Shown);
         Assert.True(v.IsRunning);
         v.Stop();

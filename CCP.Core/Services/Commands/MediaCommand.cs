@@ -31,8 +31,8 @@ namespace ConditioningControlPanel.Services.Commands
         }
 
         /// <summary>Head video surface on the UI thread: a validated path, or null for a random
-        /// clip (WPF App.Video PlaySpecificVideo(path, strict: false) / TriggerVideo). False when
-        /// nothing started (no player, one already playing). Unseeded: refused.</summary>
+        /// clip (WPF App.Video PlaySpecificVideo(path, strict: false) / TriggerVideo). True when
+        /// started or accepted for a deferred replay; false when refused. Unseeded: refused.</summary>
         public static volatile Func<string?, bool>? VideoSurface;
 
         /// <summary>Head audio surface: plays one file at full volume and answers whether it really

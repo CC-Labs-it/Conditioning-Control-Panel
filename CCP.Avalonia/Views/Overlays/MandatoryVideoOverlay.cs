@@ -41,6 +41,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
+        public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(Games.GameWindow.IsForYouOnScreen);
+        public void AnnounceFeedDefer() =>
+            App.Notifications.Show(Loc.Get("video_toast_feed_has_the_screen"), duration: TimeSpan.FromSeconds(6));
+
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library

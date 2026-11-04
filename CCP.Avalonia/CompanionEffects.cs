@@ -116,8 +116,9 @@ namespace ConditioningControlPanel.Avalonia
                 CoreSettings.Save();
                 return true;
             });
+            // WPF App.AiEffects.cs:75-77 acknowledges a random request handed to the feed guard.
             MediaCommand.VideoSurface = path => Start(() =>
-                CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+                CoreEngine.Video?.TriggerAccepted(path == null ? null : false, path) == true);
             MediaCommand.AudioSurface = PlayAudio;
             GetBackToMeCommand.AiProvider = () => App.Ai;
             GetBackToMeCommand.SaySurface = (text, aiGenerated) =>
