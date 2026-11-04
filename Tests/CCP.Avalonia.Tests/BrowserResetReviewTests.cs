@@ -128,6 +128,8 @@ public class BrowserResetReviewTests
     [Fact]
     public async Task LauncherBootOwnsNoticeAndStartupSurfacesDoNotOverlap() => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        // Windows CI is not an Inno install, so CheckAsync never requests the feed there (AppUpdaterTests.cs:63).
+        if (OperatingSystem.IsWindows()) Assert.Skip("Linux notify path; the Windows install path needs an Inno install.");
         Setup();
         OldProfile();
         var feed = UseFeed("99.1.0");
@@ -249,6 +251,8 @@ public class BrowserResetReviewTests
     [Fact]
     public async Task PendingNoticeDoesNotDelayUpdateCheckOrFailedUpdateReport() => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        // Windows CI is not an Inno install, so CheckAsync never requests the feed there (AppUpdaterTests.cs:63).
+        if (OperatingSystem.IsWindows()) Assert.Skip("Linux notify path; the Windows install path needs an Inno install.");
         Setup();
         OldProfile();
         var feed = UseFeed("99.1.0");
@@ -284,6 +288,8 @@ public class BrowserResetReviewTests
     [InlineData(false)]
     public async Task NoticeAndUpdateOfferWaitForTutorial(bool notice) => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        // Windows CI is not an Inno install, so CheckAsync never requests the feed there (AppUpdaterTests.cs:63).
+        if (!notice && OperatingSystem.IsWindows()) Assert.Skip("Linux notify path; the Windows install path needs an Inno install.");
         Setup();
         var oldProvider = CoreTutorial.IsActiveProvider;
         var feed = UseFeed("99.2.0");
