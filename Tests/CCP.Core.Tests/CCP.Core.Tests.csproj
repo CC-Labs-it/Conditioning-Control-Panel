@@ -37,6 +37,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
+    <!-- Compile the pure WPF policy with Core imports to catch cross-head type name collisions on Linux. -->
+    <Compile Include="..\..\ConditioningControlPanel\Services\Video\Floating\FloatingSpawn.cs" Link="WpfFloatingSpawn.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\HostNetPathRuleTests.cs" Link="HostNetPathRuleTests.cs" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AchievementSharePromptRuleTests.cs" Link="AchievementSharePromptRuleTests.cs" />

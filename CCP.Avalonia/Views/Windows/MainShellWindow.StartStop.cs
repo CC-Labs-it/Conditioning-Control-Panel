@@ -42,8 +42,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else StartEngineFromUser();
         }
 
-        /// <summary>WPF StartEngineFromUser: only the user's own START ends the post-panic quiet early
-        /// (Core PanicAftermath); the scheduler, programs, a remote or the Lockdown keeper never do.</summary>
+        /// <summary>WPF StartEngineFromUser: the user's own START ends the post-panic quiet early
+        /// (Core PanicAftermath). User starts include Start today's session when it starts the engine,
+        /// via UserProgramStart. Automatic, scheduled, remote and Lockdown keeper starts never do.</summary>
         internal void StartEngineFromUser()
         {
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();

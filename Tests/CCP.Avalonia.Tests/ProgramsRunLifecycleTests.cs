@@ -77,10 +77,15 @@ public sealed class ProgramsRunLifecycleTests
             Assert.True(F<Button>("BtnProgramWithdraw").IsEffectivelyEnabled);
             Assert.True(F<Button>("BtnStartTodaySession").IsEffectivelyEnabled);
 
+            // The user's own program start releases panic quiet and the engine restart hold.
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart);
             // Today's session through the bridge; the row says it is ours.
             await shell.StartProgramSessionAsync();
             Dispatcher.UIThread.RunJobs();
             Assert.True(runner.IsRunning && svc.IsProgramSession(runner.CurrentSession));
+            Assert.False(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            Assert.False(ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart);
             Assert.Equal(Loc.Get("programs_session_in_progress"), F<TextBlock>("TxtStartTodaySession").Text);
             Assert.False(F<Button>("BtnStartTodaySession").IsEnabled);
             Assert.True(F<Grid>("TodaySessionProgressRow").IsEffectivelyVisible);

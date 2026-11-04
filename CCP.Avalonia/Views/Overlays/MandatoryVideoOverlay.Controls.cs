@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p)
         {
             var s = CoreSettings.Current;
-            p.Volume = PlayerVolume = _userMuted ? 0 : MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            p.Volume = PlayerVolume = (_userMuted || !_floatingRevealed) ? 0 : MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
         }
 
         /// <summary>WPF ShowVideoControls: once the first frame is up, on every screen. UI thread.</summary>
