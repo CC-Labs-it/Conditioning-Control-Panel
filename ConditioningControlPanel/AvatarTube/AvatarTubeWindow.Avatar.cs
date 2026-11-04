@@ -876,6 +876,8 @@ namespace ConditioningControlPanel
             // Next arrow: show if not at last unlocked set
             BtnNextAvatar.Visibility = hasMultiple && currentIndex < unlockedSets.Length - 1
                 ? Visibility.Visible : Visibility.Collapsed;
+
+            UpdateGenerationPill();
         }
 
         /// <summary>
