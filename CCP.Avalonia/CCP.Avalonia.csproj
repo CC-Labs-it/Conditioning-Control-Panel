@@ -264,6 +264,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png" Link="assets\Chaos\boons\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <!-- Built-in sessions are runtime JSON, not Avalonia resources. Match WPF's lowercase
          assets/sessions output path so Core's loader sees the same files on every head. -->
     <Content Include="..\Assets\sessions\*.session.json"
