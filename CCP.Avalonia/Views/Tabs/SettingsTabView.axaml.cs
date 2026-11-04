@@ -198,7 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CardMystery.Click += CardMystery_Click;
             MysteryRevealFace.PointerReleased += MysteryRevealFace_Click;
             CardVault.Click += CardVault_Click;
-            CardJustDrop.Click += CardJustDrop_Click;
+            CardDeeperEditor.Click += CardDeeperEditor_Click;
             LogoBrandFrame.PointerPressed += ImgLogo_MouseLeftButtonDown;
             IntakePassFace.PointerPressed += IntakePassFace_MouseLeftButtonDown;
 
@@ -294,7 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ => null,
         };
         private void CardVault_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPatreonExclusives_Click(sender, e);
-        private void CardJustDrop_Click(object? sender, RoutedEventArgs e) { }        // mw.CardJustDrop_Click(...)
+        private void CardDeeperEditor_Click(object? sender, RoutedEventArgs e) => Shell?.ShowTab("deeper");
         /// <summary>
         /// WIRED (the bark and the easter egg). WPF's handler
         /// (MainWindow.UiUpdates.cs:1210) does four things: an achievement track, a bark
