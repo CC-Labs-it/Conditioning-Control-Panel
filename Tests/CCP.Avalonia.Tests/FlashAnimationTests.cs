@@ -40,7 +40,6 @@ public sealed class FlashAnimationTests
         try { body(path); }
         finally { Directory.Delete(root, recursive: true); }
     }
-
     [Fact]
     public Task Restore_previous_composes_every_frame_and_restores_the_background() => OnUi(() => WithGif(8, path =>
     {
@@ -208,7 +207,6 @@ public sealed class FlashAnimationTests
             File.Delete(path);
         }
     }
-
     [Fact]
     public async Task Retired_queued_flashes_dispose_every_decoded_frame_without_showing()
     {

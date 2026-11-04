@@ -600,7 +600,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             const int maxFrames = 60;
             const double maxMemoryMb = 30;
             // Frame budget mirrors FlashService.LoadGifFrames: estimate kept-frame memory, then
-            // subsample evenly across the WHOLE clip rather than truncating to a head slice — the
+            // subsample evenly across the WHOLE clip rather than truncating to a head slice - the
             // ceiling stride in FramePlan is what makes that claim true (#683), and the matching
             // avgMs * step delay below keeps the kept set's wall-clock duration honest.
             var bytesPerKept = (long)tw * th * 4;
@@ -666,7 +666,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (frames.Count < 2) return null;
 
             double avgMs = durationSamples > 0 ? (double)durationTotalMs / durationSamples : 100;
-            if (avgMs < 20) avgMs = 100;   // bogus/zero delays → 100ms, same as the GIF loader
+            if (avgMs < 20) avgMs = 100;   // bogus/zero delays become 100ms, same as the GIF loader
             return TimeSpan.FromMilliseconds(Math.Clamp(avgMs * step, 20, 2000));
         }
 
