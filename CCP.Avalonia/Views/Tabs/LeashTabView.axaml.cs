@@ -17,14 +17,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class LeashTabView : UserControl
 {
     private readonly Func<ILeashService?> _resolve;
+    private readonly Func<Window?>? _owner;
     private ILeashService? _service;
     private LeashSelfCard? _self;
 
     public LeashTabView() : this(() => LeashHead.Service) { }
-    internal LeashTabView(Func<ILeashService?> service)
+    internal LeashTabView(Func<ILeashService?> service, bool asDrawer = false, Func<Window?>? owner = null)
     {
         _resolve = service;
+        _owner = owner;
         InitializeComponent();
+        if (asDrawer)
+        {
+            // WPF FriendsDrawer.cs:394-395 hosts the same section without page padding or its empty state.
+            PageStack.Children.Remove(SectionHost);
+            Content = SectionHost;
+            Tag = "leash-section";
+            AttachedToVisualTree += (_, _) => OnShown();
+        }
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
         DetachedFromVisualTree += (_, _) => Unsubscribe();
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) Unsubscribe(); };
@@ -40,6 +50,10 @@ public partial class LeashTabView : UserControl
         if (_service != null) _service.SnapshotChanged += OnSnapshot;
         Render();
     }
+
+    internal void OnHidden() => Unsubscribe();
+
+    private Window? Owner() => _owner?.Invoke() ?? TopLevel.GetTopLevel(this) as Window;
 
     private void Unsubscribe()
     {
@@ -61,7 +75,7 @@ public partial class LeashTabView : UserControl
         }
         if (me != null)
         {
-            if (_self == null) _self = new LeashSelfCard(me, () => _service);
+            if (_self == null) _self = new LeashSelfCard(me, () => _service, Owner);
             else _self.Update(me);
             SectionHost.Children.Add(_self);
             // WPF NoteOnScreen: assignments are seen here; punishments are seen on the gate.
@@ -90,7 +104,7 @@ public partial class LeashTabView : UserControl
         look.Margin = new Thickness(6, 0, 0, 0);
         look.Padding = new Thickness(12, 5);
         look.CornerRadius = new CornerRadius(10);
-        look.Click += (_, _) => LeashAskWindow.Open(o, () => _service, TopLevel.GetTopLevel(this) as Window);
+        look.Click += (_, _) => LeashAskWindow.Open(o, () => _service, Owner());
         Grid.SetColumn(look, 2);
         g.Children.Add(look);
         return new Border

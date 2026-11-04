@@ -6,7 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section, no lock-day chip, no juice (.Juice.cs), no bell
+// ponytail: no lock-day chip, no juice (.Juice.cs), no bell
 // (the corner notices are not on this head). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
@@ -24,6 +24,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
@@ -58,6 +59,7 @@ public sealed partial class FriendsDrawer : Border
     private readonly Border _head = new(), _addBox = new(), _foot = new();
     private readonly Border _ask = new() { Tag = "friends-presence-ask", Margin = new Thickness(10, 8, 10, 0) };
     private readonly StackPanel _list = new();
+    private readonly LeashTabView? _leash;
     private readonly TextBox _codeBox = new();
     private readonly Button _addGo;
     private readonly TextBlock _addResult = Label("", 11.5, Muted, Display);
@@ -77,6 +79,7 @@ public sealed partial class FriendsDrawer : Border
         _resolve = service != null ? () => service : () => FriendsHead.Service;
         _svc = _resolve();
         OwnerWindow = () => TopLevel.GetTopLevel(this) as Window;
+        if (!asPage) _leash = new LeashTabView(() => LeashHead.Service, asDrawer: true, owner: () => OwnerWindow());
         if (asPage) (MaxWidth, CornerRadius) = (PageMaxWidth, new CornerRadius(16));
         else (Width, MaxHeight, CornerRadius) = (DrawerWidth, DrawerMaxHeight, new CornerRadius(16));
         Background = new LinearGradientBrush
@@ -151,6 +154,7 @@ public sealed partial class FriendsDrawer : Border
         if (_svc?.Available == true) _ = SafeRefreshAsync();
         try { if (_svc?.Available == true) StartTables(); } catch { }
         Render();
+        if (_svc?.Available == true) _leash?.OnShown();
         Dispatcher.UIThread.Post(() => Focus());
     }
     public void OnClosed()
@@ -158,6 +162,7 @@ public sealed partial class FriendsDrawer : Border
         try { _svc?.SetDrawerOpen(false); } catch { }
         Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes); also stops the tables poll
         FeedFolded();
+        _leash?.OnHidden();
         (_isOpen, _openId, _confirm, _picker, _addBox.IsVisible) = (false, null, null, null, false);
     }
     private void Rebind()
@@ -282,6 +287,8 @@ public sealed partial class FriendsDrawer : Border
             _list.Children.Add(box);
             return;
         }
+        // WPF FriendsDrawer.cs:394-395: the popup pins the leash above the friends feed.
+        if (_leash != null) _list.Children.Add(_leash);
         AddFeed();
         var (online, offline) = FriendsDrawerRules.Split(snap);
         (online, offline) = FriendsDrawerRules.HostingFirst(online, offline, f => TableFor(f) != null);
