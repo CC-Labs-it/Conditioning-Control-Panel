@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
@@ -72,6 +73,50 @@ public class EmiDeskGlassTests
         {
             desk.ShutDown(); host.Close(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
+            CoreSettings.ServiceProvider = old;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task GlassRunsOnTheSharedBeatAndStopsWhenClosed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var old = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var savedBedtime = EmiState.Current.BedtimeUntil;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        var desk = new EmiDeskWindow();
+        try
+        {
+            EmiState.Current.BedtimeUntil = DateTime.MinValue;
+            CoreSettings.Current.EmiDeskGlass = true;
+            desk.Show(); Dispatcher.UIThread.RunJobs();
+            desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
+            Assert.True(desk.GlassIsLive);
+            Assert.Contains(BeatLoop.Running, loop => loop.Owner == desk);
+            time.Advance(TimeSpan.FromMilliseconds(219)); BeatLoop.StepAll();
+            Assert.False(desk.GlassHasLanded);
+            time.Advance(TimeSpan.FromMilliseconds(1)); BeatLoop.StepAll();
+            Assert.True(desk.GlassHasLanded);
+            time.Advance(TimeSpan.FromMilliseconds(9999)); BeatLoop.StepAll();
+            Assert.True(desk.GlassIsLive);
+            time.Advance(TimeSpan.FromMilliseconds(1)); BeatLoop.StepAll();
+            Assert.False(desk.GlassIsLive);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == desk);
+            desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
+            Assert.Contains(BeatLoop.Running, loop => loop.Owner == desk);
+            desk.Hide(); Dispatcher.UIThread.RunJobs();
+            Assert.False(desk.GlassIsLive);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == desk);
+        }
+        finally
+        {
+            desk.ShutDown();
+            BeatLoop.Time = TimeProvider.System;
+            EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
         return Task.CompletedTask;
