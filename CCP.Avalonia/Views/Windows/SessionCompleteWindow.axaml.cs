@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             LoadRandomCard();
             ApplyLog(log);
+            this.FindControl<TextBlock>("TxtTasteLine")!.IsVisible = log.Completed && playSound && !CoreAccount.HasPremiumAccess;
 
             if (playSound && log.Completed)
             {

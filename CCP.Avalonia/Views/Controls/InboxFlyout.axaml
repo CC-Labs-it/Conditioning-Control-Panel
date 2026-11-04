@@ -1,7 +1,8 @@
 <!-- PORTED from ConditioningControlPanel/Controls/InboxFlyout.xaml. Same colours, sizes and order.
      Deviations, all forced: Visibility -> IsVisible; ToolTip -> ToolTip.Tip; the RelativeSource
      verb labels -> $parent[UserControl] bindings; the dismiss hover trigger -> a :pointerover style;
-     every button is a TextBlock inside a Template so '_' is never an access key. -->
+     every button is a TextBlock inside a Template so '_' is never an access key.
+     Row glyphs render through IconGlyph. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:startup="clr-namespace:ConditioningControlPanel.Services.Startup;assembly=CCP.Core"
@@ -37,8 +38,8 @@
                         <DataTemplate x:DataType="startup:InboxItem">
                             <Border BorderBrush="#FF2C2C44" BorderThickness="0,0,0,1" Padding="12,10">
                                 <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <TextBlock Grid.Column="0" Text="{Binding Glyph}"
-                                               Foreground="#FFE8E8F5" FontSize="16"
+                                    <fx:IconGlyph Grid.Column="0" Emoji="{Binding Glyph}"
+                                               Foreground="#FFE8E8F5" Size="16"
                                                Margin="0,0,10,0" VerticalAlignment="Top"/>
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Text="{Binding Title}" Foreground="#FFE8E8F5"

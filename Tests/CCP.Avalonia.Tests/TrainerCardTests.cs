@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -8,6 +9,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Rendering.Composition;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -156,6 +160,8 @@ public sealed partial class AccountSeedTests
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
                 w.Show();
                 w.ShowTab("leaderboard");
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
                 Dispatcher.UIThread.RunJobs();
@@ -163,7 +169,20 @@ public sealed partial class AccountSeedTests
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
+                // A realized row need not be in the viewport or the compositor's last frame yet.
+                row.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
+                var rendered = Stopwatch.StartNew();
+                while (!batch.Rendered.IsCompleted)
+                {
+                    Assert.True(rendered.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the leaderboard row");
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();
+                }
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
+                Assert.True(w.InputHitTest(at) is Visual hit && (hit == row || row.IsVisualAncestorOf(hit)),
+                    "the rendered leaderboard row must receive the double click");
                 for (var i = 0; i < 2; i++)
                 {
                     w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);

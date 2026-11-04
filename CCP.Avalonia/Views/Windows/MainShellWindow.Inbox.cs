@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void InitializeInboxBadge()
         {
+            InitializeConversionProfile();
             var inbox = StartupLadder.Inbox.Items;
             inbox.CollectionChanged += OnInboxCollectionChanged;
             Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;
