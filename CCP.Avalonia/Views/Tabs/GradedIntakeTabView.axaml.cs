@@ -216,13 +216,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 live.Activate();
                 return live;
             }
-            var intake = new Windows.IntakeHostWindow { DuckTarget = duckMain ? owner : null };
-            if (!recovery && CoreSettings.Current.IntakeFullscreen) intake.WindowState = WindowState.FullScreen;
-            intake.Relaunch = () => OpenIntake(owner, duckMain, recovery: true);
-            intake.Drafted += (session, path) => OnSessionDrafted(shell, session, path);
-            intake.Load(Platform.WebAssetServer.Shared);
-            intake.Show();
-            return intake;
+            var emi = Windows.EmiDesk.EmiDeskService.Instance;
+            emi.BeginIntake();
+            try
+            {
+                var intake = new Windows.IntakeHostWindow { DuckTarget = duckMain ? owner : null };
+                if (!recovery && CoreSettings.Current.IntakeFullscreen) intake.WindowState = WindowState.FullScreen;
+                intake.Relaunch = () => OpenIntake(owner, duckMain, recovery: true);
+                intake.Drafted += (session, path) => OnSessionDrafted(shell, session, path);
+                intake.Load(Platform.WebAssetServer.Shared);
+                intake.Show();
+                return intake;
+            }
+            catch
+            {
+                emi.EndIntake();
+                throw;
+            }
         }
 
         /// <summary>WPF IntakeHostService.OnQuizResult after the draft: Sessions list refresh, then the

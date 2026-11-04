@@ -27,8 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// loom-save, intake-save-image, need-remote, the speech bridge and the audio-web pack request
     /// are in IntakeHostWindow.Bridge.cs; window mode, duck and the heartbeat watchdog in
     /// IntakeHostWindow.Lifecycle.cs.
-    /// ponytail: not ported yet - the EmiDesk intakeRunning hold (this head's
-    /// EmiDeskService has no Fire/ReleaseHold director).
+    /// The opening moment still needs the EmiDesk moment director and chain player.
     /// </summary>
     internal sealed partial class IntakeHostWindow : Window
     {
@@ -60,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 lock (OpenWindows) OpenWindows.Remove(this);
                 StopSpeechBridge("closed", notifyPage: false);
                 EndLifecycle();
+                EmiDesk.EmiDeskService.Instance.EndIntake();
             };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);

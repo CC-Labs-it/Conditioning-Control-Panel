@@ -265,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True while a chain is on screen.</summary>
         // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
         // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
-        public bool ChainLive => _patFeedback is not null;
+        public bool ChainLive => _patFeedback is not null || _intakeChain is not null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -906,6 +906,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void CancelChain()
         {
             StopPatFeedback();
+            CancelIntakeChain();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -2163,6 +2164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _transiting = true;
                 InputLocked = true;
 
+                CancelIntakeReaction();
                 CancelChain();
                 StopIdleBeats();
                 OnBubbleTextCore(null);
@@ -2254,6 +2256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _transiting = true;
                 InputLocked = true;
                 StopIdleBeats();
+                CancelIntakeReaction();
                 DisarmPet();
                 CancelChain();
                 TearDownReactions();
@@ -2639,6 +2642,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // widget and no road back to a close button.
                 CloseBook();
                 StopIdleBeats();
+                CancelIntakeReaction();
                 StopAlive();
                 DisarmPet();
                 StopChromeGrace();
@@ -2662,11 +2666,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 KillOptionsPanel();
                 CloseBook();
                 StopIdleBeats();
+                CancelIntakeReaction();
                 StopAlive();
                 DisarmPet();
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelChain();
             }
             catch (Exception ex)
             {

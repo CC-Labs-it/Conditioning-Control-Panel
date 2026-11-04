@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
     /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
+    /// backSoon/weekend/bedtime beats; intake moments are wired below), the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off wiring (the <c>TubeDeskVisibility</c> rule itself is in
     /// CCP.Core; only the head call that hides/restores the desk is missing). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
@@ -26,6 +26,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     internal sealed class EmiDeskService
     {
         public static EmiDeskService Instance { get; } = new();
+
+        // WPF IntakeHostService.Launch and DisposeAll.
+        internal void BeginIntake()
+        {
+            EmiState.NoteUsage("intake");
+            FireIntakeMoment("intakeOpened");
+            FireIntakeMoment("intakeRunning");
+        }
+
+        internal void EndIntake() => EmiLineEngine.Instance.ReleaseHold("intakeRunning");
+
+        // WPF Fire/Speak: announce before drawing, draw holds even while she is away,
+        // and acknowledge a line only after the window accepts it.
+        internal event EventHandler<string>? IntakeMomentFired;
+        internal Func<string, LineDraw?> DrawIntakeMoment { get; set; } = id => EmiLineEngine.Instance.Draw(id);
+
+        private void FireIntakeMoment(string id)
+        {
+            try { IntakeMomentFired?.Invoke(this, id); }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] intake moment listener failed"); }
+            try
+            {
+                var visible = IsOut && _window?.IsVisible == true && !_window.PresentationActive;
+                if (!visible && id != "intakeRunning") return;
+                var line = DrawIntakeMoment(id);
+                if (visible && line != null)
+                {
+                    if (line.Hold) _window!.HoldIntakeFace(line);
+                    else _window!.SpeakIntakeLine(line);
+                }
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] intake moment {Moment} failed", id); }
+        }
 
         private EmiDeskWindow? _window;
         private long _summonGen;
