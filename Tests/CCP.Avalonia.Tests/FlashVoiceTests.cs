@@ -25,6 +25,43 @@ public class FlashVoiceTests
         public override long GetTimestamp() => Ticks;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
     }
+    [Theory]
+    [InlineData(0, true, 0, 1, 4)]
+    [InlineData(1, true, 0, 1, 8)]
+    [InlineData(1, false, 1, 10, 60)]
+    [InlineData(3, true, 0, 1, 4)]
+    [InlineData(2, true, 0, 1, 8)]
+    [InlineData(2, false, 1, 10, 60)]
+    [InlineData(2, false, 2, 10, 10)]
+    [InlineData(2, true, 2, 10, 80)]
+    public async Task Flash_xp_uses_attempted_voice_and_keeps_multipliers(int playback, bool linked, int generation, int lucky, int expected)
+    {
+        var file = Path.GetTempFileName();
+        var oldPlay = CoreAudio.PlayStoppableProvider;
+        var oldXp = CoreProgression.AddXPProvider;
+        try {
+            double awarded = 0;
+            CoreProgression.AddXPProvider = (xp, _) => awarded += xp;
+            CoreAudio.PlayStoppableProvider = (_, _, _, start, finish) => {
+                if (playback == 2) start!(TimeSpan.Zero); else finish!();
+                return () => { };
+            };
+            var s = new AppSettings { FlashAudioEnabled = true, MasterVolume = 100, AvatarMuted = playback == 0,
+                HydraLinkedTiming = linked, SuppressPerkNotifications = true };
+            var burst = FlashOverlay.BeginBurst();
+            await FlashOverlay.PlayFlashVoice(s, playback == 3 ? file + ".missing" : file, burst);
+            FlashOverlay.Paid(file, s, generation, lucky);
+            Assert.Equal(expected, awarded);
+            FlashOverlay.FinishBurst(burst);
+            FlashOverlay.CloseAll(false);   // WPF FlashService.cs:5118 clears the voiced flag on close
+            awarded = 0;
+            FlashOverlay.Paid(file, s, 0, 1);
+            Assert.Equal(4, awarded);
+        } finally {
+            FlashOverlay.CloseAll(false); CoreAudio.PlayStoppableProvider = oldPlay;
+            CoreProgression.AddXPProvider = oldXp; File.Delete(file);
+        }
+    }
     [Fact]
     public void Audio_length_controls_the_burst_lifetime_and_stay_still_wins()
     {
