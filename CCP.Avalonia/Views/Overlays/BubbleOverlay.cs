@@ -13,6 +13,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
@@ -181,6 +182,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
         private static Action<AmbientBubble>? _chaosPopped;
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
+        private static Action<int>? _chaosEStimArc;
+        private static int _estimCharges;
+        private static bool _estimFork;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
         private static void AnchorPop(AmbientBubble b) { ChaosLastPopX = b.CenterX; ChaosLastPopY = b.CenterY; }
@@ -189,7 +193,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
         internal static void Press(AmbientBubble b, double x, double y)
         {
-            if (!b.IsLiveThreat) { Pop(b); return; }
+            if (!b.IsLiveThreat)
+            {
+                bool wasPopping = b.Popping;
+                Pop(b);
+                // WPF BubbleService.cs:4617-4626: only a landed player pop conducts.
+                if (!wasPopping && b.Popping) EStimClick(b);
+                return;
+            }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -214,10 +225,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// if the ambient field is not already running.</summary>
         internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
-            Func<AmbientBubble, bool>? canChannel = null)
+            Func<AmbientBubble, bool>? canChannel = null, Action<int>? onEStimArc = null)
         {
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
+            _chaosEStimArc = onEStimArc;
             Field.Held = false;
             Field.ChaosDefused = onDefuse == null ? null : b =>
             {
@@ -246,11 +258,81 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
+            _chaosEStimArc = null;
+            _estimCharges = 0;
+            _estimFork = false;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
+        }
+
+        // WPF BubbleService.cs:342-442: charged clicks and their delayed paid pops.
+        internal static int EStimChargesLeft => _estimCharges;
+        internal static void ArmEStim(int charges, bool fork)
+        {
+            if (_chaosPopped == null) return;
+            _estimCharges = Math.Max(1, charges);
+            _estimFork = fork;
+        }
+
+        private static void EStimClick(AmbientBubble source)
+        {
+            if (_estimCharges <= 0 || source.Spec is not { IsLive: false, IsDarter: false, IsFreeze: false }) return;
+            static double Distance(AmbientBubble a, AmbientBubble b) =>
+                Math.Pow(a.CenterX - b.CenterX, 2) + Math.Pow(a.CenterY - b.CenterY, 2);
+            var pool = Field.Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping
+                && b.Spec is { IsDarter: false, IsFreeze: false, IsTease: false, IsBrittle: false }).ToList();
+            var hits = new List<(AmbientBubble From, AmbientBubble Target, int DelayMs)>();
+            if (!_estimFork)
+            {
+                foreach (var target in pool.OrderBy(b => Distance(source, b)).TakeWhile(b => Distance(source, b) <= 600 * 600).Take(3))
+                    hits.Add((source, target, 70 * (hits.Count + 1)));
+            }
+            else
+            {
+                var queue = new Queue<(AmbientBubble Bubble, int Depth)>();
+                var taken = new HashSet<AmbientBubble> { source };
+                queue.Enqueue((source, 0));
+                while (queue.Count > 0 && hits.Count < 40)
+                {
+                    var (current, depth) = queue.Dequeue();
+                    foreach (var target in pool)
+                    {
+                        if (taken.Contains(target) || Distance(current, target) > 600 * 600) continue;
+                        taken.Add(target);
+                        hits.Add((current, target, 70 * (depth + 1)));
+                        queue.Enqueue((target, depth + 1));
+                        if (hits.Count == 40) break;
+                    }
+                }
+            }
+            if (hits.Count == 0) return; // No conductor in reach: the charge waits.
+            _estimCharges--;
+            if (_estimCharges == 0) _estimFork = false;
+            PixelPoint CenterPx(AmbientBubble b)
+            {
+                double scale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                return new PixelPoint((int)Math.Round(b.CenterX * scale), (int)Math.Round(b.CenterY * scale));
+            }
+            var bolts = hits.Select(h => (From: CenterPx(h.From), To: CenterPx(h.Target))).ToArray();
+            foreach (var (_, target, delay) in hits)
+                DispatcherTimer.RunOnce(() =>
+                {
+                    // EndChaos removes old bubbles, just as WPF destroys them at run end.
+                    if (Field.HoldChaos || !Field.Bubbles.Contains(target) || target.Popping) return;
+                    if (target.IsLiveThreat)
+                    {
+                        if (target.Snap()) Field.ChaosDefused?.Invoke(target);
+                        RequestFrame();
+                    }
+                    else PopChaos(target);
+                }, TimeSpan.FromMilliseconds(delay));
+            if (ChaosSkiaFxOverlay.Enabled)
+                ChaosSkiaFxOverlay.Strike(bolts.Select(b => (new Point(b.From.X, b.From.Y), new Point(b.To.X, b.To.Y))).ToArray());
+            else ChaosEStimOverlay.Strike(bolts);
+            _chaosEStimArc?.Invoke(_estimCharges);
         }
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a

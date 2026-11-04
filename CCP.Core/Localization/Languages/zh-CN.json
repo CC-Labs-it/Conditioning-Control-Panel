@@ -1,4 +1,9 @@
 {
+  "chaos_estim_banner": "电刺激",
+  "chaos_estim_charged_conduct": "⚡ 已充能：接下来 {0} 个气泡会导电",
+  "chaos_estim_charged_chain": "⚡ 已充能：接下来 {0} 个气泡会引发连锁反应",
+  "chaos_estim_arc_remaining": "⚡ 电流跃动（剩余 {0} 次）",
+  "chaos_estim_spent": "⚡ 电荷已耗尽",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

@@ -1,4 +1,9 @@
 {
+  "chaos_estim_banner": "E-Stim",
+  "chaos_estim_charged_conduct": "⚡ charged: your next {0} pops conduct",
+  "chaos_estim_charged_chain": "⚡ charged: your next {0} pops chain-react",
+  "chaos_estim_arc_remaining": "⚡ the current arcs ({0} left)",
+  "chaos_estim_spent": "⚡ the charge is spent",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

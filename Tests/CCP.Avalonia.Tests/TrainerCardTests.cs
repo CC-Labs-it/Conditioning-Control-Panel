@@ -8,7 +8,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -158,12 +160,14 @@ public sealed partial class AccountSeedTests
                 w.ShowTab("leaderboard");
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
+                w.CompleteTabTransition(); // settle animated hit geometry before taking the click point
                 Dispatcher.UIThread.RunJobs();
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
+                Assert.Same(row, (w.InputHitTest(at) as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true));
                 for (var i = 0; i < 2; i++)
                 {
                     w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);

@@ -129,6 +129,10 @@ public class ChaosLiveBubbleTests
         f.DefuseAllLive();
         Assert.Equal(new[] { "snap:swept" }, log);
         Assert.False(treat.Popping);
+        Assert.False(b.Deflating); // WPF Bubble.Pop bursts a swept live (BubbleService.cs:295,4672,4711).
+        double scale = b.Scale;
+        f.Step();
+        Assert.True(b.Scale > scale);
         Assert.Equal(b.FuseRemainingMs / 1000.0, b.DefuseJudgeFuseSec, 6);
     }
 

@@ -1,4 +1,9 @@
 {
+  "chaos_estim_banner": "Electroestimulación",
+  "chaos_estim_charged_conduct": "⚡ cargado: tus próximas {0} burbujas conducen",
+  "chaos_estim_charged_chain": "⚡ cargado: tus próximas {0} burbujas inician una reacción en cadena",
+  "chaos_estim_arc_remaining": "⚡ salta la corriente (restan {0})",
+  "chaos_estim_spent": "⚡ se agotó la carga",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

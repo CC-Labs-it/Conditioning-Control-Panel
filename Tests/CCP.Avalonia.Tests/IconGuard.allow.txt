@@ -1,7 +1,7 @@
 # IconGuardTests allow-list (oracle fluent-icons.md (c)/(e)): `path :: exact literal :: reason`
 # path is relative to CCP.Avalonia; the literal is blanked on every line of that file before counting.
 # Reason prefix scopes the entry: "font:" -> NoIconFontCodepoints, "path:" -> PathIconRatchet, anything else is
-# CONTENT for IconEmojiRatchet. Only content belongs here at the finish (L12); "font:" entries are temporary.
+# CONTENT for the emoji and prefixed-loc ratchets. Only content belongs here at the finish (L12); "font:" entries are temporary.
 # Liveness is checked on comment-stripped code. A "path:" literal is listed once per line it covers (a new Path built
 # the same way fails the count). Literal `*` (path: only) exempts every file whose path starts with the entry's path.
 # A "verbatim:" reason with `*` exempts ONE exact file (Stack rule 4 import) from the emoji and prefixed-loc ratchets.
@@ -42,6 +42,8 @@ Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: tr
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ☠ RELAPSE — one more loop :: WPF ChaosModeService.cs:1083 announcer copy, the line itself is drawn as outlined text (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ⏳ ten seconds. make them count. :: WPF ChaosModeService.cs:1073 run event-feed sentence (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: Loc.GetF("chaos_estim_arc_remaining" :: localized E-Stim event-feed sentence, WPF ChaosModeService.cs:2792 (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: Loc.Get("chaos_estim_spent" :: localized E-Stim event-feed sentence, WPF ChaosModeService.cs:2798 (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🔮 prism! 10x :: run event-feed sentence, WPF ChaosModeService.cs:1837 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🪨 heavy drop! x3 :: run event-feed sentence, WPF ChaosModeService.cs:1870 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ✋ no focus — it triggers :: run event-feed sentence, WPF ChaosModeService.cs:1958 verbatim (content (c).3)

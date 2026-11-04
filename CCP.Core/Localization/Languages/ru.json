@@ -1,4 +1,9 @@
 {
+  "chaos_estim_banner": "Электростимуляция",
+  "chaos_estim_charged_conduct": "⚡ заряжено: проводящих пузырей впереди: {0}",
+  "chaos_estim_charged_chain": "⚡ заряжено: пузырей с цепной реакцией впереди: {0}",
+  "chaos_estim_arc_remaining": "⚡ ток проходит дальше (осталось: {0})",
+  "chaos_estim_spent": "⚡ заряд исчерпан",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",
