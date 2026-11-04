@@ -314,8 +314,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
             InitTakeoverCountdownBar();
-            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection;
-            // neither has ported.
+            StartFloatingAnimation(); // WPF AvatarTubeWindow.xaml.cs:614
+            // ponytail: StartFullscreenDetection remains unported.
         }
 
         protected override void OnClosed(EventArgs e)
@@ -336,6 +336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
             _poseTimer.Stop();
+            StopFloatingAnimation(); // WPF Windowing.cs:1507
             _speechTimer?.Stop();
             ClearSpeechQueue();
             _cooldownTickTimer?.Stop();
