@@ -425,7 +425,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             RefreshHover();
             // A locked tile is not an affordance; lighting it up promises a click that does nothing.
             if (IsLocked) on = false;
-            if (on) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
+            if (on && !DashboardDepth) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
         }
 
         private void RefreshHover()
@@ -435,7 +435,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _rootScale.Transitions = Env.AllowTransitions ? _hoverTransitions : null;
             _rimLight.Transitions = Env.AllowTransitions ? _rimTransitions : null;
             bool on = _hovered && !IsLocked;
-            _rootScale.ScaleX = _rootScale.ScaleY = on ? HoverLiftScale : 1;
+            _rootScale.ScaleX = _rootScale.ScaleY = on && !DashboardDepth ? HoverLiftScale : 1;
             _rimLight.Opacity = on ? RimLightOpacity : 0;
         }
 
@@ -443,7 +443,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public bool DashboardDepth
         {
             get => _dashboardDepth;
-            set { if (_dashboardDepth == value) return; _dashboardDepth = value; if (_rootBorder != null) ApplyActiveState(); }
+            set
+            {
+                if (_dashboardDepth == value) return;
+                _dashboardDepth = value;
+                if (_rootBorder == null) return;
+                ApplyActiveState();
+                RefreshHover();
+                if (value) HoverPop.Leave(_imgIconHost);
+            }
         }
         public bool DimWhenInactive { get => GetValue(DimWhenInactiveProperty); set => SetValue(DimWhenInactiveProperty, value); }
 
