@@ -167,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF PlayLockdownActivationAnimation (Lab.cs:1254): a crimson (180,220,20,60) veil over the
         // whole window fading 1 -> 0 over 600 ms (QuadraticEase out), then removed. Stepped by a
         // short-lived ~30 fps DispatcherTimer like the Emergency Exit breath, so tests drive frames.
+        internal System.TimeProvider LockdownFlashClock { get; set; } = System.TimeProvider.System;
         private global::Avalonia.Controls.Border? _lockdownFlash;
         private global::Avalonia.Threading.DispatcherTimer? _lockdownFlashTimer;
         internal global::Avalonia.Controls.Border? LockdownFlash => _lockdownFlash;
@@ -187,9 +188,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (root.RowDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetRowSpan(_lockdownFlash, root.RowDefinitions.Count);
                 if (root.ColumnDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetColumnSpan(_lockdownFlash, root.ColumnDefinitions.Count);
                 root.Children.Add(_lockdownFlash);
-                var clock = System.Diagnostics.Stopwatch.StartNew();
+                var start = LockdownFlashClock.GetTimestamp();
                 _lockdownFlashTimer = new global::Avalonia.Threading.DispatcherTimer(System.TimeSpan.FromMilliseconds(33),
-                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => PaintLockdownFlash(clock.Elapsed.TotalMilliseconds));
+                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => PaintLockdownFlash(LockdownFlashClock.GetElapsedTime(start).TotalMilliseconds));
                 _lockdownFlashTimer.Start();
             }
             catch (System.Exception ex)

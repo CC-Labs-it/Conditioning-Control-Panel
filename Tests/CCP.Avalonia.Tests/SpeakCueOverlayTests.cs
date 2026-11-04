@@ -88,8 +88,13 @@ public sealed class SpeakCueOverlayTests
         Assert.Same(w, SpeakCueOverlay.Active);              // still fading
         c.Advance(1); w.Step();
         Assert.Equal(0, alphas[^1]);
-        Assert.Null(SpeakCueOverlay.Active);
+        Assert.Same(w, SpeakCueOverlay.Active);
         Assert.False(w.IsVisible);
+        Assert.Empty(Texts(w));
+        SpeakCueOverlay.ShowCue("Say AGAIN");
+        Assert.Same(w, SpeakCueOverlay.Active);
+        Assert.True(w.IsVisible);
+        Assert.Equal(new[] { "SAY IT", "Say AGAIN" }, Texts(w));
     });
 
     [Fact]
@@ -149,9 +154,11 @@ public sealed class SpeakCueOverlayTests
         clock.Advance(179); window.Step();
         Assert.Same(window, SpeakCueOverlay.Active);
         clock.Advance(1); window.Step();
-        Assert.Null(SpeakCueOverlay.Active);
+        Assert.Same(window, SpeakCueOverlay.Active);
+        Assert.False(window.IsVisible);
         cue.Start();
-        Assert.Null(SpeakCueOverlay.Active);
+        Assert.Same(window, SpeakCueOverlay.Active);
+        Assert.False(window.IsVisible);
     });
 
     [Fact]
