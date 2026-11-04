@@ -250,6 +250,8 @@ Friends invite (7.2, `host/friendInvite.js`): a host that sets `caps.friendInvit
 roomId }`; host -> page `friends-list-reply { id, friends: [{ uid, name }] }` and `invite-friend-reply { id, sent, note }`
 (note = the host's worded result in the player's language). Hosts without the cap (web, phone) keep the button hidden.
 Page -> host in A: `ready`, `heartbeat`, `pong`, `run-started`, `run-ended { timeS, laps }`, `telemetry`.
+Page -> host (7.2.2): `loading { stage, p }` once per loading stage; the desktop host gives a page that sent one in
+the last 120 s up to 90 s of silence before it closes the window (a course build may hold the main thread, ccp-bugs #1543).
 Escape only pauses; the page never sends `exit` on Escape.
 Owned kart bodies (owner 2026-10-29, `meta/owned.js`): the ten kart bodies are sold in the Prize Counter (CCP-Server
 proxy/shop.js rows `kart.body.<id>`, grants `cos.kart.body.<id>`), so the garage offers only the free kart
