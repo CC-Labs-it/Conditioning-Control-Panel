@@ -392,7 +392,8 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var full = Path.GetFullPath(tempPath);
-                File.Delete(full); // Missing files succeed; access and sharing failures stay owed.
+                try { File.Delete(full); }
+                catch (DirectoryNotFoundException) { /* The file is already gone with its directory. */ }
                 _tempIdentity.TryRemove(full, out _);
                 return true;
             }

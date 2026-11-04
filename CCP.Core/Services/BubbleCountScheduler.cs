@@ -148,9 +148,11 @@ namespace ConditioningControlPanel.Services
             _feedDeadline = null;
             var wasBusy = IsBusy;
             _retryCount = 0;
+            // Drop the busy state before closing: a close callback must not start a strict retry.
+            // Defer temp cleanup until the host has released its players, even on Unix.
+            Idle(resumeFlashes: false, cleanupTemps: false);
             try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
-            Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
-            PackVideos?.CleanupTemps(); // CloseAll released the players before deleting their files.
+            PackVideos?.CleanupTemps();
             if (wasBusy) Log.Information("BubbleCountService: ForceCleanup called");
         }
 
@@ -321,7 +323,7 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Warning(ex, "BubbleCountService: effects hold failed"); }
         }
 
-        private void Idle(bool resumeFlashes = true)
+        private void Idle(bool resumeFlashes = true, bool cleanupTemps = true)
         {
             IsBusy = false;
             if (HoldsEffects)
@@ -333,7 +335,7 @@ namespace ConditioningControlPanel.Services
                 _heldFlashes = false;
             }
             CoreBubbles.Resume();
-            if (!IsRunning) PackVideos?.CleanupTemps();
+            if (cleanupTemps && !IsRunning) PackVideos?.CleanupTemps();
         }
 
         /// <summary>WPF BubbleCountService.ReloadAssets: drop the dealt queue so the next game re-reads

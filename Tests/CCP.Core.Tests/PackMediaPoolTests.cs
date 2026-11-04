@@ -43,6 +43,19 @@ public sealed class PackMediaPoolTests : IDisposable
         double IMandatoryVideoHost.CloseAll() { Release(); return 0; }
     }
 
+    [Fact]
+    public void ADeletedTempDirectoryIsForgottenByPoolAndStore()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.ImageType, store: () => store);
+        var path = pool.TryDraw(0)!;
+        Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        pool.CleanupTemps();
+        Assert.Equal(0, pool.TempCount);
+        Assert.False(store.TryGetSourceKey(path, out _));
+    }
+
     [Theory]
     [InlineData("bubble-stop")]
     [InlineData("bubble-reload")]
