@@ -278,12 +278,10 @@ public class LockdownDoseEngineTests
             return Task.CompletedTask;
         });
     }
-    private static void EmptyDose(ConditioningControlPanel.Models.AppSettings s)
-    {
+    private static void EmptyDose(ConditioningControlPanel.Models.AppSettings s) {
         s.FlashEnabled = s.SubliminalEnabled = s.SpiralEnabled = s.PinkFilterEnabled = false;
         s.BouncingTextEnabled = s.BubblesEnabled = s.MandatoryVideosEnabled = s.MindWipeEnabled = false;
-        s.LockCardEnabled = s.BubbleCountEnabled = s.BrainDrainEnabled = s.AudioOnlySession = s.PopQuizEnabled = false; s.CornerGifOverlays.Clear();
-        s.AutonomyModeEnabled = false;
+        s.LockCardEnabled = s.BubbleCountEnabled = s.BrainDrainEnabled = s.AudioOnlySession = s.PopQuizEnabled = false; s.CornerGifOverlays.Clear(); s.AutonomyModeEnabled = false;
     }
     private static int StarterCount(ConditioningControlPanel.Models.AppSettings s) =>
         new[] { s.FlashEnabled, s.SubliminalEnabled, s.SpiralEnabled, s.PinkFilterEnabled,
@@ -318,8 +316,7 @@ public class LockdownDoseEngineTests
                 shell.EnforceLockdownDoseEngine(false); Assert.Equal(0, StarterCount(s)); shell.EnforceLockdownDoseEngine(false); Assert.Equal(4, StarterCount(s));
                 Assert.True(s.FlashEnabled); ld.Deactivate(); Assert.Equal(1, StarterCount(s)); Assert.True(s.FlashEnabled);
                 Assert.True(CoreEngine.IsRunning); // engine was already running at activation
-            }
-            finally {
+            } finally {
                 CoreSession.IsSessionRunningProvider = null;
                 ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit();
             }
@@ -335,13 +332,11 @@ public class LockdownDoseEngineTests
             var ld = LockdownService.Current = new LockdownService(); var shell = NewDoseShell(); shell.Show();
             var path = System.IO.Path.Combine(CorePaths.UserData, "lockdown-dose.json");
             try {
-                ld.Activate(TimeSpan.FromMinutes(20)); shell.EnforceLockdownDoseEngine(true); Assert.Equal(2, StarterCount(s));
-                Assert.True(System.IO.File.Exists(path));
+                ld.Activate(TimeSpan.FromMinutes(20)); shell.EnforceLockdownDoseEngine(true); Assert.Equal(2, StarterCount(s)); Assert.True(System.IO.File.Exists(path));
                 s.PopQuizEnabled = true; // never borrowed
                 MainShellWindow.RecoverLockdownDose();
                 Assert.Equal(0, StarterCount(s)); Assert.True(s.PopQuizEnabled); Assert.False(System.IO.File.Exists(path));
-            }
-            finally { ld.Deactivate(); ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); }
+            } finally { ld.Deactivate(); ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); }
             return Task.CompletedTask;
         });
     }
@@ -361,15 +356,13 @@ public class LockdownDoseEngineTests
             if (excluded) s.DisabledAssetPaths.Add("videos/category/" + filename);
             var previous = CorePaths.EffectiveAssetsProvider; var previousVideo = CoreEngine.Video;
             CorePaths.EffectiveAssetsProvider = () => dir;
-            CoreEngine.Video = MandatoryVideoOverlay.Instance.Scheduler; var ld = LockdownService.Current = new LockdownService();
-            var shell = NewDoseShell(); shell.Show();
+            CoreEngine.Video = MandatoryVideoOverlay.Instance.Scheduler; var ld = LockdownService.Current = new LockdownService(); var shell = NewDoseShell(); shell.Show();
             try {
                 ld.Activate(TimeSpan.FromMinutes(20)); s.MandatoryVideosEnabled = false; shell.EnforceLockdownDoseEngine(true);
                 Assert.Equal(playable, s.MandatoryVideosEnabled); Assert.Equal(playable ? 1 : 2, StarterCount(s)); ld.Deactivate();
                 Assert.Equal(playable, s.MandatoryVideosEnabled); // only a picked prior choice returns
                 Assert.Equal(0, StarterCount(s));
-            }
-            finally {
+            } finally {
                 ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit();
                 CorePaths.EffectiveAssetsProvider = previous;
                 CoreEngine.Video = previousVideo;
@@ -390,8 +383,7 @@ public class LockdownDoseEngineTests
                 for (var i = 0; i < 5; i++) shell.EnforceLockdownDoseEngine(false);
                 Assert.False(CoreEngine.IsRunning); Assert.Equal(0, StarterCount(s)); PanicAftermath.ReleaseEngineHold(); shell.EnforceLockdownDoseEngine(true);
                 Assert.Equal(2, StarterCount(s)); Assert.True(CoreEngine.IsRunning); ld.Deactivate();
-            }
-            finally { PanicAftermath.EndQuiet(); ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); }
+            } finally { PanicAftermath.EndQuiet(); ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); }
             return Task.CompletedTask;
         });
     }
@@ -420,9 +412,7 @@ public class LockdownDoseEngineTests
                 Assert.True(CoreEngine.IsRunning); ld.Deactivate(); Assert.False(s.MandatoryVideosEnabled); Assert.True(s.SpiralEnabled && s.PinkFilterEnabled);
                 s.MandatoryVideosEnabled = true; ld.Activate(TimeSpan.FromMinutes(20));
                 shell.EnforceLockdownDoseEngine(true); Assert.True(CoreEngine.IsRunning); // video-only census
-                ld.Deactivate();
-                System.IO.File.Delete(System.IO.Path.Combine(dir, "videos", "clip.m4v"));
-                var packDir = System.IO.Path.Combine(dir, ".packs", "test", "content");
+                ld.Deactivate(); System.IO.File.Delete(System.IO.Path.Combine(dir, "videos", "clip.m4v")); var packDir = System.IO.Path.Combine(dir, ".packs", "test", "content");
                 System.IO.Directory.CreateDirectory(packDir);
                 System.IO.File.WriteAllText(System.IO.Path.Combine(dir, ".packs", "test", ".manifest.enc"), "");
                 System.IO.File.WriteAllText(System.IO.Path.Combine(packDir, "v.enc"), "");
@@ -431,11 +421,11 @@ public class LockdownDoseEngineTests
                     decryptFile: _ => new byte[] { 1 });
                 CoreEngine.Video = new MandatoryVideoScheduler(null!, library: () => Array.Empty<string>())
                     { PackVideos = new PackMediaPool(ContentPackStore.VideoType, store: () => store) };
+                Assert.True(System.Threading.SpinWait.SpinUntil(CoreEngine.Video.HasPlayableContent, TimeSpan.FromSeconds(10)));
                 ld.Activate(TimeSpan.FromMinutes(20)); shell.EnforceLockdownDoseEngine(true);
                 Assert.True(CoreEngine.IsRunning); Assert.True(s.MandatoryVideosEnabled); // pack-only video
                 ld.Deactivate();
-            }
-            finally {
+            } finally {
                 ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit();
                 CoreEngine.Video = previousVideo; CorePaths.EffectiveAssetsProvider = previousAssets;
                 System.IO.Directory.Delete(dir, true);
@@ -450,8 +440,7 @@ public class LockdownDoseEngineTests
         var remote = RemoteHoldings.Take(f => f == RemoteHeld.Spiral ? 1 : RemoteHoldings.Read(s, f), 1);
         remote.NoteWrite(RemoteHeld.Spiral, 1, 0);
         RemoteHoldings.Save(CorePaths.UserData, remote);
-        var dosePath = System.IO.Path.Combine(CorePaths.UserData, "lockdown-dose.json");
-        System.IO.File.WriteAllText(dosePath, "{\"Flipped\":[\"spiral\"]}");
+        var dosePath = System.IO.Path.Combine(CorePaths.UserData, "lockdown-dose.json"); System.IO.File.WriteAllText(dosePath, "{\"Flipped\":[\"spiral\"]}");
         global::ConditioningControlPanel.Avalonia.App.RecoverRemoteAndDose();
         Assert.False(s.SpiralEnabled); Assert.False(System.IO.File.Exists(dosePath));
         Assert.False(System.IO.File.Exists(System.IO.Path.Combine(CorePaths.UserData, RemoteHoldings.FileName)));
@@ -463,8 +452,7 @@ public class LockdownDoseEngineTests
     public async Task MalformedRecoveryBlocksActivationAndShowsError() {
         await AvaloniaTestDispatcher.RunAsync(() => {
             EnsureApp(); var old = CoreEntitlement.HasPremiumProvider; CoreEntitlement.HasPremiumProvider = () => true;
-            var ld = LockdownService.Current = new LockdownService(); var shell = NewDoseShell();
-            var path = System.IO.Path.Combine(CorePaths.UserData, "lockdown-dose.json");
+            var ld = LockdownService.Current = new LockdownService(); var shell = NewDoseShell(); var path = System.IO.Path.Combine(CorePaths.UserData, "lockdown-dose.json");
             System.IO.File.WriteAllText(path, "{"); CoreSettings.Current.LockdownDoseKeeperEnabled = true;
             ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog? shown = null;
             using var hook = Window.WindowOpenedEvent.AddClassHandler<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>((w, _) => shown = w);
@@ -472,8 +460,7 @@ public class LockdownDoseEngineTests
                 shell.Show(); var tab = shell.Named<LockdownTabView>("LockdownTab")!;
                 tab.CmbLockdownDuration.SelectedIndex = 0; tab.BtnActivateLockdown.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs(); Assert.NotNull(shown); Assert.False(ld.IsActive); Assert.Equal("{", System.IO.File.ReadAllText(path));
-            }
-            finally { shown?.Close(); System.IO.File.Delete(path); ld.Dispose(); LockdownService.Current = null; shell.RequestExit(); CoreEntitlement.HasPremiumProvider = old; }
+            } finally { shown?.Close(); System.IO.File.Delete(path); ld.Dispose(); LockdownService.Current = null; shell.RequestExit(); CoreEntitlement.HasPremiumProvider = old; }
             return Task.CompletedTask;
         });
     }
@@ -491,8 +478,7 @@ public class LockdownDoseEngineTests
                 settings.SealForReset(); ld.Deactivate(); settings.UnsealAfterFailedReset();
                 prop.SetValue(s, true); ld.Activate(TimeSpan.FromMinutes(20));
                 Assert.True((bool)prop.GetValue(s)!);
-            }
-            finally { settings.UnsealAfterFailedReset(); ld.Deactivate(); ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); CoreSettings.ServiceProvider = old; }
+            } finally { settings.UnsealAfterFailedReset(); ld.Deactivate(); ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); CoreSettings.ServiceProvider = old; }
             return Task.CompletedTask;
         });
     }
@@ -523,8 +509,7 @@ public class LockdownDoseEngineTests
                     MainShellWindow.RecoverLockdownDose(); // restart while the second lockdown is active
                     Assert.False(System.IO.File.Exists(path)); Assert.Equal(0, StarterCount(new SettingsService().Current)); ld.Deactivate();
                 }
-            }
-            finally {
+            } finally {
                 settings.UnsealAfterFailedReset(); ld.Dispose(); CoreEngine.Stop();
                 LockdownService.Current = null; shell.RequestExit(); CoreSettings.ServiceProvider = oldProvider;
             }

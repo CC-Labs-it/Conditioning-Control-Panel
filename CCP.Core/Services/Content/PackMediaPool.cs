@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq; using System.Threading; using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Flash;
 using Serilog;
 
@@ -27,6 +28,9 @@ namespace ConditioningControlPanel.Services
         private readonly object _lock = new();
         private readonly ShuffleBag<(string PackId, PackFileEntry File)> _bag;
         private readonly List<string> _temps = new();
+        private readonly object _availabilityGate = new();
+        private ContentPackStore? _availabilityStore; private string? _availabilitySignature;
+        private int _availabilityVersion, _checking; private bool _available;
 
         /// <param name="type"><see cref="ContentPackStore.ImageType"/> or <see cref="ContentPackStore.VideoType"/>.</param>
         public PackMediaPool(string type, Random? rng = null, Func<ContentPackStore?>? store = null)
@@ -39,20 +43,35 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Decrypts on record (tests, diagnostics).</summary>
         public int TempCount { get { lock (_lock) return _temps.Count; } }
-        /// <summary>Whether at least one active entry can be decrypted to a playable path.</summary>
-        public bool HasEntries
-        {
-            get { lock (_lock)
+        /// <summary>Last completed probe; starts a background refresh without waiting for decryption.</summary>
+        public bool HasEntries {
+            get { if (Interlocked.CompareExchange(ref _checking, 1, 0) == 0) _ = Task.Run(ProbeAvailability); return Volatile.Read(ref _available); }
+        }
+        /// <summary>Retire a cached result after a playback or decrypt failure.</summary>
+        public void InvalidateAvailability() {
+            lock (_availabilityGate) { _availabilityVersion++; _availabilitySignature = null; Volatile.Write(ref _available, false); }
+        }
+        private void ProbeAvailability() {
+            try {
+                int version; lock (_availabilityGate) version = _availabilityVersion;
+                var store = _store(); var entries = Entries();
+                // Detect opt-outs, pack changes, removal and replacement without decrypting on every tick.
+                var signature = string.Join("|", entries.Select(e =>
                 {
-                    var store = _store();
-                    if (store == null) return false;
-                    foreach (var entry in Entries())
-                    {
-                        var temp = store.GetPackFileTempPath(entry.PackId, entry.File);
-                        if (temp != null) { store.DeleteTempFile(temp); return true; }
-                    }
-                    return false;
-                } }
+                    var path = store?.GetEncryptedPath(e.PackId, e.File); var info = path == null ? null : new System.IO.FileInfo(path);
+                    return ContentPackStore.SourceKey(e.PackId, e.File) + ":" + path + ":" + info?.Length + ":" + info?.LastWriteTimeUtc.Ticks;
+                }));
+                lock (_availabilityGate)
+                    if (version != _availabilityVersion || (ReferenceEquals(store, _availabilityStore) && signature == _availabilitySignature)) return;
+                var available = false;
+                if (store != null) foreach (var entry in entries) {
+                    var temp = store.GetPackFileTempPath(entry.PackId, entry.File);
+                    if (temp != null) { store.DeleteTempFile(temp); available = true; break; }
+                }
+                lock (_availabilityGate) if (version == _availabilityVersion)
+                { _availabilityStore = store; _availabilitySignature = signature; Volatile.Write(ref _available, available); }
+            } catch (Exception ex) { Log.Debug("ContentPacks: availability probe failed: {Error}", ex.Message); InvalidateAvailability(); }
+            finally { Volatile.Write(ref _checking, 0); }
         }
 
         /// <summary>
@@ -120,6 +139,7 @@ namespace ConditioningControlPanel.Services
             {
                 // WPF VideoService.cs:8044 logs at Information (#1135): a pool that LOOKS full handed back nothing.
                 Log.Information("ContentPacks: '{Name}' from pack {PackId} could not be decrypted", entry.File.OriginalName, entry.PackId);
+                InvalidateAvailability();
                 return null;
             }
             lock (_lock) _temps.Add(temp);

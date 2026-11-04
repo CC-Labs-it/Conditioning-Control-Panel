@@ -217,7 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Scheduler.Ended();
                 });
             };
-            _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
+            _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { Scheduler.PackVideos?.InvalidateAvailability(); Scheduler.End(); });
             _media = new Media(vlc, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);

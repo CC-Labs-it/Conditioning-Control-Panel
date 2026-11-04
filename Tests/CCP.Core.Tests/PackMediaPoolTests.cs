@@ -91,29 +91,48 @@ public sealed class PackMediaPoolTests : IDisposable
         var bubble = new BubbleCountScheduler(null!, null, () => Array.Empty<string>())
             { PackVideos = new PackMediaPool(ContentPackStore.VideoType, new Random(1), () => store) };
 
-        Assert.True(video.HasPlayableContent());
+        Assert.True(System.Threading.SpinWait.SpinUntil(video.HasPlayableContent, TimeSpan.FromSeconds(10)));
         Assert.Equal("p1/v.mp4", Plain(video.PickNext()!));
         Assert.Equal("p1/v.mp4", Plain(bubble.PickNext()!));
         video.PackVideos.CleanupTemps();
         bubble.PackVideos.CleanupTemps();
 
         store.DeactivatePack("p1");
-        Assert.False(video.HasPlayableContent());
+        Assert.True(System.Threading.SpinWait.SpinUntil(() => !video.HasPlayableContent(), TimeSpan.FromSeconds(10)));
         Assert.Null(video.PickNext());
         Assert.Null(bubble.PickNext());
     }
 
     [Fact]
-    public void MissingOrCorruptPackVideoIsNotPlayable()
-    {
-        var (guid, _) = ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
-        var store = NewStore();
+    public void MissingOrCorruptPackVideoIsNotPlayable() {
+        var (guid, _) = ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video")); var store = NewStore();
         var video = new MandatoryVideoScheduler(null!, null, () => Array.Empty<string>()) { PackVideos = new PackMediaPool(ContentPackStore.VideoType, store: () => store) };
         var encrypted = Directory.GetFiles(Path.Combine(_root, ".packs", guid, "content")).Single();
-        File.Delete(encrypted); Assert.False(video.HasPlayableContent());
-        File.WriteAllText(encrypted, "invalid ciphertext"); Assert.False(video.HasPlayableContent());
+        Assert.True(System.Threading.SpinWait.SpinUntil(video.HasPlayableContent, TimeSpan.FromSeconds(10)));
+        File.Delete(encrypted); Assert.True(System.Threading.SpinWait.SpinUntil(() => !video.HasPlayableContent(), TimeSpan.FromSeconds(10)));
+        File.WriteAllText(encrypted, "invalid ciphertext"); Assert.Null(video.PickNext()); Assert.False(video.HasPlayableContent());
     }
-
+    [Fact]
+    public void AvailabilityProbeDoesNotBlockOrRepeatDecrypts() {
+        var (guid, _) = ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
+        using var entered = new System.Threading.ManualResetEventSlim(); using var release = new System.Threading.ManualResetEventSlim();
+        var count = 0;
+        var store = new ContentPackStore(() => _root, () => _settings, () => { }, decryptFile: _ =>
+        { System.Threading.Interlocked.Increment(ref count); entered.Set(); release.Wait(); return new byte[] { 1 }; }, tempDir: () => Path.Combine(_root, ".temp"));
+        var video = new MandatoryVideoScheduler(null!, null, () => Array.Empty<string>()) { PackVideos = new PackMediaPool(ContentPackStore.VideoType, store: () => store) };
+        try {
+            var tick = System.Threading.Tasks.Task.Run(() => video.HasPlayableContent()); Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            Assert.True(tick.Wait(TimeSpan.FromSeconds(2)), "The census must not wait for decryption");
+            release.Set(); Assert.True(System.Threading.SpinWait.SpinUntil(video.HasPlayableContent, TimeSpan.FromSeconds(10)));
+            for (var i = 0; i < 5; i++) Assert.True(video.HasPlayableContent());
+            System.Threading.Thread.Sleep(200); Assert.Equal(1, count);
+            File.AppendAllText(Directory.GetFiles(Path.Combine(_root, ".packs", guid, "content")).Single(), "changed");
+            Assert.True(System.Threading.SpinWait.SpinUntil(() => { video.HasPlayableContent(); return System.Threading.Volatile.Read(ref count) >= 2; }, TimeSpan.FromSeconds(10)));
+            video.PackVideos.InvalidateAvailability(); Assert.True(System.Threading.SpinWait.SpinUntil(() => { video.HasPlayableContent(); return System.Threading.Volatile.Read(ref count) >= 3; }, TimeSpan.FromSeconds(10)));
+            Assert.True(System.Threading.SpinWait.SpinUntil(video.HasPlayableContent, TimeSpan.FromSeconds(10)));
+            store.DeactivatePack("p1"); Assert.True(System.Threading.SpinWait.SpinUntil(() => !video.HasPlayableContent(), TimeSpan.FromSeconds(10)));
+        } finally { release.Set(); }
+    }
     [Fact]
     public void QueueCallers_WeighThePackClipsLeftThisCycle()
     {

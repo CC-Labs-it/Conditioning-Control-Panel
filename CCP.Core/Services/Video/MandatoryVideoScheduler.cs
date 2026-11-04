@@ -355,7 +355,7 @@ namespace ConditioningControlPanel.Services
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 try { _host.Show(path, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
+                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); PackVideos?.InvalidateAvailability(); End(); return; }
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
