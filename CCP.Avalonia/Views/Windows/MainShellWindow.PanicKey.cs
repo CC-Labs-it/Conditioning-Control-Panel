@@ -58,17 +58,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>One press of the configured key (UI thread). A foreground board or DTRH may keep the first
         /// Escape as pause; unclaimed presses stop everything. A second
         /// counted press within 2 s exits the app, as WPF does when no engine is running.</summary>
-        internal void HandlePanicKeyPress(DateTime now)
+        internal void HandlePanicKeyPress(DateTime now) => HandlePanicKeyPress(now, false);
+
+        private void HandlePanicKeyPress(DateTime now, bool fromStopButton)
         {
             var s = CoreSettings.Current;
             // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
             // Escape that unbinds Pause (the default panic key) is never also a panic.
-            if (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey) return;
+            if (!fromStopButton && (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)) return;
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
             // Panic off is the same refusal. Both share Core VoicePanicReach.PanicKeyRuns with the voice
             // panic and the blink stop (hard rule 6: no stop is more permissive than this key).
-            if (!VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))
+            if (!fromStopButton && !VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))
             {
                 if (LockdownActive) Serilog.Log.Information("Panic key ignored under Lockdown");
                 // WPF LeashPanicKeyWhilePanicOff: panic always works on a leash. The leash part alone runs
@@ -87,11 +89,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
             // or a Lines task reopens the card the press just dismissed. fromKey: only this physical press may be the
             // Escape that closes the Ctrl+K palette (the stop pass's own "leash-task" never skips).
-            try { Platform.LeashTaskHost.OnPanicPress(this, fromKey: true); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
+            try { Platform.LeashTaskHost.OnPanicPress(this, fromKey: !fromStopButton); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
 
             // Same evaluation order as WPF: asking the palette closes it, so never ask with a card up.
             bool lockCardOpen = LockCardWindow.IsAnyOpen();
-            bool paletteClaimed = !lockCardOpen
+            bool paletteClaimed = !fromStopButton && !lockCardOpen
                 && string.Equals(s.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)
                 && SettingsPaletteWindow.TryConsumeEscape();
             var rung = PanicPolicy.Decide(lockCardOpen, paletteClaimed, PanicPolicy.OverrideEnabled(s));

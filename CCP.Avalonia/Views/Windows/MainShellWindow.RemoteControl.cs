@@ -6,7 +6,7 @@
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
 // RemoteCommands refuses them "not on this build"), tray minimise/restore
-// for remote, the RemoteHud pill and controller browser video playback.
+// for remote, full RemoteHud details and Easy, and controller browser video playback.
 
 using System;
 using System.Linq;
@@ -33,6 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Clock for the toast hold and the fade-out collapse; tests step it.</summary>
         internal static TimeProvider RemoteOverlayTime = TimeProvider.System;
         internal static readonly TimeSpan RemoteToastHold = TimeSpan.FromSeconds(2), RemoteOverlayFadeOut = TimeSpan.FromMilliseconds(200);
+        internal RemoteHudWindow? RemoteHud;
+        private bool _remoteControlClosed;
         private DispatcherTimer? _remoteOverlayTimer;
         private long? _remoteToastShownAt, _remoteOverlayHidingAt;
 
@@ -59,11 +61,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.CommandReceived += command;
             Closed += (_, _) =>
             {
+                _remoteControlClosed = true;
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
                 _remoteOverlayTimer?.Stop();
+                DisposeRemoteHud();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
@@ -76,10 +80,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteControllerChanged (:784).</summary>
         internal void OnRemoteControllerChanged()
         {
+            if (_remoteControlClosed) return;
             var connected = RemoteControllerConnected;
             UpdateStartButtonForRemoteControl(connected);
-            if (connected) { ShowRemoteControlOverlay(); NotifyRemoteControllerJoined(); }
-            else HideRemoteControlOverlay();
+            if (connected)
+            {
+                ShowRemoteControlOverlay(); NotifyRemoteControllerJoined();
+                RemoteHud ??= new RemoteHudWindow(RemoteControlTabView.Relay.Value, StopFromRemoteHud);
+                RemoteHud.Refresh();
+            }
+            else { HideRemoteControlOverlay(); RemoteHud?.Refresh(); }
         }
 
         /// <summary>WPF OnRemoteControllerIdleChanged (:818): orange "may be idle", else the grey default.</summary>
@@ -96,12 +106,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnRemoteSessionEnded()
         {
             HideRemoteControlOverlay();
+            DisposeRemoteHud();
             UpdateStartButtonForRemoteControl(false);
+        }
+
+        private void DisposeRemoteHud()
+        {
+            var hud = RemoteHud; RemoteHud = null; hud?.Dispose();
+        }
+
+        internal void StopFromRemoteHud()
+        {
+            if (CoreSettings.Current.PanicKeyEnabled) HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
+            else if (LeashHoldLeashed) PanicKeyLeashOnly();
         }
 
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
         internal void OnRemoteCommandReceived(string action)
         {
+            RemoteHud?.RecordAction(action);
             if (RemoteCommands.Quiet.Contains(action)) return;
             ShowCommandNotification(action);
         }
