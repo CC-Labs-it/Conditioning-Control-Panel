@@ -502,4 +502,51 @@ public sealed class HomeMarqueeTests
         Assert.Equal(dash.FindControl<RadioButton>("RbHypnoTube")!.IsChecked == true ? "hypnotube.com" : "bambicloud.com", host.Source!.Host);
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task BrowserSiteSelectionFollowsModAndRespectsOffline() => WithShell((w, dash) =>
+    {
+        global::ConditioningControlPanel.Avalonia.App.StartMods();
+        var mods = global::ConditioningControlPanel.Avalonia.App.Mods!;
+        var host = dash.FindControl<WebHost>("BrowserWebHost")!;
+        var bambi = dash.FindControl<RadioButton>("RbBambiCloud")!;
+        var hypno = dash.FindControl<RadioButton>("RbHypnoTube")!;
+        var s = CoreSettings.Current;
+        try
+        {
+            mods.ActivateMod(BuiltInMods.BambiSleepId);
+            Dispatcher.UIThread.RunJobs();
+            host.OnNavigationCompleted(new Uri("https://example.com/"));
+            bambi.IsChecked = false; hypno.IsChecked = false;
+            dash.SyncBrowserCard();
+            Assert.True(bambi.IsChecked);
+            host.OnNavigationCompleted(new Uri("https://hypnotube.com/video"));
+            hypno.IsChecked = true;
+            dash.SyncBrowserCard();
+            Assert.True(hypno.IsChecked);
+            s.ForceShowBambiCloud = true;
+            dash.SyncBrowserCard();
+            var before = host.NavigationRequests;
+            mods.ActivateMod(BuiltInMods.SissyHypnoId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(bambi.IsVisible);
+            Assert.True(hypno.IsChecked);
+            Assert.Equal(before, host.NavigationRequests); // no page was loaded
+            host.Navigate(new Uri("https://bambicloud.com/"));
+            host.OnNavigationCompleted(new Uri("https://bambicloud.com/"));
+            bambi.IsChecked = true;
+            before = host.NavigationRequests;
+            dash.FindControl<CheckBox>("ChkForceShowBambiCloud")!.IsChecked = false;
+            Assert.True(hypno.IsChecked);
+            Assert.Equal(before + 1, host.NavigationRequests);
+            bambi.IsChecked = true;
+            s.OfflineMode = true;
+            before = host.NavigationRequests;
+            dash.SyncBrowserCard();
+            Assert.True(hypno.IsChecked);
+            Assert.Equal(before, host.NavigationRequests);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent(); }
+        return Task.CompletedTask;
+    });
+
 }

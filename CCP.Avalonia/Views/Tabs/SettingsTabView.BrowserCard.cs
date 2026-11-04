@@ -55,7 +55,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnBrowserCardTrackerChanged() => Dispatcher.UIThread.Post(RefreshBrowserWebcamButton);
-        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(SyncBrowserCard);
+        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(() =>
+        {
+            SyncBrowserCard();
+            if (!(App.Mods?.ShowBambiCloudOption() ?? true) && BrowserWebHost.Source != null
+                && !CoreSettings.Current.OfflineMode)
+                Shell?.NavigateBrowserForMod(App.Mods?.GetDefaultBrowserUrl() ?? "https://hypnotube.com/");
+        });
 
         /// <summary>The saved state into the row: the mute glyph, the webcam pill, the BambiCloud override and the prompt.</summary>
         internal void SyncBrowserCard()
@@ -159,11 +165,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             bool modWants = true;
             try { modWants = App.Mods?.ShowBambiCloudOption() ?? true; }
             catch (Exception ex) { Log.Debug("ShowBambiCloudOption: {E}", ex.Message); }
-            bool show = modWants || CoreSettings.Current.ForceShowBambiCloud;
-            RbBambiCloud.IsVisible = show;
-            if (show || RbBambiCloud.IsChecked != true) return;
-            RbHypnoTube.IsChecked = true;
-            if (navigateIfHidden) Shell?.BrowserSiteToggle_Click(RbHypnoTube, new RoutedEventArgs());
+            RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
+            var current = BrowserWebHost.CurrentUrl?.ToString() ?? BrowserWebHost.Source?.ToString() ?? "";
+            if (modWants && (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                || current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase))) return;
+            var defaultUrl = App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/";
+            var target = modWants && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                ? RbBambiCloud : RbHypnoTube;
+            bool moved = target.IsChecked != true;
+            target.IsChecked = true;
+            if (moved && navigateIfHidden && !CoreSettings.Current.OfflineMode)
+                Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
         }
 
         // ------------------------------------------------------------------ the load prompt
