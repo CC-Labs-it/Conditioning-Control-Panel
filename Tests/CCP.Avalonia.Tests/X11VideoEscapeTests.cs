@@ -100,9 +100,18 @@ public sealed class X11VideoEscapeTests
 
         // When panic can run, WPF leaves Escape to panic instead of the video.
         (s.PanicKeyEnabled, s.PanicKey) = (true, "Escape"); i = 0;
-        var one = new (bool, int, int)[] { (true, 9, 9) };
-        X11PanicKey.Listen(IntPtr.Zero, 0, () => null, () => { panic++; leashTaskActive = false; }, () => i < one.Length ? one[i++] : null);
-        Assert.Equal(1, panic); Assert.False(leashTaskActive); Assert.Equal(2, deliveries);
+        using var repeats = new System.Threading.CountdownEvent(3);
+        (bool, int, int)? PanicNext() => i++ switch
+        {
+            0 => (true, 9, 9),
+            1 => repeats.Wait(2000) ? (true, 9, 9) : throw new TimeoutException("repeat clock did not fire"),
+            2 => (false, 9, 9),
+            3 => (true, 9, 9),
+            _ => null
+        };
+        X11PanicKey.ListenRawEvents(PanicNext, () => { panic++; leashTaskActive = false; }, repeatRate: _ => (10, 10),
+            isDown: _ => { if (repeats.CurrentCount > 0) repeats.Signal(); return true; });
+        Assert.Equal(2, panic); Assert.False(leashTaskActive); Assert.Equal(2, deliveries);
     }
 
     [Fact]
@@ -127,30 +136,21 @@ public sealed class X11VideoEscapeTests
 
         Press();                         // palette owns it at the event
         palette = false;                 // focused palette closes before the UI queue drains
-        Assert.Empty(pending);
-        Assert.Equal(1, panic);          // it follows the pre-existing panic/leash path
-        Assert.Equal(0, deliveries);
+        Assert.Empty(pending); Assert.Equal(1, panic); Assert.Equal(0, deliveries);
 
         Press();                         // video owns it at the event
         palette = true;                  // palette opens before delivery
-        Assert.Single(pending);
-        pending.Dequeue()();
-        Assert.Equal(1, deliveries);
-        Assert.Equal(1, panic);
+        Assert.Single(pending); pending.Dequeue()();
+        Assert.Equal(1, deliveries); Assert.Equal(1, panic);
 
-        palette = false;
-        Press();
+        palette = false; Press();
         video = false;                   // clip stopped before queued delivery
         pending.Dequeue()();
-        Assert.Equal(1, deliveries);
-        Assert.Equal(1, attempts);       // a stopped clip is not called again
-        Assert.Empty(pending);
+        Assert.Equal(1, deliveries); Assert.Equal(1, attempts); Assert.Empty(pending);
 
-        video = true;
-        card = true;
+        video = true; card = true;
         Press();                         // lock card also outranks the video
-        Assert.Empty(pending);
-        Assert.Equal(2, panic);
+        Assert.Empty(pending); Assert.Equal(2, panic);
     }
 
     [Fact]

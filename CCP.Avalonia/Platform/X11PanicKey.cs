@@ -100,11 +100,12 @@ internal static class X11PanicKey
     internal static void ListenRawEvents(Func<(bool Press, int Code, int EscapeCode)?> next,
         Action onPanic, Action<int>? otherPress = null, Func<ulong>? eventTime = null, Func<int, (int, int)?>? repeatRate = null, Func<int, bool?>? isDown = null)
     {
-        bool escapeDown = false, videoOwnsPress = false;
+        bool escapeDown = false, videoOwnsPress = false, panicRouted = false;
         var gate = new object();
         Timer? repeat = null;
         int generation = 0;
         void StopRepeat() { lock (gate) { generation++; repeat?.Dispose(); repeat = null; } }
+        void RouteEscape(int code) { Route(true, code, () => { panicRouted = true; onPanic(); }); }
         try { while (next() is { } key)
         {
             try
@@ -123,7 +124,7 @@ internal static class X11PanicKey
                     }
                     if (!escapeDown)
                     {
-                        escapeDown = true;
+                        escapeDown = true; panicRouted = false;
                         try { videoOwnsPress = Win32Input.QueueVideoEscape(eventTime?.Invoke()); }
                         catch (Exception ex)
                         {
@@ -140,7 +141,7 @@ internal static class X11PanicKey
                                 {
                                     if (isDown != null && isDown(key.Code) != true) { StopRepeat(); escapeDown = videoOwnsPress = false; return; }
                                     videoOwnsPress = Win32Input.QueueVideoEscape();
-                                    if (!videoOwnsPress) Route(true, key.Code, onPanic);
+                                    if (!videoOwnsPress && !panicRouted) RouteEscape(key.Code);
                                 }
                                 catch (Exception ex) { Log.Warning(ex, "Global Esc: repeat failed"); } }, null, rate.Item1, rate.Item2);
                             }
@@ -149,7 +150,9 @@ internal static class X11PanicKey
                     // A video-owned press returns before WPF's panic and leash branches, including repeats.
                     if (videoOwnsPress) { otherPress?.Invoke(key.Code); continue; }
                 }
-                Route(key.Press, key.Code, onPanic);
+                if (key.Press && key.EscapeCode != 0 && key.Code == key.EscapeCode)
+                { if (!panicRouted) RouteEscape(key.Code); }
+                else Route(key.Press, key.Code, onPanic);
                 if (key.Press) otherPress?.Invoke(key.Code);
                 }
             }
