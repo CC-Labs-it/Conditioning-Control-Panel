@@ -30,9 +30,7 @@ public sealed class InboxNoticeCardTests
                 .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        StartupLadder.ResetForTests();
-        try { body(); }
-        finally { InboxNoticeCard.CloseForPanic(); StartupLadder.ResetForTests(); }
+        body(); // assembly-wide isolation closes head windows and restores settings and statics
     });
     private static Button FindButton(string name) => InboxNoticeCard.Current!.GetVisualDescendants()
         .OfType<Button>().Single(b => b.Name == name);
@@ -204,10 +202,6 @@ public sealed class InboxNoticeCardTests
     [Fact]
     public void RepeatTierRiseOpensNoticeFromRealInbox() => Run(() =>
     {
-        var oldPremium = CoreAccount.HasPremiumAccessProvider;
-        var oldLab = CoreAccount.HasLabAccessProvider;
-        var saved = CoreSettings.Current.LastKnownEffectiveTier;
-        var seen = CoreSettings.Current.SeenFeatureIntros.ToArray();
         MainShellWindow? shell = null;
         Window? host = null;
         try
@@ -239,22 +233,13 @@ public sealed class InboxNoticeCardTests
         finally
         {
             host?.Close(); shell?.Close();
-            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
-            CoreSettings.Current.LastKnownEffectiveTier = saved;
-            CoreSettings.Current.SeenFeatureIntros.Clear(); CoreSettings.Current.SeenFeatureIntros.AddRange(seen);
         }
     });
 
     [Fact]
     public void InviteWeekIsNotARiseOnFocus() => Run(() =>
     {
-        var oldPremium = CoreAccount.HasPremiumAccessProvider;
-        var oldLab = CoreAccount.HasLabAccessProvider;
         var s = CoreSettings.Current;
-        var saved = s.LastKnownEffectiveTier;
-        var grant = s.InviteGrantUntil;
-        var cached = s.PatreonPremiumValidUntil;
-        var seen = s.SeenFeatureIntros.ToArray();
         MainShellWindow? shell = null;
         try
         {
@@ -274,16 +259,12 @@ public sealed class InboxNoticeCardTests
         finally
         {
             shell?.Close();
-            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
-            s.LastKnownEffectiveTier = saved; s.InviteGrantUntil = grant; s.PatreonPremiumValidUntil = cached;
-            s.SeenFeatureIntros.Clear(); s.SeenFeatureIntros.AddRange(seen);
         }
     });
 
     [Fact]
     public void FirstTierBaselineAndRiseSurviveReloadWithoutClosingTheShell() => Run(() =>
     {
-        var (oldPremium, oldLab, oldSettings) = (CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider, CoreSettings.ServiceProvider);
         MainShellWindow? shell = null;
         Window? other = null;
         try
@@ -332,8 +313,6 @@ public sealed class InboxNoticeCardTests
         {
             other?.Close(); shell?.Close();
             SettingsService.DisarmAllPendingSaves();
-            CoreSettings.ServiceProvider = oldSettings;
-            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
         }
     });
 }

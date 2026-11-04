@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Services
     /// a tier already held). A drop is recorded only when <c>mayRecordDrop</c> (the server
     /// answered this run), so a stale cache at startup never sets up a false "it's on" later.
     /// </summary>
-    public static class TierOnNoticeRule
+    public static class TierOnNotice
     {
         public readonly record struct Verdict(bool Owed, int? Record);
 

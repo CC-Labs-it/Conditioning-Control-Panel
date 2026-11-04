@@ -16,12 +16,12 @@ public sealed class TierOnNoticeTests
     [InlineData(0, -1, true, false, 0)]
     public void MatchesWpfRiseAndAuthoritativeDrop(int? previous, int current, bool serverAnswered, bool owed, int record)
     {
-        var result = TierOnNoticeRule.Decide(previous, current, serverAnswered);
+        var result = TierOnNotice.Decide(previous, current, serverAnswered);
         Assert.Equal(owed, result.Owed);
         Assert.Equal(record, result.Record);
     }
     [Theory]
     [InlineData(1, "tier_on_basic")]
     [InlineData(2, "tier_on_prime")]
-    public void TitleMatchesTheTier(int tier, string key) => Assert.Equal(key, TierOnNoticeRule.TitleKey(tier));
+    public void TitleMatchesTheTier(int tier, string key) => Assert.Equal(key, TierOnNotice.TitleKey(tier));
 }

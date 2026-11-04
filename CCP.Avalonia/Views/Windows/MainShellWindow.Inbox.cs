@@ -96,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF EntitlementTierSync.EffectiveTierNow: an invite week is not a plan.
                 var current = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess
                     && !global::ConditioningControlPanel.Services.ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, settings) ? 1 : 0;
-                var verdict = Services.TierOnNoticeRule.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: Platform.AccountSeed.ServerTierAnsweredThisRun);
+                var verdict = Services.TierOnNotice.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: Platform.AccountSeed.ServerTierAnsweredThisRun);
                 if (verdict.Record != settings.LastKnownEffectiveTier)
                 {
                     settings.LastKnownEffectiveTier = verdict.Record;
@@ -104,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 if (!verdict.Owed || !mayShow
                     || Services.TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
-                var title = global::ConditioningControlPanel.Localization.Loc.Get(Services.TierOnNoticeRule.TitleKey(current));
+                var title = global::ConditioningControlPanel.Localization.Loc.Get(Services.TierOnNotice.TitleKey(current));
                 var body = global::ConditioningControlPanel.Localization.Loc.Get("tier_on_body");
                 StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
