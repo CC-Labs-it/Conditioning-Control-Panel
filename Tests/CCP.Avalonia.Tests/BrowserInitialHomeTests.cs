@@ -232,19 +232,23 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(knownBefore ? "https://bambicloud.com/" : "https://hypnotube.com/", host.Source!.AbsoluteUri);
     });
 
-    [Fact]
-    public Task RefusedRequestDoesNotReplacePageDuringPendingSync() => Run((shell, page, host, mod) =>
+    [Theory]
+    [InlineData(true), InlineData(false)]
+    public Task RefusedRequestDoesNotReplacePageDuringPendingSync(bool gateScrolller) => Run((shell, page, host, mod) =>
     {
         mod.ShowBambiCloudOption = true;
         host.OnNavigationCompleted(new Uri("https://bambicloud.com/video"));
         host.Navigate(new Uri("https://bambicloud.com/video"));
         page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
-        host.GateScrolller = true;
+        Assert.False(host.GateScrolller); // the Home browser setting
+        host.GateScrolller = gateScrolller;
         var policy = ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Enabled;
         var cap = ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.MaxClipShortSide;
-        try { ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(false, cap); host.Navigate(new Uri("https://scrolller.com/r/x")); }
-        finally { ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(policy, cap); }
-        Assert.True(host.RefusedNavigations > 0);
+        var request = new Uri(gateScrolller ? "https://scrolller.com/r/x" : "http://127.0.0.1/scrolller");
+        host.NewScrolllerEngine()(true); host.AllowNavigation = _ => false;
+        try { ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(false, cap); host.Navigate(request); var refused = new WebViewNavigationStartingEventArgs { Request = request }; host.OnNavigationStarted(null, refused); Assert.True(refused.Cancel); }
+        finally { ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(policy, cap); host.AllowNavigation = null; }
+        if (gateScrolller) Assert.True(host.RefusedNavigations > 0);
         var pending = new TaskCompletionSource<string?>();
         host.DocumentUrlReader = () => pending.Task;
         page.SyncBrowserCard();

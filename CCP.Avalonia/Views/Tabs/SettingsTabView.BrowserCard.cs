@@ -229,7 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _syncModWants = modWants;
                 _syncNavigate = navigateIfChanged;
                 RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
-                _syncPageUrl = (BrowserWebHost.LatestNavigationUrl ?? BrowserWebHost.Source)?.AbsoluteUri;
+                _syncPageUrl = BrowserWebHost.LatestNavigationUrl?.AbsoluteUri;
                 var current = modWants && BrowserWebHost.Source != null
                     ? await BrowserWebHost.ReadDocumentUrlAsync() : null;
                 void ApplySelection()
