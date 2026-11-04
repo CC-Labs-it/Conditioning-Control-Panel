@@ -355,6 +355,7 @@ namespace ConditioningControlPanel
             // the delta-and-provenance event that XPChanged deliberately is not.
             InitializeBankFx();
             InitializeSparkleWallet();
+            InitializeProfileEquip();
             App.Progression.XPChanged += OnXPChanged;
             App.Progression.LevelUp += OnLevelUp;
 
@@ -3801,6 +3802,13 @@ namespace ConditioningControlPanel
                 // Let the window fully render before minimizing to avoid black window artifacts
                 await Task.Delay(100);
                 _trayIcon?.MinimizeToTray();
+            }
+
+            // "Run with CCP": the wallpaper comes up with CCP, not with the engine (only after 18+ is accepted).
+            if (App.Settings.Current.CollageRunWithCcp && App.Settings.Current.HasAcceptedAgeVerification)
+            {
+                try { App.Wallpaper?.StartCollage(); }
+                catch (Exception ex) { App.Logger?.Warning("[Wallpaper] start with CCP failed: {E}", ex.Message); }
             }
 
             // Handle auto-start engine

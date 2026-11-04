@@ -40,7 +40,10 @@ namespace ConditioningControlPanel.Services.Audio
         {
             try
             {
-                var line = LineFor(player, path, EngineRunning, asked, DateTime.UtcNow);
+                var running = EngineRunning;
+                // The ring takes every sound, engine on or off: a bug report's last section (#1537).
+                RecentSounds.Shared.Note(player, path, running, asked, DateTime.Now);
+                var line = LineFor(player, path, running, asked, DateTime.UtcNow);
                 if (line != null) VideoDiag.Log("AUDIO", line);
             }
             catch

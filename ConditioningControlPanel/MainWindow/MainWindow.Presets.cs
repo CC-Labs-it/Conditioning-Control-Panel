@@ -1251,8 +1251,8 @@ namespace ConditioningControlPanel
 
         /// <summary>
         /// The LIVERY tier of a DailyFreeService key: which sign the reveal face wears before the
-        /// FREE TODAY stamp lands on it. Every pool feature is a Tier 1 exclusive except the
-        /// descent, which is the wall's Tier 2 door (Play's DTRH hero wears the same diamond).
+        /// FREE TODAY stamp lands on it. Every key is a Tier 1 exclusive; the descent joined them
+        /// when it moved to Basic on 2026-10-31.
         /// An unknown key gets 0, i.e. no sign - the same silence the box falls back to when it
         /// cannot name the day's feature either.
         ///
@@ -1262,8 +1262,7 @@ namespace ConditioningControlPanel
         /// </summary>
         private static int MysteryFeatureTier(string? key) => key switch
         {
-            "dtrh" => 2,
-            "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1,
+            "dtrh" or "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1,
             _ => 0,
         };
 

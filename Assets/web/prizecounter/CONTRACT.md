@@ -64,7 +64,7 @@ The page talks to whoever hosts it through `host.js`, never `fetch` to the serve
   `init.wears` lists the families the host puts on (rain, desk, chess, profile; kart only from the garage). Desk, chess
   and profile are worn in place (the card notes "Wearing it now.") and the host answers `worn { id, ok }`; `ok:false`
   turns the note into "That did not go through". A kart away from the garage reads "Wear it in the garage" and only
-  steps back; Back Room prizes have no Wear. A host that sends no `wears` keeps the plain Wear. The host caches the `cos.rain.*` prices of each shop-state for the dressing room's badges.
+  steps back; Back Room prizes have no Wear. A host whose `wears` list lacks `desk` (website, phone) shows an owned desk row with no Wear and the line "Shows on EMI's desk in the desktop app". A host that sends no `wears` keeps the plain Wear. The host caches the `cos.rain.*` prices of each shop-state for the dressing room's badges.
 - out: `signIn()` when `shop-state` answered `signed_out` (owner 2026-10-29): the page greys a window display of the
   art (no prices, no tabs, no wallet) behind one "Sign in to shop" button; the button, or select/Enter/A, asks the host.
   The host opens its own sign-in and, once someone is signed in, loads the page again with a fresh `init`

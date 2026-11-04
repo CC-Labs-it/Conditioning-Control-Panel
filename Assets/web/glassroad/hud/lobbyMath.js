@@ -7,7 +7,8 @@
  * Copy is dry and short.
  */
 import { LOOK_OUTFITS, LOOK_VEHICLES, DEFAULT_LOOK, normLook, SHOP_LOOK_OUTFITS, LOOK_PAINTS, LOOK_UMBRELLAS, LOOK_TRAILS } from '../net/protocol.js';
-import { KARTS, PAINTS, UMBRELLAS, TRAILS, lockedKarts, ownedKarts, ownedLooks } from './garageState.js';
+import { KARTS, PAINTS, UMBRELLAS, TRAILS, lockedKarts, ownedKarts, ownedLooks, cleanGarage, STORAGE as GARAGE_STORAGE } from './garageState.js';
+import { stampGarageBlock } from '../meta/record.js';
 import { formatTime, ordinal, BOT_NAMES } from './format.js';
 import { LINK_TOKEN } from '../net/lobbyApi.js';
 import { COURSES } from '../track/catalog.js';
@@ -297,6 +298,18 @@ export function loadLook(storage) {
 }
 export function saveLook(storage, look) {
   try { storage.setItem(LOOK_KEY, JSON.stringify(normLook(look))); return true; } catch (e) { return false; }
+}
+/** A player stepped a lobby look row (72 contract C1): the block carries it with the garage as this device stores it.
+ * @returns the record to push, or null. */
+export function stampLook(storage, look) {
+  let state = null;
+  try { state = JSON.parse(storage.getItem(GARAGE_STORAGE)); } catch (e) { /* no garage saved yet */ }
+  return stampGarageBlock({ state: state && typeof state === 'object' && !Array.isArray(state) ? state : cleanGarage(null), look: normLook(look) }, storage);
+}
+/** A pulled block's look into this device's store. normLook drops unknown ids; the lobby's own show() runs fitLook
+ * with the account's owned choices, so a look it cannot wear falls back there and the block keeps the pick. */
+export function adoptBlockLook(storage, block) {
+  return !!block && saveLook(storage, block.look);
 }
 
 // ---- time --------------------------------------------------------------------------------------
