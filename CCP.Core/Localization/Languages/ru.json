@@ -7959,5 +7959,15 @@
   "online_official_plan_prime": "Prime получает самую большую дневную долю. Всё, что вы уже видели, повторяется бесплатно.",
   "online_official_nice": "Отлично",
   "online_official_stamped_line": "Онлайн-медиа приходят из Scrolller. На каждой картинке и клипе есть маленькая пометка \"via Scrolller\".",
-  "online_cache_day_line": "Онлайн-медиа хранятся в небольшом кэше на этом компьютере один день и никуда не загружаются."
+  "online_cache_day_line": "Онлайн-медиа хранятся в небольшом кэше на этом компьютере один день и никуда не загружаются.",
+  "chaos_expiry_label": "ИСЧЕЗ",
+  "chaos_expiry_halved": "💨 {0} исчезает… серия сокращена до x{1}",
+  "chaos_expiry_gone": "💨 {0} исчезает",
+  "chaos_expiry_name_lucky": "счастливый пузырь",
+  "chaos_expiry_name_flash": "вспышка",
+  "chaos_expiry_name_subliminal": "сублиминал",
+  "chaos_expiry_name_pink": "розовый фильтр",
+  "chaos_expiry_name_spiral": "спираль",
+  "chaos_expiry_name_braindrain": "brain drain",
+  "chaos_expiry_name_gif": "каскад GIF"
 }

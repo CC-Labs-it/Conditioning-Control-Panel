@@ -6,6 +6,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
@@ -250,17 +251,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnTreatExpired(AmbientBubble b)
         {
             if (_state == null || b.Spec == null || _manualPaused || _lessonCardPaused) return;
-            Label(b, "FADED", Color.FromRgb(0xB8, 0xB8, 0xD0));
-            string name = b.Spec.IsGolden ? "lucky bubble" : b.Spec.Payload.DisplayName;
+            Label(b, Loc.Get("chaos_expiry_label"), Color.FromRgb(0xB8, 0xB8, 0xD0));
+            string name = b.Spec.IsGolden ? Loc.Get("chaos_expiry_name_lucky") : b.Spec.Payload.DisplayName switch
+            {
+                "flash" => Loc.Get("chaos_expiry_name_flash"),
+                "subliminal" => Loc.Get("chaos_expiry_name_subliminal"),
+                "pink_filter" => Loc.Get("chaos_expiry_name_pink"),
+                "spiral" => Loc.Get("chaos_expiry_name_spiral"),
+                "braindrain" => Loc.Get("chaos_expiry_name_braindrain"),
+                "gif cascade" => Loc.Get("chaos_expiry_name_gif"),
+                _ => b.Spec.Payload.DisplayName
+            };
             if (_state.Combo > 1)
             {
                 _state.Combo /= 2;
-                _state.PushEvent($"💨 {name} faded… streak halved to x{_state.Combo}");
+                _state.PushEvent(Loc.GetF("chaos_expiry_halved", name, _state.Combo));
             }
             else
             {
                 _state.Combo = 0;
-                _state.PushEvent($"💨 {name} faded away");
+                _state.PushEvent(Loc.GetF("chaos_expiry_gone", name));
             }
             Pulse(Color.FromRgb(150, 150, 175), 0.10);
         }

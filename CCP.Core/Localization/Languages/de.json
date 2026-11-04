@@ -7959,5 +7959,15 @@
   "online_official_plan_prime": "Prime bekommt den größten Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
   "online_official_nice": "Schön",
   "online_official_stamped_line": "Online-Medien kommen von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk.",
-  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen."
+  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen.",
+  "chaos_expiry_label": "VERBLASST",
+  "chaos_expiry_halved": "💨 {0} verblasst… Serie halbiert auf x{1}",
+  "chaos_expiry_gone": "💨 {0} ist verblasst",
+  "chaos_expiry_name_lucky": "Glücksblase",
+  "chaos_expiry_name_flash": "Blitz",
+  "chaos_expiry_name_subliminal": "Subliminal",
+  "chaos_expiry_name_pink": "Pinkfilter",
+  "chaos_expiry_name_spiral": "Spirale",
+  "chaos_expiry_name_braindrain": "Brain Drain",
+  "chaos_expiry_name_gif": "GIF-Kaskade"
 }

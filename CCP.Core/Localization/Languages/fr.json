@@ -7959,5 +7959,15 @@
   "online_official_plan_prime": "Prime a la plus grosse part quotidienne. Ce que tu as déjà vu se rejoue gratuitement.",
   "online_official_nice": "Cool",
   "online_official_stamped_line": "Les médias en ligne viennent de Scrolller. Chaque image et clip porte une petite mention \"via Scrolller\".",
-  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés."
+  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés.",
+  "chaos_expiry_label": "DISPARUE",
+  "chaos_expiry_halved": "💨 {0} disparaît… série réduite à x{1}",
+  "chaos_expiry_gone": "💨 {0} a disparu",
+  "chaos_expiry_name_lucky": "bulle porte-bonheur",
+  "chaos_expiry_name_flash": "flash",
+  "chaos_expiry_name_subliminal": "subliminal",
+  "chaos_expiry_name_pink": "filtre rose",
+  "chaos_expiry_name_spiral": "spirale",
+  "chaos_expiry_name_braindrain": "brain drain",
+  "chaos_expiry_name_gif": "cascade de GIF"
 }

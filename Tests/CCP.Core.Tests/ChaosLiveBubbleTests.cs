@@ -55,6 +55,25 @@ public class ChaosLiveBubbleTests
     }
 
     [Fact]
+    public void Expiry_copy_is_present_and_formattable_in_every_language()
+    {
+        string[] keys = { "chaos_expiry_label", "chaos_expiry_halved", "chaos_expiry_gone",
+            "chaos_expiry_name_lucky", "chaos_expiry_name_flash", "chaos_expiry_name_subliminal",
+            "chaos_expiry_name_pink", "chaos_expiry_name_spiral", "chaos_expiry_name_braindrain", "chaos_expiry_name_gif" };
+        foreach (var language in ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+        {
+            var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", language.Code + ".json");
+            var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
+            foreach (var key in keys) Assert.False(string.IsNullOrWhiteSpace((string?)json[key]), $"{language.Code}: {key}");
+            string halved = (string)json["chaos_expiry_halved"]!;
+            string gone = (string)json["chaos_expiry_gone"]!;
+            Assert.Contains("NAME", string.Format(halved, "NAME", 42));
+            Assert.Contains("42", string.Format(halved, "NAME", 42));
+            Assert.Contains("NAME", string.Format(gone, "NAME"));
+        }
+    }
+
+    [Fact]
     public void Treat_rot_waits_for_its_lifetime_pauses_and_dissolves_once()
     {
         var (f, b, _) = Field(new EffectBubbleSpec { SizePx = 200, TreatLifeMs = 320 });
