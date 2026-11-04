@@ -201,6 +201,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF StopVoiceInput (privacy pill, "stop listening", a voice lock card taking the mic):
         /// cut any capture and stand both modes down until the next reconcile.</summary>
+        internal bool UserDrivenVoiceArmed => _wakeLoopCts != null || _pttArmed;
+
         internal void StopVoiceInput()
         {
             // First: a command prompt in flight must end too, or its "you called?" re-prompt / retry
