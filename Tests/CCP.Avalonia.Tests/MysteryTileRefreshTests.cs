@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
@@ -47,6 +48,13 @@ public class MysteryTileRefreshTests
             shell.RefreshMysteryTile("fyp", false);
             Assert.Equal(Loc.Get("tab_fyp"), dash.MysteryRevealName.Text);
             shell.RefreshMysteryTile("fyp", true);
+            Assert.Equal(0, dash.MysteryRevealBadge.Tier);
+            Assert.False(dash.MysteryRevealBadge.FreeToday);
+            shell.RefreshMysteryTile("dtrh", false);
+            Assert.Equal("Down the Rabbit Hole", dash.MysteryRevealName.Text);
+            Assert.Equal(1, dash.MysteryRevealBadge.Tier);
+            Assert.True(dash.MysteryRevealBadge.FreeToday);
+            shell.RefreshMysteryTile("dtrh", true);
             Assert.Equal(0, dash.MysteryRevealBadge.Tier);
             Assert.False(dash.MysteryRevealBadge.FreeToday);
             shell.RefreshMysteryTile("unknown", false);
@@ -169,10 +177,14 @@ public class MysteryTileRefreshTests
         try
         {
             shell.Show();
+            Dispatcher.UIThread.RunJobs();
             var dash = shell.SettingsPage!;
             PixelSize Size() => Assert.IsType<Bitmap>(Assert.IsType<ImageBrush>(dash.MysteryRevealArt.Background).Source).PixelSize;
             shell.RefreshMysteryTile("takeover", false);
             var box = Size();
+            var previousBrush = dash.MysteryRevealArt.Background;
+            MainShellWindow.SetMysteryArt(dash.MysteryRevealArt, null);
+            Assert.Same(previousBrush, dash.MysteryRevealArt.Background);
             shell.RefreshMysteryTile("fyp", false);
             Assert.NotEqual(box, Size());
             shell.RefreshMysteryTile("voice", false);
@@ -203,6 +215,33 @@ public class MysteryTileRefreshTests
             CoreModArt.OverridePathProvider = previous;
             dir.Delete(true);
         }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ModArtSubscriptionExistsOnlyWhileTheShellIsOpen() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        var field = typeof(CoreMods).GetField("ModChanged", BindingFlags.Static | BindingFlags.NonPublic)!;
+        int Subscriptions() => (field.GetValue(null) as Delegate)?.GetInvocationList().Count(d =>
+            ReferenceEquals(d.Target, shell) && d.Method.Name == "OnModChangedFeatureImages") ?? 0;
+        try
+        {
+            Assert.Equal(0, Subscriptions());
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, Subscriptions());
+            typeof(Window).GetMethod("OnOpened", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(shell, new object[] { EventArgs.Empty });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, Subscriptions());
+        }
+        finally { shell.Close(); }
+        Assert.Equal(0, Subscriptions());
         return Task.CompletedTask;
     });
 

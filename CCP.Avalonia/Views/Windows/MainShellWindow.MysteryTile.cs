@@ -3,6 +3,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -23,7 +24,7 @@ public partial class MainShellWindow
         dash.CardMystery.TierBadge = null;
         dash.MysteryRevealName.Text = MysteryName(key) ?? Loc.Get("mosaic_daily_gift");
         var art = ModArt.TryLoad(MysteryArtPath(key), 512) ?? ModTileVariant("mysterybox", 512);
-        dash.MysteryRevealArt.Background = art == null ? null : new ImageBrush(art) { Stretch = Stretch.UniformToFill };
+        SetMysteryArt(dash.MysteryRevealArt, art);
         var badge = dash.MysteryRevealBadge;
         badge.Tier = !premium && MysteryName(key) != null ? 1 : 0;
         badge.FreeToday = badge.Tier > 0;
@@ -149,6 +150,11 @@ public partial class MainShellWindow
         dash.MysteryGlow.Opacity = 0.55;
         if (dash.MysteryBadge.RenderTransform is TransformGroup { Children: [ScaleTransform scale, ..] })
             scale.ScaleX = scale.ScaleY = 1;
+    }
+
+    internal static void SetMysteryArt(Border target, Bitmap? art)
+    {
+        if (art != null) target.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
     }
 
     private static string MysteryArtPath(string? key) => key switch
