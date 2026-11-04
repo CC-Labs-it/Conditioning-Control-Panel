@@ -53,7 +53,7 @@ public class TestIsolationTests
     {
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == typeof(CoreSession) && m.Name == nameof(CoreSession.IsEngineRunningProvider));
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == typeof(CoreSettings) && m.Name == nameof(CoreSettings.ServiceProvider));
-        foreach (var name in new[] { "Prepare", "ReadBand", "Capture", "Alpha", "Raise", "Below", "Screens", "OwnWindows", "Handle" })
+        foreach (var name in new[] { "Prepare", "ReadBand", "Capture", "CreatePump", "Alpha", "Raise", "Below", "Screens", "OwnWindows", "Handle" })
             Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == typeof(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay) && m.Name == name);
     }
 

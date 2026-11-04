@@ -78,8 +78,9 @@ internal sealed class BrainDrainCapturePump
             if (bitmap == IntPtr.Zero || bits == IntPtr.Zero) return null;
             previous = SelectObject(memory, bitmap);
             if (previous == IntPtr.Zero || previous == new IntPtr(-1)) { previous = IntPtr.Zero; return null; }
-            SetStretchBltMode(memory, 3);
+            SetStretchBltMode(memory, 4); // HALFTONE, WPF BrainDrainCapturePump.cs:495.
             if (!StretchBlt(memory, 0, 0, width, height, dc, bounds.X, bounds.Y, bounds.Width, bounds.Height, DesktopCopy)) return null;
+            if (!GdiFlush()) return null; // DIB writes must finish before reading its memory.
             var pixels = new byte[checked(width * height * 4)];
             Marshal.Copy(bits, pixels, 0, pixels.Length);
             // GDI's fourth byte is undefined. Frames are opaque BGRA.
@@ -108,6 +109,7 @@ internal sealed class BrainDrainCapturePump
     [DllImport("gdi32.dll")] private static extern IntPtr CreateDIBSection(IntPtr dc, ref BitmapInfo info, uint usage, out IntPtr bits, IntPtr section, uint offset);
     [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
     [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+    [DllImport("gdi32.dll")] private static extern bool GdiFlush();
     [DllImport("gdi32.dll")] private static extern int SetStretchBltMode(IntPtr dc, int mode);
     [DllImport("gdi32.dll")] private static extern bool StretchBlt(IntPtr dest, int x, int y, int width, int height, IntPtr src, int sx, int sy, int sw, int sh, uint rop);
 }

@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -168,6 +173,79 @@ public sealed class BrainDrainIntegrationTests
         Assert.Equal(OperatingSystem.IsWindows(), card.FindControl<Grid>("CaptureRow")!.IsVisible);
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task CapturedPixelsArePresentedWithLiveBlur() => Run(async owner =>
+    {
+        BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
+        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(
+            () => new BrainDrainCapturePump.Frame(2, 2, new byte[] { 7, 12, 200, 255, 7, 12, 200, 255, 7, 12, 200, 255, 7, 12, 200, 255 }), TimeSpan.FromSeconds(1));
+        BrainDrainOverlay.Start(owner);
+        var image = Assert.IsType<Image>(Assert.Single(BrainDrainOverlay.Active).Content);
+        for (int i = 0; i < 100 && image.Source == null; i++) await Task.Delay(20);
+        var bitmap = Assert.IsType<WriteableBitmap>(image.Source);
+        using (var buffer = bitmap.Lock()) Assert.Equal(7, Marshal.ReadByte(buffer.Address));
+        Assert.Equal(14, Assert.IsType<BlurEffect>(image.Effect).Radius, 5);
+        CoreSettings.Current.BrainDrainBlurStrength = 50;
+        Assert.Equal(7, Assert.IsType<BlurEffect>(image.Effect).Radius, 5);
+    });
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("panic")]
+    [InlineData("owner")]
+    [InlineData("monitor")]
+    public Task BlockedCaptureDoesNotHoldLifecycleOrPublishAfterwards(string action) => Run(async owner =>
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var finished = new ManualResetEventSlim();
+        var pumps = new List<BrainDrainCapturePump>();
+        var bounds = new PixelRect(0, 0, 8, 8);
+        BrainDrainOverlay.Screens = _ => new[] { (bounds, 1.0, true) };
+        BrainDrainOverlay.CreatePump = _ => {
+            if (pumps.Count > 0)
+            {
+                var replacement = new BrainDrainCapturePump(() => null, TimeSpan.FromMilliseconds(33));
+                pumps.Add(replacement); return replacement;
+            }
+            var pump = new BrainDrainCapturePump(() => {
+                entered.Set(); release.Wait(); finished.Set();
+                return new BrainDrainCapturePump.Frame(2, 2, new byte[16]);
+            }, TimeSpan.FromMilliseconds(33));
+            pumps.Add(pump); return pump;
+        };
+        try
+        {
+            BrainDrainOverlay.Start(owner);
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            var oldHost = Assert.Single(BrainDrainOverlay.Active);
+            var oldImage = Assert.IsType<Image>(oldHost.Content);
+            bool dispatched = false;
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => dispatched = true);
+            for (int i = 0; i < 100 && !dispatched; i++) await Task.Delay(10);
+            Assert.True(dispatched);
+            var elapsed = Stopwatch.StartNew();
+            switch (action)
+            {
+                case "stop": global::ConditioningControlPanel.Avalonia.App.StopDesktopOverlays(false); break;
+                case "panic": PanicSurfaces.All.Single(x => x.Id == "brain-drain").Stop(null); break;
+                case "owner": owner.Close(); break;
+                default: bounds = new PixelRect(0, 0, 12, 12); BrainDrainOverlay.Reconcile(); break;
+            }
+            Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(1));
+            Assert.False(oldHost.IsVisible);
+            Assert.Null(oldImage.Source);
+            release.Set();
+            Assert.True(finished.Wait(TimeSpan.FromSeconds(5)));
+            await Task.Delay(250);
+            Assert.Null(pumps[0].Take());
+            Assert.Null(oldImage.Source);
+            if (action == "monitor") Assert.NotSame(oldHost, Assert.Single(BrainDrainOverlay.Active));
+            else Assert.Empty(BrainDrainOverlay.Active);
+        }
+        finally { BrainDrainOverlay.CloseAll(); release.Set(); }
+    });
+
     [Fact]
     public Task SameOriginResolutionAndDpiChangesRecreateFullMonitorHosts() => Run(owner =>
     {
