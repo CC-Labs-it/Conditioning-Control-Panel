@@ -31,7 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public double LastVideoDurationSeconds => BubbleCountWindow.LastVideoDurationSeconds;
         // WPF InteractionQueue: Video, LockCard and PopQuiz claim the screen before a game may start.
         public bool OtherInteractionActive =>
-            CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen();
+            CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen()
+            || MainShellWindow.Current?.PlaylistBlocksAutonomy == true;
 
         public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(Games.GameWindow.IsForYouOnScreen);
 

@@ -16,6 +16,8 @@ namespace ConditioningControlPanel.Services
         /// <see cref="MandatoryVideoScheduler.End"/> at the clip's end or on Esc, and
         /// <see cref="MandatoryVideoScheduler.ForceCleanup"/> on the in-window panic key.</summary>
         void Show(string path, bool strict);
+        // WPF VideoService.cs:2948-2959: retry scheduled video while browser media is active.
+        bool BrowserMediaActive => false;
         /// <summary>Close every video window; returns the seconds of the clip that were watched.</summary>
         double CloseAll();
         /// <summary>WPF ShowMessage: the attention-check verdict over every screen for
@@ -297,7 +299,8 @@ namespace ConditioningControlPanel.Services
             try
             {
                 // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
-                if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
+                if (!_playing && _host.BrowserMediaActive) ScheduleNext(SkipRetrySeconds);
+                else if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
                 {
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);

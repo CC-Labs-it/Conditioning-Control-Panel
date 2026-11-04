@@ -6,7 +6,7 @@
 //
 // WebHost supplies a script channel and navigation completion. Video autoplay uses that
 // completion as its earliest available signal; WPF also has an earlier DOM-ready signal.
-// The media reporter, queue ownership, playlist autoplay and native fullscreen rig are missing.
+// The general media reporter, shared queue ownership and native fullscreen rig are missing.
 // The offline-block toast uses App.Notifications (WPF MainWindow.Browser.cs:489-494).
 //
 // THE MUTE PAIR is ported onto the card itself (Views/Tabs/SettingsTabView.BrowserCard.cs) over the WebHost
@@ -24,7 +24,7 @@
 //   * WebView2 itself (36): the init/teardown chain (InitializeBrowserAsync, InitAndNavigateAsync,
 //     TearDownBrowserForReinit, NavigateWhenBrowserReadyAsync, BrowserLoadingText_Click,
 //     OpenUrlExternallyAfterBrowserFailure, _browserInitializing, _browserCorePending); the
-//     media integration (AutoPlayBambiCloudPlaylistAsync, EndWebVideoTakeover, OnBrowserWebMessageReceived,
+//     media integration (playlist lifecycle, EndWebVideoTakeover, OnBrowserWebMessageReceived,
 //     HandleBrowserMediaMessage, the four HandleAudioSync* members, HookHapticAudioSyncRearm,
 //     OnHapticConnectionChangedForAudioSync, _hapticAudioSyncConnHooked); the pop-out and
 //     fullscreen rig (BtnPopOutBrowser_Click, FocusBrowserSurface's pop-out half,
@@ -46,6 +46,7 @@ using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Serilog;
@@ -94,33 +95,150 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _browserRequestGeneration;
         private Action<Uri, bool>? _pendingVideoAutoPlay;
         private WebHost? _pendingVideoHost;
+        private WebHost? _playlistHost;
+        private string? _playlistToken;
+        private bool _playlistClaimed, _playlistLoaded, _playlistPassive, _playlistScriptInjected, _playlistTakeover;
+        private volatile bool _playlistPlaying, _playlistSlotHeld;
+        private DateTime _playlistHeartbeat;
+        private DispatcherTimer? _playlistWatchdog;
+        internal Func<DateTime> PlaylistClock = () => DateTime.UtcNow;
+
+        // WPF BrowserMediaService.cs:196-223 claims before navigation, best effort if busy.
+        // This head has no shared interaction queue; the slot here protects Takeover only.
+        internal bool PlaylistBlocksAutonomy => _playlistSlotHeld ||
+            (_playlistPlaying && CoreSettings.Current.ProtectBrowserVideoPlayback);
+
+        private void ClaimPlaylist(WebHost host)
+        {
+            _playlistHost = host;
+            _playlistToken = Guid.NewGuid().ToString("N");
+            _playlistLoaded = _playlistPassive = _playlistScriptInjected = false;
+            _playlistClaimed = _playlistTakeover = true;
+            _playlistPlaying = false;
+            _playlistSlotHeld = !Autonomy.IsBusy();
+            _playlistHeartbeat = PlaylistClock();
+            host.WebMessage += OnPlaylistMessage;
+            host.NavigationFinished += OnPlaylistNavigation;
+            _playlistWatchdog = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _playlistWatchdog.Tick += OnPlaylistWatchdog;
+            _playlistWatchdog.Start();
+        }
+
+        private void ReleasePlaylist()
+        {
+            if (_playlistHost is { } host)
+            {
+                host.WebMessage -= OnPlaylistMessage;
+                host.NavigationFinished -= OnPlaylistNavigation;
+                _ = host.InvokeScriptAsync("window.__ccpPlaylistCleanup?.();");
+            }
+            _playlistHost = null;
+            _playlistToken = null;
+            _playlistClaimed = _playlistPlaying = _playlistSlotHeld = false;
+            if (_playlistWatchdog != null)
+            {
+                _playlistWatchdog.Stop();
+                _playlistWatchdog.Tick -= OnPlaylistWatchdog;
+                _playlistWatchdog = null;
+            }
+        }
+
+        private void OnPlaylistNavigation(Uri url, bool success)
+        {
+            if (!_playlistLoaded && success)
+            {
+                _playlistLoaded = true;
+                if (_playlistPassive && !_playlistScriptInjected) InstallPassivePlaylist();
+                return;
+            }
+            CancelVideoAutoPlay(); // failed first load or a later navigation, including an in-page link
+        }
+
+        private void OnPlaylistMessage(string raw)
+        {
+            var prefix = "ccp-playlist:" + _playlistToken + ":";
+            var message = raw.Trim().Trim('"');
+            if (_playlistToken == null || !message.StartsWith(prefix, StringComparison.Ordinal)) return;
+            switch (message[prefix.Length..])
+            {
+                case "playing":
+                    if (!_playlistClaimed)
+                    {
+                        _playlistClaimed = true; _playlistTakeover = false;
+                        _playlistSlotHeld = !Autonomy.IsBusy();
+                        _playlistWatchdog?.Start();
+                    }
+                    _playlistPlaying = true;
+                    _playlistHeartbeat = PlaylistClock();
+                    break;
+                case "progress":
+                    if (_playlistPlaying) _playlistHeartbeat = PlaylistClock();
+                    break;
+                case "ended":
+                    _playlistClaimed = _playlistPlaying = _playlistSlotHeld = false;
+                    _playlistWatchdog?.Stop();
+                    break;
+                case "failed":
+                    if (!_playlistPlaying) { _playlistClaimed = _playlistSlotHeld = false; _playlistWatchdog?.Stop(); }
+                    break;
+                case "navigated":
+                    CancelVideoAutoPlay();
+                    break;
+            }
+        }
+
+        // WPF BrowserMediaService.cs:70-78,523-543: 60s to load, then 20s without a beat.
+        private void OnPlaylistWatchdog(object? sender, EventArgs e) => CheckPlaylistTimeout();
+        internal void CheckPlaylistTimeout()
+        {
+            if (!_playlistClaimed || (PlaylistClock() - _playlistHeartbeat).TotalSeconds < (_playlistPlaying ? 20 : 60)) return;
+            if (_playlistTakeover) StopBrowserMediaForPanic();
+            else { _playlistClaimed = _playlistPlaying = _playlistSlotHeld = false; _playlistWatchdog?.Stop(); }
+        }
 
         // WPF MainWindow.Browser.cs:793-815 arms once before navigation, and :835-837
         // waits 1.5 seconds before injection. WebHost has completion but no DOM-ready event.
         internal Func<Task> BrowserAutoPlayDelay = () => Task.Delay(1500);
 
-        private void CancelVideoAutoPlay()
+        private void InstallPassivePlaylist()
+        {
+            if (_playlistHost == null || _playlistToken == null) return;
+            _playlistScriptInjected = true;
+            _ = _playlistHost.InvokeScriptAsync(PlaylistAutoPlayScript.Replace("__CCP_PLAYLIST_TOKEN__", _playlistToken)
+                .Replace("__CCP_PLAYLIST_PASSIVE__", "yes"));
+        }
+
+        private void CancelVideoAutoPlay(bool keepPlaylist = false)
         {
             ++_browserRequestGeneration;
             if (_pendingVideoHost != null && _pendingVideoAutoPlay != null)
                 _pendingVideoHost.NavigationFinished -= _pendingVideoAutoPlay;
             _pendingVideoHost = null;
             _pendingVideoAutoPlay = null;
+            if (keepPlaylist && _playlistHost != null)
+            {
+                _playlistClaimed = _playlistPlaying = _playlistSlotHeld = false;
+                (_playlistPassive, _playlistScriptInjected, _playlistToken) = (true, false, Guid.NewGuid().ToString("N"));
+                _playlistWatchdog?.Stop();
+            }
+            else ReleasePlaylist();
         }
 
         // WPF MainWindow.xaml.cs:2042-2045 and MainWindow.Browser.cs:973-990.
         // Invalidate the delayed injection before asking the current page to stop.
         internal void StopBrowserMediaForPanic()
         {
-            CancelVideoAutoPlay();
+            CancelVideoAutoPlay(keepPlaylist: true);
             if (BrowserView is { HasEngine: true } host)
                 _ = host.InvokeScriptAsync(PanicBrowserMediaScript);
+            if (_playlistLoaded && !_playlistScriptInjected) InstallPassivePlaylist();
         }
 
         internal const string PanicBrowserMediaScript = """
             (function() {
                 window._ccpForcedFs = false;
                 window._ccpTakeoverStopped = true;
+                if (window.__ccpPlaylistCleanup) window.__ccpPlaylistCleanup();
                 document.querySelectorAll('video,audio').forEach(v => { try { v.pause(); } catch (e) {} });
                 try {
                     const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
@@ -132,7 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             })();
             """;
 
-        private void ArmVideoAutoPlay(WebHost host)
+        private void ArmVideoAutoPlay(WebHost host, bool playlist)
         {
             var request = _browserRequestGeneration;
             void OnFinished(Uri completedUrl, bool success)
@@ -140,18 +258,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 host.NavigationFinished -= OnFinished;
                 _pendingVideoHost = null;
                 _pendingVideoAutoPlay = null;
-                if (success) _ = PlayVideoAfterLoadAsync(host, request);
+                if (success) _ = PlayVideoAfterLoadAsync(host, request, playlist);
             }
             _pendingVideoHost = host;
             _pendingVideoAutoPlay = OnFinished;
             host.NavigationFinished += OnFinished;
         }
 
-        private async Task PlayVideoAfterLoadAsync(WebHost host, int request)
+        private async Task PlayVideoAfterLoadAsync(WebHost host, int request, bool playlist)
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
-            await host.InvokeScriptAsync(VideoAutoPlayScript);
+            if (playlist) _playlistScriptInjected = true;
+            var script = playlist ? PlaylistAutoPlayScript.Replace("__CCP_PLAYLIST_TOKEN__", _playlistToken!) : VideoAutoPlayScript;
+            await host.InvokeScriptAsync(script);
         }
 
         // WPF MainWindow.Browser.cs:843-955: poll for the player, play, request fullscreen,
@@ -195,6 +315,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             })();
             """;
 
+        // WPF MainWindow.Browser.cs:1017-1073 and BrowserService.cs:390-430.
+        // A per-navigation token keeps late messages from an outgoing page from releasing a new claim.
+        internal const string PlaylistAutoPlayScript = """
+            (async function() {
+                const token = '__CCP_PLAYLIST_TOKEN__';
+                window.__ccpPlaylistToken = token;
+                window._ccpTakeoverStopped = false;
+                const current = () => window.__ccpPlaylistToken === token && !window._ccpTakeoverStopped;
+                const post = state => {
+                    if (!current()) return;
+                    const message = 'ccp-playlist:' + token + ':' + state;
+                    try {
+                        if (window.invokeCSharpAction) window.invokeCSharpAction(message);
+                        else if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(message);
+                    } catch (_) {}
+                };
+                let active = null, notified = false, beat = null, fallback = null;
+                const observer = new MutationObserver(() => scan());
+                const cleanup = () => { observer.disconnect(); clearInterval(beat); clearTimeout(fallback); document.removeEventListener('playing', wake, true); beat = fallback = null; };
+                window.__ccpPlaylistCleanup = cleanup;
+                const bind = audio => {
+                    if (!audio || audio.__ccpPlaylistBound === token) return;
+                    audio.__ccpPlaylistBound = token;
+                    audio.addEventListener('playing', () => { active = audio; notified = true; post('playing'); });
+                    audio.addEventListener('ended', () => { active = null; notified = true; post('ended'); });
+                    audio.addEventListener('pause', () => setTimeout(() => {
+                        if (active === audio && audio.paused && !audio.ended) { active = null; post('ended'); }
+                    }, 2000));
+                };
+                const scan = () => document.querySelectorAll('audio').forEach(bind);
+                const start = () => {
+                    scan();
+                    observer.observe(document.body, { childList: true, subtree: true });
+                    if (beat === null) beat = setInterval(() => { if (active && !active.paused && !active.ended) post('progress'); }, 1000);
+                };
+                const wake = e => {
+                    if (window.__ccpPlaylistToken !== token || !window._ccpTakeoverStopped || e.target?.tagName !== 'AUDIO') return;
+                    window._ccpTakeoverStopped = false;
+                    active = e.target; notified = true; post('playing'); start();
+                };
+                document.addEventListener('playing', wake, true);
+                window.addEventListener('pagehide', () => { post('navigated'); cleanup(); document.removeEventListener('playing', wake, true); }, { once: true });
+                if ('__CCP_PLAYLIST_PASSIVE__' === 'yes') { window._ccpTakeoverStopped = true; return; }
+                start();
+                let btn = document.querySelector('button.play-action');
+                for (let i = 0; i < 20 && !btn; i++) {
+                    await new Promise(r => setTimeout(r, 250));
+                    if (!current()) return;
+                    btn = document.querySelector('button.play-action');
+                }
+                if (!btn) { post('failed'); return; }
+                if (!current()) return;
+                try { btn.click(); } catch (_) { post('failed'); return; }
+                fallback = setTimeout(() => { if (!notified) { notified = true; post('playing'); } }, 3000);
+            })();
+            """;
+
         /// <summary>Points the web view at a URL. A missing host returns false.</summary>
         private bool NavigateBrowser(string url, bool autoPlayFullscreen = false)
         {
@@ -204,10 +381,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var host = BrowserView;
                 if (host == null) return false;
                 var target = new Uri(url);
-                if (autoPlayFullscreen && host.HasEngine &&
-                    !url.Contains("bambicloud.com/playlist/", StringComparison.OrdinalIgnoreCase))
-                    ArmVideoAutoPlay(host);
+                var playlist = autoPlayFullscreen && url.Contains("bambicloud.com/playlist/", StringComparison.OrdinalIgnoreCase);
+                if (playlist && host.HasEngine) ClaimPlaylist(host);
+                if (autoPlayFullscreen && host.HasEngine) ArmVideoAutoPlay(host, playlist);
+                var refusals = host.RefusedNavigations;
                 host.Navigate(target);   // even when equal: WPF #867, re-click goes home
+                if (playlist && host.RefusedNavigations != refusals) { CancelVideoAutoPlay(); return false; }
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }
@@ -264,7 +443,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
         /// <param name="autoPlayFullscreen">Requests video playback and fullscreen after navigation.
-        /// Playlist autoplay and the browser media session remain unported.</param>
+        /// Playlist playback claims a Takeover guard; the shared browser media service remains unported.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (string.IsNullOrWhiteSpace(url) || BrowserBlockedOffline(userInitiated))
