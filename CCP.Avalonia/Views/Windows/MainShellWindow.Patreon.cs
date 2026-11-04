@@ -271,11 +271,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializePremiumCelebration()
         {
             Opened += (_, _) => MaybeShowPremiumCelebration();
-            bool pendingRise = false;
-            System.Action<int> rise = _ => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => pendingRise = true);
+            bool pendingRise = false, closed = false;
+            System.Action<int> rise = _ => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (!closed) pendingRise = true; });
             Platform.AccountSeed.TierRaised += rise;
             System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
+                if (closed) return;
                 var onRise = pendingRise;
                 pendingRise = false;
                 MaybeShowPremiumCelebration(onRise);
@@ -286,6 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (substar != null) substar.TierChanged += tier;
             Closed += (_, _) =>
             {
+                closed = true;
                 Platform.AccountSeed.TierRaised -= rise;
                 if (patreon != null) patreon.TierChanged -= tier;
                 if (substar != null) substar.TierChanged -= tier;
@@ -313,16 +315,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Summary = Loc.Get("premium_celebration_inbox_summary"),
                     Open = () => FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key),
                 };
-                if (onRise)
-                {
-                    if (IsVisible && WindowState != WindowState.Minimized && !CoreSession.IsSessionRunning
-                        && !CoreEngine.IsRunning && !global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsAnyOpen()
-                        && !CoreTutorial.IsActive && !Platform.AppUpdater.IsUpdateDialogActive && !IsStartupDialogShowing)
-                        item.Open();
-                    else
-                        Platform.StartupLadder.Inbox.File(item);
-                }
-                else Platform.StartupLadder.PresentOrInbox(item);
+                if (onRise && IsVisible && WindowState != WindowState.Minimized && !CoreSession.IsSessionRunning
+                    && !CoreEngine.IsRunning && !global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsAnyOpen()
+                    && !CoreTutorial.IsActive && !Platform.AppUpdater.IsUpdateDialogActive && !IsStartupDialogShowing)
+                    item.Open();
+                else
+                    Platform.StartupLadder.PresentOrInbox(item);
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Premium celebration hook failed"); }
         }
