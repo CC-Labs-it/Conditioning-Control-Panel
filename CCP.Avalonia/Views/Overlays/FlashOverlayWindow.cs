@@ -58,6 +58,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _expiresAt = deadline;
             ScheduleExpiry();
         }
+        internal void SetVoiceLifetime(TimeSpan lifetime)
+        {
+            if (IsFadingOut || Exit != null || _lifetimeTimer == null) return;
+            Lifetime = lifetime;
+            _expiresAt = SpawnedAt + (long)(lifetime.TotalSeconds * FlashOverlay.Clock.TimestampFrequency);
+            ScheduleExpiry();
+        }
         private void ScheduleExpiry()
         {
             _lifetimeTimer?.Stop();
