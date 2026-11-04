@@ -591,7 +591,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         /// <summary>
         /// Core's EnhancementResolver ladder (embedded -> sidecar -> library), as WPF calls it.
-
         /// </summary>
         private void TryAutoLoadEnhancement(string mediaPath)
         {
@@ -1076,6 +1075,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 return;
             }
 
+            ClearHint();
             _txtEnhPath.Text = path ?? "";
             _btnUnloadEnhancement.IsVisible = true;
             _btnCreateNewEnhancement.IsVisible = false;
