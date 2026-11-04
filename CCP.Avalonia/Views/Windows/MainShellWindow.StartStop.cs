@@ -4,7 +4,7 @@
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
 // ponytail: still missing, each with no service on this head: the remote-control gate,
 // Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler, the Presets "running" label and the hero FX.
+// ramp starts, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Bumped by every Stop, so a Start still waiting on the portal bind (up to 30 s) is dropped
         // if the user stopped or panicked meanwhile.
         private static int _engineGen;
+        internal System.Action<System.Action>? EngineStartDispatchOverride;
 
         private void BtnStartMenu_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -35,10 +36,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning) { NoteSchedulerManualStop(); StopEngine(); }
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
+            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); NoteSchedulerManualStop(); StopEngine(); }
             else StartEngineFromUser();
         }
 
@@ -46,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (Core PanicAftermath); the scheduler, programs, a remote or the Lockdown keeper never do.</summary>
         internal void StartEngineFromUser()
         {
+            _schedulerManualStop = false;
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             StartEngine();
         }
@@ -77,10 +79,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine()
+        internal void StartEngine(System.Action? onStarted = null)
         {
             var gen = ++_engineGen;
-            StartEffect(() =>
+            (EngineStartDispatchOverride ?? StartEffect)(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
                 CoreEngine.Start();
@@ -89,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 SpiralOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
+                onStarted?.Invoke();
             });
         }
 
@@ -104,6 +107,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
+            // A Core session can end while the scheduler is still waiting on the portal.
+            if (_schedulerPending) { if (_schedulerGeneration == _engineGen) _engineGen++; _schedulerPending = _schedulerAutoStarted = false; _schedulerManualStop = true; }
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.

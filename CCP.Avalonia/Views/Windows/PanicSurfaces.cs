@@ -123,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Serilog.Log.Information("Panic: stopping every surface ({Reason})", reason);
             shell ??= MainShellWindow.Current;
+            shell?.NoteSchedulerManualStop();
             foreach (var s in All)
             {
                 try { s.Stop(shell); }
