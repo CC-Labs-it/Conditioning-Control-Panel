@@ -6,29 +6,35 @@ using Xunit;
 public class SeasonRolloverTests
 {
     [Fact]
+    public void CoreDoesNotExportWpfSeasonRecapService()
+    {
+        Assert.Null(typeof(CoreSettings).Assembly.GetType("ConditioningControlPanel.Services.SeasonRecapService"));
+    }
+
+    [Fact]
     public void BookkeepingRequiresConfirmedSeasonAndClearsPendingOnlyWhenConfirmed()
     {
         var s = new AppSettings { CurrentSeason = "bad", SeasonResetPending = true };
-        Assert.False(SeasonRecapService.UpdateBookkeeping(s));
+        Assert.False(SeasonRollover.UpdateBookkeeping(s));
         Assert.True(s.SeasonResetPending);
         s.CurrentSeason = "2026-08";
         s.LastSeasonResetSeen = "2026-08";
-        Assert.True(SeasonRecapService.UpdateBookkeeping(s));
+        Assert.True(SeasonRollover.UpdateBookkeeping(s));
         Assert.False(s.SeasonResetPending);
-        Assert.False(SeasonRecapService.UpdateBookkeeping(s));
+        Assert.False(SeasonRollover.UpdateBookkeeping(s));
     }
 
     [Fact]
     public void BookkeepingInitializesAndRollsOnlyAfterSnapshotSave()
     {
         var s = new AppSettings { CurrentSeason = "2026-07" };
-        Assert.True(SeasonRecapService.UpdateBookkeeping(s));
+        Assert.True(SeasonRollover.UpdateBookkeeping(s));
         Assert.Equal("2026-07", s.SeasonStatsSeason);
         s.CurrentSeason = "2026-08";
         s.SeasonSessionsStarted = 3;
-        Assert.False(SeasonRecapService.UpdateBookkeeping(s, _ => false));
+        Assert.False(SeasonRollover.UpdateBookkeeping(s, _ => false));
         Assert.Equal("2026-07", s.LastSeasonResetSeen);
-        Assert.True(SeasonRecapService.UpdateBookkeeping(s, snap => snap.SessionCount == 3));
+        Assert.True(SeasonRollover.UpdateBookkeeping(s, snap => snap.SessionCount == 3));
         Assert.Equal("2026-08", s.SeasonStatsSeason);
         Assert.Equal("2026-08", s.LastSeasonResetSeen);
         Assert.Equal(0, s.SeasonSessionsStarted);
@@ -39,7 +45,7 @@ public class SeasonRolloverTests
     public void RequiresConfirmedForwardKey(string? key)
     {
         var s = new AppSettings { CurrentSeason = key, SeasonStatsSeason = "2026-07", SeasonSessionsStarted = 3 };
-        Assert.Null(SeasonRecapService.CaptureAndRollover(s, key, _ => throw new System.Exception()));
+        Assert.Null(SeasonRollover.CaptureAndRollover(s, key, _ => throw new System.Exception()));
         Assert.Equal("2026-07", s.SeasonStatsSeason);
         Assert.Equal(3, s.SeasonSessionsStarted);
     }
@@ -48,7 +54,7 @@ public class SeasonRolloverTests
     public void UnconfirmedKeyCannotRoll()
     {
         var s = new AppSettings { SeasonStatsSeason = "2026-07", SeasonSessionsStarted = 3 };
-        Assert.Null(SeasonRecapService.CaptureAndRollover(s, "2026-08"));
+        Assert.Null(SeasonRollover.CaptureAndRollover(s, "2026-08"));
         Assert.Equal(3, s.SeasonSessionsStarted);
     }
 
@@ -61,7 +67,7 @@ public class SeasonRolloverTests
         try
         {
             var s = new AppSettings { CurrentSeason = "2098-08", SeasonStatsSeason = "2098-07", SeasonSessionsStarted = 3 };
-            var snap = SeasonRecapService.CaptureAndRollover(s, "2098-08", x => {
+            var snap = SeasonRollover.CaptureAndRollover(s, "2098-08", x => {
                 Assert.Equal(3, s.SeasonSessionsStarted);
                 Assert.Equal("2098-07", x.SeasonKey);
                 Assert.True(SeasonRecapStore.TrySave(x));
@@ -79,7 +85,7 @@ public class SeasonRolloverTests
     public void FailedSaveKeepsBucket()
     {
         var s = new AppSettings { CurrentSeason = "2026-08", SeasonStatsSeason = "2026-07", SeasonSessionsStarted = 3 };
-        Assert.Null(SeasonRecapService.CaptureAndRollover(s, "2026-08", _ => false));
+        Assert.Null(SeasonRollover.CaptureAndRollover(s, "2026-08", _ => false));
         Assert.Equal(3, s.SeasonSessionsStarted);
         Assert.Equal("2026-07", s.SeasonStatsSeason);
     }
@@ -88,7 +94,7 @@ public class SeasonRolloverTests
     public void EmptyBucketAdvancesWithoutSaving()
     {
         var s = new AppSettings { CurrentSeason = "2026-08", SeasonStatsSeason = "2026-07" };
-        Assert.Null(SeasonRecapService.CaptureAndRollover(s, "2026-08", _ => throw new System.Exception()));
+        Assert.Null(SeasonRollover.CaptureAndRollover(s, "2026-08", _ => throw new System.Exception()));
         Assert.Equal("2026-08", s.SeasonStatsSeason);
     }
 }

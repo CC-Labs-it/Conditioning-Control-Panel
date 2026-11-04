@@ -5,7 +5,7 @@ using ConditioningControlPanel.Models;
 namespace ConditioningControlPanel.Services;
 
 /// <summary>Captures the completed local bucket before advancing to a confirmed server season.</summary>
-public static class SeasonRecapService
+public static class SeasonRollover
 {
     /// <summary>WPF MainWindow.Marquee:270: silent monthly bookkeeping for a confirmed server key.</summary>
     public static bool UpdateBookkeeping(AppSettings s, Func<SeasonRecapSnapshot, bool>? save = null)

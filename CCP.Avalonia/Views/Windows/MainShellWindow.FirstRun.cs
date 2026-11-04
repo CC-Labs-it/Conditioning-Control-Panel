@@ -49,11 +49,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void HookFirstRun()
         {
+            // WPF MainWindow.Marquee.cs:290 catches bookkeeping errors independently.
             try
             {
-                // WPF MainWindow.xaml.cs:596: silent season bookkeeping at startup.
-                if (CoreSettings.Service != null && Services.SeasonRecapService.UpdateBookkeeping(CoreSettings.Current))
+                if (CoreSettings.Service != null && Services.SeasonRollover.UpdateBookkeeping(CoreSettings.Current))
                     CoreSettings.Save();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to update monthly bookkeeping"); }
+
+            try
+            {
                 bool fresh = FirstRunWizard.ShouldRunAndClaim();
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
                 OfferWhatMovedIfNeeded(freshInstall: fresh);

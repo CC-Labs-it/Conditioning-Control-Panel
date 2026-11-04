@@ -51,6 +51,27 @@ public sealed class FirstRunGateDeadClickTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task BookkeepingFailureStillArmsTheGate(bool welcomed) => Run(welcomed, accepted: false, async shell =>
+    {
+        if (welcomed)
+            Assert.NotNull(await Owned<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(shell));
+        else
+            Assert.NotNull(await Owned<FirstRunWizard>(shell));
+    }, service =>
+    {
+        service.Current.CurrentSeason = "2026-08";
+        service.Current.LastSeasonResetSeen = "2026-07";
+        service.Current.SeasonStatsSeason = "";
+        service.Current.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(service.Current.SeasonStatsSeason))
+                throw new System.InvalidOperationException("bookkeeping failure");
+        };
+    });
+
     [Fact]
     public Task ClosingTheGateUnticked_HandsBackAndExits() => Run(welcomed: false, accepted: false, async shell =>
     {
@@ -149,7 +170,7 @@ public sealed class FirstRunGateDeadClickTests
         Assert.True(condition(), "timed out");
     }
 
-    private static Task Run(bool welcomed, bool accepted, System.Func<MainShellWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task Run(bool welcomed, bool accepted, System.Func<MainShellWindow, Task> body, System.Action<SettingsService>? arrange = null) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -162,6 +183,7 @@ public sealed class FirstRunGateDeadClickTests
         {
             CoreSettings.Current.Welcomed = welcomed;
             CoreSettings.Current.HasAcceptedAgeVerification = accepted;
+            arrange?.Invoke(service);
             shell = new MainShellWindow();
             shell.Show();
             await body(shell);
