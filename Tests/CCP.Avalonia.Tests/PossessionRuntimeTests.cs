@@ -39,6 +39,50 @@ public sealed class PossessionRuntimeTests
 
     private static Button Btn(string name) => new() { Name = name, Width = 80, Height = 30, Content = "x" };
 
+    private sealed class FaultingEffect(bool failAtStart) : HeadEffect
+    {
+        public override string Id => "fault";
+        public override PossessionRung MinRung => PossessionRung.Settle;
+        public override double Weight => 1;
+        public override TimeSpan HoldFor => TimeSpan.FromSeconds(2);
+        public override System.Collections.Generic.IReadOnlyList<PossessionRole> Roles => new[] { PossessionRole.Button };
+        protected override void Start()
+        {
+            Lease.SetOrigin(0.5, 0.5);
+            if (failAtStart) throw new InvalidOperationException();
+        }
+        internal override void Frame(double ms) => throw new InvalidOperationException();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task FailedEffectRestoresLeaseAndStopsFrames(bool failAtStart) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var button = Btn("BtnFault");
+        var original = new RotateTransform(12);
+        var origin = new RelativePoint(0.2, 0.8, RelativeUnit.Relative);
+        button.RenderTransform = original;
+        button.RenderTransformOrigin = origin;
+        var win = Host(button);
+        try
+        {
+            var frames = new FakeFrames();
+            var runtime = new PossessionRuntime(frames);
+            Assert.Equal(!failAtStart, runtime.TryApply(new FaultingEffect(failAtStart), new(button, PossessionRole.Button, "fault")));
+            if (!failAtStart) frames.Frame(TimeSpan.FromMilliseconds(100));
+            Assert.Same(original, button.RenderTransform);
+            Assert.Equal(origin, button.RenderTransformOrigin);
+            Assert.False(PossessionLease.IsLeased(button));
+            Assert.Equal(0, runtime.LiveCount);
+            Assert.Equal(0, frames.Count);
+            Assert.True(button.IsHitTestVisible);
+        }
+        finally { win.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task DeckPickedNudgeMovesItsTargetThenGivesItsOwnTransformBack() => AvaloniaTestDispatcher.RunAsync(() =>
     {

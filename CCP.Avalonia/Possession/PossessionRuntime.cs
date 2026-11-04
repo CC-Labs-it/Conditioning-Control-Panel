@@ -96,7 +96,13 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 if (ReferenceEquals(g.Effect, effect) || ReferenceEquals(g.Target.Element, el)) return false;
             var lease = PossessionLease.Take(el);
             if (lease == null) return false;
-            effect.Begin(lease, _rng, Photosafe);
+            try { effect.Begin(lease, _rng, Photosafe); }
+            catch (Exception ex)
+            {
+                lease.ReleaseImmediate();
+                Serilog.Log.Warning(ex, "Possession {Id} start failed", effect.Id);
+                return false;
+            }
             _ghosts.Add(new Ghost { Effect = effect, Lease = lease, Target = target });
             _lastKey = target.Key;
             if (!_subscribed) { _subscribed = true; _frames.Subscribe(_onFrame); }
@@ -134,7 +140,16 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 g.Start ??= now;
                 double ms = (now - g.Start.Value).TotalMilliseconds;
                 double hold = g.ForcedHoldMs ?? g.Effect.HoldFor.TotalMilliseconds;
-                if (ms < hold) { g.Effect.Frame(ms); continue; }
+                if (ms < hold)
+                {
+                    try { g.Effect.Frame(ms); }
+                    catch (Exception ex)
+                    {
+                        Serilog.Log.Warning(ex, "Possession {Id} frame failed", g.Effect.Id);
+                        Finish(g);
+                    }
+                    continue;
+                }
                 var l = g.Lease;
                 if (!g.Returning)
                 {
