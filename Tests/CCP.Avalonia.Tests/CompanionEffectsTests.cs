@@ -41,16 +41,24 @@ public sealed class CompanionEffectsTests
             CoreEntitlement.HasLabProvider = () => true;
             CoreAccount.IsLoggedInProvider = () => true;
             var all = CompanionEffects.Activities();
-            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
+            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.race", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
                 all.Select(a => a.Id));
-            Assert.True(all[3].Allowed);
+            var race = all.Single(a => a.Id == "game.race");
+            var dtrh = all.Single(a => a.Id == "game.dtrh");
+            var intake = all.Single(a => a.Id == "game.intake");
+            Assert.True(intake.Allowed);
+            Assert.True(race.Allowed);
             CoreAccount.IsLoggedInProvider = () => false;          // the tile would ask to sign in
-            Assert.False(all[3].Allowed);
+            Assert.False(intake.Allowed);
             Assert.True(all[0].Allowed && all[1].Allowed);          // the free demo and the free board need no account
-            Assert.False(all[2].Allowed);                            // Down the Rabbit Hole asks to sign in too
+            Assert.False(dtrh.Allowed);                              // Down the Rabbit Hole asks to sign in too
+            Assert.False(race.Allowed);
             CoreAccount.IsLoggedInProvider = () => true;
+            CoreEntitlement.HasLabProvider = () => false;
+            Assert.False(race.Allowed);                             // Racing Thoughts requires Lab
+            CoreEntitlement.HasLabProvider = () => true;
             service.Current.AudioOnlySession = true;
-            Assert.False(all[3].Allowed);
+            Assert.False(intake.Allowed);
         }
         finally
         {
