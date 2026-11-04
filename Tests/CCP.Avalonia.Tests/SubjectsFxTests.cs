@@ -162,6 +162,57 @@ public sealed class SubjectsFxTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public Task NewRowsPopAcrossColumnsAndHideCleansUp(MotionLevel motion) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var clock = new Clock(); SetClock(clock);
+        Window? window = null;
+        try
+        {
+            CoreSettings.Current.MotionLevel = motion;
+            var view = new AvailableSubjectsTabView();
+            window = new Window { Width = 1300, Height = 700, Content = view }; window.Show();
+            Dispatcher.UIThread.RunJobs();
+            LobbyRow Row(string key) => new() { Game = LobbyGame.Remote, Key = key, HostName = key };
+            var old = Row("old");
+            var gates = LobbyGates.From(true, false, false);
+            view.PaintSnapshot(new LobbySnapshot(new[] { old }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), gates);
+            Dispatcher.UIThread.RunJobs(); Step(view, clock, 600);
+            view.PaintSnapshot(new LobbySnapshot(new[] { old, Row("a") }, new[] { Row("b") }, new[] { Row("c") }, true), gates);
+            Dispatcher.UIThread.RunJobs();
+            var lists = new[] { "AvailableSubjectsList", "LobbyPlayingList", "LobbyFriendsList" }.Select(n => view.FindControl<ItemsControl>(n)!).ToArray();
+            Control Card(int column, int index, string tag) => lists[column].ContainerFromIndex(index)!.GetVisualDescendants().OfType<Control>().First(c => Equals(c.Tag, tag));
+            Assert.Null(Card(0, 0, "lobby-card").RenderTransform);
+            foreach (var (column, index) in new[] { (0, 1), (1, 0), (2, 0) })
+            {
+                var card = Card(column, index, "lobby-card");
+                var ring = Card(column, index, "lobby-ring");
+                if (motion == MotionLevel.Off) { Assert.Null(card.RenderTransform); Assert.Equal(0, ring.Opacity); }
+                else
+                {
+                    Assert.Equal(0.9, Assert.IsType<ScaleTransform>(card.RenderTransform).ScaleX, 3);
+                    Assert.Equal(motion == MotionLevel.Full ? 0.9 : 0, ring.Opacity, 3);
+                }
+            }
+            view.IsVisible = false;
+            Assert.False(view.SubjectsFxRunning);
+            if (motion != MotionLevel.Off)
+            {
+                Assert.Equal(1, Assert.IsType<ScaleTransform>(Card(0, 1, "lobby-card").RenderTransform).ScaleX);
+                Assert.Equal(0, Card(0, 1, "lobby-ring").Opacity);
+            }
+        }
+        finally { window?.Close(); SetClock(TimeProvider.System); service.SaveImmediate(); CoreSettings.ServiceProvider = previous; }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task SocialDoorStartsEntranceAndLeavingParksIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
