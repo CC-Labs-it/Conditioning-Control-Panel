@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Localization;
@@ -15,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel;
 using Xunit;
 using M = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosPopTextMotion;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -137,6 +139,10 @@ public sealed class ChaosPopTextTests
                 Assert.True(b.Popping);
                 Assert.Equal(expected, ChaosRunHost.State.Combo);
                 Assert.Equal(feed, ChaosRunHost.State.RecentEvents[0]);
+                var icon = Assert.Single(IconText.Split(ChaosRunHost.State.RecentEvents[0]).Icons);
+                Assert.Equal("💨", icon);
+                Assert.True(IconMap.TryGet(icon, out var mapped));
+                Assert.Equal(IconKind.WeatherSqualls, mapped.Kind);
                 if (enabled)
                 {
                     var w = Assert.Single(ChaosPopText.Pool.All);

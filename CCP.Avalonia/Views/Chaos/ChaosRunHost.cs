@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -265,12 +266,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state.Combo > 1)
             {
                 _state.Combo /= 2;
-                _state.PushEvent(Loc.GetF("chaos_expiry_halved", name, _state.Combo));
+                _state.PushEvent(IconLabel.ForKey("chaos_expiry_halved", name, _state.Combo).Source);
             }
             else
             {
                 _state.Combo = 0;
-                _state.PushEvent(Loc.GetF("chaos_expiry_gone", name));
+                _state.PushEvent(IconLabel.ForKey("chaos_expiry_gone", name).Source);
             }
             Pulse(Color.FromRgb(150, 150, 175), 0.10);
         }
