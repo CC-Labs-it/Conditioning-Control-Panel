@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Startup;
@@ -44,6 +46,98 @@ public sealed class StartupModalLadderTests
             Assert.Equal(new[] { 10, 20, 30 }, order);
         }
         finally { StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task ArrivalDuringSettleWaitsForTheSelectedTurn() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var order = new List<string>();
+            StartupLadder.EnqueueModal("selected", 30, () => { order.Add("selected"); return Task.CompletedTask; });
+            Dispatcher.UIThread.RunJobs(); // the pump has selected its turn
+            StartupLadder.EnqueueModal("later", 10, () => { order.Add("later"); return Task.CompletedTask; });
+            await Step();
+            Assert.Equal(new[] { "selected" }, order);
+            await Step();
+            Assert.Equal(new[] { "selected", "later" }, order);
+        }
+        finally { StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task DeferredAndInboxOffersDoNotDuplicateEachOther() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        try
+        {
+            var session = false;
+            var opened = 0;
+            CoreSession.IsSessionRunningProvider = () => session;
+            var item = new InboxItem { Key = "card", Open = () => opened++ };
+            StartupLadder.EnqueueModal("modal", 10, () => Task.CompletedTask);
+            StartupLadder.PresentOrInbox(item);
+            session = true;
+            StartupLadder.PresentOrInbox(item);
+            Assert.Equal(0, StartupLadder.Inbox.UnreadCount);
+            session = false;
+            await Step();
+            Assert.Equal(1, opened);
+            Assert.Equal(0, StartupLadder.Inbox.UnreadCount);
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupQueueCore.PassiveSettle);
+
+            session = true;
+            StartupLadder.PresentOrInbox(item);
+            Assert.Equal(1, StartupLadder.Inbox.UnreadCount);
+            session = false;
+            StartupLadder.EnqueueModal("next", 10, () => Task.CompletedTask);
+            StartupLadder.PresentOrInbox(item);
+            await Step();
+            Assert.Equal(1, opened);
+            Assert.Equal(1, StartupLadder.Inbox.UnreadCount);
+        }
+        finally { CoreSession.IsSessionRunningProvider = oldSession; StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task WelcomeBackEntryWaitsBehindTheWizard() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var level = settings.PlayerLevel;
+        var user = CoreAccount.UnifiedUserId;
+        var dir = Directory.CreateTempSubdirectory("startup-welcome-").FullName;
+        try
+        {
+            WelcomeBackOffer.ResetForTests();
+            settings.PlayerLevel = 2;
+            CoreAccount.UnifiedUserId = "returning-user";
+            var closed = new TaskCompletionSource();
+            var shown = 0;
+            WelcomeBackOffer.ShowSheet = _ => { shown++; return Task.CompletedTask; };
+            StartupLadder.EnqueueModal("first-run-wizard", 20, () => closed.Task);
+            WelcomeBackOffer.Arm(true, dir);
+            await WelcomeBackOffer.TryOfferAsync("startup");
+            Assert.Equal(0, shown);
+            await Step();
+            Assert.True(MainShellWindow.IsStartupDialogShowing);
+            Assert.Equal(0, shown);
+            closed.SetResult();
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            await Step();
+            Assert.Equal(1, shown);
+        }
+        finally
+        {
+            MainShellWindow.IsStartupDialogShowing = false;
+            WelcomeBackOffer.ResetForTests();
+            settings.PlayerLevel = level;
+            CoreAccount.UnifiedUserId = user;
+            StartupLadder.ResetForTests();
+            Directory.Delete(dir, true);
+        }
     });
 
     [Fact]

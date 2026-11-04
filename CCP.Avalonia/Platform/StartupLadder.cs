@@ -65,10 +65,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 while (!_modalQueue.IsEmpty)
                 {
-                    await Task.Delay(ModalSettle, Time, token);
                     var next = _modalQueue.Next();
                     if (next == null) break;
                     var key = next.Value.Key;
+                    await Task.Delay(ModalSettle, Time, token);
                     var waited = TimeSpan.Zero;
                     while (!CanStartModal() && waited < ModalMaxWait)
                     {
@@ -147,9 +147,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => PresentOrInbox(item)); return; }
 
             var route = StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow));
+            if (route != StartupRouting.Present &&
+                (Inbox.Contains(item.Key) || _deferred.Any(h => string.Equals(h.Key, item.Key, StringComparison.OrdinalIgnoreCase)) ||
+                 _held.Any(h => string.Equals(h.Key, item.Key, StringComparison.OrdinalIgnoreCase)))) return;
             if (route == StartupRouting.Defer)
             {
-                if (!_deferred.Any(h => string.Equals(h.Key, item.Key, StringComparison.OrdinalIgnoreCase))) _deferred.Add(item);
+                _deferred.Add(item);
                 return;
             }
             if (route == StartupRouting.Present)
