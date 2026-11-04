@@ -25,23 +25,32 @@ internal sealed class FirstShowCapture
     internal byte[]? Take() => Interlocked.Exchange(ref _pending, null);
     internal void Stop() { _stop = true; Interlocked.Exchange(ref _pending, null); }
 
-    // WPF BrainDrainCapturePump.cs:106-112: SRCCOPY skips layered windows. The existing
-    // Win32Overlay keeps that style on the stage; EMI and speech must also be checked.
-    // Otherwise use the veil rather than capture any of the show windows.
+    // WPF BrainDrainCapturePump.cs:106-112: exclude every show window from the blit.
     internal static bool CanCapture(Window stage)
     {
         if (!OperatingSystem.IsWindows()) return false;
         var handle = stage.TryGetPlatformHandle();
-        return handle?.HandleDescriptor == "HWND" && handle.Handle != IntPtr.Zero && CanCaptureStyle(Win32Overlay.GetWindowLong(handle.Handle, -20));
+        return handle?.HandleDescriptor == "HWND" && handle.Handle != IntPtr.Zero &&
+            Win32Overlay.GetWindowDisplayAffinity(handle.Handle, out var affinity) && CanCaptureAffinity(affinity);
     }
-    internal static bool CanCapture(Window? stage, Window? emi, Window? speech, Func<Window, bool>? layered = null)
+    internal static bool CanCapture(Window? stage, Window? emi, Window? speech, Func<Window, bool>? excluded = null)
     {
-        layered ??= CanCapture;
-        return stage != null && emi != null && speech != null && layered(stage) && layered(emi) && layered(speech);
+        excluded ??= CanCapture;
+        return stage != null && emi != null && speech != null && excluded(stage) && excluded(emi) && excluded(speech);
     }
-    internal static bool CanCaptureStyle(uint style) => (style & Win32Overlay.WsExLayered) != 0;
+    internal static bool CanCaptureAffinity(uint affinity) => affinity == Win32Overlay.ExcludeFromCapture;
 
-    private void Run()
+    private void Run() => Retry(RunOnce, () => _stop, () => Thread.Sleep(1000));
+    internal static void Retry(Action attempt, Func<bool> stopped, Action delay)
+    {
+        while (!stopped())
+        {
+            attempt();
+            if (!stopped()) delay();
+        }
+    }
+
+    private void RunOnce()
     {
         IntPtr dc = IntPtr.Zero, bitmap = IntPtr.Zero, old = IntPtr.Zero;
         try
@@ -65,7 +74,7 @@ internal sealed class FirstShowCapture
                 {
                     try
                     {
-                        // Plain SRCCOPY excludes layered windows; CAPTUREBLT would feed overlays back.
+                        // Exclusion affinity prevents the show windows feeding back into this blit.
                         if (StretchBlt(dc, 0, 0, w, h, screen, _bounds.X, _bounds.Y, _bounds.Width, _bounds.Height, 0x00CC0020))
                         {
                             GdiFlush();

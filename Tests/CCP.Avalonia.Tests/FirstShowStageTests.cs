@@ -347,7 +347,7 @@ public sealed class FirstShowStageTests
     public Task ShowLayersEmiAndSpeechAndReleasesThem(bool closeDuringDrain, bool speechCleanupFails) => Run(async stage =>
     {
         var emi = EmiDeskService.Instance.Window!;
-        var excluded = new HashSet<Window> { stage }; var requested = new List<Window>();
+        var excluded = new HashSet<Window>(); var requested = new List<Window>();
         int released = 0, started = 0, stopped = 0;
         stage.CaptureExcluded = excluded.Contains;
         stage.LayerForCapture = window =>
@@ -363,18 +363,18 @@ public sealed class FirstShowStageTests
         await stage.Bundled(); Assert.NotNull(stage.Effects); Assert.NotNull(stage.Effects!.StartCapture);
         stage.Effects.StartCapture = _ => { started++; return (() => null, () => stopped++); };
         stage.Start(); t = S.DrainAt + .5; stage.Frame();
-        Assert.Equal(new Window[] { emi, stage.SpeechWindow }, requested);
+        Assert.Equal(new Window[] { stage, emi, stage.SpeechWindow }, requested);
         Assert.Equal(1, started); Assert.Equal(0, released);
         // A recreated or restyled speech window must discard the old pump before retrying.
         excluded.Remove(stage.SpeechWindow); t = S.DrainAt + .6; stage.Frame();
-        Assert.Equal(2, started); Assert.Equal(1, stopped); Assert.Equal(2, released);
+        Assert.Equal(2, started); Assert.Equal(1, stopped); Assert.Equal(3, released);
         if (closeDuringDrain) stage.Close();
         else
         {
             t = S.DrainDeepAt + .5; stage.Frame(); Assert.Equal(3, started); Assert.Equal(2, stopped);
             t = S.WordsAt; stage.Frame();
         }
-        Assert.Equal(started, stopped); Assert.Equal(4, released);
+        Assert.Equal(started, stopped); Assert.Equal(6, released);
         Assert.DoesNotContain(emi, excluded); Assert.DoesNotContain(stage.SpeechWindow, excluded);
     });
 
@@ -424,11 +424,12 @@ public sealed class FirstShowStageTests
     });
 
     [Fact]
-    public void CaptureLayerStyleKeepsInputAndActivationBits()
+    public void CaptureWorkerRetriesSetupAndStops()
     {
-        const uint style = Win32Overlay.WsExTransparent | Win32Overlay.WsExNoActivate | Win32Overlay.WsExToolWindow;
-        Assert.Equal(style | Win32Overlay.WsExLayered, Win32Overlay.CaptureStyle(style, true));
-        Assert.Equal(style, Win32Overlay.CaptureStyle(style, false)); Assert.Equal(style | Win32Overlay.WsExLayered, Win32Overlay.CaptureStyle(style | Win32Overlay.WsExLayered, false));
+        int attempts = 0, delays = 0;
+        FirstShowCapture.Retry(() => attempts++, () => attempts == 3, () => delays++);
+        Assert.Equal(3, attempts);
+        Assert.Equal(2, delays);
     }
 
     private sealed class CaptureTestLease(Action release) : IDisposable
@@ -441,8 +442,9 @@ public sealed class FirstShowStageTests
     [Fact]
     public void DrainFrameBlursOpaqueGdiPixelsAndMeltMoves()
     {
-        Assert.False(FirstShowCapture.CanCaptureStyle(0));
-        Assert.True(FirstShowCapture.CanCaptureStyle(0x80000));
+        Assert.False(FirstShowCapture.CanCaptureAffinity(0));
+        Assert.False(FirstShowCapture.CanCaptureAffinity(0x80000));
+        Assert.True(FirstShowCapture.CanCaptureAffinity(0x11));
         using var rawPixels = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(96, 96, SkiaSharp.SKColorType.Rgb888x, SkiaSharp.SKAlphaType.Opaque));
         for (int y = 0; y < 96; y++) for (int x = 0; x < 96; x++)
             System.Runtime.InteropServices.Marshal.WriteInt32(rawPixels.GetPixels(), (y * 96 + x) * 4, x < 48 ? 0x000000ff : 0x00ff0000);

@@ -41,46 +41,36 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
-    // WPF FirstShowDesktopWindow.cs:33 and EmiDeskWindow.xaml:8 use layered windows. Add only
-    // that bit for the drain; input, activation and taskbar flags stay as the window chose them.
-    private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> CaptureLayers = new();
-    internal static uint CaptureStyle(uint style, bool enabled) => enabled ? style | WsExLayered : style;
+    // WPF excludes the layered show windows from the desktop blit. Avalonia's
+    // CS_OWNDC host cannot use layering for that purpose; use display affinity.
+    [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+    [DllImport("user32.dll")] internal static extern bool GetWindowDisplayAffinity(IntPtr hwnd, out uint affinity);
+    internal const uint ExcludeFromCapture = 0x11;
     internal static IDisposable? CaptureLayer(TopLevel window)
     {
         if (!OperatingSystem.IsWindows()) return null;
         var handle = window.TryGetPlatformHandle();
         if (handle?.HandleDescriptor != "HWND" || handle.Handle == IntPtr.Zero) return null;
-        var box = CaptureLayers.GetValue(window, w =>
-        {
-            var state = new StrongBox<bool>();
-            Win32Properties.AddWindowStylesCallback(w, (style, ex) => (style, CaptureStyle(ex, state.Value)));
-            return state;
-        });
-        if (box.Value) return null; // one lease owns a window
         var hwnd = handle.Handle;
-        uint before = GetWindowLong(hwnd, GwlExStyle);
-        bool hadLayer = (before & WsExLayered) != 0;
-        box.Value = true;
-        SetWindowLong(hwnd, GwlExStyle, CaptureStyle(before, true));
-        if ((GetWindowLong(hwnd, GwlExStyle) & WsExLayered) == 0 ||
-            (!hadLayer && !SetLayeredWindowAttributes(hwnd, 0, 255, LwaAlpha)))
+        if (!GetWindowDisplayAffinity(hwnd, out var before)) return null;
+        if (!SetWindowDisplayAffinity(hwnd, ExcludeFromCapture)) return null;
+        if (!GetWindowDisplayAffinity(hwnd, out var actual) || actual != ExcludeFromCapture)
         {
-            box.Value = false;
-            if (!hadLayer) SetWindowLong(hwnd, GwlExStyle, GetWindowLong(hwnd, GwlExStyle) & ~WsExLayered);
+            SetWindowDisplayAffinity(hwnd, before);
             return null;
         }
-        return new CaptureLayerLease(window, hwnd, box, hadLayer);
+        return new CaptureLayerLease(window, hwnd, before);
     }
-    private sealed class CaptureLayerLease(TopLevel window, IntPtr hwnd, StrongBox<bool> active, bool hadLayer) : IDisposable
+    private sealed class CaptureLayerLease(TopLevel window, IntPtr hwnd, uint before) : IDisposable
     {
         private bool _disposed;
         public void Dispose()
         {
             if (_disposed) return;
-            _disposed = true; active.Value = false;
-            // Do not touch a replaced handle or remove a layer another overlay now owns.
-            if (!hadLayer && window.TryGetPlatformHandle()?.Handle == hwnd && !Wanted.TryGetValue(window, out _))
-                SetWindowLong(hwnd, GwlExStyle, GetWindowLong(hwnd, GwlExStyle) & ~WsExLayered);
+            _disposed = true;
+            if (window.TryGetPlatformHandle()?.Handle == hwnd &&
+                GetWindowDisplayAffinity(hwnd, out var current) && current == ExcludeFromCapture)
+                SetWindowDisplayAffinity(hwnd, before);
         }
     }
 

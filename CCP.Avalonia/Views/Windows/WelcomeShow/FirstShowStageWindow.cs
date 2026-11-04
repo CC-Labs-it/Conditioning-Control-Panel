@@ -71,7 +71,7 @@ internal sealed partial class FirstShowStageWindow : Window
     private double _scale;
     private readonly bool _redirected;
     private FirstShowEffects? _effects;
-    private IDisposable? _emiCaptureLayer, _speechCaptureLayer;
+    private IDisposable? _stageCaptureLayer, _emiCaptureLayer, _speechCaptureLayer;
     private double _captureRetryAt;
     private bool _captureExclusionEstablished;
     internal Func<Window, bool> CaptureExcluded = FirstShowCapture.CanCapture;
@@ -350,16 +350,17 @@ internal sealed partial class FirstShowStageWindow : Window
         if (_effects != null) { _stage.Children.Remove(_effects); _effects.Dispose(); }
         effects.Width = Width; effects.Height = Height; _stage.Children.Insert(0, effects); _effects = effects;
     }
-    // WPF's stage, EMI and speech are all layered, so SRCCOPY skips them.
+    // WPF excludes stage, EMI and speech from the capture.
     private bool EnsureCaptureExclusion()
     {
         try
         {
-            if (_emi == null || !CaptureExcluded(this)) { ReleaseCaptureLayers(); return false; }
-            // A changed handle or lost style invalidates a live frame. Stop this pump before retrying.
+            if (_emi == null) { ReleaseCaptureLayers(); return false; }
+            // A changed handle or lost affinity invalidates a live frame. Stop this pump before retrying.
             if (_captureExclusionEstablished && !FirstShowCapture.CanCapture(this, _emi, _speechWindow, CaptureExcluded))
             { ReleaseCaptureLayers(); return false; }
             if (Clock() < _captureRetryAt) return false;
+            if (!CaptureExcluded(this)) _stageCaptureLayer = LayerForCapture(this);
             if (!CaptureExcluded(_emi)) _emiCaptureLayer = LayerForCapture(_emi);
             if (!CaptureExcluded(_speechWindow)) _speechCaptureLayer = LayerForCapture(_speechWindow);
             if (FirstShowCapture.CanCapture(this, _emi, _speechWindow, CaptureExcluded)) { _captureExclusionEstablished = true; _captureRetryAt = 0; return true; }
@@ -371,8 +372,10 @@ internal sealed partial class FirstShowStageWindow : Window
     private void ReleaseCaptureLayers()
     {
         _captureExclusionEstablished = false;
+        var stage = _stageCaptureLayer; _stageCaptureLayer = null;
         var speech = _speechCaptureLayer; _speechCaptureLayer = null;
         var emi = _emiCaptureLayer; _emiCaptureLayer = null;
+        try { stage?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "First show stage exclusion cleanup failed"); }
         try { speech?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "First show speech layer cleanup failed"); }
         try { emi?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "First show EMI layer cleanup failed"); }
     }
