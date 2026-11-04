@@ -134,6 +134,7 @@ public sealed class RemoteControlShellTests
 
             // Overlay up with code + PIN; Start disabled, green, "REMOTE CONNECTED" (WPF StartStop.cs:992).
             Assert.True(overlay.IsVisible);
+            Assert.True(shell.RemoteHud!.IsVisible);
             Assert.False(shell.LeashBrowser!.IsVisible); // native browser must not paint over the remote card
             Assert.Equal(1, Target(overlay));
             Assert.Equal($"Session: A B C 1 2 3  PIN: {relay.ConnectPin}", shell.Named<TextBlock>("TxtOverlaySessionCode")!.Text);
@@ -194,6 +195,7 @@ public sealed class RemoteControlShellTests
             // A reconnect during the exit fade cancels the pending browser restoration.
             f.Poll = "{\"controller_connected\":false}";
             await relay.PollOnceAsync(); Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.RemoteHud!.IsVisible);
             Assert.False(shell.LeashBrowser!.IsVisible);
             clock.Step(TimeSpan.FromMilliseconds(100));
             f.Poll = "{\"controller_connected\":true}";
@@ -209,6 +211,7 @@ public sealed class RemoteControlShellTests
             await WaitFor(() => !relay.IsActive);
             Dispatcher.UIThread.RunJobs();
             Assert.Contains("/v2/remote/stop", f.Paths);
+            Assert.Null(shell.RemoteHud);
             Assert.Equal(0, Target(overlay));
             Assert.True(overlay.IsVisible);   // still fading
             clock.Step(MainShellWindow.RemoteOverlayFadeOut);
@@ -228,6 +231,15 @@ public sealed class RemoteControlShellTests
             typeof(MainShellWindow).GetMethod("HideLeashGate", flags)!.Invoke(shell, null);
             Assert.True(shell.LeashBrowser.IsVisible);
 
+            // A queued controller notification after shell close cannot create an unowned window.
+            await relay.StartAsync("light");
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync(); Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(shell.RemoteHud);
+            shell.Close();
+            Assert.Null(shell.RemoteHud);
+            shell.OnRemoteControllerChanged();
+            Assert.Null(shell.RemoteHud);
         }
         finally
         {
