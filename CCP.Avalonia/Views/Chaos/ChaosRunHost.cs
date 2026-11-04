@@ -66,7 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _vibeRemainingSec;
         private static bool _afterglowApplied;
         private static bool _runPinOnTop;
-        private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
+        private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt, _videoRaiseTick;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
@@ -149,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _invulnUntilUtc = DateTime.MinValue;
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
+            _videoRaiseTick = 0;
             _spawning = true;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
@@ -391,6 +392,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
+            // WPF ChaosModeService.cs:940-951: re-stack the visible trail about once a second.
+            if (++_videoRaiseTick >= 4)
+            {
+                _videoRaiseTick = 0;
+                if (CoreEngine.Video?.IsPlaying == true) RaiseVibeTrailAboveVideo();
+            }
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
             TickToys();

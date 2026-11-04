@@ -30,6 +30,65 @@ public sealed class ChaosVibeTrailOverlayTests
                 .SetupWithoutStarting();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Video_periodically_raises_only_visible_trail_in_active_pinned_run(bool pinned)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var settings = CoreSettings.Current;
+            bool oldPin = settings.ChaosPinOnTop;
+            var oldVideo = CoreEngine.Video;
+            var oldRaise = ChaosVibeTrailOverlay.RaiseWindow;
+            var video = new MandatoryVideoScheduler(MandatoryVideoOverlay.Instance);
+            var playing = typeof(MandatoryVideoScheduler).GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            int raises = 0;
+            ChaosVibeTrailOverlay.SkipPlatformChecksForTests = true;
+            ChaosVibeTrailOverlay.RaiseWindow = _ => raises++;
+            try
+            {
+                settings.ChaosPinOnTop = pinned;
+                CoreEngine.Video = video;
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                BubbleOverlay.SetVibePop(true);
+                ChaosVibeTrailOverlay.Start();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(ChaosVibeTrailOverlay.Active!.IsVisible);
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Assert.Equal(0, raises);
+                playing.SetValue(video, true);
+                for (int i = 0; i < 3; i++) ChaosRunHost.Tick();
+                Assert.Equal(0, raises);
+                ChaosRunHost.Tick();
+                Assert.Equal(pinned ? 1 : 0, raises);
+                ChaosRunHost.ToggleManualPause();
+                for (int i = 0; i < 8; i++) ChaosRunHost.Tick();
+                Assert.Equal(pinned ? 1 : 0, raises);
+                ChaosRunHost.ToggleManualPause();
+                ChaosVibeTrailOverlay.Stop();
+                Dispatcher.UIThread.RunJobs();
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Assert.Equal(pinned ? 1 : 0, raises);
+                ChaosRunHost.ForceShutdown();
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Assert.Equal(pinned ? 1 : 0, raises);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosVibeTrailOverlay.SkipPlatformChecksForTests = false;
+                ChaosVibeTrailOverlay.RaiseWindow = oldRaise;
+                CoreEngine.Video = oldVideo;
+                settings.ChaosPinOnTop = oldPin;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task Delayed_video_restack_posts_once_to_the_ui_thread()
     {
