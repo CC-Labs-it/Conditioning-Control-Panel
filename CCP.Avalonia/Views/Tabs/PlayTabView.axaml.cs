@@ -102,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         private static readonly (string Plate, string Art, Stretch Fit)[] HeroPlates =
         {
+            ("PlayWebAppHeroPlate",   "billboard/webapp.png",      Stretch.UniformToFill),
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
             ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),
@@ -228,6 +229,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // host on this head, so their buttons stay disabled in the markup with the
         // exclusives_not_on_this_build tooltip and carry no shim.
         // ==================================================================================
+
+        private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
 
         // ---- GAMES -----------------------------------------------------------------------
 

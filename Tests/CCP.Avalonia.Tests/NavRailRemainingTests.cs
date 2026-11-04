@@ -62,7 +62,7 @@ public sealed class NavRailRemainingTests
         Assert.Equal("THE NEST", home.Text);
         Assert.Equal("Seek", w.Named<TextBlock>("TxtNavSearchLabel")!.Text);
         Assert.Equal("Retreat", w.Named<TextBlock>("TxtNavBackLabel")!.Text);
-        Assert.Equal("Hive", w.Named<TextBlock>("TxtNavWebAppLabel")!.Text);
+        Assert.Equal("Hive", w.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!.FindControl<TextBlock>("TxtNavWebAppLabel")!.Text);
 
         loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
         Assert.Equal("THE NEST", home.Text); // a changed English label overrides localization
