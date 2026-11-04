@@ -48,6 +48,29 @@ public sealed partial class AccountSeedTests
         Assert.True(s.DescentMigrationCompleted);
     });
 
+    [Fact]
+    public void MobileQuestTotalsReplaceLocalMobileTotalsAndStayOutOfDesktopPayload() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.MobileQuestDailyCompleted = 99;
+        s.MobileQuestWeeklyCompleted = 99;
+        s.MobileQuestXP = 99;
+        sync.MarkLoaded(null);
+        wire.SyncReply = """{"user":{"mobile_stats":{"total_daily_quests_completed":3,"total_weekly_quests_completed":2,"total_xp_from_quests":40}}}""";
+        Assert.True(await sync.PushAsync("mobile totals"));
+        Assert.Equal(3, s.MobileQuestDailyCompleted);
+        Assert.Equal(2, s.MobileQuestWeeklyCompleted);
+        Assert.Equal(40, s.MobileQuestXP);
+        Assert.Null(wire.Syncs.Last()["mobile_stats"]);
+        sync.UtcNow = () => T0.AddSeconds(31);
+        wire.SyncReply = """{"user":{}}""";
+        Assert.True(await sync.PushAsync("missing mobile totals"));
+        Assert.Equal(3, s.MobileQuestDailyCompleted);
+        Assert.Equal(2, s.MobileQuestWeeklyCompleted);
+        Assert.Equal(40, s.MobileQuestXP);
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

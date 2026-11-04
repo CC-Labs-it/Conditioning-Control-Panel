@@ -336,6 +336,21 @@ namespace ConditioningControlPanel.Services
                         && user["achievements"] is JArray achievements
                         && achievements.All(a => a.Type == JTokenType.String))
                         RestoreCloudAchievements(achievements.Values<string>().Select(a => a!));
+                    // WPF ProfileSyncService.cs:2149-2165: the mobile ledger stays separate
+                    // from desktop quest counters and is replaced by the server's totals.
+                    try
+                    {
+                        if (reply["user"] is JObject mobileUser && mobileUser["mobile_stats"] is JObject mobile)
+                        {
+                            var daily = mobile.Value<int?>("total_daily_quests_completed") ?? 0;
+                            var weekly = mobile.Value<int?>("total_weekly_quests_completed") ?? 0;
+                            var xp = mobile.Value<int?>("total_xp_from_quests") ?? 0;
+                            s.MobileQuestDailyCompleted = daily;
+                            s.MobileQuestWeeklyCompleted = weekly;
+                            s.MobileQuestXP = xp;
+                        }
+                    }
+                    catch (Exception ex) { Log.Debug("Mobile quest ledger skipped: {E}", ex.Message); }
                     if (AdoptFromResponse(s, reply)) _adopted = true;
                     ClaimWebXp(s, reply, reconcile: true);
                 }
