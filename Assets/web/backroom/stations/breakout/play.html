@@ -119,7 +119,7 @@ const ctx = {
 /* The bridge holds every frame until init: say ready, take the host's init (the phone shim answers at once), then open the lane. */
 if (isHosted) {
   await new Promise((res) => {
-    const timer = setTimeout(res, 1500);
+    const timer = q.has('avalonia') ? null : setTimeout(res, 1500);
     bridge.on('init', m => { applyHost(m); clearTimeout(timer); res(); });
     announceReady();
   });

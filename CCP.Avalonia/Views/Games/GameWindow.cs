@@ -148,7 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
             if (Spec.Id == "loom") DirectoryForLoom();
-            PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
+            PageUrl = new Uri(server.Url(Spec.Page, IsBreakout ? Spec.Query + "&avalonia=1" : Spec.Query));
             Web.Navigate(PageUrl);
         }
 
