@@ -428,13 +428,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 });
             main.Children.Add(title);
 
-            // Active bonuses straight under the title (WPF ticket 2026-09-24). Entry 0 is the base.
+            // Active bonuses straight under the title (WPF ticket 2026-09-24).
             var breakdown = SkillTreeRules.GetMultiplierBreakdown(settings, DateTime.Now.Hour, 0.0);
             if (breakdown.Count > 1)
             {
                 main.Children.Add(Text(Loc.Get("label_active_bonuses"), Rgb(176, 176, 176), 11, bottom: 6));
                 var wrap = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 9) };
-                foreach (var (source, value) in breakdown.Skip(1))
+                foreach (var (source, value) in breakdown.Where(item => item.Source != "Base"))
                     wrap.Children.Add(Chip($"{mods?.MakeModAware(source) ?? source}: +{value:P0}", new Thickness(8, 3, 8, 3), new Thickness(0, 0, 6, 6)));
                 main.Children.Add(wrap);
             }
@@ -748,7 +748,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var breakdown = SkillTreeRules.GetMultiplierBreakdown(CoreSettings.Current, DateTime.Now.Hour, 0.0);
             ActiveBonusesPanel.IsVisible = breakdown.Count > 1;
             ActiveBonusesList.Children.Clear();
-            foreach (var (source, value) in breakdown.Skip(1))
+            foreach (var (source, value) in breakdown.Where(item => item.Source != "Base"))
                 ActiveBonusesList.Children.Add(Chip($"{source}: +{value:P0}", new Thickness(10, 5, 10, 5), new Thickness(0, 0, 8, 8)));
         }
 
