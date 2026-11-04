@@ -127,14 +127,12 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.AiEffects.cs:63,128-150: set, start the overlay even with the engine off,
         /// refresh and save. Refuse an unsafe or absent host before changing the user's settings.</summary>
-        private static int _spiralCommandGeneration;
         internal static bool ApplySpiral(Window? host, bool on, int? opacity) => OnUi(() =>
         {
             var generation = MainShellWindow.OverlayGeneration;
-            var command = ++_spiralCommandGeneration;
             return Start(() =>
             {
-                if (command != _spiralCommandGeneration || generation != MainShellWindow.OverlayGeneration || host is null
+                if (generation != MainShellWindow.OverlayGeneration || host is null
                     || (on && (!SpiralOverlay.CanStartForAi(host) || !SpiralOverlay.Preflight(host)))) return false;
                 var s = CoreSettings.Current;
                 var (oldEnabled, oldOpacity) = (s.SpiralEnabled, s.SpiralOpacity);

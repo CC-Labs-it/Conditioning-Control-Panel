@@ -256,20 +256,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug(ex, "AI command cancel on panic failed"); }
         }
 
+        private static readonly System.Collections.Generic.Queue<Action> PortalStartQueue = new();
         internal static void StartEffect(Action start)
         {
-            if (!_portalAllowed || (PortalPanicShortcut.IsBound && _portalBind is not { IsCompleted: false }) || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
-                || !OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+            if (_portalStarts == 0 && (!_portalAllowed || (PortalPanicShortcut.IsBound && _portalBind is not { IsCompleted: false }) || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
+                || !OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))))
             {
                 start();
                 return;
             }
             _portalBind ??= BindPortalAsync();
-            _portalStarts++;
+            _portalStarts++; PortalStartQueue.Enqueue(start);
             _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(() =>
             {
                 _portalStarts--;
-                start();
+                PortalStartQueue.Dequeue()();
             }), TaskScheduler.Default);
         }
 
