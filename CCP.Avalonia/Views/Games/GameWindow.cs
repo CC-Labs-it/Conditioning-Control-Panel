@@ -69,8 +69,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal bool IsReady { get; private set; }
         private bool _closing;
 
+        internal static Func<Uri, bool> LinuxRaceLaunch { get; set; } = LinuxRaceHost.TryLaunch;
+
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
-        /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
+        /// rather than relaunched (a second click mid-match must never restart it). Null when refused, and
+        /// also when Glassroad is hosted out of process by the Linux race shell.</summary>
         internal static GameWindow? Launch(string id)
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
@@ -80,6 +83,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (live != null) { live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
+            try { if (spec.Id == GlassroadId && LinuxRaceLaunch(new Uri(Server().Url(spec.Page, spec.Query)))) return null; }
+            catch (Exception ex) { Log.Warning(ex, "Glassroad: shell launch failed"); return null; }
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
@@ -253,7 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         // ---- panic (PanicSurfaces "games", WPF GameSurfaces.cs:53-55 -> CloseActive("panic")) ----
 
-        internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
+        internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0 || LinuxRaceHost.Current != null; }
 
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
 

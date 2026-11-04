@@ -1257,6 +1257,7 @@ namespace ConditioningControlPanel.Avalonia
 
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
+            Views.Games.LinuxRaceHost.Current?.Dispose();
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
 

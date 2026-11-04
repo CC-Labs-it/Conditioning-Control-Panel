@@ -234,8 +234,11 @@ public sealed partial class GameWindowTests
 
     /// <summary>Booting: Escape is a full panic that closes it. Up: the first Escape is its pause (kept-escape),
     /// a second inside 2 s is a full panic that closes it.</summary>
-    [Fact]
-    public void Glassroad_EscapePausesOnceUp_ASecondEscapeClosesIt() => RunGlassroad("1", (shell, _, _) =>
+    [Theory]
+    [InlineData(1000, false)]
+    [InlineData(1999, false)]
+    [InlineData(2000, true)]
+    public void Glassroad_EscapePausesOnceUp_ASecondEscapeClosesIt(int delayMs, bool remainsOpen) => RunGlassroad("1", (shell, _, _) =>
     {
         var s = CoreSettings.Current;
         var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
@@ -262,10 +265,155 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(GameWindow.IsAnyOpen());
             Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
-            shell.HandlePanicKeyPress(t1.AddSeconds(1));
+            shell.HandlePanicKeyPress(t1.AddMilliseconds(delayMs));
             Dispatcher.UIThread.RunJobs();
-            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Equal(remainsOpen, GameWindow.IsAnyOpen());
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+    [Fact]
+    public void Glassroad_LinuxWaylandShellEscapePausesThenPanicsWithXWaylandListening() => RunGlassroad("1", (shell, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
+        var now = DateTime.Now; var press = 0;
+        using var host = new LinuxRaceHost(p, _ => shell.HandlePanicKeyPress(now.AddMilliseconds(100 * press++)), x11Listening: () => true);
+        host.Receive(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "wayland" });
+        host.Receive(new JObject { ["type"] = "ready" });
+        host.Receive(new JObject { ["type"] = "shell-focus", ["active"] = true });
+        var escape = new JObject { ["type"] = "shell-escape", ["sequence"] = 1 };
+        host.Receive(escape);
+        host.Receive(escape);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(p.HasExited);
+        escape["sequence"] = 2; host.Receive(escape);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(observer.WaitForExit(5000));
+        Assert.Null(LinuxRaceHost.Current);
+    });
+    [Fact]
+    public void Glassroad_LaunchFailureIsContained() => RunGlassroad("1", (_, _, _) =>
+    {
+        var launch = GameWindow.LinuxRaceLaunch;
+        try
+        {
+            GameWindow.LinuxRaceLaunch = _ => throw new System.ComponentModel.Win32Exception("setsid unavailable");
+            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally { GameWindow.LinuxRaceLaunch = launch; }
+    });
+
+    [Theory]
+    [InlineData("wayland", "F12", true, true)]
+    [InlineData("wayland", "Pause", true, true)]
+    [InlineData(null, "F12", true, true)]
+    [InlineData("x11", "F12", true, false)]
+    [InlineData("x11", "F12", false, true)]
+    [InlineData("x11", "Escape", false, false)]
+    public void Glassroad_UnsupportedPanicKeyFailsClosed(string? backend, string key, bool listening, bool closed) => RunGlassroad("1", (_, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        CoreSettings.Current.PanicKey = key;
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
+        using var host = new LinuxRaceHost(p, x11Listening: () => listening);
+        host.ReadFrame(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = backend });
+        Dispatcher.UIThread.RunJobs();
+        if (closed) { Assert.True(observer.WaitForExit(5000)); Assert.Null(LinuxRaceHost.Current); }
+        else { Assert.False(observer.HasExited); Assert.Same(host, LinuxRaceHost.Current); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Glassroad_BootAndDisabledPanicDoNotRejectUnknownOrUnsupportedBackend(bool disabled) => RunGlassroad("1", (_, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var settings = CoreSettings.Current;
+        var (key, enabled) = (settings.PanicKey, settings.PanicKeyEnabled);
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
+        using var host = new LinuxRaceHost(p, x11Listening: () => false);
+        var unsupported = typeof(LinuxRaceHost).GetProperty("UnsupportedPanicKey", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        try
+        {
+            (settings.PanicKey, settings.PanicKeyEnabled) = ("F12", true);
+            if (!disabled) Assert.False((bool)unsupported.GetValue(host)!);
+            else
+            {
+                settings.PanicKeyEnabled = false;
+                host.ReadFrame(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "wayland" });
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(observer.HasExited);
+            }
+        }
+        finally { (settings.PanicKey, settings.PanicKeyEnabled) = (key, enabled); }
+    });
+
+    [Fact]
+    public void Glassroad_WatchdogRecoveryUsesRealPanicWithoutAdvancingExitLadder() => RunGlassroad("1", (shell, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        CoreSettings.Current.PanicKey = "Escape"; CoreSettings.Current.PanicKeyEnabled = true; CoreSettings.Current.PanicOverridesAll = false;
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var host = new LinuxRaceHost(p, x11Listening: () => false);
+        using var fired = new System.Threading.ManualResetEventSlim();
+        var watchdog = ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown;
+        var surfaces = PanicSurfaces.All; var shellProvider = LinuxRaceHost.Shell; var stops = 0;
+        try
+        {
+            LinuxRaceHost.Shell = () => shell;
+            PanicSurfaces.All = new[] { new PanicSurfaces.Surface("test", _ => stops++) };
+            ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = () => { host.Kill(); fired.Set(); };
+            host.ReadFrame(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "wayland" });
+            host.ReadFrame(new JObject { ["type"] = "shell-escape", ["sequence"] = 1 });
+            Assert.True(fired.Wait(TimeSpan.FromSeconds(6)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, stops); Assert.Null(LinuxRaceHost.Current);
+            var count = typeof(MainShellWindow).GetField("_panicPressCount", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.Equal(0, (int)count.GetValue(shell)!);
+        }
+        finally { LinuxRaceHost.Shell = shellProvider; PanicSurfaces.All = surfaces; ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = watchdog; Dispatcher.UIThread.RunJobs(); }
+    });
+
+    [Fact]
+    public void Glassroad_ReaderEscapeWatchdogKillsWhileUiIsBlocked() => RunGlassroad("1", (_, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        CoreSettings.Current.PanicKey = "Escape"; CoreSettings.Current.PanicKeyEnabled = true;
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
+        var handled = 0; LinuxRaceHost? atPanic = null;
+        using var host = new LinuxRaceHost(p, _ => { handled++; atPanic = LinuxRaceHost.Current; }, () => false);
+        using var fired = new System.Threading.ManualResetEventSlim();
+        var teardown = ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown;
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = () => { teardown(); fired.Set(); };
+            host.StartReading();
+            p.StandardInput.WriteLine("{\"type\":\"shell-loaded\",\"displayBackend\":\"wayland\"}");
+            p.StandardInput.WriteLine("{\"type\":\"shell-escape\",\"sequence\":1}"); p.StandardInput.Flush();
+            // Deliberately block the dispatcher: only the pipe reader and emergency teardown can run.
+            Assert.True(fired.Wait(TimeSpan.FromSeconds(6)));
+            Assert.True(observer.WaitForExit(5000));
+            Assert.Equal(0, handled);
+            // The UI recovers: the queued press still runs the full panic, with the dead race no longer in front.
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, handled);
+            Assert.Same(host, atPanic);
+        }
+        finally { ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = teardown; Dispatcher.UIThread.RunJobs(); }
     });
 }
