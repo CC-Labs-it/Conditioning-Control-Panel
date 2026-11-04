@@ -169,10 +169,11 @@ internal static class AccountSeed
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
-        if (!string.IsNullOrEmpty(s.AuthToken))
+        bool raised = !string.IsNullOrEmpty(s.AuthToken) &&
             EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
+        if (raised) Patreon?.NotifyEntitlementRaised((ConditioningControlPanel.Models.PatreonTier)s.PatreonTier);
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
         {
