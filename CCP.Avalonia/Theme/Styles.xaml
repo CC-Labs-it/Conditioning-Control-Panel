@@ -16,7 +16,7 @@
      in docs/avalonia-parity.html for the named follow-up lane.
      Controls.xaml keys are shared here, including the three Deeper button themes.
      Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
-     ponytail: SecondaryButton/PinkButton HudPlank depth and the ToggleStyle timing gaps below
+     ponytail: SecondaryButton/PinkButton HudPlank depth and ToggleStyle spark exit below
      remain wire-theme-controls-b. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -296,35 +296,9 @@
     </Style>
   </ControlTheme>
 
-  <!-- Controls.xaml:198. The animated on/off switch every settings and privacy row uses.
-       Deviations beyond the usual Style->ControlTheme / Trigger->pseudo-class mapping, all forced:
-
-         TranslateTransform x:Name="thumbTranslate"  ->  RenderTransform="translateX(...)"
-         ScaleTransform     x:Name="sparkScale"      ->  RenderTransform="scale(...)"
-             AVLN2000: Avalonia can only name a StyledElement, so neither transform could keep its
-             x:Name and neither can be an animation target. Animating RenderTransform with a
-             TransformOperations value is the Avalonia idiom and also sidesteps the runtime trap
-             that an animation setter targeting ScaleTransform.ScaleX compiles and then throws
-             InvalidCastException.
-
-         Storyboard EnterActions/ExitActions  ->  Transitions (the knob slide, the track fade and
-             the spark's growth) plus one keyframe Animation (the spark's opacity decay, which is
-             a one-shot and runs when :checked starts matching, exactly like the WPF
-             EnterActions storyboard). A Transition is inherently two-way, which is what the first
-             three want. RenderTransform HAS to be a transition rather than a keyframe: Avalonia
-             registers no keyframe animator for it - see the note on the spark below.
-
-         BackEase Amplitude="0.6" / "0.35"    ->  BackEaseOut. Avalonia's easings take no
-             amplitude, so the overshoot is whatever BackEaseOut gives. The 43.4-of-44 sum in the
-             comment below still holds for the resting position; only the overshoot peak differs.
-
-         Separate enter/exit durations        ->  one duration per property. WPF used 0.34 in /
-             0.30 out on the knob and 0.28 both ways on the track; a Transition has a single
-             duration, so the knob keeps the 0.34 enter value.
-
-         Spark exit (0.08s fade to 0)         ->  dropped. Unchecking stops the style matching, so
-             the spark snaps back to its parked Opacity="0" - the same "cut it dead" intent the
-             WPF comment states, minus the 80ms ramp. -->
+  <!-- WPF Controls.xaml:257-267,295-303: ToggleKnob owns one transition per thumb,
+       updating timing before the target so reversals snapshot the visible position.
+       Part B: WPF Controls.xaml:311-313 spark exit still snaps instead of fading for 80ms. -->
   <ControlTheme x:Key="ToggleStyle" TargetType="CheckBox">
     <Setter Property="Template">
       <ControlTemplate TargetType="CheckBox">
@@ -343,22 +317,10 @@
               </Transitions>
             </Border.Transitions>
           </Border>
-          <!-- Knob: overshoot lands it just shy of the track's inner edge
-               (3 + 22 + ~2.4 + 16 = 43.4 of 44) - do not raise the amplitude
-               without re-checking that sum. -->
+          <!-- WPF Controls.xaml:262-264: resting travel is 22 DIP. -->
           <Border x:Name="thumb" Width="16" Height="16" CornerRadius="8"
-                      Background="White" HorizontalAlignment="Left" Margin="3,0,0,0"
-                      RenderTransform="translateX(0px)">
-            <Border.Transitions>
-              <Transitions>
-                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.34">
-                  <TransformOperationsTransition.Easing>
-                    <BackEaseOut/>
-                  </TransformOperationsTransition.Easing>
-                </TransformOperationsTransition>
-              </Transitions>
-            </Border.Transitions>
-          </Border>
+                  Background="White" HorizontalAlignment="Left" Margin="3,0,0,0"
+                  RenderTransform="translateX(0px)" theme:ToggleKnob.IsOn="{TemplateBinding IsChecked}"/>
           <!-- Spark: parked invisible at the ON edge (centre x = 33, where the knob
                lands). Scales from its own centre, so it never moves anything. -->
           <Ellipse x:Name="spark" Width="12" Height="12" Fill="White"
@@ -382,9 +344,6 @@
 
     <Style Selector="^:checked /template/ Border#trackOn">
       <Setter Property="Opacity" Value="1"/>
-    </Style>
-    <Style Selector="^:checked /template/ Border#thumb">
-      <Setter Property="RenderTransform" Value="translateX(22px)"/>
     </Style>
     <Style Selector="^:checked /template/ Ellipse#spark">
       <!-- The 0.4 -> 3 growth is a Setter + the transition above, NOT a keyframe: Avalonia ships
