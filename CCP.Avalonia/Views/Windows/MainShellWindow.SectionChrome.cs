@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PageStrip?.Show(section, tab, pageLabel);
                 UpdateNavTitle(section, tab, pageLabel);
                 PaintSectionWash(section);
+                PageDrawer?.OnNavigated(section);
 
                 // Last tab per section. Old keys are not remembered (their new home is).
                 var memo = tab == "lab" ? "play" : tab;

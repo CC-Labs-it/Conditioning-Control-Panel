@@ -1440,9 +1440,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         return;
                     }
                     if (!File.Exists(phraseAudioPath)) return;
+                    var voiceGain = ConditioningControlPanel.Services.CompanionVoiceGain.Current(barkVoice
+                        ? ConditioningControlPanel.Services.CompanionVoiceGain.BarkTrim
+                        : ConditioningControlPanel.Services.CompanionVoiceGain.EventTrim);
+                    if (voiceGain <= 0) return;
                     handedOff = true;
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
-                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
+                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, voiceGain,
                                           barkVoice ? "bark-voice" : "phrase-audio", onFinished: onSpoken);
                     return;
                 }

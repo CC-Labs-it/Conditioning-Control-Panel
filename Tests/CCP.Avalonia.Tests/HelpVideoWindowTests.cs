@@ -125,6 +125,10 @@ public sealed class HelpVideoWindowTests
                     Assert.True(container.IsVisible);
                     Assert.False(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);   // a playing clip needs no blurb
                     var sink = win.Sink!;
+                    // Keep the UI dispatcher occupied across EOF: looping must stay in the decoder.
+                    var nativeLooped = new TaskCompletionSource(); long lastTime = 0;
+                    win.Player!.TimeChanged += (_, e) => { if (win.Player?.IsPlaying == true && e.Time < System.Threading.Interlocked.Exchange(ref lastTime, e.Time)) nativeLooped.TrySetResult(); };
+                    Assert.True(nativeLooped.Task.Wait(TimeSpan.FromSeconds(10)), "clip loop waited for the UI dispatcher");
                     // The 2 s, 24-frame clip runs past its end: frames keep coming (WPF EndReached -> Play loop;
                     // without it one pass stops below 50 displays). Event-driven wait, no sleep (P08).
                     var looped = new TaskCompletionSource();
@@ -152,7 +156,7 @@ public sealed class HelpVideoWindowTests
     private static Task RunAsync(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");

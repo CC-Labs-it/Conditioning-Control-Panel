@@ -86,6 +86,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 dash.RecentEmpty.IsVisible = dash.RecentList.Children.Count == 0;
             }
             catch (Exception ex) { Log.Debug("RefreshFavoritesRail: {E}", ex.Message); }
+            try { RefreshPageDrawer(); }
+            catch (Exception ex) { Log.Debug("RefreshPageDrawer: {E}", ex.Message); }
+        }
+
+        internal global::ConditioningControlPanel.Avalonia.Controls.PageFavoritesDrawer? PageDrawer => Named<global::ConditioningControlPanel.Avalonia.Controls.PageFavoritesDrawer>("PageFavorites");
+        internal void RefreshPageDrawer()
+        {
+            var drawer = PageDrawer;
+            var dash = SettingsPage;
+            if (drawer == null || dash == null) return;
+            var s = CoreSettings.Current;
+            var byId = SettingsPaletteIndex.All.Where(e => FavoritesRailRule.IsDestination(e.Id))
+                .ToDictionary(e => e.Id, StringComparer.Ordinal);
+            bool Known(string id) => byId.TryGetValue(id, out var e) && e.Available;
+            drawer.Paint(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
+            drawer.FavoritesList.Children.Clear();
+            foreach (var id in s.RailFavorites.Where(Known)) drawer.FavoritesList.Children.Add(BuildRailChip(dash, byId[id]));
+            drawer.RecentList.Children.Clear();
+            foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
+                drawer.RecentList.Children.Add(BuildRailChip(dash, byId[id]));
+            drawer.FavoritesEmpty.IsVisible = drawer.FavoritesList.Children.Count == 0;
+            drawer.RecentEmpty.IsVisible = drawer.RecentList.Children.Count == 0;
         }
 
         private Button BuildRailChip(Tabs.SettingsTabView dash, SettingsPaletteEntry entry)
@@ -273,7 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // favorite slides it out for a moment.
             if (!wasPinned)
             {
-                try { SettingsPage?.PeekFavoritesDrawer(id); }
+                try { SettingsPage?.PeekFavoritesDrawer(id); if (PageDrawer?.IsVisible == true) PageDrawer.SetOpen(true, true); }
                 catch (Exception ex) { Log.Debug("PeekFavoritesDrawer({Id}): {E}", id, ex.Message); }
             }
         }

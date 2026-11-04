@@ -274,6 +274,7 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;   // WPF CancelPendingRetry: a verdict message must not replay after a stop
             Dispose(ref _scheduler);
             ForceCleanup();
+            PackVideos?.CleanupTemps();   // WPF VideoService.Dispose :8763, after the clip is closed
             Log.Debug("VideoService stopped");
         }
 
@@ -440,13 +441,15 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF VideoService.ReloadAssets: drop the dealt queue so the next pick re-reads the
         /// enabled library (an untick or preset switch takes effect on the very next video, #130).</summary>
-        public void ReloadAssets() => _queue = new Queue<string>();
+        // Mid-clip the sweep waits for the next pick's refill: Linux deletes an open file, and a heal replays its path.
+        public void ReloadAssets() { _queue = new Queue<string>(); if (!_playing) PackVideos?.CleanupTemps(); }
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>
         internal string? PickNext()
         {
             if (_queue.Count == 0)
             {
+                PackVideos?.CleanupTemps();   // WPF RefillVideoQueues :8403
                 var enabled = _library();
                 var kept = KeepByLength(enabled, CoreSettings.Current.VideoMinDurationSeconds,
                     CoreSettings.Current.VideoMaxDurationSeconds, DurationOf);

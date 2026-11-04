@@ -328,6 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
+            PackImages.CleanupTemps();   // WPF FlashService.Dispose :5148; refused deletes stay held
         }
 
         /// <summary>The burst a Core provider fires (tests swap it).</summary>

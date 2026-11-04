@@ -147,6 +147,18 @@ public sealed class ContentPackStoreTests : IDisposable
 
         using (var ms = store.GetPackFileStream("p1", b)!) Assert.Equal(plain["b.png"], ms.ToArray());
 
+        using (var held = OperatingSystem.IsWindows() ? File.Open(t1, FileMode.Open, FileAccess.Read, FileShare.Read) : null)
+        {
+            var directory = Path.GetDirectoryName(t1)!;
+            var mode = OperatingSystem.IsWindows() ? 0 : File.GetUnixFileMode(directory);
+            try
+            {
+                if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+                store.DeleteTempFile(t1);
+                Assert.True(store.TryGetSourceKey(t1, out _));
+            }
+            finally { if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, mode); }
+        }
         store.DeleteTempFile(t1);
         Assert.False(File.Exists(t1));
         Assert.False(store.TryGetSourceKey(t1, out _));
