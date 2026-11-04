@@ -91,11 +91,13 @@ public sealed class LeashCardsTests
     [Fact]
     public void AskCanBeDismissedAndAcceptsOnlyAfterVisibleReadTimeAtTheChosenLevel() => RunIntro(false, settings =>
     {
+        settings.Current.PanicKey = "F12";
         var svc = new Service(); var offer = new LeashOffer(Person, Now, Now.AddDays(1));
         var card = new LeashOfferCard(offer, () => svc);
         using var cleanup = new WindowCleanup(new Window { Content = card });
         Click(card, "leash-offer-look");
         Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
+        Assert.Equal(Loc.GetF("leash_explain_leashed_cut", "F12"), Find<TextBlock>(card, "leash-explain-line:cut").Text);
         Click(card, "leash-ask-dismiss");
         Assert.False(Find<StackPanel>(card, "leash-offer-ask").IsVisible);
         Assert.True(Find<Button>(card, "leash-offer-look").IsVisible);
@@ -156,7 +158,7 @@ public sealed class LeashCardsTests
         scroll.Offset = new Vector(0, 600); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
         for (int i = 0; i < 25; i++) card.AdvanceReadClock();
         Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        scroll.Height = 180; scroll.Offset = default; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        scroll.Height = 100; scroll.Offset = default; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
         var intro = Find<StackPanel>(card, "leash-ask-intro");
         Assert.True(intro.Bounds.Height > scroll.Bounds.Height);
         for (int i = 0; i < 25; i++) card.AdvanceReadClock();

@@ -63,8 +63,11 @@ public sealed class LeashOfferCard : Border
             panels.Children.Add(new Border { Margin = new Thickness(3), Padding = new Thickness(8), CornerRadius = new CornerRadius(8), Background = F.Raised,
                 Child = new TextBlock { Text = Loc.Get(key), TextWrapping = TextWrapping.Wrap } });
         _intro.Children.Add(panels);
-        foreach (var key in new[] { "leash_ask_p_sees", "leash_ask_p_rewards", "leash_ask_p_tasks", "leash_ask_p_cut", "leash_ask_b_level", "leash_ask_b_quiet" })
-            _intro.Children.Add(new TextBlock { Text = Loc.Get(key), TextWrapping = TextWrapping.Wrap });
+        // WPF LeashExplainCard.LinesFor (:84-92): the see and cut lines under the panels.
+        _intro.Children.Add(new TextBlock { TextWrapping = TextWrapping.Wrap, Tag = "leash-explain-line:see", Text = string.IsNullOrWhiteSpace(offer.From.Name)
+            ? Loc.Get("leash_explain_leashed_see_anon") : Loc.GetF("leash_explain_leashed_see", offer.From.Name.Trim()) });
+        _intro.Children.Add(new TextBlock { TextWrapping = TextWrapping.Wrap, Tag = "leash-explain-line:cut",
+            Text = Loc.GetF("leash_explain_leashed_cut", LeashHoldToCut.KeyLabel(CoreSettings.Service?.Current?.PanicKey)) });
         _ask.Children.Add(_intro);
         _ask.Children.Add(new TextBlock { Text = Loc.Get("leash_ask_level") });
         _ask.Children.Add(_levels); _ask.Children.Add(_guide); _ask.Children.Add(_allowed);
@@ -160,7 +163,8 @@ public sealed class LeashOfferCard : Border
         var owner = TopLevel.GetTopLevel(this) as Window;
         if (owner?.Tag as string == "leash-auto-ask") owner = owner.Owner as Window;
         var result = LeashAnswerResult.Failed;
-        try { if (_service() is { } s) result = await s.AnswerAsync(_offer.From.Id, accept, _level); } catch { }
+        try { if (_service() is { } s) result = await s.AnswerAsync(_offer.From.Id, accept, _level); }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] answer failed: {E}", ex.Message); }
         _busy = false; _no.IsEnabled = true;
         if (result == LeashAnswerResult.Done)
         {
