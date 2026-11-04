@@ -59,10 +59,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// WPF's one handler serves both surfaces and repaints both labels
         /// (MainWindow.SessionIO.cs:1326/1332).
         ///
-        /// <para>The system-wide half of the toggle (GlobalHotkeyService, a Win32 RegisterHotKey)
-        /// stays in the WPF head; the flag is still stored, since it is one settings file across
-        /// both heads, and the in-window binding applied here is exactly what WPF falls back to
-        /// when the flag is off.</para>
         /// </summary>
         private async System.Threading.Tasks.Task RebindChatShortcutAsync()
         {
@@ -95,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
                 AvatarTube.AvatarTubeWindow.ApplyChatShortcutTo(owner);
                 AvatarTube.AvatarTubeWindow.ApplyChatShortcutTo(AvatarTube.AvatarTubeWindow.Live);
+                if (owner is ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow shell) shell.ApplyChatHotkey();
                 (DataContext as WorkshopRuntimeVm)?.Parts.Behavior.RefreshChatShortcutLabel();
                 Log.Information("Chat shortcut rebound to {Combo}",
                                 AvatarTube.AvatarTubeWindow.FormatChatShortcut());

@@ -1506,12 +1506,23 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>Opens the chat input panel and puts the caret in it.</summary>
+        internal Action<Window> FocusChatWindow = Platform.Win32Windows.FocusChatWindow;
+
         public void OpenChatInput() => RunOnAvatar(() =>
         {
             _inputPanel.IsVisible = true;
-            // Input priority, not inline: the panel has just become visible and is not laid out yet,
-            // so focusing it in the same beat silently does nothing.
-            Dispatcher.UIThread.Post(() => _txtUserInput.Focus(), DispatcherPriority.Input);
+            // WPF waits until input has drained and the panel has been laid out.
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    // WPF ChatInput.cs:685: keep an attached tube at the shell level while a host is open.
+                    if (IsDetached || (!Games.GameWindow.IsAnyOpen() && !Windows.IntakeHostWindow.IsAnyOpen())) FocusChatWindow(this);
+                    _txtUserInput.Focus();
+                    _txtUserInput.SelectAll();
+                }
+                catch (Exception ex) { Log.Debug(ex, "AvatarTube: focus chat input failed"); }
+            }, DispatcherPriority.ContextIdle);
         });
 
         /// <summary>
@@ -1560,7 +1571,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// The stored shortcut, defaulted. One reader for both the label and the binding so they can
         /// never disagree about what an unparseable setting means.
         /// </summary>
-        private static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
+        internal static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
         {
             var s = CoreSettings.Current.CompanionPrompt;
             var keyName = string.IsNullOrWhiteSpace(s?.ChatShortcutKey) ? "T" : s!.ChatShortcutKey;
