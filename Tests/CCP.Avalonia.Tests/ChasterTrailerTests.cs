@@ -20,6 +20,23 @@ namespace CCP.Avalonia.Tests;
 public sealed partial class ChasterMenuTests
 {
     [Fact]
+    public Task FloatingFigureTracksTheCurrentPriceAndStopsOnClose() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, _) =>
+    {
+        tab.OpenTrailer(tab.PriceRows["typo"]);
+        Assert.True(tab.TrailerFigureRunning);
+        Assert.Equal(BookedFlashPlan.For("typo", 30, CoreSettings.Current.MotionLevel), tab.TrailerFigurePlan);
+        Assert.True(tab.BeginPriceEdit("typo"));
+        tab.PriceEditor!.Text = "2";
+        tab.CommitPriceEdit();
+        Assert.Equal(BookedFlashPlan.For("typo", 120, CoreSettings.Current.MotionLevel), tab.TrailerFigurePlan);
+        tab.OpenTrailer(tab.PriceRows["typo"]);
+        tab.HideTrailer();
+        Assert.False(tab.TrailerFigureRunning);
+        Assert.Null(tab.TrailerFigurePlan);
+        await Task.CompletedTask;
+    }));
+
+    [Fact]
     public Task TrailerShowsEachRowsLiveFigureAndRefreshesAfterEditAndReset() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
     {
         foreach (var price in TabPrices.All)

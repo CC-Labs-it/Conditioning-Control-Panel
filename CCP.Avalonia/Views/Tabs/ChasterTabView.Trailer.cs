@@ -3,7 +3,7 @@
 // sign, the plain explanation with the live figure in it, and the figure itself. It opens 150 ms
 // after the pointer settles on a row, stays while the pointer is on the card, and closes 140 ms
 // after it leaves both. It sits BELOW the row (a popup over its own trigger flickers).
-// ponytail: picture drift and the repeating floating figure remain with the other unported tab Fx.
+// Picture drift remains with the other unported tab Fx.
 // not ported: the WPF vignette scene (ChasterTrailerView, a WebView2 page); the picture is the scene,
 // as WPF shows it without a browser.
 using System;
@@ -28,6 +28,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private ToggleButton? _trailerRow;
         private bool _trailerShown;
         private bool _overTrailer;
+        private readonly DispatcherTimer _trailerFigureTimer = new() { Interval = TimeSpan.FromMilliseconds(1700) };
+        private TabPrice? _trailerPrice;
+        private ChasterBookedFlash? _trailerFlash;
+        internal BookedFlashPlan.Plan? TrailerFigurePlan => _trailerShown && _trailerPrice is { } price
+            ? BookedFlashPlan.For(price.Id, price.Seconds, CoreSettings.Current.MotionLevel) : null;
+        internal bool TrailerFigureRunning => _trailerFigureTimer.IsEnabled;
+
+        private void TrailerFigure()
+        {
+            _trailerFlash?.Dismiss();
+            _trailerFlash = TrailerFigurePlan is { } plan ? ChasterBookedFlash.Show(TxtTrailerFigure, plan) : null;
+        }
         private IDisposable? _trailerVisibility;
 
         private bool TrailerCanOpen => _attached && IsEffectivelyVisible
@@ -37,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _trailerOpen.Tick += (_, _) => TrailerOpenElapsed();
             _trailerClose.Tick += (_, _) => TrailerCloseElapsed();
+            _trailerFigureTimer.Tick += (_, _) => TrailerFigure();
             // WPF (xaml.cs:103): a page that leaves the screen takes its trailer with it.
             AttachedToVisualTree += (_, _) =>
             {
@@ -120,9 +133,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 TxtTrailerFigure.Foreground = new SolidColorBrush(shown.Seconds > 0 ? CostColour : EarnColour);
                 Trailer.PlacementTarget = row;
                 _trailerShown = true;
+                _trailerPrice = shown;
+                _trailerFlash?.Dismiss();
+                _trailerFigureTimer.Stop();
+                _trailerFigureTimer.Start();
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer"); }
-            try { Trailer.IsOpen = true; }
+            try { Trailer.IsOpen = true; TrailerFigure(); }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer open"); }
         }
 
@@ -131,6 +148,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _trailerOpen.Stop();
             _trailerClose.Stop();
             _overTrailer = false;
+            _trailerFigureTimer.Stop();
+            _trailerFlash?.Dismiss();
+            _trailerFlash = null;
+            _trailerPrice = null;
             if (!_trailerShown) return;
             _trailerShown = false;
             try { Trailer.IsOpen = false; }
