@@ -24,6 +24,21 @@ namespace CCP.Avalonia.Tests;
 public sealed class TubeMotesTests
 {
     [Fact]
+    public async Task QuickMenuColorsRemainUsableAcrossThreads()
+    {
+        await Task.Run(() => AvatarTubeWindow.TubeMotesBox(false));
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            foreach (var name in new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" })
+            {
+                var brush = typeof(AvatarTubeWindow).GetField(name, BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
+                Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableSolidColorBrush>(brush);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public void TheMotesBoxesMatchWpf()
     {
         var a = AvatarTubeWindow.TubeMotesBox(detached: false);

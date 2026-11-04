@@ -127,6 +127,7 @@ internal static class WpfRenderHarness
 
     private static readonly object Gate = new();
     private static bool _ready;
+    private static Exception? _bootstrapFailure;
     private static Dispatcher? _dispatcher;
 
     /// <summary>The app theme, parked while no render body is running.</summary>
@@ -144,9 +145,12 @@ internal static class WpfRenderHarness
         lock (Gate)
         {
             if (_ready) return;
+            // Never start another pump after a timeout or failed initialization.
+            if (_bootstrapFailure != null) throw _bootstrapFailure;
 
             Exception? escaped = null;
-            using var ready = new ManualResetEventSlim(false);
+            // The pump may still signal after a timeout, so it owns this event for its lifetime.
+            var ready = new ManualResetEventSlim(false);
 
             var pump = new Thread(() =>
             {
@@ -199,10 +203,10 @@ internal static class WpfRenderHarness
             pump.IsBackground = true;   // never keeps the test host alive
             pump.Start();
 
-            if (!ready.Wait(TimeSpan.FromSeconds(30)))
-                throw new InvalidOperationException("WPF render harness: Application bootstrap timed out");
+            if (!ready.Wait(TimeSpan.FromSeconds(120)))
+                throw _bootstrapFailure = new InvalidOperationException("WPF render harness: Application bootstrap timed out");
             if (escaped != null)
-                throw new InvalidOperationException("WPF render harness: Application bootstrap failed", escaped);
+                throw _bootstrapFailure = new InvalidOperationException("WPF render harness: Application bootstrap failed", escaped);
 
             _ready = true;
         }

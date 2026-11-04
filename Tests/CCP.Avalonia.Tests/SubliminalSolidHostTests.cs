@@ -11,7 +11,7 @@ public sealed class SubliminalSolidHostTests {
     [Fact]
     public System.Threading.Tasks.Task Hosted_card_fades_holds_and_retires() => AvaloniaTestDispatcher.RunAsync(async () => {
         SubliminalSilentHintTests.EnsureAvalonia();
-        var configure = SharedOverlayHost.Configure;
+        var configure = SharedOverlayHost.Configure; var transparency = SharedOverlayHost.IsTransparent; SharedOverlayHost.IsTransparent = _ => true;
         Window? stage = null;
         SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
         try {
@@ -22,12 +22,12 @@ public sealed class SubliminalSolidHostTests {
             await System.Threading.Tasks.Task.Delay(650);
             Assert.Empty(canvas.Children);
         }
-        finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; }
+        finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency; }
     });
     [Fact]
     public void Host_is_passive_and_closes_on_release() => AvaloniaTestDispatcher.Run(() => {
         SubliminalSilentHintTests.EnsureAvalonia();
-        var configure = SharedOverlayHost.Configure;
+        var configure = SharedOverlayHost.Configure; var transparency = SharedOverlayHost.IsTransparent; SharedOverlayHost.IsTransparent = _ => true;
         Window? stage = null;
         SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
         try {
@@ -35,7 +35,7 @@ public sealed class SubliminalSolidHostTests {
             lease.Dispose(); lease.Dispose();
             Assert.False(stage.IsVisible);
         }
-        finally { SharedOverlayHost.Configure = configure; }
+        finally { SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency; }
     });
     // WPF SubliminalService: solid mode uses the shared stage; focus requests and a live mandatory video
     // keep the classic cards. Show itself exits headless (no X11), so the decision it calls is pinned here.
@@ -49,7 +49,7 @@ public sealed class SubliminalSolidHostTests {
     [Fact]
     public void Hosted_card_is_removed_by_stop_and_native_failure_allows_fallback() => AvaloniaTestDispatcher.Run(() => {
         SubliminalSilentHintTests.EnsureAvalonia();
-        var configure = SharedOverlayHost.Configure;
+        var configure = SharedOverlayHost.Configure; var transparency = SharedOverlayHost.IsTransparent; SharedOverlayHost.IsTransparent = _ => true;
         Window? stage = null;
         var bounds = new PixelRect(0, 0, 300, 200); var raise = SharedOverlayHost.Raise; var raised = new List<Window>();
         SharedOverlayHost.Raise = w => { raised.Add(w); return true; };
@@ -63,6 +63,6 @@ public sealed class SubliminalSolidHostTests {
             SharedOverlayHost.Configure = (_, _) => false;
             Assert.False(SubliminalOverlay.ShowHosted(bounds, "TEST", 0.8, TimeSpan.FromSeconds(1)));
         }
-        finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; SharedOverlayHost.Raise = raise; }
+        finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; SharedOverlayHost.IsTransparent = transparency; SharedOverlayHost.Raise = raise; }
     });
 }
