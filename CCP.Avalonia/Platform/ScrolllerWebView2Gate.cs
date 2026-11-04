@@ -17,6 +17,13 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// </summary>
 internal static class ScrolllerWebView2Gate
 {
+    private static readonly WebAudioTracker Audio = new(
+        ConditioningControlPanel.Services.Audio.RecentSounds.Shared, () => CoreEngine.IsRunning);
+
+    internal static void WatchAudio(CoreWebView2 core) => Audio.Attach(core,
+        changed => core.IsDocumentPlayingAudioChanged += (_, _) => changed(),
+        () => (core.IsDocumentPlayingAudio, core.Source, core.IsMuted));
+
     /// <summary>Hooks one raw ICoreWebView2. False when there is none (the caller retries until the core exists).</summary>
     public static bool Attach(IntPtr coreWebView2)
     {
@@ -27,6 +34,7 @@ internal static class ScrolllerWebView2Gate
         }
         try
         {
+            ScrolllerWebGate.AttachHook = WatchAudio;
             ScrolllerWebGate.Attach(CoreWebView2.CreateFromComICoreWebView2(coreWebView2));
             return true;
         }
