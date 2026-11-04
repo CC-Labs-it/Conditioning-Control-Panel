@@ -19,7 +19,6 @@
        <TransformGroup x:Name=...>              -> built in the code-behind. FindControl is
                                                    constrained to Control, and a Transform is not
                                                    one, so naming them here buys nothing.
-       <emi:EmiFace/>                           -> a mono TextBlock placeholder. See below.
 
      The window is a pad bigger than EMI on every side so her FX have room; that pad is
      Background-less on purpose. ponytail: on X11 a transparent Avalonia window still EATS the
@@ -32,6 +31,7 @@
      has to be re-set on every resize. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:emi="clr-namespace:ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskWindow"
         Title="EMI"
@@ -91,12 +91,7 @@
                  The rotate sits above the scales on purpose: a squash applied after a rotation
                  would shear her rather than squash her. -->
 
-            <!-- THE STAND-IN SILHOUETTE. Her body art is resolved at runtime by
-                 EmiChains.BodyPath, which is a WPF-head service and has not moved to Core, so on
-                 this head BodyImage has no Source and BodyRoot would draw nothing at all - a
-                 transparent window rendering an empty PNG and passing.
-                 ponytail: placeholder art, needs EmiChains (Services/EmiDesk/EmiChains.cs); SetPose
-                 hides this the moment a real pose bitmap lands. -->
+            <!-- Visible until a body pose loads. -->
             <Border x:Name="BodyPlaceholder"
                     Background="#E60E0E1C"
                     BorderBrush="#FF69B4"
@@ -113,23 +108,7 @@
                  hit-testable, because a glass click is resolved geometrically in the body's own
                  pointer-released handler (a hit-testable overlay would eat the drag). -->
             <Canvas x:Name="FaceLayer" IsHitTestVisible="False" ClipToBounds="False">
-                <!-- THE FACE. In WPF this is <emi:EmiFace/>, a 517-line DrawingContext renderer
-                     that draws the mood string as pixel glyphs in #FF69B4 (fill + stroke).
-                     ponytail: the head's EmiFace (EmiDesk/EmiFace.cs, used by the dock) is not
-                     wired into the widget yet; until then the mood string is drawn as mono text at
-                     the same size, in the same colour, on the same GazeShift transform.
-
-                     THE GAZE LEAN (ALIVE wave A): the face glyph slides up to three DIPs toward the
-                     cursor on its OWN transform, so the lean composes with the body's CRT scale,
-                     click squash and drag wobble instead of fighting them. -->
-                <TextBlock x:Name="FaceView"
-                           Text="0_0"
-                           FontFamily="Noto Sans Mono,DejaVu Sans Mono,Consolas,monospace"
-                           FontWeight="Bold"
-                           Foreground="#FF69B4"
-                           TextAlignment="Center"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
+                <emi:EmiFace x:Name="FaceView"/>
                 <Canvas x:Name="GlassCanvas" IsHitTestVisible="False"/>
             </Canvas>
 

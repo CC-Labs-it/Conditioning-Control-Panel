@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -221,7 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private readonly Border _bodyPlaceholder;
         private readonly Image _bodyImage;
         private readonly Canvas _faceLayer;
-        private readonly TextBlock _faceView;
+        private readonly EmiFace _faceView;
         private readonly Canvas _glassCanvas;
         private readonly Image _outfitOverImage;
         private readonly Image _propImage;
@@ -291,7 +292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _bodyPlaceholder = this.FindControl<Border>("BodyPlaceholder")!;
             _bodyImage = this.FindControl<Image>("BodyImage")!;
             _faceLayer = this.FindControl<Canvas>("FaceLayer")!;
-            _faceView = this.FindControl<TextBlock>("FaceView")!;
+            _faceView = this.FindControl<EmiFace>("FaceView")!;
             _glassCanvas = this.FindControl<Canvas>("GlassCanvas")!;
             _outfitOverImage = this.FindControl<Image>("OutfitOverImage")!;
             _propImage = this.FindControl<Image>("PropImage")!;
@@ -429,9 +430,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 _faceView.Width = gw;
                 _faceView.Height = gh;
-                // The pixel face fills the bezel; the placeholder's type size is what actually
-                // reads at that scale, so it tracks the glass rather than sitting at a fixed size.
-                _faceView.FontSize = Math.Max(10, gh * 0.55);
                 Canvas.SetLeft(_faceView, gl);
                 Canvas.SetTop(_faceView, gt);
 
@@ -797,42 +795,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // ---------------------------------------------------------------- face + pose
 
         /// <summary>Paint one face frame. The chain player's draw hook; safe to call directly.</summary>
-        // ponytail: needs EmiFace (Services/EmiDesk/EmiFace.cs), which renders the mood string as
-        // pixel glyphs and honours `small` and `flat`. The placeholder draws the same string as mono
-        // text in the same pink, so the glass is never blank and the cadence is still visible.
         public void DrawFace(string? text, bool small = false, bool flat = false)
         {
-            try
-            {
-                var face = string.IsNullOrEmpty(text) ? EmiChains.RestFace : text;
-                if (_faceView.Text == face) return;
-                _faceView.Text = face;
-                FaceChanged?.Invoke(this, face);
-            }
-            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] DrawFace failed"); }
+            var face = string.IsNullOrEmpty(text) ? EmiChains.RestFace : text;
+            bool changed = _faceView.Face != face;
+            _faceView.Face = face;
+            _faceView.Small = small;
+            _faceView.Flat = flat;
+            if (changed) FaceChanged?.Invoke(this, face);
         }
 
         /// <summary>The face on the glass right now. The dock chip's mini face mirrors it.</summary>
-        public string Face => _faceView.Text ?? EmiChains.RestFace;
+        public string Face => _faceView.Face ?? EmiChains.RestFace;
 
         /// <summary>Raised with the new face string on every frame that changes it (WPF binds
         /// EmiDock.MiniFace onto EmiFace.Face; Avalonia has no such property, so this is the feed).</summary>
         public event EventHandler<string>? FaceChanged;
 
+        internal Func<string, string?> BodyPath = key => EmiChains.BodyPath(key);
+        private string? _paintedPose;
+
         /// <summary>Swap the body pose PNG. A no-op when that pose is already up (this runs per sway step).</summary>
-        // ponytail: needs EmiChains.FrameKey / EmiChains.BodyPath (Services/EmiDesk/EmiChains.cs) to
-        // resolve a pose name to a file on disk, plus the BitmapImage cache that went with it.
-        // Nothing here can put art on BodyImage, so BodyPlaceholder stays up; the pose name is still
-        // tracked because the outfit overlay keys off it.
         public void SetPose(string? frame)
         {
             try
             {
-                var key = string.IsNullOrWhiteSpace(frame) ? "idle" : frame!.Trim();
-                if (key == _pose) return;
+                var key = EmiChains.FrameKey(frame) ?? "idle";
+                if (key == _paintedPose && _bodyImage.Source != null) return;
                 _pose = key;
-                // The stand-in stands down the moment real art lands, whichever road brings it.
-                _bodyPlaceholder.IsVisible = _bodyImage.Source is null;
+                var path = BodyPath(key);
+                if (path == null) return;
+                var bitmap = new Bitmap(path);
+                var old = _bodyImage.Source as Bitmap;
+                _bodyImage.Source = bitmap;
+                _paintedPose = key;
+                old?.Dispose();
+                _bodyPlaceholder.IsVisible = false;
                 PaintOutfitOver();
             }
             catch (Exception ex)
