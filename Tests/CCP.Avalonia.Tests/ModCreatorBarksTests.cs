@@ -381,4 +381,42 @@ public sealed class ModCreatorBarksTests
         Assert.Equal(TextWrapping.Wrap, conditions.TextWrapping);
     });
 
+    [Theory]
+    [InlineData("repeatable", "'bad'")]
+    [InlineData("scope", "[]")]
+    [InlineData("mood", "[]")]
+    [InlineData("id", "[]")]
+    public void MalformedLoadedFieldsKeepTheCard(string key, string value) => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        var property = key == "id" ? $"id:{value}" : $"id:'bad',{key}:{value}";
+        File.WriteAllText(FileAt(root), $"[{{{property},trigger:'Event',variant_pool:['line']}}]");
+        w.LoadBarksFrom(root);
+        Assert.Single(Cards(w).Children);
+        Assert.Equal(Loc.Get("mod_barks_load_error"), w.FindControl<TextBlock>("TxtStatus")!.Text);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExamplesAreEmptyOnlyBeforeTrimming(bool padded) => Run((w, root) =>
+    {
+        Click(w, "mod_barks_add");
+        var card = Card(w);
+        var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
+        boxes[0].Text = "rule"; boxes[1].Text = "Event";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        var mood = boxes.Single(b => Equals(b.Tag, "mood"));
+        var conditions = boxes.Single(b => Equals(b.Tag, "conditions"));
+        mood.Text = padded ? " " + mood.PlaceholderText + " " : mood.PlaceholderText;
+        conditions.Text = padded ? " " + conditions.Watermark + " " : conditions.Watermark;
+        var rule = (JObject)Assert.Single(Export(w, root));
+        if (padded)
+        {
+            Assert.Equal(mood.PlaceholderText, rule.Value<string>("mood"));
+            Assert.Equal(10, rule["conditions"]!.Value<int>("level_gte"));
+        }
+        else { Assert.Null(rule["mood"]); Assert.Null(rule["conditions"]); }
+    });
+
 }

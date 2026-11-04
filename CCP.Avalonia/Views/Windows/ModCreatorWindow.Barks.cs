@@ -55,8 +55,6 @@ public partial class ModCreatorWindow
     private void AddBarkCard(JObject? loaded)
     {
         var card = new BarkCard { Json = loaded == null ? new JObject() : (JObject)loaded.DeepClone(), LoadedFromFile = loaded != null };
-        card.Id.Text = loaded?.Value<string>("id") ?? "";
-        card.Trigger.Text = loaded?.Value<string>("trigger") ?? "";
         card.Override.Content = Loc.Get("mod_barks_override");
         card.Override.IsChecked = loaded != null && loaded["trigger"] == null;
         var triggerLabel = CreateFieldLabel(Loc.Get("mod_barks_trigger"));
@@ -104,22 +102,20 @@ public partial class ModCreatorWindow
         fields.Children.Add(numeric);
         var options = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
         card.Repeatable.Content = Loc.Get("mod_barks_repeatable");
-        card.Repeatable.IsChecked = loaded?.Value<bool?>("repeatable") ?? true;
+        card.Repeatable.IsChecked = true;
         options.Children.Add(card.Repeatable);
-        AddBarkCombo(options, card.Scope, "mod_barks_scope", 100, loaded?.Value<string>("scope"), "session", "tier", "lifetime");
-        AddBarkCombo(options, card.Class, "mod_barks_class", 110, loaded?.Value<string>("class"), "normal", "easter_egg", "safety");
+        AddBarkCombo(options, card.Scope, "mod_barks_scope", 100, null, "session", "tier", "lifetime");
+        AddBarkCombo(options, card.Class, "mod_barks_class", 110, null, "normal", "easter_egg", "safety");
         fields.Children.Add(options);
         fields.Children.Add(CreateFieldLabel(Loc.Get("mod_barks_mood")));
         card.Mood.Tag = "mood"; card.Mood.Width = 260; card.Mood.HorizontalAlignment = HorizontalAlignment.Left;
         card.Mood.PlaceholderText = Loc.Get("mod_barks_mood_example");
-        card.Mood.Text = loaded?.Value<string>("mood") ?? "";
         fields.Children.Add(card.Mood);
         fields.Children.Add(CreateFieldLabel(Loc.Get("mod_barks_conditions")));
         card.Conditions.Tag = "conditions"; card.Conditions.Width = 400; card.Conditions.Height = 56;
         card.Conditions.HorizontalAlignment = HorizontalAlignment.Left; card.Conditions.AcceptsReturn = true;
         card.Conditions.TextWrapping = TextWrapping.Wrap;
         card.Conditions.Watermark = "{ \"level_gte\": 10 }";
-        card.Conditions.Text = loaded?["conditions"] is JObject conditions ? conditions.ToString(Formatting.Indented) : "";
         fields.Children.Add(card.Conditions);
         ShowTrigger();
         card.Panel.Children.Add(CreateSubHeader(Loc.Get("mod_barks_line")));
@@ -128,9 +124,16 @@ public partial class ModCreatorWindow
         // WPF registers the card before populating loaded values (Barks.cs:281-284).
         _barkCards.Add(card);
         _barkCardsPanel?.Children.Add(card.Frame);
+        card.Id.Text = loaded?.Value<string>("id") ?? "";
+        card.Trigger.Text = loaded?.Value<string>("trigger") ?? "";
         card.Priority.Text = loaded?.Value<int?>("priority")?.ToString(CultureInfo.InvariantCulture) ?? "";
         card.Cooldown.Text = loaded?.Value<int?>("cooldown_ms")?.ToString(CultureInfo.InvariantCulture) ?? "";
         card.Chance.Text = loaded?.Value<double?>("chance")?.ToString(CultureInfo.InvariantCulture) ?? "";
+        card.Repeatable.IsChecked = loaded?.Value<bool?>("repeatable") ?? true;
+        SelectBarkCombo(card.Scope, loaded?.Value<string>("scope"));
+        SelectBarkCombo(card.Class, loaded?.Value<string>("class"));
+        card.Mood.Text = loaded?.Value<string>("mood") ?? "";
+        card.Conditions.Text = loaded?["conditions"] is JObject conditions ? conditions.ToString(Formatting.Indented) : "";
         if (loaded?["variant_pool"] is JArray pool)
             foreach (var line in pool) AddBarkLine(card, line);
         else if (loaded == null) AddBarkLine(card, new JValue(""));
@@ -148,8 +151,14 @@ public partial class ModCreatorWindow
     {
         row.Children.Add(new TextBlock { Text = Loc.Get(key), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) });
         combo.Tag = key; combo.Width = width; combo.ItemsSource = items;
-        combo.SelectedItem = items.FirstOrDefault(i => string.Equals(i, value?.Trim(), StringComparison.OrdinalIgnoreCase)) ?? items[0];
+        SelectBarkCombo(combo, value);
         row.Children.Add(combo);
+    }
+
+    private static void SelectBarkCombo(ComboBox combo, string? value)
+    {
+        var items = (string[])combo.ItemsSource!;
+        combo.SelectedItem = items.FirstOrDefault(i => string.Equals(i, value?.Trim(), StringComparison.OrdinalIgnoreCase)) ?? items[0];
     }
 
     private static void SetBarkIntField(JObject rule, string key, TextBox box)
@@ -234,9 +243,9 @@ public partial class ModCreatorWindow
                 rule["repeatable"] = card.Repeatable.IsChecked == true;
                 rule["scope"] = card.Scope.SelectedItem as string ?? "session";
                 rule["class"] = card.Class.SelectedItem as string ?? "normal";
-                var mood = card.Mood.Text?.Trim() ?? "";
+                var mood = card.Mood.Text == card.Mood.PlaceholderText ? "" : card.Mood.Text?.Trim() ?? "";
                 if (mood.Length > 0) rule["mood"] = mood; else rule.Remove("mood");
-                var conditions = card.Conditions.Text?.Trim() ?? "";
+                var conditions = card.Conditions.Text == card.Conditions.Watermark ? "" : card.Conditions.Text?.Trim() ?? "";
                 if (conditions.Length == 0) rule.Remove("conditions");
                 else
                 {
