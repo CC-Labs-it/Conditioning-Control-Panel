@@ -7,6 +7,7 @@
     <IsPublishable>false</IsPublishable>
     <AssemblyName>CCP.Avalonia.Tests</AssemblyName>
     <RootNamespace>CCP.Avalonia.Tests</RootNamespace>
+    <DefineConstants>$(DefineConstants);PROFILE_EQUIP_AVALONIA_TESTS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\ConditioningControlPanel.Tests\ProfileEquipSyncTests.cs" Link="ProfileEquipSyncTests.cs" />
     <Compile Include="..\Shared\AvaloniaTestDispatcher.cs" Link="AvaloniaTestDispatcher.cs" />
     <Compile Include="..\Shared\FakeContentServer.cs" Link="FakeContentServer.cs" />
     <ProjectReference Include="..\..\CCP.Avalonia\CCP.Avalonia.csproj" />

@@ -101,6 +101,14 @@ public static class ProfileEquipRules
         return next;
     }
 
+    public static long MarkOwed(AppSettings s)
+    {
+        var stamp = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), s.ProfileEquipUpdatedMs + 1);
+        s.ProfileEquipUpdatedMs = stamp;
+        s.ProfileEquipPushOwed = true;
+        return stamp;
+    }
+
     public static JObject? ParseObject(string body)
     {
         try { return JsonConvert.DeserializeObject(body, NoDates) as JObject; }

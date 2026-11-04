@@ -2,6 +2,7 @@ using System;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using static ConditioningControlPanel.Services.ProfileEquipRules;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json;
@@ -155,14 +156,6 @@ public static class ProfileEquipSync
     }
 
     private static ProfileSlots OwnSlots(AppSettings s) => ProfileSlots.Of(CosmeticsCatalog.SanitizeOwn(s.ProfileCosmetics));
-
-    private static long MarkOwed(AppSettings s)
-    {
-        var stamp = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), s.ProfileEquipUpdatedMs + 1);
-        s.ProfileEquipUpdatedMs = stamp;
-        s.ProfileEquipPushOwed = true;
-        return stamp;
-    }
 
     private static async Task PutAsync(ProfileSlots slots, long stamp, bool firstRun = false)
     {

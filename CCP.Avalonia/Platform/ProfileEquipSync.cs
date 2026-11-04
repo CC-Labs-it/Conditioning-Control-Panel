@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using static ConditioningControlPanel.Services.ProfileEquipRules;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
@@ -10,7 +11,6 @@ using Serilog;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -58,14 +58,6 @@ public static class ProfileEquipSync
 
     /// <summary>Raised on the UI thread when an adoption changed a slot: repaint the card.</summary>
     public static event Action? Adopted;
-
-    public static JObject BuildPut(string unifiedId, ProfileSlots slots, bool keepEmpty = false) => ProfileEquipRules.BuildPut(unifiedId, slots, keepEmpty);
-    public static bool IsEquipReply(JObject? reply) => ProfileEquipRules.IsEquipReply(reply);
-    public static (ProfileSlots Slots, long UpdatedMs)? ReadProfile(JObject? reply) => ProfileEquipRules.ReadProfile(reply);
-    public static bool ShouldAdopt(long serverMs, long localMs) => ProfileEquipRules.ShouldAdopt(serverMs, localMs);
-    public static ProfileEquipStep Decide(string? storedAccount, string account, bool pushOwed, ProfileSlots local, ProfileSlots? server, long serverMs, long localMs)
-        => ProfileEquipRules.Decide(storedAccount, account, pushOwed, local, server, serverMs, localMs);
-    public static ProfileCosmetics WithSlots(ProfileCosmetics? current, ProfileSlots slots) => ProfileEquipRules.WithSlots(current, slots);
 
     // ---------------------------------------------------------------- the app
 
@@ -176,14 +168,6 @@ public static class ProfileEquipSync
 
     private static ProfileSlots OwnSlots(AppSettings s) => ProfileSlots.Of(MainShellWindow.SanitizeOwnWardrobe(s.ProfileCosmetics));
 
-    private static long MarkOwed(AppSettings s)
-    {
-        var stamp = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), s.ProfileEquipUpdatedMs + 1);
-        s.ProfileEquipUpdatedMs = stamp;
-        s.ProfileEquipPushOwed = true;
-        return stamp;
-    }
-
     private static async Task<bool> PutAsync(ProfileSlots slots, long stamp, bool firstRun = false)
     {
         var id = BackRoomApi.AppIdentity();
@@ -233,5 +217,4 @@ public static class ProfileEquipSync
         catch { }
     }
 
-    private static JObject? ParseObject(string body) => ProfileEquipRules.ParseObject(body);
 }
