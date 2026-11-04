@@ -64,8 +64,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt, _chromeTicks;
-        internal static Action<Window> RaiseChromeWindow = w => X11Overlay.Raise(w);
-        internal static Action RaiseBubbles = () => BubbleOverlay.RaiseAll(RaiseChromeWindow);
+        internal static Action<Window> RaiseChromeWindow = w => X11Overlay.RaiseManaged(w);
+        internal static Action<Window> RaiseOverlayWindow = w => X11Overlay.Raise(w);
+        internal static Action RaiseBubbles = () => BubbleOverlay.RaiseAll(RaiseOverlayWindow);
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
@@ -393,8 +394,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             foreach (var toy in _toyButtons) Raise(toy);
             RaiseBubbles();
             ChaosGifCascadeOverlay.RaiseActive();
-            ChaosFlashOverlay.RaiseActive(RaiseChromeWindow);
-            FlashOverlay.RaiseAll(RaiseChromeWindow);
+            ChaosFlashOverlay.RaiseActive(RaiseOverlayWindow);
+            FlashOverlay.RaiseAll(RaiseOverlayWindow);
         }
 
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>

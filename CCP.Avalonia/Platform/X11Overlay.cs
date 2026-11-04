@@ -17,10 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// as they do today rather than losing a feature — but Avalonia.X11 12.1.1 binds neither, which
 /// was verified by extracting the assembly's symbols rather than assumed.</para>
 ///
-/// <para><b>Topmost is deliberately absent from this class.</b> Avalonia already maps
-/// <c>Window.Topmost</c> to <c>_NET_WM_STATE_ABOVE</c>, which is the correct X11 mechanism, so
-/// the 34 <c>HWND_TOPMOST</c> sites port to that property and need nothing here. Wrapping it
-/// would add an indirection that only obscures where the behaviour comes from. The one case it
+/// <para>Avalonia maps <c>Window.Topmost</c> to <c>_NET_WM_STATE_ABOVE</c>. Managed windows
+/// use <see cref="RaiseManaged"/> to reassert their order without focus. The case that state
 /// does NOT cover — sitting above ANOTHER app's focused fullscreen window, which KWin promotes
 /// above the keep-above layer — is what <see cref="SetOverrideRedirect"/> is for: an
 /// override-redirect window is never managed by the WM at all, so no WM layer policy applies.</para>
@@ -298,6 +296,39 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>Raise a WM-managed topmost window without activating it. The window manager
+    /// raises its frame, including on reparenting X11 desktops. Override-redirect windows use Raise.</summary>
+    internal static bool RaiseManaged(TopLevel window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.Raise(hwnd);
+        if (IntPtr.Size != 8 || !TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var e = Marshal.AllocHGlobal(XEventSize);
+            try
+            {
+                for (var i = 0; i < XEventSize; i += IntPtr.Size) Marshal.WriteIntPtr(e, i, IntPtr.Zero);
+                Marshal.WriteInt32(e, 0, ClientMessage);
+                Marshal.WriteIntPtr(e, 24, _display);
+                Marshal.WriteIntPtr(e, 32, xid);
+                Marshal.WriteIntPtr(e, 40, XInternAtom(_display, "_NET_WM_STATE", false));
+                Marshal.WriteInt32(e, 48, 32);
+                Marshal.WriteIntPtr(e, 64, XInternAtom(_display, "_NET_WM_STATE_ABOVE", false));
+                Marshal.WriteIntPtr(e, 80, new IntPtr(SourcePager));
+                var root = XDefaultRootWindow(_display);
+                // Some WMs ignore restack requests with no sibling. Remove and add ABOVE as
+                // separate messages so they reassert the topmost band without activating.
+                XSendEvent(_display, root, false, SubstructureMask, e); // remove ABOVE
+                Marshal.WriteIntPtr(e, 56, new IntPtr(1));             // add ABOVE
+                XSendEvent(_display, root, false, SubstructureMask, e);
+                XFlush(_display);
+            }
+            finally { Marshal.FreeHGlobal(e); }
+        }
+        return RestackXid(xid, IntPtr.Zero);
+    }
+
     /// <summary>Explicit subliminal focus opt-in, after Show. Windows removes NOACTIVATE while
     /// preserving click-through; X11 override-redirect windows bypass the WM so need a direct
     /// focus request (PointerRoot on removal, CurrentTime). Headless/native Wayland return false.</summary>
@@ -377,7 +408,11 @@ internal static class X11Overlay
     {
         if (!TryGetXid(window, out var xid)) return false;
         if (!TryGetXid(sibling, out var siblingXid)) return false;
+        return RestackXid(xid, siblingXid);
+    }
 
+    private static bool RestackXid(IntPtr xid, IntPtr siblingXid)
+    {
         lock (Gate)
         {
             if (!EnsureDisplay()) return false;

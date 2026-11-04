@@ -48,6 +48,7 @@ public sealed class ChaosFlashOverlayTests
                 ChaosFlashOverlay.SkipPlatformChecksForTests = true;
                 ChaosFlashOverlay.Schedule = (_, _) => { };
                 ChaosRunHost.RaiseChromeWindow = raised.Add;
+                ChaosRunHost.RaiseOverlayWindow = raised.Add;
                 var bubble = new BubbleOverlayWindow();
                 ChaosRunHost.RaiseBubbles = () => raised.Add(bubble);
                 spawning.SetValue(null, true);
@@ -75,8 +76,9 @@ public sealed class ChaosFlashOverlayTests
                 ChaosFlashOverlay.SkipPlatformChecksForTests = false;
                 ChaosFlashOverlay.Schedule = schedule;
                 spawning.SetValue(null, wasSpawning);
-                ChaosRunHost.RaiseChromeWindow = w => X11Overlay.Raise(w);
-                ChaosRunHost.RaiseBubbles = () => BubbleOverlay.RaiseAll(ChaosRunHost.RaiseChromeWindow);
+                ChaosRunHost.RaiseChromeWindow = w => X11Overlay.RaiseManaged(w);
+                ChaosRunHost.RaiseOverlayWindow = w => X11Overlay.Raise(w);
+                ChaosRunHost.RaiseBubbles = () => BubbleOverlay.RaiseAll(ChaosRunHost.RaiseOverlayWindow);
                 CoreSettings.Current.ChaosPinOnTop = pin;
                 Directory.Delete(dir, true);
             }

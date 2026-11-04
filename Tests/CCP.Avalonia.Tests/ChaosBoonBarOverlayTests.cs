@@ -57,8 +57,8 @@ public sealed class ChaosBoonBarOverlayTests
             finally
             {
                 ChaosRunHost.ForceShutdown();
-                ChaosRunHost.RaiseChromeWindow = w => ConditioningControlPanel.Avalonia.Platform.X11Overlay.Raise(w);
-                ChaosRunHost.RaiseBubbles = () => BubbleOverlay.RaiseAll(ChaosRunHost.RaiseChromeWindow);
+                ChaosRunHost.RaiseChromeWindow = w => ConditioningControlPanel.Avalonia.Platform.X11Overlay.RaiseManaged(w);
+                ChaosRunHost.RaiseBubbles = () => BubbleOverlay.RaiseAll(ChaosRunHost.RaiseOverlayWindow);
                 settings.ChaosPinOnTop = pin;
             }
             return Task.CompletedTask;
