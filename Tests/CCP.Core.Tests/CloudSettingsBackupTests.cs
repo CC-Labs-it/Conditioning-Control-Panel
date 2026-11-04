@@ -271,6 +271,14 @@ public sealed class CloudSettingsBackupTests : IDisposable
     }
 
     [Fact]
+    public async Task AnUnreadableExistingSlotIsNeverOverwritten()
+    {
+        _fake.Body = "{\"backup\":{\"settings_data\":\"invalid\"}}";
+        Assert.False(await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
+        Assert.Empty(Uploads);
+    }
+
+    [Fact]
     public async Task NoTokenNoAccountOrOfflineSendsNothing()
     {
         var c = new CloudSettingsBackup(_fake);

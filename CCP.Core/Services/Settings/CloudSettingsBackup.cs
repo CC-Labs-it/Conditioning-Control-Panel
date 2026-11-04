@@ -284,7 +284,9 @@ namespace ConditioningControlPanel.Services
                     Log.Warning("Settings backup skipped: the current backup could not be read, so its file paths could not be kept");
                     return false;
                 }
-                CarryPathFields(obj, SlotSettings(slot.Backup));
+                var slotSettings = SlotSettings(slot.Backup);
+                if (slot.Backup != null && slotSettings == null) return false;
+                CarryPathFields(obj, slotSettings);
                 var encoded = SettingsBackupBudget.Encode(obj);
                 if (!encoded.Fits)
                 {
@@ -405,13 +407,13 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>409 merged goes to contract D when the head seeded it (<see cref="V2AuthService.MergedRecovery"/>);
-        /// everything else non-2xx is a logged failure. ponytail: WPF's 401 token recovery has no twin on this
-        /// head yet (SyncPush has none either), so a 401 is a plain failure here.</summary>
+        /// 401 recovers the session without retrying the backup operation, as in WPF.</summary>
         private static async Task<bool> SucceededAsync(HttpResponseMessage response, string what)
         {
             if (response.IsSuccessStatusCode) return true;
             var error = await response.Content.ReadAsStringAsync();
             if (V2AuthService.MergedRecovery is { } merged && await merged(response, error)) return false;
+            await AuthRecovery.HandleUnauthorizedAsync(response);
             Log.Warning("{What} failed: {Status} (body {Bytes} bytes)", what, (int)response.StatusCode, error?.Length ?? 0);
             return false;
         }

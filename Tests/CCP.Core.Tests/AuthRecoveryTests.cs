@@ -65,6 +65,24 @@ public sealed class AuthRecoveryTests : IDisposable
     private V2AuthService Client() => new(() => _settings, _http);
     private static HttpResponseMessage Status(HttpStatusCode code) => new(code) { Content = new StringContent("{}") };
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CloudBackup401RecoversWithoutRetryingOrOverwritingSlot(bool upload)
+    {
+        if (upload) _http.Answers.Enqueue((HttpStatusCode.OK, "{\"backup\":null}"));
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+        _http.Answers.Enqueue((HttpStatusCode.OK, "{\"auth_token\":\"fresh\"}"));
+        var recovered = 0;
+        AuthRecovery.Recovered = () => recovered++;
+        Assert.False(await new CloudSettingsBackup(_http).BackupAsync(_settings));
+        Assert.Equal(1, recovered);
+        Assert.Equal("fresh", _settings.AuthToken);
+        Assert.Equal(upload ? 1 : 0, _http.Calls.Count(c => c.Path == "/v2/user/backup-settings"));
+        Assert.Equal(1, _http.Calls.Count(c => c.Path == "/v2/user/settings-backup"));
+        Assert.Equal(1, _http.Calls.Count(c => c.Path == "/v2/auth/restore-session"));
+    }
+
     [Fact]
     public async Task AnythingButA401IsNotRecovered()
     {
