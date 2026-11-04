@@ -554,21 +554,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             _ = InitializePreviewAsync();
 
-            // ponytail: the WPF Loaded handler dispatched the interactive tutorial's Part 2 (queued
-            // by the New Enhancement dialog) and, failing that, auto-launched the first-run editor
-            // coachmarks once. THREE of the four things that note used to name have arrived and are
-            // not the blocker any more: App.Settings is CoreSettings, App.Tutorial is CoreTutorial,
-            // and TutorialOverlay is ported (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs,
-            // live ctor TutorialOverlay(Window)). What is actually left is two things:
-            //   1. CoreTutorial is UNSEEDED on this head - see CCP.Avalonia/App.axaml.cs:71. The
-            //      step lists live in ConditioningControlPanel/Services/TutorialService.cs, so
-            //      CoreTutorial.Start(name) is a silent no-op and a live overlay would open a dim
-            //      sheet over a blank card. See StartEditorTutorial for the shape to restore.
-            //   2. The Part 2 hand-off needs TutorialEventBus.PendingPart2Tutorial
-            //      (ConditioningControlPanel/Services/TutorialEventBus.cs) and CoreTutorial
-            //      deliberately carries no event bus, so there is no seam to read it from.
-            // The first-run auto-launch's "shown once" flag is NOT a blocker: WPF used
-            // AppSettings.HasSeenDeeperEditorIntro and that is in Core (AppSettings.cs:7938).
+            var pending = CoreTutorialEvents.PendingPart2Tutorial;
+            CoreTutorialEvents.PendingPart2Tutorial = null;
+            if (pending != null)
+            {
+                var timer = new global::Avalonia.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(800)
+                };
+                timer.Tick += (_, _) =>
+                {
+                    timer.Stop();
+                    if (!IsLoaded) return;
+                    if (CoreTutorial.IsActive) CoreTutorial.Skip();
+                    CoreTutorial.Start(pending);
+                    if (CoreTutorial.IsActive)
+                        new ConditioningControlPanel.Avalonia.Views.Windows.TutorialOverlay(this).Show();
+                };
+                Closed += (_, _) => timer.Stop();
+                timer.Start();
+            }
         }
 
         private void BtnEditorHelp_Click(object? sender, RoutedEventArgs e)
@@ -2516,14 +2521,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // Avalonia's deferred TextChanged handlers fire and the flag stays clear.
                 UpdateTitle();
 
-                // ponytail: WPF also set TutorialEventBus.LastSavedEnhancementPath and emitted
-                // "FileSaved" so the HT walkthrough could advance to its follow-up card. Still
-                // blocked, and the blocker is NOT "the tutorial has not been ported" - the overlay
-                // has been (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs) and CoreTutorial is
-                // the seam. It is that CoreTutorial deliberately carries NO event bus: the
-                // OnEvent advance trigger crosses as an enum only, and the publisher side stays in
-                // ConditioningControlPanel/Services/TutorialEventBus.cs. Nothing here can emit, and
-                // with the seam unseeded on this head nothing would be listening either.
+                CoreTutorialEvents.LastSavedEnhancementPath = path;
+                CoreTutorialEvents.Emit("FileSaved");
             }
             catch (Exception ex)
             {

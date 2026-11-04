@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Tours;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -12,16 +14,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// PORTED from ConditioningControlPanel/Views/Deeper/NewEnhancementDialog.xaml.cs. Deviations:
     ///  - DialogResult becomes Close(bool); callers use ShowDialog&lt;bool&gt;.
     ///  - OpenFileDialog becomes the StorageProvider file picker.
-    ///  - The three interactive tutorials remain in follow-up lane
-    ///    wire-views-deeper-new-enhancement-dialog-b: the legacy overlay's native input region
-    ///    and automatic advancement need porting before the walkthroughs can be enabled.
-    ///    Known-video sample selection is shared with WPF through HypnotubeDefaultLinks.
     /// </summary>
     public partial class NewEnhancementDialog : Window
     {
         public string SelectedMediaType { get; private set; } = MediaTypes.Video;
         public string SelectedSource { get; private set; } = "";
 
+        private TutorialType? _pendingPart2;
+        private TutorialOverlay? _overlay;
         private readonly RadioButton _rbVideo;
         private readonly RadioButton _rbAudio;
         private readonly TextBox _txtSource;
@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public NewEnhancementDialog()
         {
             AvaloniaXamlLoader.Load(this);
+            Closed += (_, _) => _overlay?.Close();
 
             _rbVideo = this.FindControl<RadioButton>("RbVideo")!;
             _rbAudio = this.FindControl<RadioButton>("RbAudio")!;
@@ -37,8 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _txtError = this.FindControl<TextBlock>("TxtError")!;
 
             this.FindControl<Button>("BtnBrowse")!.Click += async (_, _) => await BrowseAsync();
-            this.FindControl<Button>("BtnLocalVideoTutorial")!.Click += (_, _) => { _rbVideo.IsChecked = true; StartInteractiveTutorial(); };
-            this.FindControl<Button>("BtnLocalAudioTutorial")!.Click += (_, _) => { _rbAudio.IsChecked = true; StartInteractiveTutorial(); };
+            this.FindControl<Button>("BtnLocalVideoTutorial")!.Click += (_, _) => { _rbVideo.IsChecked = true; StartInteractiveTutorial(TutorialType.DeeperEditorInteractiveLocalVideo, TutorialType.DeeperEditorInteractiveLocalVideoPart2); };
+            this.FindControl<Button>("BtnLocalAudioTutorial")!.Click += (_, _) => { _rbAudio.IsChecked = true; StartInteractiveTutorial(TutorialType.DeeperEditorInteractiveLocalAudio, TutorialType.DeeperEditorInteractiveLocalAudioPart2); };
             this.FindControl<Button>("BtnTryHypnoTubeTutorial")!.Click += (_, _) => BtnTryHypnoTubeTutorial_Click();
             this.FindControl<Button>("BtnCancel")!.Click += (_, _) => Close(false);
             this.FindControl<Button>("BtnCreate")!.Click += (_, _) => BtnCreate_Click();
@@ -91,18 +92,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
             catch { /* a settings write must never take the dialog down */ }
 
-            StartInteractiveTutorial();
+            StartInteractiveTutorial(TutorialType.DeeperEditorInteractiveHT, TutorialType.DeeperEditorInteractiveHTPart2);
         }
 
-        /// <summary>
-        /// ponytail: wire-views-deeper-new-enhancement-dialog-b owns the remaining walkthroughs.
-        /// TutorialHead already seeds CoreTutorial and CoreTutorialEvents already carries Part 2.
-        /// The legacy TutorialOverlay still lacks automatic control/event advancement and native
-        /// partial input regions; opening it here would obscure the Browse/Create controls.
-        /// Port those interactions with success-only editor continuation before enabling the tours.
-        /// </summary>
-        private void StartInteractiveTutorial()
+        private void StartInteractiveTutorial(TutorialType part1, TutorialType part2)
         {
+            if (CoreTutorial.IsActive) CoreTutorial.Skip();
+            CoreTutorial.Start(part1.ToString());
+            if (!CoreTutorial.IsActive) return;
+            _pendingPart2 = part2;
+            _overlay = new TutorialOverlay(this);
+            _overlay.Show();
         }
 
         private void BtnCreate_Click()
@@ -113,6 +113,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _txtError.IsVisible = true;
                 return;
             }
+            if (_pendingPart2.HasValue)
+                CoreTutorialEvents.PendingPart2Tutorial = _pendingPart2.Value.ToString();
             SelectedMediaType = _rbVideo.IsChecked == true ? MediaTypes.Video : MediaTypes.Audio;
             SelectedSource = source;
             Close(true);
