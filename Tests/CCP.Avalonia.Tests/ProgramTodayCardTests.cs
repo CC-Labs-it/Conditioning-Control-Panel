@@ -31,10 +31,7 @@ public sealed class ProgramTodayCardTests
     [Fact]
     public void DashboardCardShowsTodayForAnActiveRunAndItsLoopsStopWhenHidden() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        Setup();
 
         var program = BuiltInPrograms.All().First(p => p.Id == "first_week");
         var savedDay = DateTime.Today;
@@ -187,14 +184,34 @@ public sealed class ProgramTodayCardTests
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            // Frame requests are one-shot and the compositor can still be processing the prior
+            // pulse. Wait for a callback on this same top-level, then assert the exact nudge value.
+            var delivered = false;
+            shell.RequestAnimationFrame(_ => delivered = true);
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            var spin = new System.Threading.SpinWait();
+            while (!delivered && deadline.Elapsed < TimeSpan.FromSeconds(5))
+            {
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                spin.SpinOnce();
+            }
+            Assert.True(delivered, "the requested banner frame was not delivered");
             return ((TranslateTransform)art.RenderTransform!).X;
         }
         var p = 0.13 / 0.26;
         Assert.Equal(-10 * (1 - (1 - p) * (1 - p)), Nudged(0.13), 3);       // halfway in time, 75% of the way
         Nudged(0.2);
         Assert.Equal(-10, ((TranslateTransform)art.RenderTransform!).X, 3);
+    }
+
+    private static void Setup()
+    {
+        var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
+        if (Application.Current is null)
+            builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        else builder.AfterSetupCallback(builder);
     }
 
     [Fact]
@@ -204,10 +221,7 @@ public sealed class ProgramTodayCardTests
         Assert.Equal("programs/banner_default.png", ProgramArtPaths.Banner(bare).Last());
         AvaloniaTestDispatcher.Run(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            Setup();
             var dash = new SettingsTabView();
             dash.ApplyProgramBannerArt(bare, Brushes.HotPink);
             var art = dash.FindControl<Rectangle>("ProgramTodayArt")!;
