@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Services
         private readonly List<string> _temps = new();
         private readonly object _availabilityGate = new();
         private ContentPackStore? _availabilityStore; private string? _availabilitySignature;
-        private int _availabilityVersion, _checking; private bool _available;
+        private int _availabilityVersion, _checking; private bool _available, _probed;
 
         /// <param name="type"><see cref="ContentPackStore.ImageType"/> or <see cref="ContentPackStore.VideoType"/>.</param>
         public PackMediaPool(string type, Random? rng = null, Func<ContentPackStore?>? store = null)
@@ -43,13 +43,13 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Decrypts on record (tests, diagnostics).</summary>
         public int TempCount { get { lock (_lock) return _temps.Count; } }
-        /// <summary>Last completed probe; starts a background refresh without waiting for decryption.</summary>
-        public bool HasEntries {
-            get { if (Interlocked.CompareExchange(ref _checking, 1, 0) == 0) _ = Task.Run(ProbeAvailability); return Volatile.Read(ref _available); }
+        /// <summary>Last completed probe (null before the first); starts a background refresh without waiting for decryption.</summary>
+        public bool? HasEntries {
+            get { if (Interlocked.CompareExchange(ref _checking, 1, 0) == 0) _ = Task.Run(ProbeAvailability); lock (_availabilityGate) return _probed ? _available : null; }
         }
         /// <summary>Retire a cached result after a playback or decrypt failure.</summary>
         public void InvalidateAvailability() {
-            lock (_availabilityGate) { _availabilityVersion++; _availabilitySignature = null; Volatile.Write(ref _available, false); }
+            lock (_availabilityGate) { _availabilityVersion++; _availabilitySignature = null; _available = false; _probed = true; }
         }
         private void ProbeAvailability() {
             try {
@@ -69,7 +69,7 @@ namespace ConditioningControlPanel.Services
                     if (temp != null) { store.DeleteTempFile(temp); available = true; break; }
                 }
                 lock (_availabilityGate) if (version == _availabilityVersion)
-                { _availabilityStore = store; _availabilitySignature = signature; Volatile.Write(ref _available, available); }
+                { _availabilityStore = store; _availabilitySignature = signature; _available = available; _probed = true; }
             } catch (Exception ex) { Log.Debug("ContentPacks: availability probe failed: {Error}", ex.Message); InvalidateAvailability(); }
             finally { Volatile.Write(ref _checking, 0); }
         }

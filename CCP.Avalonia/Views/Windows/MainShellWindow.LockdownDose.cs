@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
 public partial class MainShellWindow
 {
-    private bool _doseEngineArmed, _doseEngineWasRunning, _doseEngineRequested, _doseEngineStarted, _doseWasEmpty;
+    private bool _doseEngineArmed, _doseEngineWasRunning, _doseEngineRequested, _doseEngineStarted; private bool? _doseLast;
     private int _doseEngineIdle, _doseEngineGeneration, _doseIdle, _doseRound;
     private DispatcherTimer? _doseEngineKickoff;
     private readonly HashSet<string> _doseSnapshot = new(StringComparer.OrdinalIgnoreCase);
@@ -39,17 +39,14 @@ public partial class MainShellWindow
         void Activate() => OnUi(() =>
         {
             if (!ld.IsActive || !CoreSettings.Current.LockdownDoseKeeperEnabled) return;
-            if (File.Exists(DoseRecoveryPath)) {
-                RecoverLockdownDose();
-                if (File.Exists(DoseRecoveryPath)) return;
-            }
+            RecoverLockdownDose(); if (File.Exists(DoseRecoveryPath)) return;
             _doseEngineArmed = true;
             _doseEngineWasRunning = CoreEngine.IsRunning;
             _doseEngineRequested = false;
             _doseEngineStarted = false;
             _doseEngineIdle = _doseIdle = _doseRound = 0; _doseSnapshot.Clear();
             foreach (var key in DoseWall.Where(IsWallFeatureOn)) _doseSnapshot.Add(key);
-            _doseFlipped.Clear(); _doseWasEmpty = !HasLockdownDose();
+            _doseFlipped.Clear(); _doseLast = HasLockdownDose();
             DeleteDoseRecovery();
             PanicAftermath.ReleaseEngineHold();
             _doseEngineKickoff?.Stop();
@@ -93,31 +90,31 @@ public partial class MainShellWindow
         };
     }
 
-    // WPF DoseKeeper:81-90,107-116: all wall flags and the off-wall census count.
-    private bool HasLockdownDose()
+    // WPF DoseKeeper:61,81-90,107-116: all wall flags and the off-wall census count; null while only a pending video probe could.
+    private bool? HasLockdownDose()
     {
         var s = CoreSettings.Current;
-        return DoseStarter.Any(key => IsWallFeatureOn(key) && DoseFeatureAvailable(key))
-            || (s.MandatoryVideosEnabled && DoseFeatureAvailable("video")) || s.MindWipeEnabled
+        if (DoseStarter.Any(key => IsWallFeatureOn(key) && DoseFeatureAvailable(key)) || s.MindWipeEnabled
             || s.LockCardEnabled || s.BubbleCountEnabled || s.BrainDrainEnabled || s.AudioOnlySession
             || s.PopQuizEnabled || (s.CornerGifOverlays?.Exists(o => o != null && o.Enabled) == true)
-            || (Autonomy.IsEnabled && s.AutonomyModeEnabled && s.AutonomyConsentGiven);
+            || (Autonomy.IsEnabled && s.AutonomyModeEnabled && s.AutonomyConsentGiven)) return true;
+        return s.MandatoryVideosEnabled ? DoseVideo() : false;
     }
 
     // A pending user START owns the portal request until it runs or Stop invalidates it.
     private bool CanStartLockdownDoseEngine() => _doseEngineArmed && LockdownActive
         && _pendingUserEngineGen != _engineGen
         && CoreSettings.Current.LockdownDoseKeeperEnabled && !IsSessionFeatureLockActive
-        && !PanicAftermath.HoldsEngineRestart && HasLockdownDose();
+        && !PanicAftermath.HoldsEngineRestart && HasLockdownDose() != false;
 
     internal void EnforceLockdownDoseEngine(bool atActivation)
     {
         if (!_doseEngineArmed || !LockdownActive || !CoreSettings.Current.LockdownDoseKeeperEnabled) return;
         if (IsSessionFeatureLockActive) { _doseEngineIdle = _doseIdle = 0; return; }
-        var empty = !HasLockdownDose();
-        if (empty && !_doseWasEmpty && !atActivation)
+        var dose = HasLockdownDose(); var empty = dose == false; // pending defers selection
+        if (empty && _doseLast == true && !atActivation)
             LockdownService.Current?.NotifyEscapeAttempt(EscapeKinds.Starve);
-        _doseWasEmpty = empty;
+        if (dose != null) _doseLast = dose;
         if (!CoreEngine.IsRunning) {
             if (PanicAftermath.HoldsEngineRestart || _pendingUserEngineGen == _engineGen) { _doseEngineIdle = 0; return; }
             if (!atActivation && ++_doseEngineIdle < 4) return;
@@ -140,12 +137,7 @@ public partial class MainShellWindow
         var escalation = DoseFeatureAvailable("video") ? new[] { "video" } : Array.Empty<string>(); var allowed = starter.Concat(escalation).ToArray(); var picks = new List<string>();
         void Take(IEnumerable<string> keys)
         {
-            var shuffled = keys.ToList();
-            for (var i = shuffled.Count - 1; i > 0; i--) {
-                var j = Random.Shared.Next(i + 1);
-                (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
-            }
-            foreach (var key in shuffled) {
+            foreach (var key in keys.OrderBy(_ => Random.Shared.Next()).ToList()) {
                 if (picks.Count >= Math.Clamp(1 + round, 2, 4)) return;
                 if (allowed.Contains(key) && !IsWallFeatureOn(key) && !picks.Contains(key)) picks.Add(key);
             }
@@ -155,15 +147,11 @@ public partial class MainShellWindow
         if (round >= 2 || starter.Length == 0) Take(escalation);
         if (picks.Count == 0) { Log.Warning("Lockdown dose: no available feature to pick"); return; }
         _doseRound = round;
-        foreach (var key in picks) {
-            _doseFlipped.Add(key);
-            WriteDoseRecovery();
-            SetWallFeature(key, true);
-        }
+        foreach (var key in picks) { _doseFlipped.Add(key); WriteDoseRecovery(); SetWallFeature(key, true); }
         // WPF DoseKeeper:383-385 and :412-415: the edge pulse and bark are not wired here yet.
     }
     private bool DoseFeatureAvailable(string key) {
-        if (key == "video") return (DoseVideoReadyForTests ?? (LibVlcAudio.Shared != null)) && CoreEngine.Video?.HasPlayableContent() == true;
+        if (key == "video") return DoseVideo() == true;
         if (DoseOverlaySupportForTests is bool supported) return supported;
         return key switch
         {
@@ -172,6 +160,7 @@ public partial class MainShellWindow
             _ => X11Overlay.BackendOf(TryGetPlatformHandle()) != OverlayBackend.None && X11Overlay.IsAvailable,
         };
     }
+    private bool? DoseVideo() => (DoseVideoReadyForTests ?? (LibVlcAudio.Shared != null)) && CoreEngine.Video is { } video ? video.HasPlayableContent() : false;
     private void WriteDoseRecovery() {
         try {
             var flipped = _doseFlipped.Where(k => !_doseSnapshot.Contains(k)).ToArray();

@@ -101,16 +101,20 @@ namespace ConditioningControlPanel.Services
             _library = library ?? LocalLibrary;
         }
 
-        /// <summary>Whether the enabled local or pack library can supply a scheduled clip.</summary>
-        public bool HasPlayableContent()
+        private int _localBusy, _localPlayable = -1; // -1 until the first walk completes
+        /// <summary>Whether the enabled local or pack library can supply a clip: the last background
+        /// check (each call starts a fresh one), null while the first one is still running.</summary>
+        public bool? HasPlayableContent()
         {
-            try
-            {
-                var s = CoreSettings.Current;
-                return KeepByLength(_library(), s.VideoMinDurationSeconds, s.VideoMaxDurationSeconds, DurationOf).Count > 0
-                    || PackVideos?.HasEntries == true;
-            }
-            catch { return false; }
+            if (Interlocked.CompareExchange(ref _localBusy, 1, 0) == 0)
+                _ = System.Threading.Tasks.Task.Run(() => {
+                    var s = CoreSettings.Current; var found = 0;
+                    try { found = KeepByLength(_library(), s.VideoMinDurationSeconds, s.VideoMaxDurationSeconds, DurationOf).Count > 0 ? 1 : 0; }
+                    catch (Exception ex) { Log.Debug("VideoService: library check failed: {Error}", ex.Message); }
+                    finally { Volatile.Write(ref _localPlayable, found); Volatile.Write(ref _localBusy, 0); }
+                });
+            var local = Volatile.Read(ref _localPlayable); var pack = PackVideos == null ? false : PackVideos.HasEntries;
+            return local == 1 || pack == true ? true : local < 0 || pack == null ? null : false;
         }
 
         public bool IsRunning => _running;

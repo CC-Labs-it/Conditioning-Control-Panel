@@ -925,11 +925,7 @@ namespace ConditioningControlPanel.Services
         public void SaveImmediate(bool suppressCloudBackup = false) => SaveImmediateCore(suppressCloudBackup, out _);
 
         /// <summary>Flushes settings and reports whether they reached disk, for recovery journal owners.</summary>
-        public bool TrySaveImmediate(bool suppressCloudBackup = false)
-        {
-            SaveImmediateCore(suppressCloudBackup, out var saved);
-            return saved;
-        }
+        public bool TrySaveImmediate(bool suppressCloudBackup = false) { SaveImmediateCore(suppressCloudBackup, out var saved); return saved; }
 
         private void SaveImmediateCore(bool suppressCloudBackup, out bool saved)
         {

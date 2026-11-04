@@ -251,12 +251,10 @@ public class LockdownDoseEngineTests
                 ld.Activate(TimeSpan.FromMinutes(20));
                 shell.EnforceLockdownDoseEngine(true);
                 Assert.True(CoreEngine.IsRunning);
-                Assert.Equal(2, new[] { s.FlashEnabled, s.SubliminalEnabled, s.SpiralEnabled, s.PinkFilterEnabled,
-                    s.BouncingTextEnabled, s.BubblesEnabled }.Count(on => on));
+                Assert.Equal(2, StarterCount(s));
                 ld.Deactivate();
                 Assert.False(CoreEngine.IsRunning);
-                Assert.False(s.FlashEnabled || s.SubliminalEnabled || s.SpiralEnabled || s.PinkFilterEnabled
-                    || s.BouncingTextEnabled || s.BubblesEnabled);
+                Assert.Equal(0, StarterCount(s));
                 s.FlashEnabled = true;
                 s.LockdownDoseKeeperEnabled = false;
                 Assert.DoesNotContain("starts or restarts the engine", LockdownTabView.LockdownWarning(20, s, false));
@@ -279,13 +277,10 @@ public class LockdownDoseEngineTests
         });
     }
     private static void EmptyDose(ConditioningControlPanel.Models.AppSettings s) {
-        s.FlashEnabled = s.SubliminalEnabled = s.SpiralEnabled = s.PinkFilterEnabled = false;
-        s.BouncingTextEnabled = s.BubblesEnabled = s.MandatoryVideosEnabled = s.MindWipeEnabled = false;
-        s.LockCardEnabled = s.BubbleCountEnabled = s.BrainDrainEnabled = s.AudioOnlySession = s.PopQuizEnabled = false; s.CornerGifOverlays.Clear(); s.AutonomyModeEnabled = false;
-    }
+        s.FlashEnabled = s.SubliminalEnabled = s.SpiralEnabled = s.PinkFilterEnabled = s.BouncingTextEnabled = s.BubblesEnabled = s.MandatoryVideosEnabled = s.MindWipeEnabled = false;
+        s.LockCardEnabled = s.BubbleCountEnabled = s.BrainDrainEnabled = s.AudioOnlySession = s.PopQuizEnabled = s.AutonomyModeEnabled = false; s.CornerGifOverlays.Clear(); }
     private static int StarterCount(ConditioningControlPanel.Models.AppSettings s) =>
-        new[] { s.FlashEnabled, s.SubliminalEnabled, s.SpiralEnabled, s.PinkFilterEnabled,
-            s.BouncingTextEnabled, s.BubblesEnabled }.Count(on => on);
+        new[] { s.FlashEnabled, s.SubliminalEnabled, s.SpiralEnabled, s.PinkFilterEnabled, s.BouncingTextEnabled, s.BubblesEnabled }.Count(on => on);
     [Fact]
     public async Task EmptyEdgeWaitsForSessionThenRefillsWithShrinkingGraceAndRestoresSnapshot() {
         await AvaloniaTestDispatcher.RunAsync(() => {
@@ -296,9 +291,7 @@ public class LockdownDoseEngineTests
             ld.EscapeAttempted += a => { if (a.Kind == ConditioningControlPanel.Services.Possession.EscapeKinds.Starve) attempts++; };
             try {
                 shell.StartEngine(); ld.Activate(TimeSpan.FromMinutes(20));
-                // Drive ticks explicitly here; the real kickoff has its own timed test above.
-                ((DispatcherTimer)typeof(MainShellWindow).GetField("_doseEngineKickoff",
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell)!).Stop();
+                ((DispatcherTimer)typeof(MainShellWindow).GetField("_doseEngineKickoff", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell)!).Stop(); // ticks driven below; the kickoff has its own timed test
                 CoreSession.IsSessionRunningProvider = () => true;
                 s.FlashEnabled = false;
                 for (var i = 0; i < 8; i++) shell.EnforceLockdownDoseEngine(false);
@@ -358,7 +351,7 @@ public class LockdownDoseEngineTests
             CorePaths.EffectiveAssetsProvider = () => dir;
             CoreEngine.Video = MandatoryVideoOverlay.Instance.Scheduler; var ld = LockdownService.Current = new LockdownService(); var shell = NewDoseShell(); shell.Show();
             try {
-                ld.Activate(TimeSpan.FromMinutes(20)); s.MandatoryVideosEnabled = false; shell.EnforceLockdownDoseEngine(true);
+                Assert.True(Probed(playable)); ld.Activate(TimeSpan.FromMinutes(20)); s.MandatoryVideosEnabled = false; shell.EnforceLockdownDoseEngine(true);
                 Assert.Equal(playable, s.MandatoryVideosEnabled); Assert.Equal(playable ? 1 : 2, StarterCount(s)); ld.Deactivate();
                 Assert.Equal(playable, s.MandatoryVideosEnabled); // only a picked prior choice returns
                 Assert.Equal(0, StarterCount(s));
@@ -406,9 +399,9 @@ public class LockdownDoseEngineTests
                 Assert.True(s.SpiralEnabled && s.PinkFilterEnabled); // pre-existing but not runnable
                 CoreEngine.Video = MandatoryVideoOverlay.Instance.Scheduler;
                 shell.EnforceLockdownDoseEngine(true); Assert.False(CoreEngine.IsRunning); // host unavailable
-                shell.DoseVideoReadyForTests = true; s.DisabledAssetPaths.Add("videos/clip.m4v");
+                shell.DoseVideoReadyForTests = true; s.DisabledAssetPaths.Add("videos/clip.m4v"); Assert.True(Probed(false));
                 shell.EnforceLockdownDoseEngine(true); Assert.False(CoreEngine.IsRunning); // excluded
-                s.DisabledAssetPaths.Remove("videos/clip.m4v"); shell.EnforceLockdownDoseEngine(true); Assert.True(s.MandatoryVideosEnabled);
+                s.DisabledAssetPaths.Remove("videos/clip.m4v"); Assert.True(Probed(true)); shell.EnforceLockdownDoseEngine(true); Assert.True(s.MandatoryVideosEnabled);
                 Assert.True(CoreEngine.IsRunning); ld.Deactivate(); Assert.False(s.MandatoryVideosEnabled); Assert.True(s.SpiralEnabled && s.PinkFilterEnabled);
                 s.MandatoryVideosEnabled = true; ld.Activate(TimeSpan.FromMinutes(20));
                 shell.EnforceLockdownDoseEngine(true); Assert.True(CoreEngine.IsRunning); // video-only census
@@ -421,7 +414,7 @@ public class LockdownDoseEngineTests
                     decryptFile: _ => new byte[] { 1 });
                 CoreEngine.Video = new MandatoryVideoScheduler(null!, library: () => Array.Empty<string>())
                     { PackVideos = new PackMediaPool(ContentPackStore.VideoType, store: () => store) };
-                Assert.True(System.Threading.SpinWait.SpinUntil(CoreEngine.Video.HasPlayableContent, TimeSpan.FromSeconds(10)));
+                Assert.True(Probed(true));
                 ld.Activate(TimeSpan.FromMinutes(20)); shell.EnforceLockdownDoseEngine(true);
                 Assert.True(CoreEngine.IsRunning); Assert.True(s.MandatoryVideosEnabled); // pack-only video
                 ld.Deactivate();
@@ -430,6 +423,23 @@ public class LockdownDoseEngineTests
                 CoreEngine.Video = previousVideo; CorePaths.EffectiveAssetsProvider = previousAssets;
                 System.IO.Directory.Delete(dir, true);
             }
+            return Task.CompletedTask;
+        });
+    }
+    private static bool Probed(bool expected) => System.Threading.SpinWait.SpinUntil(() => CoreEngine.Video!.HasPlayableContent() == expected, TimeSpan.FromSeconds(10));
+    [Fact]
+    public async Task PendingVideoProbeDefersSelectionWithoutStarving() {
+        await AvaloniaTestDispatcher.RunAsync(() => {
+            EnsureApp(); var s = CoreSettings.Current; EmptyDose(s); s.MandatoryVideosEnabled = s.LockdownDoseKeeperEnabled = s.LockdownTripwiresEnabled = true;
+            using var gate = new System.Threading.ManualResetEventSlim(); var previousVideo = CoreEngine.Video; var attempts = 0;
+            CoreEngine.Video = new MandatoryVideoScheduler(null!, library: () => { gate.Wait(); return Array.Empty<string>(); }); // a hung assets mount
+            var ld = LockdownService.Current = new LockdownService(); var shell = NewDoseShell(); shell.Show(); ld.EscapeAttempted += _ => attempts++;
+            try { ld.Activate(TimeSpan.FromMinutes(20));
+                for (var i = 0; i < 8; i++) shell.EnforceLockdownDoseEngine(i == 0); // the enabled video counts while unknown
+                Assert.True(CoreEngine.IsRunning); Assert.Equal(0, StarterCount(s)); Assert.True(s.MandatoryVideosEnabled);
+                gate.Set(); Assert.True(Probed(false)); for (var i = 0; i < 6; i++) shell.EnforceLockdownDoseEngine(false);
+                Assert.Equal(2, StarterCount(s)); Assert.Equal(0, attempts); ld.Deactivate();
+            } finally { gate.Set(); ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); CoreEngine.Video = previousVideo; }
             return Task.CompletedTask;
         });
     }
@@ -482,9 +492,7 @@ public class LockdownDoseEngineTests
             return Task.CompletedTask;
         });
     }
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [Theory, InlineData(false), InlineData(true)]
     public async Task ExitFlushesBeforeDiscardingRecoveryAndKeepsItOnSaveFailure(bool failSave) {
         await AvaloniaTestDispatcher.RunAsync(() => {
             EnsureApp();
