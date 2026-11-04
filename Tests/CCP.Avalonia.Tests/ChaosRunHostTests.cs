@@ -71,7 +71,7 @@ public sealed class ChaosRunHostTests
                 overlay.FinishCountdown(); Ticks(130); // 88%: the rabbit arrives
                 Assert.Contains(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
                 Ticks(86); Assert.False(ChaosRunHost.IsDescending); Assert.Equal(1, ChaosMeta.State.RunsCompleted); ChaosMeta.Init(); Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
-                Assert.Equal(1, ChaosLessons.Progress("draft4")); Assert.NotEmpty(state.RunPickTiles);
+                Assert.Equal(1, ChaosLessons.Progress("draft4")); Assert.Contains(state.RunPickTiles, tile => tile != null);
             } finally { LocalizationManager.Instance.SetLanguage(language); ChaosRunHost.ForceShutdown(); FreshMeta(); }
             return Task.CompletedTask; });
     }
