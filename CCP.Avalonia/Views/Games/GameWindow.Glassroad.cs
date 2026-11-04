@@ -128,6 +128,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
                         return true;
+                    case "race-result":
+                        if (ConditioningControlPanel.Services.GameRewards.GlassroadRewards.SparklesClaimFor(o) is { } claim)
+                            SparklesPending = DeliverSparkles(ConditioningControlPanel.Services.Sparkles.SparklesGameEnd.Claim(
+                                "rt3d", claim.Mode, claim.Result, claim.Duration, claim.Detail, claim.Proof, SparklesHead.Service));
+                        return true;
                     case "net":
                         OnGlassroadNet(o);
                         return true;

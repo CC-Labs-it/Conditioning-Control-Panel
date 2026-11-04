@@ -113,7 +113,7 @@ public sealed class SparklesClaimService
                 if (_adoptSp != null && ShouldAdopt(receipt))
                 {
                     try { _adoptSp(sentFor, receipt.Sp!.Value); adopted = true; }
-                    catch (Exception ex) { App.Logger?.Debug("Sparkles: adopt sp failed: {E}", ex.Message); }
+                    catch (Exception ex) { Serilog.Log.Debug("Sparkles: adopt sp failed: {E}", ex.Message); }
                 }
                 return new SparklesClaimOutcome(receipt, null, adopted);
             }
@@ -165,25 +165,9 @@ public sealed class SparklesClaimService
         catch (OperationCanceledException) { return (0, null); }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Sparkles claim failed: {E}", ex.Message);
+            Serilog.Log.Debug("Sparkles claim failed: {E}", ex.Message);
             return (0, null);
         }
     }
 
-    // ------------------------------------------------------------------ the app's one
-
-    /// <summary>The app's service: adopts on the UI thread and fires the wallet juice.</summary>
-    public static SparklesClaimService CreateForApp() => new(adoptSp: (account, sp) =>
-        App.Current?.Dispatcher?.BeginInvoke(new Action(() =>
-        {
-            if (App.Settings?.Current is not { } s) return;
-            // The account is checked AGAIN inside the marshalled write: the player may be
-            // somebody else by the time the reply lands.
-            var same = string.Equals(BackRoomApi.AppIdentity()?.UnifiedId, account, StringComparison.Ordinal);
-            var before = s.SkillPoints;
-            if (!V2WalletAdoption.Decide(same, fromBuy: false, sp, before, out var next)) return;
-            s.SkillPoints = next;
-            App.Settings.Save();
-            SparklePointRewards.PublishCredit(before, next, SparklePointSource.Place);
-        })));
 }
