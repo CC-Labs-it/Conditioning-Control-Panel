@@ -15,11 +15,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// so the show request and its ack travel over a named pipe (a Unix socket on Linux) instead. The request
     /// carries WPF's surface handoff (LauncherHandoff payload, App.xaml.cs:1951) in place of its handoff file:
     /// one length byte for short payloads, or 255 and a four-byte length for long UTF-8 payloads; 0 is bare.
+    /// That framing and file requests use the "_v2" pipe. The original pipe keeps the one-byte framing, so
+    /// older builds (which route any payload as a surface) only ever exchange surface payloads with this one.
     /// </summary>
     internal sealed class SingleInstance : IDisposable
     {
         public const string MutexName = "ConditioningControlPanel_SingleInstance_Mutex";
         internal const int MaxPayloadBytes = 131072;
+        internal const string V2Suffix = "_v2";
+        const int LegacyFallbackAfterMs = 2000;
         const int ShowAckTimeoutMs = 10000;                          // WPF App.xaml.cs:68
         static readonly TimeSpan LegacyTakeoverWait = TimeSpan.FromSeconds(8);   // WPF App.xaml.cs:1862
         static readonly TimeSpan StaleTakeoverWait = TimeSpan.FromSeconds(3);    // WPF App.xaml.cs:1914
@@ -33,8 +37,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _mutex = mutex;
             _owned = owned;
             // Only the mutex owner answers; an unowned run (wedged primary) would fight it for the pipe.
-            if (owned) _ = Task.Run(() => ListenAsync(pipe, show, _cts.Token));
+            if (!owned) return;
+            // v2 is created first, so a sender reaching only the original pipe has found an older build.
+            var current = TryCreateServer(pipe + V2Suffix);
+            var legacy = TryCreateServer(pipe);
+            _ = Task.Run(() => ListenAsync(pipe + V2Suffix, current, true, show, _cts.Token));
+            _ = Task.Run(() => ListenAsync(pipe, legacy, false, show, _cts.Token));
         }
+
+        internal static string PipeName(string suffix) => "ConditioningControlPanel_ShowWindow_Signal_" + Environment.UserName + suffix;
 
         /// <summary>A sandboxed profile (CCP_USERDATA_DIR) is a different instance, so kc and tests never
         /// wake or block the user's real app. A shipped build never sets it and holds WPF's exact name.</summary>
@@ -46,12 +57,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>Null means a live primary acknowledged the show request and this launch must exit.</summary>
         public static SingleInstance? Claim(string suffix, Func<string?, Task> show, string? payload = null)
+            => Claim(suffix, show, payload, payload);
+
+        /// <summary><paramref name="legacyPayload"/> is what an older primary receives in place of <paramref name="payload"/>.</summary>
+        public static SingleInstance? Claim(string suffix, Func<string?, Task> show, string? payload, string? legacyPayload)
         {
-            var pipe = "ConditioningControlPanel_ShowWindow_Signal_" + Environment.UserName + suffix;
+            var pipe = PipeName(suffix);
             var mutex = CreateMutex(MutexName + suffix, out bool owned);
             if (!owned)
             {
-                bool? acked = RequestShow(pipe, payload);
+                bool? acked = RequestShow(pipe, payload, legacyPayload);
                 if (acked == true) { mutex.Dispose(); return null; }
                 // No listener: a primary still exiting mid-update (#466) - wait for it, else exit (WPF 1861-1870).
                 // Listener but no ack: wedged primary. ponytail: WPF also kills it (KillStaleInstances);
@@ -71,13 +86,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static NamedWaitHandleOptions? UnixMutexOptions() =>
             OperatingSystem.IsWindows() ? null : new NamedWaitHandleOptions { CurrentUserOnly = true, CurrentSessionOnly = false };
 
-        static Mutex CreateMutex(string name, out bool owned) =>
+        internal static Mutex CreateMutex(string name, out bool owned) =>
             UnixMutexOptions() is { } options
                 ? new Mutex(true, name, options, out owned)
                 : new Mutex(true, name, out owned);
 
         /// <summary>true = acked, false = connected but no ack in time, null = nobody listening.</summary>
-        static bool? RequestShow(string pipe, string? payload)
+        static bool? RequestShow(string pipe, string? payload, string? legacyPayload)
         {
             var bytes = Encoding.UTF8.GetBytes(payload ?? "");
             if (bytes.Length > MaxPayloadBytes) return null;
@@ -92,8 +107,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     catch (AbandonedMutexException) { ownsGate = true; }
                 }
                 if (!ownsGate) return null;
-                using var c = ConnectPipe(pipe);
-                if (bytes.Length < byte.MaxValue) c.WriteByte((byte)bytes.Length);
+                using var c = ConnectPipe(pipe, out bool current);
+                if (!current)
+                {
+                    bytes = Encoding.UTF8.GetBytes(legacyPayload ?? "");
+                    if (bytes.Length > byte.MaxValue) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
+                    c.WriteByte((byte)bytes.Length);
+                }
+                else if (bytes.Length < byte.MaxValue) c.WriteByte((byte)bytes.Length);
                 else
                 {
                     c.WriteByte(byte.MaxValue);
@@ -113,38 +134,56 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally { if (ownsGate) gate.ReleaseMutex(); }
         }
 
-        static NamedPipeClientStream ConnectPipe(string pipe)
+        // Prefer v2; only after a grace period with v2 unreachable accept the original pipe of an older build.
+        static NamedPipeClientStream ConnectPipe(string pipe, out bool current)
         {
-            var deadline = Environment.TickCount64 + ShowAckTimeoutMs;
+            var start = Environment.TickCount64;
             while (true)
             {
-                var client = new NamedPipeClientStream(".", pipe, PipeDirection.InOut,
-                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-                try
-                {
-                    client.Connect(250);
-                    return client;
-                }
-                catch (Exception ex) when (ex is TimeoutException or IOException)
-                {
-                    client.Dispose();
-                    if (Environment.TickCount64 >= deadline) throw new TimeoutException("No single-instance listener", ex);
-                    Thread.Sleep(25);
-                }
+                var elapsed = Environment.TickCount64 - start;
+                if (TryConnect(pipe + V2Suffix) is { } v2) { current = true; return v2; }
+                if (elapsed >= LegacyFallbackAfterMs && TryConnect(pipe) is { } legacy) { current = false; return legacy; }
+                if (elapsed >= ShowAckTimeoutMs) throw new TimeoutException("No single-instance listener");
+                Thread.Sleep(25);
             }
         }
 
-        static async Task ListenAsync(string pipe, Func<string?, Task> show, CancellationToken ct)
+        static NamedPipeClientStream? TryConnect(string pipe)
+        {
+            var client = new NamedPipeClientStream(".", pipe, PipeDirection.InOut,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            try
+            {
+                client.Connect(250); return client;
+            }
+            catch (Exception ex) when (ex is TimeoutException or IOException)
+            {
+                client.Dispose();
+                return null;
+            }
+        }
+
+        static NamedPipeServerStream CreateServer(string pipe) =>
+            new(pipe, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+
+        static NamedPipeServerStream? TryCreateServer(string pipe)
+        {
+            try { return CreateServer(pipe); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance listener"); return null; }
+        }
+
+        static async Task ListenAsync(string pipe, NamedPipeServerStream? first, bool extended, Func<string?, Task> show, CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
             {
-                NamedPipeServerStream? server = null;
+                var server = first;
+                first = null;
                 try
                 {
-                    server = new NamedPipeServerStream(pipe, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
-                        PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                    server ??= CreateServer(pipe);
                     await server.WaitForConnectionAsync(ct);
-                    _ = HandleConnectionAsync(server, show, ct);
+                    _ = HandleConnectionAsync(server, extended, show, ct);
                     server = null; // the handler owns it
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
@@ -155,9 +194,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 finally { server?.Dispose(); }
             }
+            first?.Dispose();   // cancelled before the first wait
         }
 
-        static async Task HandleConnectionAsync(NamedPipeServerStream server, Func<string?, Task> show, CancellationToken ct)
+        static async Task HandleConnectionAsync(NamedPipeServerStream server, bool extended, Func<string?, Task> show, CancellationToken ct)
         {
             await using (server)
             {
@@ -165,7 +205,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     timeout.CancelAfter(ShowAckTimeoutMs);
-                    var payload = await ReadPayloadAsync(server, timeout.Token);
+                    var payload = await ReadPayloadAsync(server, timeout.Token, extended);
                     // Ack after the request is accepted, even if showing it failed (WPF App.xaml.cs:1985).
                     try { await show(payload); } catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show failed"); }
                     await server.WriteAsync(new byte[] { 1 }, timeout.Token);
@@ -176,16 +216,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        internal static async Task<string?> ReadPayloadAsync(Stream stream, CancellationToken ct)
+        internal static async Task<string?> ReadPayloadAsync(Stream stream, CancellationToken ct, bool extended = true)
         {
             var len = new byte[1];
             await stream.ReadExactlyAsync(len, ct);
             int count = len[0];
-            if (count == byte.MaxValue)
+            if (extended && count == byte.MaxValue)
             {
-                var extended = new byte[4];
-                await stream.ReadExactlyAsync(extended, ct);
-                count = BinaryPrimitives.ReadInt32LittleEndian(extended);
+                var wide = new byte[4];
+                await stream.ReadExactlyAsync(wide, ct);
+                count = BinaryPrimitives.ReadInt32LittleEndian(wide);
                 if (count < byte.MaxValue || count > MaxPayloadBytes) throw new InvalidDataException("Invalid handoff length");
             }
             var body = new byte[count];
