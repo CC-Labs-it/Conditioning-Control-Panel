@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -129,8 +130,30 @@ public partial class AvailableSubjectsTabView : UserControl
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
-        // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
-        // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+        // Chess/Goon host and non-Remote row doors still wait for their game hosts.
+    }
+
+    // WPF MainWindow.Lobby.cs:243-271 and MainWindow.RemoteControl.cs:499-512.
+    internal Func<string, bool> OpenClaimUrl = url => Platform.ExternalOpener.Open(url);
+    private async void BtnLobbyRow_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not LobbyCardView view) return;
+        var row = view.Row;
+        if (row.Game != LobbyGame.Remote || !row.CanJoin || string.IsNullOrEmpty(row.Key)) return;
+        var gates = ReadGates();
+        if (!gates.SignedIn || !gates.CanJoin(row.Game))
+        {
+            if (TopLevel.GetTopLevel(this) is MainShellWindow shell) _ = shell.OpenUnifiedLoginDialog();
+            return;
+        }
+        button.SetCurrentValue(IsEnabledProperty, false);
+        try
+        {
+            var url = await Discovery.ClaimRemoteAsync(row.Key);
+            if (!string.IsNullOrEmpty(url)) OpenClaimUrl(url);
+        }
+        catch { Serilog.Log.Warning("[Lobby] Remote claim failed"); }
+        finally { button.SetCurrentValue(IsEnabledProperty, view.RemoteJoinEnabled); }
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -147,6 +170,7 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Row = row;
         Art = ArtFor(row.Game);
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
@@ -184,6 +208,8 @@ public sealed class LobbyCardView
         return new LinearGradientBrush { StartPoint = RelativePoint.TopLeft, EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
             GradientStops = new GradientStops { new(c, 0), new(Color.FromArgb(0, c.R, c.G, c.B), 1) } };
     }
+    public LobbyRow Row { get; }
+    public bool RemoteJoinEnabled => Row.Game == LobbyGame.Remote && Row.CanJoin;
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }

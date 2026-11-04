@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (!Allowed(target)) return false;
             try { return Shell(target!); }
-            catch (Exception ex) { Log.Warning("Could not open {Target}: {Error}", Path.IsPathRooted(target!) ? target : "link", ex.Message); return false; }
+            catch { Log.Warning("Could not open target"); return false; }
         }
 
         /// <summary>Test seam for the select-the-file half of <see cref="Reveal"/>: gets a full path to an existing
@@ -114,7 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         : await l.LaunchUriAsync(Path.IsPathRooted(target!) ? new Uri(Path.GetFullPath(target!)) : new Uri(target!))))
                     return true;
             }
-            catch (Exception ex) { Log.Debug("Launcher failed, trying the shell: {Error}", ex.Message); }
+            catch { Log.Debug("Launcher failed, trying the shell"); }
             return Open(target);
         }
     }

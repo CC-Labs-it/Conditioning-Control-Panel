@@ -87,6 +87,56 @@ internal static class AccountSeed
         return true;
     }
 
+    // WPF MergedAccountRecoveryHead.cs:11-33 and App.xaml.cs:4590: stop old writes,
+    // preserve quest ownership, try each provider, then read the canonical profile or offer sign-in.
+    internal static void SeedMergedRecovery()
+    {
+        MergedAccountRecovery.StopSync = () => Sync?.Reset();
+        MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
+        MergedAccountRecovery.Reauthenticate = ReauthenticateMergedAsync;
+        MergedAccountRecovery.ReloadProfile = async () => { await LoadProfileAsync(); };
+        MergedAccountRecovery.Finished = (canonical, reauthed) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            Views.Windows.MainShellWindow.Current?.UpdateQuickLoginUI(accountChanged: true);
+            if (!reauthed) StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "merged-account-signin:" + canonical,
+                HasLinkIcon = true,
+                Title = global::ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_title"),
+                Summary = global::ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_summary"),
+                Open = async () =>
+                {
+                    if (Views.Windows.MainShellWindow.Current is not { } shell) return;
+                    if (await Views.Dialogs.MessageDialog.ConfirmAsync(shell, global::ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_title"),
+                        global::ConditioningControlPanel.Localization.Loc.Get("account_merged_signin_body"))) await shell.OpenUnifiedLoginDialog();
+                },
+            });
+        });
+    }
+    private static async Task<bool> ReauthenticateMergedAsync()
+    {
+        var v2 = NewV2();
+        async Task<bool> Try(Func<string?> getToken, Func<string, Task<V2AuthService.V2AuthResponse>> authenticate)
+        {
+            try
+            {
+                var token = getToken();
+                if (string.IsNullOrEmpty(token)) return false;
+                var result = await authenticate(token);
+                if (!result.Success || result.User == null || string.IsNullOrEmpty(result.User.UnifiedId) || string.IsNullOrEmpty(result.AuthToken)) return false;
+                ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, DateTime.UtcNow);
+                Services.Invites.InviteRules.ApplyGrant(CoreSettings.Current, Services.Invites.InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), DateTime.UtcNow);
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(Views.Controls.Invites.InvitePanel.ArmExpiry);
+                CoreAccount.UnifiedUserId = result.User.UnifiedId;
+                CoreSettings.Save(suppressCloudBackup: true);
+                return true;
+            }
+            catch { Log.Warning("[MergedAccount] provider re-auth failed"); return false; }
+        }
+        if (Patreon?.IsAuthenticated == true && await Try(Patreon.GetAccessToken, t => v2.AuthenticateWithPatreonAsync(t))) return true;
+        if (Discord?.IsAuthenticated == true && await Try(Discord.GetAccessToken, t => v2.AuthenticateWithDiscordAsync(t))) return true;
+        return SubscribeStar?.IsAuthenticated == true && await Try(SubscribeStar.GetAccessToken, t => v2.AuthenticateWithSubstarAsync(t));
+    }
     /// <summary>WPF App.xaml.cs:2267 restore: the unified id persisted from the previous session. Unlike WPF,
     /// only when something can still prove it (an auth token, or a signed-in provider): with no Secret Service
     /// the token is gone after a restart, and showing "signed in" with nothing behind it is worse than signed out.</summary>

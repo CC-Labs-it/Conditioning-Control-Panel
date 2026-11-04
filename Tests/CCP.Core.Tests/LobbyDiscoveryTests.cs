@@ -117,6 +117,11 @@ public sealed class LobbyDiscoveryTests
         Assert.True(service.Snapshot.SignedIn);
     }
 
+    [Fact] public async Task CompletedRoundsStayRefreshable() {
+        using var service = new LobbyService(new Timer()) { SignedIn = () => false }; int rounds = 0; service.Changed += _ => rounds++;
+        for (int i = 0; i < 1000; i++) await service.RefreshAsync();
+        Assert.Equal(1000, rounds);
+    }
     [Fact]
     public async Task FaultsBackOffToSixtySecondsAndRecoveryResetsCadence()
     {

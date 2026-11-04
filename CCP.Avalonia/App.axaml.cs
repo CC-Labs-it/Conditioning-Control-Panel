@@ -662,6 +662,7 @@ namespace ConditioningControlPanel.Avalonia
                     // WPF MainWindow.JustDrop.cs:66: the Just Drop door flag, 9 s after startup.
                     Views.Windows.MainShellWindow.JustDropAvailabilityCheck = Services.JustDrop.JustDropService.RefreshAvailabilityAsync;
                 }
+                Platform.AccountSeed.SeedMergedRecovery(); // WPF App.xaml.cs:417, before account requests.
                 if (Platform.AccountSeed.Seed())
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
