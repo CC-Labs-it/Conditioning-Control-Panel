@@ -90,6 +90,42 @@ public sealed class LeashHolderTests
         finally { window.Close(); }
     });
     [Fact]
+    public void DrawerReconcilesHeldCardsAndReceiptsAcrossReopen() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var (friends, _) = FriendsDrawerTests.Service();
+        var svc = new Service { ReceiptsSupported = true };
+        var one = Held(); var two = Held();
+        svc.Publish(one, two);
+        var drawer = new FriendsDrawer(friends) { ResolveLeash = () => svc };
+        var window = new Window { Content = drawer };
+        try
+        {
+            window.Show(); drawer.OnOpened();
+            Assert.Equal(2, drawer.LeashSection!.HolderCards.Count);
+            var card = drawer.LeashSection!.HolderCards[one.Who.Id];
+            Assert.Contains(card, drawer.GetLogicalDescendants());
+            Click(card, "leash-btn:assign");
+            svc.Publish(one with { Day = 4 });
+            Assert.Same(card, drawer.LeashSection!.HolderCards[one.Who.Id]);
+            Assert.Single(drawer.LeashSection!.HolderCards);
+            Assert.Equal("assign", card.OpenSheet);
+            Assert.Contains(card.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("leash_holder_day", 4));
+            var at = DateTimeOffset.UtcNow;
+            var receipt = new LeashSentItem("k", LeashItemKind.Tug, one.Who.Id, "0123456789abcdef", LeashStep.Seen, at, at);
+            svc.Receipt(receipt);
+            Assert.Contains("leash-sent-row:tug:seen", Tags(card));
+            drawer.OnClosed(); svc.Publish(); svc.Receipt(receipt with { Step = LeashStep.Done });
+            Assert.Single(drawer.LeashSection!.HolderCards);
+            Assert.Contains("leash-sent-row:tug:seen", Tags(card));
+            drawer.OnOpened(); Assert.Empty(drawer.LeashSection!.HolderCards); Assert.True(drawer.LeashSection.ShowingEmpty);
+            svc.Publish(one); Assert.Contains("leash-sent-row:tug:done", Tags(drawer.LeashSection!.HolderCards[one.Who.Id]));
+            drawer.OnClosed();
+        }
+        finally { window.Close(); friends.Dispose(); }
+    });
+    [Fact]
     public void HoldingAloneReachesTheCardAndPollsKeepItsOpenSheet() => Run((page, svc, held) =>
     {
         Assert.False(page.ShowingEmpty);

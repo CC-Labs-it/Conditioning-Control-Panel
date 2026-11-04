@@ -18,10 +18,18 @@ public partial class LeashTabView : UserControl
     internal Dictionary<string, LeashHolderCard> HolderCards { get; } = new();
 
     public LeashTabView() : this(() => LeashHead.Service) { }
-    internal LeashTabView(Func<ILeashService?> service)
+    internal LeashTabView(Func<ILeashService?> service, bool asDrawer = false)
     {
         _resolve = service;
         InitializeComponent();
+        if (asDrawer)
+        {
+            PageStack.Children.Remove(SectionHost);
+            Content = SectionHost;
+            Tag = "leash-section";
+            AttachedToVisualTree += (_, _) => OnShown();
+        }
+        EmptyButton.Cursor = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer.Hand();
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
         DetachedFromVisualTree += (_, _) => Unsubscribe();
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) Unsubscribe(); };
@@ -37,6 +45,8 @@ public partial class LeashTabView : UserControl
         if (_service != null) { _service.SnapshotChanged += OnSnapshot; _service.ReceiptsChanged += OnReceipts; }
         Render();
     }
+
+    internal void OnHidden() => Unsubscribe();
 
     private void Unsubscribe()
     {

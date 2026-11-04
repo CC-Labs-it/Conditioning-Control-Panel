@@ -14,14 +14,14 @@
     </UserControl.Styles>
     <Grid Margin="32,20,32,20" MaxWidth="660">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel MaxWidth="620">
+            <StackPanel x:Name="PageStack" MaxWidth="620">
                 <StackPanel x:Name="SectionHost"/>
                 <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" Margin="18,40,18,28">
                     <TextBlock Text="{loc:Str social_leash_empty}" Foreground="{DynamicResource TextMutedBrush}"
                                FontSize="13" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,12"/>
                     <Button x:Name="EmptyButton" Tag="leash-page-open-friends" HorizontalAlignment="Center"
                             Background="#5FFFD0" Foreground="#062A1F" BorderBrush="#5FFFD0" BorderThickness="1"
-                            CornerRadius="10" Padding="16,6" Cursor="Hand">
+                            CornerRadius="10" Padding="16,6">
                         <TextBlock Text="{loc:Str social_leash_empty_open}" FontSize="13" FontFamily="Fredoka, Segoe UI"/>
                     </Button>
                 </StackPanel>
