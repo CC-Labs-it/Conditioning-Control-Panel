@@ -100,13 +100,18 @@ namespace ConditioningControlPanel.Services
             _http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{appVersion}");
         }
 
+        /// <summary>Head-provided merged-account recovery, as in WPF AuthPostAsync. Unseeded until the head can complete the swap.</summary>
+        public static volatile Func<HttpResponseMessage, Task<bool>>? MergedRecovery;
+
         private async Task<HttpResponseMessage> PostAsync(string path, object body)
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + path)
             { Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json") };
             var token = _token();
             if (!string.IsNullOrEmpty(token)) req.Headers.Add("X-Auth-Token", token);
-            return await _http.SendAsync(req).ConfigureAwait(false);
+            var response = await _http.SendAsync(req).ConfigureAwait(false);
+            if (MergedRecovery is { } recover) await recover(response).ConfigureAwait(false);
+            return response;
         }
 
         /// <summary>WPF StartSessionAsync: the new session code, or null (logged; see <see cref="LastStartFailedAuth"/>).</summary>
