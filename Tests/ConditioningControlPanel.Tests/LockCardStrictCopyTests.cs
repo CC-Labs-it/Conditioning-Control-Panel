@@ -36,7 +36,7 @@ public class LockCardStrictCopyTests
     }
 
     private static JObject Lang(string lang) =>
-        JObject.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages", lang + ".json")));
+        JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json")));
 
     [Theory]
     [InlineData("Escape", true)]

@@ -329,6 +329,8 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // Web page audio into the recent-sounds ring (#1540 / #1549): the gate is in Core, the ring writer here.
+            Services.Fyp.Online.ScrolllerWebGate.AttachHook = Services.Audio.WebAudioWatch.Attach;
             // The browser video gate's rules live in Core; the WebView2 engine half stays here.
             // Touching Instance also kicks off the shared environment build on first use, so a
             // later video finds IsAvailable already settled. A file the page cannot serve (outside
