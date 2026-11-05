@@ -25,7 +25,11 @@ public sealed class AvatarTubeFinishTests
     private static Task Run(Action<MainShellWindow, AvatarTubeWindow, Action<ModPackage>> body,
         int savedSet = 1, int? remembered = null) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        AmbientBeatLoopsTests.Setup();
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         var service = new SettingsService();
         var settingsProvider = CoreSettings.ServiceProvider;
         var packageProvider = CoreMods.ActiveModPackageProvider;
