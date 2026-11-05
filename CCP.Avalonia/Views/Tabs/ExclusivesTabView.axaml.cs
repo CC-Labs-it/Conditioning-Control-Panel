@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -53,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { WakeMotion(); UpdateMotion(); } };
             // Main bf57cecdf: columns follow the width, cards stretch to fill the row (Core ExclusiveShelfFit).
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
         }
@@ -88,7 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>ModChanged may be raised off the UI thread; marshal before touching the Image.</summary>
-        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() => { LoadBackdrop(); RefreshVault(); });
+        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() => { _vaultState = null; LoadBackdrop(); RefreshVault(); });
 
         /// <summary>WPF binds the group headers live (BindVaultLoc); here the rows are rebuilt (PLAYBOOK P09).</summary>
         private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshVault);
@@ -113,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
+            _vaultState = null;   // detached: a same-id mod reload goes unheard, so repaint on the next show
             _ambientFx.Stop();
             UpdateMotion();
         }
@@ -121,6 +124,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // The vault (WPF MainWindow.Exclusives.cs EnsureExclusivesBuilt + RefreshExclusivesTab)
         // ------------------------------------------------------------------
 
+        private (ExclusiveFeature Feature, bool Shown, ExclusiveGateState State, bool FreeToday)[]? _vaultState;
+        private (ExclusiveFeature Feature, bool Shown, ExclusiveGateState State, bool FreeToday)[] _vaultProbe = new (ExclusiveFeature, bool, ExclusiveGateState, bool)[ExclusiveFeature.All.Count];
+        private ExclusiveCardRow?[] _vaultCards = new ExclusiveCardRow?[ExclusiveFeature.All.Count];
+        private ObservableCollection<object>? _vaultRows;
+        private string? _vaultMod;
+        private string? _vaultLanguage;
+        private Color _vaultAccent;
+
         /// <summary>
         /// Repaints the spotlight and the shelf from <see cref="ExclusiveFeature.All"/> and each
         /// feature's live gate. Called on construction, on every show of the tab
@@ -128,28 +139,75 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void RefreshVault()
         {
-            RetintVaultChrome();
+            var mod = CoreMods.ActiveModId;
+            var language = LocalizationManager.Instance.CurrentLanguage;
+            var state = _vaultProbe;
+            var accent = VaultAccent();
+            // The accent is a paint input too: untiered card edges and the spotlight rim follow it.
+            bool rebuild = _vaultState == null || _vaultMod != mod || _vaultLanguage != language || _vaultAccent != accent;
+            if (rebuild) RetintVaultChrome();
+            bool changed = rebuild;
+            // Probe every door, including hidden ones, without allocating on unchanged visits.
+            for (int i = 0; i < state.Length; i++)
+            {
+                var f = ExclusiveFeature.All[i];
+                var gate = f.GateState();
+                state[i] = (f, f.Shown(), gate, f.IsFreeToday(gate));
+                changed |= _vaultState == null || _vaultState[i] != state[i];
+            }
+            RefreshTierPlates();
+            if (!changed) return;
+
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
             var rows = new List<object>();
-            var cards = ExclusiveFeature.All.Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
+            if (rebuild) _vaultCards = new ExclusiveCardRow?[state.Length];
+            for (int i = 0; i < state.Length; i++)
+            {
+                var entry = state[i];
+                if (_vaultCards[i] is { } existing) existing.UpdateGate(entry.State, entry.FreeToday);
+                else if (entry.Shown || i == 0)
+                    _vaultCards[i] = new ExclusiveCardRow(entry.Feature, entry.State, entry.FreeToday);
+            }
+            var cards = state.Select((entry, i) => entry.Shown ? _vaultCards[i] : null).OfType<ExclusiveCardRow>();
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
             {
-                rows.Add(new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count));
+                var header = rebuild ? null : _vaultRows!.OfType<ExclusiveGroupRow>().FirstOrDefault(r => r.Group == group);
+                if (header == null) header = new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count);
+                else header.UpdateCount(items.Count(r => !r.IsLocked), items.Count);
+                rows.Add(header);
                 rows.AddRange(items);
             }
-            this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = rows;
+            if (rebuild)
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = _vaultRows = new ObservableCollection<object>(rows);
+            else
+            {
+                // WPF retains cards when access reorders the shelf. Move only the affected rows;
+                // replacing ItemsSource would re-template every card and decode its art again.
+                for (int i = _vaultRows!.Count - 1; i >= 0; i--)
+                    if (!rows.Contains(_vaultRows[i])) _vaultRows.RemoveAt(i);
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    int old = _vaultRows.IndexOf(rows[i]);
+                    if (old < 0) _vaultRows.Insert(i, rows[i]);
+                    else if (old != i) _vaultRows.Move(old, i);
+                }
+                foreach (var part in _fxParts) Dress(part);
+            }
 
-            var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
+            var spot = _vaultCards[0]!;
             this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
             var spotArt = this.FindControl<Image>("SpotArtImage")!;
-            var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
-            spotArt.Source = banner ?? spot.Art;
-            // WPF ApplySpotlightArt: the Ken Burns zoom centres on a banner, on the focal point of card art.
-            spotArt.RenderTransformOrigin = banner != null
-                ? RelativePoint.Center
-                : new RelativePoint(spot.Feature.FocalX, spot.Feature.FocalY, RelativeUnit.Relative);
+            if (rebuild)
+            {
+                var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
+                spotArt.Source = banner ?? spot.Art;
+                // WPF ApplySpotlightArt: banner centre, otherwise the card art's focal point.
+                spotArt.RenderTransformOrigin = banner != null
+                    ? RelativePoint.Center
+                    : new RelativePoint(spot.Feature.FocalX, spot.Feature.FocalY, RelativeUnit.Relative);
+            }
             this.FindControl<TextBlock>("TxtSpotTitle")!.Text = spot.Title;
             this.FindControl<TextBlock>("TxtSpotTagline")!.Text = spot.Tagline;
             this.FindControl<Border>("SpotBadge")!.IsVisible = spot.HasBadge;
@@ -172,9 +230,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             open.IsEnabled = spot.IsAvailable;
             ToolTip.SetTip(open, spot.UnavailableTip);
             ToolTip.SetShowOnDisabled(open, true);
-            RefreshTierPlates();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+            // Publish only after a successful repaint. ModChanged clears this even for a same-id reload.
+            _vaultProbe = _vaultState ?? new (ExclusiveFeature, bool, ExclusiveGateState, bool)[state.Length];
+            (_vaultState, _vaultMod, _vaultLanguage, _vaultAccent) = (state, mod, language, accent);
         }
 
         // WPF RetintVaultChrome: only decor follows the mod; gold free-day and tier commerce do not.
@@ -228,16 +288,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private BeatLoop? _motion;
         private long _motionStart;
 
-        /// <summary>True while the one ambient clock runs. Test seam.</summary>
-        internal bool MotionRunning => _motion?.IsRunning == true;
+        /// <summary>True while the one ambient clock runs and is not parked by a hide. Test seam.</summary>
+        internal bool MotionRunning => _motion is { IsRunning: true, Parked: false } && IsVisible;
 
-        /// <summary>Shelf cards currently wearing a sheen. Test seam.</summary>
-        internal int SheenCount => _sheens.Values.Count(s => s != null);
+        /// <summary>Shelf cards currently drawing a sheen (a hidden tab's sheens are parked, not drawn). Test seam.</summary>
+        internal int SheenCount => _sheens.Values.Count(s => s is { IsVisible: true });
 
-        /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
+        /// <summary>The loop and the sheens that survived the last hide (perf: a show re-uses them). Test seam.</summary>
+        internal (BeatLoop? Loop, CardSheenAdorner? Sheen) MotionParts => (_motion, _sheens.Values.FirstOrDefault(s => s != null));
+
+        /// <summary>The only start/stop: attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01). A hide only parks:
+        /// BeatLoop stops its clock and each sheen hides and stops ticking with its card (FxAdorner), so a tab
+        /// switch no longer rebuilds the loop and re-attaches every card's sheen on the next show (perf-exclusives-p95).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            bool want = this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
@@ -254,16 +319,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _motion = null;
                 foreach (var sheen in _sheens.Values) CardSheenAdorner.Detach(sheen);
                 foreach (var k in _sheens.Keys.ToList()) _sheens[k] = null;
+            }
+            if (_motion == null || !IsVisible)
+            {
                 _kenBurns.ScaleX = _kenBurns.ScaleY = 1;
                 if (LitPlate != null) LitPlate.Opacity = 1;
             }
             foreach (var part in _fxParts) Dress(part);
         }
 
+        /// <summary>A show of a parked room starts it afresh like WPF (StartExclusivesMotion + AttachExclusiveSheens,
+        /// MainWindow.Exclusives.cs:1422-1430,1545-1548): the zoom from 1.0, every sheen re-tinted and sweeping on entry.</summary>
+        private void WakeMotion()
+        {
+            if (!IsVisible || _motion == null) return;
+            _motionStart = FxAdorner.Time.GetTimestamp();
+            foreach (var s in _sheens.Values) s?.Start();
+        }
+
         /// <summary>One frame of every loop, read from <see cref="FxAdorner.Time"/> so tests step it.</summary>
         internal void MotionFrame()
         {
-            if (_motion == null) return;
+            if (!MotionRunning) return;   // BeatLoop.Start steps once even when it starts parked (hidden tab)
             double t = FxAdorner.Time.GetElapsedTime(_motionStart).TotalSeconds;
             _kenBurns.ScaleX = _kenBurns.ScaleY = Breath(t, 26, 1.0, 1.07);
             if (LitPlate != null) LitPlate.Opacity = Breath(t, 3.4, 0.75, 1.0);
@@ -312,7 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // that same shadow is baked once into a bitmap behind the glyph (glyph-shaped, GlowBake) and the
                 // breath moves only the bitmap's Opacity: a live Effect re-blurs every frame (P82 rule 3).
                 if (LockGlow(part) is not { } g || part is not IconGlyph glyph) return;
-                g.IsVisible = _motion != null && glow && part.IsEffectivelyVisible;
+                g.IsVisible = _motion != null && IsVisible && glow && part.IsEffectivelyVisible;
                 if (!g.IsVisible) return;
                 double blur = Math.Min(20, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)), pad = 2 * blur;
                 var key = $"{glyph.Kind}|{glyph.Variant}|{glyph.Size}|{AmbientFxCanvas.Env.GlowColor}|{blur}";
@@ -339,7 +416,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void FxPart_Loaded(object? sender, RoutedEventArgs e)
         {
             if (sender is not Control part) return;
-            if (part.Name == "ExCard") { if (!_sheens.ContainsKey(part)) _sheens[part] = _motion == null ? null : CardSheenAdorner.Attach(part, 12); return; }
+            if (part.Name == "ExCard") { if (!_sheens.ContainsKey(part)) _sheens[part] = MotionRunning ? CardSheenAdorner.Attach(part, 12) : null; return; }
             if (_fxParts.Add(part)) Dress(part);
         }
 
@@ -398,13 +475,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// One shelf card: an <see cref="ExclusiveFeature"/> plus the state
     /// MainWindow.Exclusives.cs paints onto it (ApplyExclusiveCardState / VaultLivery.Apply).
     /// </summary>
-    public sealed class ExclusiveCardRow
+    public sealed class ExclusiveCardRow : INotifyPropertyChanged
     {
-        public ExclusiveCardRow(ExclusiveFeature feature)
+        public ExclusiveCardRow(ExclusiveFeature feature) : this(feature, feature.GateState()) { }
+
+        private ExclusiveCardRow(ExclusiveFeature feature, ExclusiveGateState state)
+            : this(feature, state, feature.IsFreeToday(state)) { }
+
+        internal ExclusiveCardRow(ExclusiveFeature feature, ExclusiveGateState state, bool freeToday)
         {
             Feature = feature;
-            State = feature.GateState();
-            FreeToday = feature.IsFreeToday(State);
+            State = state;
+            FreeToday = freeToday;
             // WPF ExclusiveArtPath: Takeover forks its art under BambiSleep.
             Art = ModArt.TryLoad(feature.Key == "bambitakeover" && CoreMods.ActiveModId == BuiltInMods.BambiSleepId
                 ? "features/bambi takeover.png"
@@ -412,8 +494,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         public ExclusiveFeature Feature { get; }
-        public ExclusiveGateState State { get; }
-        public bool FreeToday { get; }
+        public ExclusiveGateState State { get; private set; }
+        public bool FreeToday { get; private set; }
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        internal void UpdateGate(ExclusiveGateState state, bool freeToday)
+        {
+            if (State == state && FreeToday == freeToday) return;
+            (State, FreeToday) = (state, freeToday);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+        }
         public Bitmap? Art { get; }
         public bool HasArt => Art != null;
         public bool IsAvailable => ExclusivesTabView.IsOnThisBuild(Feature.Key);
@@ -478,7 +568,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// sign (none for Free), the plan's name and one line in its colour, and "n of m yours". Commerce
     /// colours: they never follow the mod accent.
     /// </summary>
-    public sealed class ExclusiveGroupRow(Services.UI.PremiumGroup group, int open, int total)
+    public sealed class ExclusiveGroupRow(Services.UI.PremiumGroup group, int open, int total) : INotifyPropertyChanged
     {
         private static readonly Color BasicGold = Color.FromRgb(0xFF, 0xC8, 0x5A);
         private static readonly Color PrimeCyan = Color.FromRgb(0x6F, 0xE8, 0xFF);
@@ -500,7 +590,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         public string Title => Loc.Get($"premium_group_{Key}");
         public string Sub => Loc.Get($"premium_group_{Key}_sub");
-        public string Count { get; } = Loc.GetF("premium_group_count", open, total);
+        public string Count { get; private set; } = Loc.GetF("premium_group_count", open, total);
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        internal void UpdateCount(int open, int total)
+        {
+            var count = Loc.GetF("premium_group_count", open, total);
+            if (Count == count) return;
+            Count = count;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Count)));
+        }
         /// <summary>Loaded once per row (ModArt keeps no cache); WPF builds its headers once.</summary>
         public Bitmap? Sign { get; } = group == Services.UI.PremiumGroup.Free ? null : ModArt.TryLoad($"features/tier_badge_t{(group == Services.UI.PremiumGroup.Basic ? 1 : 2)}.png", 240);
         public bool HasSign => Sign != null;
