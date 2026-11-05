@@ -100,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             SyncFromSettings();
             ApplyFeatureArt();
+            RefreshModLabels();
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -110,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             SyncFromSettings();
             ApplyFeatureArt();
+            RefreshModLabels();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -123,11 +125,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The voice and chant hints are chosen in code (local value beats {loc:Str}), so a
         /// language switch re-runs the sync that picks their keys instead of leaving them stale.</summary>
         private void OnLanguageChanged(object? sender, EventArgs e) =>
-            Dispatcher.UIThread.Post(SyncFromSettings);
+            Dispatcher.UIThread.Post(() => { SyncFromSettings(); RefreshModLabels(); });
 
         /// <summary>ModChanged can be raised off the UI thread, so the repaint is marshalled.</summary>
         private void OnModChanged(object? sender, Models.ModPackage mod) =>
-            Dispatcher.UIThread.Post(ApplyFeatureArt);
+            Dispatcher.UIThread.Post(() => { ApplyFeatureArt(); RefreshModLabels(); });
+
+        // WPF MainWindow.UiUpdates.cs:154-178: mod replacements win over localization.
+        private void RefreshModLabels()
+        {
+            static string Label(string english, string key)
+            {
+                var mod = CoreMods.MakeModAware(english);
+                return mod != english ? mod : Loc.Get(key);
+            }
+
+            TxtBambiTakeoverHeader.Text = CoreMods.Service?.GetTakeoverLabel() ?? Loc.Get("tab_takeover");
+            TxtAutoFlash.Text = Label("Flashes", "tab_flashes");
+            TxtAutoVideo.Text = Label("Videos", "tab_videos");
+            TxtAutoSubliminal.Text = Label("Subliminals", "tab_subliminals");
+            TxtAutoBubbles.Text = Label("Bubbles", "label_bubbles");
+            TxtAutoPinkFilter.Text = Label("Pink Filter", "label_pink_filter");
+            TxtAutoLockCards.Text = Label("Lock Cards", "label_lock_card");
+            TxtAutoBouncing.Text = Label("Bouncing", "label_bouncing_text");
+            TxtAutoMindwipe.Text = Label("Mindwipe", "label_mind_wipe");
+        }
 
         /// <summary>
         /// WPF: MainWindow.xaml.cs:2633 picks the path and BambiTakeoverTabView.xaml.cs:87 repaints
