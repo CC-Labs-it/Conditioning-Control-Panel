@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
@@ -57,6 +59,142 @@ public sealed class BannerMotionTests
         Assert.Equal(744, host.MaxWidth);
         Assert.Equal(14, w.Named<TextBlock>("TxtBannerPrimary")!.FontSize);
     });
+
+    [Fact]
+    public Task BannerDepthTracksSectionAndKeepsLinksClear() => InShell(w =>
+    {
+        var shade = w.Named<Border>("BannerDrumShade")!;
+        var lip = w.Named<Border>("BannerDrumLip")!;
+        w.PaintBannerDepth(global::Avalonia.Media.Colors.Red);
+        var first = Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(shade.Background).GradientStops[0].Color;
+        w.PaintBannerDepth(global::Avalonia.Media.Colors.Blue);
+        Assert.NotEqual(first, Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(shade.Background).GradientStops[0].Color);
+        Assert.Equal(4, ((global::Avalonia.Media.LinearGradientBrush)shade.Background!).GradientStops.Count);
+        Assert.False(lip.IsHitTestVisible);
+        Assert.False(shade.IsHitTestVisible);
+        Assert.False(w.Named<Border>("BannerDrumFoot")!.IsHitTestVisible);
+        Assert.False(w.Named<Border>("BannerGlass")!.IsHitTestVisible);
+        Assert.True(w.Named<Grid>("BannerDrum")!.ClipToBounds);
+        foreach (var name in new[] { "TxtBannerPrimary", "TxtBannerSecondary", "TxtBannerWeb", "TxtBannerPool" })
+            Assert.Null(w.Named<TextBlock>(name)!.Effect);
+        Assert.NotNull(w.Named<Image>("BannerSecondaryGlow")!.Source);
+        Assert.NotNull(w.Named<SafeLink>("BannerSupportLink"));
+        Assert.NotNull(w.Named<SafeLink>("BannerWebLink"));
+    });
+
+    [Fact]
+    public Task BannerSheenStaysInsideCurvedEnds() => InShell(w =>
+    {
+        w.UpdateLayout();
+        var host = w.Named<Border>("HeaderBannerHost")!;
+        var sheen = w.Named<Grid>("BannerSheenHost")!;
+        Assert.Equal(new Thickness(14, 0), sheen.Margin);
+        Assert.True(sheen.ClipToBounds);
+        var start = sheen.TranslatePoint(new Point(0, 0), host)!.Value;
+        var end = sheen.TranslatePoint(new Point(sheen.Bounds.Width, 0), host)!.Value;
+        Assert.Equal(15, start.X, 1);
+        Assert.Equal(host.Bounds.Width - 15, end.X, 1);
+    });
+
+    [Fact]
+    public Task PlainBannerGlowsBakeOnTextAndAccentChangeAndFollowOpacity() => InShell(w =>
+    {
+        foreach (var (textName, imageName) in new[] { ("TxtBannerSecondary", "BannerSecondaryGlow"), ("TxtBannerPool", "BannerPoolGlow") })
+        {
+            var text = w.Named<TextBlock>(textName)!;
+            var image = w.Named<Image>(imageName)!;
+            text.Transitions = null;
+            text.Text = "A short line";
+            var first = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+            Assert.False(image.IsHitTestVisible);
+            var firstWidth = first.PixelSize.Width;
+            text.Text = "A longer banner line";
+            var second = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+            Assert.NotSame(first, second);
+            Assert.True(second.PixelSize.Width > firstWidth);
+            using var beforeAccent = new System.IO.MemoryStream();
+            second.Save(beforeAccent);
+            w.Resources["PinkBrush"] = new global::Avalonia.Media.SolidColorBrush(
+                textName == "TxtBannerSecondary" ? global::Avalonia.Media.Colors.Blue : global::Avalonia.Media.Colors.Red);
+            Dispatcher.UIThread.RunJobs();
+            var recolored = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+            Assert.NotSame(second, recolored);
+            using var afterAccent = new System.IO.MemoryStream();
+            recolored.Save(afterAccent);
+            Assert.False(beforeAccent.ToArray().SequenceEqual(afterAccent.ToArray()));
+            text.Opacity = 0.37;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0.37, image.Opacity, 2);
+            text.Text = "";
+            Assert.Null(image.Source);
+        }
+    });
+
+    [Fact]
+    public Task BannerLinksReceiveHitTestsThroughDecorations() => InShell(w =>
+    {
+        foreach (var (beatName, linkName) in new[] { ("TxtBannerPrimary", "BannerSupportLink"), ("TxtBannerWeb", "BannerWebLink") })
+        {
+            foreach (var name in new[] { "TxtBannerPrimary", "TxtBannerSecondary", "TxtBannerWeb", "TxtBannerPool" })
+            {
+                var beat = w.Named<TextBlock>(name)!;
+                beat.Transitions = null;
+                beat.Opacity = name == beatName ? 1 : 0;
+                beat.IsHitTestVisible = name == beatName;
+            }
+            w.UpdateLayout();
+            ContentHitTestTests.RenderLiveTree(w);
+            var link = w.Named<SafeLink>(linkName)!;
+            Assert.True(link.Bounds.Width > 2 && link.Bounds.Height > 2);
+            var point = link.TranslatePoint(new Point(link.Bounds.Width / 2, 2), w)!.Value;
+            var hit = w.InputHitTest(point) as Visual;
+            Assert.True(hit == link || (hit != null && link.IsVisualAncestorOf(hit)), $"{linkName}: hit {hit}");
+        }
+    });
+
+    [Fact]
+    public Task BannerDepthFollowsSectionNavigation() => InShell(w =>
+    {
+        var lastTabs = CoreSettings.Current.NavLastTabBySection;
+        try
+        {
+            var shade = w.Named<Border>("BannerDrumShade")!;
+            var lip = w.Named<Border>("BannerDrumLip")!;
+
+            (SkiaSharp.SKColor Shade, SkiaSharp.SKColor Lip) Navigate(string tab, string section)
+            {
+                w.ShowTab(tab);
+                Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
+                Assert.Equal(tab, w.CurrentTab);
+                var hue = ConditioningControlPanel.Services.UI.NavStripPaint.Accent(section);
+                var top = global::Avalonia.Media.Color.FromUInt32(ConditioningControlPanel.Services.UI.DepthLaw.ShadowColor(hue, ConditioningControlPanel.Services.UI.DepthLaw.WellTopAlpha));
+                var edge = global::Avalonia.Media.Color.FromUInt32(ConditioningControlPanel.Services.UI.DepthLaw.ShadowColor(hue, ConditioningControlPanel.Services.UI.DepthLaw.WellLeftAlpha));
+                Assert.Equal(top, Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(shade.Background).GradientStops[0].Color);
+                Assert.Equal(edge, Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(lip.Background).GradientStops[0].Color);
+                return (Pixel(shade, true), Pixel(lip, false));
+            }
+
+            var home = Navigate("settings", ConditioningControlPanel.Services.UI.NavSections.Home);
+            var studio = Navigate("presets", ConditioningControlPanel.Services.UI.NavSections.Studio);
+            Assert.NotEqual(home.Shade, studio.Shade);
+            Assert.NotEqual(home.Lip, studio.Lip);
+        }
+        finally { CoreSettings.Current.NavLastTabBySection = lastTabs; }
+    });
+
+    private static SkiaSharp.SKColor Pixel(Border layer, bool top)
+    {
+        var width = (int)Math.Floor(layer.Bounds.Width);
+        var height = (int)Math.Floor(layer.Bounds.Height);
+        Assert.True(width > 10 && height > 4);
+        using var frame = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(width, height));
+        frame.Render(layer);
+        using var png = new System.IO.MemoryStream();
+        frame.Save(png);
+        using var pixels = SkiaSharp.SKBitmap.Decode(png.ToArray());
+        return pixels.GetPixel(top ? width / 2 : 2, top ? 2 : height / 2);
+    }
 
     [Fact]
     public Task SupportLinkUsesTheGuardedOpener() => InShell(w =>
