@@ -717,7 +717,7 @@ public sealed class ChaosRunHostTests
         var log = new System.Collections.Generic.List<string>();
         _previousPopText = ChaosRunHost.PopText;
         ChaosRunHost.PopText = (_, y, w, _) => log.Add("label:" + w);
-        ChaosRunHost.PulseFx = (c, s) => log.Add($"pulse:{c.R},{c.G},{c.B}@{s:0.00}");
+        ChaosRunHost.PulseFx = (c, s) => log.Add(FormattableString.Invariant($"pulse:{c.R},{c.G},{c.B}@{s:0.00}"));   // invariant: the expected strings use a dot on every culture
         ChaosRunHost.ShakeFx = (i, ms) => log.Add($"shake:{i:0.000}/{ms}");
         CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => log.Add("sfx:" + System.IO.Path.GetFileNameWithoutExtension(p));
         return log;
@@ -780,7 +780,7 @@ public sealed class ChaosRunHostTests
                 Assert.Equal("sfx:resist_crumble", Press(1, 0)[4]);   // the last point has its own cue
                 Assert.Equal(noFocus.Concat(new[] { "sfx:collar_save", "pulse:255,215,0@0.32",
                     $"shake:{(0.25 + s * 0.3) * 0.5:0.000}/280" }), Press(0, 1));
-                Assert.Equal(noFocus.Concat(new[] { "sfx:trigger", $"pulse:255,50,50@{0.4 + s * 0.35:0.00}",
+                Assert.Equal(noFocus.Concat(new[] { "sfx:trigger", FormattableString.Invariant($"pulse:255,50,50@{0.4 + s * 0.35:0.00}"),
                     $"shake:{(0.4 + s * 0.5) * 0.5:0.000}/380" }), Press(0, 0));
             }
             finally { Unjuice(); ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }

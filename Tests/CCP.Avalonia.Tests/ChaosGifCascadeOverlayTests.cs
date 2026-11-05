@@ -49,6 +49,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     .SetupWithoutStarting();
             var clock = new SteppedClock();
             ChaosGifCascadeOverlay? rain = null;
+            ChaosGifCascadeOverlay? rain2 = null;   // the window opened after the run shutdown decodes too
             try
             {
                 ChaosGifCascadeOverlay.CloseActive();
@@ -81,7 +82,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.Equal(1, ChaosLessons.Progress("blindfold"));
                 ChaosRunHost.ForceShutdown();
                 Show(gif);
-                w = ChaosGifCascadeOverlay.Active!;
+                w = rain2 = ChaosGifCascadeOverlay.Active!;
                 var first = Assert.IsType<Image>(Assert.Single(w.Surface.Children));
                 Assert.Equal(0.9, first.Opacity, 3);
                 Assert.Equal(400, first.Width);
@@ -115,6 +116,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 ChaosRunHost.ForceShutdown();
                 ChaosGifCascadeOverlay.CloseActive();
                 if (rain != null) await rain.PendingDecodes;
+                if (rain2 != null) await rain2.PendingDecodes;   // Windows keeps tiny.gif locked while one decodes
                 Dispatcher.UIThread.RunJobs();
                 ChaosGifCascadeOverlay.Clock = TimeProvider.System;
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
