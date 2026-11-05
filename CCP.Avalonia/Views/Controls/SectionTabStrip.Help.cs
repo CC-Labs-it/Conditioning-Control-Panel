@@ -1,4 +1,6 @@
-// PORTED from WPF SectionTabStrip.Help.cs (d0ec7aa8d): pill help and window confirmation.
+// PORTED from ConditioningControlPanel/Controls/NavRail/SectionTabStrip.Help.cs (d0ec7aa8d, owner
+// 2026-10-07): help badges and the window pill confirmation card. Colour math through Core.
+// The window host is now available; window pills use the WPF ask-first card below.
 
 using System;
 using System.Collections.Generic;
@@ -101,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private BeatLoop? _confirmFade;
         internal Popup? ConfirmationPopup => _confirm;
         internal string? ConfirmingKey => _confirmTab?.Key;
+        internal Control? ConfirmationCard => _confirm?.Child;
 
         private void AskBeforeOpening(NavTab tab)
         {
@@ -110,6 +113,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _confirmTab = tab;
             var yes = ConfirmButton(SafeLoc("nav_open_window_yes", "Open it"), true, _hue);
             var no = ConfirmButton(SafeLoc("nav_open_window_no", "Not now"), false, _hue);
+            yes.Name = "NavOpenWindowYes";
+            no.Name = "NavOpenWindowNo";
             global::Avalonia.Automation.AutomationProperties.SetAutomationId(yes, "NavOpenWindowYes");
             global::Avalonia.Automation.AutomationProperties.SetAutomationId(no, "NavOpenWindowNo");
             yes.Click += (_, _) => AnswerConfirm(true);
@@ -163,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (open && tab != null) TabRequested?.Invoke(tab);
         }
 
-        private void CloseConfirm()
+        internal void CloseConfirm()   // also the nav-window-confirm panic stop
         {
             var popup = _confirm;
             StopConfirmFade();
