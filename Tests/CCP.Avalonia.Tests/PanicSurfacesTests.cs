@@ -84,6 +84,9 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "emergency-exit",
+        "emi-ring",
+        "launcher-notes",
+        "launcher-friends",
         "intake",
         "leash-task",
         "deeper-tutorial",
@@ -112,6 +115,7 @@ public sealed class PanicSurfacesTests
         "settings-palette",
         "keyword-triggers",
         "haptics",
+        "help-video",
         "intake",
         "friend-notices", "knock-cards",
         "leash-task",
@@ -145,6 +149,7 @@ public sealed class PanicSurfacesTests
         "deeper-editor-audio",
         "friend-notices", "knock-cards",
         "quick-recal",
+        "mod-creator-preview",
         "asset-preview",
         "camera",
     };
