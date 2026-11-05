@@ -61,7 +61,9 @@ public class TakeoverCommentHeadTests
                 Assert.Contains(ai.Messages!, m => m.Content.Contains(FrameFormatter.TakeoverCommentEvent()));
                 Assert.Equal(new[] { TurnKind.AmbientEvent, TurnKind.AmbientReply }, brain.Session.Turns.Select(t => t.Kind));
             }
-            else { Assert.False(ai.LegacyInteractive); Assert.Equal(1, ai.LegacyCalls); Assert.Equal(TakeoverComment.Prompt, ai.Prompt); Assert.Empty(brain.Session.Turns); }
+            // Brain off: no ambient turns. The shown line is still logged for the Companion page, as WPF
+            // AvatarTubeWindow.Speech.cs:357 does for every AI tube line (#1443).
+            else { Assert.False(ai.LegacyInteractive); Assert.Equal(1, ai.LegacyCalls); Assert.Equal(TakeoverComment.Prompt, ai.Prompt); Assert.Equal(new[] { TurnKind.TubeLine }, brain.Session.Turns.Select(t => t.Kind)); }
             await Reply(new(" FIRST LINE ", true, null)); Assert.Equal("first line", text.Text);
             await Reply(new("blocked", true, new(null, ModerationSource.Output))); Assert.Equal("first line", text.Text);
             Assert.False(tube.FindControl<Border>("PolicyBadge")!.IsVisible);

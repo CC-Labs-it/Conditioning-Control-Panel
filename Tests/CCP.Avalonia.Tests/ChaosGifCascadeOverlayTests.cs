@@ -52,6 +52,10 @@ public sealed class ChaosGifCascadeOverlayTests
             var clock = new SteppedClock();
             ChaosGifCascadeOverlay? rain = null;
             ChaosGifCascadeOverlay? rain2 = null;   // the window opened after the run shutdown decodes too
+            var oldClock = ChaosGifCascadeOverlay.Clock;
+            var oldSkip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+            var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
+            var oldMotion = CoreSettings.Current.MotionLevel;
             try
             {
                 ChaosGifCascadeOverlay.CloseActive();
@@ -133,9 +137,10 @@ public sealed class ChaosGifCascadeOverlayTests
                 if (rain != null) await rain.PendingDecodes;
                 if (rain2 != null) await rain2.PendingDecodes;   // Windows keeps tiny.gif locked while one decodes
                 Dispatcher.UIThread.RunJobs();
-                ChaosGifCascadeOverlay.Clock = TimeProvider.System;
-                ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
-                ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                ChaosGifCascadeOverlay.Clock = oldClock;
+                ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldSkip;
+                ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
+                CoreSettings.Current.MotionLevel = oldMotion;
             }
         });
         Directory.Delete(dir, true);
