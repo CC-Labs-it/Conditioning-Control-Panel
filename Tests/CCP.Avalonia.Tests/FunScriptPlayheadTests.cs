@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -9,6 +10,7 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Haptics;
@@ -91,4 +93,32 @@ public sealed class FunScriptPlayheadTests
     private static string Src(string path, [CallerFilePath] string here = "") =>
         Regex.Replace(File.ReadAllText(Path.Combine(Path.GetDirectoryName(here)!, "../../CCP.Avalonia", path)),
             @"//[^\n]*|/\*.*?\*/", " ", RegexOptions.Singleline);
+    /// <summary>Panic stops a running funscript at once (position writes are outside the 400 ms panic
+    /// mute), not only later when the engine closes the video.</summary>
+    [Fact]
+    public Task PanicHapticsSurfaceStopsTheFunscriptBeforeTheEngine() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var old = CoreHaptics.Service;
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "clip.mp4");
+        File.WriteAllText(Path.ChangeExtension(path, ".funscript"), "{\"actions\":[{\"at\":0,\"pos\":0},{\"at\":1000,\"pos\":100}]}");
+        using var haptics = new HapticService(new HapticSettings { FunScriptEnabled = true });
+        try
+        {
+            CoreHaptics.Service = haptics;
+            haptics.FunScript.OnVideoStarted(path);
+            Assert.True(SpinWait.SpinUntil(() => haptics.FunScript.IsActive, TimeSpan.FromSeconds(10)));
+            PanicSurfaces.All.Single(s => s.Id == "haptics").Stop(null);
+            Assert.False(haptics.FunScript.IsActive);
+            Assert.Null(haptics.FunScript.LoadedScriptPath);
+        }
+        finally
+        {
+            haptics.FunScript.OnVideoStopped();
+            CoreHaptics.Service = old;
+            Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
 }
