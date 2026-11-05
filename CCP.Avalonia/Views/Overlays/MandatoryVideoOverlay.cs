@@ -41,6 +41,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
+        public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsForYouOnScreen);
+
+        public void Freeze() => SubliminalWhisperShow.FreezeForVideo();
+        public void FinishFreeze(bool cancelled) => SubliminalWhisperShow.FinishVideoFreeze(cancelled);
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library
@@ -82,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
             DurationOf = LengthOf,
+            CascadeIsRaining = () => Views.Chaos.ChaosGifCascadeOverlay.IsRaining,
             // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
             PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
         };
@@ -110,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>This clip arms the attention checks (never on a floating window).</summary>
         internal bool AttentionArmed => _attention;
         /// <summary>Milliseconds from Show to the first frame on screen; -1 until then.</summary>
-        internal long FirstFrameMs { get; private set; } = -1;
+        internal long FirstFrameMs { get; set; } = -1;
         /// <summary>Total ms spent downscaling blur fills, and how many (CCP perf check).</summary>
         internal double FillMs { get; private set; }
         internal int FillCount { get; private set; }
@@ -184,7 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (FirstFrameMs < 0)
                 {
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
-                    if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
+                    if (!_gracePaused && !PrimaryPaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
                     ShowVideoControls();   // mute and close, once the clip is rolling (MandatoryVideoOverlay.Controls.cs)
                 }
@@ -204,7 +209,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (OnPlayerPlaying(_player == live))
+            {
+                LibVlcAudio.ApplyPreferredDevice(live);
+                live.SetRate(ConditioningControlPanel.Services.Video.MandatoryVideoPlaybackRules.PlaybackRate(
+                    s.GentleVisuals, s.GentleSpeed));
+            } });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {
@@ -212,9 +222,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (len > 0) Interlocked.Exchange(ref _watchedMs, len);
                 Dispatcher.UIThread.Post(() =>   // never tear down on LibVLC's own thread
                 {
+                    if (_player != live) return;
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
-                    Scheduler.Ended();
+                    OnNaturalVideoEnd();
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
@@ -243,6 +254,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_player is { } p) ApplyVolume(p);
         }
 
+        internal bool PrimaryPaused { get; private set; }
+
+        /// <summary>WPF PausePrimary/PlayPrimary: pause the shared player for every screen. A voice
+        /// resume cannot release the grace card. Freeze attention/health clocks while held so a
+        /// deliberately paused output is never mistaken for a stalled decoder.</summary>
+        internal void PausePrimary()
+        {
+            if (_player == null || _closing || PrimaryPaused) return;
+            PrimaryPaused = true;
+            _player.SetPause(true);
+            _sinceShow.Stop();
+            _sinceFrame.Stop();
+        }
+
+        internal void PlayPrimary()
+        {
+            if (_gracePaused || !PrimaryPaused || _player == null || _closing) return;
+            PrimaryPaused = false;
+            _sinceShow.Start();
+            if (FirstFrameMs >= 0) _sinceFrame.Start();
+            FrameTs = Stopwatch.GetTimestamp();
+            _player.SetPause(false);
+        }
+
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
         /// card's own pick (All, or a connected monitor), else the global "Show content on" pick -
         /// Default and an unplugged index both follow it, without rewriting the setting.</summary>
@@ -265,7 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
-        private Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
+        internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
             RenderOptions.SetBitmapInterpolationMode(fill, BitmapInterpolationMode.HighQuality);
@@ -284,6 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Background = Brushes.Black,
                 Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
             };
+            CoverGentleEntrance((Panel)w.Content!);
             var floating = Floating;
             if (floating)
             {
@@ -327,6 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
+            WireChaosTimerStacking(w);
             w.Show();
             if (!floating)
             {
@@ -334,6 +371,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Activate();
             }
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
+        }
+
+        /// <summary>WPF ChaosModeService.cs:816-828 and VideoService.cs:5810-5822:
+        /// lift the Pocket Watch after video activation settles, without taking keyboard focus.</summary>
+        private static void WireChaosTimerStacking(Window video)
+        {
+            void Raise()
+            {
+                // Capture the watch so a delayed kick cannot affect a later run.
+                var watch = Chaos.ChaosWaveTimerWindow.Active;
+                if (watch == null) return;
+                void Kick()
+                {
+                    if (video.IsVisible && ReferenceEquals(watch, Chaos.ChaosWaveTimerWindow.Active))
+                        Chaos.ChaosWaveTimerWindow.RaiseActive();
+                }
+                Dispatcher.UIThread.Post(Kick);
+                DispatcherTimer.RunOnce(Kick, TimeSpan.FromMilliseconds(60));
+            }
+            video.Opened += (_, _) => Raise();
+            video.Activated += (_, _) => Raise();
+            video.AddHandler(InputElement.PointerPressedEvent, (_, _) => Raise(),
+                global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
@@ -470,6 +530,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceTimer?.Stop();
             _graceTimer = null;
             foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; }
+            PrimaryPaused = false; // WPF ResumeFromGrace -> PlayPrimary releases the paused player
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
@@ -481,7 +542,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// that shows no frame, stalls, overruns or passes the user's max ends like a dismiss.</summary>
         internal void GuardTick()
         {
-            if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            if (_gracePaused || PrimaryPaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
             var framed = FirstFrameMs >= 0;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
@@ -598,7 +659,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.RequestAnimationFrame(now =>
             {
                 if (!_attention || _surfaces.Count == 0 || _surfaces[0].Window != w) return;
-                if (_gracePaused) { _lastFrame = null; NextFrame(); return; }   // targets hold still, expiry clock stopped
+                if (_gracePaused || PrimaryPaused) { _lastFrame = null; NextFrame(); return; }   // targets hold still, expiry clock stopped
                 Step(Elapsed, _lastFrame is { } l ? Math.Clamp((now - l).TotalSeconds, 0, 0.25) : 1 / 60.0);
                 _lastFrame = now;
                 NextFrame();
@@ -881,8 +942,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
             _closing = true;
+            DropEntrance();
+            if (!Scheduler.SoftExit) DropExitCurtains();
             try
             {
+                PrimaryPaused = false;
                 _attention = _gracePaused = false;
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
@@ -902,7 +966,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
-                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; x.Window.Close(); }
+                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; CloseGentleSurface(x.Window, Scheduler.SoftExit); }
                 _surfaces.Clear();
                 _sink?.Free();
                 _sink = null;

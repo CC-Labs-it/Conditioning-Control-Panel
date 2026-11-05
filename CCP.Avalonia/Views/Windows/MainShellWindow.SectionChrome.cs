@@ -12,10 +12,9 @@
 // The section edge (PaintSectionEdge, WPF MainWindow.SectionEdge.cs, 8f4bb7814) is here too: the
 // frame line, the 28 px glow band and the lift in the hue.
 //
-// ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
-// motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
+// The edge lift laps at Full and rests at Reduced. Still missing: fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
+// (PaintDepthHud/Home), the "Moved" redirects and their note, and the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
 
 using System;
@@ -37,6 +36,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _sectionStripWired;
 
         internal SectionTabStrip? PageStrip => Named<SectionTabStrip>("SectionStrip");
+
+        /// <summary>Old keys that land on a new home with a "Moved" note. WPF :39.</summary>
+        internal static readonly string[] MovedRedirectKeys = { "together" };
+
+        /// <summary>How many times the "Moved" note shows across the app's life, then never. WPF :47.</summary>
+        internal const int NavMovedNoteLimit = 3;
+
+        /// <summary>
+        /// An old ShowTab key with a new home: navigate there and, the first three times, say so
+        /// (and glow the new home). True when the key was a redirect and has been handled. WPF :68.
+        /// </summary>
+        private bool TryRedirectMovedTab(string tab)
+        {
+            if (Array.IndexOf(MovedRedirectKeys, tab) < 0) return false;
+            if (!NavSections.Redirects.TryGetValue(tab, out var to)) return false;
+
+            if (to.Section == NavSections.Settings) OpenAppSettingsSection(to.Tab);
+            else ShowTab(to.Tab);
+
+            try
+            {
+                var s = CoreSettings.Current;
+                if (s.NavMovedToastHits < NavMovedNoteLimit)
+                {
+                    s.NavMovedToastHits++;
+                    CoreSettings.Save();
+                    var section = Loc.Get(NavSections.Find(to.Section)?.LabelKey ?? string.Empty);
+                    var page = to.Section == NavSections.Settings
+                        ? Loc.Get(SettingsSectionLabelKey(to.Tab) ?? string.Empty)
+                        : Loc.Get(NavStripTable.PageLabelKey(to.Tab) ?? string.Empty);
+                    PageStrip?.ShowMovedNote(string.Format(Loc.Get("nav_moved_toast"), section, page));
+
+                    // The one-time "moved here" shimmer rides the same three hits as the note.
+                    var glowKey = to.Tab;
+                    global::Avalonia.Threading.Dispatcher.UIThread.Post(() => GlowNavTarget(glowKey));
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Moved note failed: {E}", ex.Message); }
+            return true;
+        }
 
         /// <summary>The tab a section returns to (its remembered tab, else its default). WPF :97.</summary>
         internal static string NavLastTabFor(string section) =>
@@ -89,6 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _washSection = section;
                 var hue = NavStripRules.Accent(section);
                 PaintSectionInk(section);
+                PaintDepthRail(hue); // WPF MainWindow.SectionChrome.cs:166
                 Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView>("QuestsTab")?.PaintDepthQuests(hue);
                 var level = CoreSettings.Current.MotionLevel;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
@@ -108,6 +148,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void InitializeMotionChrome()
         {
+            Activated += (_, _) => UpdateSectionEdgeMotion();
+            Deactivated += (_, _) => UpdateSectionEdgeMotion();
+            PropertyChanged += (_, e) =>
+            {
+                // Avalonia raises Activated before IsActive becomes true. Resume after that change.
+                if (e.Property == IsActiveProperty || e.Property == WindowStateProperty || e.Property == IsVisibleProperty)
+                    UpdateSectionEdgeMotion();
+            };
             Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome; AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome; };
             Closed += (_, _) =>
             {
@@ -146,12 +194,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Panel>("SectionEdgeGlow") is { } glow)
                 foreach (var band in glow.Children.OfType<Border>())
                     PaintFill(band, NavStripRules.WithAlpha(hue, NavStripRules.EdgeGlowAlpha(hue) / 255.0), ms);
-            if (Named<Border>("SectionEdgeLiftTop") is { } lift)
+            if (Named<SectionEdgeLift>("SectionEdgeLift") is { } lift)
             {
-                lift.IsVisible = level != Models.MotionLevel.Off;
-                PaintFill(lift, NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
+                lift.Paint(NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
+                UpdateSectionEdgeMotion();
             }
         }
+
+        // WPF MainWindow.SectionEdge.cs:165: pause the lap while the window cannot show it.
+        private void UpdateSectionEdgeMotion() => Named<SectionEdgeLift>("SectionEdgeLift")?.Apply(
+            AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.AllowAmbientLoops,
+            IsActive && IsVisible && WindowState != WindowState.Minimized);
 
         /// <summary>A solid background, crossfaded over <paramref name="ms"/> (0 = at once, WPF's
         /// QuadraticEase out).</summary>
@@ -176,21 +229,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal const byte SectionEdgeLineAlpha = 0xE6;
         internal const double SectionEdgeLiftWhite = 0.35;
 
-        /// <summary>WPF PaintSectionInk (:192): the four section Color resources and their brushes
-        /// (the SectionInkBrush family consumers bind with DynamicResource), swapped at once.</summary>
+        /// <summary>WPF PaintSectionInk (:194): publish the four section colors and brushes together.
+        /// Avalonia resource notifications have no key filter: eight individual writes re-resolved
+        /// every DynamicResource in every tab eight times, including hidden pages.</summary>
         internal static void PaintSectionInk(string? section)
         {
             var res = global::Avalonia.Application.Current?.Resources;
             if (res == null) return;
-            Set("SectionInk", NavStripRules.Ink(section));
-            Set("SectionTint", NavStripRules.Tint(section));
-            Set("SectionRule", NavStripRules.Rule(section));
-            Set("SectionOutline", NavStripRules.Outline(section));
-
-            void Set(string key, global::Avalonia.Media.Color c)
+            var ink = res.MergedDictionaries.OfType<SectionInkResources>().FirstOrDefault();
+            if (ink == null)
             {
-                res[key] = c;
-                res[key + "Brush"] = new global::Avalonia.Media.SolidColorBrush(c);
+                ink = new SectionInkResources();
+                res.MergedDictionaries.Add(ink); // empty: no resource notification yet
+            }
+            ink.Show(section);
+        }
+
+        /// <summary>A single resource notification after all eight values are ready. The palette
+        /// is owned by the application's resources, so there is no static application/window root.</summary>
+        internal sealed class SectionInkResources : ResourceProvider
+        {
+            private ResourceDictionary _palette = new();
+            private string? _section;
+            public override bool HasResources => _palette.Count != 0;
+            public override bool TryGetResource(object key, global::Avalonia.Styling.ThemeVariant? theme, out object? value)
+                => _palette.TryGetResource(key, theme, out value);
+
+            public void Show(string? section)
+            {
+                if (HasResources && string.Equals(section, _section, StringComparison.Ordinal)) return;
+                var next = new ResourceDictionary();
+                Set("SectionInk", NavStripRules.Ink(section));
+                Set("SectionTint", NavStripRules.Tint(section));
+                Set("SectionRule", NavStripRules.Rule(section));
+                Set("SectionOutline", NavStripRules.Outline(section));
+                _section = section;
+                _palette = next;
+                RaiseResourcesChanged();
+
+                void Set(string key, global::Avalonia.Media.Color c)
+                {
+                    next[key] = c;
+                    next[key + "Brush"] = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(c);
+                }
             }
         }
 
@@ -223,11 +304,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
         }
 
-        /// <summary>Pills this head can open. A page another lane has not ported yet (Friends,
-        /// Leash, the Companion pages, Folders' scroll...) is not drawn rather than drawn dead.</summary>
+        /// <summary>Pills with a real route on this head, including the existing Just Drop window.
+        /// Unknown page keys remain hidden.</summary>
         private static bool CanOpenNavTab(NavTab tab) => tab.Kind == NavTabKind.Launcher
             ? tab.Key is "mods" or "catalogue" or "phrases" or "medialog"
-            : TabPanels.ContainsKey(tab.Key);
+            : tab.Kind == NavTabKind.Window
+                ? tab.Key == "justdrop" && Services.JustDrop.JustDropService.DoorAvailable
+                : TabPanels.ContainsKey(tab.Key);
 
         /// <summary>WPF OnSectionPillChosen (:246): launchers through their old handlers, pages and
         /// zones through ShowTab.</summary>

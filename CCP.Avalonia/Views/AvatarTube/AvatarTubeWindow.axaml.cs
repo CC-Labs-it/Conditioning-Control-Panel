@@ -115,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // Pose cycling (static avatars only). Four PNGs per set; a set with fewer than two that
         // actually loaded never starts the timer, which is the WPF rule verbatim.
         private readonly DispatcherTimer _poseTimer;
+        private DispatcherTimer? _idleTimer;
         private int _currentPoseIndex;
         private int _currentAvatarSet;
         private Bitmap?[] _avatarPoses = new Bitmap?[4];
@@ -249,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // one pose actually loaded - a set that ships one PNG has nothing to rotate between.
             _poseTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
             _poseTimer.Tick += (_, _) => AdvancePose();
+            Opened += (_, _) => RestartIdleTimer();
 
             // The art. WPF did all of this in its constructor off App.Settings / App.Mods; every
             // read it needs is in Core now (CoreSettings for the chosen set, CoreModArt for a mod's
@@ -268,7 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // ponytail: GIF/emote/portrait playback and non-awareness service reactions remain
             // in the WPF reference. Look selection and ModChanged repaint use AvatarSets.cs.
 
-            // ponytail: the WPF ctor also started four timers here - a 2s greeting, the idle-giggle,
+            // ponytail: the WPF ctor also started three timers here: a 2s greeting,
             // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
             // calls into a partial this layer does not have, and --render-all constructs ~180 windows
             // in one process, where a stray timer firing at a closed window is a flaky failure.
@@ -314,8 +316,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
             InitTakeoverCountdownBar();
-            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection;
-            // neither has ported.
+            StartFloatingAnimation(); // WPF xaml.cs:614 and Windowing.cs:1481
+            // Part B: WPF StartFullscreenDetection.
         }
 
         protected override void OnClosed(EventArgs e)
@@ -327,6 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _avatarSetsClosed = true;
             CoreMods.ModChanged -= OnTubeModChanged;
             CancelAvatarSwitch();
+            StopFloatingAnimation(); // WPF Windowing.cs:1507
             ReleaseWindowing();
             DetachAwareness();
             UnwireContentPolicyWarning();
@@ -336,6 +339,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
             _poseTimer.Stop();
+            _idleTimer?.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
             _cooldownTickTimer?.Stop();
@@ -401,7 +405,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // same two timers for the same reason.
             _speechTimer?.Stop();
             _cancelSpeechDelay();   // WPF ChatInput.cs:475 _speechDelayTimer.Stop (the queue stays)
-            _cancelSpeechDelay = static () => { };
+            _cancelSpeechDelay = NoSpeechDelay;
             _isGiggling = false;
 
             _isShowingChatHistory = true;
@@ -828,7 +832,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
-                img.RenderTransform = transform;
+                // WPF Avatar.cs:765-771 sets LayoutTransform; xaml:512-517 bobs RenderTransform.
+                // .NET 10 WPF FrameworkElement.SetLayoutOffset appends layout first, render second
+                // (FrameworkElement.cs:5224,5256), so the bob displacement stays unscaled.
+                img.RenderTransform = name == "ImgAvatar"
+                    ? new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _avatarFloat } }
+                    : transform;
             }
 
             // When the mod only overrides the ATTACHED tube image, force the attached layout in the
@@ -938,6 +947,20 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private static bool ModOverridesAttachedTubeOnly()
             => CoreModArt.HasOverride("tube.png") && !CoreModArt.HasOverride("tube2.png");
 
+        /// <summary>WPF MidnightGlassWanted (Windowing.cs:2040): a mod tube wins, then the player's
+        /// switch, then the Prize Counter's sale. Never throws.</summary>
+        internal static bool MidnightGlassWanted()
+        {
+            try
+            {
+                if (CoreModArt.HasOverride("tube.png") || CoreModArt.HasOverride("tube2.png")) return false;
+                if (CoreSettings.Current.TubeMidnightGlass != true) return false;
+                return global::ConditioningControlPanel.Services.Arcademy.ArcademyMetaStore.WalletOwnsOnDisk(
+                    global::ConditioningControlPanel.Services.Arcademy.ArcademyEconomy.SkuTubeMidnight);
+            }
+            catch { return false; }
+        }
+
         // =========================================================================================
         //  Tube glass and avatar art. PORTED from AvatarTubeWindow.Windowing.cs (SetTubeStyle) and
         //  Avatar.cs (LoadAvatarPoses / ApplyAvatarTransform / UpdateTitleDisplay).
@@ -946,13 +969,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>
         /// Points ImgTubeFrame at tube.png or tube2.png - the mod's replacement if it ships one,
         /// else this head's own shipped copy. A mod that overrides only the attached pane owns both
-        /// states (see <see cref="ModOverridesAttachedTubeOnly"/>).
-        ///
-        /// <para>ponytail: the MIDNIGHT glass pair is deliberately not here. WPF gates it on
-        /// <c>ArcademyHostService.WalletOwnsSku(SkuTubeMidnight)</c> - a purchased cosmetic - and
-        /// this head has no wallet seam, so the only answers available are "always show it" or
-        /// "never". Showing a player glass they have not bought is the worse of the two lies, so
-        /// the standard pair it is until an entitlement seam exists.</para>
+        /// states (see <see cref="ModOverridesAttachedTubeOnly"/>). When the midnight glass is bought
+        /// and switched on, their <c>*_midnight.png</c> siblings instead; a miss falls back to standard.
         /// </summary>
         public void SetTubeStyle(bool useAlternative) => RunOnAvatar(() =>
         {
@@ -960,11 +978,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 if (useAlternative && ModOverridesAttachedTubeOnly()) useAlternative = false;
                 var name = useAlternative ? "tube2.png" : "tube.png";
-                var art = ModArt.TryLoad(name);
+                global::Avalonia.Media.Imaging.Bitmap? art = null;
+                if (MidnightGlassWanted())
+                {
+                    var midnightName = useAlternative ? "tube2_midnight.png" : "tube_midnight.png";
+                    art = ModArt.TryLoad(midnightName);
+                    if (art != null) name = midnightName;
+                }
+                art ??= ModArt.TryLoad(name);
                 if (art != null) _imgTubeFrame.Source = art;
                 Log.Information("Tube style changed to: {Style}", name);
-                // No midnight glass on this head (see above), so the motes are always the pink tint.
-                ApplyTubeMotes(useAlternative, midnight: false);
+                ApplyTubeMotes(useAlternative, name.Contains("_midnight"));
             }
             catch (Exception ex) { Log.Warning(ex, "Failed to change tube style"); }
         });
@@ -1137,7 +1161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// SwitchToAvatarSet (:395): a roster switch puts the companion's set on the tube and saves it,
         /// globally and per mod. The companion itself is already switched by the caller, so the
         /// set->companion coupling is not re-fired. All sets are unlocked (WPF IsAvatarSetUnlocked).
-        /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
+        /// Single-emote mods retain their pinned look (WPF :832).</summary>
         public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
         {
             // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
@@ -1145,7 +1169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             int set = 1;
             for (int n = 3; n <= 7; n++)
                 if (CompanionForAvatarSet(n) == companionId) { set = n; break; }
-            if (_avatarSetsClosed) return;
+            if (_avatarSetsClosed || SingleEmoteSet() != null) return;
             // A look-picker fade still pending would re-couple its own companion over this one.
             CancelAvatarSwitch();
             _currentAvatarSet = set;
@@ -1154,8 +1178,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             ConditioningControlPanel.Services.Companion.ModAvatarLooks.Store(s.ModAvatarSet, CoreMods.ActiveModId, set);
             CoreSettings.Save();
             _poseTimer.Stop();
-            ApplyAvatarSet();
-            UpdateNavigationArrows();
+            _rosterAvatarSwitchPending = true;
+            FadeAvatarSwitch(() =>
+            {
+                ApplyAvatarSet();
+                UpdateNavigationArrows();
+            });
         });
 
         /// <summary>The persona an avatar set belongs to; null for sets 1-2, which are generic
@@ -1194,7 +1222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///         emotive-portrait pose swap against the voice; that system did not port, so a
         ///         lead-in would be a pause with nothing happening in it.</item>
         ///   <item>EMI Desk's <c>NoteAvatarSpeaking</c>: its only consumer is her line engine,
-        ///         which is not on this head. Her <c>AvatarMuted</c> IS honoured below, as WPF
+        ///         whose voice-hold tail is still missing here. Her <c>AvatarMuted</c> IS honoured below, as WPF
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
         /// </list>
         ///
@@ -1203,7 +1231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true,
                                    string? phraseAudioPath = null, bool barkVoice = false,
-                                   string? mood = null, Action? onSpoken = null)
+                                   string? mood = null, Action? onSpoken = null, bool unprompted = false)
         {
             // onSpoken: fires once her voiced clip has finished (at once when nothing plays) - the
             // spoken mantra holds the mic shut on it so the recognizer never hears her (SpokenMantra).
@@ -1212,30 +1240,64 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
                 _isGiggling = false;
-                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken);
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, unprompted);
             });
         }
 
         private int _presetGiggleCounter;
 
+        /// <summary>WPF RestartIdleTimer (Speech.cs): the idle cadence restarts after every line.</summary>
+        public void RestartIdleTimer() => RunOnAvatar(() =>
+        {
+            _idleTimer?.Stop();
+            _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds) };
+            _idleTimer.Tick += (_, _) => IdleTick();
+            _idleTimer.Start();
+        });
+
+        internal void IdleTick()
+        {
+            if (_idleTimer != null) _idleTimer.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
+            ClearStaleSpeechLatch();   // WPF Speech.cs:1612-1614: the one beat still running once she is wedged
+            if (IsSpeechReady()) Platform.BarkHead.Engine?.DispatchIdle();
+        }
+
+        /// <summary>WPF ClearStaleSpeechLatch (Speech.cs:3070): drop a latch nothing can lower any more.
+        /// This head has no lead-in timer.</summary>
+        private void ClearStaleSpeechLatch()
+        {
+            if (!ConditioningControlPanel.Services.Companion.SpeechLatchRule.IsLatchStale(
+                    isGiggling: _isGiggling,
+                    bubbleVisible: _speechBubble.IsVisible,
+                    waitingForAi: _isWaitingForAi,
+                    queueEmpty: _speechQueue.Count == 0,
+                    leadInPending: false,
+                    delayPending: _cancelSpeechDelay != NoSpeechDelay))
+                return;
+            _isGiggling = false;
+            _isMouseOverSpeechBubble = false;
+            _lastSpeechEndTime = SpeechNow;
+            Log.Warning("[Speech] stale speech latch cleared - the companion was wedged silent");
+        }
+
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text)
+        public void Giggle(string text, bool unprompted = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
-                if (_isGiggling) { _speechQueue.Enqueue(text); return; }
+                if (_isGiggling) { _speechQueue.Enqueue((text, unprompted)); return; }
                 if (!IsSpeechReady())
                 {
-                    _speechQueue.Enqueue(text);
+                    _speechQueue.Enqueue((text, unprompted));
                     _isGiggling = true;
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: unprompted);
             });
         }
 
@@ -1243,8 +1305,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false)
         {
+            RestartIdleTimer();
                 var spokenHandled = false;
                 var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 Action spoken = () => { clipDone.TrySetResult(); onSpoken?.Invoke(); };
@@ -1285,7 +1348,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
+                    if (!IsMuted && MayVoice(unprompted)) { (SpeechAudioPlayer ?? PlaySpeechAudio)(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
                     _txtSpeech.Text = text;
@@ -1347,6 +1410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 };
                 _listeningDotsTimer = timer;
                 timer.Start();
+                RestartIdleTimer();   // WPF AvatarTubeWindow.Speech.cs:789: keep idle off the mic prompt.
             });
         }
 
@@ -1422,6 +1486,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF IsSpeakingAudio as a task: completes when her LATEST voiced clip ends (cut or
         /// finished). The voice host waits on it so a bark that cut her confirmation still holds the mic.</summary>
         internal Task SpokenAudioDone { get; private set; } = Task.CompletedTask;
+
+        // Tests capture delivery here, before file lookup or native audio.
+        internal Action<bool, string?, bool, Action?>? SpeechAudioPlayer;
+
+        private static bool MayVoice(bool unprompted) =>
+            ConditioningControlPanel.Services.Companion.CompanionVoicePolicy.ShouldVoice(
+                unprompted, CoreEngine.IsRunning, CoreSession.IsSessionRunning,
+                App.Sessions?.IsPaused == true, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
+                ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
 
         private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
         {
@@ -1657,9 +1730,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 return;
             }
             _txtUserInput.Text = string.Empty;
-            // Keep the box open and focused so the player can type the next line (WPF ShowInputPanel,
-            // ccp-bugs #1279). The reply bubble sits above it (ZIndex 10 over 3), so it is never covered.
-            OpenChatInput();
+            // WPF b248a7b91: Send closes the box. Click her or use the chat key for the next line.
+            _inputPanel.IsVisible = false;
 
             var ai = App.Ai;
             var brain = App.Brain;   // decided once, up front, as WPF (ChatInput.cs:772)

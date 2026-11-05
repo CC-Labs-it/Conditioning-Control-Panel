@@ -50,6 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Sign-in, startup restore and logout all land here; WPF repaints the header on
                 // each (Login.cs:198 UpdateLevelDisplay, OnProfileLoaded).
                 UpdateLevelDisplay();
+                UpdateBannerWelcomeMessage(); // WPF Login.cs:123/328: sign-in/out must replace the previous account's line.
+                Named<Tabs.DiscordTabView>("DiscordTab")?.RefreshPrivacyActions();
                 RefreshProfileBubble();   // WPF UpdateXPBarLoginState: the bubble paints the same identity
                 // WPF UpdatePatreonUI -> RefreshEntitlementVeils: an account change moves every veil.
                 RefreshEntitlementVeils(persist: accountChanged);
@@ -72,11 +74,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (await dialog.ShowDialogSafe<bool>(owner ?? this) && dialog.Result is not null)
             {
                 UpdateQuickLoginUI(accountChanged: true);
+                await AskDisplayNameAfterSignIn(owner ?? this, dialog.Result.DisplayName, dialog.Result.ServerNeedsDisplayName);
                 if (SecretStore.NotRemembered && !_notRememberedShown)
                 {
                     _notRememberedShown = true;
                     await MessageDialog.ShowAsync(owner ?? this, Loc.Get("login_not_remembered_title"), Loc.Get("login_not_remembered_body"));
                 }
+                // WPF MainWindow.Login.cs:209: required name precedes sharing.
+                await AskDisplayNameAfterSignIn(owner ?? this, dialog.Result.DisplayName, dialog.Result.ServerNeedsDisplayName);
                 // WPF MainWindow.Login.cs:209 (#749): a first sign-in through Discord attaches it too, so
                 // offer sharing here as the link flow does. The offer self-guards on consent.
                 // WPF Login.cs:214: the sharing question does not wait for the background profile load,
@@ -97,11 +102,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             await AccountSeed.Logout();
             UpdateQuickLoginUI(accountChanged: true);
+            ClearProfileViewer();
             if (SecretStore.ClearFailed)
                 await MessageDialog.ShowAsync(this, Loc.Get("title_error"), Loc.Get("logout_not_complete_body"));
         }
 
         private bool _achievementShareOfferUp;
+        private MessageDialog? _achievementSharingPrompt;
+
+        internal void CloseAchievementSharingForPanic() => _achievementSharingPrompt?.Close(false);
 
         /// <summary>WPF Patreon.cs:836, called after sign-in (Login.cs:214). A provider link is not
         /// consent to sharing: ask separately, with the panel as owner. A game or a hidden panel
@@ -130,16 +139,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _achievementShareOfferUp = true;
             try
             {
-                if (!await MessageDialog.ConfirmAsync(this, Loc.Get("title_discord_linked"),
-                    Loc.Get("msg_discord_share_achievements_prompt"),
-                    okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"))) return;
+                _achievementSharingPrompt = new MessageDialog(Loc.Get("title_discord_linked"),
+                    Loc.Get("msg_discord_share_achievements_prompt"), showCancel: true,
+                    okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
+                if (await _achievementSharingPrompt.ShowDialogSafe<bool?>(this) != true) return;
                 s.DiscordShareAchievements = true;
                 CoreSettings.Save();
                 if (ProfilePage?.PrivacyPanel.FindControl<CheckBox>("ChkDiscordTabShareAchievements") is { } checkbox)
                     checkbox.IsChecked = true;
                 UpdateProfileSharingSummary();
             }
-            finally { _achievementShareOfferUp = false; }
+            finally { _achievementSharingPrompt = null; _achievementShareOfferUp = false; }
         }
 
         private static void SetVisible(Control? control, bool visible)

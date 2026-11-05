@@ -6,8 +6,8 @@
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
 // RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise/restore
-// for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and the browser
-// blindfold (no embedded browser under the overlay on this head).
+// for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and remote
+// browser video playback and reveal.
 
 using System;
 using System.Linq;
@@ -43,6 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeRemoteControlOverlay()
         {
             var r = RemoteControlTabView.Relay.Value;
+            r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
+                .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
+            r.SessionRunnerProvider = () => App.Sessions;
             EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
             EventHandler ended = (_, _) => Dispatcher.UIThread.Post(OnRemoteSessionEnded);
@@ -53,6 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.CommandReceived += command;
             Closed += (_, _) =>
             {
+                r.SessionsProvider = null;
+                r.SessionRunnerProvider = null;
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
@@ -110,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var presets = CoreSettings.Current.RemoteEmotePresets;
             if (Named<ItemsControl>("LstEmotePresetsBigTop") is { } top) top.ItemsSource = presets.Take(3).ToList();
             if (Named<ItemsControl>("LstEmotePresetsBigBottom") is { } bottom) bottom.ItemsSource = presets.Skip(3).ToList();
+            if (Named<SettingsTabView>("SettingsTab") is { } settings) settings.BrowserContainer.IsVisible = false;
             if (Named<Border>("RemoteControlOverlay") is { } o) { o.IsVisible = true; o.Opacity = 1; }
             _remoteOverlayHidingAt = null;
             _remoteOverlayTimer ??= new DispatcherTimer(RemoteOverlaySlowTick, DispatcherPriority.Background, (_, _) => RemoteOverlayTick());
@@ -147,6 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _remoteOverlayHidingAt = null;
                 _remoteOverlayTimer?.Stop();
                 if (Named<Border>("RemoteControlOverlay") is { } o) o.IsVisible = false;
+                if (Named<SettingsTabView>("SettingsTab") is { } settings) settings.BrowserContainer.IsVisible = true;
                 if (Named<Border>("RemoteCommandNotification") is { } n0) n0.Opacity = 0;
                 return;
             }
@@ -203,6 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = "\U0001F3AE";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new Localization.StrExtension("label_remote_connected").ProvideValue(null!));
+            ApplyStartHeroState();
         }
 
         /// <summary>WPF BtnEndRemoteSession_Click (:1255): stop the relay; the tab unticks on SessionEnded.</summary>

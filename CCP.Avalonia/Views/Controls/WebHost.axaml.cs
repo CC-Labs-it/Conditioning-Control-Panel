@@ -63,6 +63,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnBrowserProcessFailed() => BrowserProcessFailed?.Invoke();
         internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
 
+        /// <summary>Per-host WebView2 options, set before attachment. Other adapters ignore these.</summary>
+        public string? WindowsBrowserArguments { get; set; }
+        public string? WindowsUserDataFolder { get; set; }
+
+        // WPF JustDropHostService.cs:111,132-135. Keep custom arguments off shared profiles.
+        internal void ApplyWindowsOptions(object? args)
+        {
+            if (args is not WindowsWebView2EnvironmentRequestedEventArgs windows) return;
+            if (WindowsBrowserArguments is { } arguments) windows.AdditionalBrowserArguments = arguments;
+            if (WindowsUserDataFolder is { } folder) windows.UserDataFolder = folder;
+        }
+
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
         /// in-page links and script hops included, unlike <see cref="Source"/>, which is only
@@ -89,7 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
-            if (url is null) return;
+            if (url is null || _panicBlank) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
@@ -311,6 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         public WebHost()
         {
+            TrackScrolllerHost();
             AvaloniaXamlLoader.Load(this);
             _webSlot = this.FindControl<Panel>("WebSlot")!;
             _fallback = this.FindControl<Border>("Fallback")!;
@@ -334,6 +347,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                         if (preferGtk && e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
                         // Windows: the WebView2 profile under UserData, never beside the exe (Platform/WebViewProfile).
                         Platform.WebViewProfile.Apply(e);
+                        ApplyWindowsOptions(e);
                     };
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
@@ -392,6 +406,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            // Panic teardown must pass a caller's page allowlist, including on reattachment.
+            // Late redirects from the stopped document must not replace the blank page.
+            if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
+            _scrolllerPanicTarget = target;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
@@ -423,6 +441,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public void Navigate(Uri url)
         {
+            _panicBlank = false;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
@@ -468,6 +487,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             _scrolllerGate = null;
             _loadedOnThisEngine = false;
+            if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
             return gated => OnScrolllerGate(engine, gated);
         }
@@ -502,7 +522,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == SourceProperty) ApplySource();
+            if (change.Property == SourceProperty)
+            {
+                if (Source != null) _panicBlank = false; // a new explicit request may load normally
+                ApplySource();
+            }
         }
 
         private void ApplySource()

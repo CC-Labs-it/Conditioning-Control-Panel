@@ -12,6 +12,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -25,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Core <see cref="AmbientBubbleField"/> moves and scores, this draws. WPF's default render is
     /// the shared host (one click-through surface, pops from a hook); here that is one override-
     /// redirect window per targeted screen whose X11 input region is exactly the live bubbles'
-    /// hit squares, so the desktop stays clickable everywhere else. Reached through
+    /// hit discs, so the desktop stays clickable everywhere else. Reached through
     /// <see cref="CoreBubbles"/>, which App seeds.
     ///
     /// <para>Hot path is allocation-free: one cached frame delegate, one Render pass over the
@@ -66,9 +67,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly bool Stats = Environment.GetEnvironmentVariable("CCP_FRAME_STATS") == "1";
         private static readonly Stopwatch StatClock = new();
         private static double _statMax, _statSum;
-        private static int _statN, _statBubbles;
+        private static int _statN, _statBubbles, _statRectMax;
+        private static long _statRects;
 
         /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
+        internal static void RaiseAll(Action<Window> raise)
+        {
+            foreach (var window in Windows) if (window.IsVisible) raise(window);
+        }
+
         public static bool IsRunning => _running && !_chaosOpenedWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
 
@@ -139,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             _chaosOpenedWindows = false;
+            ChaosRipples.Clear();
             _running = false;
             _pending = false;
             _spawnTimer?.Stop();
@@ -179,7 +187,75 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
+        // WPF BubbleService.cs:1631-1632, 1669-1677, 1704-1719. Physical-pixel
+        // distances, advanced once per logical field tick, never by the render clock.
+        private static readonly List<(Point Center, double AgeMs)> ChaosRipples = new();
+
+        internal static Point CenterPx(AmbientBubble b)
+        {
+            double scale = b.Screen >= 0 && b.Screen < Targets.Count ? Targets[b.Screen].Scaling : 1;
+            return new Point(b.CenterX * scale, b.CenterY * scale);
+        }
+
+        internal static void TriggerChaosRipple(AmbientBubble b)
+        {
+            if (_chaosPopped == null || Field.HoldChaos) return;
+            var center = CenterPx(b);
+            ChaosRipples.Add((center, 0));
+            if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.Ripple(center, 430, 550, strong: false);
+            else ChaosFieldFxOverlay.Ripple(center, 430, 550);
+            RequestFrame();
+        }
+
+        internal static void TickChaosRipples()
+        {
+            if (Field.HoldChaos || _chaosPopped == null) return;
+            for (int i = ChaosRipples.Count - 1; i >= 0; i--)
+            {
+                var (center, age) = ChaosRipples[i];
+                age += 32;
+                double radius = 430 * Math.Min(1, age / 550);
+                foreach (var b in Field.Bubbles.ToArray())
+                {
+                    if (b.Popping || b.Spec == null || b.Spec.IsLive || b.Spec.IsDarter || b.Spec.IsFreeze) continue;
+                    if (b.Spec.IsTease || b.Spec.IsBrittle) continue; // WPF BubbleService.cs:4653-4659
+                    var point = CenterPx(b);
+                    double dx = point.X - center.X, dy = point.Y - center.Y;
+                    if (dx * dx + dy * dy <= radius * radius) PopChaos(b);
+                }
+                if (age >= 550) ChaosRipples.RemoveAt(i);
+                else ChaosRipples[i] = (center, age);
+            }
+        }
+
         private static Action<AmbientBubble>? _chaosPopped;
+        private static int _hoverScreen = -1;
+        private static double _hoverX, _hoverY;
+
+        internal static void SetHover(int screen, double x, double y)
+        {
+            _hoverScreen = screen;
+            _hoverX = x;
+            _hoverY = y;
+        }
+
+        internal static void ClearHover(int screen)
+        {
+            if (_hoverScreen == screen) _hoverScreen = -1;
+        }
+
+        // WPF BubbleService.IsCursorOverLiveChaosBubble: scan all armed lives, even behind a treat.
+        internal static bool CursorOnLive
+        {
+            get
+            {
+                if (_chaosPopped == null || _hoverScreen < 0) return false;
+                foreach (var b in Field.Bubbles)
+                    if (b.Screen == _hoverScreen && b.Spec is { IsLive: true } && !b.Popping
+                        && b.Contains(_hoverX, _hoverY)) return true;
+                return false;
+            }
+        }
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
@@ -244,6 +320,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
+            ChaosRipples.Clear();
+            _hoverScreen = -1;
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
@@ -275,12 +353,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void PopChaos(AmbientBubble b)
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
+            // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
+            if (b.Spec.IsTease || b.Spec.IsBrittle) return;
+            if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
+            if (b.IsLiveThreat)
+            {
+                if (!b.Snap()) return;
+                AnchorPop(b);
+                // WPF BubbleService.cs:4686-4688: a live snap is a bigger release, in SnapColor at 1.3,
+                // burst before the defuse callback can clear the field.
+                var snapScale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * snapScale, b.CenterY * snapScale),
+                    Color.FromRgb(0x7A, 0xE0, 0xFF), 1.3);
+                Field.ChaosDefused?.Invoke(b);
+                RequestFrame();
+                return;
+            }
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
+            // WPF BubbleService.cs:4682-4688: burst before the callback can clear the field.
+            var scaling = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+            ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
+                b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
+                b.Spec.IsLive ? 1.3 : 1.0);
             PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
             _chaosPopped?.Invoke(b);
             RequestFrame();
+        }
+
+        /// <summary>WPF BubbleService.cs:325-340: paid DVD sweep, darters/freeze exempt.
+        /// Use the existing pop/snap callbacks so payloads, score and lessons still run.</summary>
+        internal static void PopChaosInRect(Rect rect)
+        {
+            if (Field.HoldChaos) return;
+            for (int i = Field.Bubbles.Count - 1; i >= 0; i--)
+            {
+                if (i >= Field.Bubbles.Count) continue;
+                var b = Field.Bubbles[i];
+                // WPF BubbleService.cs:4652-4660: instant sweeps cannot end Tease or Brittle.
+                if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
+                if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
+                if (b.IsLiveThreat)
+                {
+                    if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
+                }
+                else PopChaos(b);
+            }
         }
 
         private static string ChaosCuePath(string name) =>
@@ -331,9 +450,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 Field.Step();
+                TickChaosRipples();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-                if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
+                if (Field.Bubbles.Count == 0 && ChaosRipples.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
             }
             RequestFrame();
         }
@@ -341,18 +461,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void Sample(double ms)
         {
             _statSum += ms; _statN++; _statBubbles += Field.Bubbles.Count;
+            // Disc input regions send about one native rect per pixel row per bubble.
+            var rects = 0;
+            foreach (var w in Windows) rects += w.InputRectCount;
+            _statRects += rects;
+            if (rects > _statRectMax) _statRectMax = rects;
             if (ms > _statMax) _statMax = ms;
             if (StatClock.Elapsed.TotalSeconds < 10) return;
             Console.WriteLine(FormattableString.Invariant(
-                $"[Bubbles] {_statN} steps, avg {(double)_statBubbles / _statN:F1} bubbles, step+sync mean {_statSum / _statN:F3} ms, max {_statMax:F3} ms, gen0 GCs {GC.CollectionCount(0)}"));
-            _statSum = _statMax = 0; _statN = _statBubbles = 0;
+                $"[Bubbles] {_statN} steps, avg {(double)_statBubbles / _statN:F1} bubbles, step+sync mean {_statSum / _statN:F3} ms, max {_statMax:F3} ms, input rects mean {(double)_statRects / _statN:F0} max {_statRectMax}, gen0 GCs {GC.CollectionCount(0)}"));
+            _statSum = _statMax = 0; _statN = _statBubbles = _statRectMax = 0; _statRects = 0;
             StatClock.Restart();
         }
     }
 
     /// <summary>One screen of the field: draws its bubbles (WPF Bubble visuals: bubble.png, or the
     /// gradient ellipse fallback, scaled and rotated about the centre at the pop fade) and takes
-    /// presses only inside their hit squares.</summary>
+    /// presses only inside their hit discs.</summary>
     internal sealed class BubbleOverlayWindow : Window
     {
         private static readonly IBrush FallbackFill = new RadialGradientBrush
@@ -381,7 +506,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal readonly int Index;
         internal readonly PixelRect Bounds;
         internal readonly double Scaling;
-        internal readonly PixelRect[] Rects = new PixelRect[64];
+        internal PixelRect[] Rects = new PixelRect[64];
+        internal int InputRectCount { get; private set; }
         private int _lastCount = -1;
         /// <summary>Cached (no per-frame closure); a closed window's late frame is ignored.</summary>
         internal readonly Action<TimeSpan> FrameCallback;
@@ -415,7 +541,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Content = new Layer(this);
             FrameCallback = now => { if (BubbleOverlay.IsFrameOwner(this)) BubbleOverlay.OnFrame(now); };
             PointerPressed += OnPressed;
-            PointerMoved += (_, e) => OnHold(e, true);
+            PointerEntered += (_, e) => UpdateHover(e);
+            PointerMoved += (_, e) => { UpdateHover(e); OnHold(e, true); };
+            PointerExited += (_, _) => BubbleOverlay.ClearHover(Index);
             PointerReleased += (_, e) => OnHold(e, false);
             // WPF polls the physical button (BubbleService.cs:545): a release the window never saw
             // (alt-tab, compositor grab) still breaks the hold.
@@ -438,6 +566,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             e.Handled = true;
         }
 
+        private void UpdateHover(PointerEventArgs e)
+        {
+            var p = e.GetPosition(this);
+            BubbleOverlay.SetHover(Index, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
+        }
+
         /// <summary>The press is captured, so the hold's moves and release land here (WPF TickChannel reads them).</summary>
         private void OnHold(PointerEventArgs e, bool held)
         {
@@ -451,16 +585,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var n = 0;
             var bubbles = BubbleOverlay.Field.Bubbles;
-            for (var i = 0; i < bubbles.Count && n < Rects.Length; i++)
+            for (var i = 0; i < bubbles.Count; i++)
             {
                 var b = bubbles[i];
-                if (b.Screen != Index || !b.Clickable || b.Popping) continue;
-                Rects[n++] = new PixelRect((int)(b.X * Scaling) - Bounds.X, (int)(b.Y * Scaling) - Bounds.Y,
-                    (int)(b.Size * Scaling), (int)(b.Size * Scaling));
+                if (b.Screen != Index || !b.Clickable || b.Popping || b.Size <= 0) continue;
+                // WPF BubbleService.cs:3023-3027: physical-pixel hit disc;
+                // :581 and :3013 exclude non-clickable and popping bubbles.
+                // Both native backends already accept unions of rectangles: rasterise each
+                // physical pixel row, clipped to this screen. Keep the buffer across frames.
+                var cx = b.CenterX * Scaling - Bounds.X;
+                var cy = b.CenterY * Scaling - Bounds.Y;
+                var r = b.Size * Scaling / 2;
+                var first = Math.Max(0, (int)Math.Ceiling(cy - r));
+                var last = Math.Min(Bounds.Height - 1, (int)Math.Floor(cy + r));
+                for (var y = first; y <= last; y++)
+                {
+                    var dy = y - cy;
+                    var half = Math.Sqrt(Math.Max(0, r * r - dy * dy));
+                    var left = Math.Max(0, (int)Math.Ceiling(cx - half));
+                    var right = Math.Min(Bounds.Width - 1, (int)Math.Floor(cx + half));
+                    // Round trips through mixed-DPI global DIPs can differ by an ULP at the
+                    // radius. Use the same predicate as the press handler at the endpoints.
+                    bool Hit(int x) => b.Contains((Bounds.X + x) / Scaling, (Bounds.Y + y) / Scaling);
+                    if (left > 0 && Hit(left - 1)) left--;
+                    if (right < Bounds.Width - 1 && Hit(right + 1)) right++;
+                    while (left <= right && !Hit(left)) left++;
+                    while (right >= left && !Hit(right)) right--;
+                    if (left > right) continue;
+                    var rect = new PixelRect(left, y, right - left + 1, 1);
+                    // Coalesce identical adjacent rows (especially useful for small bubbles).
+                    if (n > 0 && Rects[n - 1] is var prev && prev.X == rect.X && prev.Width == rect.Width && prev.Bottom == y)
+                        Rects[n - 1] = new PixelRect(prev.X, prev.Y, prev.Width, prev.Height + 1);
+                    else
+                    {
+                        if (n == Rects.Length) Array.Resize(ref Rects, Rects.Length * 2);
+                        Rects[n++] = rect;
+                    }
+                }
             }
+            InputRectCount = n;
             var drawn = HasBubbles();
             if (!drawn && _lastCount == 0) return;   // stayed empty: region already empty, nothing to repaint
-            X11Overlay.SetInputRects(this, Rects, n);
+            X11Overlay.SetInputRects(this, Rects, InputRectCount);
             (Content as Control)?.InvalidateVisual();
             _lastCount = drawn ? 1 : 0;
         }

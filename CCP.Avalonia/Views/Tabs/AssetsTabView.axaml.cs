@@ -495,6 +495,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// nothing autosaves: the explicit (debounced) save keeps the toggle across a restart.</summary>
         private static void InvalidateAssetPoolsAfterSelectionChange()
         {
+            Overlays.FlashOverlay.ReloadAssets();
             Overlays.MandatoryVideoOverlay.Instance.Scheduler.ReloadAssets();
             Windows.BubbleCountHost.Instance.Scheduler.ReloadAssets();
             CoreSettings.Save();

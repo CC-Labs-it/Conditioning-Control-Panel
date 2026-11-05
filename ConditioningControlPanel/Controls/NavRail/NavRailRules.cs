@@ -231,22 +231,17 @@ namespace ConditioningControlPanel.Controls.NavRail
         /// <summary>The spring's overshoot point on release: past the target by ReleaseOvershootPx
         /// in the direction of travel, then back. No travel, no overshoot.</summary>
         internal static double CoinOvershoot(double from, double to) =>
-            to == from ? to : to + Math.Sign(to - from) * Depth.DepthRules.ReleaseOvershootPx;
+            DepthLaw.Overshoot(from, to);
 
         /// <summary>The hover lean toward the pointer (the launcher recipe): nx, ny are the pointer
         /// over the tile in -1..1; right side dips when the pointer is right, flipped by the
         /// vertical half. Never past TiltDegrees.</summary>
-        internal static double CoinTilt(double nx, double ny)
-        {
-            nx = Math.Clamp(nx, -1, 1);
-            ny = Math.Clamp(ny, -1, 1);
-            return nx * -ny * Depth.DepthRules.TiltDegrees;
-        }
+        internal static double CoinTilt(double nx, double ny) => DashboardDepthLaw.TiltFor(nx, ny);
 
         /// <summary>A lit coin sits in its socket and never leans; an idle one leans on hover
         /// where the motion level and tier allow it.</summary>
         internal static bool CoinTilts(bool active, Models.MotionLevel level, Models.PerformanceTier tier) =>
-            !active && Depth.DepthRules.TiltAllowed(level, tier);
+            DepthLaw.CoinTilts(active, level, tier);
 
         /// <summary>The contact disc's stops, tinted by the row's hue: the DepthDropDisc shape
         /// (ShadowAlpha at the centre, 0x5C at 60%, clear at the edge) in DepthRules.ShadowColor.</summary>

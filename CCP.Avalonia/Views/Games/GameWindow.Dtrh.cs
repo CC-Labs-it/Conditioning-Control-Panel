@@ -3,9 +3,8 @@
 // motionLevel + runSetup, then the manifest :83), request-run -> run-config (:523, rules in Core
 // DtrhRunWire), run-started / run-progress / run-ended with the one-payout latch (:360, :583) and the
 // close-mid-run booking (:1002 DtrhRunCloseRule). The kept Escape (:119) is posted by the panic key's pause
-// claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh); a full panic closes it with
-// every other game (PanicSurfaces "games"). Shell frames (boot-error, exit's 1200 ms close, exit-done)
-// stay in GameWindow.HandleMessage.
+// claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh). Panic requests end-run
+// and gives the page 1200 ms to settle before forcing close (WPF DtrhHostService.cs:250-266,1017-1028).
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
@@ -46,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
+        private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
 
@@ -67,6 +67,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "boot-error":
+                    // WPF DtrhHostService.cs:925-954: close the failed web host, then fall back.
+                    if (_closing) return true;
+                    Log.Warning("DtrhHost: page boot-error: {Msg}; opening classic game", (string?)o["msg"]);
+                    Close();
+                    try { LaunchDtrhLegacy(); }
+                    catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();
@@ -94,11 +102,60 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     OnDtrhRunEnded(o, fromTeardown: false);
                     return true;
                 case "exit":
-                    _dtrhExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
-                    return false;
+                    _dtrhExiting = true;
+                    ArmDtrhExitWatchdog();
+                    return true;
                 default:
                     return false;
             }
+        }
+
+        /// <summary>WPF DtrhHostService.cs:250-266: panic asks a ready page to settle its run.
+        /// A booting page, or a second close while exiting, closes immediately.</summary>
+        private void CloseDtrhForPanic()
+        {
+            try
+            {
+                if (DtrhReady)
+                {
+                    _dtrhExiting = true;
+                    Post(new { type = "end-run", reason = "host" });
+                    ArmDtrhExitWatchdog();
+                }
+                else Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("DtrhHost: end-run post failed: {E}", ex.Message);
+                Close(); // WPF :266: a broken bridge must not prevent panic closing the window.
+            }
+        }
+
+        /// <summary>WPF DtrhHostService.cs:1017-1028: replace the deadline on each exit;
+        /// exit-done closes sooner, teardown cancels the outstanding callback.</summary>
+        private void ArmDtrhExitWatchdog()
+        {
+            _dtrhExitWatchdog?.Dispose();
+            _dtrhExitWatchdog = DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
+        }
+
+        /// <summary>WPF DtrhHostService.cs:939-954. The existing Core first-run deal is shared
+        /// with ChaosHappyPath; repeat players enter the hub and use its FALL IN button.</summary>
+        private static void LaunchDtrhLegacy()
+        {
+            if (Chaos.ChaosRunHost.IsActive) return;
+            if (ChaosMeta.State.RunsCompleted == 0)
+            {
+                Chaos.ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                return;
+            }
+            var desktop = global::Avalonia.Application.Current?.ApplicationLifetime
+                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var hub = desktop?.Windows.OfType<Chaos.ChaosHubWindow>().FirstOrDefault();
+            if (hub != null) { hub.Activate(); return; }
+            hub = new Chaos.ChaosHubWindow();
+            if (desktop?.MainWindow is { IsVisible: true } owner) hub.Show(owner);
+            else hub.Show();
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>
@@ -210,6 +267,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void DisposeDtrh()
         {
             if (!IsDtrh) return;
+            _dtrhExitWatchdog?.Dispose();
+            _dtrhExitWatchdog = null;
             DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
             if (DtrhRunCloseRule.ShouldBookOnClose(_dtrhRunActive, _dtrhLastProgress != null))
             {

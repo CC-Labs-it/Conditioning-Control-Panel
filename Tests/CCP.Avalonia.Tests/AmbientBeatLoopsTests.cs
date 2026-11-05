@@ -72,7 +72,7 @@ public sealed class AmbientBeatLoopsTests
         "Views/Tabs/AchievementsTabView.axaml.cs", "Views/Tabs/AchievementsTabView.Fx.cs",
         "Views/Tabs/LockdownTabView.axaml.cs", "Views/Tabs/QuestsTabView.Fx.cs", "Views/Tabs/StudioTabView.axaml.cs",
         "Views/Windows/AnnouncementPopup.axaml.cs", "Views/Windows/FeatureIntroPopup.axaml.cs",
-        "Views/Windows/ItemUnlockedPopup.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
+        "Views/Windows/ItemUnlockedPopup.axaml.cs",
         "Views/Windows/LockCardWindow.axaml.cs",
         "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MainShellWindow.NavRail.cs",
         "Views/Windows/MantraWindow.axaml.cs",
@@ -190,20 +190,7 @@ public sealed class AmbientBeatLoopsTests
     private static T F<T>(object o, string name) =>
         (T)o.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(o)!;
 
-    internal static void Setup()
-    {
-        if (Application.Current is null)
-        {
-            var options = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
-            // Lifecycle/curve tests use the bundled face for Windows-only font names on Linux.
-            var mappings = new Dictionary<string, FontFamily>(options.FontFamilyMappings!);
-            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
-            options.FontFamilyMappings = mappings;
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(options)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        }
-    }
+    internal static void Setup() => LifecycleTestPump.Setup();
 
     private static void Step(SteppedTime time, double seconds)
     {

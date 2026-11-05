@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -46,6 +47,44 @@ public sealed class RemoteRelayTests
 
     private static void Poll(FakeRelay f, string json) =>
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
+
+    [Fact]
+    public async Task Status_publishes_available_sessions_and_live_progress()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        var custom = new Session { Id = "custom-test", Name = "Custom test", Icon = "C", DurationMinutes = 3, Difficulty = SessionDifficulty.Hard, IsAvailable = true, Source = SessionSource.Custom, Phases = { new SessionPhase { Name = "First" } } };
+        var unavailable = new Session { Id = "unavailable-test", IsAvailable = false };
+        var runner = new SessionRunner(new SessionLogService());
+        r.SessionsProvider = () => Session.GetAllSessions().Concat(new[] { custom, unavailable });
+        r.SessionRunnerProvider = () => runner;
+        await r.StartAsync("light");
+        try
+        {
+            await r.PushStatusNowAsync();
+            var idle = f.Seen.Last(x => x.Path == "/v2/remote/status").Body;
+            var list = (JArray)idle["available_sessions"]!;
+            Assert.Contains(list, x => (string?)x["id"] == custom.Id && (string?)x["name"] == custom.GetModeAwareName() && (string?)x["icon"] == "C" && (int?)x["duration_minutes"] == 3 && (string?)x["difficulty"] == "Hard");
+            Assert.Contains(list, x => Session.GetAllSessions().Any(s => s.IsAvailable && s.Id == (string?)x["id"]));
+            Assert.DoesNotContain(list, x => (string?)x["id"] == unavailable.Id || Session.GetAllSessions().Any(s => !s.IsAvailable && s.Id == (string?)x["id"]));
+            Assert.Equal(JTokenType.Null, idle["session_info"]!.Type);
+            runner.Start(custom);
+            await r.PushStatusNowAsync();
+            var running = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["session_info"]!;
+            Assert.Equal(custom.GetModeAwareName(), (string?)running["name"]);
+            Assert.Equal("C", (string?)running["icon"]);
+            Assert.Equal(180, (int?)running["total_seconds"]);
+            Assert.False((bool)running["is_paused"]!);
+            Assert.Equal(custom.GetModeAwarePhaseName(custom.Phases[0]), (string?)running["current_phase"]);
+            runner.Pause();
+            runner._pausedElapsed = TimeSpan.FromSeconds(17);
+            await r.PushStatusNowAsync();
+            var paused = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["session_info"]!;
+            Assert.True((bool)paused["is_paused"]!);
+            Assert.Equal(17, (int?)paused["elapsed_seconds"]);
+        }
+        finally { runner.Stop(); CoreEngine.Stop(); CoreSession.IsSessionRunningProvider = null; }
+    }
 
     [Fact]
     public void A_sandbox_never_reaches_the_real_relay()
@@ -289,6 +328,79 @@ public sealed class RemoteRelayTests
             LockdownService.Current = prev;
             ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
             (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.StopEffectsOnRemoteDisconnect) = saved;
+        }
+    }
+
+    // WPF ReleaseHoldingsForExit (RemoteControlService.V2.cs:261, main bafe52cfc): exit hands back the controller's
+    // strict lock before the final save, keeps the wearer's own, and refuses a command fetched before exit.
+    [Fact]
+    public async Task Exit_releases_the_controllers_strict_lock_keeps_the_wearers_and_refuses_late_commands()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled);
+        var savedInvoke = CoreDispatch.InvokeProvider;
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled) = (false, false);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => { }, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            r.ReleaseHoldingsForExit();
+            r.ReleaseHoldingsForExit();   // idempotent
+            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+
+            s.StrictLockEnabled = true;   // the wearer's own
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
+            r.ReleaseHoldingsForExit();
+            Assert.True(s.StrictLockEnabled);
+
+            // A command fetched before exit whose UI dispatch lands after it is refused.
+            s.StrictLockEnabled = false;
+            Func<object?>? parked = null;
+            CoreDispatch.InvokeProvider = (fn, _) => { parked ??= fn; return (false, null); };
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"3\",\"action\":\"enable_strict_lock\"}]}");
+            await r.PollOnceAsync();
+            r.ReleaseHoldingsForExit();
+            Assert.Equal("the controller left", parked!());
+            Assert.False(s.StrictLockEnabled);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.StrictLockEnabled, s.PanicKeyEnabled) = saved;
+            CoreDispatch.InvokeProvider = savedInvoke;
+        }
+    }
+
+    // The exit release keeps the Lockdown rule: its forced strict lock stays on, its disabled panic key stays off.
+    [Fact]
+    public async Task Exit_mid_lockdown_keeps_the_forced_strict_lock_and_the_panic_key_off()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey);
+        var prev = LockdownService.Current;
+        var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = (false, true, true, true);
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => { }, new FakeRelay()) { AutoPoll = false };
+            await r.StartAsync("full");
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            ld.Activate(TimeSpan.FromMinutes(30));
+            r.ReleaseHoldingsForExit();
+            Assert.True(s.StrictLockEnabled);       // the Lockdown forced it
+            Assert.False(s.PanicKeyEnabled);       // the Lockdown holds it off
+            Assert.False(ld.RecordedStrictLock);   // ...and will put the wearer's own back
+        }
+        finally
+        {
+            ld.Deactivate();
+            ld.Dispose();
+            LockdownService.Current = prev;
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = saved;
         }
     }
 

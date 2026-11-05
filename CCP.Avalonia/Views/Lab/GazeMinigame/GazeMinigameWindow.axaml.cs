@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
     ///    <c>App.Flash</c> suspend/resume -> <c>CoreFlash</c>; <c>App.Haptics</c> -> <c>CoreHaptics</c>.
     ///  - Panic closes the game (PanicSurfaces "gaze-minigame"): panic also closes the camera here.
     ///  - Video panes reuse InlineLoopVideo's muted VLC frame sink; GIFs reuse the spiral decoder.
-    ///  - ponytail: still missing - the Flashes / Bubbles / MindWipe / OverlayPulse rewards.
+    ///  - ponytail: Flashes / Bubbles / MindWipe rewards are covered by a separate lane.
     ///  - <c>MessageBox.Show</c> -> this head's <c>Views/Dialogs/MessageDialog.ConfirmAsync</c>,
     ///    so the mid-run "quit the session?" confirmation is raised again (awaited, hence the
     ///    re-test of <c>_gameRunning</c> after it).
@@ -995,8 +995,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             {
                 // Own IsVisible alone controls InlineLoopVideo's pause; removing the panes below
                 // detaches both players before the feedback screen can hide their ancestor.
-                var leftView = new InlineLoopVideo(leftPath, randomStart: true) { Stretch = Stretch.Uniform };
-                var rightView = new InlineLoopVideo(rightPath, randomStart: true) { Stretch = Stretch.Uniform };
+                var leftView = CreateRoundVideo(leftPath);
+                var rightView = CreateRoundVideo(rightPath);
                 _leftPane.Children.Add(leftView);
                 _rightPane.Children.Add(rightView);
                 AnimateAssetIn(leftView);
@@ -1012,6 +1012,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             _gameRunning = true;
             StartRoundTicker();
         }
+
+        // WPF GazeMinigameWindow.xaml.cs:962-994: each pane plays once, muted, with random seeking.
+        internal static InlineLoopVideo CreateRoundVideo(string path) =>
+            new(path, randomStart: true, loop: false) { Stretch = Stretch.Uniform };
 
         private readonly List<GazeRoundImage> _roundImages = new();
 
@@ -1164,13 +1168,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         //  Reward / vibration triggers
         // ─────────────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// ponytail: reward-effects follow-up. Audio is wired; port the other four together:
-        /// CoreFlash.ShowProvider / CoreMindWipe.TriggerOnce exist, but WPF's five one-shot
-        /// bubbles and pulse of all active overlays still need equivalent head service entry points.
-        /// </summary>
+        // WPF GazeMinigameWindow.xaml.cs:1263. Other reward effects are covered by a separate lane.
         private void FireRewardEffect(GazeRewardEffect effect)
         {
+            if (effect == GazeRewardEffect.OverlayPulse) { Overlays.OverlayPulse.PulseOverlays(); return; }
             if (effect == GazeRewardEffect.Audio) { PlayRewardAudio(_settings.RewardAudioFile); return; }
             if (effect == GazeRewardEffect.None) return;
             Log.Debug("GazeMinigame: reward effect {Effect} suppressed (reward-effects follow-up)", effect);

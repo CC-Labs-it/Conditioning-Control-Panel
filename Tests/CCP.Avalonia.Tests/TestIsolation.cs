@@ -1,3 +1,7 @@
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Skia;
+using ConditioningControlPanel.Avalonia.Platform;
 using System;
 using Avalonia;
 using Avalonia.Headless;
@@ -8,6 +12,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using Avalonia;
+using Avalonia.Headless;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
@@ -89,8 +95,12 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // The shell paints the section ink into the app resources (PaintSectionInk); drop the
             // overrides so the next test sees the authored (Home) ink (P02).
             if (global::Avalonia.Application.Current?.Resources is { } res)
+            {
+                foreach (var palette in res.MergedDictionaries.OfType<ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.SectionInkResources>().ToArray())
+                    res.MergedDictionaries.Remove(palette);
                 foreach (var k in new[] { "SectionInk", "SectionTint", "SectionRule", "SectionOutline" })
                 { res.Remove(k); res.Remove(k + "Brush"); }
+            }
             Current?.Restore();
             Current = null;
             // A closed window's Skia surfaces and render targets are native, freed by finalizers, and
@@ -260,6 +270,11 @@ internal sealed class ProcessStateSnapshot
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
+
+        // Panic is raised through methods, so the assignment scanner cannot see its private state.
+        // Restore the quiet deadline, engine hold and count together after every test.
+        foreach (var f in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic)
+                     .Where(f => !f.IsInitOnly && !f.IsLiteral)) found.Add(f);
 
         // Every `Type.Member =` a test writes, through `using Alias = ...;` too.
         var alias = new Regex(@"^using\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;", RegexOptions.Multiline);

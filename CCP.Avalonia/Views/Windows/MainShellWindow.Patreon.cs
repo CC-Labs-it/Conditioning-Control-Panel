@@ -52,8 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.Patreon.cs:92, over the shared Core flag pass. Skipped while the seam is
         /// unseeded: WPF never runs it before App.Patreon exists, and a head that cannot read the account
-        /// must not wipe a patron's settings. ponytail: this head runs none of the lapsed engines (no
-        /// keyword hook, OCR, autonomy, mantra chant or haptics mixer), so there is nothing to stop yet.</summary>
+        /// must not wipe a patron's settings. Keyword and window awareness reconcile below;
+        /// OCR, autonomy, mantra chant and the haptics mixer remain follow-ups here.</summary>
         private bool _lapseUnsaved;   // cleared in memory, not yet written by an entitlement event
 
         private void EnforceEntitlementLapse(bool persist)
@@ -77,6 +77,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (s.AwarenessModeEnabled && s.AwarenessConsentGiven && ConditioningControlPanel.Services.WindowAwarenessService.HasEntitlement
                     && !App.WindowAwareness.IsRunning)
                     App.WindowAwareness.Start();
+                // WPF MainWindow.Patreon.cs:187-189,452-456: stop on lapse, re-arm saved master on access.
+                // Do not re-attach a user-disabled keyboard source on ordinary tab refreshes.
+                if (!Platform.KeywordTriggerHead.Engine.IsActive || !Platform.KeywordAudioRuntime.HasAccess)
+                    Platform.KeywordTriggerHead.Sync();
                 if (cleared.Count == 0) return;
                 Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab")?.SyncFromSettings();
                 Named<Tabs.AwarenessTabView>("AwarenessTab")?.SyncAwarenessTabUi();
@@ -149,6 +153,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else
                 toasts.Show(verdict.Reason, Helpers.NotificationType.Warning, System.TimeSpan.FromSeconds(8),
                     Loc.Get("tiergate_see_tiers"), () => ShowVaultGate(null, verdict.Required >= Models.PatreonTier.Level2 ? 2 : 1));
+        }
+
+        /// <summary>WPF f3f7288bf: a spent-pass/reroll CTA repairs a dead grant before offering a tier.</summary>
+        internal void OpenPricedCard(string featureKey, int tier)
+        {
+            if (LockdownActive) return;
+            if (TierGate.ReconnectIsTheAnswer()) { _ = ReconnectFromGate(); return; }
+            ShowVaultGate(featureKey, tier);
         }
 
         /// <summary>WPF ShowVaultGate. Null feature = the tier as a whole (the TierGate toast's "See tiers").</summary>

@@ -75,6 +75,45 @@ public sealed partial class GameWindowTests
         });
     }
 
+    /// <summary>WPF ChaosWebViewHost.cs:222-225,1704: query/fragment changes are the same document;
+    /// a different path, origin or scheme cannot drive the game bridge.</summary>
+    [Fact]
+    public void PageFrames_OnlyTheLoadedDocumentCanDriveTheBridge() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var root = Directory.CreateTempSubdirectory("game-document-").FullName;
+        using var server = new WebAssetServer(root);
+        var w = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        try
+        {
+            w.Load(server);
+            w.Show();
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            var page = w.PageUrl!;
+            foreach (var other in new[]
+            {
+                new Uri(page, "/intake/index.html"),
+                new UriBuilder(page) { Port = page.Port + 1 }.Uri,
+                new UriBuilder(page) { Scheme = "https" }.Uri,
+            })
+            {
+                w.Web.OnNavigationCompleted(other);
+                w.Web.OnWebMessage("{\"type\":\"ready\"}");
+                w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+                Assert.Empty(sent);
+                Assert.False(w.IsReady);
+                Assert.Contains(w, GameWindow.OpenWindowsForTests());
+            }
+            w.Web.OnNavigationCompleted(new UriBuilder(page) { Query = "changed=1", Fragment = "dock" }.Uri);
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            Assert.True(w.IsReady);
+            Assert.Equal("init", (string?)JObject.Parse(Assert.Single(sent))["type"]);
+            w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+            Assert.DoesNotContain(w, GameWindow.OpenWindowsForTests());
+        }
+        finally { w.Close(); Directory.Delete(root, true); }
+    });
+
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>
     {
@@ -196,6 +235,61 @@ public sealed partial class GameWindowTests
         }
         finally { Directory.Delete(root, true); }
     }
+
+    /// <summary>WPF PieceByPieceHostService.cs:164-168 and SeasonRecapService.cs:182-197.
+    /// One day event per fresh attempt, including failed setup; no recap Catalog entry or refocus credit.</summary>
+    [Fact]
+    public void PieceByPiece_FreshLaunchCreditsDayLog_RefocusDoesNot() => Run((shell, launcher) =>
+    {
+        var property = typeof(ConditioningControlPanel.Avalonia.App).GetProperty("FeatureDayLog",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var previous = property.GetValue(null);
+        var folder = Directory.CreateTempSubdirectory("pbp-credit-").FullName;
+        using var log = new FeatureDayLogService(() => null, Path.Combine(folder, "day.json"));
+        try
+        {
+            property.SetValue(null, log);
+            int Uses() => log.BuildWirePayload(10).Sum(d => d.TryGetValue("e_pb", out var n) ? Convert.ToInt32(n) : 0);
+            var bucket = CoreSettings.Current.SeasonStatsSeason;
+            var counts = CoreSettings.Current.SeasonFeatureUse.ToArray();
+            launcher.Hide();
+            MainShellWindow.LeashGateDueProvider = () => true;
+            MainShellWindow.PresentLeashGateProvider = _ => { };
+            launcher.Play(LauncherCards.Find(GameWindow.PbpId)!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, Uses());
+            MainShellWindow.LeashGateDueProvider = () => false;
+            var first = GameWindow.Launch(GameWindow.PbpId)!;
+            Assert.Equal(1, Uses());
+            Assert.Same(first, GameWindow.Launch(GameWindow.PbpId));
+            Assert.Equal(1, Uses());
+            first.Close();
+            Dispatcher.UIThread.RunJobs();
+            var second = GameWindow.Launch(GameWindow.PbpId)!;
+            Assert.NotSame(first, second);
+            Assert.Equal(2, Uses());
+            Assert.Equal(bucket, CoreSettings.Current.SeasonStatsSeason);
+            Assert.Equal(counts, CoreSettings.Current.SeasonFeatureUse.ToArray());
+            second.Close();
+            Dispatcher.UIThread.RunJobs();
+            var server = GameWindow.Server;
+            try
+            {
+                GameWindow.Server = () => throw new InvalidOperationException("setup failed");
+                var error = Assert.Throws<InvalidOperationException>(() => GameWindow.Launch(GameWindow.PbpId));
+                Assert.Equal("setup failed", error.Message);
+                Assert.Equal(3, Uses()); // WPF :168 runs before ChaosWebViewHost construction (:197).
+                Assert.False(GameWindow.IsAnyOpen());
+            }
+            finally { GameWindow.Server = server; }
+        }
+        finally
+        {
+            property.SetValue(null, previous);
+            log.Dispose();
+            Directory.Delete(folder, true);
+        }
+    });
 
     private sealed class FakeHttp : System.Net.Http.HttpMessageHandler
     {
@@ -324,6 +418,42 @@ public sealed partial class GameWindowTests
             Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
             Directory.Delete(lib, true);
         }
+    });
+
+    /// <summary>WPF PieceByPieceHostService.cs:165,230-232,284: opening, ready and a repeat
+    /// launch all return keyboard focus. The headless WebHost fallback is focusable for this probe;
+    /// the same FocusPage call targets NativeWebView when an engine is attached.</summary>
+    [Theory]
+    [InlineData("open")]
+    [InlineData("ready")]
+    [InlineData("reopen")]
+    public void PieceByPiece_ReturnsKeyboardToPage(string path) => RunBoard(() =>
+    {
+        var board = new GameWindow(GameWindow.Games[GameWindow.PbpId]);
+        board.Web.Focusable = true;
+        board.Load(GameWindow.Server());
+        board.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            if (path != "open")
+            {
+                var other = new global::Avalonia.Controls.Button { Content = "Focus probe" };
+                // A sibling can take focus without replacing the page or its native host.
+                var panel = new global::Avalonia.Controls.StackPanel();
+                board.Content = null;
+                panel.Children.Add(board.Web);
+                panel.Children.Add(other);
+                board.Content = panel;
+                Assert.True(other.Focus());
+                Assert.False(board.Web.IsFocused);
+                if (path == "ready") board.HandleMessage("{\"type\":\"ready\"}");
+                else Assert.Same(board, GameWindow.Launch(GameWindow.PbpId));
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(board.Web.IsFocused);
+        }
+        finally { board.Close(); }
     });
 
     [Theory]
@@ -697,6 +827,56 @@ public sealed partial class GameWindowTests
         Assert.Equal((40, 40), GameWindow.RacePayout(200, 60, 1.0));
     });
 
+    [Fact]
+    public void Race_and_launcher_follow_grant_additions_and_close_on_any_revocation() => RunRace("rt.original.03", (launcher, _, _) =>
+    {
+        var tracks = new HashSet<string> { "rt.original.03" };
+        RacingAccess.IsGrantedProvider = tracks.Contains;
+        launcher.BuildTiles();
+        var w = GameWindow.Launch("race")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        tracks.Add("rt.original.04");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        var update = Assert.Single(sent);
+        Assert.Equal("race-ownership", (string?)update["type"]);
+        Assert.Equal(new[] { 3, 4 }, update["tracks"]!.Values<int>());
+        sent.Clear();
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(sent); // An unrelated grant cannot restage the race menu.
+        tracks.Remove("rt.original.03");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);
+        tracks.Clear();
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
+        tracks.Add("rt.original.00");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
+    });
+
+    [Fact]
+    public void Race_revocation_then_regrant_without_dispatching_closes_the_host() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var granted = true;
+        RacingAccess.IsGrantedProvider = id => granted && id == "rt.original.03";
+        var w = GameWindow.Launch("race")!;
+        granted = false;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        granted = true;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);
+    });
     /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)
     /// gets one ping, a pong resets it, still silent on the next tick closes the window.</summary>
     [Fact]
@@ -926,6 +1106,53 @@ public sealed partial class GameWindowTests
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
             Directory.Delete(lib, true);
+        }
+    });
+
+    /// <summary>WPF DtrhHostService.cs:925-954: an actual page boot failure opens the
+    /// classic first run or the Warren. The Warren's FALL IN then opens the bound HUD.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Dtrh_BootError_reaches_the_classic_Hud(int completed) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var oldIntro = ChaosMeta.State.SeenIntroGuide;
+        ChaosMeta.State.RunsCompleted = completed;
+        ChaosMeta.State.SeenIntroGuide = true;
+        ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow? hub = null;
+        void Opened(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            if (sender is ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow h) hub = h;
+        }
+        using var subscription = Window.WindowOpenedEvent.AddClassHandler<Window>(Opened);
+        try
+        {
+            var web = GameWindow.Launch("dtrh")!;
+            Assert.True(web.IsVisible);
+            web.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"renderer failed\"}");
+            Assert.False(web.IsVisible);
+            if (completed == 1)
+            {
+                Assert.NotNull(hub);
+                Assert.False(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+                hub.FallIn();
+                Dispatcher.UIThread.RunJobs();
+            }
+            var host = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.Hud;
+            Assert.NotNull(host);
+            Assert.True(host.IsVisible);
+            Assert.Same(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State, host.DataContext);
+            Assert.Equal(completed == 0,
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State!.Config.ScriptedFirstRun);
+            var state = host.DataContext;
+            web.HandleMessage("{\"type\":\"boot-error\"}");
+            Assert.Same(state, ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State);
+        }
+        finally
+        {
+            ChaosMeta.State.SeenIntroGuide = oldIntro;
+            hub?.Close();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
         }
     });
 
@@ -1205,10 +1432,81 @@ public sealed partial class GameWindowTests
 
             shell.HandlePanicKeyPress(t0.AddSeconds(1));                          // again within 2 s: panic
             Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen()); // WPF gives the page its settlement window
+            Assert.Equal("end-run", (string?)sent.Last()["type"]);
+            Assert.Equal("host", (string?)sent.Last()["reason"]);
+            Assert.False(w.KeptEscapeReady);
+            w.HandleMessage("{\"type\":\"exit-done\"}");
             Assert.False(GameWindow.IsAnyOpen());
             Assert.False(shellClosed);                                            // a game owned the screen: no exit rung
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+
+    /// <summary>WPF DtrhHostService.cs:250-266,1017-1028: final page booking wins over
+    /// the older progress snapshot; no response forces close after 1200 ms.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Dtrh_PanicSettlesOrTimesOut(bool responds) => RunDtrh(lab: true, (_, xp, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        w.HandleMessage("{\"type\":\"run-progress\",\"score\":10,\"durationSec\":180}");
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        GameWindow.CloseAllForPanic();
+        Assert.True(GameWindow.IsAnyOpen());
+        Assert.False(w.DtrhReady);
+        Assert.Equal("end-run", (string?)Assert.Single(sent)["type"]);
+        Assert.Equal("host", (string?)sent[0]["reason"]);
+        Assert.Empty(xp);
+        if (responds)
+        {
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Assert.Equal(300.0, Assert.Single(xp));
+        }
+        else
+        {
+            // RunJobs drains queued work but does not service native dispatcher timers.
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            w.Closed += (_, _) => deadline.Cancel();
+            Dispatcher.UIThread.MainLoop(deadline.Token);
+            Assert.InRange(clock.ElapsedMilliseconds, 1100, 2999);
+            Assert.Single(xp); // forced close still banks the last snapshot
+        }
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Single(xp);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_PanicClosesBootingOrAlreadyExitingPage(bool ready) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        if (ready)
+        {
+            w.HandleMessage("{\"type\":\"ready\"}");
+            GameWindow.CloseAllForPanic();
+            Assert.True(GameWindow.IsAnyOpen());
+        }
+        GameWindow.CloseAllForPanic();
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    /// <summary>WPF DtrhHostService.cs:266: a failed end-run post must still close the window.</summary>
+    [Fact]
+    public void Dtrh_PanicClosesIfTheBridgeThrows() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.Posted += _ => throw new InvalidOperationException("bridge failed");
+        GameWindow.CloseAllForPanic();
+        Assert.False(GameWindow.IsAnyOpen());
     });
 
     /// <summary>WPF TryRacePauseOnEscape (owner 2026-10-12: Escape only pauses a game) on every game this head

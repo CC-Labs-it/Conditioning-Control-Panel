@@ -54,7 +54,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsShowing => Windows.Count > 0;
         internal static bool IsAnimating => _timer is { IsEnabled: true };
         internal static int FrameIndex => _index;
-        internal static TimeSpan FrameDelay => _delay;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
 
         private static readonly SpiralPool Pool = new();
@@ -83,6 +82,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
         internal static double PaintedOpacity => SpiralFrames.Paint(
             Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+
+        private static double? _pulseWeight;
+        private static double _pulseBase, _pulsePeak;
+        private static double PulseOpacity => _pulseWeight is { } k
+            ? Math.Clamp(_pulseBase + (_pulsePeak - _pulseBase) * k, 0, 1) : PaintedOpacity;
+
+        internal static void SetPulse(double? weight)
+        {
+            // WPF OverlayService.cs:659-660: ramp base, settings peak, both fixed for this pulse.
+            if (_pulseWeight == null && weight != null)
+            {
+                _pulseBase = PaintedOpacity;
+                _pulsePeak = Math.Min(SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0) * 2, 1);
+            }
+            _pulseWeight = weight;
+            foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
+        }
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
@@ -116,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-            var opacity = PaintedOpacity;
+            var opacity = PulseOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
@@ -162,7 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
-                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = _delay };
+                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = FrameDelay };
                 _timer.Tick += (_, _) => Tick();
                 _timer.Start();
             }
@@ -170,9 +186,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF GifFrameTimer_Tick: next frame on every window. Allocation-free.</summary>
+        internal static TimeSpan FrameDelay => TimeSpan.FromMilliseconds(
+            ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(_delay.TotalMilliseconds));
+
         internal static void Tick()
         {
             if (_frames.Count == 0 || Windows.Count == 0) return;
+            if (_timer != null) _timer.Interval = FrameDelay;
             _index = (_index + 1) % _frames.Count;
             var frame = _frames[_index];
             for (var i = 0; i < Windows.Count; i++) Windows[i].Spiral.Source = frame;
@@ -181,11 +201,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _pulseWeight = null;
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
             _repicked = false;
             CloseWindows();
+            QuestMinutes.Follow(false);   // WPF AchievementService.cs:250-253: actual deactivation resets the run.
         }
 
         private static void CloseWindows()
@@ -200,13 +222,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             Windows.Clear();
             _shownOn = Array.Empty<int>();
-            QuestMinutes.Follow(false);
+            // Rebuilding windows keeps the logical run and minute clock (WPF AchievementService.cs:203,246-253).
             // WPF OverlayService.cs:2094: the fullscreen spiral left, so a session may raise its corner GIF again.
             App.Sessions?.RefreshCornerGifPolicy();
         }
 
-        /// <summary>WPF AchievementService:276 - quest minutes while the spiral is on screen.</summary>
-        internal static readonly OverlayQuestMinutes QuestMinutes = new(m => App.Quests?.TrackSpiralMinutes(m));
+        /// <summary>WPF AchievementService:249-275 - achievement and quest minutes while the spiral is on
+        /// screen or rebuilding; deactivation restarts the continuous run (spiral_eyes).</summary>
+        internal static readonly OverlayQuestMinutes QuestMinutes = new(
+            m => { App.Achievements?.TrackSpiralMinutes(m); App.Quests?.TrackSpiralMinutes(m); },
+            () => App.Achievements?.ResetContinuousSpiral());
 
         /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
         /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
@@ -274,12 +299,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
                         new PixelSize(plan.Width, plan.Height), new Vector(96, 96), scaled.RowBytes));
                 }
-                Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, path);
+                Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, CornerGifPlanner.LogWhere(path));
                 return (frames, TimeSpan.FromMilliseconds(plan.DelayMs));
             }
             catch (Exception ex)
             {
-                Log.Warning("Spiral: failed to decode {Path}: {E}", path, ex.Message);
+                Log.Warning("Spiral: failed to decode {Path}: {E}", CornerGifPlanner.LogWhere(path), ex.Message);
                 return (frames, TimeSpan.FromMilliseconds(50));
             }
         }

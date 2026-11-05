@@ -25,7 +25,7 @@ public sealed class DeeperRowsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -59,13 +59,16 @@ public sealed class DeeperRowsTests
 
     private sealed class FakeAudio : IDeeperLocalAudio
     {
-        public bool Playing, Disposed;
+        public bool Playing, Disposed, Rejects;
+        public int Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
-        public void Play() => Playing = true;
+        public void Play() { if (Rejects) throw new InvalidOperationException("Audio transport could not start"); Playing = true; }
         public void Pause() => Playing = false;
         public event Action? Ended;
+        public event Action? Failed;
         public void End() { Playing = false; Ended?.Invoke(); }
+        public void Fail() { Playing = false; Failed?.Invoke(); }
         public void Dispose() => Disposed = true;
     }
 
@@ -109,6 +112,22 @@ public sealed class DeeperRowsTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
             Assert.Equal("0:00", editor.TxtCurrentTime.Text);
+
+            // A start the transport rejects leaves the editor stopped, and the next press tries again.
+            fake.Rejects = true;
+            Click(editor.BtnPlayPause);
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            fake.Rejects = false;
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
+            Assert.Equal(IconKind.Pause, editor.PlayPauseGlyph.Kind);
+
+            // A playback error after the start does the same.
+            fake.Fail();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
         }
         finally
         {
@@ -124,10 +143,12 @@ public sealed class DeeperRowsTests
     private sealed class FakeEngine : DeeperLocalAudio.IEngine
     {
         public LibVLCSharp.Shared.VLCState State { get; set; } = LibVLCSharp.Shared.VLCState.NothingSpecial;
+        public int Volume { get; set; }
         public long Time { get; set; }
         public long Length => 6000;
         public int Stops;
-        public void Play() => State = LibVLCSharp.Shared.VLCState.Opening;
+        public bool Starts = true;
+        public bool Play() { Volume = 100; State = LibVLCSharp.Shared.VLCState.Opening; return Starts; }
         public void SetPause(bool pause) => State = pause ? LibVLCSharp.Shared.VLCState.Paused : LibVLCSharp.Shared.VLCState.Playing;
         public void Stop() { Stops++; State = LibVLCSharp.Shared.VLCState.Stopped; }
     }
@@ -137,6 +158,11 @@ public sealed class DeeperRowsTests
     {
         var e = new FakeEngine();
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
+        e.State = LibVLCSharp.Shared.VLCState.Playing; t.Volume = 135; Assert.Equal(100, e.Volume);
+        t.Volume = -1; Assert.Equal(0, e.Volume);
+        foreach (var (linear, native) in new[] { (25, 63), (50, 79), (75, 91), (80, 93) })
+        { t.Volume = linear; Assert.Equal(native, e.Volume); Assert.Equal(linear, t.Volume); }
+        e.State = LibVLCSharp.Shared.VLCState.NothingSpecial;
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
         // Seek before playback: taken by the first Playing, never again.
@@ -144,12 +170,15 @@ public sealed class DeeperRowsTests
         t.Play();
         e.State = LibVLCSharp.Shared.VLCState.Playing;
         t.OnPlaying();
+        Assert.Equal(93, e.Volume);
         Assert.Equal(3000, e.Time);
         Assert.Equal(6, t.DurationSeconds);               // exact length once playing
         e.Time = 4000;
         t.Pause();
         t.Play();
+        e.Volume = 100; // The new output on resume also loses the earlier native level.
         t.OnPlaying();
+        Assert.Equal(93, e.Volume);
         Assert.Equal(4000, e.Time);
 
         // Seek while playing, play on, pause, resume: resume must not jump back to the seek.
@@ -167,6 +196,8 @@ public sealed class DeeperRowsTests
         Assert.Equal(LibVLCSharp.Shared.VLCState.Opening, e.State);
         t.Pause();
         Assert.Equal(LibVLCSharp.Shared.VLCState.Stopped, e.State);
+        e.Starts = false; Assert.Throws<InvalidOperationException>(t.Play);
+        var failed = false; t.Failed += () => failed = true; t.OnError(); Assert.True(failed);
     }
 
     [Fact]

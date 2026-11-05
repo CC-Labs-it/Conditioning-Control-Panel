@@ -69,7 +69,7 @@ public sealed class PresetsFocalFxTests
         var entrances = Assert.IsType<System.Threading.CancellationTokenSource>(typeof(PresetsTabView).GetField("_entranceCancellation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(view));
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
-        Assert.True(entrances.IsCancellationRequested);   // #3301: motion off clears the arrival in flight, as WPF does
+        Assert.True(entrances.IsCancellationRequested);   // OnMotionGateChanged: motion off clears the arrival in flight, as WPF does
         // Show ran the Full-motion arrival, which owns TranslateTransform.Y at animation priority for ~260 ms of
         // real time and masks the hover's -2. Re-arriving at Off cancels it and snaps, as a tab switch would.
         view.IsVisible = false; view.IsVisible = true; Settle();
@@ -91,6 +91,25 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(0.97, press.ScaleX);
         host.MouseMove(new Point(1, 1)); host.MouseUp(new Point(1, 1), MouseButton.Left, RawInputModifiers.None); Settle();
         Assert.Equal(1, press.ScaleX);
+    });
+
+    [Fact]
+    public Task TurningMotionOffCancelsAnInFlightArrivalBeforeHover() => WithPresets((host, view) =>
+    {
+        view.IsVisible = false; Settle();
+        view.IsVisible = true; Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        Assert.True(row.Opacity < 1); // The entrance is actually in progress.
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Settle();
+        Assert.Equal(1, row.Opacity);
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.Equal(0, slide.Y);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y);
+        Settle();
+        Assert.Equal(-2, slide.Y); // A later arrival frame must not override the hover.
     });
 
     [Fact]
@@ -166,6 +185,8 @@ public sealed class PresetsFocalFxTests
             var manager = new SessionManager(files); manager.LoadAllSessions();
             var added = 0; manager.SessionAdded += _ => added++;
             var view = new PresetsTabView(); view.UseSessionManager(manager);
+            var animationClock = new SharedDeeperThemeTests.StepClock();
+            view.SetValue(SharedDeeperThemeTests.StepClock.Property, animationClock.Instance);
             host = new Window { Width = 1200, Height = 900, Content = view }; host.Show(); host.Activate(); Settle();
             var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
             string[] Ids() => rack.Children.OfType<Border>().Select(b => ((Session)b.Tag!).Id).Where(id => id.StartsWith("sync_")).ToArray();
@@ -184,9 +205,14 @@ public sealed class PresetsFocalFxTests
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
+            // Reproduce a loaded runner: wall time must not choose the frame being asserted.
+            System.Threading.Thread.Sleep(600); Settle();
+            animationClock.Step(0); animationClock.Step(100);
             Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
+            animationClock.Step(1000);
+            Assert.All(rack.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
         }
         finally
         {

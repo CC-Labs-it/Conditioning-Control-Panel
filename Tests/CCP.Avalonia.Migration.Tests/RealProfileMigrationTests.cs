@@ -14,6 +14,9 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Platform;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
@@ -77,21 +80,37 @@ public sealed class RealProfileMigrationTests
     }
 
     [Fact]
+    public async Task InPlaceWpf72ProfileSurvivesAvaloniaStartupAndShutdown()
+    {
+        if (Environment.GetEnvironmentVariable("CCP_MIGRATION_COPIED") == "1")
+            Assert.Skip("Copied-profile test owns this process.");
+        await SyntheticProfileAsync(inPlace: true);
+    }
+
+    [Fact]
     public async Task SyntheticWpfProfileSurvivesAvaloniaStartupAndShutdown()
+    {
+        if (Environment.GetEnvironmentVariable("CCP_MIGRATION_COPIED") != "1")
+            Assert.Skip("Run with CCP_MIGRATION_COPIED=1 in a separate testhost (one Avalonia startup).");
+        await SyntheticProfileAsync(inPlace: false);
+    }
+
+    private static async Task SyntheticProfileAsync(bool inPlace)
     {
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ProfileVariable)))
             Assert.Skip("One desktop startup per process: the real profile run owns this testhost.");
 
-        var fixture = Path.Combine(MigrationTestProfile.Root, "synthetic");
+        var fixture = inPlace ? MigrationTestProfile.UserData : Path.Combine(MigrationTestProfile.Root, "synthetic");
         Directory.CreateDirectory(Path.Combine(fixture, "mods", "premove"));
         Directory.CreateDirectory(Path.Combine(fixture, "session_logs"));
-        // The settings WPF saved after its own startup migrations (ModServiceCoreTests golden).
-        // Its two fence stamps are normalized to a placeholder there; give them a real instant.
-        var settings = JObject.Parse(File.ReadAllText(Fixture("mod_activation_golden.json")));
+        // Serialized by main's WPF model; see wpf72_settings.provenance.txt.
+        // Fixed migration stamps keep the generated profile reproducible.
+        var settings = JObject.Parse(File.ReadAllText(Fixture("wpf72_settings.json")));
         settings["PersonaVoiceFenceUtc"] = "2026-10-01T12:00:00Z";
         settings["PersonaIdentityFenceUtc"] = "2026-10-01T12:00:00Z";
         // Open drawers on a tab the run never shows (the exit write used to reset them).
         settings["CompanionSectionOpen"] = new JObject { ["EngineRoom"] = true, ["Workshop"] = true };
+        if (inPlace) settings["PatreonTier"] = 2;
         File.WriteAllText(Path.Combine(fixture, "settings.json"), settings.ToString());
         File.Copy(Fixture("mod_manifest_premove.json"), Path.Combine(fixture, "mods", "premove", "manifest.json"));
         File.Copy(Fixture("session_log_premove.json"), Path.Combine(fixture, "session_logs", "premove.json"));
@@ -100,8 +119,90 @@ public sealed class RealProfileMigrationTests
         File.WriteAllText(Path.Combine(fixture, "auth_token.dat"), "never copied");
         var roaming = Directory.CreateDirectory(Path.Combine(MigrationTestProfile.Root, "synthetic-roaming")).FullName;
         File.Copy(Fixture("achievements_golden.json"), Path.Combine(roaming, "achievements.json"));
-        await RunMigrationAsync(fixture, roaming);
-        Assert.False(File.Exists(Path.Combine(MigrationTestProfile.UserData, "auth_token.dat")));
+        if (!inPlace)
+        {
+            await RunMigrationAsync(fixture, roaming);
+            Assert.False(File.Exists(Path.Combine(MigrationTestProfile.UserData, "auth_token.dat")));
+            return;
+        }
+
+        const string token = "{\"access_token\":\"migration-test-only\",\"refresh_token\":\"test-refresh\",\"expires_at\":\"2099-01-01T00:00:00Z\"}";
+        var tokenPath = Path.Combine(fixture, "patreon_auth.dat");
+        var secrets = new Dictionary<string, string> { ["patreon_auth"] = token,
+            ["authtoken"] = "synthetic-auth", ["apikey"] = "synthetic-key" };
+        if (OperatingSystem.IsWindows())
+        {
+            // WPF's writer format, independent of Avalonia's Dpapi.Write.
+            File.WriteAllBytes(tokenPath, ProtectedData.Protect(Encoding.UTF8.GetBytes(token),
+                Encoding.UTF8.GetBytes("ConditioningControlPanel_Patreon_v1"), DataProtectionScope.CurrentUser));
+            foreach (var (name, value) in secrets.Where(kv => kv.Key != "patreon_auth"))
+            {
+                var file = name == "authtoken" ? "auth_token.dat" : "api_key.dat";
+                var label = name == "authtoken" ? "AuthToken" : "ApiKey";
+                File.WriteAllBytes(Path.Combine(fixture, file), ProtectedData.Protect(Encoding.UTF8.GetBytes(value),
+                    Encoding.UTF8.GetBytes($"ConditioningControlPanel_{label}_v1"), DataProtectionScope.CurrentUser));
+            }
+            SecretStore.Sandboxed = false; // DPAPI touches only our temporary userdata folder
+        }
+        else
+        {
+            File.WriteAllBytes(tokenPath, new byte[] { 9, 8, 7, 6 }); // opaque WPF file, never interpreted on Linux
+            SecretStore.OsReadOverride = name => (true, secrets.GetValueOrDefault(name));
+            SecretStore.OsWriteOverride = (_, _) => true;
+        }
+        var secretHashes = Directory.GetFiles(fixture, "*.dat").ToDictionary(p => p, Sha256);
+        try
+        {
+            await RunMigrationAsync(fixture, roaming, inPlace: true);
+            foreach (var (name, value) in secrets) Assert.Equal(value, CoreSecrets.Retrieve(name));
+            Assert.Equal(2, (int)ReadJson(Path.Combine(fixture, "settings.json"))["PatreonTier"]!);
+            foreach (var (path, hash) in secretHashes) Assert.Equal(hash, Sha256(path));
+        }
+        finally
+        {
+            SecretStore.OsReadOverride = null;
+            SecretStore.OsWriteOverride = null;
+            SecretStore.Sandboxed = true;
+        }
+    }
+
+    // WPF Services/Progression/AchievementService.cs:17 uses AchievementStore.DefaultPath too.
+    [Fact]
+    public void RoamingRootRemainsWithTheProcessProfileWhenEnvironmentChanges()
+    {
+        var before = CorePaths.RoamingData;
+        var original = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR");
+        try
+        {
+            Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", Path.Combine(MigrationTestProfile.Root, "other"));
+            Assert.Equal(before, CorePaths.RoamingData);
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", original); }
+    }
+
+    [Fact]
+    public void EstablishedWpfKeysArePresentAndTheirLossFailsComparison()
+    {
+        var sample = ReadJson(Fixture("wpf72_settings.json"));
+        foreach (var key in new[] { "HasSeenProgramsTab", "HasSeenProgramsIntro", "HasSeenDeeperTab",
+            "HasSeededDeeperDemos", "HasSeenDeeperWelcome", "HasSeenDeeperEditorIntro",
+            "HasSeenDeeperHTInteractiveTutorial", "InstallDate" })
+        {
+            Assert.True(sample.ContainsKey(key), "fixture missing: " + key);
+            var saved = (JObject)sample.DeepClone();
+            saved.Remove(key);
+            Assert.Contains("key dropped with a non-default value: " + key,
+                CompareSettings(sample, saved, _ => { }));
+        }
+    }
+
+    [Fact]
+    public void ComparisonRejectsLostKeysAndTokenBackedTierReset()
+    {
+        var before = new JObject { ["UnknownWpfKey"] = 42, ["PatreonTier"] = 2 };
+        var failures = CompareSettings(before, new JObject { ["PatreonTier"] = 0 }, _ => { }, false).ToArray();
+        Assert.Contains("unknown key (dropped on load): UnknownWpfKey", failures);
+        Assert.Contains("value changed: PatreonTier", failures);
     }
 
     private static string Fixture(string name, [CallerFilePath] string here = "") =>
@@ -147,7 +248,7 @@ public sealed class RealProfileMigrationTests
         return JToken.Load(reader);
     }
 
-    private static async Task RunMigrationAsync(string source, string? roaming)
+    private static async Task RunMigrationAsync(string source, string? roaming, bool inPlace = false)
     {
         var profile = MigrationTestProfile.UserData;
         Assert.Equal(profile, CorePaths.UserData);
@@ -160,30 +261,50 @@ public sealed class RealProfileMigrationTests
             Assert.False(inputs.ContainsKey("achievements.json"), "achievements.json in both inputs");
             inputs["achievements.json"] = Path.Combine(roaming, "achievements.json");   // ProfileApp.AchievementsPath
         }
+        var original = ReadJson(Path.Combine(source, "settings.json"));
+        var comparisons = new Dictionary<string, string>();
+        if (inPlace)
+            foreach (var (relative, from) in inputs.Where(kv => ExitFlushedJson.Contains(kv.Key)))
+            {
+                var snapshot = Path.Combine(MigrationTestProfile.Root, "before-" + relative);
+                File.Copy(from, snapshot);
+                comparisons[relative] = snapshot;
+            }
         var sourceHashes = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (relative, from) in inputs)
         {
-            var to = Path.Combine(profile, relative);
+            var to = inPlace && relative == "achievements.json" ? AchievementStore.DefaultPath : Path.Combine(profile, relative);
+            if (inPlace && relative == "achievements.json")
+                Assert.Equal(Path.Combine(CorePaths.RoamingData, "achievements.json"), to);
+            if (from == to) { sourceHashes[relative] = Sha256(from); continue; }
             Directory.CreateDirectory(Path.GetDirectoryName(to)!);
             using (var input = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             using (var output = new FileStream(to, FileMode.CreateNew, FileAccess.Write))
                 input.CopyTo(output);
             sourceHashes[relative] = Sha256(from);
         }
-        var original = ReadJson(Path.Combine(source, "settings.json"));
         var settingsWrittenBefore = File.GetLastWriteTimeUtc(Path.Combine(profile, "settings.json"));
 
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             try
             {
-                AppBuilder.Configure<ProfileApp>()
+                (inPlace ? AppBuilder.Configure<App>() : AppBuilder.Configure<ProfileApp>())
                     .UseSkia()
+                    .WithInterFont()
+                    .With(AppFonts.Options(systemEmoji: false))
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithLifetime(lifetime);
-                Assert.IsType<ProfileApp>(Application.Current);
+                if (inPlace)
+                {
+                    Assert.IsType<App>(Application.Current);
+                    Assert.Contains("first_bloom", App.Achievements!.Progress.UnlockedAchievements);
+                    Assert.Equal(777, App.Achievements.Progress.TotalFlashImages);
+                }
+                else Assert.IsType<ProfileApp>(Application.Current);
                 Dispatcher.UIThread.RunJobs();
+                await AccountSeed.InitializeAsync();
                 lifetime.MainWindow?.Show();
                 Dispatcher.UIThread.RunJobs();
             }
@@ -192,7 +313,6 @@ public sealed class RealProfileMigrationTests
                 try { lifetime.Shutdown(); }
                 finally { Dispatcher.UIThread.RunJobs(); }
             }
-            return Task.CompletedTask;
         });
 
         var failures = new List<string>();
@@ -201,18 +321,18 @@ public sealed class RealProfileMigrationTests
         var savedPath = Path.Combine(profile, "settings.json");
         if (File.GetLastWriteTimeUtc(savedPath) == settingsWrittenBefore)
             failures.Add("settings.json was not saved on shutdown (the round trip did not run)");
-        failures.AddRange(CompareSettings(original, ReadJson(savedPath), Expect));
+        failures.AddRange(CompareSettings(original, ReadJson(savedPath), Expect, allowMissingTokens: !inPlace));
 
         foreach (var (relative, hash) in sourceHashes.Where(kv => !IsSettingsFile(kv.Key)))
         {
-            var copy = Path.Combine(profile, relative);
+            var copy = inPlace && relative == "achievements.json" ? AchievementStore.DefaultPath : Path.Combine(profile, relative);
             if (!File.Exists(copy)) failures.Add("file removed: " + relative);
             else if (Sha256(copy) == hash) continue;
-            else if (ExpectedChange(relative, inputs[relative], copy) is { } transform) Expect(transform);
+            else if (ExpectedChange(relative, comparisons.GetValueOrDefault(relative, inputs[relative]), copy) is { } transform) Expect(transform);
             else failures.Add("file changed: " + relative);
         }
 
-        TestContext.Current.TestOutputHelper?.WriteLine($"migration: {original.Count} settings keys, {sourceHashes.Count} files copied, "
+        TestContext.Current.TestOutputHelper?.WriteLine($"migration: {original.Count} settings keys, {sourceHashes.Count} files checked, "
             + $"expected transforms [{string.Join(", ", expected.Select(kv => kv.Key + " " + kv.Value))}], {failures.Count} failure(s)");
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
     }
@@ -292,7 +412,7 @@ public sealed class RealProfileMigrationTests
     /// <summary>Every original key keeps its value, or is absent and held the default (properties
     /// marked DefaultValueHandling.Ignore). A key AppSettings does not know fails by name: there is
     /// no JsonExtensionData, so the load drops it. Messages carry key names, never values.</summary>
-    internal static IEnumerable<string> CompareSettings(JObject original, JObject saved, Action<string> expect)
+    internal static IEnumerable<string> CompareSettings(JObject original, JObject saved, Action<string> expect, bool allowMissingTokens = true)
     {
         var contract = (JsonObjectContract)JsonSerializer.CreateDefault().ContractResolver.ResolveContract(typeof(AppSettings));
         var defaults = new AppSettings();
@@ -310,7 +430,7 @@ public sealed class RealProfileMigrationTests
                 // Expected: Patreon tokens are secrets and never copied (Windows DPAPI files are not
                 // portable either), and WPF's own rule clears the cached tier without tokens. The
                 // user signs in again on Linux. Precisely: the tier, and only to 0.
-                if (key == "PatreonTier" && now.Type == JTokenType.Integer && (int)now == 0)
+                if (allowMissingTokens && key == "PatreonTier" && now.Type == JTokenType.Integer && (int)now == 0)
                     expect("patreon-tier-cleared-without-tokens");
                 else yield return "value changed: " + key;
                 continue;

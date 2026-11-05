@@ -72,11 +72,16 @@ public sealed class RemoteControlShellTests
         try
         {
             shell = new MainShellWindow();
+            Assert.NotNull(relay.SessionsProvider);
+            Assert.Contains(relay.SessionsProvider!(), s => s.IsAvailable);
+            Assert.NotNull(relay.SessionRunnerProvider);
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             var overlay = shell.Named<Border>("RemoteControlOverlay")!;
             var start = shell.Named<Button>("BtnStart")!;
             Assert.False(overlay.IsVisible);
+            var browser = shell.Named<SettingsTabView>("SettingsTab")!.BrowserContainer;
+            Assert.True(browser.IsVisible);
 
             Assert.Equal("ABC123", await relay.StartAsync("light"));
             f.Poll = "{\"controller_connected\":true}";
@@ -89,6 +94,7 @@ public sealed class RemoteControlShellTests
 
             // Overlay up with code + PIN; Start disabled, green, "REMOTE CONNECTED" (WPF StartStop.cs:992).
             Assert.True(overlay.IsVisible);
+            Assert.False(browser.IsVisible);
             Assert.Equal(1, Target(overlay));
             Assert.Equal($"Session: A B C 1 2 3  PIN: {relay.ConnectPin}", shell.Named<TextBlock>("TxtOverlaySessionCode")!.Text);
             Assert.False(start.IsEnabled);
@@ -97,6 +103,18 @@ public sealed class RemoteControlShellTests
             Assert.Equal("\U0001F3AE", shell.Named<TextBlock>("TxtStartIcon")!.Text);
             Assert.True(shell.Named<Control>("RemoteSessionIdle")!.IsVisible);   // no session running
             Assert.Equal(MainShellWindow.RemoteOverlaySlowTick, shell.RemoteOverlayInterval);
+
+            // A controller leaving restores the browser after the overlay fades; reconnect hides it again.
+            f.Poll = "{\"controller_connected\":false}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            clock.Step(MainShellWindow.RemoteOverlayFadeOut);
+            shell.RemoteOverlayTick();
+            Assert.True(browser.IsVisible);
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(browser.IsVisible);
 
             // A loud verb toasts for 2 s; a quiet one does not.
             var toast = shell.Named<Border>("RemoteCommandNotification")!;
@@ -156,6 +174,7 @@ public sealed class RemoteControlShellTests
             clock.Step(MainShellWindow.RemoteOverlayFadeOut);
             shell.RemoteOverlayTick();
             Assert.False(overlay.IsVisible);
+            Assert.True(browser.IsVisible);
             Assert.True(start.IsEnabled);
             Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
         }
@@ -177,4 +196,30 @@ public sealed class RemoteControlShellTests
         for (var i = 0; i < 200 && !done(); i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
         Assert.True(done());
     }
+
+    /// <summary>WPF SettleTemporarySettingsForExit (main bafe52cfc): exit with a controller connected hands its
+    /// strict lock back before the final save, through the app's own relay.</summary>
+    [Fact]
+    public Task Exit_save_hands_back_the_controllers_strict_lock() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var (oldRelay, strict, panic) = (RemoteControlTabView.Relay, s.StrictLockEnabled, s.PanicKeyEnabled);
+        using var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => { }, new FakeRelay()) { AutoPoll = false };
+        try
+        {
+            RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+            s.StrictLockEnabled = false;
+            Assert.Equal("ABC123", await RemoteControlTabView.Relay.Value.StartAsync("full"));
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            bool? saved = null;
+            global::ConditioningControlPanel.Avalonia.App.SaveSettingsOnExit(null, () => saved = s.StrictLockEnabled);
+            Assert.False(saved);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            RemoteControlTabView.Relay = oldRelay;
+            (s.StrictLockEnabled, s.PanicKeyEnabled) = (strict, panic);
+        }
+    });
 }

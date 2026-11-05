@@ -128,6 +128,13 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--x11-probe") >= 0)
                 return X11OverlayProbe.Run();
 
+            // Private native KWin regression: opens a real fullscreen video surface and watch.
+            if (Array.IndexOf(args, "--wave-timer-check") >= 0)
+                return OverlayCheck.RunWaveTimer();
+
+            if (Array.IndexOf(args, "--x11-managed-raise-check") >= 0)
+                return X11OverlayProbe.RunManagedRaise(direct: Array.IndexOf(args, "--direct-raise-control") >= 0);
+
             // --overlay-check opens one click-through override-redirect overlay per screen and
             // reads map state, override_redirect, depth, input shape and geometry back from the
             // X server. Non-zero on any mismatch. Safe on a live session (transparent, no input).
@@ -227,6 +234,8 @@ namespace ConditioningControlPanel.Avalonia
                 return 0;
             }
 
+            // WPF App.xaml.cs:4069: end protection after initialization, not an intermediate splash frame.
+            App.DesktopStartupCompleted = instance.EndStartupPhase;
             var app = BuildAvaloniaApp();
 #if DEBUG
             // Keincheck MCP server on http://127.0.0.1:3001, Debug builds only. Kept out of

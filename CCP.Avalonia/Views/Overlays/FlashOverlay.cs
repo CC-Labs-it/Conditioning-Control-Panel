@@ -42,6 +42,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private const int StaggerMs = 300;
 
         internal static readonly List<(FlashOverlayWindow Window, PixelRect Rect)> Active = new();
+
+        internal static void RaiseAll(Action<Window> raise)
+        {
+            foreach (var (window, _) in Active) if (window.IsVisible && !window.IsFadingOut) raise(window);
+        }
         private static readonly Random Rng = new();
         // #627: one shuffled walk of the folder (WPF FlashService DiskBag), so every image comes up
         // before any repeats. Not thread-safe: LoadPictures draws under the bag's own lock.
@@ -50,6 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF FlashService _packImageList + PackBag + _tempPackFiles (:173-191).</summary>
         internal static readonly ConditioningControlPanel.Services.PackMediaPool PackImages =
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
+        // WPF FlashService.cs:1674: notify at display, after loading and the pre-display wait.
+        internal static event Action? Displayed;
+        internal static Action<Action, TimeSpan> After = (then, delay) => DispatcherTimer.RunOnce(then, delay);
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static int _generation;
 
@@ -111,21 +119,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
-        private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
+        internal static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
             int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
+            // WPF FlashService.cs:1674: FlashDisplayed once per batch, right after its spawns are queued.
+            if (flashes.Count > 0) Platform.BarkHead.Engine?.Raise("FlashDisplayed");
             var refused = false;
+            var notified = false; // WPF FlashService.cs:1674: one display event per burst.
             for (var i = 0; i < flashes.Count; i++)
             {
                 var (bmp, rect, path, screen) = flashes[i];
                 var last = i == flashes.Count - 1;
-                DispatcherTimer.RunOnce(() =>
+                After(() =>
                 {
                     try
                     {
                         if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
-                        refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
+                        refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion, notify: !notified);
+                        notified |= !refused;
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
                     finally { if (last) done?.Invoke(); }
@@ -136,18 +148,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>One flash on screen plus what WPF SpawnFlashWindow pays for it: the lucky roll
         /// before the show (FlashService.cs:1851) and its glow (1881-1967).</summary>
         internal static bool Show(Bitmap bmp, PixelRect rect, string path, Screen screen, double alpha, TimeSpan fade,
-            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null)
+            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null, bool notify = true)
         {
             var s = CoreSettings.Current;
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
-            var w = new FlashOverlayWindow(bmp)
+            var w = new FlashOverlayWindow(bmp, path)
             {
                 HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
+            if (notify) Displayed?.Invoke();
             Paid(path, s, hydraGeneration, multiplier);
             return true;
         }
@@ -328,7 +341,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
+            PackImages.CleanupTemps();
         }
+
+        // WPF FlashService.LoadAssets / RefreshImagesPath: retain refused deletes for the next sweep.
+        internal static void ReloadAssets() => PackImages.CleanupTemps();
 
         /// <summary>The burst a Core provider fires (tests swap it).</summary>
         internal static Action<Visual, bool> Fire = (host, ambient) => TriggerOnce(host, ambient: ambient);
@@ -386,6 +403,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: false, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            if (s.GentleVisuals)
+            {
+                Exiting.Add(w);
+                w.Closed += (_, _) => Exiting.Remove(w);
+                w.BeginExit(FlashExit.Gentle(ConditioningControlPanel.Services.Safety.GentleVisuals.ClampFade(s.GentleFadeSeconds), Rng.Next()), fromDisplayedAlpha: true);
+                return;
+            }
             if (FlashShatter.DecidesClick(s.FlashShatterEnabled, PrizeOwnership.OwnsFlashV2())
                 && w.TryBeginShatter(s.MotionLevel, Rng))
             {

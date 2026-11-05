@@ -88,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public MainShellWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            Closed += (_, _) => Platform.FriendsLanding.Stop(); // WPF Services/Friends/FriendsLanding.cs:75-82: ownerless notices must not hold exit.
             InitializeLanguageSelector();
             InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
 
@@ -105,10 +106,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // (MainWindow.xaml.cs:555) and opens the wizard once the window is up. Same here -
             // see MainShellWindow.FirstRun.cs, which owns both halves.
             HookFirstRun();
+            HookDisplayNameAsk();
 
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
             InitializeNavRail();
+            InitializeProgramsToasts(); // WPF ProgramsTab.cs:1864-1940, Presets.cs:2013,2058
             InitializeChromeFx(); // WPF chrome message cue lifecycle
             InitFavoritesRail(); // MainShellWindow.FavoritesRail.cs (WPF MainWindow.xaml.cs:3501)
             ApplyEnableDeeper(); // MainShellWindow.DeeperTab.cs (WPF LoadSettings: rail door follows EnableDeeper)
@@ -119,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AttachModSwitch();
             HookPanicEnabled();
             HookWallRings();   // MainShellWindow.Presets.cs: wall tile rings follow the flags
+            InitializeEventFx(); // WPF EventFx.cs:276, hidden achievement rail burst
             HookLevelDisplay(); // MainShellWindow.HeroFx.cs: header level/XP follow ProgressionBank
             HookAutonomy();     // MainShellWindow.Autonomy.cs: Takeover seeds; starts only on the user's switch
             InitializeDescentFuse(); // MainShellWindow.DescentFuse.cs (WPF MainWindow ctor); no-op without App.DescentCountdown
@@ -126,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeProfileVat();
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
             InitializeInboxBadge(); // MainShellWindow.Inbox.cs (WPF MainWindow.Inbox.cs:27)
+            InitializeIntakePassNudge();
             InitializeServerAnnouncement(); // MainShellWindow.Announcement.cs (WPF MainWindow.Marquee.cs:688)
             InitializeServerBanners(); // MainShellWindow.ServerBanners.cs (WPF MainWindow.Marquee.cs:649-826)
             InitializeJustDropDoor(); // MainShellWindow.JustDrop.cs (WPF MainWindow.xaml.cs:3793)

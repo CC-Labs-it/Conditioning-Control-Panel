@@ -7,10 +7,6 @@
        Visibility="Collapsed"            ->  IsVisible="False"
        Content="{loc:Str ...}" on Button ->  a <TextBlock> child (a snake_case key would lose an
                                             underscore to Avalonia's access-key parsing)
-       ImageBrush HeroArtBrush/SideArtBrush -> dropped: Resources/features/brain_drain.png is not
-                                            an AvaloniaResource in this head yet and x:Name on a
-                                            brush is AVLN2000. The Studio wash stands in on both
-                                            plates, exactly as the SpiralFeatureControl port does.
        feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
        LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%" (Avalonia points are absolute
@@ -33,7 +29,7 @@
                 Background="{DynamicResource SurfaceBgBrush}"
                 BorderBrush="{StaticResource SectionHueStudioBorderBrush}" BorderThickness="2">
             <Grid ClipToBounds="True">
-                <Border Width="240" HorizontalAlignment="Right" CornerRadius="0,16,16,0"
+                <Border x:Name="HeroArt" Width="240" HorizontalAlignment="Right" CornerRadius="0,16,16,0"
                         Background="{StaticResource SectionHueStudioWashBrush}">
                     <Border.OpacityMask>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -292,9 +288,9 @@
             </StackPanel>
 
             <!-- SIDE ART. On WPF the art is the Border's BACKGROUND (an ImageBrush) so the rounded
-                 corners clip it; the wash stands in until feature art ships in this head. The
+                 corners clip it; ModArt binds both plates on attach and mod changes. The
                  scrim is kept verbatim. -->
-            <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
+            <Border x:Name="SideArt" Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                     Background="{StaticResource SectionHueStudioWashBrush}"
                     VerticalAlignment="Stretch" MinHeight="200">

@@ -6,6 +6,8 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
 
@@ -32,11 +34,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
         private readonly Panel _card, _root;
         private readonly Border _glow, _whiten;
+        internal ScrolllerCreditBadge? CreditMark { get; private set; }
         private Canvas? _sparks;
         private Panel? _slices;
         private Panel? _shards;
         internal FlashShatterState? Shatter { get; private set; }
         private double _alpha = 1;
+        internal double DisplayedAlpha { get; private set; } = 1;
+        private void SetDisplayedAlpha(double alpha)
+        {
+            DisplayedAlpha = alpha;
+            X11Overlay.SetOpacity(this, alpha);
+        }
         private DispatcherTimer? _lifetimeTimer;
         private TimeSpan _fade;
         private long _expiresAt;
@@ -90,10 +99,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>Play <paramref name="exit"/> (WPF FlashLayer draws FlashExit.Sample the same way)
         /// and close when it is done. The flash no longer takes clicks while it leaves.</summary>
-        internal void BeginExit(FlashExitState exit)
+        internal void BeginExit(FlashExitState exit, bool fromDisplayedAlpha = false)
         {
             if (Exit != null || Shatter != null) return;
+            if (fromDisplayedAlpha) _alpha = DisplayedAlpha;
             Exit = exit;
+            if (CreditMark != null) CreditMark.IsVisible = false; // WPF FlashLayer.cs:484: no credit during an exit.
             _lifetimeTimer?.Stop(); _lifetimeTimer = null;
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);
@@ -207,7 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     shift.Y = piece.Dy / scale;
                     image.Opacity = Math.Clamp(piece.Alpha, 0, 1);
                 }
-                X11Overlay.SetOpacity(this, _alpha);
+                SetDisplayedAlpha(_alpha);
                 if (shatter.Done) { _exitTimer?.Stop(); _exitTimer = null; Close(); }
                 return;
             }
@@ -276,7 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Canvas.SetTop(dot, cy + sp.Dy * sp.Distance * half - r);
                 }
             }
-            X11Overlay.SetOpacity(this, _alpha * Math.Clamp(s.Alpha, 0, 1));
+            SetDisplayedAlpha(_alpha * Math.Clamp(s.Alpha, 0, 1));
         }
 
         /// <summary>WPF SpawnFlashWindow glow (FlashService.cs:1881-1967; values from FlashFxRules): a
@@ -322,7 +333,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Height = 300;
         }
 
-        public FlashOverlayWindow(Bitmap picture)
+        public FlashOverlayWindow(Bitmap picture, string? path = null)
         {
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -343,6 +354,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
             };
+            // WPF FlashService.cs:2045-2059: mark the picture, sharing its motion and fade.
+            if (ScrolllerCreditRules.IsScrolllerMedia(path))
+            {
+                CreditMark = new ScrolllerCreditBadge { Margin = new Thickness(0, 0, 6, 4) };
+                _card.Children.Add(CreditMark);
+                CreditMark.SetShown(true);
+            }
             _root = new Panel { Children = { _card } };
             Content = _root;
             Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; picture.Dispose(); };
@@ -356,6 +374,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public void Run(double alpha, TimeSpan fade, TimeSpan lifetime)
         {
             _alpha = alpha;
+            SetDisplayedAlpha(0);
             _fade = fade;
             _expiresAt = FlashOverlay.Clock.GetTimestamp() + (long)(lifetime.TotalSeconds * FlashOverlay.Clock.TimestampFrequency);
             Fade(0, alpha, fade);
@@ -374,7 +393,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var v = from + (to - from) * i / steps;
                 var last = i == steps;
-                DispatcherTimer.RunOnce(() => { if (Exit != null || Shatter != null) return; X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
+                DispatcherTimer.RunOnce(() => { if (Exit != null || Shatter != null) return; SetDisplayedAlpha(v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
             }
         }
     }

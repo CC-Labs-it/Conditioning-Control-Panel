@@ -14,9 +14,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// source has no producer on this head (no trigger loop), so it is not here.</summary>
         internal enum SpeechSource { Preset, AI }
 
-        // WPF Speech.cs:35: a QUEUED line carries text only - its clip is dropped, as WPF ("audio is
-        // still text-only on this delayed path", Speech.cs:283).
-        private readonly Queue<string> _speechQueue = new();
+        // Queued lines keep their sensing classification until delivery; clips still drop as on WPF.
+        private readonly Queue<(string Text, bool Unprompted)> _speechQueue = new();
         private DateTime _lastSpeechEndTime = DateTime.MinValue;
         private SpeechSource _lastSpeechSource = SpeechSource.Preset;
         private int _lastSpeechLength;
@@ -28,7 +27,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private const double PerCharDelaySeconds = 0.02;
 
         /// <summary>Cancels the pending post-line gap (WPF _speechDelayTimer.Stop). Never null.</summary>
-        private Action _cancelSpeechDelay = static () => { };
+        private Action _cancelSpeechDelay = NoSpeechDelay;
+        /// <summary>The idle cancel; anything else means a gap is pending (the stale-latch check reads it).</summary>
+        private static readonly Action NoSpeechDelay = static () => { };
 
         /// <summary>Runs <c>fire</c> once after the delay and returns its cancel. A DispatcherTimer, as
         /// WPF; tests swap in a manual one (P08).</summary>
@@ -71,11 +72,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var next = _speechQueue.Dequeue();
             var remaining = SecondsUntilSpeechReady();
             _cancelSpeechDelay();
-            _cancelSpeechDelay = static () => { };
+            _cancelSpeechDelay = NoSpeechDelay;
             if (remaining > 0)
                 _cancelSpeechDelay = SpeechDelayScheduler(TimeSpan.FromSeconds(remaining), () =>
                 {
-                    _cancelSpeechDelay = static () => { };
+                    _cancelSpeechDelay = NoSpeechDelay;
                     ShowQueuedPreset(next);
                 });
             else
@@ -83,15 +84,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>WPF ShowSpeechBySource for a Preset: the giggle cue on every fifth.</summary>
-        private void ShowQueuedPreset(string text) =>
-            ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+        private void ShowQueuedPreset((string Text, bool Unprompted) line) =>
+            ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted);
 
         /// <summary>WPF GigglePriority / PanicSilence: drop every waiting line and the pending gap.</summary>
         private void ClearSpeechQueue()
         {
             _speechQueue.Clear();
             _cancelSpeechDelay();
-            _cancelSpeechDelay = static () => { };
+            _cancelSpeechDelay = NoSpeechDelay;
         }
 
         /// <summary>A line left the screen (or was skipped): remember what it earned, then the next.</summary>

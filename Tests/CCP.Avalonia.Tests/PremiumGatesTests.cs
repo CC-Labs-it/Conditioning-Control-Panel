@@ -96,6 +96,8 @@ public sealed class PremiumGatesTests
             var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider);
             var s = CoreSettings.Current;
             var oldFlags = (s.AutonomyModeEnabled, s.KeywordTriggersEnabled);
+            var oldInform = global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.KeywordTriggersPanel.Inform;
+            global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.KeywordTriggersPanel.Inform = (_, _, _) => System.Threading.Tasks.Task.CompletedTask;
             var shell = new MainShellWindow();
             shell.Show();
             try
@@ -171,6 +173,7 @@ public sealed class PremiumGatesTests
             {
                 (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider) = old;
                 (s.AutonomyModeEnabled, s.KeywordTriggersEnabled) = oldFlags;
+                global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.KeywordTriggersPanel.Inform = oldInform;
                 shell.Close();
             }
         });

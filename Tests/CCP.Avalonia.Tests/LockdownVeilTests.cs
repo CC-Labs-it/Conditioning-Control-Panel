@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -30,12 +31,14 @@ namespace CCP.Avalonia.Tests;
 /// the panel half is a table of every control WPF greys or refuses under Lockdown.</summary>
 public sealed class LockdownVeilTests
 {
+    private sealed class FrozenTime : TimeProvider { public override long GetTimestamp() => 0; }
     private static void Run(Action<MainShellWindow, LockdownService> body)
     {
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -246,6 +249,17 @@ public sealed class LockdownVeilTests
                 // programs 3a (P05; WPF has no gate): each lifecycle door says Lockdown before anything else
                 ("program Enroll", () => _ = shell.EnrollProgramAsync("first_week"),
                     () => !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
+                ("program locked account door", () =>
+                {
+                    var premiumBeforeAttempt = CoreEntitlement.HasPremiumProvider;
+                    try
+                    {
+                        CoreEntitlement.HasPremiumProvider = () => false;
+                        _ = shell.EnrollProgramAsync("presentation");
+                    }
+                    finally { CoreEntitlement.HasPremiumProvider = premiumBeforeAttempt; }
+                },
+                    () => shell.CurrentTab == "appsettings" || !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
                 ("program Withdraw", () => _ = shell.WithdrawProgramAsync(),
                     () => programs.ActiveEnrollment == null || !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
                 ("program Start session", () => _ = shell.StartProgramSessionAsync(),
@@ -506,6 +520,13 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Milliseconds;
+        public override long GetTimestamp() => Milliseconds;
+        public override long TimestampFrequency => 1000;
+    }
+
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
@@ -514,6 +535,10 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Render work can exceed the entire 600 ms flash on a loaded CI runner. Keep its
+        // clock still until we explicitly step it, including callbacks drained by Frame().
+        var clock = new FlashClock { Milliseconds = 5_000 };
+        shell.LockdownFlashTime = clock;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -533,12 +558,14 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        clock.Milliseconds += 300;
+        shell.StepLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Milliseconds += 300;
+        shell.StepLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 

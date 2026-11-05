@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Linq;
+using ConditioningControlPanel.Models;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -17,8 +19,6 @@ namespace ConditioningControlPanel.Services
     /// /v2/remote/*, the PIN, the 429 backoff, the 401/404 endings, the controller connect/idle state
     /// and the 120 s idle auto-disconnect. Commands go through <see cref="RemoteCommandGate"/> first and
     /// then to the executor on the UI thread (<see cref="CoreDispatch.Invoke"/>).
-    /// ponytail: session list/progress in the status push are not here yet;
-    /// add them with the tab parts that use them.
     /// </summary>
     public sealed class RemoteRelay : IDisposable
     {
@@ -69,6 +69,9 @@ namespace ConditioningControlPanel.Services
         internal Func<DateTime> Now = () => DateTime.UtcNow;
         /// <summary>False in tests: they drive <see cref="PollOnceAsync"/> themselves.</summary>
         internal bool AutoPoll = true;
+
+        public Func<IEnumerable<Session>>? SessionsProvider { get; set; }
+        public Func<SessionRunner?>? SessionRunnerProvider { get; set; }
 
         public bool IsActive { get; private set; }
         public string? SessionCode { get; private set; }
@@ -311,6 +314,20 @@ namespace ConditioningControlPanel.Services
             if (!done) CoreDispatch.Post(ReleaseOnLeave);
         }
 
+        /// <summary>WPF ReleaseHoldingsForExit (RemoteControlService.V2.cs:261, main bafe52cfc): the app exits with a
+        /// controller connected, so hand back what it holds BEFORE the final save, or the save keeps its strict
+        /// lock as the wearer's own. Also refuses a command already queued (the leave generation). Idempotent.</summary>
+        public void ReleaseHoldingsForExit()
+        {
+            if (!IsActive) return;
+            _loop?.Cancel();
+            Interlocked.Increment(ref _leaveGeneration);
+            Remote.RemoteWearer.HandBackAllButStrict();
+            Remote.RemoteWearer.ReleaseSafetyState();
+            Remote.RemoteWearer.Drop();
+            Log.Information("[RemoteControl] Exit with a controller connected: its holdings handed back");
+        }
+
         private void ReleaseOnLeave()
         {
             RemoteCommands.RemoteHaptics.Stop();
@@ -450,14 +467,28 @@ namespace ConditioningControlPanel.Services
         {
             if (Now() < _statusBackoffUntil) return;
             var s = CoreSettings.Current;
+            var (_, sessionStatus) = CoreDispatch.Invoke(() =>
+            {
+                var sessions = SessionsProvider?.Invoke().Where(x => x.IsAvailable)
+                    .Select(x => new { id = x.Id, name = x.GetModeAwareName(), icon = x.Icon, duration_minutes = x.DurationMinutes, difficulty = x.Difficulty.ToString() }).ToArray();
+                var runner = SessionRunnerProvider?.Invoke();
+                var session = runner?.CurrentSession;
+                object? progress = null;
+                if (runner?.IsRunning == true && session != null)
+                {
+                    var i = runner.CurrentPhaseIndex;
+                    progress = new { name = session.GetModeAwareName(), icon = session.Icon, elapsed_seconds = (int)runner.Elapsed.TotalSeconds, total_seconds = session.DurationMinutes * 60, is_paused = runner.IsPaused, current_phase = session.Phases != null && i >= 0 && i < session.Phases.Count ? session.GetModeAwarePhaseName(session.Phases[i]) : "" };
+                }
+                return (Sessions: sessions, Progress: progress);
+            }, TimeSpan.FromSeconds(10));
             var body = new
             {
                 unified_id = _unifiedId(),
                 active_services = ActiveServices(s),
                 level = s.PlayerLevel,
                 last_executed = lastId == null ? null : new { id = lastId, action = lastAction, status = _lastStatus, reason = _lastReason, at = Now().ToString("o") },
-                available_sessions = (object?)null,
-                session_info = (object?)null,
+                available_sessions = sessionStatus.Sessions,
+                session_info = sessionStatus.Progress,
                 share_avatar = s.RemoteShareAvatar,
             };
             try

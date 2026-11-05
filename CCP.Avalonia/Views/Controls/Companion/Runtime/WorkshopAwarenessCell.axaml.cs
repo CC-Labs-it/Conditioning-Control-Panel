@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using Serilog;
 // Aliased for the same reason the WPF original aliases it: the parent namespace has its own
 // AwarenessIntensity (Z5's 3-stop dial, AwarenessPrivacyView.axaml.cs) and wins name resolution
@@ -86,7 +87,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // would offer two pacing controls, one of which does nothing.
                 bool v2 = s.UseAwarenessV2;
                 AwarenessIntensityPanel.IsVisible = v2;
-                AwarenessSettingsPanel.IsVisible = !v2;
+                // WPF MainWindow.Patreon.cs:1318,1330-1332: controls must match the observer gate.
+                AwarenessSettingsPanel.IsVisible = !v2 && s.AwarenessModeEnabled
+                    && s.AwarenessConsentGiven && WindowAwarenessService.HasEntitlement;
 
                 bool eyesOpen = s.AwarenessModeEnabled && s.AwarenessConsentGiven;
                 TxtIntensityEyesClosed.IsVisible = v2 && !eyesOpen;
@@ -133,21 +136,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             if (sender is not RadioButton { IsChecked: true, Tag: string tag }) return;
             if (!Enum.TryParse<Intensity>(tag, ignoreCase: true, out var intensity)) return;
 
-            var s = CoreSettings.Current;
-            if (s.AwarenessIntensity == intensity) return;
-
-            s.AwarenessIntensity = intensity;
-            // The migration flag is what stops a later start-up from overwriting this choice.
-            s.AwarenessIntensityMigrated = true;
-            CoreSettings.Save();
-
-            Log.Information("Awareness intensity set to {Intensity}", intensity);
-            // ponytail: WPF also re-syncs the room's hero through CompanionRoom.AwarenessVm.Sync()
-            // (ConditioningControlPanel/MainWindow/MainWindow.CompanionRoom.cs). The HOST is no
-            // longer the blocker - CompanionRoomView composes CompanionHeroCard now - but the pill
-            // it would repaint is CompanionHeroCardViewModel.AwarenessPillText, which is init-only
-            // and seeded from a viewmodel this head does not build from settings. Give the hero an
-            // awareness re-read and this becomes one call.
+            // WPF WorkshopAwarenessCell.xaml.cs:78: use the shell write surface so Z5
+            // re-reads immediately, including when the cell is hosted on the Awareness tab.
+            if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+                shell.SetAwarenessIntensity(intensity);
         }
 
         private void SliderAwarenessCooldown_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)

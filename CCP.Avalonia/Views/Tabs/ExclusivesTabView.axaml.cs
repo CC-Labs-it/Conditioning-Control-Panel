@@ -419,8 +419,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void Card_PointerReleased(object? sender, PointerReleasedEventArgs e)
         {
-            if (e.InitialPressMouseButton == MouseButton.Left && (sender as Control)?.DataContext is ExclusiveCardRow row)
-                Open(row.Feature);
+            if (e.InitialPressMouseButton == MouseButton.Left && (sender as Control)?.DataContext is ExclusiveCardRow row && IsOnThisBuild(row.Feature.Key))
+                OnVaultCardClicked((Control)sender!, row.Feature, () => Open(row.Feature));
         }
 
         /// <summary>

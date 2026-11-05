@@ -75,11 +75,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
-            try { if (spec.Gate != null && !spec.Gate()) return null; }
+            if (live != null)
+            {
+                live.Activate();
+                // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
+                if (live.Spec.Id == PbpId)
+                    Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
+                return live;
+            }
+            try { if (spec.Id != JustDropId && spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
+            // WPF PieceByPieceHostService.cs:165-168: refocus is free; failed setup still counts.
+            if (spec.Id == PbpId)
+            {
+                try { SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.PieceByPiece,
+                    ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            }
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
@@ -93,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
@@ -104,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
             Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
             Closing += (_, _) => _closing = true;
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
@@ -129,10 +145,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static bool SameOrigin(Uri a, Uri b) =>
             a.IsAbsoluteUri && b.IsAbsoluteUri && a.Scheme == b.Scheme && a.Authority == b.Authority;
 
-        /// <summary>WPF ChaosWebViewHost.OnWebMessage's same-document guard.</summary>
+        /// <summary>WPF ChaosWebViewHost.cs:238,1704 fences transferred documents; JustDropHostService.cs:105-108
+        /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
+        /// use its last completed top-level URL, as Intake does.</summary>
         private void OnPageMessage(string json)
         {
-            if (PageUrl == null || Web.CurrentUrl == null || !SameOrigin(Web.CurrentUrl, PageUrl)) return;
+            if (PageUrl == null || Web.CurrentUrl == null) return;
+            if (Spec.Id == JustDropId
+                ? !JustDropHandoff.IsSite(Web.CurrentUrl)
+                : !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(Web.CurrentUrl, PageUrl)) return;
             HandleMessage(json);
         }
 
@@ -268,7 +289,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
             {
-                try { w.Close(); }
+                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else w.Close(); }
                 catch (Exception ex) { Log.Warning(ex, "[Game] panic close of {Id} failed", w.Spec.Id); }
             }
         }

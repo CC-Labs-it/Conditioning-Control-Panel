@@ -24,14 +24,12 @@ namespace CCP.Avalonia.Tests;
 public sealed class SpiralHelpPopoverTests
 {
     [Fact]
-    public async Task MountedSpiralHelpUsesLocalizedTopicAndCleansUpAcrossVisibilityAndReload()
+    public Task MountedSpiralHelpUsesLocalizedTopicAndCleansUpAcrossVisibilityAndReload() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var localization = LocalizationManager.Instance;
         var previousLanguage = localization.CurrentLanguage;
         // EnsureAvalonia initializes Avalonia and normalizes the language, so capture/restore surrounds it.
         try
-        {
-            await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             EnsureAvalonia();
             Window? host = null;
@@ -156,17 +154,16 @@ public sealed class SpiralHelpPopoverTests
                 host?.Close();
                 Dispatcher.UIThread.RunJobs();
             }
-        });
         }
         finally
         {
             if (localization.CurrentLanguage != previousLanguage)
                 localization.SetLanguage(previousLanguage);
         }
-    }
+    });
 
     [Fact]
-    public async Task MountedSpiralHelpPreservesCallerLanguageStartingInGerman()
+    public Task MountedSpiralHelpPreservesCallerLanguageStartingInGerman() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var localization = LocalizationManager.Instance;
         var previousLanguage = localization.CurrentLanguage;
@@ -181,14 +178,14 @@ public sealed class SpiralHelpPopoverTests
             if (localization.CurrentLanguage != previousLanguage)
                 localization.SetLanguage(previousLanguage);
         }
-    }
+    });
 
     private static void EnsureAvalonia()
     {
         Assert.True(AvaloniaTestDispatcher.IsDispatcherThread);
         if (Application.Current is null)
         {
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
@@ -200,17 +197,17 @@ public sealed class SpiralHelpPopoverTests
     // runner (CI #1781). Poll instead, bounded; the Assert after it reports a miss.
     private static async Task WaitForOpen(Button button)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
         do
         {
             await Task.Delay(50);
             Dispatcher.UIThread.RunJobs();
-        } while (!HelpPopover.IsOpen(button) && DateTime.UtcNow < deadline);
+        } while (!HelpPopover.IsOpen(button) && elapsed.Elapsed < TimeSpan.FromSeconds(5));
     }
 
     private static void Move(TopLevel host, Control target)
     {
-        Dispatcher.UIThread.RunJobs();
+        HeadlessFrame.Publish(host);
         var point = target.TranslatePoint(
             new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), host);
         Assert.True(point.HasValue, $"could not translate {target.Name ?? target.GetType().Name} into host");

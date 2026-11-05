@@ -1,12 +1,14 @@
 using System;
 using System.IO;
 using System.Linq;
+using BindingFlags = System.Reflection.BindingFlags;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -23,6 +25,35 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    [Theory]
+    [InlineData("MenuRed")]
+    [InlineData("MenuGreen")]
+    [InlineData("MenuPatreon")]
+    [InlineData("MenuLocked")]
+    public async Task SharedMenuBrushesCanCrossTheWorkerAndRenderThreads(string field)
+    {
+        var brush = await Task.Run(() => typeof(AvatarTubeWindow).GetField(field,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null));
+        // A cached brush may be initialized by a pure tube helper on any thread.
+        var colour = Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableSolidColorBrush>(brush);
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var host = new Window { Width = 100, Height = 100,
+                Content = new TextBlock { Text = "menu", Foreground = colour } };
+            try
+            {
+                host.Show();
+                using var frame = host.CaptureRenderedFrame();
+                Assert.NotNull(frame);
+            }
+            finally { host.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
@@ -32,7 +63,7 @@ public sealed class TubeQuickMenuTests
     private static Task WithShell(Action<MainShellWindow, AvatarTubeWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -144,7 +175,7 @@ public sealed class TubeQuickMenuTests
         Assert.Equal("menu_trigger_mode_on", HeaderKey(tube, "MenuItemTriggerMode"));
         Click(tube, "MenuItemMute");
         Assert.False(s.AvatarMuted);
-        Assert.False(tube.FindControl<MenuItem>("MenuItemPauseBrowser")!.IsVisible);
+        Assert.True(tube.FindControl<MenuItem>("MenuItemPauseBrowser")!.IsVisible);
     });
 
     [Fact]
