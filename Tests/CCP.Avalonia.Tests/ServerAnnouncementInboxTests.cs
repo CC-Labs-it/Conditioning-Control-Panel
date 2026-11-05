@@ -132,12 +132,25 @@ public sealed class ServerAnnouncementInboxTests
 
             var popup = Assert.Single(opened);
             Assert.Equal("The Spiral is open", popup.FindControl<TextBlock>("TxtTitle")!.Text);
+            await shell.CheckServerAnnouncementAsync(); // a delayed launch check cannot repost an opened row
             Assert.Empty(StartupLadder.Inbox.Items);
             ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7));
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(StartupLadder.Inbox.Items); // the startup timer must not re-file the row just opened
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task AClosedShellCannotPostIntoTheNextShellsInbox() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        shell.Show();
+        shell.Close();
+        await shell.CheckServerAnnouncementAsync();
+        Assert.Empty(fake.Calls);
+        Assert.Empty(StartupLadder.Inbox.Items);
     });
 
     [Fact]

@@ -61,7 +61,7 @@ public sealed class ProgramsRunLifecycleTests
             T F<T>(string n) where T : Control => tab.FindControl<T>(n)!;
 
             var rows = F<ListBox>("ProgramLibraryList").Items.Cast<ProgramBrowseItem>().ToList();
-            Assert.Equal(new[] { "first_week" }, rows.Where(r => r.IsActionEnabled).Select(r => r.ProgramId));
+            Assert.Equal(new[] { "first_week" }, rows.Where(r => r.IsActionEnabled && !r.IsLocked).Select(r => r.ProgramId));
 
             // Enroll: the ceremony, then the run panel and a written ledger.
             var enroll = shell.EnrollProgramAsync("first_week");
