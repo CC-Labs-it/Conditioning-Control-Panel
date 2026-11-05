@@ -28,6 +28,7 @@
     <Compile Include="..\ConditioningControlPanel.Tests\UiThreadExitTests.cs" Link="UiThreadExitTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\ProfileSyncPrizesFeedTests.cs" Link="PrizesFeedTests.cs" />
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
+    <Compile Include="..\ConditioningControlPanel.Tests\RemoteFlashPoolTests.cs" Link="RemoteFlashPoolTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\ChasterLinkTests.cs" Link="ChasterLinkTests.cs" />
   </ItemGroup>

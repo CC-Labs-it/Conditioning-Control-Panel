@@ -13,6 +13,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -141,8 +142,10 @@ public sealed partial class AccountSeedTests
         }
     }
 
-    [Fact]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(750)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(int renderDelayMs)
     {
         var s = CoreSettings.Current;
         var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
@@ -162,11 +165,17 @@ public sealed partial class AccountSeedTests
                 w.ShowTab("leaderboard");
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
+                // Pointer input uses the compositor's last scene, not the newly arranged row bounds.
+                // Land the entrance and await that scene before sampling the double-click target.
+                w.CompleteTabTransition();
                 Dispatcher.UIThread.RunJobs();
+                using var frame = w.CaptureRenderedFrame(); // settle layout and the hit-test tree before taking row coordinates
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
+                w.CaptureRenderedFrame()?.Dispose();
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
+                var name = ((LeaderboardRow)row.DataContext!).DisplayName;
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
                 w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
@@ -179,7 +188,6 @@ public sealed partial class AccountSeedTests
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
-                var name = ((LeaderboardRow)row.DataContext!).DisplayName;
                 Assert.True(card.IsEffectivelyVisible);                          // the Profile tab is up
                 Assert.Equal(name, card.FindControl<TextBox>("TxtProfileSearch")!.Text);
                 Assert.Equal(name, card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);

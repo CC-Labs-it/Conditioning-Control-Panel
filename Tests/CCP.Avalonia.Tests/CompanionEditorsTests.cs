@@ -202,6 +202,9 @@ public sealed class CompanionEditorsTests
         try
         {
             shell.Show();
+            shell.CompleteTabTransition();
+            // Park subsequent entrances so pointer success cannot depend on runner speed.
+            shell.TabClock = new SteppedTime();
             shell.ShowTab("companion");
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!

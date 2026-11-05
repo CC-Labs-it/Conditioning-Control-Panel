@@ -165,6 +165,20 @@ internal sealed class AchievementEngine
         TrackBubbleCountGameResult(correct);
     }
 
+    /// <summary>WPF TrackBubblesPopped: batch count, unlock, persist; return every 100-bubble milestone
+    /// crossed so the head credits points and presents one notification.</summary>
+    public int TrackBubblesPopped(int count)
+    {
+        if (count <= 0) return 0;
+        int before = Progress.TotalBubblesPopped;
+        Progress.TotalBubblesPopped += count;
+        IsDirty = true;
+        if (before < AchievementRules.PopTheThoughtBubbles && Progress.TotalBubblesPopped >= AchievementRules.PopTheThoughtBubbles)
+            TryUnlock("pop_the_thought");
+        Save();
+        return Progress.TotalBubblesPopped / 100 - before / 100;
+    }
+
     /// <summary>WPF AchievementService.TrackVideoWatched: minutes to the total, screen_time at 10 h.
     /// Returns the minutes so the caller can credit quests (WPF App.Quests.TrackVideoMinutes).</summary>
     public double TrackVideoWatched(double seconds)
@@ -176,6 +190,23 @@ internal sealed class AchievementEngine
         Save();
         if (Progress.TotalVideoMinutes >= AchievementRules.ScreenTimeVideoMinutes) TryUnlock("screen_time");
         return minutes;
+    }
+
+    /// <summary>WPF AchievementService.cs:378-413 ambient credit; milestone presentation stays in the head.</summary>
+    public void TrackBubblePopped()
+    {
+        Progress.TotalBubblesPopped++;
+        IsDirty = true;
+        if (Progress.TotalBubblesPopped >= AchievementRules.PopTheThoughtBubbles) TryUnlock("pop_the_thought");
+        if (Progress.TotalBubblesPopped % 100 == 0)
+        {
+            var settings = CoreSettings.Current;
+            var previous = settings.SkillPoints;
+            settings.SkillPoints++;
+            CoreSettings.Save();
+            SparklePointRewards.PublishCredit(previous, settings.SkillPoints, SparklePointSource.BubbleMilestone);
+        }
+        if (Progress.TotalBubblesPopped % 50 == 0) Save();
     }
 
     /// <summary>WPF AchievementService.TrackFlashImage: one more image shown, retinal_burn at 5000.

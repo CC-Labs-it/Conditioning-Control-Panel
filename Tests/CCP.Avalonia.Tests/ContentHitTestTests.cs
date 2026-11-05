@@ -13,6 +13,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using Xunit;
@@ -43,7 +44,10 @@ public sealed class ContentHitTestTests
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
             ToolTip.SetServiceEnabled(w, false);
             w.Show();
+            w.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            // Hold only subsequent entrances; do not change the clock of an entrance already running.
+            w.TabClock = new SteppedTime();
             var misses = new List<string>();
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
@@ -61,6 +65,10 @@ public sealed class ContentHitTestTests
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
+                    // The previous probe can hover a help button. Its independent popup timer is not
+                    // covered by ToolTip.SetServiceEnabled and can obscure the next control.
+                    w.MouseMove(new Point(0, 0));
+                    HelpPopover.CloseActive();
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
                     HeadlessRendering.RenderLiveTree(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
@@ -91,6 +99,10 @@ public sealed class ContentHitTestTests
             return Task.CompletedTask;
         });
     }
+
+    /// <summary>Kept for the ported tests that still call it here; the shared helper is
+    /// <see cref="HeadlessRendering.RenderLiveTree"/>.</summary>
+    internal static void RenderLiveTree(Visual w) => HeadlessRendering.RenderLiveTree(w);
 
     private static bool Inside(Visual v, Point p, Visual root)
         => v.TranslatePoint(default, root) is { } tl && v.TranslatePoint(new Point(v.Bounds.Width, v.Bounds.Height), root) is { } br
