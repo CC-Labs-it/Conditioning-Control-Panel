@@ -486,6 +486,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawnTimer?.Stop();
             _spawnTimer = null;
             BubbleOverlay.EndChaos();
+            _hud?.SetCursorOnLive(false);
         }
 
         // WPF ChaosModeService.KeepChromeTopmost: chrome first, then bubbles.
@@ -512,6 +513,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (++_chromeTicks >= 4) { _chromeTicks = 0; KeepChromeTopmost(); }
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
+            _hud?.SetCursorOnLive(BubbleOverlay.CursorOnLive);
             TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
             if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
