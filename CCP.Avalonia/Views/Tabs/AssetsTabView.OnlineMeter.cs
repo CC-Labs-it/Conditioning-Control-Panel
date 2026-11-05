@@ -1,5 +1,13 @@
 using System;
 using System.Linq;
+using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Safety;
 using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -13,12 +21,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The Assets tab's "Online media today" card, the one-time official note and the Scrolller credit (WPF
     /// MainWindow.OnlineMeter.cs PaintOnlineMeterCard / PaintOnlineOfficialNote + AssetsTabView.xaml:273-465). What
     /// shows is Core <see cref="OnlineMeterRules"/> through <see cref="OnlineMeterHead"/>; this file only paints it.
-    /// <para>ponytail: not on this head yet - the "See plans" link (no vault gate card here), the spent corner notice,
-    /// the licence card on the startup ladder.</para>
+    /// <para>ponytail: not on this head yet - the spent corner notice,
+    /// and the licence card on the startup ladder.</para>
     /// </summary>
     public partial class AssetsTabView
     {
         private bool _meterWired;
+        internal Button OnlineHelpButton => (Button)OnlineMeterHelp.Content!;
 
         /// <summary>WPF ScrolllerCredit.HomeLink.</summary>
         internal const string ScrolllerHome = "https://scrolller.com";
@@ -36,9 +45,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 DetachedFromVisualTree += (_, _) => OnlineMeterHead.Refresh -= RefreshOnlineMeter;
                 AttachedToVisualTree += (_, _) => { OnlineMeterHead.Refresh -= RefreshOnlineMeter; OnlineMeterHead.Refresh += RefreshOnlineMeter; };
                 BtnOnlineOfficialNice.Click += (_, _) => OnlineOfficialNice();
+                BtnOnlineSeePlans.Click += (_, _) =>
+                {
+                    if (OnlineMeterHead.Now().SeePlansTier is int tier)
+                        (TopLevel.GetTopLevel(this) as Windows.MainShellWindow ?? Windows.MainShellWindow.Current)?.OpenOnlinePlans(tier);
+                };
                 // The credit is the shared ScrolllerCreditLine: its own link opens scrolller.com and refuses under
                 // Strict Lock, Lockdown or a Chaos run (a second click handler here would open it twice).
-                ToolTip.SetTip(OnlineMeterHelp, HelpText());
+                OnlineMeterHelp.Content = LeashHelpButton.Create(() => new Border
+                {
+                    Background = LeashHelpSlip.Paper, Padding = new Thickness(16), CornerRadius = new CornerRadius(10),
+                    Child = new TextBlock { Text = HelpText(), Width = 340, TextWrapping = TextWrapping.Wrap, Foreground = LeashHelpSlip.Ink },
+                }, "online-help");
             }
             catch (Exception ex) { Log.Warning(ex, "Online meter wiring failed"); }
             RefreshOnlineMeter();
@@ -61,6 +79,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             OnlineMeterCard.IsVisible = st.Show;
             OnlineMeterStamped.IsVisible = st.ShowStampedLine;
             OnlineOfficialNote.IsVisible = st.ShowOfficialNote;
+            BtnOnlineSeePlans.IsVisible = st.Show && st.SeePlansTier != null;
+            OnlinePlansSpace.Text = st.Show && st.SeePlansTier != null ? "   " : "";
             if (st.ShowOfficialNote) TxtOnlineOfficialPlan.Text = Loc.Get(OnlineMeterRules.OfficialPlanKey(st.Plan));
             if (!st.Show) return;
             var tone = new SolidColorBrush(ToneColor(st.Tone));
@@ -69,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             OnlineMeterBar.ColumnDefinitions[0].Width = new GridLength(st.Percent, GridUnitType.Star);
             OnlineMeterBar.ColumnDefinitions[1].Width = new GridLength(100 - st.Percent, GridUnitType.Star);
             OnlineMeterBarFill.Background = tone;
-            TxtOnlineMeterLine.Text = OnlineMeterHead.CardLine(st, now, reset);
+            TxtOnlineMeterSummary.Text = OnlineMeterHead.CardLine(st, now, reset);
         }
 
         /// <summary>WPF OnlineMeterRing.ColorFor: pink, amber from 80%, grey once used up.</summary>

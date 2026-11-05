@@ -3,7 +3,16 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using ConditioningControlPanel;
+using Avalonia.Controls;
+using Avalonia.LogicalTree;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -36,7 +45,7 @@ public sealed class OnlineMeterSurfaceTests
         tab.PaintOnlineMeter(State(42), noon, midnight);
         Assert.True(tab.OnlineMeterCard.IsVisible);
         Assert.Equal("42%", tab.TxtOnlineMeterPct.Text);
-        Assert.DoesNotContain("MB", tab.TxtOnlineMeterLine.Text);
+        Assert.DoesNotContain("MB", tab.TxtOnlineMeterSummary.Text);
         Assert.Equal(42, tab.OnlineMeterBar.ColumnDefinitions[0].Width.Value);
         Assert.False(tab.OnlineOfficialNote.IsVisible);
         Assert.False(tab.OnlineMeterStamped.IsVisible);
@@ -50,7 +59,7 @@ public sealed class OnlineMeterSurfaceTests
 
         tab.PaintOnlineMeter(State(100, spent: true), noon, midnight);
         Assert.Equal("100%", tab.TxtOnlineMeterPct.Text);
-        Assert.Contains(string.Format(Loc.Get("online_meter_hours"), 12), tab.TxtOnlineMeterLine.Text);
+        Assert.Contains(string.Format(Loc.Get("online_meter_hours"), 12), tab.TxtOnlineMeterSummary.Text);
 
         foreach (var hidden in new[] { State(5, source: "local"), State(5, consent: false), State(5, on: false) })
         {
@@ -171,6 +180,13 @@ public sealed class OnlineMeterSurfaceTests
             Assert.Equal(42, shell.OnlinePillRing!.Percent);
             Assert.Equal(OnlineMeterTone.Pink, shell.OnlinePillRing.Tone);
             shell.PaintOnlineMeterPill(State(100, spent: true));
+            shell.OpenOnlineHover(State(100, spent: true));
+            Assert.NotNull(shell.OnlineHoverBody);
+            Assert.Contains(shell.OnlineHoverBody!.Children.OfType<global::Avalonia.Controls.Button>(), b => Equals(b.Content, Loc.Get("online_see_plans")));
+            shell.PaintOnlineMeterPill(State(100, spent: true, plan: ScrolllerPlan.Prime));
+            Assert.DoesNotContain(shell.OnlineHoverBody.Children.OfType<Button>(), b => Equals(b.Content, Loc.Get("online_see_plans")));
+            Assert.Single(shell.OnlineHoverBody.GetLogicalDescendants().OfType<Button>(), b => Equals(b.Tag, "online-help-open"));
+            Assert.Contains(shell.OnlineHoverBody.Children.OfType<global::Avalonia.Controls.TextBlock>(), t => t.Text == Loc.Get("online_hover_body"));
             Assert.Equal(Loc.Get("online_pill_done"), shell.OnlinePillText!.Text);
             Assert.Equal(OnlineMeterTone.Spent, shell.OnlinePillRing!.Tone);
             shell.PaintOnlineMeterPill(State(42, source: "local"));
@@ -227,11 +243,142 @@ public sealed class OnlineMeterSurfaceTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task Plans_link_follows_the_plan_and_repairs_a_dead_grant() => Run(() =>
+    {
+        var tab = new AssetsTabView();
+        var button = tab.FindControl<global::Avalonia.Controls.Button>("BtnOnlineSeePlans")!;
+        tab.PaintOnlineMeter(State(42), DateTime.Now, DateTime.Now.AddHours(1));
+        Assert.True(button.IsVisible);
+        tab.PaintOnlineMeter(State(42, plan: ScrolllerPlan.Prime), DateTime.Now, DateTime.Now.AddHours(1));
+        Assert.False(button.IsVisible);
+        tab.PaintOnlineMeter(State(42, consent: false), DateTime.Now, DateTime.Now.AddHours(1));
+        Assert.False(button.IsVisible);
+        var shell = new MainShellWindow();
+        shell.Content = tab;
+        var provider = ConditioningControlPanel.Services.TierGate.ReconnectIsTheAnswerProvider;
+        var repaired = false;
+        try
+        {
+            ConditioningControlPanel.Services.TierGate.ReconnectIsTheAnswerProvider = () => true;
+            shell.ReconnectFromGateOverride = () => { repaired = true; return Task.CompletedTask; };
+            CoreSettings.Current.MediaSource = "mixed";
+            CoreSettings.Current.RemoteMediaConsented = true;
+            ScrolllerPolicy.Apply(true, null);
+            shell.Show();
+            Assert.Same(shell, TopLevel.GetTopLevel(tab));
+            Assert.NotNull(OnlineMeterHead.Now().SeePlansTier);
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Assert.True(repaired);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.TierGate.ReconnectIsTheAnswerProvider = provider;
+            shell.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task Spent_help_opens_assets_scrolls_to_media_and_pins_the_slip(int plan) => Run(() =>
+    {
+        CoreSettings.Current.RemoteMediaConsented = true;
+        CoreSettings.Current.MediaSource = "mixed";
+        ScrolllerPolicy.Apply(true, null);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("settings");
+            var tab = shell.FindControl<AssetsTabView>("AssetsTab")!;
+            var scrolled = false;
+            tab.RemoteMediaBlock.AddHandler(Control.RequestBringIntoViewEvent, (_, _) => scrolled = true);
+            shell.PaintOnlineMeterPill(State(100, spent: true, plan: (ScrolllerPlan)plan));
+            shell.OpenOnlineHover(State(100, spent: true, plan: (ScrolllerPlan)plan));
+            var help = Assert.Single(shell.OnlineHoverBody!.GetLogicalDescendants().OfType<Button>(), b => Equals(b.Tag, "online-help-open"));
+            help.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal("assets", shell.CurrentTab);
+            Assert.True(scrolled);
+            Assert.True(LeashHelpButton.IsPinned(tab.OnlineHelpButton));
+            Assert.True(LeashHelpButton.IsOpen(tab.OnlineHelpButton));
+            Assert.Equal(AssetsTabView.HelpText(), Assert.IsType<TextBlock>(Assert.IsType<Border>(LeashHelpButton.Slip(tab.OnlineHelpButton)).Child).Text);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Plans_link_is_inline_and_does_not_add_a_card_row() => Run(() =>
+    {
+        var tab = new AssetsTabView();
+        var now = DateTime.Now;
+        tab.PaintOnlineMeter(State(42), now, now.AddHours(1));
+        var inline = Assert.Single(tab.TxtOnlineMeterLine.Inlines!.OfType<InlineUIContainer>());
+        Assert.Same(tab.FindControl<Button>("BtnOnlineSeePlans"), inline.Child);
+        tab.OnlineMeterCard.Measure(new Size(1200, double.PositiveInfinity));
+        var withPlans = tab.OnlineMeterCard.DesiredSize.Height;
+        tab.PaintOnlineMeter(State(42, plan: ScrolllerPlan.Prime), now, now.AddHours(1));
+        tab.OnlineMeterCard.Measure(new Size(1200, double.PositiveInfinity));
+        Assert.Equal(tab.OnlineMeterCard.DesiredSize.Height, withPlans, precision: 2);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Spent_hover_handles_presses_before_the_title_bar() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.PaintOnlineMeterPill(State(100, spent: true));
+            shell.OpenOnlineHover(State(100, spent: true));
+            var holder = Assert.IsType<Border>(shell.OnlineHoverBody!.Parent);
+            var title = shell.FindControl<Border>("TitleBarBorder")!;
+            var reachedTitle = 0;
+            title.AddHandler(InputElement.PointerPressedEvent, (_, _) => reachedTitle++, RoutingStrategies.Bubble);
+            var initial = shell.WindowState;
+            var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+            foreach (var clicks in new[] { 1, 2 })
+            {
+                var press = new PointerPressedEventArgs(holder, pointer, shell, new Point(300, 100), 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, clicks);
+                holder.RaiseEvent(press);
+                Assert.True(press.Handled);
+                Assert.Equal(0, reachedTitle);
+                Assert.Equal(initial, shell.WindowState);
+            }
+            Assert.Equal(Color.Parse("#3A3A5C"), Assert.IsType<SolidColorBrush>(holder.BorderBrush).Color);
+            var body = shell.OnlineHoverBody;
+            var head = Assert.IsType<DockPanel>(body.Children[0]);
+            var heading = Assert.Single(head.Children.OfType<TextBlock>());
+            Assert.Equal(13, heading.FontSize);
+            Assert.Equal(FontWeight.SemiBold, heading.FontWeight);
+            Assert.Equal(Color.Parse("#CCCCE0"), Assert.IsType<SolidColorBrush>(Assert.IsType<TextBlock>(body.Children[1]).Foreground).Color);
+            Assert.Equal(Color.Parse("#E0B0FF"), Assert.IsType<SolidColorBrush>(Assert.IsType<TextBlock>(body.Children[2]).Foreground).Color);
+            Assert.NotNull(Assert.Single(body.Children.OfType<Button>()).Theme);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         OnlineMeterTestPlatform.EnsureApplication();
         LocalizationManager.Instance.SetLanguage("en");
-        await body();
+        var settings = CoreSettings.Current;
+        var (source, consent) = (settings.MediaSource, settings.RemoteMediaConsented);
+        var (enabled, cap) = (ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        try { await body(); }
+        finally
+        {
+            settings.MediaSource = source;
+            settings.RemoteMediaConsented = consent;
+            ScrolllerPolicy.Apply(enabled, cap);
+        }
     });
 
     private static string RepoRoot()
