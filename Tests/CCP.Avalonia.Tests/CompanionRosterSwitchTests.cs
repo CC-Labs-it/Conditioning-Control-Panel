@@ -105,6 +105,8 @@ public sealed class CompanionRosterSwitchTests
             Click(shell, switchButton, MouseButton.Left); // the user's Switch chip opens Roster
             Assert.True(((WorkshopRuntimeVm)room.FindControl<WorkshopAccordion>("WorkshopZone")!.DataContext!).IsExpanded);
             var roster = room.GetVisualDescendants().OfType<WorkshopRosterCell>().Single();
+            // Assignment is live: the pointer test cancels the native picker without touching the desktop.
+            room.FindControl<WorkshopAccordion>("WorkshopZone")!.RosterPromptPicker = (_, _) => Task.FromResult<string?>(null);
             test(shell, room, roster);
         }
         finally

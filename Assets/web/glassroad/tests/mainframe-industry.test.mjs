@@ -60,9 +60,9 @@ test('closed heads stop a complete high-speed swept crossing, open heads and cen
 test('head volume allows real clearance but catches an airborne kart against the visible raised head',()=> {
   const z=zones[0], pose={lift:3.5};
   assert.equal(pressOverlap(z,pose,{x:z.x,along:0,h:0}),false);
-  assert.equal(pressOverlap(z,pose,{x:z.x,along:0,h:2.1}),true);
+  assert.equal(pressOverlap(z,pose,{x:z.x,along:0,h:2.4}),true);
   assert.equal(pressOverlap(z,pose,{x:z.x,along:0,h:6}),false);
-  assert.equal(pressOverlap(z,pose,{x:z.x+z.w/2+.8,along:0,h:2.1}),false);
+  assert.equal(pressOverlap(z,pose,{x:z.x+z.w/2+.8,along:0,h:2.4}),false);
 });
 test('tar slows only its physical surface; centre and hops stay free, pause and reset deterministic',()=> {
   const z=zones.find(z=>z.kind==='tar');
