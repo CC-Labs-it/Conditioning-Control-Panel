@@ -193,8 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
-                // WPF MainWindow/MainWindow.PlayTab.cs:130-131, tier presentation only.
-                PlayLockDtrh.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh").Allowed;
+                // WPF MainWindow/MainWindow.PlayTab.cs:131, tier presentation only.
                 PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
                 // WPF MainWindow/MainWindow.PlayTab.cs:132.
                 PlayLockRacingThoughts.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
@@ -204,14 +203,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 PlayLockLockdown.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_lockdown_mode")).Allowed;
                 PlayLockBlink.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_blink_trainer")).Allowed;
                 PlayLockFyp.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_fyp"), "fyp").Allowed;
+                PlayLockDtrh.IsVisible = Games.GameWindow.DtrhLocked();
 
                 // FREE TODAY (WPF :145): only on a door that is otherwise shut - an owner gets no gift.
                 bool premium = CoreEntitlement.HasPremium;
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
-
-                // WPF MainWindow/MainWindow.PlayTab.cs:185, an owner gets no stamp.
-                PlayBadgeDtrh.FreeToday = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
+                PlayBadgeDtrh.FreeToday = !premium && CoreEntitlement.IsFreeToday("dtrh");
 
                 RefreshPlayIntakeCard();
             }
@@ -257,7 +255,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
 
-        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("dtrh");
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e)
+        {
+            if (Owner is { } owner) LauncherWindow.LaunchGame(owner, Games.GameWindow.DtrhId);
+        }
 
         private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("race");
 

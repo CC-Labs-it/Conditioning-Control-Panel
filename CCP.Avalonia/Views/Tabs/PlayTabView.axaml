@@ -31,8 +31,7 @@
      (Play*HeroPlate) and PlayTabView.axaml.cs paints it - see RefreshHeroArt, which also repaints
      on CoreMods.ModChanged. Every scrim and card colour underneath stays exactly where it was:
      that is the no-art fallback, and it is what draws if a plate fails to resolve.
-     The 2026-09-18 relayout (descent hero, Goon card, Just Drop and the Arcademy strip off this
-     wall; the four GAMES cards on) is carried over. -->
+     The GAMES wall includes the Basic DTRH card. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -221,8 +220,7 @@
                    FontSize="12" Margin="0,0,0,16"/>
 
         <!-- ===================== ZONE: GAMES =====================
-             WPF PlayTabView.xaml:339-455 (the 2026-09-18 relayout: the descent hero, the Goon card
-             and the Arcademy strip left this wall for the CC Labs launcher). The two free games share
+             WPF PlayTabView.xaml: the Basic DTRH card and the two free games share
              the existing GameWindow hosts. Full Breakout and Goon stay disabled honestly until
              their hosts and gates land. -->
         <Grid x:Name="ZoneGames" Margin="2,4,2,8" ColumnDefinitions="Auto,*">
@@ -334,8 +332,8 @@
             </Border>
           </Grid>
           <Grid x:Name="SlotDtrh">
-            <Border Theme="{StaticResource PlayCardT2}"
-                    fx:TierFxBorder.Tier="2" fx:TierFxBorder.RimThickness="3">
+            <Border Theme="{StaticResource PlayCardT1}"
+                    fx:TierFxBorder.Tier="1" fx:TierFxBorder.RimThickness="3">
               <Grid>
                 <Grid RowDefinitions="Auto,Auto,*,Auto">
                   <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
@@ -343,17 +341,17 @@
                   </Border>
                   <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_dtrh_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
                   <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_dtrh_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
-                  <Button Grid.Row="3" x:Name="BtnPlayDtrh" Cursor="Hand" Click="BtnPlayDtrh_Click" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13">
+                  <Button Grid.Row="3" x:Name="BtnPlayDtrh" Cursor="Hand" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13" Click="BtnPlayDtrh_Click">
                     <TextBlock Text="{loc:Str launcher_play}"/>
                   </Button>
                 </Grid>
-                <Border x:Name="PlayLockDtrh" Theme="{StaticResource PlayLockBandT2}" Margin="-22">
+                <Border x:Name="PlayLockDtrh" Theme="{StaticResource PlayLockBand}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
                     <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
-                    <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
+                    <TextBlock Text="{loc:Str hm3_rail_lock_t1}" Theme="{StaticResource PlayLockTeaser}"/>
                   </StackPanel>
                 </Border>
-                <fx:TierBadge x:Name="PlayBadgeDtrh" Theme="{StaticResource PlayTierBadge}" Tier="2"/>
+                <fx:TierBadge x:Name="PlayBadgeDtrh" Theme="{StaticResource PlayTierBadge}" Tier="1"/>
               </Grid>
             </Border>
           </Grid>

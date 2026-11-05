@@ -535,7 +535,7 @@ public sealed partial class FriendsDrawer : Border
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var avatar = FriendsLook.Avatar(f.Name, f.AvatarUrl, 38, f.Online || table != null);
+        var avatar = FriendsLook.Avatar(f.Name, f.AvatarUrl, 38, f.Online || table != null, f.Look);
         if (!f.Online && table == null) avatar.Opacity = 0.55;
         avatar.RenderTransformOrigin = new Point(0.5, 1);
         avatar.RenderTransform = new TranslateTransform();
@@ -757,7 +757,7 @@ public sealed partial class FriendsDrawer : Border
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var avatar = FriendsLook.Avatar(r.Name, r.AvatarUrl, 38);
+        var avatar = FriendsLook.Avatar(r.Name, r.AvatarUrl, 38, null, r.Look);
         g.Children.Add(avatar);
 
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };

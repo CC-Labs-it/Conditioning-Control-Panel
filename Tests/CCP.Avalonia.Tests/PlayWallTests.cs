@@ -212,10 +212,12 @@ public sealed class PlayWallTests
             var (loggedIn, lab, owns, prevServer, prevShell) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider,
                 RacingAccess.IsGrantedProvider, GameWindow.Server, ExternalOpener.Shell);
             var prevFree = CoreEntitlement.IsFreeTodayProvider;
+            var prevPremium = CoreEntitlement.HasPremiumProvider;
             bool isLoggedIn = false, isLab = false;
             string? freeKey = null;
             CoreAccount.IsLoggedInProvider = () => isLoggedIn;
             CoreEntitlement.HasLabProvider = () => isLab;
+            CoreEntitlement.HasPremiumProvider = () => isLab;   // a Lab owner holds Premium too (DtRH is a Premium door)
             CoreEntitlement.IsFreeTodayProvider = k => k == freeKey;
             RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
             string? opened = null;
@@ -252,7 +254,7 @@ public sealed class PlayWallTests
                 Assert.True(C<Border>("PlayLockArcademy").IsVisible);
                 Assert.True(C<Border>("PlayLockRacingThoughts").IsVisible);
                 Assert.False(C<TierBadge>("PlayBadgeDtrh").FreeToday);
-                // A DtRH drop day (WPF RequiresLab(.., "dtrh") + SetFreeStamp): band off, FREE TODAY on.
+                // A DtRH drop day (WPF RequiresPremium(.., "dtrh") + SetFreeStamp): band off, FREE TODAY on.
                 freeKey = "dtrh";
                 ((global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView)play).RefreshPlayCards();
                 Assert.False(C<Border>("PlayLockDtrh").IsVisible);
@@ -265,13 +267,9 @@ public sealed class PlayWallTests
                 Assert.False(C<Border>("PlayLockRacingThoughts").IsVisible);
                 Assert.False(C<TierBadge>("PlayBadgeDtrh").FreeToday); // an owner gets no gift
 
-                // DtRH uses the existing launcher door, including its account check.
+                // The DtRH door itself (launcher entry, account ask, Premium gate) is port/7.2's,
+                // covered by GameWindowTests.Dtrh_BasicAndDailyGiftAgreeAcrossDoorsAndPayout.
                 Assert.True(C<Button>("BtnPlayDtrh").IsEnabled);
-                C<Button>("BtnPlayDtrh").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Dispatcher.UIThread.RunJobs();
-                Assert.Single(shell.OwnedWindows.OfType<LoginDialog>()).Close();
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(GameWindow.OpenForTests("dtrh"));
 
                 // Racing Thoughts signed out: the login door, no race.
                 var race = C<Button>("BtnPlayRacingThoughts");
@@ -281,13 +279,8 @@ public sealed class PlayWallTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.Null(GameWindow.OpenForTests("race"));
 
-                // Signed in with Lab access: the base's DtRH host, then the owned race track.
+                // Signed in with Lab access: the owned race track.
                 isLoggedIn = true;
-                C<Button>("BtnPlayDtrh").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal("/dtrh/index.html", GameWindow.OpenForTests("dtrh")!.PageUrl!.AbsolutePath);
-                GameWindow.CloseAllForPanic();
-                Dispatcher.UIThread.RunJobs();
                 race.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal("/dtrh/race.html", GameWindow.OpenForTests("race")!.PageUrl!.AbsolutePath);
@@ -312,6 +305,7 @@ public sealed class PlayWallTests
                 GameWindow.CloseAllForPanic();
                 shell.Close();
                 (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, CoreEntitlement.IsFreeTodayProvider) = (loggedIn, lab, owns, prevFree);
+                CoreEntitlement.HasPremiumProvider = prevPremium;
                 (GameWindow.Server, ExternalOpener.Shell, CorePaths.EffectiveAssetsProvider) = (prevServer, prevShell, prevAssets);
                 service.SealForReset();
                 CoreSettings.ServiceProvider = prevSettings;
