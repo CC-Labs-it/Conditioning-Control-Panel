@@ -56,6 +56,39 @@ public sealed class HelpVideoWindowTests
     });
 
     [Fact]
+    public Task SessionEditorClipOnlyTopicOpensHelpInsteadOfCoachMarks() => Run(() =>
+    {
+        // WPF SessionEditorWindow.xaml.cs:123-129 accepts a clip even without a drawn loop.
+        var content = HelpContentService.GetContent("SessionEditor");
+        var oldSection = content.SectionId;
+        var oldClip = content.ClipFile;
+        var editor = new SessionEditorWindow();
+        try
+        {
+            content.SectionId = "SessionEditorClipOnlyTest";
+            content.ClipFile = "missing-help-test.mp4";
+            Assert.False(HelpLoopRegistry.Has(content.SectionId));
+            editor.Show();
+            editor.FindControl<Button>("BtnHelp")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var win = Current();
+            Assert.NotNull(win);
+            Assert.Same(editor, win!.Owner);
+            Assert.False(editor.FindControl<Control>("TutorialOverlay")!.IsVisible);
+            // A missing clip still opens the help window with WPF's caption fallback.
+            Assert.False(win.FindControl<Border>("VideoContainer")!.IsVisible);
+            Assert.True(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);
+        }
+        finally
+        {
+            Current()?.Close();
+            editor.Close();
+            content.SectionId = oldSection;
+            content.ClipFile = oldClip;
+        }
+    });
+
+    [Fact]
     public Task WebcamCalibrationTopicHostsItsSliceCLoop() => Run(() =>
     {
         // What WebcamCalibrationWindow's ? passes (WebcamCalibrationWindow.axaml.cs:239).
@@ -153,7 +186,8 @@ public sealed class HelpVideoWindowTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var oldSettings = CoreSettings.ServiceProvider;
