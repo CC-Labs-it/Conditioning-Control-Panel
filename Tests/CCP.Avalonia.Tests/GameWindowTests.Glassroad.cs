@@ -159,6 +159,148 @@ public sealed partial class GameWindowTests
     public void Glassroad_Signing_Refusals(string method, string path, string body)
         => Assert.False(GlassroadHostRules.TrySign(method, path, body, "u_1", out _, out _));
 
+    [Fact]
+    public void Glassroad_OwnershipAndToys_KeepShopClosed()
+    {
+        var grants = new[] { "cos.kart.body.petal", "cos.other", "cos.kart.body.petal", "cos.kart." + new string('x', 65) };
+        var init = GlassroadHostRules.InitFrame("u", "Kit", 2, false, 1, 1, grants, true);
+        Assert.Equal(new[] { "cos.kart.body.petal" }, init["identity"]!["grants"]!.Values<string>());
+        Assert.True((bool)init["caps"]!["toysConnected"]!);
+        Assert.False((bool)init["caps"]!["prizeCounter"]!);
+        Assert.Equal("owned", (string?)GlassroadHostRules.OwnedFrame(grants)["type"]);
+        Assert.Equal(64, GlassroadHostRules.KartGrants(Enumerable.Range(0, 100).Select(i => "cos.kart." + i)).Count);
+        Assert.Equal(JTokenType.Null, GlassroadHostRules.InitFrame(null, "Kit", 0, false, 1, 1, grants)["identity"]!.Type);
+    }
+
+    [Fact]
+    public void Glassroad_InviteNamesKnownCourseOnly()
+    {
+        var item = new ConditioningControlPanel.Services.Friends.InboxItem("a",
+            ConditioningControlPanel.Services.Friends.SendKind.Invite, "u", "Kit", null, null,
+            ConditioningControlPanel.Services.Friends.InviteDestination.Race, null, null,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(1)) { Track = "keep" };
+        Assert.Contains("The Keep", ConditioningControlPanel.Avalonia.Platform.FriendsLanding.KnockLine(item));
+        item = item with { Track = "unknown" };
+        Assert.DoesNotContain("unknown", ConditioningControlPanel.Avalonia.Platform.FriendsLanding.KnockLine(item));
+    }
+
+    [Fact]
+    public void Glassroad_OneDayEventPerWindow_PanicStopsRaceBed() => RunGlassroad("1", (_, _, _) =>
+    {
+        var oldNote = GameWindow.GlassroadNoteEvent;
+        var oldHaptics = CoreHaptics.Service;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        using var haptics = new HapticService(new ConditioningControlPanel.Models.HapticSettings { Enabled = true });
+        var notes = new List<string>();
+        try
+        {
+            GameWindow.GlassroadNoteEvent = notes.Add;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreHaptics.Service = haptics;
+            GameWindow.Launch(GameWindow.GlassroadId);
+            GameWindow.Launch(GameWindow.GlassroadId);
+            Assert.Equal(new[] { "e_race3d" }, notes);
+            haptics.SetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race, 0.8);
+            Assert.Equal(0.8, haptics.GetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race));
+            GameWindow.CloseAllForPanic();
+            Assert.Equal(0, haptics.GetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race));
+            Assert.Null(GameWindow.OpenForTests(GameWindow.GlassroadId));
+            GameWindow.Launch(GameWindow.GlassroadId);
+            Assert.Equal(2, notes.Count);
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            GameWindow.GlassroadNoteEvent = oldNote;
+            CoreHaptics.Service = oldHaptics;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
+    private sealed class GrProfileHttp : System.Net.Http.HttpMessageHandler
+    {
+        public string Account = "discord:12", Grant = "cos.kart.body.petal";
+        public long Revision = 4;
+        public bool ProfileGrants = true;
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        {
+            var prizes = new JObject { ["revision"] = Revision, ["grants"] = new JArray(Grant) };
+            var body = request.RequestUri!.AbsolutePath switch
+            {
+                "/v2/user/profile" => new JObject { ["user"] = new JObject { ["unified_id"] = Account, ["prizes"] = ProfileGrants ? prizes : null } },
+                "/v2/user/sync" => new JObject { ["success"] = true, ["prizes"] = prizes },
+                _ => throw new InvalidOperationException("Unexpected request: " + request.RequestUri.AbsolutePath),
+            };
+            return System.Threading.Tasks.Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                { Content = new System.Net.Http.StringContent(body.ToString()) });
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Glassroad_ExistingServerGrantsLoadWithoutPurchase_UpdateAndClear(bool profileGrants) => RunGlassroad("1", (_, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var oldSync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync;
+        using var wire = new GrProfileHttp { ProfileGrants = profileGrants };
+        var v2 = new V2AuthService(() => s, wire);
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire);
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = profileGrants ? null : sync;
+            s.UnifiedId = wire.Account;
+            s.AuthToken = "tok";
+            s.OfflineMode = false;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
+            sync.StopHeartbeat();
+            var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.PostGlassroadInit();
+            Assert.Contains(wire.Grant, sent.Last()["identity"]!["grants"]!.Values<string>());
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = sync;
+            // Same profile revision, then a newer sync snapshot from a different device.
+            sync.MarkLoaded(null);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
+            sync.StopHeartbeat();
+            wire.Grant = "cos.kart.body.trinket";
+            wire.Revision++;
+            sync.UtcNow = () => DateTime.UtcNow.AddMinutes(2);
+            Assert.True(sync.PushAsync("ownership refresh").GetAwaiter().GetResult());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(wire.Grant, sent.Last(o => (string?)o["type"] == "owned")["grants"]!.Values<string>());
+            foreach (var (answer, revision) in new[] { ("wrong", 999L), (wire.Account, 1L) })
+                ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplyProfile(wire.Account, answer,
+                    new ConditioningControlPanel.Models.PrizesBlock { Revision = revision, Grants = new() { "cos.kart.body.old" } }, "stale");
+            Assert.Equal(new[] { wire.Grant }, ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
+            s.UnifiedId = "other";
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.NoteAccount("other");
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplyProfile(wire.Account, wire.Account,
+                new ConditioningControlPanel.Models.PrizesBlock { Revision = 999, Grants = new() { wire.Grant } }, "late");
+            Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
+            s.UnifiedId = wire.Account;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.NoteAccount(wire.Account);
+            Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Logout(accountDeleted: true).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(sent.Last(o => (string?)o["type"] == "owned")["grants"]!);
+            s.UnifiedId = wire.Account;
+            s.AuthToken = "tok";
+            Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
+        }
+        finally
+        {
+            sync.StopHeartbeat();
+            GameWindow.CloseAllForPanic();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = oldSync;
+        }
+    });
+
     // ---- the window ----
 
     [Fact]
