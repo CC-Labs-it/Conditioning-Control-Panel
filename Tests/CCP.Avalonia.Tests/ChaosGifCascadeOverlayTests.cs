@@ -67,6 +67,21 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.Equal(w.DesktopScaling, w.Scale);       // the factor SetOverrideRedirect sizes with
                 Assert.True(w.IsVisible);
                 Assert.True(ChaosGifCascadeOverlay.IsRaining);
+                clock.Advance(7);
+                w.Frame();
+                Assert.False(w.Cascade.Spawning);
+                Assert.True(ChaosGifCascadeOverlay.IsRaining);
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosMeta.State.LessonsComplete.Remove("blindfold");
+                ChaosMeta.State.LessonProgress.Remove("blindfold");
+                var spec = ChaosBubbleVariants.Build(ChaosBubbleVariants.All.First(), 1);
+                ChaosRunHost.OnDefused(new ConditioningControlPanel.Services.AmbientBubble { Spec = spec });
+                Assert.Equal(1, ChaosLessons.Progress("blindfold"));
+                ChaosRunHost.ForceShutdown();
+                Show(gif);
+                w = ChaosGifCascadeOverlay.Active!;
                 var first = Assert.IsType<Image>(Assert.Single(w.Surface.Children));
                 Assert.Equal(0.9, first.Opacity, 3);
                 Assert.Equal(400, first.Width);
@@ -97,6 +112,7 @@ public sealed class ChaosGifCascadeOverlayTests
             }
             finally
             {
+                ChaosRunHost.ForceShutdown();
                 ChaosGifCascadeOverlay.CloseActive();
                 if (rain != null) await rain.PendingDecodes;
                 Dispatcher.UIThread.RunJobs();
