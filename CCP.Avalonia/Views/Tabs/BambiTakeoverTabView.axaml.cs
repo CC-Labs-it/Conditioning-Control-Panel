@@ -601,8 +601,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (s.MantraChantEnabled == on) return;
             s.MantraChantEnabled = on;
             CoreSettings.Save();
-            // ponytail: WPF then calls App.MantraChant.Start()/Stop() and re-reads the hint. Needs
-            // ConditioningControlPanel/Services/MantraChantService.cs.
+            if (on) App.MantraChant.Start(); else App.MantraChant.Stop();
+            TxtMantraChantHint.Text = Loc.Get(App.MantraVoice.HasVoicedMantras()
+                ? "desc_mantra_chant" : "desc_mantra_chant_none");
         }
 
         private void SldMantraChantVolume_Changed(object? sender, RangeBaseValueChangedEventArgs e)
@@ -611,7 +612,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_isLoading) return;
             CoreSettings.Current.MantraChantVolume = e.NewValue;
             CoreSettings.Save();
-            // ponytail: WPF also live-applies to a clip already playing (App.MantraChant.ApplyVolume).
+            App.MantraChant.ApplyVolume();
         }
 
         private void SldMantraChantGap_Changed(object? sender, RangeBaseValueChangedEventArgs e)
