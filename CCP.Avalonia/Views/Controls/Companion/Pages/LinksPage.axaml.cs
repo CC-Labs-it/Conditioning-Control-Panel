@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
         /// <summary>WPF LinksPage.OnShown: adopt the live cell, reload its list (RefreshVideoLinkPool).</summary>
         internal void OnShown(CompanionRoomView? room)
         {
+            KnowledgeLinks.Load();
             if (room?.FindControl<WorkshopAccordion>("WorkshopZone")?.DataContext is not WorkshopRuntimeVm workshop) return;
             CompanionPageHost.Adopt(workshop.Parts.Library, VideosHost);
             workshop.Parts.Library.RefreshPool();
