@@ -8219,5 +8219,6 @@
   "shop_item_rt_bundle_2_name": "Racing Thoughts Paket 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts Paket 3",
   "remote_media_offer_title": "Medien ohne Download",
-  "remote_media_offer_summary": "Deine Ordner sind leer - sie kann stattdessen aus dem Online-Pool streamen."
+  "remote_media_offer_summary": "Deine Ordner sind leer - sie kann stattdessen aus dem Online-Pool streamen.",
+  "lucky_xp_multiplier": "{0}x XP"
 }

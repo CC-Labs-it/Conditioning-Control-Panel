@@ -8972,5 +8972,6 @@
   "shop_item_rt_bundle_2_name": "Racing Thoughts Vol. 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts Vol. 3",
   "remote_media_offer_title": "Media without the download",
-  "remote_media_offer_summary": "Your folders are empty - she can stream from the online pool instead."
+  "remote_media_offer_summary": "Your folders are empty - she can stream from the online pool instead.",
+  "lucky_xp_multiplier": "{0}x XP"
 }

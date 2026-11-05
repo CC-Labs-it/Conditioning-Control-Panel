@@ -8219,5 +8219,6 @@
   "shop_item_rt_bundle_2_name": "Pack Racing Thoughts 2",
   "shop_item_rt_bundle_3_name": "Pack Racing Thoughts 3",
   "remote_media_offer_title": "Des médias sans téléchargement",
-  "remote_media_offer_summary": "Tes dossiers sont vides - elle peut diffuser les médias en ligne à la place."
+  "remote_media_offer_summary": "Tes dossiers sont vides - elle peut diffuser les médias en ligne à la place.",
+  "lucky_xp_multiplier": "{0}x XP"
 }

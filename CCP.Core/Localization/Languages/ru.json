@@ -8219,5 +8219,6 @@
   "shop_item_rt_bundle_2_name": "Racing Thoughts: набор 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts: набор 3",
   "remote_media_offer_title": "Медиа без скачивания",
-  "remote_media_offer_summary": "Ваши папки пусты - вместо этого она может транслировать медиа из онлайн-каталога."
+  "remote_media_offer_summary": "Ваши папки пусты - вместо этого она может транслировать медиа из онлайн-каталога.",
+  "lucky_xp_multiplier": "{0}x XP"
 }

@@ -258,12 +258,12 @@ public sealed class FlashFinishTests
             var rect = new PixelRect(100, 100, 100, 100);
             var old = new System.Collections.Generic.List<(Bitmap, PixelRect, string, Screen)>
                 { (Picture(), rect, "old.png", screen) };
-            FlashOverlay.Schedule(old, 1, 0, FlashOverlay.Generation, 40, 1, TimeSpan.Zero,
+            FlashOverlay.Schedule(old, 1, 0, FlashOverlay.Generation, 1, TimeSpan.Zero,
                 TimeSpan.FromSeconds(6), false, false, 0, () => staleDone = true);
             FlashOverlay.CloseAll(false);
             var next = new System.Collections.Generic.List<(Bitmap, PixelRect, string, Screen)>
                 { (Picture(), rect, "next.png", screen) };
-            FlashOverlay.Schedule(next, 30, 0, FlashOverlay.Generation, 40, 1, TimeSpan.Zero,
+            FlashOverlay.Schedule(next, 30, 0, FlashOverlay.Generation, 1, TimeSpan.Zero,
                 TimeSpan.FromSeconds(6), false, false, 0, () => done.SetResult());
             await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.False(staleDone);
