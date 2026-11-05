@@ -44,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ["gamepad"] = true, ["touch"] = false, ["forceRenderer"] = null, ["hostSfx"] = false,
                     ["toys"] = true, ["toysConnected"] = toysConnected, ["prizeCounter"] = false,
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
+                    ["friendInvite"] = true,
                 },
                 ["identity"] = signedIn
                     ? new JObject
