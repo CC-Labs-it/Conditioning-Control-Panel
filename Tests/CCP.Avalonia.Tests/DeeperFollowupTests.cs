@@ -38,6 +38,109 @@ public sealed class DeeperFollowupTests
     }
 
     [Fact]
+    public void EmptyActionsDependOnTotalFilesAndLibraryAvailability()
+    {
+        var folder = DeeperLocalLibrary.DefaultFolder;
+        var backup = folder + ".empty-model-backup";
+        var existed = Directory.Exists(folder);
+        if (existed) Directory.Move(folder, backup);
+        try
+        {
+            var model = new DeeperTabViewModel();
+            model.ReloadLibrary();
+            Assert.True(model.ShowLibraryEmptyActions);
+            Directory.CreateDirectory(folder);
+            var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "clip.wav" };
+            File.WriteAllText(Path.Combine(folder, "one.ccpenh.json"), EnhancementSerializer.Save(enhancement));
+            model.ReloadLibrary();
+            Assert.Single(model.FilteredEntries);
+            Assert.False(model.ShowLibraryEmptyActions);
+            model.SetSearch("no matching rows");
+            Assert.Empty(model.FilteredEntries);
+            Assert.False(model.ShowLibraryEmptyActions);
+            Directory.Delete(folder, true);
+            File.WriteAllText(folder, "blocked folder");
+            model.ReloadLibrary();
+            Assert.True(model.ShowLibraryError);
+            Assert.False(model.ShowLibraryEmptyActions);
+        }
+        finally
+        {
+            if (File.Exists(folder)) File.Delete(folder);
+            if (Directory.Exists(folder)) Directory.Delete(folder, true);
+            if (existed) Directory.Move(backup, folder);
+        }
+    }
+
+    // WPF MainWindow.DeeperHub.cs:383-403 and Views/Tabs/DeeperTabView.xaml:751-774.
+    [Fact]
+    public Task EmptyLibraryActionsImportAndHideForFilteredOrUnavailableLibrary() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var folder = DeeperLocalLibrary.DefaultFolder;
+        var backup = folder + ".empty-actions-backup";
+        var existed = Directory.Exists(folder);
+        if (existed) Directory.Move(folder, backup);
+        var oldPicker = MainShellWindow.DeeperImportPicker;
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("deeper");
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            var model = (DeeperTabViewModel)view.DataContext!;
+            var actions = view.FindControl<StackPanel>("DeeperLibraryEmptyActions")!;
+            Assert.True(actions.IsVisible);
+            Click(view, "BtnDeeperEmptyNew");
+            var create = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Deeper.NewEnhancementDialog>());
+            create.Close(false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(view.FindControl<Button>("BtnDeeperEmptyCatalogue"));
+            var calls = 0;
+            MainShellWindow.DeeperImportPicker = owner =>
+            {
+                Assert.Same(shell, owner);
+                calls++;
+                return Task.FromResult(Array.Empty<string>()); // cancellation leaves the library empty
+            };
+            Click(view, "BtnDeeperEmptyImport");
+            Assert.Equal(1, calls);
+            Assert.True(actions.IsVisible);
+            Directory.CreateDirectory(folder);
+            var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "clip.wav" };
+            enhancement.Metadata.Name = "Existing enhancement";
+            File.WriteAllText(Path.Combine(folder, "existing.ccpenh.json"), EnhancementSerializer.Save(enhancement));
+            var notified = false;
+            model.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(model.ShowLibraryEmptyActions)) notified = true; };
+            model.ReloadLibrary();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(notified);
+            Assert.False(actions.IsVisible);
+            model.SetSearch("no matching rows");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(model.FilteredEntries);
+            Assert.True(model.ShowLibraryEmpty);
+            Assert.False(actions.IsVisible);
+            Directory.Delete(folder, true);
+            File.WriteAllText(folder, "blocked library folder");
+            model.ReloadLibrary();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(model.ShowLibraryError);
+            Assert.False(actions.IsVisible);
+        }
+        finally
+        {
+            MainShellWindow.DeeperImportPicker = oldPicker;
+            shell?.Close();
+            if (File.Exists(folder)) File.Delete(folder);
+            if (Directory.Exists(folder)) Directory.Delete(folder, true);
+            if (existed) Directory.Move(backup, folder);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task BothTourButtonsStartDeeperAndPanicEndsTheOverlay() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

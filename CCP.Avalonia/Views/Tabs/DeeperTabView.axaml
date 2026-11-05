@@ -681,6 +681,36 @@
                                                TextWrapping="Wrap" MaxWidth="500"
                                                Margin="0,40,0,0"
                                                TextAlignment="Center"/>
+                                    <!-- Empty-library actions (only while the library has no files). -->
+                                    <StackPanel x:Name="DeeperLibraryEmptyActions"
+                                                IsVisible="{Binding ShowLibraryEmptyActions}"
+                                                Orientation="Horizontal" HorizontalAlignment="Center"
+                                                VerticalAlignment="Top" Margin="0,84,0,0">
+                                        <Button x:Name="BtnDeeperEmptyNew" Theme="{StaticResource DeeperRoundButton}"
+                                                Click="BtnDeeperNewEnhancement_Click"
+                                                Padding="14,7" Cursor="Hand" FontWeight="SemiBold" Margin="0,0,8,0"
+                                                Background="{DynamicResource DeeperAccentBrush}" Foreground="White"
+                                                BorderThickness="0">
+                                            <TextBlock Text="{loc:Str deeper_empty_cta}"/>
+                                        </Button>
+                                        <Button x:Name="BtnDeeperEmptyImport"
+                                                Theme="{StaticResource DeeperRoundButton}"
+                                                Click="BtnDeeperImport_Click"
+                                                Padding="14,7" Cursor="Hand" Margin="0,0,8,0"
+                                                Background="{DynamicResource DeeperAccentTransparent20Brush}"
+                                                Foreground="{DynamicResource DeeperAccentBrush}"
+                                                BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1">
+                                            <fx:IconLabel Key="deeper_tab_import_btn"/>
+                                        </Button>
+                                        <Button x:Name="BtnDeeperEmptyCatalogue" Theme="{StaticResource DeeperRoundButton}"
+                                                Click="BtnDeeperCatalogue_Click"
+                                                Padding="14,7" Cursor="Hand"
+                                                Background="Transparent"
+                                                Foreground="{DynamicResource DeeperAccentBrush}"
+                                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1">
+                                            <TextBlock Text="{loc:Str deeper_hub_catalogue_btn}"/>
+                                        </Button>
+                                    </StackPanel>
                                     <TextBlock x:Name="TxtDeeperLibraryError" x:FieldModifier="internal"
                                                Text="{Binding LibraryErrorText}"
                                                IsVisible="{Binding ShowLibraryError}"
