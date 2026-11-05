@@ -265,8 +265,8 @@ public sealed class SharedDeeperThemeTests
                     Assert.Equal(h, drop.Height);
                     Assert.Equal(-h, drop.Margin.Bottom);
                     var slide = (TranslateTransform)Part("DepthFace").RenderTransform!;
-                    var clock = new StepClock();
-                    slide.SetValue(StepClock.Property, clock.Instance);
+                    var clock = new TestAnimationClock();
+                    slide.SetValue(TestAnimationClock.Property, clock.Instance);
                     double Travel() => Base(slide, TranslateTransform.YProperty);
                     double Drop() => Base((ScaleTransform)drop.RenderTransform!, ScaleTransform.ScaleYProperty) * h;
                     // Rest: on the sheet, RaisedPx drop (StartPx for START).
