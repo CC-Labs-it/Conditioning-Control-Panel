@@ -461,9 +461,6 @@ public sealed class HeaderQuestStampsTests
         PixelPoint CardCentre() => card.PointToScreen(new Point(card.Bounds.Width / 2, 0));
         void Layout()
         {
-            // Headless popups place once per open: reopen so each measurement reads its own placement.
-            popup.IsOpen = false;
-            popup.IsOpen = true;
             Dispatcher.UIThread.RunJobs();
             visual.UpdateLayout();
             Dispatcher.UIThread.RunJobs();

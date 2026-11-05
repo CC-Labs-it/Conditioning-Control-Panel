@@ -571,10 +571,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 PlacementTarget = host,
                 Placement = PlacementMode.Bottom,
-                // The 24 px shadow padding: Y cancels it; on X the Avalonia 12 Bottom placement left the padded card
-                // 12 px left of the unpadded WPF anchor (MainWindow.QuestStamps.cs:809-811), so half is added back.
+                // Bottom placement centres horizontally, so symmetric shadow padding needs no X compensation.
                 VerticalOffset = 10 - 24,
-                HorizontalOffset = -6 + 12,
+                HorizontalOffset = -6,
                 IsLightDismissEnabled = false,
                 IsHitTestVisible = false,
                 Child = _stampPopVisual,
