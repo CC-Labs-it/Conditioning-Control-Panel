@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly TaskCompletionSource _secondFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
         /// <summary>Completes when the second frame is shown (tests await it instead of polling).</summary>
         internal Task SecondFrame => _secondFrame.Task;
+        internal event Action? FramePresented;
         public bool Freed { get { lock (_lock) return _buffer == IntPtr.Zero; } }
 
         private uint Format(ref IntPtr opaque, IntPtr chroma, ref uint width, ref uint height, ref uint pitches, ref uint lines)
@@ -109,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             if (Interlocked.Increment(ref _frames) >= 2) _secondFrame.TrySetResult();
             _frame();
+            FramePresented?.Invoke();
         }
 
         private static ref byte At(IntPtr p) => ref Unsafe.AddByteOffset(ref Unsafe.NullRef<byte>(), p);

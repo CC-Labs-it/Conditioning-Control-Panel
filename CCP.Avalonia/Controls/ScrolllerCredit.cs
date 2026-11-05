@@ -73,6 +73,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
             Link = new SafeHyperlinkButton { Content = new TextBlock { Text = "Media from Scrolller" }, Padding = new Thickness(0) };
             Link[!ForegroundProperty] = this[!ForegroundProperty];
             Link.Click += (_, _) => OpenHome();
+            // shortcut: Avalonia #22339 (12.1.3-12.1.5): a TextBlock that is itself hidden still renders, and that
+            // first measures the embedded Link, applying its template inside the render pass (throws). Measuring it
+            // on attach applies the template first; width 0 is what that render-pass measure of a never-measured
+            // block uses, so it finds the Link already measured. Drop when #22339 is fixed upstream.
+            Link.AttachedToVisualTree += (_, _) => Link.Measure(new Size(0, double.PositiveInfinity));
             var label = new Run();
             label.Bind(Run.TextProperty, (global::Avalonia.Data.Binding)new StrExtension("label_online_media_credit").ProvideValue(null!));
             Inlines = new InlineCollection { new InlineUIContainer(Link), new Run(". "), label };
