@@ -933,6 +933,7 @@ namespace ConditioningControlPanel.Services
 
             Game("backroom", "🎰", "back room casino slots slot machine wheel blackjack roulette sparkle points");
             Game("race", "🏎️", "racing racing thoughts race kart");
+            Game("raceclassic", "🏁", "racing thoughts classic 2d race original old race");
             Game("dtrh", "🕳️", "rabbit hole down the rabbit hole descent dtrh");
             Game("arcademy", "🎓", "arcademy academy campus school");
             Game("goon", "🎮", "goon goon game 1v1 duel");

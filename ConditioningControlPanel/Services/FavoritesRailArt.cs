@@ -179,6 +179,7 @@ namespace ConditioningControlPanel.Services
             // picture of its own, so it is not listed and FavoritesRailRule keeps it off the rail.
             ["game.backroom"] = Cover("features/backroom.png"),
             ["game.race"] = Cover("features/race.png"),
+            ["game.raceclassic"] = Cover("features/race_classic.png"),
             ["game.dtrh"] = Cover("features/dtrh.png"),
             ["game.arcademy"] = Cover("features/arcademy.png"),
             ["game.goon"] = Cover("features/goon_game_tile.png"),
