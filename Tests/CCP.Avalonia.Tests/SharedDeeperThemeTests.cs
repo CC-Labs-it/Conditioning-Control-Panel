@@ -40,7 +40,7 @@ public sealed class SharedDeeperThemeTests
             var button = new Button { Theme = Theme(key), Content = "Test", Width = 120, Height = 40,
                 Background = Brushes.Red, BorderBrush = Brushes.Blue, BorderThickness = new Thickness(2), Padding = new Thickness(9), FontSize = 17 };
             var window = new Window { Content = button, Width = 200, Height = 100 };
-            window.Show(); Dispatcher.UIThread.RunJobs();
+            window.Show(); HeadlessFrame.Publish(window);
             try
             {
                 var plate = Plate(button);
@@ -68,11 +68,12 @@ public sealed class SharedDeeperThemeTests
         Setup();
         var toggle = new ToggleButton { Theme = Theme("DeeperRoundIconToggleButton"), Content = "Lock", Background = Brushes.Transparent };
         var window = new Window { Content = toggle, Width = 200, Height = 100 };
-        window.Show(); Dispatcher.UIThread.RunJobs();
+        window.Show(); HeadlessFrame.Publish(window);
         try
         {
             Assert.Equal(new CornerRadius(6), Plate(toggle).CornerRadius);
             Assert.Same(toggle.Background, Plate(toggle).Background);
+            window.MouseMove(new Point(100, 50));
             window.MouseDown(new Point(100, 50), MouseButton.Left);
             window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
             Assert.True(toggle.IsChecked);
@@ -103,7 +104,7 @@ public sealed class SharedDeeperThemeTests
         {
             var button = new Button { Theme = Theme(key), Content = "Test", Width = 120, Height = 40 };
             var window = new Window { Content = button, Width = 200, Height = 100 };
-            window.Show(); Dispatcher.UIThread.RunJobs();
+            window.Show(); HeadlessFrame.Publish(window);
             try
             {
                 var border = button.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "border");
@@ -112,6 +113,7 @@ public sealed class SharedDeeperThemeTests
                 border.SetValue(StepClock.Property, clock.Instance);
                 double Scale() => border.RenderTransform?.Value.M11 ?? 1.0;   // settled release = no transform
                 // Press: 80 ms linear 1 -> 0.97 (the 150 ms BackEase would sit at 0.9811 at 30 ms, not done at 80).
+                window.MouseMove(new Point(100, 50));
                 window.MouseDown(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
                 Assert.Same(press, border.Transitions);
                 clock.Step(0); clock.Step(40);

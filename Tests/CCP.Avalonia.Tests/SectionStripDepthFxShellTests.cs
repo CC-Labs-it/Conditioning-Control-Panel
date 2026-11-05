@@ -31,15 +31,14 @@ public sealed class SectionStripDepthFxShellTests
     private static (MainShellWindow W, SectionTabStrip Strip) Open(string tab)
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var w = new MainShellWindow();
         w.Show();
         w.ShowTab(tab);
         Dispatcher.UIThread.RunJobs();
-        w.UpdateLayout();
-        Dispatcher.UIThread.RunJobs();
+        HeadlessFrame.Publish(w);
         return (w, w.Named<SectionTabStrip>("SectionStrip")!);
     }
 
@@ -119,6 +118,9 @@ public sealed class SectionStripDepthFxShellTests
             try
             {
                 (w, var strip) = Open("presets");
+                // Keep the real nine-second timer parked until its lifecycle is tested below.
+                strip.AmbientTierOverride = false;
+                strip.UpdateSheenClock();
 
                 // The real pointer path (P04): moving onto a rest pill lifts it, pressing drops
                 // its face, releasing springs it back and chooses it.
