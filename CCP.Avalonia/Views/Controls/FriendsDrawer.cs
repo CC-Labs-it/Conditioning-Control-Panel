@@ -6,7 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section, juice (.Juice.cs) or FriendsSfx. A word WPF throws outside the drawer
+// ponytail: no leash section and no juice (.Juice.cs). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Linq;
@@ -368,24 +368,7 @@ public sealed partial class FriendsDrawer : Border
             sq.Margin = new Thickness(6, 1, 0, 0);
             nameLine.Children.Add(sq);
         }
-        var marks = FriendsDrawerRules.PlatformMarks(f);
-        if (marks.Count > 0)
-        {
-            var strip = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 0, 0), Tag = "friends-platforms" };
-            foreach (var (platform, _, tipKey) in marks)
-            {
-                var icon = new IconGlyph
-                {
-                    Kind = platform switch { FriendPlatform.Phone => IconKind.Phone, FriendPlatform.Web => IconKind.Globe, _ => IconKind.Desktop },
-                    Size = 10.5, Foreground = Dim, Margin = new Thickness(0, 1, 4, 0),
-                    Tag = "friends-platform:" + platform,
-                };
-                ToolTip.SetTip(icon, Loc.Get(tipKey));
-                AutomationProperties.SetName(icon, Loc.Get(tipKey));
-                strip.Children.Add(icon);
-            }
-            nameLine.Children.Add(strip);
-        }
+        AddPlatformMarks(nameLine, f);
         mid.Children.Add(nameLine);
         mid.Children.Add(table != null ? HostingLine() : ActivityLine(f));
         // What you last sent them and how far it got (sent, arrived, seen, answered).
@@ -393,7 +376,7 @@ public sealed partial class FriendsDrawer : Border
         Grid.SetColumn(mid, 1);
         top.Children.Add(avatar);
         top.Children.Add(mid);
-        if (LockChip(f) is { } chip) { Grid.SetColumn(chip, 2); top.Children.Add(chip); }
+        if (LockChip(f) is { } lockChip) { Grid.SetColumn(lockChip, 2); top.Children.Add(lockChip); }
         if (table != null)
         {
             top.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
