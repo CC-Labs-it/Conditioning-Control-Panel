@@ -8220,5 +8220,6 @@
   "shop_item_rt_bundle_2_name": "Racing Thoughts: pack 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts: pack 3",
   "title_select_companion_personality": "Elegir personalidad de IA para {0}",
-  "filter_personality_json_files": "Archivos JSON de personalidad"
+  "filter_personality_json_files": "Archivos JSON de personalidad",
+  "awareness_add_app_tip": "Añadir '{0}' a la lista"
 }

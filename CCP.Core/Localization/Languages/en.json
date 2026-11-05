@@ -8973,5 +8973,6 @@
   "shop_item_rt_bundle_2_name": "Racing Thoughts Vol. 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts Vol. 3",
   "title_select_companion_personality": "Select AI Personality for {0}",
-  "filter_personality_json_files": "Prompt JSON files"
+  "filter_personality_json_files": "Prompt JSON files",
+  "awareness_add_app_tip": "Add '{0}' to the list"
 }

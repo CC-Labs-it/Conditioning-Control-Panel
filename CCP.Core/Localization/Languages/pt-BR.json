@@ -8220,5 +8220,6 @@
   "shop_item_rt_bundle_2_name": "Pacote Racing Thoughts 2",
   "shop_item_rt_bundle_3_name": "Pacote Racing Thoughts 3",
   "title_select_companion_personality": "Selecionar personalidade de IA para {0}",
-  "filter_personality_json_files": "Arquivos JSON de personalidade"
+  "filter_personality_json_files": "Arquivos JSON de personalidade",
+  "awareness_add_app_tip": "Adicionar '{0}' à lista"
 }

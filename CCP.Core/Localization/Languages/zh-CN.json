@@ -8729,5 +8729,6 @@
   "shop_item_rt_bundle_2_name": "Racing Thoughts 合集 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts 合集 3",
   "title_select_companion_personality": "为{0}选择 AI 人格",
-  "filter_personality_json_files": "人格 JSON 文件"
+  "filter_personality_json_files": "人格 JSON 文件",
+  "awareness_add_app_tip": "将“{0}”添加到列表"
 }
