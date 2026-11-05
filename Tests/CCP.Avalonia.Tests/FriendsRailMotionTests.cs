@@ -20,14 +20,6 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class FriendsDrawerTests
 {
-    private static void ChipApp()
-    {
-        if (Application.Current == null)
-            AppBuilder.Configure<AvApp>().WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-    }
     [Theory]
     [InlineData(0, 0)] [InlineData(1, 1)]
     public void BumpSettleIsWpfsOneOscillationElastic(double t, double expected) =>

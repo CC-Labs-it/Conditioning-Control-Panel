@@ -1,4 +1,8 @@
-// ponytail: no inactive-owner code-box activation or face/pill border/glow; light-dismiss replaces WPF outside-click and host-move watchers.
+// PORTED from ConditioningControlPanel/Controls/Friends/FriendsRailChip.cs: your face and name at the
+// foot of the rail with a mint pill for friends online; a click opens the drawer upward over the rail.
+// The pink unread badge counts the friends feed (WPF UpdateBadge). Count bump, hover lift and tier plate:
+// FriendsRailChip.Motion.cs. ponytail: no inactive-owner code-box activation or face/pill border/glow.
+// The shell rail is fixed open.
 using System;
 using Avalonia;
 using Avalonia.Controls;
@@ -23,9 +27,12 @@ public sealed partial class FriendsRailChip : Grid
     private readonly Func<IFriendsService?> _resolve;
     private readonly Grid _nameLine = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
     private int _lastOnline = -1, _lastUnread = -1;
+    private Window? _host;
+    private DateTime _closedAt = DateTime.MinValue;
     public FriendsRailChip() : this(null) { }
     internal FriendsRailChip(IFriendsService? service)
     {
+        // WPF FriendsRailChip.cs:251-263: resolve afresh after account replacement.
         _resolve = service != null ? () => service : () => Platform.FriendsHead.Service;
         Drawer = new FriendsDrawer(service);
         (Height, Margin, Background, Cursor) = (48, new Thickness(0, 2, 0, 4), Brushes.Transparent, FriendsDrawer.Hand());
@@ -62,8 +69,8 @@ public sealed partial class FriendsRailChip : Grid
             IsLightDismissEnabled = true,
         };
         Children.Add(_popup);
-        _popup.Opened += (_, _) => { _face.Background = FriendsDrawer.Raised; Drawer.OnOpened(); };
-        _popup.Closed += (_, _) => { _face.Background = Brushes.Transparent; Drawer.OnClosed(); };
+        _popup.Opened += (_, _) => { _face.Background = FriendsDrawer.Raised; DropTopmost(); Platform.FriendsLanding.DrawerOpen(); Drawer.OnOpened(); };
+        _popup.Closed += (_, _) => { _closedAt = DateTime.UtcNow; _face.Background = Brushes.Transparent; Platform.FriendsLanding.DrawerClose(); Drawer.OnClosed(); };
         Drawer.OwnerWindow = () => TopLevel.GetTopLevel(this) as Window;
         Drawer.CloseRequested += () => _popup.IsOpen = false;
         Drawer.SettingsRequested += () => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("appsettings");
@@ -75,8 +82,8 @@ public sealed partial class FriendsRailChip : Grid
             if (e.Source is Visual s && (ReferenceEquals(s, Drawer) || Drawer.IsVisualAncestorOf(s))) return;
             if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(); e.Handled = true; }
         };
-        AttachedToVisualTree += (_, _) => { BindFaceHost(); Rebind(); RefreshFace(); LocalizationManager.Instance.LanguageChanged += OnLanguage; };
-        DetachedFromVisualTree += (_, _) => { _popup.IsOpen = false; UnbindFaceHost(); CancelBumps(); Unwire(); Drawer.Unsubscribe(); LocalizationManager.Instance.LanguageChanged -= OnLanguage; };
+        AttachedToVisualTree += (_, _) => { BindHost(); Rebind(); RefreshFace(); LocalizationManager.Instance.LanguageChanged += OnLanguage; };
+        DetachedFromVisualTree += (_, _) => { _popup.IsOpen = false; UnbindHost(); CancelBumps(); Unwire(); Drawer.Unsubscribe(); LocalizationManager.Instance.LanguageChanged -= OnLanguage; };
         Rebind();
     }
     internal FriendsDrawer Drawer { get; }
@@ -111,12 +118,48 @@ public sealed partial class FriendsRailChip : Grid
     }
 
     internal int PillCount => _pill.IsVisible && int.TryParse(_pillText.Text, out var n) ? n : 0;
+    // WPF Controls/Friends/FriendsRailChip.cs:395-402: request row opens the drawer.
+    internal void OpenDrawer(string? friendId)
+    {
+        if (!_popup.IsOpen) { Rebind(); _popup.IsOpen = true; }
+        if (!string.IsNullOrEmpty(friendId)) Drawer.OpenOn(friendId);
+    }
+
     internal void Toggle()
     {
         if (_popup.IsOpen) { _popup.IsOpen = false; return; }
+        // WPF FriendsRailChip.cs:383-390: a dismissing press must not reopen it.
+        if (DateTime.UtcNow - _closedAt < TimeSpan.FromMilliseconds(250)) return;
         Rebind(); RefreshFace();
         _popup.IsOpen = true;
     }
+
+    // WPF FriendsRailChip.cs:197-228,405-509: follow the owner and release handlers on detach.
+    private void BindHost()
+    {
+        UnbindHost();
+        _host = TopLevel.GetTopLevel(this) as Window;
+        if (_host == null) return;
+        _host.Activated += OnHostActivated;
+        _host.PositionChanged += OnHostMoved;
+        _host.PropertyChanged += OnHostProperty;
+    }
+    private void UnbindHost()
+    {
+        if (_host == null) return;
+        _host.Activated -= OnHostActivated;
+        _host.PositionChanged -= OnHostMoved;
+        _host.PropertyChanged -= OnHostProperty;
+        _host = null;
+    }
+    // WPF FriendsRailChip.cs:197-228: refresh identity on attach and activation.
+    private void OnHostActivated(object? sender, EventArgs e) { Rebind(); RefreshFace(); if (IsOpen) DropTopmost(); }
+    private void OnHostMoved(object? sender, PixelPointEventArgs e) => _popup.IsOpen = false;
+    private void OnHostProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
+    { if (e.Property == Window.WindowStateProperty) _popup.IsOpen = false; }
+    // WPF FriendsRailChip.cs:231-242: the drawer follows the panel behind other apps.
+    private void DropTopmost()
+    { if (TopLevel.GetTopLevel(Drawer) is WindowBase popup) popup.Topmost = false; }
 
     private void Rebind()
     {
