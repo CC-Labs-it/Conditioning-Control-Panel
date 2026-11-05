@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -75,11 +76,12 @@ public sealed partial class FirstShowStageTests
             Assert.InRange(stage.GuideSpeechWindow.Position.X, targetScreen.Bounds.X, targetScreen.Bounds.Right);
             stage.GuideScreenFromPointOverride = _ => shell.Position.X < 0 ? second : first;
             stage.GuideScreenOverride = () => shell.Position.X < 0 ? second : first;
-            // The headless backend keeps PointToScreen at the original origin after a window move.
+            // Map through the shell's own Position: headless backends differ on whether PointToScreen
+            // follows a window move (Avalonia 12 does), so the test assumes neither.
             stage.GuidePointToScreenOverride = (control, point) =>
             {
-                var pixel = control.PointToScreen(point);
-                return new PixelPoint(pixel.X - 1900, pixel.Y - 200);
+                var local = control.TranslatePoint(point, shell) ?? point;
+                return new PixelPoint((int)Math.Round(shell.Position.X + local.X), (int)Math.Round(shell.Position.Y + local.Y));
             };
             shell.Position = new PixelPoint(-1800, -100);
             Dispatcher.UIThread.RunJobs();

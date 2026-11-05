@@ -51,8 +51,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnManageMessages.Click += BtnManageMessages_Click;
             BtnAdvanced.Click += BtnAdvanced_Click;
 
-            Loaded += (_, _) => { RebindToCurrentSettings(); CoreMods.ModChanged += OnModChanged; };
-            Unloaded += (_, _) => { Unhook(); CoreMods.ModChanged -= OnModChanged; };
+            // WPF OnLoaded/OnUnloaded (:30/:36): one ModChanged subscription per loaded control.
+            // RebindToCurrentSettings hooks it (IsLoaded is true inside Loaded) and Unhook drops it.
+            Loaded += (_, _) => RebindToCurrentSettings();
+            Unloaded += (_, _) => Unhook();
 
             Helpers.ModArt.BindFeaturePlates(this, "features/subliminal.png", HeroArt, SideArt);
 
