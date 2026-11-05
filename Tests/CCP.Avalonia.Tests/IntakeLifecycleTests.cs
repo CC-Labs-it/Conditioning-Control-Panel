@@ -24,7 +24,9 @@ public sealed class IntakeLifecycleTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -69,6 +71,41 @@ public sealed class IntakeLifecycleTests
         GradedIntakeTabView.OpenIntake(main, duckMain: false);     // first-ever run: no duck
         Assert.Equal(WindowState.Maximized, main.WindowState);
         main.Close();
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BeginUsesUnsavedIntakeHistoryToDuck() => WithCleanState(() =>
+    {
+        var dir = System.IO.Directory.CreateTempSubdirectory("intake-history-");
+        using var card = new ConditioningControlPanel.Services.IntakePunchCardService(
+            System.IO.Path.Combine(dir.FullName, "card.json"));
+        var previous = AvApp.IntakePunchCard;
+        AvApp.IntakePunchCard = card;
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreAccount.HasPremiumAccessProvider = () => true;
+        CoreAi.IsAvailableProvider = () => true;
+        var view = new GradedIntakeTabView();
+        var main = new Window { Content = view };
+        main.Show();
+        try
+        {
+            view.BtnStartIntake_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs());
+            Assert.NotEqual(WindowState.Minimized, main.WindowState);
+            Only().Close();
+            card.NotifyIntakeCompleted("draft"); // pending save: the live service must win over disk
+            Assert.False(System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "card.json")));
+            view.BtnStartIntake_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs());
+            Assert.Equal(WindowState.Minimized, main.WindowState);
+        }
+        finally
+        {
+            IntakeHostWindow.CloseAllForPanic();
+            main.Close();
+            AvApp.IntakePunchCard = previous;
+            card.Dispose();
+            dir.Delete(true);
+        }
         return Task.CompletedTask;
     });
 

@@ -276,6 +276,80 @@ public sealed class VaultGateTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF MainWindow.QuestsTab.cs:96 OpenPricedCard: the spent toast's CTA opens the priced intake
+    /// card, except for a patron whose grant died, who is sent to Reconnect instead. One test, one shell:
+    /// two shells built around a seeded SettingsService break later VaultGate tests.</summary>
+    [Fact]
+    public Task SpentIntakeToastOpensThePricedIntakeCard() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        // The pass reads CoreSettings.Service (not CoreSettings.Current), so a service of our own is seeded
+        // around each click only.
+        var oldLockdown = LockdownService.Current;
+        var lockdown = LockdownService.Current = new LockdownService();
+        var prevSettings = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        var login = CoreAccount.IsLoggedInProvider;
+        var lab = CoreAccount.HasLabAccessProvider;
+        var premium = CoreAccount.HasPremiumAccessProvider;
+        var provider = TierGate.ReconnectIsTheAnswerProvider;
+        var reconnect = true;
+        CoreAccount.HasPremiumAccessProvider = () => false;
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreAccount.HasLabAccessProvider = () => false;
+        TierGate.ReconnectIsTheAnswerProvider = () => reconnect;
+        var shell = new MainShellWindow();
+        var reconnects = 0;
+        shell.ReconnectFromGateOverride = () => { reconnects++; return Task.CompletedTask; };
+        shell.Show();
+        var host = new StackPanel();
+        global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
+        void ClickSpentCta(Action? beforeClick = null)
+        {
+            host.Children.Clear();
+            CoreSettings.ServiceProvider = () => service;
+            try { shell.Named<GradedIntakeTabView>("GradedIntakeTab")!.BtnStartIntake_Click(null, new RoutedEventArgs()); }
+            finally { CoreSettings.ServiceProvider = prevSettings; }
+            beforeClick?.Invoke();
+            Click(host, Loc.Get("intake_gate_spent_cta"));
+        }
+        try
+        {
+            service.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
+            service.Current.IntakePassSpentUtc = DateTime.UtcNow;
+
+            // A toast raised before Lockdown must refuse a later click, including Reconnect.
+            ClickSpentCta(() => lockdown.Activate(TimeSpan.FromMinutes(30)));
+            Assert.Equal(0, reconnects);
+            Assert.Null(VaultGateDialog.Open);
+            lockdown.Deactivate();
+
+            ClickSpentCta();   // lapsed patron: Reconnect, no price card
+            Assert.Equal(1, reconnects);
+            Assert.Null(VaultGateDialog.Open);
+
+            reconnect = false;
+            ClickSpentCta();   // everyone else: the priced Basic intake card
+            Assert.Equal(1, reconnects);
+            Assert.NotNull(VaultGateDialog.Open);
+            Assert.Contains(Loc.Get("vaultgate_chip_vault"), Texts(VaultGateDialog.Open!));
+        }
+        finally
+        {
+            lockdown.Deactivate();
+            LockdownService.Current = oldLockdown;
+            VaultGateDialog.Open?.Close();
+            shell.Close();
+            CoreSettings.ServiceProvider = prevSettings;
+            CoreAccount.IsLoggedInProvider = login;
+            CoreAccount.HasLabAccessProvider = lab;
+            CoreAccount.HasPremiumAccessProvider = premium;
+            TierGate.ReconnectIsTheAnswerProvider = provider;
+            global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(new StackPanel());
+        }
+        return Task.CompletedTask;
+    });
+
     private static ConditioningControlPanel.Avalonia.Helpers.NotificationService Toasts(out StackPanel host)
     {
         var toasts = new ConditioningControlPanel.Avalonia.Helpers.NotificationService();
@@ -293,7 +367,9 @@ public sealed class VaultGateTests
     private static void EnsureAvalonia()
     {
         if (global::Avalonia.Application.Current is not null) return;
-        global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+        global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
             .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
