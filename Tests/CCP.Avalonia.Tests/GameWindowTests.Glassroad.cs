@@ -39,7 +39,7 @@ public sealed partial class GameWindowTests
     }
 
     /// <summary>Signed in, no Racing Thoughts track, the door at <paramref name="door"/>, the relay on a fake transport.</summary>
-    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body, bool lab = true) => Run((shell, launcher) =>
+    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body, bool? lab = null) => Run((shell, launcher) =>
     {
         var (oldDoor, oldOwns, oldHttp, oldBase) = (CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
@@ -49,7 +49,7 @@ public sealed partial class GameWindowTests
         try
         {
             GameWindow.UseLinuxRaceCard = () => false; // exercise the existing WebKit host explicitly
-            CoreEntitlement.HasLabProvider = () => door == "1";
+            CoreEntitlement.HasLabProvider = () => lab ?? door == "1"; // an explicit lab wins (Play door tests), else the door string
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
             GameWindow.PbpServerBase = () => GrBase;
