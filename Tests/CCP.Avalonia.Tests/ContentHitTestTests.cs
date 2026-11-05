@@ -29,7 +29,7 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             // This probes static hit geometry, not tab entrance or hover animation progress.
@@ -40,7 +40,10 @@ public sealed class ContentHitTestTests
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
             ToolTip.SetServiceEnabled(w, false);
             w.Show();
+            w.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            // Hold only subsequent entrances; do not change the clock of an entrance already running.
+            w.TabClock = new SteppedTime();
             var misses = new List<string>();
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
@@ -88,6 +91,10 @@ public sealed class ContentHitTestTests
             return Task.CompletedTask;
         });
     }
+
+    /// <summary>Kept for the ported tests that still call it here; the shared helper is
+    /// <see cref="HeadlessRendering.RenderLiveTree"/>.</summary>
+    internal static void RenderLiveTree(Visual w) => HeadlessRendering.RenderLiveTree(w);
 
     private static bool Inside(Visual v, Point p, Visual root)
         => v.TranslatePoint(default, root) is { } tl && v.TranslatePoint(new Point(v.Bounds.Width, v.Bounds.Height), root) is { } br
