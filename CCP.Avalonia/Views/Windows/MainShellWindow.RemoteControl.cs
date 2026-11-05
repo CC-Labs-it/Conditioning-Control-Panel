@@ -5,7 +5,7 @@
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
-// RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise/restore
+// RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise
 // for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and the browser
 // blindfold (no embedded browser under the overlay on this head).
 
@@ -43,7 +43,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeRemoteControlOverlay()
         {
             var r = RemoteControlTabView.Relay.Value;
-            EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
+            EventHandler connected = (_, _) =>
+            {
+                bool restore = r.IsActive && !r.ControllerConnected && CoreSettings.Current.StopEffectsOnRemoteDisconnect;
+                Dispatcher.UIThread.Post(() => { OnRemoteControllerChanged(); if (restore) ShowFromTray(); });
+            };
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
             EventHandler ended = (_, _) => Dispatcher.UIThread.Post(OnRemoteSessionEnded);
             EventHandler<string> command = (_, a) => Dispatcher.UIThread.Post(() => OnRemoteCommandReceived(a));
@@ -90,11 +94,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             HideRemoteControlOverlay();
             UpdateStartButtonForRemoteControl(false);
+            ShowFromTray();
         }
 
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
         internal void OnRemoteCommandReceived(string action)
         {
+            if (action == "trigger_panic") ShowFromTray();
             if (RemoteCommands.Quiet.Contains(action)) return;
             ShowCommandNotification(action);
         }

@@ -168,6 +168,68 @@ public sealed class RemoteControlShellTests
         }
     });
 
+    [Fact]
+    public Task Teardown_restores_tray_shell_and_avatar_but_continuity_does_not() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldRelay = RemoteControlTabView.Relay;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        service.Current.AvatarEnabled = true;
+        var f = new FakeRelay();
+        var relay = new RemoteRelay(() => "tok", () => "uid", "9.9.9", (_, _) => null, _ => { }, f) { AutoPoll = false };
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.CreateTray();
+            shell.TrayHostPresent = () => true;
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            void HideToTray() { shell.Close(); Dispatcher.UIThread.RunJobs(); Assert.False(shell.IsVisible); }
+            void Restored() { Dispatcher.UIThread.RunJobs(); Assert.True(shell.IsVisible); Assert.True(shell.Tube!.IsVisible); }
+            await relay.StartAsync("light");
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            HideToTray();
+            f.Poll = "{\"controller_connected\":false}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.IsVisible);
+            Assert.False(shell.Tube!.IsVisible);
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            service.Current.StopEffectsOnRemoteDisconnect = true;
+            f.Poll = "{\"controller_connected\":false}";
+            await relay.PollOnceAsync();
+            Restored();
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            HideToTray();
+            f.Poll = "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"trigger_panic\"}]}";
+            await relay.PollOnceAsync();
+            Restored();
+            HideToTray();
+            await relay.StopAsync();
+            Restored();
+        }
+        finally
+        {
+            if (shell != null) { shell.TrayHostPresent = () => false; shell.Close(); }
+            relay.Dispose();
+            RemoteControlTabView.Relay = oldRelay;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
     /// <summary>The opacity the fade is heading to (the transition animates the visible value).</summary>
     private static double Target(Visual v) => v.GetBaseValue(Visual.OpacityProperty).Value;
 
