@@ -7,8 +7,8 @@
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
 // wire-shell-nav-rail-b added the coin depth (BuildNavCoin, press travel + spring, tilt, specular)
 // in MainShellWindow.NavCoin.cs. Rail shadow is covered separately by PR #3337.
-// ponytail: not yet here (lane wire-shell-nav-rail-b-next): the possession reroute seam (WPF PossessionReroute, written only by
-// Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
+// The guarded possession reroute press seam is here (#4419); it has no effect writer on this head yet
+// (WPF Services/Possession/Effects/MisrouteEffect.cs). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 
 using System;
@@ -19,6 +19,7 @@ using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Transformation;
@@ -75,6 +76,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly List<NavSectionRow> _navSectionRows = new();
         private bool _navRailReady;
+
+        // WPF MainWindow.NavRail.cs:517: the effect owns this one-shot hook.
+        internal static Func<string, string?>? PossessionReroute;
 
         internal IReadOnlyList<NavSectionRow> NavSectionRowsForTests => _navSectionRows;
 
@@ -160,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Button = btn,
                     Hue = Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb),
                 };
+                btn.AddHandler(PointerPressedEvent, NavDoorPossessionReroute, RoutingStrategies.Tunnel);
                 btn.Background = new SolidColorBrush(WithAlpha(row.Hue, NavFillAlpha));
                 btn.BorderBrush = new SolidColorBrush(row.Hue);
                 if (btn.Content is Panel grid)
@@ -245,6 +250,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
+
+        // WPF NavDoor_PossessionReroute: the press stands if the hook fails or its door is not live.
+        private void NavDoorPossessionReroute(object? sender, PointerPressedEventArgs e)
+        {
+            if (sender is not Button { Tag: string from } button ||
+                e.GetCurrentPoint(button).Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed) return;
+            var hook = PossessionReroute;
+            if (hook == null) return;
+            string? to;
+            try { to = hook(from); }
+            catch (Exception ex) { Log.Warning(ex, "Possession rail hook failed; press stands"); return; }
+            if (string.IsNullOrWhiteSpace(to) || string.Equals(to, "webapp", StringComparison.OrdinalIgnoreCase)) return;
+            foreach (var row in _navSectionRows)
+            {
+                if (row.Button.Tag is not string tag || !string.Equals(tag, to, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!row.Button.IsEffectivelyVisible || !row.Button.IsEffectivelyEnabled || !row.Button.IsHitTestVisible) return;
+                e.Handled = true;
+                OpenNavSection(row.Section);
+                return;
+            }
+        }
 
         /// <summary>A row press: the section's last tab, else its default (WPF NavDoor_Click :568).</summary>
         private void NavDoor_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
