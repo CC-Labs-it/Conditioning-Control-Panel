@@ -139,9 +139,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             public bool ShouldShowOgWelcome { get; set; }
             public string? UnifiedId { get; set; }
             public string? DisplayName { get; set; }
-            public bool? ServerNeedsDisplayName { get; set; }
             public string? Provider { get; set; }
             public string? LinkedProvider { get; set; }
+            public bool? ServerNeedsDisplayName { get; set; }
         }
 
         public LoginDialog()
@@ -538,7 +538,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
                 if (authResponse.Success && authResponse.User != null)
                 {
-                    Succeed(authResponse.User, authResponse.AuthToken, _firstProvider, legacy: false);
+                    Succeed(authResponse.User, authResponse.AuthToken, _firstProvider, legacy: false, trustServerName: false);
                 }
                 else
                 {
@@ -686,7 +686,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
                 if (authResponse.Success && authResponse.User != null)
                 {
-                    Succeed(authResponse.User, authResponse.AuthToken, "account", legacy: false);
+                    Succeed(authResponse.User, authResponse.AuthToken, "account", legacy: false, trustServerName: false);
                     return;
                 }
                 ShowAccountPanel(_isAccountRegisterMode);
@@ -757,7 +757,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// <summary>The read-only profile load Succeed started (tests await it).</summary>
         internal Task ProfileLoad { get; private set; } = Task.CompletedTask;
 
-        internal void Succeed(V2AuthService.V2User user, string? authToken, string? provider, bool legacy, bool? serverNeedsDisplayName = null)
+        // trustServerName: WPF LoginDialog.xaml.cs:227/915 pass the server's needs_display_name; register/first-provider (:430) and
+        // account (:614) sign-ins do not, so the ask falls back to the empty-name check there.
+        internal void Succeed(V2AuthService.V2User user, string? authToken, string? provider, bool legacy, bool trustServerName = true)
         {
             if (_closed) { Log.Warning("Sign-in finished after the login dialog closed; ignored"); return; }
             // WPF MainWindow.Login.cs:110-141: a PROVEN different account never inherits the last one's progression.
@@ -782,7 +784,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ShouldShowOgWelcome = legacy && CoreSettings.Current.HasShownOgWelcome != true,
                 UnifiedId = user.UnifiedId,
                 DisplayName = user.DisplayName,
-                ServerNeedsDisplayName = serverNeedsDisplayName ?? user.NeedsDisplayName,
+                ServerNeedsDisplayName = trustServerName ? user.NeedsDisplayName : null,
                 Provider = provider,
             };
             Close(true);
@@ -968,7 +970,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // The full user when the server sent it (SP3 fix): the same adopt + load as every other sign-in.
             if (result.User != null)
             {
-                Succeed(result.User, result.AuthToken, "device_code", legacy: false, serverNeedsDisplayName: result.NeedsDisplayName);
+                result.User.NeedsDisplayName = result.NeedsDisplayName; // V2DeviceCodeService already falls back to user's
+                Succeed(result.User, result.AuthToken, "device_code", legacy: false);
                 return;
             }
             if (_closed) return;
@@ -987,7 +990,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ShouldShowOgWelcome = false,
                 UnifiedId = result.UnifiedId,
                 DisplayName = s.UserDisplayName,
-                ServerNeedsDisplayName = result.NeedsDisplayName, // WPF LoginDialog.xaml.cs:915
+                ServerNeedsDisplayName = result.NeedsDisplayName,
                 Provider = "device_code",
             };
             Close(true);

@@ -99,8 +99,8 @@ public sealed class LoginDeviceCodeTests
     private static async Task Run(Wire wire, Func<LoginDialog, Clock, AppSettings, Task> body)
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
-                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (oldGet, oldSet) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
         var secrets = new Dictionary<string, string?>(); // memory only: never the keyring
@@ -221,13 +221,31 @@ public sealed class LoginDeviceCodeTests
             }));
     }
 
+    /// <summary>WPF MainWindow.Login.cs:209: the server's needs_display_name (device-code reply) beats a
+    /// non-blank local name, and the shell asks right after sign-in.</summary>
+    [Fact]
+    public Task AServerThatNeedsADisplayNameMakesTheShellAskAfterDeviceSignIn()
+    {
+        var wire = new Wire(T0.AddMinutes(10),
+            (HttpStatusCode.OK, """{"auth_token":"tok-dev","unified_id":"u_dev","needs_display_name":true,"user":{"unified_id":"u_dev","display_name":"Bambi Dev"}}"""));
+        return AvaloniaTestDispatcher.RunAsync(() => Run(wire, async (dialog, clock, s) =>
+            {
+                var shell = (Window)dialog.Owner!;
+                clock.Advance(TimeSpan.FromSeconds(3));
+                await Until(() => !dialog.IsVisible);
+                await dialog.DevicePoll;
+                Assert.True(dialog.Result!.ServerNeedsDisplayName);
+                await Until(() => shell.OwnedWindows.OfType<DisplayNameDialog>().Any());
+            }));
+    }
+
     /// <summary>WPF BrowserLauncher.OpenUrlOrPrompt: a sign-in link no browser takes is copied and the user told so.</summary>
     [Fact]
     public Task AnUnopenableSignInLinkIsCopiedAndExplained() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
-                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldShell = ExternalOpener.Shell;
         ExternalOpener.Shell = _ => false; // nothing handles the link
