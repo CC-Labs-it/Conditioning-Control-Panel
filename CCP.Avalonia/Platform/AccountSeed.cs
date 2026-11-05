@@ -135,7 +135,9 @@ internal static class AccountSeed
     {
         try
         {
-            if (!await LoadProfileCoreAsync(v2 ?? NewV2())) return false;
+            var uid = CoreSettings.Current.UnifiedId;
+            if (!await LoadProfileCoreAsync(v2 ?? NewV2()) || CoreSettings.Current.UnifiedId != uid) return false;
+            LoadedProfileUid = uid;
             ProfileLoaded?.Invoke();
             return true;
         }
@@ -152,6 +154,7 @@ internal static class AccountSeed
 
     /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
     internal static event Action? ProfileLoaded;
+    internal static string? LoadedProfileUid; // WPF ProfileSync.HasLoadedProfile, scoped to this account
 
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();

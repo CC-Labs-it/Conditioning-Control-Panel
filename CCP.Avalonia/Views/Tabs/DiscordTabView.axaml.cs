@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -164,7 +165,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var progress = App.Achievements?.Progress;
             ShowCard(s.IsSeason0Og);
             ApplyIdentityBadges(false, null, CoreAccount.IsWhitelisted);
-            TxtProfileViewerName.Text = s.UserDisplayName ?? "You";
+            // WPF MainWindow.Browser.cs:2014-2017: the signed-in no-name placeholder.
+            TxtProfileViewerName.Text = NeedsDisplayNameRule.FirstName(s.UserDisplayName, AccountSeed.Discord?.CustomDisplayName, AccountSeed.Patreon?.DisplayName)
+                ?? (string.IsNullOrEmpty(s.UnifiedId) ? "You" : Loc.Get("account_name_not_set"));
             ShowOwnActions(true);
             SetOnline(true, Loc.Get("label_online"));
             TxtProfileViewerLevel.Text = s.PlayerLevel.ToString();

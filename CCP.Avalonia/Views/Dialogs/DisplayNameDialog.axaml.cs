@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _txtDisplayName.TextChanged += (_, _) => OnTextChanged();
             _txtDisplayName.KeyDown += TxtDisplayName_KeyDown;
             this.FindControl<Button>("BtnCancel")!.Click += (_, _) => Close(false);
+            this.FindControl<Button>("BtnClose")!.Click += (_, _) => Close(false);
             _btnConfirm.Click += (_, _) => Accept();
 
             Loaded += (_, _) => _txtDisplayName.Focus();
@@ -76,7 +77,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             this.FindControl<TextBlock>("TxtTitle")!.Text = Loc.Get("label_choose_your_display_name");
             this.FindControl<TextBlock>("TxtPrompt")!.Text = Loc.Get("name_ask_body");
             this.FindControl<Border>("WarningPanel")!.IsVisible = false;
-            // ponytail: keep the existing Cancel button as the close affordance; Escape also closes.
+            // WPF DisplayNameDialog.xaml:76-82: the corner close replaces Cancel; Escape also closes.
+            this.FindControl<Button>("BtnCancel")!.IsVisible = false;
+            this.FindControl<Button>("BtnClose")!.IsVisible = true;
             _txtDisplayName.Text = suggestion ?? "";
             _txtDisplayName.SelectAll();
             OnTextChanged();
@@ -148,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 var shape = NeedsDisplayNameRule.Check(text);
                 _txtCharCount.Text = Loc.GetF("label_char_count_of_max", text.Length, NeedsDisplayNameRule.MaxLength);
-                _btnConfirm.IsEnabled = shape == DisplayNameShape.Ok;
+                _btnConfirm.IsEnabled = _txtDisplayName.IsEnabled && shape == DisplayNameShape.Ok;
                 ShowStatus(shape == DisplayNameShape.BadChars ? Loc.Get("name_ask_bad_chars") : null);
             }
             else

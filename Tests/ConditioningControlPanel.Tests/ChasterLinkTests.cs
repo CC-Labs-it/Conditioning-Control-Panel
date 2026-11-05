@@ -115,9 +115,11 @@ public class ChasterLinkTests : IDisposable
     {
         var (flow, state) = Start();
 
-        var page = await _browser.GetStringAsync(Callback + "?state=" + state);
-
+        using var response = await _browser.GetAsync(Callback + "?state=" + state, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        Assert.True(response.Headers.ConnectionClose);
         Assert.Equal(LinkOutcome.Failed, await flow);
+        var page = await response.Content.ReadAsStringAsync();
         Assert.Contains("Not linked", page);
         Assert.Empty(_broker.Bodies);
     }
