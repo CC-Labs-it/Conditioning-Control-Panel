@@ -28,6 +28,8 @@ namespace CCP.Avalonia.Snapshot.Tests;
 /// one baseline per row id under Snapshots/. A new baseline is accepted only with the WPF
 /// side-by-side image path in the commit message (docs/avalonia-parity.html, "Locking a row").
 /// ~/ccp-port/bin/ledger-snapshot-check.sh fails a verified/improved row without a file here.
+/// Retains historical snapshot locks when a ledger status is capped at wired, including
+/// win-layered-audio; keeping a regression baseline does not promote its ledger status.
 /// </summary>
 public sealed class VerifiedRowSnapshotTests
 {
