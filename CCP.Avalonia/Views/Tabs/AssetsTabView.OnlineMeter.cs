@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// MainWindow.OnlineMeter.cs PaintOnlineMeterCard / PaintOnlineOfficialNote + AssetsTabView.xaml:273-465). What
     /// shows is Core <see cref="OnlineMeterRules"/> through <see cref="OnlineMeterHead"/>; this file only paints it.
     /// <para>ponytail: not on this head yet - the "See plans" link (no vault gate card here), the spent corner notice,
-    /// the licence card on the startup ladder, and the note's landing animation.</para>
+    /// the licence card on the startup ladder.</para>
     /// </summary>
     public partial class AssetsTabView
     {
@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (_meterWired) return;
             _meterWired = true;
+            InitializeOfficialNoteLanding();
             try
             {
                 OnlineMeterHead.Start();
