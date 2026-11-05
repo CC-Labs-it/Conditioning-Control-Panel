@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "Say the phrase out loud instead of typing it (offline mic). Falls back to typing if no mic.",
+  "lockcard_voice_hint_on": "On. Speak the phrase to dismiss the card. Typing stays available if the mic can't hear you.",
+  "lockcard_voice_hint_no_mic": "No microphone detected. Lock cards will use typing until one is connected.",
+  "lockcard_voice_hint_model_failed": "Speech model found but it would not load. Remove any extra model you added under {0}, then restart.",
+  "lockcard_voice_hint_model_missing": "Speech model not installed yet. Lock cards will use typing until it is. Unzip vosk-model-small-en-us-0.15 into {0}",
   "title_select_companion_personality": "Select AI Personality for {0}",
   "filter_personality_json_files": "Prompt JSON files",
   "audio_device_unnamed": "(unnamed)",

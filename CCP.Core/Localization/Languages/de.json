@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "Sprich den Satz, statt ihn zu tippen (Offline-Mikrofon). Ohne Mikrofon bleibt die Texteingabe verfügbar.",
+  "lockcard_voice_hint_on": "An. Sprich den Satz, um die Karte zu schließen. Falls das Mikrofon dich nicht hört, kannst du tippen.",
+  "lockcard_voice_hint_no_mic": "Kein Mikrofon erkannt. Sperrkarten nutzen die Texteingabe, bis eines verbunden ist.",
+  "lockcard_voice_hint_model_failed": "Sprachmodell gefunden, aber nicht geladen. Entferne zusätzliche Modelle unter {0} und starte neu.",
+  "lockcard_voice_hint_model_missing": "Noch kein Sprachmodell installiert. Sperrkarten nutzen bis dahin die Texteingabe. Entpacke vosk-model-small-en-us-0.15 nach {0}",
   "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
   "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
   "audio_device_unnamed": "(unbenannt)",
