@@ -190,10 +190,7 @@ namespace ConditioningControlPanel
             if (_droneFundamental != null && Math.Abs(_droneCurrentGain - _droneTargetGain) > 0.001f)
             {
                 _droneCurrentGain += (_droneTargetGain - _droneCurrentGain) * 0.02f;
-                var masterVol = (float)((App.Settings?.Current?.MantraDroneVolume ?? 30) / 100.0);
-                _droneFundamental.Gain = _droneCurrentGain * masterVol;
-                if (_droneHarmonic != null)
-                    _droneHarmonic.Gain = _droneCurrentGain * 0.4f * masterVol;
+                ApplyDroneGain(App.Settings?.Current?.MasterVolume ?? 100);
             }
         }
 
@@ -361,38 +358,36 @@ namespace ConditioningControlPanel
 
         // The drone and tones obey the master volume (ccp-bugs #1432) as a SAMPLE gain. Never
         // WaveOutEvent.Volume here: that moves the whole app's volume in the Windows mixer.
-        private const float DroneFundamentalGain = 0.05f, DroneHarmonicGain = 0.02f, ToneGain = 0.15f;
+        private const float ToneGain = 0.15f;
 
         private static float MasterGain() =>
             (float)Math.Clamp((App.Settings?.Current?.MasterVolume ?? 100) / 100.0, 0.0, 1.0);
 
-        private void OnMasterVolumeChanged(int level)
+        /// <summary>The drone's sample gain in every phase (idle, streak ramp, master change): its level
+        /// x the Mantra drone dial x the master dial. The ramp used to skip the master dial, so a
+        /// streak made the drone audible again at master 0; a master change used to drop a ramped
+        /// drone back to idle.</summary>
+        internal static float DroneGain(float level, double droneVolume, int master) =>
+            level * (float)Math.Clamp(droneVolume / 100.0, 0.0, 1.0) * Math.Clamp(master / 100f, 0f, 1f);
+
+        private void ApplyDroneGain(int master)
         {
-            float g = Math.Clamp(level / 100f, 0f, 1f);
+            float g = DroneGain(_droneCurrentGain, App.Settings?.Current?.MantraDroneVolume ?? 30, master);
             var fundamental = _droneFundamental;
             var harmonic = _droneHarmonic;
-            if (fundamental != null) fundamental.Gain = DroneFundamentalGain * g;
-            if (harmonic != null) harmonic.Gain = DroneHarmonicGain * g;
+            if (fundamental != null) fundamental.Gain = g;
+            if (harmonic != null) harmonic.Gain = g * 0.4f;   // 180 Hz at 0.4 of the fundamental
         }
+
+        private void OnMasterVolumeChanged(int level) => ApplyDroneGain(level);
 
         private void StartDrone()
         {
             try
             {
-                float g = MasterGain();
-                _droneFundamental = new SignalGenerator(44100, 1)
-                {
-                    Type = SignalGeneratorType.Sin,
-                    Frequency = 90,
-                    Gain = DroneFundamentalGain * g
-                };
-
-                _droneHarmonic = new SignalGenerator(44100, 1)
-                {
-                    Type = SignalGeneratorType.Sin,
-                    Frequency = 180,
-                    Gain = DroneHarmonicGain * g
-                };
+                _droneFundamental = new SignalGenerator(44100, 1) { Type = SignalGeneratorType.Sin, Frequency = 90, Gain = 0 };
+                _droneHarmonic = new SignalGenerator(44100, 1) { Type = SignalGeneratorType.Sin, Frequency = 180, Gain = 0 };
+                ApplyDroneGain(App.Settings?.Current?.MasterVolume ?? 100);
 
                 _droneMixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(44100, 1));
                 _droneMixer.AddMixerInput(_droneFundamental);

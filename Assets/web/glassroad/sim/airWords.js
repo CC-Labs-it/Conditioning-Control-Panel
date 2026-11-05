@@ -1,4 +1,5 @@
-/* Scripted word flights. Only a locally bound run owns these forgiving aerial crossings. */
+/* Scripted word flights. Only a locally bound run owns these forgiving aerial crossings: the player's kart, solo and
+ * online. The room judges them like any other record (tests/word-flight.test.mjs holds them inside its limits). */
 import { S, RESPAWN, setPos, setVel, setQuat } from './state.js';
 import { qlook } from '../core/math.js';
 import { resetGlide, setPhraseGlide } from './glide.js';
@@ -15,7 +16,7 @@ const APPEAR_S = .64, FADE_S = .65;
 const FLIGHT_PACE = 1.6;
 const LYRIC_WINDOW_S = 1.25;
 // Owner 2026-10-28: bigger letters, a higher springier arc with a small hang at the apex, and the
-// word spawns under the kart instead of on the road centre. Solo-only tuning: never in feel.json.
+// word spawns under the kart instead of on the road centre. Never in feel.json.
 export const WORD_SCALE = 1.5, WORD_LENGTH_M = 3.2 * WORD_SCALE, WORD_MAX_WIDTH_M = 8.5 * WORD_SCALE;
 export const ARC_M = [2.6, 3.2];
 const HANG = .3, EDGE_M = 1.2;

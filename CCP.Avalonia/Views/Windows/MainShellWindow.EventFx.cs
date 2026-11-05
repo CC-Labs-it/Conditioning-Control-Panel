@@ -48,14 +48,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             FireEventBurst(Named<Border>("XPBarTrack"), 110, rightEdge: true);
         }
 
-        internal void CelebrateProgramDayComplete(Control banner)
-        {
-            // It was hidden until this refresh; measure its new banner before anchoring sparks,
-            // just as the quest tab lays out its freshly resized fills before celebrating.
-            banner.UpdateLayout();
-            FireEventBurst(banner, 90);
-        }
-
         private void FireEventBurst(Control? anchor, int count, bool rightEdge = false, Color? color = null)
         {
             if (_eventFxClosed || anchor == null) return;
