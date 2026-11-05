@@ -38,8 +38,13 @@ public static class RacingAccess
     /// <see cref="RaceRunLifecycle"/> latches the active run and never asks anything about
     /// ownership - and it came in from the stack untouched and in force, because it is anti-abuse
     /// and the owner wants it.</para>
+    ///
+    /// <para>OPEN since 2026-11-05 (owner): the 2D race returns as "Racing Thoughts Classic" (launcher
+    /// id raceclassic), FREE FOR EVERYONE WITH EVERY TRACK. The 7.2 Prize Counter does not sell the
+    /// rt.original.* grants, so an armed door could never open again. Flip this back to true to
+    /// restore the purchase door; the Back Room keeps reading real purchases (PurchasedTracks).</para>
     /// </summary>
-    private const bool PurchaseDoorArmed = true;
+    private const bool PurchaseDoorArmed = false;
 
     /// <summary>Every original track, which is what an open door hands the page.</summary>
     private static int[] AllTracks => Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1).ToArray();
@@ -51,10 +56,12 @@ public static class RacingAccess
     /// 971, smoke/ownership-check.mjs), so sending real grants here while the door is open would
     /// gate the game's content even though its door is unlocked, which is the same refusal one
     /// screen later.</summary>
-    public static int[] OwnedTracks => PurchaseDoorArmed
-        ? Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1)
-            .Where(n => PrizeGrants.IsGranted(PrizeGrants.RacingTrack(n))).ToArray()
-        : AllTracks;
+    public static int[] OwnedTracks => PurchaseDoorArmed ? PurchasedTracks : AllTracks;
+
+    /// <summary>The tracks actually bought, whatever the door says. The Back Room paints its counter
+    /// rows from these, so opening Classic for everyone does not stamp every race row as owned.</summary>
+    public static int[] PurchasedTracks => Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1)
+        .Where(n => PrizeGrants.IsGranted(PrizeGrants.RacingTrack(n))).ToArray();
 
     internal static bool AllowsLaunch(Func<string, bool> owns)
         => Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1).Any(n => owns(PrizeGrants.RacingTrack(n)));
