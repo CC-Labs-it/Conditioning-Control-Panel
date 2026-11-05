@@ -43,21 +43,21 @@ public sealed class TubeContentGatesTests
         return owner.OwnedWindows.OfType<T>().Single();
     }
 
-    /// <summary>The flake behind ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement: a plain [Fact] that reads a tube static
-    /// (TubeMotesTests) runs AvatarTubeWindow's type initializer on an xUnit worker. A mutable SolidColorBrush built there
-    /// belongs to that thread's dispatcher, so the next frame that paints the menu (MenuGreen on the engine item) throws
-    /// "a different thread owns it" and every later render in the testhost dies. Shared static brushes must be immutable.</summary>
-    [Fact]
-    public void TubeStaticBrushesBelongToNoThread()
+    // A type initializer may run on a worker before the UI constructs the tube (Windows CI).
+    // Fixed menu colors must be usable across threads, including by the icon compositor.
+    [Theory]
+    [InlineData("MenuRed", "#FFFF6347")]
+    [InlineData("MenuGreen", "#FF90EE90")]
+    [InlineData("MenuPatreon", "#FF9B59B6")]
+    [InlineData("MenuLocked", "#FF606070")]
+    public Task SharedMenuColorsAreSafeAcrossThreads(string name, string expected) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var brushes = typeof(AvatarTubeWindow)
-            .GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
-            .Where(f => typeof(global::Avalonia.Media.IBrush).IsAssignableFrom(f.FieldType))
-            .Select(f => (f.Name, Value: f.GetValue(null)))
-            .ToList();
-        Assert.Contains(brushes, b => b.Name == "MenuGreen");
-        Assert.All(brushes, b => Assert.False(b.Value is AvaloniaObject, b.Name + " is thread-affine"));
-    }
+        var brush = (global::Avalonia.Media.ISolidColorBrush)typeof(AvatarTubeWindow)
+            .GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        var color = await Task.Run(() => brush.Color);
+        Assert.Equal(global::Avalonia.Media.Color.Parse(expected), color);
+        Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableBrush>(brush);
+    });
 
     [Fact]
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
