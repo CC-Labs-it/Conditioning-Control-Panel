@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Tests;
 /// fill may be no brighter than its body. The fill's edge moves by the same layout whether it is at
 /// rest or mid-tween, so this holds through an XP gain.</para>
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class XpBarTipTests
 {
     private const double TrackWidth = 600;
