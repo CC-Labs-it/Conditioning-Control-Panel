@@ -56,14 +56,27 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         /// "features/flash.png", "achievements/lv_10.png". Traversal is rejected inside
         /// <see cref="CoreModArt.OverridePath"/>.
         /// </param>
-        internal static Bitmap? TryLoad(string? resourceName, int? decodeWidth = null)
+        internal static Bitmap? TryLoad(string? resourceName, int? decodeWidth = null) =>
+            TryLoad(resourceName, out _, decodeWidth);
+
+        internal static Bitmap? TryLoad(string? resourceName, out bool modApplied, int? decodeWidth = null)
         {
+            modApplied = false;
             if (string.IsNullOrWhiteSpace(resourceName)) return null;
 
             var overridePath = CoreModArt.OverridePath(resourceName);
             if (overridePath != null)
             {
-                try { if (File.Exists(overridePath)) { using var file = File.OpenRead(overridePath); return Decode(file, decodeWidth); } }
+                try
+                {
+                    if (File.Exists(overridePath))
+                    {
+                        using var file = File.OpenRead(overridePath);
+                        var bitmap = Decode(file, decodeWidth);
+                        modApplied = true;
+                        return bitmap;
+                    }
+                }
                 catch (Exception ex) { Log.Warning(ex, "[ModArt] mod override {Path} would not load", overridePath); }
             }
 
