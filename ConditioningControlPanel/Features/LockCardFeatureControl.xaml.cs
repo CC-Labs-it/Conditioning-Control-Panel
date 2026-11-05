@@ -216,11 +216,12 @@ namespace ConditioningControlPanel.Features
             if (on)
             {
                 var owner = Application.Current.MainWindow;
+                // #1547: the old body promised that Esc could never end a strict card,
+                // but Escape is the default panic key and panic always ends a card (hard rule 6).
+                var panicKey = s.PanicKey;
                 var confirmed = WarningDialog.ShowDoubleWarning(owner,
-                    "Strict Lock Card",
-                    "• You will NOT be able to escape lock cards with ESC\n" +
-                    "• You MUST type the phrase the required number of times\n" +
-                    "• This can be very restrictive!");
+                    Loc.Get(Services.LockCardStrictCopy.ConfirmTitle),
+                    Loc.GetF(Services.LockCardStrictCopy.ConfirmBodyKey(panicKey), panicKey ?? "?"));
 
                 if (!confirmed)
                 {
