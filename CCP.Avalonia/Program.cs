@@ -128,6 +128,10 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--x11-probe") >= 0)
                 return X11OverlayProbe.Run();
 
+            // Private native KWin regression: opens a real fullscreen video surface and watch.
+            if (Array.IndexOf(args, "--wave-timer-check") >= 0)
+                return OverlayCheck.RunWaveTimer();
+
             // --overlay-check opens one click-through override-redirect overlay per screen and
             // reads map state, override_redirect, depth, input shape and geometry back from the
             // X server. Non-zero on any mismatch. Safe on a live session (transparent, no input).
