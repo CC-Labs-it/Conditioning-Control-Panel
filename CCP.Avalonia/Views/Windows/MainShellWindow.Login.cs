@@ -72,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (await dialog.ShowDialogSafe<bool>(owner ?? this) && dialog.Result is not null)
             {
                 UpdateQuickLoginUI(accountChanged: true);
+                await AskDisplayNameAfterSignIn(owner ?? this, dialog.Result.DisplayName, dialog.Result.ServerNeedsDisplayName);
                 if (SecretStore.NotRemembered && !_notRememberedShown)
                 {
                     _notRememberedShown = true;
