@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     public static class IconMap
     {
         public const string FriendRequest = "💌"; // WPF Services/Friends/FriendsLanding.cs:320,365: Inbox row data, rendered as Mail.
+        public const string PossessionRules = "🕶"; // WPF MainWindow.Lab.cs:1122: the warden's rules Inbox row, rendered as Glasses.
         private const IconVariant R = IconVariant.Regular, F = IconVariant.Filled;
         private static readonly Dictionary<string, IconEntry> ByGlyph = new();
         private static readonly Dictionary<char, IconKind> ByMdl2 = new();
@@ -108,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.HatGraduation, R, null, "🎓");
 
             M(IconKind.Mail, R, null, FriendRequest);
+            M(IconKind.Glasses, R, null, PossessionRules);
             // D4 feature brands, objects, nature, people (🎀 ☠ 💀 are per-site calls: unmapped)
             M(IconKind.Flash, R, null, "⚡"); M(IconKind.BubbleMultiple, R, null, "🫧"); M(IconKind.Chat, R, null, "💬");
             M(IconKind.Comment, R, null, "💭"); M(IconKind.BrainCircuit, R, null, "🧠"); M(IconKind.Drop, R, null, "💧");
