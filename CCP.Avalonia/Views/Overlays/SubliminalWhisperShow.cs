@@ -126,9 +126,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>Duck, play the phrase's linked clip, then draw the card. False (nothing played) when
         /// there is no clip or whispers are muted: the caller then draws the card straight away.</summary>
-        internal static bool HasRecordedVoice(string text) => SubliminalWhisper.FindLinkedAudio(text,
-            SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath), SubAudioDir, App.Mods?.ActiveModId) != null;
-
         internal static bool Whisper(string text)
         {
             var s = CoreSettings.Current;
