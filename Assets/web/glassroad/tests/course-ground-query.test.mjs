@@ -12,7 +12,8 @@ for (const id of ['threshold','keep','mainframe','boudoir','goonworks']) test(id
     if (f.flags.includes('jump') || f.flags.includes('magnet') || f.n[1] < .6
       || t.fields.some(c => s >= c.fromS - 5 && s <= c.toS + 5)
       || t.courts.some(c => s >= c.fromS - 5 && s <= c.toS + 5)
-      || t.forks.some(fork => s >= fork.fromS - 20 && s <= fork.toS + 20)) continue;
+      || t.forks.some(fork => s >= fork.fromS - 20 && s <= fork.toS + 20)
+      || (t.ramps || []).some(r => s >= r.s0 - 2 && s <= r.lipS + 3)) continue;   // a jump wedge stands karts above the road
     for (const x of [-f.w * .25, 0, f.w * .25]) {
       const surface = t.surfaceAt(s, x), p = surface.p.map((v,k) => v + surface.n[k] * .1);
       for (const hint of [f.seg, -1]) {
