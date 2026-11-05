@@ -1,4 +1,7 @@
 using System;
+using Avalonia;
+using Avalonia.Headless;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,8 +11,6 @@ using System.Text.RegularExpressions;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
-using Avalonia;
-using Avalonia.Headless;
 using Xunit;
 using Xunit.Sdk;
 using Xunit.v3;
@@ -56,12 +57,17 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
-            // One production font setup per testhost, before any class can seed a bare app.
-            if (global::Avalonia.Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            // The first test owns the platform for the whole process. Use the shipped fonts here,
+            // before a class-specific setup can omit them and make later shell tests order-dependent.
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             Current = ProcessStateSnapshot.Take();
+            // A get-only singleton retained queued toasts, old hosts and live sticky keys across tests.
+            // The snapshot restores the original service after each test; each body gets fresh state.
+            ConditioningControlPanel.Avalonia.App.Notifications = new();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time = new ConditioningControlPanel.Avalonia.Platform.StartupLadder.TestClock();

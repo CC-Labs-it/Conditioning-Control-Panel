@@ -39,6 +39,29 @@ public class MasterVolumeObeyedTests
         Assert.Contains("MasterVolumeWatch.Shared.Changed += OnMasterVolumeChanged", source);
     }
 
+    // ---- Mantra drone ------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(0.4f, 100.0, 0, 0f)]       // a full streak ramp at master 0 stays silent
+    [InlineData(0.05f, 30.0, 0, 0f)]
+    [InlineData(0.4f, 0.0, 100, 0f)]       // drone dial at 0
+    [InlineData(0.4f, 100.0, 100, 0.4f)]
+    [InlineData(0.4f, 50.0, 50, 0.1f)]
+    [InlineData(0.05f, 30.0, 100, 0.015f)]
+    [InlineData(0.4f, 150.0, 150, 0.4f)]
+    public void Mantra_drone_gain_is_level_times_drone_dial_times_master(float level, double drone, int master, float expected)
+        => Assert.Equal(expected, MantraWindow.DroneGain(level, drone, master), 4);
+
+    [Fact]
+    public void Every_mantra_drone_gain_write_goes_through_the_master_aware_formula()
+    {
+        // The ramp tick, the master change and the start each wrote their own gain before, and the
+        // ramp left the master dial out. One writer keeps all three phases under the master dial.
+        var source = File.ReadAllText(Path.Combine(AppDir(), "Windows", "MantraWindow.xaml.cs"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(source, @"fundamental\.Gain = |_droneFundamental\.Gain = "));
+        Assert.Contains("MasterVolumeWatch.Shared", source);
+    }
+
     // ---- the plain PlaySound path ------------------------------------------------------------
 
     [Theory]
