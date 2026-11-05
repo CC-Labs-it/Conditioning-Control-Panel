@@ -42,11 +42,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static string SubAudioDir => Path.Combine(AppContext.BaseDirectory, "Resources", "sub_audio");
 
         /// <summary>Test seams: the card, and the clock every delay runs on.</summary>
-        internal static Action<string> Draw = text => Dispatcher.UIThread.Post(() =>
+        internal static Action<string> Draw = text => DrawWithOpacity(text, null);
+        internal static Action<string, int?> DrawWithOpacity = (text, opacity) =>
         {
-            if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
-                SubliminalOverlay.Show(host, text);
-        });
+            var generation = Volatile.Read(ref _gen);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (generation != Volatile.Read(ref _gen)) return;
+                if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
+                    SubliminalOverlay.Show(host, text, opacity);
+            });
+        };
         internal static Action<int, Action> After = (ms, then) => Task.Delay(ms).ContinueWith(_ => then());
         internal static Func<double> Roll = () => { lock (Rng) return Rng.NextDouble(); };
 
@@ -70,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (Whisper(text))
             {
-                if (SubliminalWhisper.IsFreezePhrase(text)) ScheduleReset();
+                if (SubliminalWhisper.IsFreezePhrase(text)) ScheduleReset(SubliminalWhisper.ResetDelayMs);
                 CoreProgression.AddXP(20, "Subliminal");
             }
             else
@@ -78,6 +84,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 HapticThenDraw(text);
                 CoreProgression.AddXP(10, "Subliminal");
             }
+        }
+
+        /// <summary>WPF FlashSubliminalCustom for the AI command: trim, cap, remove tags, then
+        /// haptic anticipation and a silent card (10 XP), even when the ambient scheduler is off.</summary>
+        internal static void Custom(string text, int? opacity = null)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            text = text.Trim();
+            if (text.Length > 200) text = text[..200];
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]*>", "");
+            var phrase = text;
+            HapticThenDraw(phrase, () => DrawWithOpacity(phrase, opacity));
+            CoreProgression.AddXP(10, "Subliminal");
         }
 
         /// <summary>WPF TriggerBambiFreeze(deferReset: false): the mod's Freeze text, even with subliminals off.</summary>
@@ -151,13 +170,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF TriggerSubliminalWithHapticPattern: haptic first, the card after the provider's
         /// spin-up head start (0 with no toy connected).</summary>
-        internal static void HapticThenDraw(string text)
+        internal static void HapticThenDraw(string text, Action? draw = null)
         {
             var haptics = CoreHaptics.Service;
             _ = haptics?.TriggerSubliminalPatternAsync(text);
             var anticipationMs = haptics?.SubliminalAnticipationMs ?? 0;
-            if (anticipationMs > 0) Later(anticipationMs, () => Draw(text));
-            else Draw(text);
+            draw ??= () => Draw(text);
+            if (anticipationMs > 0) Later(anticipationMs, draw);
+            else draw();
         }
     }
 }

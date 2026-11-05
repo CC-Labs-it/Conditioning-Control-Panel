@@ -652,6 +652,7 @@ namespace ConditioningControlPanel.Avalonia
                     Views.Overlays.SubliminalWhisperShow.Phrase(text);
                     NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
                 };
+                CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
                 CoreSubliminal.VideoFreezeProvider = () => Views.Overlays.SubliminalWhisperShow.Freeze(true);
                 CoreSubliminal.DeferredResetProvider = Views.Overlays.SubliminalWhisperShow.DeferredReset;

@@ -83,8 +83,7 @@ namespace ConditioningControlPanel.Avalonia
                 : OnUi(() => { BubbleOverlay.Stop(); return true; });
             SubliminalCommand.Surface = (text, opacity) => Overlay(host =>
             {
-                SubliminalOverlay.Show(host, text, opacity);
-                CoreProgression.AddXP(10, "Subliminal");   // WPF FlashSubliminalCustom
+                SubliminalWhisperShow.Custom(text, opacity);
             });
             BounceCommand.Surface = (on, words) => on
                 ? Overlay(host => BouncingTextOverlay.Start(host, words))

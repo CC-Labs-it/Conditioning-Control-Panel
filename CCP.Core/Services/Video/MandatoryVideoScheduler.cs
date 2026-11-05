@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF <c>SkipRetrySeconds</c>: a skipped tick retries this soon.</summary>
         public const double SkipRetrySeconds = 30;
         public static readonly TimeSpan PreRoll = TimeSpan.FromSeconds(1.3);
+        public static readonly TimeSpan FreezeLead = TimeSpan.FromMilliseconds(800);
 
         public static readonly string[] SupportedVideoExtensions =
             { ".mp4", ".mov", ".avi", ".wmv", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg", ".flv", ".ts" };
@@ -353,6 +354,7 @@ namespace ConditioningControlPanel.Services
                 WaitForBubbleCount(strictOverride, path, _running);
                 return true;
             }
+            var specific = path != null;   // WPF PlaySpecificVideo freezes even behind a bubble count
             path ??= PickNext();
             if (path == null)
             {
@@ -363,7 +365,7 @@ namespace ConditioningControlPanel.Services
             }
             // WPF: no Freeze while attention or the bubble-count game needs alert input.
             var freeze = !CoreSettings.Current.AttentionChecksEnabled &&
-                !(CoreEngine.BubbleCount?.IsBusy ?? false) && CoreSubliminal.VideoFreezeProvider != null;
+                (specific || !(CoreEngine.BubbleCount?.IsBusy ?? false)) && CoreSubliminal.VideoFreezeProvider != null;
             if (freeze) try { CoreSubliminal.VideoFreezeProvider?.Invoke(); }
                 catch (Exception ex) { Log.Warning(ex, "VideoService: Freeze callback failed"); }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
@@ -392,7 +394,7 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _preroll = created;
-            created.Change(PreRoll + (freeze ? TimeSpan.FromMilliseconds(800) : TimeSpan.Zero), Timeout.InfiniteTimeSpan);
+            created.Change(PreRoll + (freeze ? FreezeLead : TimeSpan.Zero), Timeout.InfiniteTimeSpan);
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
         }

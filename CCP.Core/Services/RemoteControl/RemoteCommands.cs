@@ -65,11 +65,16 @@ namespace ConditioningControlPanel.Services
                     flash();
                     return null;
                 case "trigger_subliminal":
-                case "trigger_custom_subliminal":
-                    var text = action == "trigger_subliminal" ? CoreSubliminal.PickPhrase() : p?["text"]?.ToString();
-                    if (string.IsNullOrWhiteSpace(text)) return action == "trigger_subliminal" ? "no phrases" : null;   // WPF: blank text is a no-op
+                    var text = CoreSubliminal.PickPhrase();
+                    if (string.IsNullOrWhiteSpace(text)) return "no phrases";
                     if (CoreSubliminal.ShowProvider is not { } sub) return NotOnThisBuild;
                     sub(text);
+                    return null;
+                case "trigger_custom_subliminal":
+                    var customText = p?["text"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(customText)) return null;   // WPF: blank text is a no-op
+                    if (CoreSubliminal.CustomShowProvider is not { } custom) return NotOnThisBuild;
+                    custom(customText);
                     return null;
                 case "start_flash": s.FlashEnabled = true; CoreFlash.Start(); return null;
                 case "stop_flash": CoreFlash.Stop(); return null;
