@@ -34,7 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static readonly OwnershipService HeldOwnership = new(
             () => FriendsHead.Identity()?.UnifiedId, overrideSpec: null, raise: action => action());
 
-        static PrizeOwnership() => HeldOwnership.OwnershipChanged += (_, _) => Changed?.Invoke();
+        // WPF OwnershipService.Changed -> PrizeGrants.GrantsChanged (PrizeGrants.Attach): the launcher refreshes its
+        // grant-gated cards from it (#3375), raised only when the held set actually changed.
+        static PrizeOwnership() => HeldOwnership.OwnershipChanged += (_, _) => { Changed?.Invoke(); PrizeGrants.RaiseGrantsChanged(); };
 
         /// <summary>WPF GrantsChanged: snapshot grants changed, possibly off the UI thread.</summary>
         internal static event Action? Changed;
