@@ -41,6 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
+        public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsForYouOnScreen);
+
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library
