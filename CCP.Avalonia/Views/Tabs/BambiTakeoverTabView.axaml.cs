@@ -280,6 +280,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF's RefreshWallpaperFolderLabel + RefreshWallpaperDurationVisibility.</summary>
         private void RefreshWallpaperBlock(Models.AppSettings s)
         {
+            TxtWallpaperCredit.IsVisible = Services.Fyp.Online.ScrolllerCreditRules.WallpaperMediaEnabled(
+                s.MediaSource, s.HasRemoteMediaConsent);
             TxtWallpaperFolder.Text = string.IsNullOrWhiteSpace(s.WallpaperSourceFolder)
                 ? Loc.Get("label_wallpaper_folder_default")
                 : s.WallpaperSourceFolder;

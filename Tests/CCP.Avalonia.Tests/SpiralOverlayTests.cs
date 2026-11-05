@@ -132,6 +132,42 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task Corner_gif_decode_logs_only_the_extension_not_the_content_path()
+    {
+        await EnsurePlatform();
+        var dir = Directory.CreateTempSubdirectory("ccp-private-corner-").FullName;
+        var path = Path.Combine(dir, "private-scrolller-post.gif");
+        File.WriteAllBytes(path, Convert.FromBase64String(TinyGif));
+        var sink = new DecodeLogCapture();
+        var previous = Serilog.Log.Logger;
+        using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        try
+        {
+            Serilog.Log.Logger = logger;
+            var (frames, _) = SpiralOverlay.Decode(path, fitLongSide: 2);
+            try
+            {
+                Assert.Equal(3, frames.Count);
+                var decoded = Assert.Single(sink.Events, e => e.MessageTemplate.Text.StartsWith("Spiral: decoded"));
+                Assert.Equal("file .gif", Assert.IsType<Serilog.Events.ScalarValue>(decoded.Properties["Path"]).Value);
+                foreach (var e in sink.Events)
+                {
+                    Assert.DoesNotContain(path, e.RenderMessage());
+                    Assert.DoesNotContain("private-scrolller-post", e.RenderMessage());
+                }
+            }
+            finally { foreach (var frame in frames) frame.Dispose(); }
+        }
+        finally { Serilog.Log.Logger = previous; Directory.Delete(dir, true); }
+    }
+
+    private sealed class DecodeLogCapture : Serilog.Core.ILogEventSink
+    {
+        internal readonly System.Collections.Concurrent.ConcurrentQueue<Serilog.Events.LogEvent> Events = new();
+        public void Emit(Serilog.Events.LogEvent e) => Events.Enqueue(e);
+    }
+
+    [Fact]
     public async Task The_shipped_spiral_is_linked_and_decodes_to_the_planned_frames()
     {
         await EnsurePlatform();   // Bitmap needs the render platform; do not rely on test order (P02)

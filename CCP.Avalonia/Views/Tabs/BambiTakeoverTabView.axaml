@@ -593,6 +593,9 @@
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,0,0"/>
                                                     </Grid>
 
+                                                    <fx:ScrolllerCreditLine x:Name="TxtWallpaperCredit" IsVisible="False"
+                                                        FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
+
                                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
                                                     <!-- Wallpaper persistence — every change used to snap back after a hardcoded

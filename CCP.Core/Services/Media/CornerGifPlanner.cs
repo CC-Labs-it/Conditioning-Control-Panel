@@ -26,6 +26,19 @@ namespace ConditioningControlPanel.Services
         /// able to spawn an unbounded number of topmost layered windows.</summary>
         public const int MaxOverlays = 2;
 
+        /// <summary>Source identity allowed in logs: host or file extension, never content paths.</summary>
+        public static string LogWhere(string? source)
+        {
+            if (string.IsNullOrWhiteSpace(source)) return Logging.UrlLog.Empty;
+            try
+            {
+                if (Uri.TryCreate(source, UriKind.Absolute, out var uri))
+                    return uri.IsFile ? "file " + Path.GetExtension(uri.LocalPath) : Logging.UrlLog.Host(uri);
+                return "file " + Path.GetExtension(source);
+            }
+            catch { return Logging.UrlLog.Invalid; }
+        }
+
         /// <summary>Longest-edge target when a slot carries no size of its own.</summary>
         public const int DefaultSize = 300;
 

@@ -274,12 +274,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
                         new PixelSize(plan.Width, plan.Height), new Vector(96, 96), scaled.RowBytes));
                 }
-                Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, path);
+                Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, CornerGifPlanner.LogWhere(path));
                 return (frames, TimeSpan.FromMilliseconds(plan.DelayMs));
             }
             catch (Exception ex)
             {
-                Log.Warning("Spiral: failed to decode {Path}: {E}", path, ex.Message);
+                Log.Warning("Spiral: failed to decode {Path}: {E}", CornerGifPlanner.LogWhere(path), ex.Message);
                 return (frames, TimeSpan.FromMilliseconds(50));
             }
         }
