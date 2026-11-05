@@ -60,6 +60,27 @@ public class TestIsolationTests
         });
 
     [Fact]
+    public System.Threading.Tasks.Task EveryTestHostUsesTheProductionFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.NotNull(global::Avalonia.Application.Current);
+            var fonts = global::Avalonia.Media.FontManager.Current;
+            Assert.Contains("Inter", fonts.DefaultFontFamily.Name);
+            Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily("Fredoka")), out var display));
+            Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka)), out var bundled));
+            Assert.Equal(bundled!.FamilyName, display!.FamilyName);
+            if (!System.OperatingSystem.IsWindows())
+            {
+                Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(
+                    new global::Avalonia.Media.FontFamily("Consolas, Courier New")), out var mono));
+                Assert.Equal("Noto Sans Mono", mono!.FamilyName);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        });
+
+    [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
