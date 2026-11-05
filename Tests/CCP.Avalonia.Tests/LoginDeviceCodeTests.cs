@@ -222,18 +222,22 @@ public sealed class LoginDeviceCodeTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var oldShell = ExternalOpener.Shell;
-        ExternalOpener.Shell = _ => false; // nothing handles the link
+        var old = (ExternalOpener.Shell, ExternalOpener.IsWindows, ExternalOpener.StartBrowserFallback);
+        var attempts = new List<string>();
         var dialog = new LoginDialog();
         try
         {
+            ExternalOpener.Shell = _ => false;
+            ExternalOpener.IsWindows = () => true;
+            ExternalOpener.StartBrowserFallback = info => { attempts.Add(info.FileName); return false; };
             dialog.Show();
             const string url = "http://127.0.0.1:9/oauth"; // loopback: the only kind a sandboxed test may open
             var open = dialog.OpenBrowserAsync(url, "sign in with Patreon");
             await Until(() => dialog.OwnedWindows.OfType<MessageDialog>().Any());
             var box = dialog.OwnedWindows.OfType<MessageDialog>().Single();
+            Assert.Equal(new[] { "explorer.exe", "cmd.exe", "rundll32.exe" }, attempts);
             Assert.Equal(Loc.Get("title_open_link_in_browser"), box.FindControl<TextBlock>("TxtTitle")!.Text);
             Assert.Equal(Loc.GetF("msg_browser_no_default_for", "sign in with Patreon") + Loc.GetF("msg_browser_link_copied", url),
                 box.FindControl<TextBlock>("TxtMessage")!.Text);
@@ -243,7 +247,7 @@ public sealed class LoginDeviceCodeTests
         finally
         {
             dialog.Close();
-            ExternalOpener.Shell = oldShell;
+            (ExternalOpener.Shell, ExternalOpener.IsWindows, ExternalOpener.StartBrowserFallback) = old;
         }
     });
 }
