@@ -285,7 +285,8 @@ public sealed class LauncherWindowTests
         Assert.False(chip.IsOpen);
         Assert.False(w.IsVisible);
         Assert.True(shell.IsVisible);
-        Assert.Equal("premium", shell.CurrentTab);
+        // WPF 7.2.2 MainWindow.InviteTicket.cs OpenInvitesCard: the invites card lives in the account settings section.
+        Assert.Equal("appsettings", shell.CurrentTab);
     });
 
     [Fact]
