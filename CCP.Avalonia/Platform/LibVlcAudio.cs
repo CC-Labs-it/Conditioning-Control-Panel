@@ -232,6 +232,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 catch { voice.Dispose(); throw; }
             }
             catch { if (!owned) { media?.Dispose(); input.Dispose(); } throw; }
+        // WPF AudioService.PlaySound: unlike a one-shot cue, a muted sound remains live for unmute.
+        internal MindWipePlayer.IVoice? PlaySound(string path, float volume,
+            Action<TimeSpan> started, Action finished)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+            var voice = NewVoice(path, finished);
+            voice.UsePreferredDevice = true;
+            voice.Started = ms => started(TimeSpan.FromMilliseconds(ms));
+            voice.Volume = volume;
+            return voice.Play() ? voice : null;
         }
 
         private Voice NewVoice(string path, Action onEnded)
@@ -249,6 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
             internal Action<long>? Started;
             internal volatile bool Failed;
+            internal bool UsePreferredDevice;
             public double Volume
             {
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.

@@ -270,6 +270,7 @@ namespace ConditioningControlPanel.Services
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
             CoreBubbles.Stop(); // WPF SessionEngine.cs:521
+            CoreAudio.StopSound();   // WPF SessionEngine.cs:532, companion Audio action too
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }

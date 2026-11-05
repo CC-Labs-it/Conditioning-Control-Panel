@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("quiz", _ => QuizWindow.ForceCloseAll()), // WPF MainWindow.xaml.cs:2080
             new("companion-level-sound", sh => sh?.StopCompanionLevelSound()), // WPF App.xaml.cs:1830 kill-audio intent; also stop the shell-owned milestone handle.
             new("mantra-chant", _ => Platform.MantraChantHost.StopForPanic()), // WPF App.xaml.cs:1880: stop and clear opt-in
+            new("companion-audio", _ => CompanionEffects.StopAudio()),     // WPF b1a39bc77 KillAllAudio -> Audio.StopSound
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
@@ -104,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // all precede StopEngine. WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does,
             // so the leash task parks before StopEngine and before its lock card closes.
             new("engine", _ => MainShellWindow.StopEngine(),
-                After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player"]),
+                After: ["companion-audio", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
             new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.
