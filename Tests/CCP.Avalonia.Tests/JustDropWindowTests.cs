@@ -120,5 +120,22 @@ public sealed class JustDropWindowTests
     });
 
     [Fact]
+    public void TheStripPillOpensTheShopOnlyAfterOpenIt() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("presets");
+        var strip = shell.PageStrip!;
+        strip.PillFor("justdrop")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(Open());                              // the pill only asks
+        var yes = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(strip.ConfirmationCard!)
+            .OfType<global::Avalonia.Controls.Button>().Single(b => b.Name == "NavOpenWindowYes");
+        yes.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(Open());                           // Open it -> ShowTab -> OpenJustDrop -> GameWindow.Launch
+        Assert.Equal("presets", shell.CurrentTab);
+    });
+
+    [Fact]
     public void ThePremiumShelfCardReachesTheDoor() => Assert.True(ExclusivesTabView.IsOnThisBuild("justdrop"));
 }
