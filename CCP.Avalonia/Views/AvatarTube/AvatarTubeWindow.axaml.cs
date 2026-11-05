@@ -1476,7 +1476,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         /// <summary>
         /// The voice for one bubble, with WPF's volume curves verbatim: a bark voiceline at
-        /// master^1.5 * 0.85, a phrase clip at * 0.56, the canned giggle at * 0.7. MasterVolume 0
+        /// master^1.5 * 0.85, a phrase clip at * 0.56, both scaled by CompanionVoiceGain; the canned giggle at * 0.7. MasterVolume 0
         /// means "attempt no audio at all" (the mute egg), so it returns before touching a file.
         /// <para>"Mute Voice Lines" (#846) silences only the spoken VO and drops back to a sound
         /// cue, so she still reads as present - the single choke point every voiced line funnels
@@ -1490,10 +1490,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // Tests capture delivery here, before file lookup or native audio.
         internal Action<bool, string?, bool, Action?>? SpeechAudioPlayer;
 
-        private static bool MayVoice(bool unprompted) =>
+        // WPF CompanionIdleVoice.ShouldVoiceNow. CoreSession mirrors CoreEngine/App.Sessions at runtime
+        // (App.axaml.cs, SessionRunner); either seam is read so headless tests can drive both.
+        internal static bool MayVoice(bool unprompted) =>
             ConditioningControlPanel.Services.Companion.CompanionVoicePolicy.ShouldVoice(
-                unprompted, CoreEngine.IsRunning, CoreSession.IsSessionRunning,
-                App.Sessions?.IsPaused == true, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
+                unprompted, CoreEngine.IsRunning || CoreSession.IsEngineRunning, CoreSession.IsSessionRunning,
+                App.Sessions?.IsPaused == true || CoreSession.IsSessionPaused, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
                 ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
 
         private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
@@ -1513,9 +1515,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         return;
                     }
                     if (!File.Exists(phraseAudioPath)) return;
+                    var gain = ConditioningControlPanel.Services.CompanionVoiceGain.Current(barkVoice ? ConditioningControlPanel.Services.CompanionVoiceGain.BarkTrim : ConditioningControlPanel.Services.CompanionVoiceGain.EventTrim);
+                    if (gain <= 0f) return;
                     handedOff = true;
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
-                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
+                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, gain,
                                           barkVoice ? "bark-voice" : "phrase-audio", onFinished: onSpoken);
                     return;
                 }
