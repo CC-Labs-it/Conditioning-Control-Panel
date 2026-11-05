@@ -311,6 +311,20 @@ namespace ConditioningControlPanel.Services
             if (!done) CoreDispatch.Post(ReleaseOnLeave);
         }
 
+        /// <summary>WPF ReleaseHoldingsForExit (RemoteControlService.V2.cs:261, main bafe52cfc): the app exits with a
+        /// controller connected, so hand back what it holds BEFORE the final save, or the save keeps its strict
+        /// lock as the wearer's own. Also refuses a command already queued (the leave generation). Idempotent.</summary>
+        public void ReleaseHoldingsForExit()
+        {
+            if (!IsActive) return;
+            _loop?.Cancel();
+            Interlocked.Increment(ref _leaveGeneration);
+            Remote.RemoteWearer.HandBackAllButStrict();
+            Remote.RemoteWearer.ReleaseSafetyState();
+            Remote.RemoteWearer.Drop();
+            Log.Information("[RemoteControl] Exit with a controller connected: its holdings handed back");
+        }
+
         private void ReleaseOnLeave()
         {
             RemoteCommands.RemoteHaptics.Stop();
