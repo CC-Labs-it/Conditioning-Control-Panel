@@ -143,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _pollInFlight;
         private bool _pollDisabled;
         private bool _videoNavigated;
+        private int _videoGeneration;
 
         // One per window so EnhancementFetcher's per-session cache is worth having; disposed in
         // Window_Closing because it owns an HttpClient and its guarded handler.
@@ -674,6 +675,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// </summary>
         private void LoadLocalVideo(string path)
         {
+            _videoGeneration++;
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -718,6 +720,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void LoadVideoUrl(string url)
         {
+            _videoGeneration++;
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
@@ -932,9 +935,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (_pollInFlight || _pollDisabled || !_videoNavigated) return;
             _pollInFlight = true;
+            var generation = _videoGeneration;
             try
             {
                 var raw = await _videoBrowser.InvokeScriptAsync(DeeperPreview.ReadTime());
+                if (generation != _videoGeneration || !_videoNavigated) return;
 
                 var parts = DeeperPreview.Unquote(raw).Split('|');
                 if (parts.Length != 3) return;
@@ -960,6 +965,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
             catch (Exception ex)
             {
+                if (generation != _videoGeneration) return;
                 _pollDisabled = true;
                 Log.Debug("EnhancementPlayer: video time poll disabled after {Error}", ex.Message);
             }
@@ -1156,6 +1162,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void ShowMediaPaneFor(string? mediaType)
         {
             var isVideo = string.Equals(mediaType, MediaTypes.Video, StringComparison.OrdinalIgnoreCase);
+            if (!isVideo && (_isVideoMode || _videoNavigated))
+            {
+                // WPF EnhancementPlayerWindow.xaml.cs:1325: stop the old page before hiding it.
+                _videoGeneration++;
+                _videoNavigated = false;
+                _ = _videoBrowser.InvokeScriptAsync(
+                    "(function(){document.querySelectorAll('video,audio').forEach(function(v){v.pause();});})()");
+                _videoBrowser.AllowNavigation = u => u.AbsoluteUri == "about:blank";
+                _videoBrowser.Source = new Uri("about:blank");
+                _isPlaying = false;
+                _currentSec = _durationSec = 0;
+                _txtPlayPauseGlyph.Kind = IconKind.Play;
+                _txtCurrent.Text = _txtTotal.Text = "0:00";
+                _txtVideoStatus.IsVisible = false;
+            }
             _isVideoMode = isVideo;
             _audioFileRow.IsVisible = !isVideo;
             _audioPane.IsVisible = !isVideo;
