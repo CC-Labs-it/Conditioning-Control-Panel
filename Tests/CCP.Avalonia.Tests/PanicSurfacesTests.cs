@@ -144,6 +144,7 @@ public sealed class PanicSurfacesTests
         "descent-fuse",
         "deeper-player-fullscreen",
         "deeper-editor-audio",
+        "discord-share-prompt",
         "friend-notices", "knock-cards",
         "quick-recal",
         "asset-preview",
