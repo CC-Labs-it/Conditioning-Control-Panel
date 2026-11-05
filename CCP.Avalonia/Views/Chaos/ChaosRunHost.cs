@@ -6,6 +6,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
@@ -40,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips,
-    /// lessons/first-times, the announcer and the achievement credit; slow-mo,
+    /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; only the Gif Rain payload fires; the
     /// first-time bonus and ripple-denial pop text. Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
@@ -65,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
+        private static int _regenPopCount;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
@@ -157,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _waveDetonatedAt = _state.Detonated;
             _lastComboBigFired = 0;
             _invulnUntilUtc = DateTime.MinValue;
+            _regenPopCount = 0;
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
             _spawning = true;
@@ -224,6 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
             EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
+            CountRegenPop();   // WPF ChaosModeService :1768
             if (spec.IsPrism)
             {
                 FireScaledPayload(spec.Payload);
@@ -236,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return;
             }
             spec.Payload.Fire();   // benign pop = a treat
+            FirstTime(ChaosFirstTimes.Taste);   // WPF ChaosModeService :1844
             if (spec.VariantId == "subliminal") ChaosLessons.Tick("intrusive_thoughts");   // WPF OnTreatPopped
             bool focusWasLow = _state.FocusLow;
             double pts = ChaosFieldMath.ApplyTreatPop(_state, spec, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
@@ -261,6 +266,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Label(b, "SNAP", SnapColor);   // WPF CompleteDefuse :4577 / Pop :4684
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
+            CountRegenPop();   // WPF ChaosModeService :2001
+            FirstTime(ChaosFirstTimes.Snap);
+            ChaosRunLessons.OnDefuseCompleted(fuseSecLeft, b.DefusedViaChannel);
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: false, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
             // WPF ChaosLessonHooks.cs:161, 250: live rain remains busy after its spawn window.
@@ -286,7 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
             CheckComboMilestone();
-            // ponytail: defuse lessons, first-times, regen, aftermath and
+            // ponytail: slow_fuses/blindfold lessons, aftermath and
             // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
         }
 
@@ -406,6 +414,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Pulse(Color.FromRgb(255, 200, 60), 0.4);
             }
             else Pulse(Color.FromRgb(255, 170, 80), 0.04 + 0.08 * ((combo % 10) / 10.0));
+        }
+
+        /// <summary>WPF CountRegenPop (:2427), Slow Recovery: every N pops regrow one resistance,
+        /// up to what the run descended with.</summary>
+        private static void CountRegenPop()
+        {
+            if (_state == null || _state.ShieldRegenPops <= 0) return;
+            if (_state.Shields >= _state.StartShields) { _regenPopCount = 0; return; }
+            if (++_regenPopCount < _state.ShieldRegenPops) return;
+            _regenPopCount = 0;
+            _state.Shields += 1;
+            _state.PushEvent($"♥ {Loc.Get("chaos_resistance_regrows")}");
+            Pulse(Color.FromRgb(120, 220, 160), 0.18);   // SHIELD_GAIN_COLOR
+        }
+
+        /// <summary>WPF ChaosFirstTimes.TryAward + OnFirstTimeAwarded (:209): bank once, then a feed
+        /// line and a float where the hand was.</summary>
+        private static void FirstTime(string bonusId)
+        {
+            if (_state == null || ChaosFirstTimes.IsAwarded(bonusId) || !ChaosFirstTimes.TryAward(bonusId)) return;
+            int amount = ChaosFirstTimes.Amounts[bonusId];
+            string text = $"+{amount} {ChaosGlyphs.Drops} {ChaosFirstTimes.Labels.GetValueOrDefault(bonusId, bonusId)}";
+            _state.PushEvent(text);
+            PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY - 30, text, Color.FromRgb(0xC8, 0xA8, 0xFF));
         }
 
         /// <summary>WPF ShowPopScore (:1685), Blank Eyes.</summary>

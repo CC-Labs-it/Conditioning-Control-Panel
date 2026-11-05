@@ -1,12 +1,14 @@
 using System;
 using System.IO;
 using System.Linq;
+using BindingFlags = System.Reflection.BindingFlags;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
