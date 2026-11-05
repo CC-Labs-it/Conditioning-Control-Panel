@@ -19,6 +19,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Invites;
 using ConditioningControlPanel.Services.Vault;
 using Serilog;
+using ConditioningControlPanel.Services.Funnel;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 
@@ -61,6 +62,7 @@ public sealed class VaultGateDialog : Window
     private readonly int _tier;
     private readonly Action _signIn;
     // WPF 5265111bc: one plan snapshot drives prices and checkout links.
+    private string _funnelKey = "vault";   // WPF VaultGateDialog: the funnel beacon names the gate it came from
     private PlanSet _plans = PlanCatalog.Current;
     private PriceCurrency _currency => VaultOffer.HeadlineCurrency(_plans);
     private readonly List<(StackPanel Slot, int Tier, bool Compact, bool Yearly, bool Hints)> _priceSlots = new();
@@ -102,8 +104,10 @@ public sealed class VaultGateDialog : Window
     {
         var feature = VaultOffer.Feature(featureKey);
         var dialog = new VaultGateDialog(feature, Math.Max(tier, feature?.Tier ?? 1), signIn);
+        dialog._funnelKey = FunnelBeacon.Clean(featureKey) is { Length: > 0 } key ? key : "vault";
         dialog.BuildOffer();
         Present(dialog, owner);
+        FunnelBeacon.Post("gate_shown", dialog._funnelKey, FunnelBeacon.TierName(dialog._tier));   // WPF :128
         _ = dialog.FillPlansAsync();
         _ = dialog.FillAsyncBits();
         return dialog;
@@ -113,8 +117,10 @@ public sealed class VaultGateDialog : Window
     public static VaultGateDialog ShowEnding(Window? owner, DateTime grantUntilUtc, Action signIn)
     {
         var dialog = new VaultGateDialog(null, 1, signIn);
+        dialog._funnelKey = "invite_ending";
         dialog.BuildEnding(grantUntilUtc);
         Present(dialog, owner);
+        FunnelBeacon.Post("gate_shown", dialog._funnelKey, "basic");   // WPF :149
         _ = dialog.FillPlansAsync();
         return dialog;
     }
@@ -336,6 +342,7 @@ public sealed class VaultGateDialog : Window
 
     private void OpenPlan(int tier, string from)
     {
+        FunnelBeacon.Post("cta_clicked", _funnelKey, "patreon");   // WPF :399
         Log.Information("[VaultGate] open plan {Tier} from {From}", tier, from);
         if (!Launch(_plans.For(tier).PatreonUrl)) Log.Warning("[VaultGate] checkout link refused or failed");
     }
@@ -352,6 +359,7 @@ public sealed class VaultGateDialog : Window
 
     private void OpenCard(int tier, string from)
     {
+        FunnelBeacon.Post("cta_clicked", _funnelKey, "web");   // WPF :426
         Log.Information("[VaultGate] open card checkout ({Plan}) from {From}", tier, from);
         if (!Launch(PlanCatalog.WebUrlFor(_plans.For(tier), "panel"))) Log.Warning("[VaultGate] card checkout link refused or failed");
     }

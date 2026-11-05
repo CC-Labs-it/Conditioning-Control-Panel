@@ -43,7 +43,7 @@ public static class FunnelBeacon
             var body = Body(evt, a, b);
             if (body == null) return;
             // Offline Mode promises no outside connections: the count is not worth breaking that.
-            if (App.Settings?.Current?.OfflineMode == true) return;
+            if (CoreSettings.Current.OfflineMode) return;
             var root = BaseUrlOverride ?? BackRoom.BackRoomApi.BaseUrl;
             if (string.IsNullOrWhiteSpace(root)) return;
             var url = root.TrimEnd('/') + Path;
