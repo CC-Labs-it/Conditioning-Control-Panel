@@ -130,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public event Action<GazeSide>? OnGazeSide;
         /// <summary>Tests: what a classified frame publishes, without a face in front of a camera.</summary>
         internal void RaiseGazeSideForTest(GazeSide side) => OnGazeSide?.Invoke(side);
+        internal void RaiseMouthForTest() => OnMouthOpen?.Invoke();
         internal void RaiseBlinkForTest() => OnBlink?.Invoke();
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>
         public event Action<ScreenPoint>? OnGazeMove;
