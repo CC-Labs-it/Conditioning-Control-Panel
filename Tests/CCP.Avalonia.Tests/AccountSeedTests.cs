@@ -17,6 +17,7 @@ namespace CCP.Avalonia.Tests;
 /// FAIL CLOSED on any exception.</summary>
 public sealed partial class AccountSeedTests : IDisposable
 {
+    private readonly Action<string?, string?, PrizesBlock?, string>? _oldPrizes = ProviderSubscription.PrizesSink;
     private readonly Func<string, string?>? _oldGet = CoreSecrets.RetrieveProvider;
     private readonly Action<string, string?>? _oldSet = CoreSecrets.StoreProvider;
     private readonly Dictionary<string, string?> _secrets = new();
@@ -30,6 +31,7 @@ public sealed partial class AccountSeedTests : IDisposable
 
     public void Dispose()
     {
+        ProviderSubscription.PrizesSink = _oldPrizes;
         CoreSecrets.RetrieveProvider = _oldGet;
         CoreSecrets.StoreProvider = _oldSet;
         Unseed();

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel.Services.Prizes;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
@@ -76,7 +77,28 @@ namespace ConditioningControlPanel.Avalonia.Platform
             GrantsChanged?.Invoke();
         }
 
-        /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
+        /// <summary>The sync push's feed (WPF ProfileSyncService.PrizeFeed): the requested account's grants.</summary>
+        internal static void ApplySyncSnapshot(string requestedFor, PrizesBlock? prizes)
+        {
+            if (prizes?.Grants != null) ApplySnapshot(requestedFor, prizes.Revision, prizes.Grants);
+        }
+
+        /// <summary>Provider validation replies: only an answer for the account that asked lands.</summary>
+        internal static void ApplyValidateSnapshot(string? requestedFor, string? answeredFor, PrizesBlock? prizes, string source)
+        {
+            if (!string.IsNullOrEmpty(requestedFor) && requestedFor == answeredFor)
+                ApplySyncSnapshot(requestedFor, prizes);
+        }
+
+        /// <summary>The current account's held grants, or null before any snapshot for it (cannot validate yet).</summary>
+        internal static ISet<string>? KnownGrants()
+        {
+            var current = FriendsHead.Identity()?.UnifiedId;
+            lock (Gate) return current != null && current == _account && HeldOwnership.Revision > 0
+                ? new HashSet<string>(HeldOwnership.Grants, StringComparer.Ordinal) : null;
+        }
+
+        /// <summary>Logout and test cleanup: forget every held snapshot.</summary>
         internal static void ResetHeld() { lock (Gate) { _account = null; HeldOwnership.Clear(); } }
 
         /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>

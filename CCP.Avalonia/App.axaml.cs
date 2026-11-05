@@ -473,6 +473,8 @@ namespace ConditioningControlPanel.Avalonia
         {
             AvaloniaXamlLoader.Load(this);
             ConditioningControlPanel.Services.Chaos.ChaosRunState.IconResolver = Views.Chaos.ChaosBoonBarArt.Resolve;
+            ConditioningControlPanel.Services.PlayerLook.KnownIdsProvider = () =>
+                (ConditioningControlPanel.Services.ShopCosmeticsRegistry.AllAvatarIds(), ConditioningControlPanel.Services.ShopCosmeticsRegistry.FrameIds());
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
@@ -743,10 +745,8 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
                     // MainWindow OnLevelUp -> sync, ProfileSyncService.AttachXpNudge outside sessions).
-                    var sync = Platform.AccountSeed.Sync = new SyncPush(
-                        () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
-                        sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown, DescentReader = Descent };
+                    var sync = Platform.AccountSeed.Sync = Platform.AccountSeed.NewSync(
+                        () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true);
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));

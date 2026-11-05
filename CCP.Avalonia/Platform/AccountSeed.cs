@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Net.Http;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -35,6 +37,7 @@ internal static class AccountSeed
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
     internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
     {
+        ProviderSubscription.PrizesSink = PrizeOwnership.ApplyValidateSnapshot;
         make ??= prefix => new ProviderSubscription(prefix);
         makeDiscord ??= peer => new DiscordAccount(() => peer);
         ProviderSubscription patreon, substar;
@@ -148,6 +151,15 @@ internal static class AccountSeed
         }
     }
 
+    /// <summary>The sync configuration used by desktop startup and account tests.</summary>
+    internal static SyncPush NewSync(Func<IEnumerable<string>?> unlocked, Func<bool> running, HttpMessageHandler? http = null)
+        => new(unlocked, running, http, Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
+        {
+            PrizesReceived = PrizeOwnership.ApplySyncSnapshot,
+            Countdown = App.DescentCountdown,
+            DescentReader = App.Descent,
+        };
+
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
     internal static SyncPush? Sync;
 
@@ -223,7 +235,6 @@ internal static class AccountSeed
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         PrizeOwnership.NoteAccount(id);
-        if (Sync is { } prizeSync) prizeSync.PrizesReceived = (account, prizes) => PrizeOwnership.ApplyProfile(account, account, prizes, "V2 sync");
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
         {
@@ -271,6 +282,7 @@ internal static class AccountSeed
     {
         if (!accountDeleted && Sync is { Loaded: true } sync) await sync.PushAsync("pre-logout", waitForGate: true);
         Sync?.StopHeartbeat();
+        PrizeOwnership.ResetHeld();
         SecretStore.ClearFailed = false;
         Patreon?.Logout();
         Discord?.Logout();
