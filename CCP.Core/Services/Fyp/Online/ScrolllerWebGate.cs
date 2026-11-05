@@ -179,6 +179,10 @@ internal static partial class ScrolllerWebGate
         }
     }
 
+    /// <summary>Every WebView2 core passes through <see cref="Attach"/>; the WPF head sets this to
+    /// WebAudioWatch.Attach (#1540 / #1549), which writes to its head-only EngineOffAudioLog.</summary>
+    public static Action<CoreWebView2>? AttachHook;
+
     /// <summary>Hooks the gate onto a CoreWebView2. Safe to call twice on the same core; never
     /// throws (a host that cannot be gated still runs, and logs why).</summary>
     public static void Attach(CoreWebView2? core)
@@ -186,6 +190,7 @@ internal static partial class ScrolllerWebGate
         if (core == null) return;
         try
         {
+            AttachHook?.Invoke(core);
             if (Attached.TryGetValue(core, out _)) return;
             var state = new CoreState();
             Attached.Add(core, state);

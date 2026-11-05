@@ -6,10 +6,20 @@ import { expandWardrobe as expandTailoring } from './wardrobe-tailoring.js';
 import { createWardrobeColors } from './wardrobe-colors.js';
 import { expandWardrobe as expandJewelry } from './wardrobe-jewelry.js';
 import { installReviewStudio } from './wardrobe-review.js';
-import { hosted, BIG_ASSETS, reviewAllowed, qaAllowed, hostItems, hostColors, postLook, postHost, isLocked, lockNote } from './host-bridge.js';
+import { hosted, BIG_ASSETS, reviewAllowed, qaAllowed, hostItems, hostColors, postLook, postHost, isLocked, toHostLook, bootCompanion, bootCalm, bootStrings, bootSizes } from './host-bridge.js';
+import { createLoadProgress, createRevealGate, paintCover, prefetchModule, reveal, LOAD_STR } from './wardrobe-loading.js';
+import { installBaker } from './bake.js';
+import { createShop, listenToHost, paintShop, paintCompanion, STR as SHOP } from './wardrobe-shop.js';
+const shop=createShop({isLocked,post:postHost,companion:bootCompanion,nameOf:key=>{const at=key.indexOf(':');const item=findItem(key.slice(0,at),key.slice(at+1));return item?.name||item?.label||'';}});
+const COLOR_CHANNELS=['fabric','trim','hair','skin','eyes','lips','nails','shoes','accessories'];
 
 const $ = id => document.getElementById(id);
 const canvas = $('preview');
+// Boot cover (wardrobe-loading.js): opaque until the first dressed frame, a real byte count, then OUT/IN.
+paintCompanion(document,shop.companion);
+const loadText={...LOAD_STR,...bootStrings},loadProgress=createLoadProgress({sizes:bootSizes}),revealGate=createRevealGate();
+let coverQueued=false;const paintLoad=()=>{if(coverQueued)return;coverQueued=true;requestAnimationFrame(()=>{coverQueued=false;if(!revealGate.open&&!$('loading').classList.contains('error'))paintCover(document,loadProgress,loadText,shop.companion);});};paintLoad();
+const bootCalmNow=()=>bootCalm||shop.calm||matchMedia('(prefers-reduced-motion: reduce)').matches;
 const stage = canvas.parentElement;
 const STORE = 'rain-wardrobe-v1';
 const COLOR_STORE='rain-wardrobe-colors-v1';
@@ -27,8 +37,8 @@ const state = { ready:false, slot:'dress', look:{}, animation:'idle', paused:mot
 const singleSlots=['dress','hair','skin','shoes','legwear','arms','ankles'];
 const meshSlots=['dress','hair','accessories','shoes','legwear','arms','ankles'];
 let expansionUpdates=[],coveredNodes=new Set(),transitionStart=0,transitionTimer,transitionOrbit=0;
-const garmentUniforms={mode:{value:1},color:{value:new THREE.Color(.075,.012,.038)},opacity:{value:.78},density:{value:5},lower:{value:.129},upper:{value:.713},hideBelow:{value:-1},bodyMaskRange:{value:new THREE.Vector2(0,-1)},bodyMaskHem:{value:new THREE.Vector4(0,0,0,-1)}};
-let demoTimers=[],demoPrevious=null;
+const garmentUniforms={mode:{value:1},color:{value:new THREE.Color(.075,.012,.038)},opacity:{value:.78},density:{value:5},lower:{value:.129},upper:{value:.713},hideBelow:{value:-1},bodyMaskRange:{value:new THREE.Vector2(0,-1)},bodyMaskHem:{value:new THREE.Vector4(0,0,0,-1)},strand:{value:.092}};
+let demoTimers=[],demoPrevious=null,onFirstFrame=null,hostInitWaiter=null;
 const titles = {dress:['The dress.','Pick a silhouette.'],hair:['A new mood.','Keep it loose. Change it up.'],skin:['Your palette.','A little warmth. A different glow.'],accessories:['Little details.','Wear one. Wear a few.'],shoes:['From the ground up.','A different finishing touch.'],legwear:['The next layer.','Sheer, patterned or tailored.'],looks:['The whole look.','One touch. Everything together.']};
 titles.arms=['On your arms.','Bracelets, cuffs and bands.'];titles.ankles=['A little glint.','Anklets, ribbons and cuffs.'];
 const knownAnimations = [{id:'idle',name:'Idle'},{id:'greeting',name:'Hello'},{id:'listening',name:'Listen'},{id:'giggle',name:'Giggle'},{id:'smirk',name:'Smirk'},{id:'jump',name:'Cheer'}];
@@ -58,10 +68,10 @@ scene.add(new THREE.HemisphereLight(0xfff6ec,0xc4b9b5,2.1));
 const key=new THREE.DirectionalLight(0xfff3e5,3.0);key.position.set(-3,5,4);scene.add(key);
 const fill=new THREE.DirectionalLight(0xdce7ff,.8);fill.position.set(3,2,3);scene.add(fill);
 const rim=new THREE.DirectionalLight(0xffe5dc,1.6);rim.position.set(1,3,-3);scene.add(rim);
-const ground=new THREE.Mesh(new THREE.CircleGeometry(.7,64),new THREE.MeshBasicMaterial({color:0xb8aaa0,transparent:true,opacity:.13,depthWrite:false}));
+const ground=new THREE.Mesh(new THREE.CircleGeometry(.7,64),new THREE.MeshBasicMaterial({color:0xff69b4,transparent:true,opacity:.07,depthWrite:false}));
 ground.rotation.x=-Math.PI/2;ground.position.y=.002;scene.add(ground);
 
-function fail(error){const message=error?.message || String(error);errors.push(message);postHost({type:'boot-error',msg:message});state.ready=false;console.error(error);$('loading').hidden=false;$('loading').classList.add('error');$('loadMessage').textContent=`The live model could not load. ${message}`;$('liveLabel').textContent='PREVIEW UNAVAILABLE';}
+function fail(error){revealGate.fail();document.body.classList.remove('booting','entering');const message=error?.message || String(error);errors.push(message);postHost({type:'boot-error',msg:message});state.ready=false;console.error(error);$('loading').hidden=false;$('loading').classList.add('error');$('loadMessage').textContent=`The live model could not load. ${message}`;$('liveLabel').textContent='PREVIEW UNAVAILABLE';}
 function resize(){width=stage.clientWidth;height=stage.clientHeight;renderer.setSize(width,height,false);camera.aspect=width/Math.max(1,height-controlSpace);camera.updateProjectionMatrix();}
 new ResizeObserver(resize).observe(stage);resize();
 
@@ -75,14 +85,15 @@ function render(now){
   const frameStart=performance.now();
   updateTransition(now);updateCamera(dt);if(mixer&&!state.paused){mixer.update(dt);elapsed+=dt;}
   for(const update of expansionUpdates)update(state.paused?0:dt,state.look);
-  drawPreview();
+  if(!state.ready)return; // never draw a half-built Rain; the cover is opaque anyway
+  drawPreview();if(!revealGate.open&&revealGate.mark('drawn'))onFirstFrame?.();
   frameCount++;frameCpuTotal+=performance.now()-frameStart;
   if(now-perfWindow>=1000){perf.fps=Math.round(frameCount*1000/(now-perfWindow));perf.frameCpuMs=Number((frameCpuTotal/frameCount).toFixed(2));perf.frameIntervalMs=Number(interval.toFixed(2));frameCount=0;frameCpuTotal=0;perfWindow=now;}
   if(qaPanel&&now-qaLast>=500){qaPanel.textContent=JSON.stringify(getDebugState(),null,2);qaLast=now;}
 }
 function drawPreview(){
   renderer.setScissorTest(false);renderer.setViewport(0,0,width,height);renderer.setClearColor(0xede9e2,0);renderer.clear();renderer.setViewport(0,controlSpace,width,height-controlSpace);renderer.render(scene,camera);
-  if(state.tube&&avatar){const tw=118,th=190,x=25,y=132;renderer.setScissorTest(true);renderer.setScissor(x,y,tw,th);renderer.setViewport(x,y,tw,th);renderer.setClearColor(0xf8f5ef,1);renderer.clear();tubeCamera.aspect=tw/th;tubeCamera.position.set(target.x,1.04,3.65);tubeCamera.lookAt(0,1.04,0);tubeCamera.updateProjectionMatrix();renderer.render(scene,tubeCamera);renderer.setScissorTest(false);}
+  if(state.tube&&avatar){const tw=118,th=190,x=25,y=132;renderer.setScissorTest(true);renderer.setScissor(x,y,tw,th);renderer.setViewport(x,y,tw,th);renderer.setClearColor(0x1c1c35,1);renderer.clear();tubeCamera.aspect=tw/th;tubeCamera.position.set(target.x,1.04,3.65);tubeCamera.lookAt(0,1.04,0);tubeCamera.updateProjectionMatrix();renderer.render(scene,tubeCamera);renderer.setScissorTest(false);}
 }
 requestAnimationFrame(render);
 if(qaMode){
@@ -120,7 +131,7 @@ function validLook(input={}){
 }
 function selected(slot,id){if(slot==='looks'){const bundle=findItem(slot,id)?.look;return bundle&&singleSlots.every(s=>!bundle[s]||bundle[s]===state.look[s])&&JSON.stringify([...(bundle.accessories||[])].sort())===JSON.stringify([...(state.look.accessories||[])].sort());}return slot==='accessories'?state.look.accessories?.includes(id):state.look[slot]===id;}
 function finishTransition(){clearTimeout(transitionTimer);transitionOrbit=0;state.transition.active=false;state.transition.progress=1;$('swapFx')?.classList.remove('playing');}
-function beginTransition(){finishTransition();state.transition.sequence++;if(!state.ready||state.paused||motionPreference.matches)return;transitionStart=performance.now();state.transition.active=true;state.transition.progress=0;const fx=$('swapFx');void fx.offsetWidth;fx.classList.add('playing');transitionTimer=setTimeout(()=>{finishTransition();refreshQa();},850);}
+function beginTransition(){finishTransition();state.transition.sequence++;if(!state.ready||state.paused||motionPreference.matches||shop.calm)return;transitionStart=performance.now();state.transition.active=true;state.transition.progress=0;const fx=$('swapFx');void fx.offsetWidth;fx.classList.add('playing');transitionTimer=setTimeout(()=>{finishTransition();refreshQa();},850);}
 function updateTransition(now){if(!state.transition.active)return;const t=Math.min(1,(now-transitionStart)/850);state.transition.progress=Number(t.toFixed(3));transitionOrbit=Math.sin(t*Math.PI)*.14*Math.sin(t*Math.PI*2);if(t>=1)finishTransition();}
 motionPreference.addEventListener('change',()=>{if(motionPreference.matches)finishTransition();});
 function applyLook(input,{persist=!reviewMode}={}){
@@ -150,11 +161,11 @@ function applyLook(input,{persist=!reviewMode}={}){
     for(const mat of matches){const values=typeof props==='string'?{color:props}:props;if(values.color&&mat.color)mat.color.set(values.color);if(values.roughness!==undefined)mat.roughness=values.roughness;}
   }
   colorController?.apply(colorOverrides,look);
-  const changed=JSON.stringify(state.look)!==JSON.stringify(look);state.look=look;state.swaps++;if(changed)beginTransition();if(persist){if(postLook(look,colorOverrides))$('saveStatus').textContent='Saved';else try{localStorage.setItem(STORE,JSON.stringify(look));$('saveStatus').textContent='Saved on this device';}catch{$('saveStatus').textContent='Saved for this visit';}}
+  const changed=JSON.stringify(state.look)!==JSON.stringify(look);state.look=look;state.swaps++;if(changed)beginTransition();if(hosted)shopSync(persist);else if(persist){try{localStorage.setItem(STORE,JSON.stringify(look));$('saveStatus').textContent='Saved on this device';}catch{$('saveStatus').textContent='Saved for this visit';}}
   for(const update of expansionUpdates)update(0,look);
   paintChoices();paintEquipped();paintColorControls();refreshQa();return true;
 }
-function toggleItem(slot,id){if(isLocked(slot,id))return;stopDemo(false);if(slot==='looks'){applyLook({...info.defaultLook,...findItem(slot,id).look});return;}const next=structuredClone(state.look);if(slot==='skin'&&colorOverrides.skin){delete colorOverrides.skin;saveColors();}if(slot==='accessories'){if(coveredByHood(id))return;next.accessories=next.accessories.includes(id)?next.accessories.filter(x=>x!==id):[...next.accessories.filter(x=>accessoryGroup(x)!==accessoryGroup(id)),id];}else next[slot]=id;applyLook(next);}
+function toggleItem(slot,id){stopDemo(false);if(slot==='looks'){applyLook({...info.defaultLook,...findItem(slot,id).look});return;}const next=structuredClone(state.look);if(slot==='skin'&&colorOverrides.skin){delete colorOverrides.skin;saveColors();}if(slot==='accessories'){if(coveredByHood(id))return;next.accessories=next.accessories.includes(id)?next.accessories.filter(x=>x!==id):[...next.accessories.filter(x=>accessoryGroup(x)!==accessoryGroup(id)),id];}else next[slot]=id;applyLook(next);}
 function stopDemo(restore=true){
   for(const timer of demoTimers)clearTimeout(timer);demoTimers=[];
   if(state.demo&&restore&&demoPrevious)applyLook(demoPrevious,{persist:false});
@@ -252,7 +263,7 @@ function art(item,slot){
 }
 function paintChoices(){
   const slot=state.slot,covered=coveredSlot(slot);$('categoryTitle').textContent=titles[slot][0];$('categoryHint').textContent=covered?'Change the outfit to see this layer.':titles[slot][1];$('choices').replaceChildren();$('choices').setAttribute('aria-label',slot);
-  for(const item of slotItems(slot)){const b=document.createElement('button');b.className='choice';b.dataset.item=item.id;b.setAttribute('aria-pressed',String(!covered&&selected(slot,item.id)));const locked=isLocked(slot,item.id);if(locked){b.classList.add('locked');b.setAttribute('aria-disabled','true');}b.disabled=covered||(slot==='accessories'&&coveredByHood(item.id));b.append(art(item,slot));if(covered)b.querySelector('.check')?.remove();const name=document.createElement('span');name.className='choice-name';name.textContent=item.name || item.label || item.id;b.append(name);const note=document.createElement('span');note.className='choice-note';note.textContent=locked?lockNote:covered?'Covered by the outfit or boots':b.disabled?'Covered by the hood':item.note || (slot==='accessories'?(selected(slot,item.id)?'Wearing':'Add a detail'):(selected(slot,item.id)?'Wearing now':'Try on'));b.append(note);b.addEventListener('click',()=>toggleItem(slot,item.id));$('choices').append(b);}
+  for(const item of slotItems(slot)){const b=document.createElement('button');b.className='choice';b.dataset.item=item.id;b.setAttribute('aria-pressed',String(!covered&&selected(slot,item.id)));const badge=hosted?shop.badge(slot,item.id):null;if(badge){b.classList.add('stamp-'+badge.kind);if(!badge.owned)b.classList.add('unowned');}b.disabled=covered||(slot==='accessories'&&coveredByHood(item.id));b.append(art(item,slot));if(covered)b.querySelector('.check')?.remove();const name=document.createElement('span');name.className='choice-name';name.textContent=item.name || item.label || item.id;b.append(name);const note=document.createElement('span');note.className='choice-note';note.textContent=covered?'Covered by the outfit or boots':b.disabled?'Covered by the hood':badge?badge.text:item.note || (slot==='accessories'?(selected(slot,item.id)?'Wearing':'Add a detail'):(selected(slot,item.id)?'Wearing now':'Try on'));b.append(note);b.addEventListener('click',()=>toggleItem(slot,item.id));$('choices').append(b);}
 }
 function paintEquipped(){
   $('equipped').replaceChildren();for(const slot of [...singleSlots,'accessories'])for(const id of slot==='accessories'?state.look.accessories:[state.look[slot]]){const item=findItem(slot,id);if(!item||id==='none'||coveredSlot(slot))continue;const pill=document.createElement('span');pill.className='equipped-pill';const dot=document.createElement('i');dot.className='equipped-dot';dot.style.background=item.swatch || item.color || '#a76570';pill.append(dot,document.createTextNode(item.name||item.id));$('equipped').append(pill);}
@@ -272,7 +283,7 @@ const colorPresets={
   shoes:['#7d294f','#202128','#ddd5c2','#702430','#a5b3bd','#be6784','#25465b','#e6b62e'],
   accessories:['#d2a953','#c7d2da','#322331','#b44978','#74364a','#d6a18b','#4f4865','#647d83']
 };
-function saveColors(){if(postLook(state.look,colorOverrides))return;try{localStorage.setItem(COLOR_STORE,JSON.stringify(colorOverrides));}catch{}}
+function saveColors(){if(hosted){shopSync(true);return;}try{localStorage.setItem(COLOR_STORE,JSON.stringify(colorOverrides));}catch{}}
 function changeColor(value){const id=$('colorChannel').value;if(!/^#[0-9a-f]{6}$/i.test(value))return;stopDemo(false);colorOverrides[id]=value.toLowerCase();saveColors();applyLook(state.look,{persist:false});drawPreview();}
 function paintColorControls(){
   if(!colorController)return;const id=$('colorChannel').value||'fabric';const slot=({fabric:'dress',hair:'hair',skin:'skin',shoes:'shoes'})[id];const value=colorOverrides[id]||(slot&&findItem(slot,state.look[slot])?.swatch)||colorController.defaultColor(id);
@@ -340,7 +351,7 @@ function preserveStockingsMaterial(){
       for(const [name,value] of Object.entries(garmentUniforms))shader.uniforms[`wardrobe_${name}`]=value;
       shader.vertexShader='attribute vec3 wardrobeBodyReference;\nattribute float wardrobeLowerBody;\nvarying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\n'+shader.vertexShader;
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nwardrobeRest = position;\nwardrobeBodyRest = wardrobeBodyReference;\nwardrobeBodyRegion = wardrobeLowerBody;');
-      shader.fragmentShader='varying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\nuniform float wardrobe_mode;\nuniform vec3 wardrobe_color;\nuniform float wardrobe_opacity;\nuniform float wardrobe_density;\nuniform float wardrobe_lower;\nuniform float wardrobe_upper;\nuniform float wardrobe_hideBelow;\nuniform vec2 wardrobe_bodyMaskRange;\nuniform vec4 wardrobe_bodyMaskHem;\n'+shader.fragmentShader;
+      shader.fragmentShader='varying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\nuniform float wardrobe_mode;\nuniform vec3 wardrobe_color;\nuniform float wardrobe_opacity;\nuniform float wardrobe_density;\nuniform float wardrobe_lower;\nuniform float wardrobe_upper;\nuniform float wardrobe_hideBelow;\nuniform vec2 wardrobe_bodyMaskRange;\nuniform vec4 wardrobe_bodyMaskHem;\nuniform float wardrobe_strand;\n'+shader.fragmentShader;
       shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
         float wardrobeZ = wardrobeRest.y / 1.03;
         if (wardrobeBodyRegion > .5) {
@@ -354,13 +365,13 @@ function preserveStockingsMaterial(){
         float wardrobeTheta = atan(wardrobeRest.x - sign(wardrobeRest.x) * .075, -wardrobeRest.z + .006);
         float wardrobeA = abs(sin(wardrobeTheta * wardrobe_density + wardrobeZ * wardrobe_density * 10.0));
         float wardrobeB = abs(sin(wardrobeTheta * wardrobe_density - wardrobeZ * wardrobe_density * 10.0));
-        float wardrobeGrid = max(1.0 - smoothstep(.092 - fwidth(wardrobeA), .092 + fwidth(wardrobeA), wardrobeA), 1.0 - smoothstep(.092 - fwidth(wardrobeB), .092 + fwidth(wardrobeB), wardrobeB));
+        float wardrobeGrid = max(1.0 - smoothstep(wardrobe_strand - fwidth(wardrobeA), wardrobe_strand + fwidth(wardrobeA), wardrobeA), 1.0 - smoothstep(wardrobe_strand - fwidth(wardrobeB), wardrobe_strand + fwidth(wardrobeB), wardrobeB));
         float wardrobeMask = wardrobe_mode < .5 ? 0.0 : (wardrobe_mode < 1.5 ? max(wardrobeGrid * wardrobe_opacity, step(wardrobe_upper-.029, wardrobeZ) * wardrobe_opacity) : wardrobe_opacity);
         wardrobeMask *= step(wardrobe_lower, wardrobeZ) * (1.0 - step(wardrobe_upper, wardrobeZ)) * step(.5, wardrobeBodyRegion);
         diffuseColor.rgb = mix(diffuseColor.rgb, wardrobe_color, wardrobeMask);`:''}
       `);
     };
-    material.customProgramCacheKey=()=> `rain-legwear-v3-${stockings}`;
+    material.customProgramCacheKey=()=> `rain-legwear-v4-${stockings}`;
     material.needsUpdate=true;
   }
 }
@@ -399,12 +410,15 @@ function expandPalettesAndLooks(){
 }
 
 async function init(){
+  const pelvisJob=prefetchModule(BIG_ASSETS+'pelvis-data.js',(l,t)=>{loadProgress.bytes('pelvis-data.js',l,t);paintLoad();});pelvisJob.then(()=>{loadProgress.done('pelvis-data.js');paintLoad();},()=>{});
   const response=await fetch('./assets/runtime-info.json',{cache:'no-store'});if(!response.ok)throw new Error(`Wardrobe manifest: HTTP ${response.status}`);info=await response.json();
-  const gltf=await new GLTFLoader().loadAsync(BIG_ASSETS+'avatar.glb',event=>{if(event.total){$('loadProgress').value=event.loaded/event.total;$('loadMessage').textContent=`Getting dressed · ${Math.round(event.loaded/event.total*100)}%`;}});
+  const gltf=await new GLTFLoader().loadAsync(BIG_ASSETS+'avatar.glb',event=>{loadProgress.bytes('avatar.glb',event.loaded,event.lengthComputable?event.total:0);paintLoad();});
+  loadProgress.done('avatar.glb');await pelvisJob.catch(()=>{});loadProgress.done('pelvis-data.js');loadProgress.stage(.15);paintLoad();
   avatar=gltf.scene;clips=gltf.animations;scene.add(avatar);
   avatar.traverse(obj=>{nodes.set(obj.name,obj);const originalName=gltf.parser.json.nodes?.[gltf.parser.associations.get(obj)?.nodes]?.name;if(originalName)nodes.set(originalName,obj);if(obj.userData.name)nodes.set(obj.userData.name,obj);if(!obj.isMesh)return;obj.frustumCulled=false;for(const mat of Array.isArray(obj.material)?obj.material:[obj.material]){if(!materials.has(mat.name))materials.set(mat.name,[]);if(!materials.get(mat.name).includes(mat))materials.get(mat.name).push(mat);if(!originals.has(mat))originals.set(mat,{color:mat.color?.clone(),roughness:mat.roughness});}});
   mixer=new THREE.AnimationMixer(avatar);setAnimation('idle');mixer.update(0);avatar.updateMatrixWorld(true);
   for(const expand of [expandFoundation,expandItems,expandTailoring,expandJewelry]){const result=await expand({THREE,avatar,nodes,materials,info});if(result?.update)expansionUpdates.push(result.update);}
+  loadProgress.stage(.55);paintLoad();
   isolateBodyMaterials();
   for(const list of materials.values())for(const mat of list)if(!originals.has(mat))originals.set(mat,{color:mat.color?.clone(),roughness:mat.roughness});
   expandPalettesAndLooks();
@@ -416,9 +430,22 @@ async function init(){
   for(const channel of colorController.channels){const option=document.createElement('option');option.value=channel.id;option.textContent=channel.name;option.disabled=!channel.available;$('colorChannel').append(option);}
   // Preserve source facing while reserving stage space for feet, jump peaks and controls.
   if(info.camera?.target){target.fromArray(info.camera.target);target.y=.9;}if(info.camera?.position){const offset=new THREE.Vector3().fromArray(info.camera.position).sub(new THREE.Vector3().fromArray(info.camera.target||[0,1.08,0]));yaw=Math.atan2(offset.x,offset.z);}distance=4.3;pitch=.035;
-  paintAnimations();let saved;if(hosted)saved=hostItems();else try{if(!reviewMode)saved=JSON.parse(localStorage.getItem(STORE)||'null');}catch{}
-  applyLook(saved||info.defaultLook||{},{persist:!hosted&&!reviewMode});setAnimation('idle');if(!action&&clips.length){const first=(info.animations||[])[0];setAnimation(typeof first==='string'?first:first?.id);}
-  state.ready=true;postHost({type:'rain-ready'});$('demo').disabled=false;$('loading').hidden=true;updateCamera(1/60);
+  paintAnimations();let saved;if(hosted){const early=shop.source==='init'?shop.applied:undefined;if(early)colorOverrides=hostColors(COLOR_CHANNELS,early);saved=hostItems(early,!early);}else try{if(!reviewMode)saved=JSON.parse(localStorage.getItem(STORE)||'null');}catch{}
+  applyLook(saved||info.defaultLook||{},{persist:!hosted&&!reviewMode});if(hosted){shop.markApplied();paintShop(document,shop);}setAnimation('idle');if(!action&&clips.length){const first=(info.animations||[])[0];setAnimation(typeof first==='string'?first:first?.id);}
+  // Bake on Apply (bake.js): its own renderer, camera and mixer; every frame hands the visible pose back.
+  const settle=()=>{for(const update of expansionUpdates)update(0,state.look);avatar.updateMatrixWorld(true);};
+  window.wardrobeDebug.bake=installBaker({THREE,scene,avatar,clips,getClip,hide:[ground],garment:garmentUniforms,prepare:finishTransition,sync:settle,restore:()=>{mixer.update(0);settle();},post:postHost});
+  loadProgress.stage(.8);paintLoad();updateCamera(1/60);
+  // Compile every shader behind the cover so the first visible frame is the finished one.
+  try{if(renderer.compileAsync)await renderer.compileAsync(scene,camera);}catch(e){console.warn('compileAsync',e);}
+  loadProgress.stage(1);paintLoad();
+  state.ready=true;postHost({type:'rain-ready'});$('demo').disabled=false;
+  // In the app the host answers rain-ready with init (look, name); give it a moment so the first frame wears it.
+  if(hosted&&shop.source!=='init')await new Promise(done=>{const t=setTimeout(done,900);hostInitWaiter=()=>{clearTimeout(t);done();};});
+  if(reviewMode)revealGate.mark('drawn'); // the review studio draws its own frames
+  await new Promise(done=>{onFirstFrame=done;if(revealGate.mark('dressed'))done();});
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  await reveal(document,bootCalmNow());
   if(!clips.length){errors.push('No animation clips in avatar.glb');$('liveLabel').textContent='NO ANIMATIONS EXPORTED';}
   if(reviewMode)installReviewStudio({info,errors,renderCase:renderReviewCase});
 }
@@ -433,5 +460,20 @@ function renderReviewCase({look,clip,time,view,frame,width:rw,height:rh}){
   }
   const rc=new THREE.PerspectiveCamera(32,rw/rh,.01,100);rc.position.set(aim.x+Math.sin(view)*zoom,aim.y+.035*zoom,aim.z+Math.cos(view)*zoom);rc.lookAt(aim);renderer.setPixelRatio(1);renderer.setSize(rw,rh,false);renderer.setScissorTest(false);renderer.setViewport(0,0,rw,rh);renderer.setClearColor(0xeee9df,1);renderer.clear();renderer.render(scene,rc);return renderer.domElement;
 }
-window.addEventListener('rain-locks',()=>{if(state.ready)paintChoices();});
+window.addEventListener('rain-locks',()=>{if(state.ready){paintChoices();paintShop(document,shop);}});
+// Shop layer: the draft is what Rain wears here, the applied look is what the tube wears.
+function shopSync(save){if(!state.demo)shop.setDraft(toHostLook(state.look,colorOverrides));if(save&&!shop.applyMode&&shop.status().wearable){postLook(state.look,colorOverrides);shop.markApplied();$('saveStatus').textContent=SHOP.saved;}paintShop(document,shop);}
+function showHostLook(look){colorOverrides=hostColors(COLOR_CHANNELS,look);applyLook(hostItems(look,shop.source!=='init')||info?.defaultLook||{},{persist:false});shop.markApplied();paintShop(document,shop);}
+// The Prize Counter's Wear door: put that one piece on as a draft (try-on, Apply stays the host's call).
+function wearTryOn(){if(!state.ready)return;const t=shop.takeTryOn();if(t&&findItem(t.slot,t.id)&&!selected(t.slot,t.id))toggleItem(t.slot,t.id);}
+if(hosted){
+  document.body.classList.add('shop-on');$('lookBar').hidden=false;
+  fetch('./items.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(json=>{if(!json)return;shop.setItems(json);if(state.ready){paintChoices();paintShop(document,shop);wearTryOn();}}).catch(()=>{});
+  listenToHost(window,shop,(kind,data)=>{if(kind==='init'&&hostInitWaiter){const w=hostInitWaiter;hostInitWaiter=null;setTimeout(w,0);}if(kind==='baking'){paintShop(document,shop);return;}if(kind==='init'&&state.ready&&shop.applied){showHostLook(shop.applied);wearTryOn();return;}if(kind==='tryon'||kind==='init')wearTryOn();if(kind==='applied')$('saveStatus').textContent=SHOP.applied;
+    // A host clamp sends the look it would wear back as the draft (never applied, never baked).
+    if(kind==='apply-failed'&&state.ready&&data&&data.look&&typeof data.look==='object'){stopDemo(false);colorOverrides=hostColors(COLOR_CHANNELS,data.look);applyLook(hostItems(data.look,false)||info?.defaultLook||{},{persist:false});}if(state.ready)paintChoices();paintShop(document,shop);});
+  $('applyLook').addEventListener('click',()=>{if(!shop.apply())return;if(!shop.applyMode){postLook(state.look,colorOverrides);$('saveStatus').textContent=SHOP.saved;}paintShop(document,shop);});
+  $('discardLook').addEventListener('click',()=>{stopDemo(false);const look=shop.discard();if(look&&state.ready)showHostLook(look);});
+  $('openCounter').addEventListener('click',()=>shop.openCounter());
+}
 init().catch(fail);
