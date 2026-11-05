@@ -61,8 +61,9 @@ public sealed class LockdownTests
                 Assert.True(tab.LockdownActivePanel.IsVisible);
                 Assert.False(tab.LockdownSetupPanel.IsVisible);
 
-                // The slab: a notice with the steps, never the box, never an end.
+                // The slab opens a game and preserves the phrase fallback.
                 tab.BtnEmergencyExit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.NotNull(EmergencyExitWindow.Current);
                 Assert.True(tab.TxtEmergencyExitNotice.IsVisible);
                 Assert.Contains("let me out", tab.TxtEmergencyExitNotice.Text);
                 Assert.False(tab.TxtLockdownExit.IsVisible);
@@ -100,6 +101,7 @@ public sealed class LockdownTests
                 Type("let me out");
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(ld.IsActive);
+                Assert.Null(EmergencyExitWindow.Current);
                 Assert.False(CoreSettings.Current.StrictLockEnabled);   // the pre-lockdown value
                 Assert.True(CoreSettings.Current.PanicKeyEnabled);
                 Assert.True(tab.LockdownSetupPanel.IsVisible);

@@ -33,7 +33,7 @@ public sealed class CompanionPagesTests
     public Task CollapsedRoomLendsItsZonesToThePages() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -106,6 +106,12 @@ public sealed class CompanionPagesTests
             Assert.Equal("personality", w.CurrentTab);
             Assert.True(personality.IsVisualAncestorOf(presets));
             Assert.True(personality.IsVisualAncestorOf(workshop.Parts.Community));
+            var picker = Assert.Single(personality.GetVisualDescendants().OfType<CompanionPickerCard>());
+            Assert.NotNull(picker.MorePersonalityOptions);
+            w.ShowTab("companion");
+            w.ShowTab("personality");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(picker, Assert.Single(personality.GetVisualDescendants().OfType<CompanionPickerCard>()));
             Capture(w, "personality");
 
             // The Advanced row's door (WPF BtnOpenPromptEditor) opens the full prompt editor.
