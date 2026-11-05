@@ -136,6 +136,9 @@ public sealed class MandatoryVideoSchedulerTests
         clock.Advance(TimeSpan.FromSeconds(722));
         Assert.Single(host.Shown);
         v.Stop();
+    });
+
+    [Fact]
     public void StartupUsesConfiguredFileOrRandomAndEmptyLibraryStaysSilent() => With(6, true, () =>
     {
         var s = CoreSettings.Current;
