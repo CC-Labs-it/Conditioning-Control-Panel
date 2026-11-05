@@ -36,6 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF StartThinkingAnimation: phrase + 0-3 dots every 500ms until the reply lands.</summary>
         internal void StartThinkingAnimation()
         {
+            CancelTriggerAnimation(); // thinking takes ownership of the bubble too
             StopThinkingAnimation();
             _isWaitingForAi = true;
             _thinkingPhraseBase = ThinkingPhrases.Pick(Random.Shared);

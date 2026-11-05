@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 preset.ApplyToSettings();
                 CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
                 CoreSettings.Save();
-                UpdatePhraseCountDisplay(parts);
+                parts.Triggers.RefreshPhraseCount();
                 Log.Information("Loaded phrase preset: {Name} ({Count} phrases)", preset.Name, preset.ActivePhraseCount);
             };
             parts.Triggers.SavePhrasePresetRequested += async (_, _) => await SavePhrasePresetAsync();
@@ -38,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         internal void RefreshPhrasePresets()
         {
             if (DataContext is not WorkshopRuntimeVm vm) return;
-            UpdatePhraseCountDisplay(vm.Parts);
+            vm.Parts.Triggers.RefreshPhraseCount();
             var combo = vm.Parts.Triggers.FindControl<ComboBox>("CmbPhrasePresets")!;
             _loadingPhrasePresets = true;
             try
@@ -50,15 +50,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             finally { _loadingPhrasePresets = false; }
         }
 
-        // WPF MainWindow.Patreon.cs:1403-1406: enabled mod, voice, custom and bark rows.
-        private static void UpdatePhraseCountDisplay(WorkshopShelfParts parts) =>
-            parts.Triggers.FindControl<TextBlock>("TxtPhraseCount")!.Text = Loc.GetF("label_0_active_2",
-                CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled));
-
         private async Task SavePhrasePresetAsync()
         {
             if (TopLevel.GetTopLevel(this) is not Window { IsVisible: true } owner) return;
-            var activePhraseCount = CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled);
+            var activePhraseCount = CompanionPhraseEditorDialog.ActivePhraseCount();
             var input = new TextBox
             {
                 Text = $"Preset {CoreSettings.Current.PhrasePresets.Count + 1}",

@@ -19,6 +19,9 @@ mkdir -p "$pub/Resources/Models/vosk"
 cp -r "$model" "$pub/Resources/Models/vosk/"
 cp -r "$root/packaging/linux/share" "$pub/"
 cp "$root/LICENSE" "$pub/"
+cp "$root/packaging/linux/RT-ENGINE-NOTICES.txt" "$pub/"
+mkdir -p "$pub/packaging/linux"
+cp "$root/packaging/linux/rt-engine-check.sh" "$pub/packaging/linux/"
 
 # A checkout with LFS off publishes the media as pointer files, and the app then plays nothing.
 # Refuse them: run `git lfs pull --include "Assets/**"` first (CI does).

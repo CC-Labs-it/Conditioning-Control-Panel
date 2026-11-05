@@ -2,13 +2,13 @@
 // "WHAT HAPPENED" feed at the top of the list (Core FriendsFeed + FriendsFeedRules) and, under a
 // friend's name, the trail of the latest poke / invite / watch you sent them (Core SentTrail +
 // FriendsDrawerRules.TrailKeys/ToneOf).
-// ponytail: no slide-in for a line that lands while open (WPF LandLine, part of the Juice motion
-// this head does not have yet) and no glow on the pink dot (P82: no Effect in rows).
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
+using Avalonia.Styling;
 using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -38,6 +38,7 @@ public sealed partial class FriendsDrawer
     private FriendsFeed? _feedLive;
     private bool _feedMarking;
     private int _feedExtra;
+    private string? _feedTop;
 
     /// <summary>WPF AddFeed: the section is one persistent panel, re-added on every render.</summary>
     private void AddFeed()
@@ -118,7 +119,11 @@ public sealed partial class FriendsDrawer
             if (friends.Any(f => f.Id == l.Event.FriendId)) MakeOpener(row, l.Event.FriendId);
             _feedBox.Children.Add(row);
             if (!l.Read) shownUnread.Add(l.Key);
+            // WPF FriendsDrawer.Feed.cs:164: only a changed top while open lands.
+            if (i == 0 && _isOpen && _feedTop != null && _feedTop != l.Key) LandLine(row);
         }
+
+        _feedTop = lines[0].Key;
 
         var hidden = lines.Count - show;
         if (hidden > 0 || _feedExtra > 0)
@@ -172,9 +177,12 @@ public sealed partial class FriendsDrawer
             Background = Brushes.Transparent, Tag = "friends-feed-line:" + e.Key, Child = g,
         };
         if (isNew)
-            g.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse
+            g.Children.Add(new Border
             {
-                Width = 6, Height = 6, Fill = Pink, HorizontalAlignment = HorizontalAlignment.Left,
+                // WPF FriendsDrawer.Feed.cs:239 glow, using a BoxShadow to keep Effects out of rows (P82).
+                Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Pink,
+                BoxShadow = new BoxShadows(new BoxShadow { Blur = 6, Color = Color.FromArgb(0xE6, 0xFF, 0x5F, 0xB4) }),
+                HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center, Tag = "friends-feed-new",
             });
         var text = new TextBlock
@@ -239,6 +247,47 @@ public sealed partial class FriendsDrawer
             _list.Children.OfType<Control>().FirstOrDefault(c => c.Tag as string == "friends-row:" + friendId)?.BringIntoView();
         }
         catch (Exception ex) { Serilog.Log.Debug("[Friends] feed open failed: {E}", ex.Message); }
+    }
+
+    // WPF FriendsDrawer.Juice.cs:24-29; reuse this head's OS and Gentle Visuals cap.
+    internal static double FeedMotionAmount => AmbientFxCanvas.Env.Level switch
+    {
+        ConditioningControlPanel.Models.MotionLevel.Off => 0,
+        ConditioningControlPanel.Models.MotionLevel.Reduced => 0.5,
+        _ => 1,
+    };
+
+    // WPF FriendsDrawer.Feed.cs:334-344: 280 ms, -12*k, BackEase amplitude 0.4*k.
+    internal static Animation? LandingAnimation()
+    {
+        var k = FeedMotionAmount;
+        if (k <= 0) return null;
+        return new Animation
+        {
+            Duration = TimeSpan.FromMilliseconds(280),
+            Easing = new Theme.BackEaseOutAmplitude { Amplitude = 0.4 * k },
+            Children =
+            {
+                new KeyFrame { Cue = new Cue(0), Setters = { new Setter(TranslateTransform.XProperty, -12 * k) } },
+                new KeyFrame { Cue = new Cue(1), Setters = { new Setter(TranslateTransform.XProperty, 0d) } },
+            },
+        };
+    }
+
+    private static void LandLine(Control row)
+    {
+        if (LandingAnimation() is not { } animation) return;
+        row.RenderTransform = new TranslateTransform();
+        _ = animation.RunAsync(row);
+        _ = new Animation
+        {
+            Duration = TimeSpan.FromMilliseconds(280),
+            Children =
+            {
+                new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 0d) } },
+                new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 1d) } },
+            },
+        }.RunAsync(row);
     }
 
     private static Button FeedLink(string text, string tag)

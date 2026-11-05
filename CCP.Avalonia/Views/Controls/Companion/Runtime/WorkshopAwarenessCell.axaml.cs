@@ -140,6 +140,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // re-reads immediately, including when the cell is hosted on the Awareness tab.
             if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
                 shell.SetAwarenessIntensity(intensity);
+            else
+            {
+                // Hosted outside the shell (a standalone drawer): write the same setting, so a checked stop is
+                // never a choice that was not saved (Nov 4 review of #3334).
+                Windows.MainShellWindow.StoreAwarenessIntensity(intensity);
+                SyncIntensity();
+            }
         }
 
         private void SliderAwarenessCooldown_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)

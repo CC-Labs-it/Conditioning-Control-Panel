@@ -70,9 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The one relay client (WPF App.RemoteControl). Commands run through Core's gate and table.
         /// Tests swap in a fake-relay client before opening the shell.</summary>
-        internal static Lazy<RemoteRelay> Relay = new(() => new RemoteRelay(
+        internal static Lazy<RemoteRelay> Relay = new(() => App.WireRemoteQuestProgress(new RemoteRelay(
             () => CoreSettings.Current.AuthToken, () => CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersion,
-            RemoteCommands.Execute, RemoteCommands.StopEffects));
+            RemoteCommands.Execute, RemoteCommands.StopEffects)));
 
         private readonly ObservableCollection<string> _log = new();
 
@@ -151,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 else await MessageDialog.ShowAsync(owner, Loc.Get("title_connection_error"), Loc.Get("msg_remote_connection_error"));
                 return;
             }
+            Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Remote); // WPF RemoteControlService.cs:198
             ShowSession(code);
             OptInChain = RunOptInChainAsync();
         }

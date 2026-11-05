@@ -123,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             HookPanicEnabled();
             HookWallRings();   // MainShellWindow.Presets.cs: wall tile rings follow the flags
             InitializeEventFx(); // WPF EventFx.cs:276, hidden achievement rail burst
+            HookCompanionEvents(); // WPF Companion XP/level/drain/switch subscriptions
             HookLevelDisplay(); // MainShellWindow.HeroFx.cs: header level/XP follow ProgressionBank
             HookAutonomy();     // MainShellWindow.Autonomy.cs: Takeover seeds; starts only on the user's switch
             InitializeDescentFuse(); // MainShellWindow.DescentFuse.cs (WPF MainWindow ctor); no-op without App.DescentCountdown
@@ -137,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshIntakePassTile(); // startup Home has no ShowTab call
             InitializeFirstVisitPulses(); // MainShellWindow.TabTransitions.cs (WPF MainWindow.xaml.cs:3795-3830)
             InitializeLockdownGreys(); // MainShellWindow.Lockdown.cs (WPF Lab.cs:612/707)
+            InitializePossessionHost(); // MainShellWindow.Possession.cs (WPF Lab.cs:42 InitializePossessionHost)
             InitializeInviteTicket(); // MainShellWindow.InviteTicket.cs (WPF MainWindow.xaml.cs, main e2d4e35ef)
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)
             InitializePremiumCelebration(); // MainShellWindow.Patreon.cs (WPF InitializePatreonTab + MainWindow.xaml.cs:3559)

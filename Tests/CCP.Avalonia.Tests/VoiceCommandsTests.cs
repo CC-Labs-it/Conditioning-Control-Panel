@@ -127,13 +127,13 @@ public sealed class VoiceCommandsTests
     {
         var help = shell.VoiceCmds.HelpLine();
         Assert.Contains("take over", help);
-        Assert.DoesNotContain("spiral", help);
-        Assert.DoesNotContain("quiz", help);
+        Assert.Contains("spiral", help);
+        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "quiz_once"), help.Contains("quiz"));
         shell.ShowTab("shelistening");
         Dispatcher.UIThread.RunJobs();
         var rows = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell.SheListeningPage!)
             .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
-        Assert.False(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
+        Assert.True(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
         Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
         // WPF SheListeningTabView.xaml:536-540 groups freeze, shake and count. Shake now runs
         // even when the optional freeze/count seams are absent.

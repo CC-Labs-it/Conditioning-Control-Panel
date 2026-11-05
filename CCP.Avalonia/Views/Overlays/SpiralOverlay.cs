@@ -78,10 +78,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
+        // WPF ShowOverlaySustained: voice owns a runtime hold, never the saved feature flag.
+        // ponytail: retain the request through asynchronous decode; panic clears it even if no window opened.
+        internal static double? VoiceOpacity { get; private set; }
+        internal static void SetVoiceHold(Visual host, bool on)
+        {
+            VoiceOpacity = on ? Math.Clamp(CoreSettings.Current.SpiralOpacity / 100.0, 0, 1) : null;
+            Refresh(host);
+        }
+        // WPF Session/SessionEngine.cs:799,814: a later session tick overwrites the
+        // sustained opacity, while its visibility hold remains owned by the voice action.
+        internal static bool ApplySessionOpacity(double? percent)
+        {
+            if (VoiceOpacity == null || percent == null) return false;
+            var next = Math.Clamp(percent.Value / 100.0, 0, 1);
+            var changed = VoiceOpacity != next;
+            VoiceOpacity = next;
+            return changed;
+        }
+        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
         internal static double PaintedOpacity => SpiralFrames.Paint(
-            Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+            VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
@@ -105,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -236,8 +256,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
         /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
         private static bool ShouldShow()
-            => App.Sessions?.IsPaused != true
-               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true);
+            => !RemoteCommands.OverlaysStopped && (RemoteCommands.OverlayRunning || (App.Sessions?.IsPaused != true
+               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true)));
 
         private static void BeginDecode(Visual host, string path)
         {
