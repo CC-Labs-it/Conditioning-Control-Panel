@@ -293,7 +293,8 @@
                                         BorderBrush="{Binding EdgeBrush}" BorderThickness="{Binding EdgeThickness}"
                                         Cursor="{Binding Cursor}" ToolTip.Tip="{Binding UnavailableTip}"
                                         PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited"
-                                        PointerReleased="Card_PointerReleased">
+                                        PointerReleased="Card_PointerReleased" RenderTransformOrigin="50%,50%">
+                                  <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
                                   <Grid>
                                     <!-- Sibling shadow: no live Effect under the looping vault FX. -->
                                     <Border Name="HoverGlow" CornerRadius="12" IsVisible="False" IsHitTestVisible="False"/>
@@ -416,6 +417,9 @@
                                     <fx:TierBadge Tier="{Binding Tier}" FreeToday="{Binding BadgeFreeToday}"
                                                   HorizontalAlignment="Right" VerticalAlignment="Top"
                                                   Margin="0,-6,-6,0"/>
+                                    <fx:VaultCardAura IsVisible="{Binding IsMine}" Hue="{Binding GroupHue}"
+                                                      Seed="{Binding AuraSeed}" Margin="{Binding AuraMargin}"
+                                                      Loaded="Aura_Loaded" Unloaded="Aura_Unloaded"/>
                                   </Grid>
                                 </Border>
                             </DataTemplate>
