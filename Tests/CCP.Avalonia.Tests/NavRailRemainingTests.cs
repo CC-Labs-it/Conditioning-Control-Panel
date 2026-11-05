@@ -46,6 +46,37 @@ public sealed class NavRailRemainingTests
     });
 
     [Fact]
+    public void RailShadowFollowsNavigationWithoutTakingPageInput() => Run(w =>
+    {
+        // WPF MainWindow.xaml:820-822 and MainWindow.SectionChrome.cs:150-166.
+        var shadow = w.Named<global::Avalonia.Controls.Shapes.Rectangle>("NavRailShadow")!;
+        Assert.NotNull(shadow);
+        Assert.Equal(DepthLaw.RailShadowPx, shadow.Width);
+        Assert.False(shadow.IsHitTestVisible);
+        Assert.Equal(1, Grid.GetColumn(shadow));
+        Assert.Equal(1, Grid.GetRow(shadow));
+        Assert.Equal(5, Grid.GetRowSpan(shadow));
+        Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Left, shadow.HorizontalAlignment);
+        Assert.Equal(59, shadow.ZIndex);
+        Assert.True(shadow.Bounds.Height > 0);
+        foreach (var tab in new[] { "studio", "friends", "settings" })
+        {
+            w.ShowTab(tab); Dispatcher.UIThread.RunJobs();
+            var rgb = NavStripTable.AccentRgb(NavSections.SectionForTab(tab)!);
+            var hue = Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+            var brush = Assert.IsType<LinearGradientBrush>(shadow.Fill);
+            Assert.Equal(new RelativePoint(0, 0, RelativeUnit.Relative), brush.StartPoint);
+            Assert.Equal(new RelativePoint(1, 0, RelativeUnit.Relative), brush.EndPoint);
+            Assert.Equal(new[] { 0.0, 1.0 }, brush.GradientStops.Select(s => s.Offset));
+            Assert.Equal(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), 0xBF / 255.0)), brush.GradientStops[0].Color);
+            Assert.Equal(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), 0)), brush.GradientStops[1].Color);
+        }
+        var unchanged = shadow.Fill;
+        w.ShowTab("settings"); Dispatcher.UIThread.RunJobs();
+        Assert.Same(unchanged, shadow.Fill); // same section does not repaint
+    });
+
+    [Fact]
     public void RailLabelsFollowModSwitchAndLanguageWithoutLosingTheirBindings() => Run(w =>
     {
         var loc = LocalizationManager.Instance;

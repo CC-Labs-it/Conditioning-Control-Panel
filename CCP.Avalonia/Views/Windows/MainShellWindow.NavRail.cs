@@ -5,9 +5,9 @@
 //
 // sync6-nav-rail-c added the edge spur, the art tint (navtint), the label glow, the 160 ms halo
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
-// ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
-// rail shadow (PaintDepthRail) - lane
-// wire-shell-nav-rail-b; the possession reroute seam (WPF PossessionReroute, written only by
+// ponytail: coin depth (BuildNavCoin, press travel, tilt, specular) remains lane
+// wire-shell-nav-rail-b. The rail shadow is ported below. Also missing is
+// the possession reroute seam (WPF PossessionReroute, written only by
 // Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 
@@ -86,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_navRailReady) return;
                 CacheNavSectionRows();
+                if (Named<Rectangle>("NavRailShadow") is { } shadow) shadow.Width = DepthLaw.RailShadowPx;
                 RegisterSectionShortcuts();
                 // WPF :122. Per-window subscriber, so it leaves with the window (P41/P68).
                 NavBadges.Changed += OnNavBadgeChanged;
@@ -427,6 +428,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 gradient.GradientStops.Add(new GradientStop(Color.FromUInt32(stop.Color), stop.Offset));
             target.BorderBrush = gradient;
             target.BorderThickness = new Thickness(NavRailPaintRules.RingThickness(row.Active));
+        }
+
+        // WPF MainWindow.NavRail.cs:486-496 and NavRailRules.cs:262-266.
+        // The section wash calls this only when the section changes. It is static paint,
+        // including with Motion Off, and uses the shared depth colour law.
+        internal void PaintDepthRail(Color hue)
+        {
+            if (Named<Rectangle>("NavRailShadow") is not { } shadow) return;
+            shadow.Fill = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), 0xBF / 255.0)), 0),
+                    new GradientStop(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), 0)), 1),
+                },
+            };
         }
 
         /// <summary>The rail's search pill, one line as in WPF (:559). Toggle refuses during Lockdown.</summary>
