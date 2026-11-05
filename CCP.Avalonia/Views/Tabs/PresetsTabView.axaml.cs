@@ -1419,11 +1419,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return file?.TryGetLocalPath();
         }
 
-        /// <summary>WPF PaintTakeawayShelf (MainWindow.Takeaway.cs:107) with an empty drawer and the
-        /// door withheld: no chips, no tray rows, no count, the shelf collapsed and the empty sentence
-        /// shown. This head has neither JustDropOrdersService (the device-token order drawer) nor
-        /// JustDropService.DoorAvailable, so that is exactly what WPF paints for it - never sample
-        /// orders. The Community Catalogue chip and Export stay live on the same line.</summary>
+        /// <summary>Initial empty state for a standalone view. On shell visits the existing receipts
+        /// stay visible while the drawer refreshes (WPF MainWindow.Takeaway.cs:72-84).</summary>
         private void SeedTakeaway()
         {
             TakeawayShelf.Children.Clear();

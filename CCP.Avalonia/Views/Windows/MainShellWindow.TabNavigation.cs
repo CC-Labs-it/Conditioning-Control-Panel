@@ -253,7 +253,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                     // WPF MainWindow.TabNavigation.cs:292/367: throttled share-status polls on tab open.
                     case "presets":
-                        RefreshTakeawayShelf();
+                        // Arrival refresh runs in the view before its stagger. A visible-tab revisit has no visibility event.
+                        if (_tabBefore == "presets") RefreshTakeawayShelf();
                         _ = CheckCatalogueSubmissionStatusesAsync(CatalogueKindPresets);
                         _ = CheckCatalogueSubmissionStatusesAsync(CatalogueKindSessions);
                         break;
