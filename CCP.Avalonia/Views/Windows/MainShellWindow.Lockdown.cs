@@ -170,7 +170,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private global::Avalonia.Controls.Border? _lockdownFlash;
         private global::Avalonia.Threading.DispatcherTimer? _lockdownFlashTimer;
         internal global::Avalonia.Controls.Border? LockdownFlash => _lockdownFlash;
-        internal System.TimeProvider LockdownFlashClock { get; set; } = System.TimeProvider.System;
+        internal System.TimeProvider LockdownFlashTime { get; set; } = System.TimeProvider.System;
+        private long _lockdownFlashStarted;
 
         private void PlayLockdownActivationAnimation()
         {
@@ -188,10 +189,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (root.RowDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetRowSpan(_lockdownFlash, root.RowDefinitions.Count);
                 if (root.ColumnDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetColumnSpan(_lockdownFlash, root.ColumnDefinitions.Count);
                 root.Children.Add(_lockdownFlash);
-                var clock = LockdownFlashClock;
-                var started = clock.GetTimestamp();
+                _lockdownFlashStarted = LockdownFlashTime.GetTimestamp();
                 _lockdownFlashTimer = new global::Avalonia.Threading.DispatcherTimer(System.TimeSpan.FromMilliseconds(33),
-                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => PaintLockdownFlash(clock.GetElapsedTime(started).TotalMilliseconds));
+                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => StepLockdownFlash());
                 _lockdownFlashTimer.Start();
             }
             catch (System.Exception ex)
@@ -199,6 +199,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Serilog.Log.Warning(ex, "Failed to play lockdown animation");
             }
         }
+
+        internal void StepLockdownFlash() =>
+            PaintLockdownFlash(LockdownFlashTime.GetElapsedTime(_lockdownFlashStarted).TotalMilliseconds);
 
         /// <summary>One frame of the flash at <paramref name="ms"/> in; at 600 ms it is removed.</summary>
         internal void PaintLockdownFlash(double ms)
