@@ -88,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public MainShellWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            Closed += (_, _) => Platform.FriendsLanding.Stop(); // WPF Services/Friends/FriendsLanding.cs:75-82: ownerless notices must not hold exit.
             InitializeLanguageSelector();
             InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
 
@@ -109,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
             InitializeNavRail();
+            InitializeProgramsToasts(); // WPF ProgramsTab.cs:1864-1940, Presets.cs:2013,2058
             InitializeChromeFx(); // WPF chrome message cue lifecycle
             InitFavoritesRail(); // MainShellWindow.FavoritesRail.cs (WPF MainWindow.xaml.cs:3501)
             ApplyEnableDeeper(); // MainShellWindow.DeeperTab.cs (WPF LoadSettings: rail door follows EnableDeeper)
@@ -117,7 +119,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The mod switcher's rows, the saved mod's palette and the pending first-run choice
             // (MainShellWindow.ModSwitch.cs). No-op on the headless render path (no App.Mods).
             AttachModSwitch();
+            HookPanicEnabled();
             HookWallRings();   // MainShellWindow.Presets.cs: wall tile rings follow the flags
+            InitializeEventFx(); // WPF EventFx.cs:276, hidden achievement rail burst
             HookLevelDisplay(); // MainShellWindow.HeroFx.cs: header level/XP follow ProgressionBank
             HookAutonomy();     // MainShellWindow.Autonomy.cs: Takeover seeds; starts only on the user's switch
             InitializeDescentFuse(); // MainShellWindow.DescentFuse.cs (WPF MainWindow ctor); no-op without App.DescentCountdown
@@ -134,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeInviteTicket(); // MainShellWindow.InviteTicket.cs (WPF MainWindow.xaml.cs, main e2d4e35ef)
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)
             InitializePremiumCelebration(); // MainShellWindow.Patreon.cs (WPF InitializePatreonTab + MainWindow.xaml.cs:3559)
+            InitializeSubscribeStarDependents(); // WPF MainWindow.SubscribeStar.cs:28-48
             InitializePremiumSpark();       // MainShellWindow.PremiumSpark.cs (WPF MainWindow.PremiumSpark.cs)
             InitializeSparkleWallet();      // MainShellWindow.SparkleWallet.cs (WPF MainWindow.SparkleWallet.cs)
             InitializeWebcamLoadingSplash(); // MainShellWindow.WebcamSplash.cs (WPF MainWindow.xaml.cs:3631)
