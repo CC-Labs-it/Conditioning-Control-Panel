@@ -8806,6 +8806,8 @@
   "online_official_nice": "Nice",
   "online_official_stamped_line": "Online media comes from Scrolller. Each picture and clip carries a small \"via Scrolller\" mark.",
   "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded.",
+  "possession_rules_inbox_title": "The warden's rules",
+  "possession_rules_inbox_summary": "What possession does before the room starts moving.",
   "shop_title": "Prize Counter",
   "shop_loading": "Opening the counter.",
   "shop_offline": "The counter did not answer. Try again in a moment.",

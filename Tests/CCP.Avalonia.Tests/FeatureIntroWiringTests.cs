@@ -192,4 +192,83 @@ public sealed class FeatureIntroWiringTests
         var at = dismiss.TranslatePoint(new Point(0, 0), scroll)!.Value;
         Assert.InRange(at.Y, 0, scroll.Bounds.Height - dismiss.Bounds.Height);
     }, "lockdown");
+    /// <summary>WPF OnLockdownActivated -> ShowPossessionRulesIfFirstTime (Lab.cs:690/1104): starting a lockdown with
+    /// possession armed opens the warden's rules once and spends both flags; a second lockdown opens nothing.</summary>
+    [Fact]
+    public async Task LockdownWithPossessionArmedOpensTheWardenRulesOnce()
+    {
+        var s = CoreSettings.Current;
+        bool wasEnabled = s.LockdownPossessionEnabled, wasSeen = s.LockdownPossessionIntroSeen;
+        var ld = new ConditioningControlPanel.Services.LockdownService();
+        ConditioningControlPanel.Services.LockdownService.Current = ld;   // before the shell: it binds at construction
+        try
+        {
+            await Run((opened, shell) =>
+            {
+                // Deactivate in the same turn (P02): Activate forces panic-key off and writes a recovery file.
+                try
+                {
+                    s.LockdownPossessionEnabled = true;
+                    s.LockdownPossessionIntroSeen = false;
+                    ld.Activate(TimeSpan.FromMinutes(30));
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(FeatureIntros.All["possession"].Title, CardTitle(opened));
+                    Assert.True(s.LockdownPossessionIntroSeen);
+                    Assert.Contains("possession", s.SeenFeatureIntros);
+
+                    foreach (var w in opened.OfType<FeatureIntroPopup>().ToArray()) w.Close();
+                    opened.Clear();
+                    ld.Deactivate();
+                    StartupLadder.ResetForTests();
+                    FeatureIntroPopup.ResetForTests();
+                    ld.Activate(TimeSpan.FromMinutes(30));
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Empty(opened.OfType<FeatureIntroPopup>());
+                    Assert.False(StartupLadder.Inbox.Contains("intro:possession"));
+                }
+                finally { ld.Deactivate(); Dispatcher.UIThread.RunJobs(); }
+            }, "possession");
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.LockdownService.Current = null;
+            s.LockdownPossessionEnabled = wasEnabled;
+            s.LockdownPossessionIntroSeen = wasSeen;
+            CoreSettings.Save();
+        }
+    }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public Task PossessionRulesSkipDisabledOrSeen(bool enabled, bool seen) => Run((opened, shell) =>
+    {
+        CoreSettings.Current.LockdownPossessionEnabled = enabled;
+        CoreSettings.Current.LockdownPossessionIntroSeen = seen;
+        shell.ShowPossessionRulesIfFirstTime();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(opened.OfType<FeatureIntroPopup>());
+        Assert.False(StartupLadder.Inbox.Contains("intro:possession"));
+    }, "possession");
+
+    [Fact]
+    public Task QuietPossessionRulesSpendFlagsOnlyWhenOpened() => Run((opened, shell) =>
+    {
+        var s = CoreSettings.Current;
+        s.LockdownPossessionEnabled = true;
+        s.LockdownPossessionIntroSeen = false;
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        shell.ShowPossessionRulesIfFirstTime();
+        shell.ShowPossessionRulesIfFirstTime();
+        Assert.Empty(opened.OfType<FeatureIntroPopup>());
+        Assert.False(s.LockdownPossessionIntroSeen);
+        Assert.DoesNotContain("possession", s.SeenFeatureIntros);
+        var row = StartupLadder.Inbox.Items.Single(i => i.Key == "intro:possession");
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("possession_rules_inbox_title"), row.Title);
+        StartupLadder.Inbox.Open(row);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(FeatureIntros.All["possession"].Title, CardTitle(opened));
+        Assert.True(s.LockdownPossessionIntroSeen);
+        Assert.Contains("possession", s.SeenFeatureIntros);
+    }, "possession");
+
 }

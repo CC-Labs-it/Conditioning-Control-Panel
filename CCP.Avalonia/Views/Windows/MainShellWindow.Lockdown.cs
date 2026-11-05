@@ -82,6 +82,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshLockdownGate();   // WPF 605c451ae: the padlock stands down for the run, back after it
             });
             void Flash() => global::Avalonia.Threading.Dispatcher.UIThread.Post(PlayLockdownActivationAnimation);
+            // WPF MainWindow.Lab.cs:690: offer the first-possession rules on activation.
+            void Rules() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (!_lockdownVisualsClosed) ShowPossessionRulesIfFirstTime();
+            });
             // WPF OnLockdownTick (Lab.cs:771) and OnLockdownTimerRestarted (Lab.cs:1039): the badge
             // clock follows the page clock, through the same HideLockdownTimer mask.
             void Tick(System.TimeSpan _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(PaintLockdownBadge);
@@ -90,12 +95,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 ld.LockdownActivated += Refresh;
                 ld.LockdownActivated += Flash;
+                ld.LockdownActivated += Rules;
                 ld.LockdownDeactivated += Refresh;
                 ld.CountdownTick += Tick;
                 ld.TimerRestarted += Restarted;
                 Closed += (_, _) =>
                 {
-                    ld.LockdownActivated -= Refresh; ld.LockdownActivated -= Flash; ld.LockdownDeactivated -= Refresh;
+                    ld.LockdownActivated -= Refresh; ld.LockdownActivated -= Flash; ld.LockdownActivated -= Rules; ld.LockdownDeactivated -= Refresh;
                     ld.CountdownTick -= Tick; ld.TimerRestarted -= Restarted;
                 };
             }
@@ -106,6 +112,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ApplyLockdownTheme(false);
             };
             Refresh();
+        }
+
+        /// <summary>WPF ShowPossessionRulesIfFirstTime (Lab.cs:1103): with possession armed, the rules card once,
+        /// through the presenter (an Inbox row when quiet); the flag is spent when the card opens, not when the row
+        /// is posted. The guaranteed rules bark runs when offered, including the quiet Inbox path (WPF Lab.cs:1136).</summary>
+        internal void ShowPossessionRulesIfFirstTime()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (!s.LockdownPossessionEnabled || s.LockdownPossessionIntroSeen) return;
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "intro:possession",
+                    Glyph = FeatureIntros.All["possession"].Glyph,
+                    Title = Loc.Get("possession_rules_inbox_title"),
+                    Summary = Loc.Get("possession_rules_inbox_summary"),
+                    Open = () =>
+                    {
+                        var live = CoreSettings.Current;
+                        if (!live.LockdownPossessionIntroSeen) { live.LockdownPossessionIntroSeen = true; CoreSettings.Save(); }
+                        FeatureIntroPopup.ShowIfFirstTime("possession", this);
+                    },
+                });
+                Platform.BarkHead.Engine?.Raise(Services.Possession.PossessionBarkTriggers.Rules, guaranteed: true);
+            }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Possession: failed to show the first-run rules"); }
         }
 
         // --- WPF ApplyLockdownTheme / RestoreLockdownTheme (Lab.cs:1147/1203) ----------------

@@ -8053,6 +8053,8 @@
   "online_official_nice": "Genial",
   "online_official_stamped_line": "Los medios en línea vienen de Scrolller. Cada imagen y clip lleva una pequeña marca \"via Scrolller\".",
   "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben.",
+  "possession_rules_inbox_title": "Las reglas de la guardiana",
+  "possession_rules_inbox_summary": "Qué hace la posesión antes de que la habitación se mueva.",
   "shop_title": "Mostrador de premios",
   "shop_loading": "Abriendo el mostrador.",
   "shop_offline": "El mostrador no respondió. Inténtalo de nuevo en un momento.",
