@@ -11,7 +11,6 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
-using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -22,9 +21,6 @@ namespace CCP.Avalonia.Tests;
 /// there: every visible, enabled, unclipped button in four tabs is the hit-test result at its own
 /// centre and receives a headless press there. The press is swallowed at the button's tunnel so no
 /// click side effect runs.</summary>
-// The render barrier pumps the shared dispatcher: another collection's cleanup must not
-// close this shell or restore process state while its pointer scene is being probed.
-[Collection(RunsAloneCollection.Name)]
 public sealed class ContentHitTestTests
 {
     [Fact]
@@ -33,13 +29,20 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             // This probes static hit geometry, not tab entrance or hover animation progress.
             ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
             var w = new MainShellWindow();
-            try
+            // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
+            // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
+            // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
+            ToolTip.SetServiceEnabled(w, false);
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var misses = new List<string>();
+            foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 var sinceShow = Stopwatch.StartNew();
                 w.ShowTab(tab);
@@ -78,13 +81,10 @@ public sealed class ContentHitTestTests
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
                         misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}; {probe}");
                 }
-                Assert.True(misses.Count == 0, string.Join("\n", misses));
+                Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
             }
-            finally
-            {
-                w.Close();
-                Dispatcher.UIThread.RunJobs();
-            }
+            w.Close();
+            Assert.True(misses.Count == 0, string.Join("\n", misses));
             return Task.CompletedTask;
         });
     }
