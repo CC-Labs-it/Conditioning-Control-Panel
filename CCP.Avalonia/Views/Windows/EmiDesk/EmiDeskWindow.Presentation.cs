@@ -23,6 +23,7 @@ public partial class EmiDeskWindow
         _stopPresentation = stop;
         try
         {
+            _dismissPending = false; _dismissDone = null; // #3329: the show abandons a running dismissal
             FinishSummon(); CancelChain(); CancelHold(); CloseRing(); CloseOptionsPanel(); CloseBook();
             StopIdleBeats(); DisarmPet(); _dragging = false; SweepFx(all: true); TearDownReactions();
         }

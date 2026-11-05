@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -237,6 +238,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private double _bodyWidth = DefaultBodyWidth;
         private string _pose = "idle";
+        private readonly Dictionary<string, Bitmap> _bodyCache = new();
         private DateTime _petCooldownUntil = DateTime.MinValue;
         private bool _petArmed;
         // Written by the summon / dismiss FX region below, which is the whole of what ever moved
@@ -823,20 +825,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// EmiDock.MiniFace onto EmiFace.Face/Small/Flat; this is the feed).</summary>
         public event EventHandler<string>? FaceChanged;
 
-        /// <summary>Swap the body pose PNG. A no-op when that pose is already up (this runs per sway step).</summary>
-        // ponytail: needs EmiChains.FrameKey / EmiChains.BodyPath (Services/EmiDesk/EmiChains.cs) to
-        // resolve a pose name to a file on disk, plus the BitmapImage cache that went with it.
-        // Nothing here can put art on BodyImage, so BodyPlaceholder stays up; the pose name is still
-        // tracked because the outfit overlay keys off it.
+        /// <summary>Swap the body pose PNG, reusing cached art and retaining it if a sheet is missing.</summary>
         public void SetPose(string? frame)
         {
             try
             {
-                var key = string.IsNullOrWhiteSpace(frame) ? "idle" : frame!.Trim();
-                if (key == _pose) return;
+                var key = EmiChains.FrameKey(frame) ?? "idle";
                 _pose = key;
-                // The stand-in stands down the moment real art lands, whichever road brings it.
-                _bodyPlaceholder.IsVisible = _bodyImage.Source is null;
+                var path = EmiChains.BodyPath(key, _outfit);
+                // WPF keeps the previous art when a sheet is missing.
+                if (path == null) return;
+                if (!_bodyCache.TryGetValue(path, out var image))
+                {
+                    image = new Bitmap(path);
+                    _bodyCache[path] = image;
+                }
+                _bodyImage.Source = image;
+                _bodyPlaceholder.IsVisible = false;
                 PaintOutfitOver();
             }
             catch (Exception ex)
@@ -913,8 +918,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
             // ponytail: voice mood, prop teardown and pixel/art rendering still need their hosts.
+            // #3329: the goodbye wink owns her until the dismissal lands, and any other chain during the
+            // wake completes the summon first (WPF React.cs:132-138 order), so its done hook still runs once.
+            if (_dismissPending && chain.Id != "wink") return;
+            if (_summonChainLive && chain.Id != "wake") FinishSummon();
             StopPatFeedback();
-            CancelLandFace();
             StopIdleBeats();
             _player.Play(chain, BuildHooks(done), bodyFrameOverride);
         }
@@ -2305,6 +2313,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 PlayChain("wink", () =>
                 {
                     if (_closingForGood) { FinishPendingDismiss(); return; }
+                    if (!_dismissPending) return; // a presentation took her over (#3329)
                     CrtOff();
                     After(CrtOffMs, () =>
                     {
@@ -2696,6 +2705,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 _closingForGood = true;
                 _player.Dispose();
+                _bodyImage.Source = null;
+                foreach (var image in _bodyCache.Values) image.Dispose();
+                _bodyCache.Clear();
                 try { OnTearDownCore(); }
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] teardown seam threw"); }
                 KillOptionsPanel();
@@ -2727,6 +2739,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 _closingForGood = true;
                 _player.Dispose();
+                _bodyImage.Source = null;
+                foreach (var image in _bodyCache.Values) image.Dispose();
+                _bodyCache.Clear();
                 KillOptionsPanel();
                 CloseBook();
                 StopIdleBeats();

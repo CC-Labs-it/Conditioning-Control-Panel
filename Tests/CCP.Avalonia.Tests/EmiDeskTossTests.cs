@@ -52,6 +52,9 @@ public sealed class EmiDeskTossTests
             desk = new EmiDeskWindow();
             desk.Show();
             Dispatcher.UIThread.RunJobs();
+            var art = (Image)typeof(EmiDeskWindow).GetField("_bodyImage", Priv)!.GetValue(desk)!;
+            var idleArt = art.Source;
+            Assert.NotNull(idleArt);
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot", Priv)!.GetValue(desk)!;
             var c = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), desk)!.Value;
             var toss = typeof(EmiDeskWindow).GetMethod("NoteTossFrame", Priv)!;
@@ -91,10 +94,46 @@ public sealed class EmiDeskTossTests
 
             // WPF's LandChain: ^_^, then her rest face, not the startled pickup face forever.
             Assert.Equal("^_^", desk.Face);
-            Assert.Equal(TimeSpan.FromMilliseconds(EmiDeskWindow.LandFaceMs), clock.Due);
-            clock.Fire();
+            Assert.NotSame(idleArt, art.Source);
+            Assert.NotNull(art.Source);
+            Assert.Equal("celebration", typeof(EmiDeskWindow).GetField("_pose", Priv)!.GetValue(desk));
+            Assert.True(desk.ChainLive);
+            Assert.Equal(TimeSpan.FromMilliseconds(EmiDeskWindow.LandFaceMs), desk.ChainPlayer.PendingHold);
+            desk.ChainPlayer.ElapsePendingHold();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("0_0", desk.Face);
+            Assert.True(desk.ChainLive); // the final rest frame holds for 160 ms
+            desk.ChainPlayer.ElapsePendingHold();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(desk.ChainLive);
+            Assert.Equal("idle", typeof(EmiDeskWindow).GetField("_pose", Priv)!.GetValue(desk));
+            Assert.Same(idleArt, art.Source);
+            var sheet = EmiChains.BodyPath("celebration")!;
+            System.IO.File.Move(sheet, sheet + ".test-hidden");
+            try
+            {
+                desk.SetPose("celebration");
+                Assert.Same(idleArt, art.Source); // WPF xaml.cs:833-838 retains prior art
+            }
+            finally { System.IO.File.Move(sheet + ".test-hidden", sheet); }
+            desk.SetPose("celebration");
+            var celebration = art.Source;
+            desk.SetPose("idle");
+            desk.SetPose("celebration");
+            Assert.Same(celebration, art.Source); // a repeat uses the cache
+            desk.SetPose("idle");
+            desk.PlayChain("dizzy");
+            desk.CancelChain();
+            clock.Fire();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(desk.ChainLive);
+            Assert.Equal("@_@", desk.Face); // cancellation never runs the next frame or Done
+            desk.PlayChain("dizzy");
+            desk.Close();
+            clock.Fire();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(desk.ChainLive); // no queued frame survives the window
+
         }
         finally
         {
