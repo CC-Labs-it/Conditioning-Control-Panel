@@ -40,10 +40,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
+            new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
+            // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
+            new("quest-stamps", sh => sh?.HideStampPopup()),
+            new("quest-voice", _ => ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop()),
             new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
             // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
             new("ai-followups", _ => MainShellWindow.CancelPendingAi(), After: ["voice-capture", "first-show"]),
@@ -106,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // After: engine mirrors StopEngineCore's unduck (StartStop.cs:547). Panic only: the plain Stop does not unduck here yet.
             new("audio-duck", _ => Platform.LibVlcAudio.Instance?.ForceUnduck(), After: ["engine"]),
             new("descent-fuse", _ => DescentFuseWindow.ForceCloseAll()), // WPF StartStop.cs:525
+            new("deeper-player-fullscreen", _ => Deeper.EnhancementPlayerWindow.ForceExitFullscreenAll()), // WPF player:2500-2511
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
             new("quick-recal", _ => WebcamQuickRecalWindow.CloseAllForPanic()),
