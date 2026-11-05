@@ -66,6 +66,8 @@ namespace ConditioningControlPanel
                 if (s.MindWipeLoop) CoreMindWipe.StartLoop(s.MindWipeVolume / 100.0);
             }
 
+            if (s.IntensityRampEnabled) CoreIntensityRamp.Start(); // WPF StartStop.cs:432-433
+
             _running = true;
             StartedUtc = DateTime.UtcNow;
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
@@ -94,6 +96,7 @@ namespace ConditioningControlPanel
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }
                 catch (Exception ex) { Log.Warning(ex, "Engine stop hook failed"); }
+                CoreIntensityRamp.Stop(); // WPF StartStop.cs:526 cancels pulses before :578 restores ramp
                 Log.Information("Engine stopped");
             }
             finally { _stopInProgress = false; }

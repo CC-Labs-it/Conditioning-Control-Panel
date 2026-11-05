@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private readonly ComboBox _output;
         private SettingsService? _service;
         private bool _syncing;
+        private Models.AppSettings? _settings;
 
         internal AudioSettingsBinder(Control owner, Slider master, TextBlock txtMaster, Slider video, TextBlock txtVideo,
             CheckBox duckOn, Slider duck, TextBlock txtDuck, CheckBox exclude, ComboBox output, Button refresh, Button test)
@@ -74,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Changed += Sync;
                 _service = CoreSettings.Service;
                 if (_service != null) _service.CurrentReplaced += OnReplaced;
+                WatchSettings();
                 if (_devices is null) RefreshDevices(); else Sync();
             };
             owner.DetachedFromVisualTree += (_, _) =>
@@ -81,10 +83,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Changed -= Sync;
                 if (_service != null) _service.CurrentReplaced -= OnReplaced;
                 _service = null;
+                WatchSettings();
             };
         }
 
-        private void OnReplaced() => Dispatcher.UIThread.Post(Sync);
+        private void WatchSettings()
+        {
+            if (_settings != null) _settings.PropertyChanged -= OnSettingChanged;
+            _settings = _service?.Current;
+            if (_settings != null) _settings.PropertyChanged += OnSettingChanged;
+        }
+        private void OnReplaced() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_service == null) return;
+            WatchSettings();
+            Sync();
+        });
+        // WPF StartStop.cs:676-679, 751-754: ramp ticks/restoration repaint the master controls.
+        private void OnSettingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(Models.AppSettings.MasterVolume)) return;
+            if (Dispatcher.UIThread.CheckAccess()) Sync();
+            else Dispatcher.UIThread.Post(() => { if (_settings != null) Sync(); });
+        }
 
         /// <summary>Paints every control from settings without raising an edit.</summary>
         internal void Sync()
