@@ -30,6 +30,43 @@ public sealed class AchievementEngineTests : IDisposable
         new AchievementStore(path).Load().IsUnlocked(id);
 
     [Fact]
+    public void CompanionMessagesUnlockAtWpfThresholdAndKeepCounting()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.TrackCompanionMessage();
+        Assert.Equal(1, engine.Progress.CompanionMessages);
+        Assert.True(engine.Progress.IsUnlocked("pleased_to_meet_you"));
+        Assert.False(engine.Progress.IsUnlocked("pillow_talk"));
+        engine.Progress.CompanionMessages = AchievementRules.PillowTalkMessages - 1;
+        engine.TrackCompanionMessage();
+        Assert.True(engine.Progress.IsUnlocked("pillow_talk"));
+        engine.IsDirty = false;
+        engine.TrackCompanionMessage();
+        Assert.Equal(AchievementRules.PillowTalkMessages + 1, engine.Progress.CompanionMessages);
+        Assert.True(engine.IsDirty);
+    }
+
+    [Fact]
+    public void Pop_credit_unlocks_at_1000_awards_points_and_flushes_every_50()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-bubble-credit-");
+        var s = CoreSettings.Current; var points = s.SkillPoints;
+        try
+        {
+            var path = Path.Combine(dir.FullName, "achievements.json");
+            var engine = new AchievementEngine(new AchievementStore(path));
+            engine.Progress.TotalBubblesPopped = 949;
+            engine.TrackBubblePopped();
+            Assert.Equal(950, new AchievementStore(path).Load().TotalBubblesPopped);
+            Assert.Equal(points, s.SkillPoints);
+            for (var i = 0; i < 50; i++) engine.TrackBubblePopped();
+            Assert.True(engine.Progress.IsUnlocked("pop_the_thought"));
+            Assert.Equal(points + 1, s.SkillPoints);
+        }
+        finally { s.SkillPoints = points; dir.Delete(true); }
+    }
+
+    [Fact]
     public void AttentionTrackersCountAndUnlockAtWpfThresholds()
     {
         var engine = new AchievementEngine(new AchievementStore(MainPath));

@@ -92,6 +92,24 @@ public sealed class TakeawayShelfTests
         Assert.Equal(prior, shell.WindowState);
     });
 
+    /// <summary>ccp-bugs #1499 (WPF JustDropHostService.cs:176-188): a refused sign-in handoff opens the
+    /// signed-out destination once; the site's own pages never trip it.</summary>
+    [Fact]
+    public Task ARefusedHandoffOpensTheSignedOutDestinationOnce() => InShell(shell =>
+    {
+        var live = GameWindow.LaunchJustDropReplay("code9", shell)!;   // InShell's finally closes it
+        Assert.Equal(JustDropHandoff.HandoffPath, live.PageUrl!.AbsolutePath);
+        var before = live.Web.NavigationRequests;
+        live.Web.OnNavigationCompleted(new Uri(JustDropHandoff.SiteOrigin + JustDropHandoff.ShopPath));
+        Assert.Equal(before, live.Web.NavigationRequests);
+        live.Web.OnNavigationCompleted(live.PageUrl);
+        Assert.Equal(before + 1, live.Web.NavigationRequests);
+        Assert.Equal(new Uri(JustDropHandoff.SiteOrigin + JustDropHandoff.ReplayPath("code9")), live.Web.Source);
+        live.Web.OnNavigationCompleted(live.PageUrl);   // once only: no loop if the site refuses again
+        Assert.Equal(before + 1, live.Web.NavigationRequests);
+        return Task.CompletedTask;
+    });
+
     private sealed class Drawer : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)

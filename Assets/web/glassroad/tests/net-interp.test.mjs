@@ -1,5 +1,6 @@
 /* tests/net-interp.test.mjs - remote karts 100 ms in the past, dead reckoning up to 250 ms, 150 ms correction
- * blend, rescue snap, held seats, pulses counted once (NET.md section 3, client render rule). */
+ * blend, rescue snap, held seats, pulses counted once, a record that agrees moves nothing on screen (NET.md section
+ * 3, client render rule). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInterp } from '../net/interp.js';
@@ -93,12 +94,35 @@ test('seed writes the newest record as a full state (keeper hand-off)', () => {
   assert.ok(near(out[S.speedPct], 0.9));
 });
 
-test('a peek (the per-frame view) never moves the correction blend', () => {
+test('a record that agrees with the kart moves nothing on screen, frame after frame', () => {
+  const ip = createInterp(track), out = createState(), V = 40;    // 40 m/s, a record every 50 ms, drawn at 60 fps
+  let next = 0, seq = 0, prev = null;
+  for (let t = 0; t < 2000; t += 1000 / 60) {
+    while (next <= t) { ip.push(rec(++seq, 100 + V * next / 1000), 1000 + next); next += 50; }
+    ip.sample(2, 1100 + t, out);
+    if (t > 1000) assert.ok(near(out[S.s] - prev, V / 60), `frame at ${t}: moved ${out[S.s] - prev}`);
+    prev = out[S.s];
+  }
+});
+
+test('a late record that corrects the kart eases in, with no step on screen', () => {
+  const ip = createInterp(track), out = createState();
+  ip.push(rec(1, 100), 1000); ip.push(rec(2, 102), 1050);        // 40 m/s
+  ip.sample(2, 1200, out);                                       // dead reckoning at 1100: s 104
+  const before = out[S.s];
+  ip.push(rec(3, 103), 1100);                                    // really 20 m/s from here: s 103 at 1100
+  ip.sample(2, 1200, out);
+  assert.ok(near(out[S.s], before), 'same drawn time, same place');
+  ip.sample(2, 1350, out);                                       // past the blend: on the corrected path
+  assert.ok(near(out[S.s], 103 + 20 * 0.15, 1e-6));
+});
+
+test('whichever sample meets a new record first (sim tick, drawn frame), the blend is the same', () => {
   const a = createInterp(track), b = createInterp(track), oa = createState(), ob = createState(), op = createState();
   for (const ip of [a, b]) { ip.push(rec(1, 100), 1000); ip.push(rec(2, 102), 1050); }
-  a.sample(2, 1250, oa); b.sample(2, 1250, ob);
+  a.sample(2, 1200, oa); b.sample(2, 1200, ob);
   for (const ip of [a, b]) ip.push(rec(3, 103), 1100);
-  b.sample(2, 1240, op, true);
+  a.sample(2, 1200, op); b.sample(2, 1200, op); b.sample(2, 1200, op);
   a.sample(2, 1290, oa); b.sample(2, 1290, ob);
   assert.equal(oa[S.s], ob[S.s]);
 });
