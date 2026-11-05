@@ -6,5 +6,7 @@ internal static class FriendsSfx
 {
     public static void Click() => FriendsLanding.Sfx("chaos/ui_click.mp3", 0.12f, "friends-click");
     public static void Sent() => FriendsLanding.Sfx("chaos/chip_pop.mp3", 0.16f, "friends-sent");
+    public static void Accepted() => FriendsLanding.Sfx("chaos/ui_unlock.mp3", 0.18f, "friends-accepted");
+    public static void Dismiss() => FriendsLanding.Sfx("chaos/sink.mp3", 0.10f, "friends-sink");
     public static void Denied() => FriendsLanding.Sfx("chaos/ui_denied.mp3", 0.14f, "friends-denied");
 }

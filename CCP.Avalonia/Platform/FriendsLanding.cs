@@ -299,17 +299,19 @@ internal static partial class FriendsLanding
     internal static void DrawerOpen() => Sfx("chaos/cards_in.mp3", 0.14f, "friends-open");
     internal static void DrawerClose() => Sfx("chaos/ui_unequip.mp3", 0.10f, "friends-close");
 
+    /// <summary>The gap rules' clock; tests step it.</summary>
+    internal static Func<DateTime> SfxNow = () => DateTime.UtcNow;
+
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
     internal static void Sfx(string rel, float scale, string tag, bool incoming = false)
     {
         try
         {
             var s = CoreSettings.Current;
-            // WPF FriendsSfx.cs:47-51,66-69: suppression must not consume the cue gap.
-            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed
-                || CoreEngine.Video?.IsPlaying == true
+            // WPF Services/Friends/FriendsSfx.cs:47-51: silence under output suppression, video or Emi hold.
+            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed || CoreEngine.Video?.IsPlaying == true
                 || ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
-            lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
+            lock (SfxGate) if (!SfxGate.TryPass(SfxNow(), incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;

@@ -273,6 +273,7 @@ public sealed partial class FriendsDrawer
     /// <summary>WPF ShowResult: worded in the row; a drawer that folded while the send was out says it outside.</summary>
     private void ShowResult(string friendId, SendResult r)
     {
+        // WPF FriendsDrawer.cs:1144: cheer only after a successful send.
         if (FriendsDrawerRules.IsGood(r)) Platform.FriendsSfx.Sent(); else Platform.FriendsSfx.Denied();
         var text = Loc.Get(FriendsDrawerRules.SendResultKey(r));
         ShowTimed(friendId, text, FriendsDrawerRules.IsGood(r));
