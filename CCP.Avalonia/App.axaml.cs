@@ -471,6 +471,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             AvaloniaXamlLoader.Load(this);
             ConditioningControlPanel.Services.Chaos.ChaosRunState.IconResolver = Views.Chaos.ChaosBoonBarArt.Resolve;
+            Platform.FontGuard.Startup.Verify(Resources, OperatingSystem.IsWindows()); // before any window, including the splash
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
@@ -202,7 +203,10 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // Motion is Off here (no entrance starts); settle anyway so a later motion change cannot move the target.
+            shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
