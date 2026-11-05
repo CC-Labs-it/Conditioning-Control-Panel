@@ -67,8 +67,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// are Core's (ModManifest / ModPackage) and the active mod comes from the CoreMods seam, which
     /// answers "the built-in default" on a head with no mod layer, so the ctor touches no disk.
     ///
-    /// Preview playback is stoppable through CoreAudio. UI Art uses the existing image slots.
-    /// Barks, Mantras, Event Audio, Portraits, Emotes and Art Framing remain deferred.
+    /// Preview playback is stoppable through CoreAudio. UI Art uses the existing image slots, and text
+    /// Barks are a ported partial. Mantras, Event Audio, Portraits, Emotes and Art Framing remain deferred.
     /// </summary>
     public partial class ModCreatorWindow : Window
     {
@@ -429,7 +429,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildPoolsSection();
             BuildPersonalitiesSection();
             BuildAdvancedSection();
-            BuildDeferredSection("barks", "Barks", "ModCreatorWindow.Barks.cs");
+            BuildBarksSection();
             BuildDeferredSection("mantras", "Mantras", "ModCreatorWindow.Mantras.cs");
             BuildDeferredSection("eventaudio", "Event Audio", "ModCreatorWindow.EventAudio.cs");
             BuildDeferredSection("portraits", "Portraits", "ModCreatorWindow.Portraits.cs");
@@ -452,13 +452,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // ─── Side-file seams ─────────────────────────────────────
-        // ponytail: needs the panel partials (Barks/Mantras/EventAudio/Portraits/Emotes), wired
+        // Barks is wired below. Remaining panel partials (Mantras/EventAudio/Portraits/Emotes) join
         // when each is ported. In the WPF head these three aggregate hooks let export write each
         // panel's side files into the .ccpmod resources tree, let load repopulate the panels from
         // an extracted tree, and let reset clear them.
-        private void WriteSideFilesTo(string resourcesDir) { }
-        private void LoadSideFilesFrom(string resourcesDir) { }
-        private void ClearSideFileState() { }
+        private void WriteSideFilesTo(string resourcesDir) => WriteBarksTo(resourcesDir);
+        private void LoadSideFilesFrom(string resourcesDir) => LoadBarksFrom(resourcesDir);
+        private void ClearSideFileState() => ClearBarksSection();
 
         private void ApplyPanelSectionsToManifest(ModManifest manifest)
         {
