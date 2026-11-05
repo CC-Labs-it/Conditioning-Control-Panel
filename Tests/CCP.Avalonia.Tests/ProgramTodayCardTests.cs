@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -187,7 +188,12 @@ public sealed class ProgramTodayCardTests
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
-            PointerTestFrame.Next(shell);
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            // A real 60 fps headless tick between pumps renders a frame at the same stepped time, which
+            // commits nothing; MediaContext then hands the next frame to its 16 ms wall-clock timer, which
+            // no forced tick drives (CI: stuck at -7.5). A commit request makes this pump render a frame.
+            ElementComposition.GetElementVisual(shell)!.Compositor.RequestCommitAsync();
+            Dispatcher.UIThread.RunJobs();
             return ((TranslateTransform)art.RenderTransform!).X;
         }
         var p = 0.13 / 0.26;

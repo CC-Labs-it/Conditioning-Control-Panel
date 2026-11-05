@@ -61,6 +61,20 @@ public sealed class JustDropServiceTests
         Assert.Equal("/express/play?order=AB%2012", JustDropHandoff.ReplayPath(" AB 12 "));
     }
 
+    /// <summary>ccp-bugs #1499 (WPF JustDropHandoffFallbackTests): a completion ON the handoff url is a
+    /// refusal; the site's own pages and other origins never trip the fallback.</summary>
+    [Theory]
+    [InlineData("https://app.cclabs.app/api/auth/desktop-session?unified_id=u&next=%2Fdashboard%2Fexpress", true)]
+    [InlineData("https://app.cclabs.app/api/auth/desktop-session/", true)]
+    [InlineData("https://app.cclabs.app/dashboard/express", false)]
+    [InlineData("https://app.cclabs.app/express/play?order=AB", false)]
+    [InlineData("https://evil.example/api/auth/desktop-session", false)]
+    [InlineData("http://app.cclabs.app/api/auth/desktop-session", false)]
+    [InlineData("https://user@app.cclabs.app/api/auth/desktop-session", false)]
+    [InlineData(null, false)]
+    public void Only_a_completion_on_the_handoff_url_is_a_refusal(string? completed, bool refused)
+        => Assert.Equal(refused, JustDropHandoff.IsRefusedHandoff(completed == null ? null : new Uri(completed)));
+
     [Theory]
     [InlineData("https://app.cclabs.app/api/auth/desktop-session?unified_id=u1&next=%2Fdashboard%2Fexpress", true)]
     [InlineData("https://APP.cclabs.app/api/auth/desktop-session", true)]
