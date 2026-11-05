@@ -79,13 +79,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnQuestProgressChanged(object? sender, QuestProgressEventArgs e) =>
             Dispatcher.UIThread.Post(() => { if (IsVisible) RefreshQuestUI(); });
 
-        /// <summary>MainWindow.Quests.cs:40. ponytail: no flash voice line (App.Flash.PlayRandomSound
-        /// - FlashService audio is not on this head; the service's own chime still plays) and no header
-        /// stamps (MainWindow.QuestStamps.cs).</summary>
+        /// <summary>WPF MainWindow.Quests.cs:40-62: announcements, banner and sync.</summary>
         private void OnQuestCompleted(object? sender, QuestCompletedEventArgs e) => Dispatcher.UIThread.Post(() =>
         {
             // Perk-announcement opt-out: the popup goes, the in-tab banner stays (WPF :47).
             bool announce = !CoreSettings.Current.SuppressPerkNotifications;
+            if (announce) Services.Flash.FlashCelebrationVoice.Play(CoreSettings.Current);
             try { _questCompletePopup?.Close(); } catch { }
             _questCompletePopup = null;
             if (announce)
@@ -222,7 +221,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 TxtWeeklyQuestDesc.Text = Loc.Get("quest_weekly_done_desc");
                 TxtWeeklyProgress.Text = TxtWeeklyXP.Text = "";
                 WeeklyXpIcon.IsVisible = false;
-                TxtWeeklyStreakBonus.IsVisible = TxtWeeklyRerollBonus.IsVisible = false;
+                // Empties the icons too, not just hides them (#22339, see DailyQuestCard.SetBonus).
+                TxtWeeklyStreakBonus.IsVisible = DailyQuestCard.SetBonus(TxtWeeklyStreakBonus, 0, 0);
+                TxtWeeklyRerollBonus.IsVisible = DailyQuestCard.SetBonus(TxtWeeklyRerollBonus, 0, 0);
                 WeeklyCompletedOverlay.IsVisible = true;
                 BtnRerollWeekly.IsEnabled = false;
                 rerollText.Kind = null;

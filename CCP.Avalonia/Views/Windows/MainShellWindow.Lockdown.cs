@@ -172,7 +172,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal global::Avalonia.Controls.Border? LockdownFlash => _lockdownFlash;
         internal System.TimeProvider LockdownFlashTime { get; set; } = System.TimeProvider.System;
         private long _lockdownFlashStarted;
-        internal void TickLockdownFlash() => PaintLockdownFlash(LockdownFlashTime.GetElapsedTime(_lockdownFlashStarted).TotalMilliseconds);
 
         private void PlayLockdownActivationAnimation()
         {
@@ -192,7 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 root.Children.Add(_lockdownFlash);
                 _lockdownFlashStarted = LockdownFlashTime.GetTimestamp();
                 _lockdownFlashTimer = new global::Avalonia.Threading.DispatcherTimer(System.TimeSpan.FromMilliseconds(33),
-                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => TickLockdownFlash());
+                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => StepLockdownFlash());
                 _lockdownFlashTimer.Start();
             }
             catch (System.Exception ex)
@@ -200,6 +199,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Serilog.Log.Warning(ex, "Failed to play lockdown animation");
             }
         }
+
+        internal void StepLockdownFlash() =>
+            PaintLockdownFlash(LockdownFlashTime.GetElapsedTime(_lockdownFlashStarted).TotalMilliseconds);
 
         /// <summary>One frame of the flash at <paramref name="ms"/> in; at 600 ms it is removed.</summary>
         internal void PaintLockdownFlash(double ms)
