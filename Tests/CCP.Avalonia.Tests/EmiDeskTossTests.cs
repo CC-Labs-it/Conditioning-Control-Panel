@@ -75,6 +75,10 @@ public sealed class EmiDeskTossTests
             var squash = (CancellationTokenSource?)typeof(EmiDeskWindow).GetField("_squashAnim", Priv)!.GetValue(desk);
             Assert.NotNull(squash);                                  // the landing owns the squash slot
 
+            Assert.True(desk.ChainLive);
+            Assert.Equal("@_@", desk.Face);
+            desk.CancelChain(); // finish the throw before testing a separate gentle drop
+
             // A slow drag is a drop: not counted, the bump cue.
             clock.Now += TimeSpan.TicksPerSecond;
             desk.MouseDown(c, MouseButton.Left);
