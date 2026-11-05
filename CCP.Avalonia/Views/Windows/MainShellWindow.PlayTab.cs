@@ -17,6 +17,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void LaunchPlayChess() => Games.GameWindow.Launch("piecebypiece");
 
+        /// <summary>WPF LaunchPlayLauncherGame -> LaunchExclusiveGame (MainWindow.Exclusives.cs:217): the
+        /// launcher's own entry, so its account rule and gate answer. Signed out -> the login dialog; an id
+        /// this head has no destination for (arcademy) does nothing, as WPF's unavailable entry.</summary>
+        internal void LaunchPlayLauncherGame(string id)
+        {
+            if (global::ConditioningControlPanel.Services.Launcher.LauncherCards.Find(id) is not { } card
+                || !LauncherWindow.Destinations.TryGetValue(id, out var dest)) return;
+            if (card.RequiresAccount && !CoreAccount.IsLoggedIn) { _ = OpenUnifiedLoginDialog(); return; }
+            dest.Open(this);
+        }
+
         /// <summary>Builds the Mantra Lab. Tests swap it to make the open fail.</summary>
         internal static System.Func<MantraWindow> NewMantraWindow = () => new MantraWindow();
 
