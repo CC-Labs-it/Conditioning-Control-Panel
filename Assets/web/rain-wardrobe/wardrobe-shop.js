@@ -1,7 +1,8 @@
 // The dressing room's shop layer (RAIN-V2-PLAN 2.4 / 2.5): badges, try-on, draft then Apply.
 // Pure on purpose: no location, no document at import, so node tests load it as is. viewer.js wires it.
-// Host -> page: init {look, grants[], level, achievements[], locale, motion, gentle, prices?, applyMode?},
-//   rain-owned {grants}, rain-applied {lookHash}. Page -> host: rain-draft {look, unowned},
+// Host -> page: init {look, grants[], level, achievements[], locale, motion, gentle, prices?, applyMode?, companion?},
+//   rain-owned {grants}, rain-applied {lookHash}, rain-tryon {key} (init.tryOn too),
+//   rain-baking {lookHash, done, total, shown, fraction} (the host's count of the bake; init.strings localises STR). Page -> host: rain-draft {look, unowned},
 //   rain-apply {look}, open-counter {tab}. Without init the page reads today's ?locked= list instead
 //   (fallback), and without applyMode:true the page keeps the old autosave (viewer.js decides).
 
@@ -22,11 +23,37 @@ export const STR = {
   apply: 'Apply look',
   openCounter: 'Open counter',
   applying: 'Getting dressed',
+  baking: 'Getting dressed: {n} of {total}',
+  bakeHint: 'Keep this window open. Closing it stops the change.',
   applied: 'Applied',
   saved: 'Saved',
 };
 
 export const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? ''));
+
+/** What the page calls her (owner 2026-10-30): the host's `init.companion`, the active mod's name (Bambi, Bimbo,
+ *  Emi). "Rain" is only the 3D model's name and never shows. A missing or odd value answers Emi. */
+export function companionName(value) {
+  const v = typeof value === 'string' ? value.trim() : '';
+  return v && v.length <= 24 ? v : 'Emi';
+}
+
+/** Put the name on the page chrome (ids from index.html): title, brand, preview label, foot line. */
+export function paintCompanion(doc, name) {
+  const n = companionName(name);
+  const $ = id => doc.getElementById(id);
+  doc.title = `${n} | Dressing room`;
+  const brand = $('brand');
+  if (brand) {
+    brand.setAttribute('aria-label', `${n} dressing room`);
+    const first = brand.firstChild;
+    if (first && first.nodeType === 3) first.nodeValue = n.toUpperCase();
+    else brand.insertBefore(doc.createTextNode(n.toUpperCase()), first);
+  }
+  if ($('preview')) $('preview').setAttribute('aria-label', `${n}. Drag to rotate, scroll to zoom.`);
+  if ($('sameName')) $('sameName').textContent = `Your look. Same ${n}.`;
+  return n;
+}
 
 const SINGLE = ['dress', 'hair', 'skin', 'shoes', 'legwear', 'arms', 'ankles'];
 
@@ -67,11 +94,14 @@ const prettify = key => { const id = String(key).split(':').pop().replace(/-/g, 
  * The shop state for one window. `isLocked(slot, id)` is today's ?locked= reader (fallback until init).
  * `post(message)` reaches the host (host-bridge postHost); `nameOf(key)` is the page's display name.
  */
-export function createShop({ items, isLocked = () => false, post = () => {}, nameOf = prettify } = {}) {
+export function createShop({ items, isLocked = () => false, post = () => {}, nameOf = prettify, companion = null } = {}) {
   const s = {
     items: items instanceof Map ? items : indexItems(items),
     source: 'fallback', grants: new Set(), level: 0, achievements: [], prices: {},
-    applyMode: false, calm: false, applied: null, draft: null, pending: null, applying: false, lookHash: '',
+    applyMode: false, calm: false, applied: null, draft: null, pending: null, applying: false, lookHash: '', tryOn: null,
+    // bake = {shown, total, fraction} while a bake reports; outcome = how the last Apply ended (the meter's OUT).
+    bake: null, outcome: null, str: { ...STR },
+    companion: companionName(companion),
   };
 
   function owned(key) {
@@ -128,7 +158,7 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
     const dirty = !!s.draft && !!s.applied && !sameLook(s.draft, s.applied);
     const wearable = unowned.length === 0;
     return {
-      keys, unowned, count: unowned.length, wearable, dirty, applying: s.applying,
+      keys, unowned, count: unowned.length, wearable, dirty, applying: s.applying, bake: s.bake, outcome: s.outcome,
       blocker: unowned.length ? blockerFor(unowned[0]) : null,
       canApply: wearable && dirty && !s.applying,
       canDiscard: dirty && !s.applying,
@@ -148,7 +178,7 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
   function apply() {
     const st = status();
     if (!st.canApply) return false;
-    if (s.applyMode) { s.applying = true; s.pending = s.draft; post({ type: 'rain-apply', look: s.draft }); }
+    if (s.applyMode) { s.applying = true; s.pending = s.draft; s.bake = null; s.outcome = null; post({ type: 'rain-apply', look: s.draft }); }
     else s.applied = s.draft;
     return true;
   }
@@ -175,17 +205,33 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
       s.applyMode = data.applyMode === true;
       s.calm = data.gentle === true || data.motion === false || data.motion === 0 || data.motion === 'off' || data.motion === 'reduced';
       if (data.look && typeof data.look === 'object' && !Array.isArray(data.look)) { s.applied = data.look; s.draft = data.look; }
+      if (typeof data.tryOn === 'string') s.tryOn = data.tryOn;
+      // The host's localised lines: known keys only, plain strings only.
+      if (data.strings && typeof data.strings === 'object') for (const [k, v] of Object.entries(data.strings)) if (k in STR && typeof v === 'string' && v.trim()) s.str[k] = v;
+      // The page already paints the query's name at boot; an init without one keeps it.
+      if (typeof data.companion === 'string') s.companion = companionName(data.companion);
       return 'init';
     }
+    // The Prize Counter's Wear door on a window that is already up.
+    if (data.type === 'rain-tryon' && typeof data.key === 'string') { s.tryOn = data.key; return 'tryon'; }
     if (data.type === 'rain-owned' && Array.isArray(data.grants)) {
       if (s.source === 'init') s.grants = new Set(data.grants.filter(g => typeof g === 'string'));
       return 'owned';
+    }
+    // The host counts the bake's clips (a host-side re-bake on open counts too, with no Apply press).
+    if (data.type === 'rain-baking') {
+      const total = Number(data.total), shown = Number(data.shown), fraction = Number(data.fraction);
+      if (!(total > 0) || !Number.isFinite(shown) || !Number.isFinite(fraction)) return null;
+      s.bake = { shown: Math.max(0, Math.min(total, Math.round(shown))), total: Math.round(total), fraction: Math.max(0, Math.min(1, fraction)) };
+      s.outcome = null;
+      return 'baking';
     }
     if (data.type === 'rain-applied') {
       // failed:true = cancelled, bake error or a host clamp (data.look): the applied look stays.
       const failed = data.failed === true;
       if (s.pending && !failed) s.applied = s.pending;
-      s.pending = null; s.applying = false;
+      s.outcome = s.bake ? (failed ? 'failed' : 'applied') : null;
+      s.pending = null; s.applying = false; s.bake = null;
       if (failed) return 'apply-failed';
       s.lookHash = typeof data.lookHash === 'string' ? data.lookHash : '';
       return 'applied';
@@ -195,8 +241,17 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
 
   return {
     get applyMode() { return s.applyMode; }, get calm() { return s.calm; }, get source() { return s.source; },
-    get applied() { return s.applied; }, get lookHash() { return s.lookHash; },
+    get applied() { return s.applied; }, get lookHash() { return s.lookHash; }, get str() { return s.str; }, get companion() { return s.companion; },
     owned, badge, status, setDraft, apply, discard, openCounter, handle,
+    /** The piece the counter asked to try on, once: {slot, id} when items.json knows it (never a bundled
+     *  look), else null. Kept until items.json has loaded, so an early init is not lost. */
+    takeTryOn() {
+      const key = s.tryOn;
+      if (!key || !s.items.size) return null;
+      s.tryOn = null;
+      const row = s.items.get(key);
+      return row && row.slot !== 'looks' ? { slot: row.slot, id: row.pageId } : null;
+    },
     setItems(json) { s.items = json instanceof Map ? json : indexItems(json); },
     /** The old autosave reached the host: that look is the applied one now. */
     markApplied() { s.applied = s.draft; },
@@ -215,6 +270,7 @@ export function listenToHost(win, shop, onChange) {
 export function paintShop(doc, shop) {
   const $ = id => doc.getElementById(id);
   const st = shop.status();
+  const T = shop.str || STR;
   doc.documentElement.toggleAttribute('data-calm', shop.calm);
   const ribbon = $('tryonRibbon');
   if (ribbon) { ribbon.textContent = st.count ? fill(STR.ribbon, { n: st.count }) : ''; ribbon.classList.toggle('on', st.count > 0); ribbon.setAttribute('aria-hidden', String(!st.count)); }
@@ -222,12 +278,39 @@ export function paintShop(doc, shop) {
   if ($('lookNow')) $('lookNow').textContent = st.names.join(', ');
   const blocker = $('lookBlocker');
   if (blocker) {
-    blocker.classList.toggle('on', !!st.blocker);
-    $('lookBlockerText').textContent = st.blocker ? st.blocker.text : (st.applying ? STR.applying : '');
+    blocker.classList.toggle('on', !!st.blocker || !!st.bake);
+    $('lookBlockerText').textContent = st.blocker ? st.blocker.text : (st.bake ? T.bakeHint : (st.applying ? T.applying : ''));
     $('openCounter').hidden = !(st.blocker && st.blocker.counter);
     $('openCounter').textContent = STR.openCounter;
   }
   if ($('discardLook')) { $('discardLook').textContent = STR.discard; $('discardLook').disabled = !st.canDiscard; }
-  if ($('applyLook')) { $('applyLook').textContent = st.applying ? STR.applying : STR.apply; $('applyLook').disabled = !st.canApply; }
+  if ($('applyLook')) { $('applyLook').textContent = st.bake ? bakeLine(T, st.bake) : (st.applying ? T.applying : STR.apply); $('applyLook').disabled = !st.canApply; }
+  paintMeter($('bakeMeter'), st, shop.calm);
+  paintCompanion(doc, shop.companion);
   return st;
+}
+
+/** "Getting dressed: 3 of 17" from the (localised) template. */
+export const bakeLine = (T, bake) => fill(T.baking || STR.baking, { n: bake.shown, total: bake.total });
+
+/** The bake meter (a hairline over the bar). IN: a fresh bake starts empty with no backwards sweep
+ *  and fades in; the fill follows the host's count. OUT: an applied bake fills to the end, then fades
+ *  (style.css delays the fade); a failed or cancelled one just fades. Calm lengthens both fades. */
+export function paintMeter(meter, st, calm = false) {
+  if (!meter) return;
+  const fill = meter.firstElementChild;
+  const on = !!st.bake, was = meter.classList.contains('on');
+  meter.classList.toggle('calm', !!calm);
+  if (on && !was) {
+    meter.classList.toggle('done', false);
+    if (fill) { fill.style.transition = 'none'; fill.style.transform = 'scaleX(0)'; void meter.offsetWidth; fill.style.transition = ''; }
+  }
+  if (on && fill) fill.style.transform = `scaleX(${st.bake.fraction})`;
+  if (!on && was) {
+    const done = st.outcome === 'applied';
+    meter.classList.toggle('done', done);
+    if (fill && done) fill.style.transform = 'scaleX(1)';
+  }
+  meter.classList.toggle('on', on);
+  meter.setAttribute?.('aria-hidden', String(!on));
 }

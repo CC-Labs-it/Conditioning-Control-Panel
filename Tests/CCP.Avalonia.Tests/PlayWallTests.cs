@@ -36,9 +36,10 @@ public sealed class PlayWallTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var previous = PlayTabView.LaunchGame;
-            var (oldLogin, oldLab) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider);
+            var (oldLogin, oldLab, oldPremium) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider);
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => true;
+            CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is a Basic door (port/7.2 DtrhGate)
             var shell = new MainShellWindow();
             var launches = new System.Collections.Generic.List<string>();
             PlayTabView.LaunchGame = id => launches.Add(id);
@@ -55,7 +56,7 @@ public sealed class PlayWallTests
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(gameId, Assert.Single(launches));
             }
-            finally { shell.Close(); PlayTabView.LaunchGame = previous; CoreAccount.IsLoggedInProvider = oldLogin; CoreEntitlement.HasLabProvider = oldLab; }
+            finally { shell.Close(); PlayTabView.LaunchGame = previous; CoreAccount.IsLoggedInProvider = oldLogin; CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.HasPremiumProvider = oldPremium; }
         });
     }
 
@@ -211,11 +212,11 @@ public sealed class PlayWallTests
                 games.Children.Skip(4).Select(c => c.Name));
             foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
                 Assert.NotNull(C<Border>("Play" + name + "HeroPlate").Background);
-            // WPF PlayCardT2 (PlayTabView.xaml:131-132): tier-2 living-metal rim, 3 px.
-            foreach (var slot in new[] { "SlotBreakout", "SlotDtrh", "SlotArcademy" })
+            // WPF PlayCardT2 (PlayTabView.xaml:131-132): tier-2 living-metal rim, 3 px; DtRH is the Basic (tier-1) card on port/7.2.
+            foreach (var (slot, tier) in new[] { ("SlotBreakout", 2), ("SlotDtrh", 1), ("SlotArcademy", 2) })
             {
                 var card = (Border)C<Grid>(slot).Children[0];
-                Assert.Equal(2, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(card));
+                Assert.Equal(tier, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(card));
                 Assert.Equal(3, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetRimThickness(card));
             }
 

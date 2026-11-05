@@ -103,12 +103,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static readonly (string Plate, string Art, Stretch Fit)[] HeroPlates =
         {
             ("PlayBackRoomHeroPlate", "features/backroom.png", Stretch.UniformToFill),
-            ("PlayDtrhHeroPlate", "features/dtrh.png", Stretch.UniformToFill),
             ("PlayArcademyHeroPlate", "features/arcademy.png", Stretch.UniformToFill),
             ("PlayRacingThoughtsHeroPlate", "features/race.png", Stretch.UniformToFill),
             ("PlayWebAppHeroPlate", "billboard/webapp.png", Stretch.UniformToFill),
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
+            ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
             ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill),
             ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill),
@@ -186,22 +186,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
-                PlayLockDtrh.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh").Allowed;
                 PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
                 // WPF MainWindow.PlayTab.cs:132: Racing Thoughts requires Lab, with no daily-free key.
                 PlayLockRacingThoughts.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
-                PlayBadgeDtrh.FreeToday = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
                 PlayLockFocusGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed;
                 PlayLockRemote.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed;
                 PlayLockLockdown.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_lockdown_mode")).Allowed;
                 PlayLockBlink.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_blink_trainer")).Allowed;
                 PlayLockFyp.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_fyp"), "fyp").Allowed;
+                PlayLockDtrh.IsVisible = Games.GameWindow.DtrhLocked();
 
                 // FREE TODAY (WPF :145): only on a door that is otherwise shut - an owner gets no gift.
                 bool premium = CoreEntitlement.HasPremium;
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
+                PlayBadgeDtrh.FreeToday = !premium && CoreEntitlement.IsFreeToday("dtrh");
 
                 RefreshPlayIntakeCard();
             }

@@ -125,16 +125,16 @@ public sealed class PremiumGatesTests
                 Assert.True(Stamped("PlayBadgeRemote"));
                 Assert.False(Stamped("PlayBadgeFyp"));
 
-                // DtRH is a Lab gift, independent of the premium Remote/For You gifts.
+                // DtRH is a Basic gift (port/7.2 DtrhLocked/DtrhGate), independent of the Remote/For You gifts.
                 CoreEntitlement.IsFreeTodayProvider = k => k == "dtrh";
                 Show("play");
                 Assert.False(Banded("PlayLockDtrh"));
                 Assert.True(Banded("PlayLockArcademy"));
                 Assert.True(Stamped("PlayBadgeDtrh"));
-                CoreEntitlement.HasLabProvider = () => true;
+                CoreEntitlement.HasPremiumProvider = () => true;
                 Show("play");
                 Assert.False(Stamped("PlayBadgeDtrh"));
-                CoreEntitlement.HasLabProvider = null;
+                CoreEntitlement.HasPremiumProvider = null;
 
                 // The other three pool keys lift their own veils (WPF RefreshEntitlementVeils).
                 CoreEntitlement.IsFreeTodayProvider = k => k is "takeover" or "voice" or "haptics";

@@ -44,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;
         private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
+        private DateTime? _grLastLoadingUtc;   // #1543: the page's last `loading` frame (a course build may follow)
         private DispatcherTimer? _grWatch;
 
         /// <summary>Test seam: the last net relay; done once its reply is queued on the UI thread.</summary>
@@ -56,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _grOpen = true;
             _grEarlyInitSent = _grPinged = false;
             _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
+            _grLastLoadingUtc = null;
             Closed += (_, _) => CloseGlassroad();
             Web.NavigationCompleted += url => { if (PageUrl != null && SameOrigin(url, PageUrl)) PostGlassroadInit(); };
             _grWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -124,6 +126,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
                         return true;
+                    case "loading":
+                        // The page's loading bar moved (glassroad CONTRACT.md): a long build may follow.
+                        _grLastLoadingUtc = DateTime.UtcNow;
+                        break;   // unclaimed, as before: the shell frames still see it
                     case "net":
                         OnGlassroadNet(o);
                         return true;
@@ -194,25 +200,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void ReplyGlassroadNet(string id, int status, string body)
             { if (!_closing) Post(new { type = "net-reply", id, status, body }); }
 
-        /// <summary>One 5 s watchdog tick (WPF StartWatch): before ready, 45 s with no page message at all closes
-        /// it (the bridge beats every 2 s); after ready, silent past 20 s gets one ping, then the close.</summary>
+        /// <summary>One 5 s watchdog tick (WPF StartWatch, GlassroadHostRules.Watch): before ready, 45 s with no page
+        /// message at all closes it (the bridge beats every 2 s); after ready, silent past 20 s gets one ping, then the
+        /// close. A page with a recent `loading` frame (a course build, #1543) gets up to 90 s of silence first.</summary>
         internal string CheckGlassroadWatch(DateTime nowUtc)
         {
             if (!_grOpen || _closing) return "idle";
-            if (PbpHostRules.BootTimedOut(IsReady, nowUtc - _grLastProgressUtc))
-            {
-                Log.Warning("Glassroad: no page progress for {S:0}s - closing", PbpHostRules.BootDeadline.TotalSeconds);
-                Close();
-                return "boot-timeout";
-            }
-            switch (PbpHostRules.HeartbeatStep(IsReady, (nowUtc - _grLastBeatUtc).TotalSeconds, _grPinged))
+            bool busy = GlassroadHostRules.IsBusy(nowUtc - _grLastLoadingUtc);
+            switch (GlassroadHostRules.Watch(IsReady, nowUtc - _grLastProgressUtc, nowUtc - _grLastBeatUtc, _grPinged, busy))
             {
                 case PbpHostRules.WatchStep.Ping:
                     _grPinged = true;
                     Post(new { type = "ping", t = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
                     return "ping";
+                case PbpHostRules.WatchStep.Close when !IsReady:
+                    Log.Warning("Glassroad: no page progress for {S:0}s (busy={Busy}) - closing", (nowUtc - _grLastProgressUtc).TotalSeconds, busy);
+                    Close();
+                    return "boot-timeout";
                 case PbpHostRules.WatchStep.Close:
-                    Log.Warning("Glassroad: page heartbeat silent >20s and no pong - closing");
+                    Log.Warning("Glassroad: page silent {S:0}s and no pong (busy={Busy}) - closing", (nowUtc - _grLastBeatUtc).TotalSeconds, busy);
                     Close();
                     return "closed";
                 case PbpHostRules.WatchStep.Ok:

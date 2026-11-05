@@ -8,6 +8,7 @@ using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Race;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -21,6 +22,7 @@ namespace CCP.Avalonia.Tests;
 public sealed partial class GameWindowTests
 {
     private const string GrBase = "http://race.test";
+    private const double LoadingAged = 121;
     private const string GrRace = GlassroadHostRules.AllowedPathPrefix;
 
     private sealed class GrHttp : System.Net.Http.HttpMessageHandler
@@ -123,6 +125,25 @@ public sealed partial class GameWindowTests
     {
         Assert.Equal(pass, HostNetPathRule.TryBuild(GrBase, path, GrRace, out var uri));
         if (pass) Assert.Equal("race.test", uri!.Host);
+    }
+
+    /// <summary>WPF 7.2.2 GlassroadHostTests (#1543): a page building a course is waited for, up to 90 s.</summary>
+    [Fact]
+    public void Glassroad_Watch_ABusyPageIsWaitedFor()
+    {
+        static TimeSpan S(double s) => TimeSpan.FromSeconds(s);
+        Assert.True(GlassroadHostRules.IsBusy(S(10)));
+        Assert.False(GlassroadHostRules.IsBusy(null));
+        Assert.False(GlassroadHostRules.IsBusy(GlassroadHostRules.LoadingWindow));
+        Assert.Equal(PbpHostRules.WatchStep.Idle, GlassroadHostRules.Watch(false, S(40), S(40), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(false, S(46), S(46), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Idle, GlassroadHostRules.Watch(false, S(60), S(60), false, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(false, S(91), S(91), false, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Ok, GlassroadHostRules.Watch(true, S(1), S(19), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Ping, GlassroadHostRules.Watch(true, S(25), S(25), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(true, S(30), S(30), true, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Ok, GlassroadHostRules.Watch(true, S(60), S(60), true, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(true, S(95), S(95), true, busy: true));
     }
 
     [Fact]
@@ -254,9 +275,16 @@ public sealed partial class GameWindowTests
 
         var now = DateTime.UtcNow;
         Assert.Equal("ok", w.CheckGlassroadWatch(now));
+        // #1543: a `loading` frame marks the page busy, so a silent, pinged page is waited for instead of closed.
+        w.Web.OnWebMessage("{\"type\":\"loading\",\"stage\":\"boudoir\",\"p\":0.5}");
         Assert.Equal("ping", w.CheckGlassroadWatch(now.AddSeconds(25)));
+        Assert.Equal("ok", w.CheckGlassroadWatch(now.AddSeconds(60)));
+        Assert.True(GameWindow.IsAnyOpen());
+        w.Web.OnWebMessage("{\"type\":\"heartbeat\"}");
+        now = DateTime.UtcNow.AddSeconds(LoadingAged);   // the loading frame has aged out: back to ping, then close
+        Assert.Equal("ping", w.CheckGlassroadWatch(now));
         Assert.Equal("ping", (string?)sent.Last()["type"]);
-        Assert.Equal("closed", w.CheckGlassroadWatch(now.AddSeconds(30)));
+        Assert.Equal("closed", w.CheckGlassroadWatch(now.AddSeconds(5)));
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
 
