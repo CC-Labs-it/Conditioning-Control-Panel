@@ -97,6 +97,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // WPF MainWindow/MainWindow.Exclusives.cs:296 -> ShowVaultPage -> RefreshVaultCore: gates can move between visits.
             if (PlansView.PlansActive) PlansView.RefreshVault();
         }
+        /// <summary>The signed-out card opens the same sign-in dialog as the header.</summary>
+        private async void AccountTierCard_Tapped(object? sender, global::Avalonia.Input.TappedEventArgs e)
+        {
+            if (CoreAccount.IsLoggedIn) return;
+            e.Handled = true;
+            if (Shell is { } shell) await shell.OpenUnifiedLoginDialog();
+        }
 
         private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
 
@@ -105,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             try
             {
+                _tierCard.Cursor = CoreAccount.IsLoggedIn ? null : new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand);
                 if (!CoreAccount.IsLoggedIn && !AccountSeed.SandboxWhitelisted)
                 {
                     _txtName.Text = Loc.Get("account_chip_sign_in");
