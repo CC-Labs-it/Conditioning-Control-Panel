@@ -97,6 +97,7 @@ public sealed class PanicSurfacesTests
         "ai-followups",
         "blink-trainer",
         "shell-hero",
+        "companion-level-sound",
         "camera",
         "help-tooltips",
         "chaster-hold",
