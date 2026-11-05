@@ -76,8 +76,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 lock (_pending) { _pending.Add(a.Id); if (_flushQueued) return; _flushQueued = true; }
                 global::Avalonia.Threading.Dispatcher.UIThread.Post(Flush);
             }
-            AttachedToVisualTree += (_, _) => { engine.Unlocked -= OnUnlocked; engine.Unlocked += OnUnlocked; };
-            DetachedFromVisualTree += (_, _) => engine.Unlocked -= OnUnlocked;
+            AttachedToVisualTree += (_, _) =>
+            {
+                engine.Unlocked -= OnUnlocked; engine.Unlocked += OnUnlocked;
+                CoreMods.ModChanged += OnModChanged;
+                LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+            };
+            DetachedFromVisualTree += (_, _) =>
+            {
+                engine.Unlocked -= OnUnlocked;
+                CoreMods.ModChanged -= OnModChanged;
+                LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            };
             DetachedFromVisualTree += (_, _) => FinishFx();
             PropertyChanged += (_, e) =>
             {
@@ -87,6 +97,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 StaggerTiles();
             };
         }
+
+        private void OnModChanged(object? sender, ModPackage mod) => QueueRefresh();
+        private void OnLanguageChanged(object? sender, EventArgs e) => QueueRefresh();
+        private void QueueRefresh() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (VisualRoot != null && IsEffectivelyVisible) RefreshAll();
+        });
 
         /// <summary>The live engine; on the headless render path a read-only load of the same file
         /// (nothing on that path ever saves it).</summary>
