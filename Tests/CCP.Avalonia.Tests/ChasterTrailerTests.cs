@@ -211,6 +211,22 @@ public sealed class ChasterTrailerTests {
         tab.HideTrailer(); pending.SetResult("true"); await navigation;
         Assert.False(view.IsVisible); Assert.Equal(ChasterTrailerView.PauseScript, scripts.Last());
     }));
+    /// <summary>Panic always closes the trailer popup, even one left up without _trailerShown (a failed
+    /// open, or a park that threw before the close): HideTrailer used to return early and skip it.</summary>
+    [Fact]
+    public Task PanicClosesATrailerPopupLeftUpWithoutItsState() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
+        var popup = tab.FindControl<Popup>("Trailer")!;
+        popup.PlacementTarget = tab.PriceRows["typo"];
+        popup.IsOpen = true;                       // up, but OpenTrailer never marked it shown
+        Assert.Null(tab.TrailerId);
+        PanicSurfaces.All.Single(s => s.Id == "chaster-trailer").Stop(null);
+        Assert.False(popup.IsOpen);
+        tab.OpenTrailer(tab.PriceRows["typo"]);
+        Assert.True(popup.IsOpen); Assert.Equal("typo", tab.TrailerId);
+        PanicSurfaces.All.Single(s => s.Id == "chaster-trailer").Stop(null);
+        Assert.False(popup.IsOpen); Assert.Null(tab.TrailerId);
+        await Task.CompletedTask;
+    }));
     [Theory, InlineData(true), InlineData(false)]
     public void NativeOptionsMatchTheTrailerProfile(bool windows) {
         var args = (WebViewEnvironmentRequestedEventArgs)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(windows ? typeof(global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs) : typeof(global::Avalonia.Platform.GtkWebViewEnvironmentRequestedEventArgs));

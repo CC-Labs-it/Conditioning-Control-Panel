@@ -97,6 +97,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
                 FxTrailerStart(shown);
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer"); }
+            // Open only a trailer the state knows about: a popup up while _trailerShown is false is one
+            // HideTrailer (and so the panic step) would skip.
+            if (!_trailerShown) return;
             try { Trailer.IsOpen = true; }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer open"); }
         }
@@ -104,13 +107,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
             _trailerOpen.Stop();
             _trailerClose.Stop();
             _overTrailer = false;
-            if (!_trailerShown) return;
+            if (!_trailerShown && !Trailer.IsOpen) return;
             _trailerShown = false;
-            FxTrailerStop();
-            TrailerWeb.Pause();
-            _trailerPark ??= TrailerWeb.PreserveForMove();
-            try { Trailer.IsOpen = false; }
-            catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer close"); }
+            // The popup always closes, panic included: a throw while the scene pauses or the browser is
+            // parked must never leave it up with _trailerShown already false (every later hide would skip it).
+            try
+            {
+                FxTrailerStop();
+                TrailerWeb.Pause();
+                _trailerPark ??= TrailerWeb.PreserveForMove();   // before the close, so the browser survives it
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer park"); }
+            finally
+            {
+                try { Trailer.IsOpen = false; }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer close"); }
+            }
         }
         internal static void StopTrailersForPanic() {
             TrailerOwners.RemoveAll(w => !w.TryGetTarget(out _));
