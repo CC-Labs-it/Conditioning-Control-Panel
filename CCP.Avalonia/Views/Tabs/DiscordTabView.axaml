@@ -232,13 +232,11 @@
                                                  the whole held delta into the glass. Drawn in
                                                  XAML (no bitmap): metallic grays with the app's
                                                  pink accent on the handle.
-                                                 ponytail: the shake/scale/tilt transforms cannot
+                                                 The shake/scale/tilt transforms cannot
                                                  be x:Named (a Transform is not a StyledElement)
                                                  and every animation on them lives in
-                                                 MainWindow.ProfileFaucet.cs, which is not on this
-                                                 head. The static frame is drawn; re-attach a
-                                                 TransformGroup from code when ProfileFaucet moves
-                                                 to Core. -->
+                                                 MainShellWindow.ProfileFaucetFeedback.cs, which attaches
+                                                 the TransformGroup from code. -->
                                             <Grid x:Name="ProfileVatFaucet"
                                                   ZIndex="3" Focusable="True"
                                                   Width="40" Height="42" HorizontalAlignment="Left"
