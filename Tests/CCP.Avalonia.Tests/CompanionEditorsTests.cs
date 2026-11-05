@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -191,7 +191,8 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        service.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
         var clock = new SteppedClock();
         var shell = new MainShellWindow { TabClock = clock };
         ToolTip.SetServiceEnabled(shell, false);
@@ -202,9 +203,10 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
-            Assert.NotNull(shell.EnteringTab); // exercise the running entrance
+            Assert.NotNull(shell.EnteringTab);
+            // Dispatcher jobs do not advance animation time. Settle the entrance before sampling hit geometry.
             shell.CompleteTabTransition();
+            Dispatcher.UIThread.RunJobs();
             Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
