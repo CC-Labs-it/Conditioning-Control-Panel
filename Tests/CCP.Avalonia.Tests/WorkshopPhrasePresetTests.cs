@@ -153,6 +153,24 @@ public sealed class WorkshopPhrasePresetTests
         Assert.DoesNotContain("REMOVE", s.UserAddedCustomTriggers);
     });
 
+    [Fact] // WPF MainWindow.Patreon.cs:1557 MarkSilentLines(App.Subliminal.HasRecordedVoice)
+    public Task TriggerEditorMarksLinesWithNoRecordedVoice() => Run(async (drawer, parts, owner, s) =>
+    {
+        const string phrase = "NO CLIP RECORDED FOR THIS TRIGGER 4C72";
+        s.CustomTriggers = new() { phrase };
+        Click(parts.Triggers.FindControl<Button>("BtnEditTriggersCompanion")!);
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.TextEditorDialog>(Assert.Single(owner.OwnedWindows));
+        var item = Assert.Single(dialog.FindControl<ItemsControl>("ItemList")!.Items
+            .Cast<global::ConditioningControlPanel.Avalonia.Views.Dialogs.TextItem>());
+        Assert.Equal(phrase, item.Text);
+        Assert.True(item.IsSilent);
+        Assert.True(dialog.FindControl<TextBlock>("TxtSilentHint")!.IsVisible);
+        Click(dialog.FindControl<Button>("BtnCancel")!);
+        await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { phrase }, s.CustomTriggers);
+    });
+
     [Fact]
     public Task CancellingEmptyTriggerEditorKeepsEmptyPool() => Run(async (drawer, parts, owner, s) =>
     {
