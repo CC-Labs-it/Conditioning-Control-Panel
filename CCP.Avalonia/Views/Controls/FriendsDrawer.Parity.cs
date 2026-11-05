@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls;
 
 public sealed partial class FriendsDrawer
 {
-    internal Func<int> MeTier { get; set; } = () => (int)(AccountSeed.Patreon?.CurrentTier ?? Models.PatreonTier.None);
+    // MeTier lives in FriendsDrawer.cs (#3657: FriendsDrawerRules.DisplayTier, refreshed on activation).
     internal static Func<int, IImage?> TierArt { get; set; } = TierBadge.TierArt;
     internal static Control? TierPlate(int tier, double height)
     {

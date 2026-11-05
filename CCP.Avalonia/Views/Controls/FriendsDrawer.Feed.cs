@@ -277,8 +277,13 @@ public sealed partial class FriendsDrawer
     private static void LandLine(Control row)
     {
         if (LandingAnimation() is not { } animation) return;
-        row.RenderTransform = new TranslateTransform();
-        _ = animation.RunAsync(row);
+        // The slide keys the TranslateTransform itself (Helpers/TransformTween): Animation.RunAsync on the row with
+        // TranslateTransform setters never moved it. The opacity rise below targets the row, which owns Opacity.
+        var slide = new TranslateTransform(-12 * FeedMotionAmount, 0);
+        row.RenderTransform = slide;
+        ConditioningControlPanel.Avalonia.Helpers.TransformTween.Run(slide, animation.Duration,
+            new (double, AvaloniaProperty, double)[] { (0, TranslateTransform.XProperty, -12 * FeedMotionAmount), (1, TranslateTransform.XProperty, 0d) },
+            animation.Easing);
         _ = new Animation
         {
             Duration = TimeSpan.FromMilliseconds(280),

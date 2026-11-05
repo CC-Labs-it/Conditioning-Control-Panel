@@ -1,7 +1,8 @@
 // PORTED from ConditioningControlPanel/Controls/Friends/FriendsRailChip.cs: your face and name at the
 // foot of the rail with a mint pill for friends online; a click opens the drawer upward over the rail.
 // The pink unread badge counts the friends feed (WPF UpdateBadge).
-// Remaining visual gaps: count bump, hover lift and tier plate. The shell rail is fixed open.
+// Count bumps run on Helpers/TransformTween (never Animation.RunAsync on a transform). The shell rail is fixed open.
+// ponytail: no inactive-owner code-box activation or face/pill border/glow; light-dismiss replaces WPF outside-click and host-move watchers.
 using System;
 using Avalonia;
 using Avalonia.Animation;
@@ -19,7 +20,7 @@ using ConditioningControlPanel.Services.Friends;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls;
 
-public sealed class FriendsRailChip : Grid
+public sealed partial class FriendsRailChip : Grid
 {
     private readonly Border _pill = new(), _badge = new(), _face = new() { Width = 48, Height = 48, CornerRadius = new CornerRadius(14) };
     private readonly TextBlock _pillText = new(), _badgeText = new(), _name;
@@ -31,6 +32,8 @@ public sealed class FriendsRailChip : Grid
     private readonly Func<IFriendsService?> _resolve;
     private Window? _host;
     private DateTime _closedAt = DateTime.MinValue;
+    private readonly Grid _nameLine = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
+    private int _lastOnline = -1;
     public FriendsRailChip() : this(null) { }
     internal FriendsRailChip(IFriendsService? service)
     {
@@ -43,6 +46,13 @@ public sealed class FriendsRailChip : Grid
         (_pill.Child, _pill.Background, _pill.CornerRadius, _pill.Padding, _pill.IsVisible, _pill.Tag) = (_pillText, FriendsDrawer.Mint, new CornerRadius(999), new Thickness(5, 0), false, "friends-chip-online");
         (_pill.HorizontalAlignment, _pill.VerticalAlignment, _pill.Margin) = (HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, -2, -4, 0));
         _face.HorizontalAlignment = HorizontalAlignment.Center;
+        foreach (var target in new[] { _face, _pill, _badge })
+        {
+            target.RenderTransform = new ScaleTransform(1, 1);
+            target.RenderTransformOrigin = RelativePoint.Center;
+        }
+        PointerEntered += (_, _) => Hover(true);
+        PointerExited += (_, _) => Hover(false);
         // WPF FriendsRailChip.cs:111-128: the pink unread badge, bottom right of the face.
         (_badgeText.FontFamily, _badgeText.FontWeight, _badgeText.FontSize, _badgeText.HorizontalAlignment, _badgeText.Foreground) =
             (FriendsDrawer.Display, FontWeight.SemiBold, 11, HorizontalAlignment.Center, new SolidColorBrush(Color.FromRgb(0x2A, 0x06, 0x1A)));
@@ -53,10 +63,10 @@ public sealed class FriendsRailChip : Grid
         _face.Child = new Grid { Children = { FriendsDrawer.Avatar(Drawer.MeName(), 40, null), _pill, _badge } };
         // The name column is 0 px wide while the rail is shut, so nothing in it may wrap.
         _name = FriendsDrawer.Label(Drawer.MeName(), 14, FriendsDrawer.Text, FriendsDrawer.Display, FontWeight.SemiBold);
-        _name.Margin = new Thickness(0, 0, 10, 0);
         // WPF e9242c3d0: the name already sits in a star column and Label trims with an ellipsis; the tooltip carries it whole.
-        Grid.SetColumn(_name, 1);
-        Children.AddRange(new Control[] { _face, _name });
+        _nameLine.Children.Add(_name);
+        Grid.SetColumn(_nameLine, 1);
+        Children.AddRange(new Control[] { _face, _nameLine });
         UpdateBadge();
         _popup = new Popup
         {
@@ -77,8 +87,8 @@ public sealed class FriendsRailChip : Grid
             if (e.Source is Visual s && (ReferenceEquals(s, Drawer) || Drawer.IsVisualAncestorOf(s))) return;
             if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(); e.Handled = true; }
         };
-        AttachedToVisualTree += (_, _) => { BindHost(); Rebind(); LocalizationManager.Instance.LanguageChanged += OnLanguage; };
-        DetachedFromVisualTree += (_, _) => { _popup.IsOpen = false; UnbindHost(); Unwire(); Drawer.Unsubscribe(); LocalizationManager.Instance.LanguageChanged -= OnLanguage; };
+        AttachedToVisualTree += (_, _) => { BindHost(); BindFaceHost(); Rebind(); RefreshFace(); LocalizationManager.Instance.LanguageChanged += OnLanguage; };
+        DetachedFromVisualTree += (_, _) => { _popup.IsOpen = false; UnbindHost(); UnbindFaceHost(); CancelBumps(); Unwire(); Drawer.Unsubscribe(); LocalizationManager.Instance.LanguageChanged -= OnLanguage; };
         Rebind();
     }
     internal FriendsDrawer Drawer { get; }
@@ -104,14 +114,7 @@ public sealed class FriendsRailChip : Grid
         _badge.IsVisible = n > 0;
         ToolTip.SetTip(this, Tip(_name.Text, n));
         // WPF FriendsRailChip.cs:358: increases only, never initial binding or decreases.
-        if (animate && n > _lastUnread && _lastUnread >= 0 && n > 0 && BadgeAnimation() is { } animation)
-        {
-            _badgeRun?.Cancel();
-            _badgeRun = new();
-            _badge.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            _badge.RenderTransform = new ScaleTransform(1, 1);
-            _ = animation.RunAsync(_badge, _badgeRun.Token);
-        }
+        if (animate && n > _lastUnread && _lastUnread >= 0 && n > 0) Bump(_badge);
         _lastUnread = n;
     }
     private void OnFeedChanged()
@@ -161,7 +164,7 @@ public sealed class FriendsRailChip : Grid
         if (_popup.IsOpen) { _popup.IsOpen = false; return; }
         // WPF FriendsRailChip.cs:383-390: a dismissing press must not reopen it.
         if (DateTime.UtcNow - _closedAt < TimeSpan.FromMilliseconds(250)) return;
-        Rebind();
+        Rebind(); RefreshFace();
         _popup.IsOpen = true;
     }
 
@@ -204,7 +207,7 @@ public sealed class FriendsRailChip : Grid
             _feed = feed;
             if (_feed != null) _feed.Changed += OnFeedChanged;
         }
-        UpdatePill();
+        UpdatePill(false);
     }
     private void Unwire()
     {
@@ -213,14 +216,20 @@ public sealed class FriendsRailChip : Grid
         _badgeRun?.Cancel();
         (_svc, _feed) = (null, null);
     }
-    private void OnSnapshot(FriendsSnapshot _) => UpdatePill();
-    internal void UpdatePill()
+    private void OnSnapshot(FriendsSnapshot _)
+    {
+        if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { global::Avalonia.Threading.Dispatcher.UIThread.Post(() => UpdatePill()); return; }
+        UpdatePill();
+    }
+    internal void UpdatePill(bool animate = true)
     {
         int n = 0;
         try { if (_svc?.Available == true) n = _svc.Snapshot?.OnlineCount ?? 0; } catch { }
         _pillText.Text = n.ToString();
         _pill.IsVisible = n > 0;
+        if (animate && _lastOnline >= 0 && n > _lastOnline) Bump(_pill);
+        _lastOnline = n;
         // A snapshot change can be an account change: the feed then counts another account's lines.
-        UpdateBadge();
+        UpdateBadge(animate);
     }
 }
