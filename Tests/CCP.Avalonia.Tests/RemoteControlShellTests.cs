@@ -77,6 +77,8 @@ public sealed class RemoteControlShellTests
             var overlay = shell.Named<Border>("RemoteControlOverlay")!;
             var start = shell.Named<Button>("BtnStart")!;
             Assert.False(overlay.IsVisible);
+            var browser = shell.Named<SettingsTabView>("SettingsTab")!.BrowserContainer;
+            Assert.True(browser.IsVisible);
 
             Assert.Equal("ABC123", await relay.StartAsync("light"));
             f.Poll = "{\"controller_connected\":true}";
@@ -89,6 +91,7 @@ public sealed class RemoteControlShellTests
 
             // Overlay up with code + PIN; Start disabled, green, "REMOTE CONNECTED" (WPF StartStop.cs:992).
             Assert.True(overlay.IsVisible);
+            Assert.False(browser.IsVisible);
             Assert.Equal(1, Target(overlay));
             Assert.Equal($"Session: A B C 1 2 3  PIN: {relay.ConnectPin}", shell.Named<TextBlock>("TxtOverlaySessionCode")!.Text);
             Assert.False(start.IsEnabled);
@@ -97,6 +100,18 @@ public sealed class RemoteControlShellTests
             Assert.Equal("\U0001F3AE", shell.Named<TextBlock>("TxtStartIcon")!.Text);
             Assert.True(shell.Named<Control>("RemoteSessionIdle")!.IsVisible);   // no session running
             Assert.Equal(MainShellWindow.RemoteOverlaySlowTick, shell.RemoteOverlayInterval);
+
+            // A controller leaving restores the browser after the overlay fades; reconnect hides it again.
+            f.Poll = "{\"controller_connected\":false}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            clock.Step(MainShellWindow.RemoteOverlayFadeOut);
+            shell.RemoteOverlayTick();
+            Assert.True(browser.IsVisible);
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(browser.IsVisible);
 
             // A loud verb toasts for 2 s; a quiet one does not.
             var toast = shell.Named<Border>("RemoteCommandNotification")!;
@@ -156,6 +171,7 @@ public sealed class RemoteControlShellTests
             clock.Step(MainShellWindow.RemoteOverlayFadeOut);
             shell.RemoteOverlayTick();
             Assert.False(overlay.IsVisible);
+            Assert.True(browser.IsVisible);
             Assert.True(start.IsEnabled);
             Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
         }
