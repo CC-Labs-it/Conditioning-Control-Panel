@@ -41,11 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para><b>What is stubbed, and why each one is a stub:</b></para>
     /// <list type="bullet">
-    ///   <item><c>SpiralRoom.StateFor</c> (Core) reads the real settings and fuse. The withhold
-    ///     reads the persisted migration gates through the shared <c>SpiralRoom.SpiralWithheldFor</c>,
-    ///     but its live inputs (an offer in hand, an open ceremony) and <c>App.Descent</c> (the block)
-    ///     are WPF-head services, so <see cref="Refresh"/> passes false for those and Spiral is
-    ///     unreachable — see the placeholder there.</item>
+    ///   <item>The room reads the shared descent service and persisted migration gates.
+    ///     Live migration offers still need the migration service lane.</item>
     ///   <item>The first-light canvas supplies the fog; the one-shot reveal still needs the
     ///     ceremony director and block-service handoff, timeout and cancellation integration.</item>
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
@@ -310,11 +307,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void OnTabShown() => Refresh();
 
-        /// <summary>WPF Wire: the fuse's phase and tick drive the fog. BlockChanged has no twin
-        /// (DescentService is WPF-only).</summary>
+        private DescentService? _wiredDescent;
+
+        /// <summary>WPF SpiralTabView.xaml.cs:249,307-333: visible-only block updates.</summary>
         private void Wire()
         {
             WireMigrationGate();
+            if (!ReferenceEquals(_wiredDescent, App.Descent))
+            {
+                if (_wiredDescent != null) _wiredDescent.BlockChanged -= OnBlockChanged;
+                _wiredDescent = App.Descent;
+                if (_wiredDescent != null) _wiredDescent.BlockChanged += OnBlockChanged;
+            }
             if (_wiredFuse != null || App.DescentCountdown is not { } fuse) return;
             _wiredFuse = fuse;
             fuse.PhaseChanged += OnPhaseChanged;
@@ -325,10 +329,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void Unwire()
         {
             UnwireMigrationGate();
+            if (_wiredDescent != null) _wiredDescent.BlockChanged -= OnBlockChanged;
+            _wiredDescent = null;
             if (_wiredFuse is not { } fuse) return;
             _wiredFuse = null;
             fuse.PhaseChanged -= OnPhaseChanged;
             fuse.Tick -= OnFuseTick;
+        }
+
+        private void OnBlockChanged(object? sender, EventArgs e)
+        {
+            if (!IsVisible) return;
+            if (_embed != null && _wiredDescent?.Current is { } block) _embed.PostState(block);
+            Refresh();
         }
 
         /// <summary>WPF OnPhaseChanged: repaint, then flare only if the room is still the fog.</summary>
@@ -378,10 +391,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     CoreSettings.Current,
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
-                    // ponytail: the persisted unanswered-offer gate is shared with WPF. Live offers,
-                    // ceremony ownership and server blocks still need the Descent service lane.
+                    // SyncPush does not request live migration offers. Keep the persisted hold;
+                    // WPF's ceremony-open input is always false (DescentMigrationService.cs:67).
                     spiralWithheld: SpiralRoom.SpiralWithheldFor(CoreSettings.Current, false, false),
-                    hasBlock: false));
+                    hasBlock: App.Descent?.Current != null));
             }
             catch (Exception ex)
             {
@@ -651,8 +664,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     TeardownEmbed();
                     ShowWaitingUnderSpiral();
                 };
-                // No server block exists on this head yet: never fabricate one from local XP.
-                embed.PostState(null);
+                // WPF SpiralTabView.xaml.cs:892: queue the accepted server block before boot.
+                embed.PostState(App.Descent?.Current);
                 StartEmbed(embed);
             }
             catch (Exception ex)
