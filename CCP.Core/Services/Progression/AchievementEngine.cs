@@ -148,6 +148,20 @@ internal sealed class AchievementEngine
         TrackBubbleCountGameResult(correct);
     }
 
+    /// <summary>WPF TrackBubblesPopped: batch count, unlock, persist; return every 100-bubble milestone
+    /// crossed so the head credits points and presents one notification.</summary>
+    public int TrackBubblesPopped(int count)
+    {
+        if (count <= 0) return 0;
+        int before = Progress.TotalBubblesPopped;
+        Progress.TotalBubblesPopped += count;
+        IsDirty = true;
+        if (before < AchievementRules.PopTheThoughtBubbles && Progress.TotalBubblesPopped >= AchievementRules.PopTheThoughtBubbles)
+            TryUnlock("pop_the_thought");
+        Save();
+        return Progress.TotalBubblesPopped / 100 - before / 100;
+    }
+
     /// <summary>WPF AchievementService.TrackVideoWatched: minutes to the total, screen_time at 10 h.
     /// Returns the minutes so the caller can credit quests (WPF App.Quests.TrackVideoMinutes).</summary>
     public double TrackVideoWatched(double seconds)
