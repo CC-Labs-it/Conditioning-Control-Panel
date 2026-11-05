@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;               // MonitorTarget
 using Serilog;
 
@@ -172,8 +173,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <para>A session counts as running (WPF ResumeSession's App.Overlay.Start() after a panic) and a
         /// paused one hides the tint (PauseSession's App.Overlay.Stop()).</para>
         private static bool ShouldShow()
-            => PulseHold || (App.Sessions?.IsPaused != true
-               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true));
+            => PulseHold || (!RemoteCommands.OverlaysStopped && (RemoteCommands.OverlayRunning || App.Sessions?.IsPaused != true
+               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true)));
 
         // Start (MainShellWindow.StartEngine) is what restores a tint left enabled - WPF OverlayService.Start().
 

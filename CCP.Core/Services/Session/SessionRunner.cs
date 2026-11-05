@@ -263,6 +263,7 @@ namespace ConditioningControlPanel.Services
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
             CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
+            RemoteCommands.StopOverlays();   // WPF SessionEngine.cs:530: pause stops all overlays
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
@@ -273,6 +274,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!IsRunning || !IsPaused || CurrentSession is not { } session) return;
             IsPaused = false;
+            RemoteCommands.ReleaseOverlayStop(); // WPF local Resume restarts the overlay service after panic
             _startTime = DateTime.Now;
             _stopwatch.Start();
             _timer?.Change(1000, 1000);
