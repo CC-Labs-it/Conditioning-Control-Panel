@@ -17,6 +17,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -212,6 +213,49 @@ public sealed class ModChoiceTests
             Assert.NotEqual(2, ((global::Avalonia.Media.Imaging.Bitmap)dash.CardFlash.Icon!).Size.AspectRatio);
         }
         finally { CoreModArt.OverridePathProvider = old; scratch.Delete(true); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ModChangesRefreshDisplayedProfilePins() => Run(async (shell, svc, server) =>
+    {
+        var old = CoreModArt.OverridePathProvider;
+        var oldNames = CoreMods.MakeModAwareProvider;
+        var scratch = Directory.CreateTempSubdirectory("ccp-pin-art-");
+        var png = Path.Combine(scratch.FullName, "art.png");
+        using (var bmp = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96)))
+            bmp.Save(png);
+        try
+        {
+            CoreModArt.OverridePathProvider = p => AvApp.Mods!.ActiveModId == BuiltInMods.DronificationId
+                && p.StartsWith("achievements/", StringComparison.Ordinal) ? png : null;
+            CoreMods.MakeModAwareProvider = text => AvApp.Mods!.ActiveModId == BuiltInMods.DronificationId ? "Drone " + text : text;
+            shell.ShowTab("discord");
+            var page = shell.ProfilePage!;
+            var pins = page.FindControl<ItemsControl>("ProfilePinnedShowcase")!;
+            CoreSettings.Current.ProfileCosmetics = new ProfileCosmetics { PinnedAchievements = { "plastic_initiation" } };
+            foreach (var self in new[] { true, false })
+            {
+                shell.SetProfileViewingSelf(self);
+                var id = self ? "plastic_initiation" : Achievement.All.Keys.First(k => k != "plastic_initiation" && ConditioningControlPanel.Avalonia.Helpers.ModArt.TryLoad($"achievements/{Achievement.All[k].ImageName}", 176) != null);
+                if (self) shell.ApplyOwnProfileWardrobe();
+                else shell.ApplyViewedProfileWardrobe(new ProfileCosmetics { PinnedAchievements = { id } });
+                var before = Assert.Single(pins.ItemsSource!.Cast<ProfileAchievementTile>());
+                AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
+                Dispatcher.UIThread.RunJobs();
+                var after = Assert.Single(pins.ItemsSource!.Cast<ProfileAchievementTile>());
+                Assert.Equal(id, after.Id);
+                Assert.Equal(CoreMods.MakeModAware(Achievement.All[id].TitleName), after.Name);
+                Assert.NotEqual(before.Name, after.Name);
+                Assert.Equal(2, ((global::Avalonia.Media.Imaging.Bitmap)after.Image!).Size.AspectRatio);
+                Assert.NotSame(before.Image, after.Image);
+                AvApp.Mods.ActivateMod(BuiltInMods.CCPDefaultId);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(id, Assert.Single(pins.ItemsSource!.Cast<ProfileAchievementTile>()).Id);
+            }
+            Assert.Equal("plastic_initiation", Assert.Single(CoreSettings.Current.ProfileCosmetics.PinnedAchievements));
+        }
+        finally { CoreModArt.OverridePathProvider = old; CoreMods.MakeModAwareProvider = oldNames; scratch.Delete(true); }
         await Task.CompletedTask;
     });
 

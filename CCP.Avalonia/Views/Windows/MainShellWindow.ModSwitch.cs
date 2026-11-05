@@ -48,6 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeModSelector();
             RefreshThemeAwareElements();
             LoadFeatureImages();
+            CoreMods.ModChanged += OnModChangedShowcasePins;
+            Closed += (_, _) => CoreMods.ModChanged -= OnModChangedShowcasePins;
             CoreMods.ModChanged += OnModChangedFeatureImages;
             Closed += (_, _) => CoreMods.ModChanged -= OnModChangedFeatureImages;
             if (_hookedMods != mods)
