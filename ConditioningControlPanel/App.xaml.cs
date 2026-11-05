@@ -329,6 +329,8 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // Web page audio into the recent-sounds ring (#1540 / #1549): the gate is in Core, the ring writer here.
+            Services.Fyp.Online.ScrolllerWebGate.AttachHook = Services.Audio.WebAudioWatch.Attach;
             // The browser video gate's rules live in Core; the WebView2 engine half stays here.
             // Touching Instance also kicks off the shared environment build on first use, so a
             // later video finds IsAvailable already settled. A file the page cannot serve (outside
@@ -405,6 +407,8 @@ namespace ConditioningControlPanel
             // stamps) that need a version string or the installed build's notes and nothing else.
             CoreReleaseContent.AppVersionProvider = () => Services.UpdateService.AppVersion;
             CoreReleaseContent.PatchNotesProvider = () => Services.UpdateService.CurrentPatchNotes;
+            // Core PlayerLook reads other players' looks against the ids this head can draw.
+            Services.PlayerLook.KnownIdsProvider = () => (Services.CosmeticsCatalog.AllAvatarIds(), Services.ShopCosmetics.FrameIds());
             // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
             Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
@@ -493,8 +497,13 @@ namespace ConditioningControlPanel
             CoreQuests.TrackProgramVerifierProvider = (category, amount) => Programs?.TrackVerifier(category, amount);
             CoreQuests.PlayCompletionEffectsProvider = () =>
             {
-                // Play Windows notification sound
-                SystemSounds.Exclamation.Play();
+                // Play Windows notification sound. The perk opt-out drops the popup and its clip in
+                // MainWindow.Quests.cs; this ding has to go with them or it plays with nothing to explain it.
+                if (!PerkNotificationsSuppressed)
+                {
+                    SystemSounds.Exclamation.Play();
+                    Services.Audio.EngineOffAudioLog.Note("system:quest", "Exclamation");
+                }
 
                 // Quest completion posts its OWN event kind, so the Haptics tab's "Quest complete"
                 // routing row (enable / intensity / pattern / target toy) is what decides how this
@@ -976,7 +985,7 @@ namespace ConditioningControlPanel
 
         /// <summary>
         /// Cleans up stale temp files from previous sessions (crash recovery).
-        /// Deletes ccp_temp_* and haptic_video_* files from both the assets temp dir and system temp.
+        /// Deletes ccp_temp_*, haptic_video_* and ccp_collage_* files from both the assets temp dir and system temp.
         /// </summary>
         public static void CleanupStaleTempFiles()
         {
@@ -1008,6 +1017,14 @@ namespace ConditioningControlPanel
                 try
                 {
                     foreach (var file in Directory.GetFiles(dir, "ccp_temp_*"))
+                    {
+                        try { File.Delete(file); deleted++; }
+                        catch (Exception ex) { Diag.Swallowed(ex); }
+                    }
+                    // A composed wallpaper left by a crash. The restore of the user's own runs from the
+                    // settings breadcrumb, so this file has nothing left to do. ccp_original_wallpaper
+                    // stays: that breadcrumb can still need it.
+                    foreach (var file in Directory.GetFiles(dir, "ccp_collage_*"))
                     {
                         try { File.Delete(file); deleted++; }
                         catch (Exception ex) { Diag.Swallowed(ex); }
@@ -1283,6 +1300,7 @@ namespace ConditioningControlPanel
         public static ModService Mods { get; private set; } = null!;
         public static BugReportService BugReport { get; private set; } = null!;
         public static WallpaperService? Wallpaper { get; private set; }
+        public static DynamicWallpaperService? DynamicWallpaper { get; private set; }
         public static WebcamTrackingService Webcam { get; private set; } = null!;
         public static NotificationService Notifications { get; private set; } = null!;
         public static AttentionCheckService AttentionCheck { get; private set; } = null!;
@@ -1882,7 +1900,9 @@ namespace ConditioningControlPanel
                 // Stop autonomy mode
                 Autonomy?.Stop();
 
-                // Restore wallpaper
+                // Restore wallpaper. The collage first: Deactivate refuses while it runs, and every
+                // stop-everything gesture funnels through here (panic included), "Run with CCP" or not.
+                Wallpaper?.StopCollage();
                 Wallpaper?.Deactivate();
 
                 // Stop avatar voice lines
@@ -2637,6 +2657,8 @@ namespace ConditioningControlPanel
                     Services.FxTheme.ApplyForActiveMod();
                     foreach (Window w in Current.Windows)
                         Services.WindowChromeHelper.ApplyDarkTitleBar(w);
+                    // {companion} and the other vocab tokens name the new mod's words.
+                    Localization.LocalizationManager.Instance.NotifyVocabChanged();
                 }
                 if (Current?.Dispatcher?.CheckAccess() == true) Recolor();
                 else Current?.Dispatcher?.Invoke(Recolor);
@@ -2824,6 +2846,8 @@ namespace ConditioningControlPanel
                 }
             });
             Services.Prizes.PrizeGrants.Attach(Ownership);
+            // Rain's wardrobe reaches the Prize Counter (its Open counter door and price badges).
+            Services.PrizeCounter.PrizeCounterHostService.WireRainWardrobe();
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on
             // screen. The relay is the room's own, so a reply applies its prizes block.
@@ -3514,6 +3538,9 @@ namespace ConditioningControlPanel
             // Initialize wallpaper override service
             Wallpaper = new WallpaperService();
 
+            // Dynamic (moving) wallpaper: inert until Studio > Wallpaper > Dynamic has something to run.
+            DynamicWallpaper = new DynamicWallpaperService();
+
             // Initialize Patreon (validate subscription in background)
             // Then load cloud profile if authenticated
             _ = InitializePatreonAndSyncAsync();
@@ -3837,7 +3864,7 @@ namespace ConditioningControlPanel
 #endif
             if (e.Args.Contains("--dtrh"))
             {
-                var dtrhGate = Services.TierGate.RequiresLab("Down the Rabbit Hole", "dtrh");
+                var dtrhGate = Services.TierGate.RequiresPremium("Down the Rabbit Hole", "dtrh");
                 if (dtrhGate.Allowed) Services.Chaos.DtrhHostService.Launch();
                 else Logger?.Information("--dtrh ignored: {Reason}", dtrhGate.Reason);
             }
@@ -3845,7 +3872,7 @@ namespace ConditioningControlPanel
             // Racing Thoughts (the kart run on the descent's media), dev shortcut: `--race` opens
             // the race window straight away. NOT the same door as `--dtrh` any more: the race has
             // no tier door since 2026-09-17 (owner's call - open testing on both surfaces) while
-            // the descent above is still tier 2. This arg asks exactly what BtnStartRace_Click
+            // the descent above still asks for Basic. This arg asks exactly what BtnStartRace_Click
             // asks, which is the only thing that keeps a dev shortcut honest about the product.
             //
             // The race-06/race-07 stack arrived a day later with a PURCHASE door (RacingAccess.CanLaunch)
@@ -5826,6 +5853,7 @@ namespace ConditioningControlPanel
             try
             {
                 SystemSounds.Asterisk.Play();
+                Services.Audio.EngineOffAudioLog.Note("system:achievement", "Asterisk");
             }
             catch
             {
@@ -6317,6 +6345,15 @@ Application State:
         [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool TerminateProcess(IntPtr hProcess, uint uExitCode);
 
+        /// <summary>Windows is logging off or shutting down: put the real wallpaper back first, so a
+        /// "Run with CCP" collage never stays behind as the desktop.</summary>
+        protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+        {
+            try { Wallpaper?.StopAndFlush(TimeSpan.FromSeconds(3)); }
+            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper restore on session end"); }
+            base.OnSessionEnding(e);
+        }
+
         protected override void OnExit(ExitEventArgs e)
         {
             // Before anything else: the fuse's pool timer outlives the dispatcher (it moved to Core),
@@ -6352,6 +6389,11 @@ Application State:
             // the watchdog on the way out. That is not the freeze we are hunting — disarm it so the
             // next launch doesn't cry hang over a clean, if slow, exit.
             try { Services.UiHangWatchdog.ClearSentinelOnCleanExit(); } catch (Exception ex) { Diag.Swallowed(ex); }
+
+            // Wallpaper back early, ahead of the slow teardown below. The restore is queued (#1453), so
+            // wait for it (3 s, like Wallpaper.Dispose). The later Wallpaper.Dispose is then a no-op.
+            try { Wallpaper?.StopAndFlush(TimeSpan.FromSeconds(3)); }
+            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper restore on exit"); }
 
             // Haptics FIRST and synchronously (bounded ~2s): a Lovense level has no server-side
             // watchdog, so a toy we don't countermand keeps running after the app is gone. This
@@ -6390,6 +6432,7 @@ Application State:
             // and here is a straight dispose - the board has nothing to flush and no verdict to
             // protect, so there is no graceful wind-down whose 1200ms timer would never tick.
             try { Services.PieceByPiece.PieceByPieceHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Services.PrizeCounter.PrizeCounterHostService.CloseFor(Services.PrizeCounter.PrizeCounterHostService.CloseAppExit); } catch (Exception ex) { Diag.Swallowed(ex); }
             // Glassroad (3D race preview): the same straight dispose.
             try { Services.Glassroad.GlassroadHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
@@ -6504,6 +6547,7 @@ Application State:
             DualMonitorVideo?.Dispose();
             ScreenMirror?.Dispose();
             Autonomy?.Dispose();
+            DynamicWallpaper?.Dispose();
             Wallpaper?.Dispose();
             BlinkTrainer?.Dispose();
             GazeFocus?.Dispose();

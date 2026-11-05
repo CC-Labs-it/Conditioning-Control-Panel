@@ -25,10 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // ponytail: WPF's aggregate runtime viewmodel/compat surface remains in
             // wire-views-tab-companion-b; the room already owns live per-zone viewmodels.
 
-            // WPF WorkshopRosterCell forwards its card action through the tab to MainWindow.
-            if (Room.WorkshopParts is { } shelf)
-                shelf.Roster.CompanionCardClicked += (_, index) =>
-                    (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.SwitchCompanionFromRoster(index, Room);
+            // WorkshopAccordion owns the single roster switch subscription.
 
             // WPF CompanionTabView.xaml.cs:36-40: the room is collapsed (XAML) and the page reads its zones.
             Conversation.Room = Room;

@@ -101,10 +101,16 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.LastSeenUtc), // Local-only greeting timestamp — must never leave the device.
             // Documented local only: a restore on another PC must not switch presence sharing on.
             nameof(AppSettings.FriendsPresenceShared),
+            // Same reason: a restore must not switch the always-on wallpaper on without its warning.
+            nameof(AppSettings.CollageRunWithCcp),
+            // A path on this PC: means nothing elsewhere, and names the user's folders.
+            nameof(AppSettings.CollageOwnImagePath),
             nameof(AppSettings.ModPersonalityPreset),
             // Conversion rows (C9): machine-local stamps and the last server tier reading.
             // A restore must not bring back a stale reading or re-open a once-ever row.
             nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.GraceClosedTier),
+            nameof(AppSettings.GraceClosedAtUtc),
             nameof(AppSettings.InboxStamps),
             nameof(AppSettings.LastKnownEffectiveTier),
             // Free member fields mirror the server profile; the next profile read refills them.
@@ -113,6 +119,15 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ServerPaidUntil),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
+            // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
+            nameof(AppSettings.ProfileEquipAccount),
+            nameof(AppSettings.ProfileEquipUpdatedMs),
+            nameof(AppSettings.ProfileEquipPushOwed),
+            // Rain look sync state: what THIS PC owes the server and last agreed with it (WPF ProfileSyncService).
+            nameof(AppSettings.RainLookPushOwed),
+            nameof(AppSettings.RainLookAgreedUtc),
+            // What THIS PC last saw of each account's wallet net: on another PC it would invent or hide a spend.
+            nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
             // ---- not in WPF (no WPF reader): which privacy switches this install owns (SyncPush) ----
@@ -165,16 +180,26 @@ namespace ConditioningControlPanel.Services
             restored.DiscordWebhookUrl = current.DiscordWebhookUrl;
             restored.LastSeenUtc = current.LastSeenUtc;
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
+            restored.CollageRunWithCcp = current.CollageRunWithCcp;
+            restored.CollageOwnImagePath = current.CollageOwnImagePath;
             // Conversion state lives on this PC only (it is left out of the backup): a restore must
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
             restored.ServerTierSeen = current.ServerTierSeen;
+            restored.GraceClosedTier = current.GraceClosedTier;
+            restored.GraceClosedAtUtc = current.GraceClosedAtUtc;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
+            restored.ProfileEquipAccount = current.ProfileEquipAccount;
+            restored.ProfileEquipUpdatedMs = current.ProfileEquipUpdatedMs;
+            restored.ProfileEquipPushOwed = current.ProfileEquipPushOwed;
+            restored.RainLookPushOwed = current.RainLookPushOwed;
+            restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
+            restored.WalletNetSeen = current.WalletNetSeen;
             restored.ConsentOwnedAccount = current.ConsentOwnedAccount;
             restored.ConsentOwnedFields = current.ConsentOwnedFields;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
