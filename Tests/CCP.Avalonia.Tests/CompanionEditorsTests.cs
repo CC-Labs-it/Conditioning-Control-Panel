@@ -191,6 +191,11 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
+        // Exercise the links as a returning user, independently of onboarding and intro cards.
+        var settings = CoreSettings.Current;
+        settings.Welcomed = settings.HasAcceptedAgeVerification = true;
+        settings.WhatMovedCardShown = 1;
+        settings.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         CoreSettings.Current.PerformanceMode = false;
         var shell = new MainShellWindow { TabClock = new SteppedClock() };
@@ -223,6 +228,8 @@ public sealed class CompanionEditorsTests
                 shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
                 shell.UpdateLayout();
                 HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
+                Assert.True(shell.IsEnabled);
+                Assert.True(button.IsEffectivelyVisible);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
@@ -231,7 +238,7 @@ public sealed class CompanionEditorsTests
                 await Until(() => shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Any());
                 var editor = shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Single();
                 Click(editor.FindControl<Button>("BtnCancel")!);
-                await Until(() => !editor.IsVisible);
+                await Until(() => !editor.IsVisible && shell.IsEnabled);
             }
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = null; }
