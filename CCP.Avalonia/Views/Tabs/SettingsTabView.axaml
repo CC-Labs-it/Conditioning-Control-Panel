@@ -59,6 +59,12 @@
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView">
 
   <UserControl.Resources>
+    <LinearGradientBrush x:Key="HomeDepthDropBand" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Offset="0" Color="#9E06020F"/><GradientStop Offset="1" Color="#0006020F"/>
+    </LinearGradientBrush>
+    <RadialGradientBrush x:Key="HomeDepthDropDisc" Center="50%,50%" GradientOrigin="50%,50%" RadiusX="50%" RadiusY="50%">
+      <GradientStop Offset="0" Color="#9E06020F"/><GradientStop Offset="0.6" Color="#5C06020F"/><GradientStop Offset="1" Color="#0006020F"/>
+    </RadialGradientBrush>
     <!-- The Training Programs "Today" card. Padding lives on the content Grid, NOT here: the
          banner art and FX layers are part of the content and have to reach the card's edges. -->
     <ControlTheme x:Key="ProgramTodayCardStyle" TargetType="Button">
@@ -1349,6 +1355,7 @@
       <!-- below is written by live code (Login.cs UpdateQuickLoginUI,    -->
       <!-- HelpButtons, the view's click wiring); none may be dropped.    -->
       <!-- ============================================================ -->
+      <Border x:Name="AccountStripDrop" Grid.Row="2" Height="3" VerticalAlignment="Bottom" Margin="6,0,6,-3" CornerRadius="3" IsHitTestVisible="False" Background="{DynamicResource HomeDepthDropBand}"/>
       <Border x:Name="AccountStrip" Grid.Row="2" CornerRadius="12" Padding="9,6"
               Background="{DynamicResource ElevatedSurfaceBrush}"
               BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
