@@ -74,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // WPF repaints on V2PurchaseService.Changed and PrizeGrants.GrantsChanged; a sign-in or
             // sign-out moves the row too (P41: subscribed on attach, dropped on detach).
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
+            // WPF Controls/V2GetItRow.xaml.cs:68,81: grants repaint while loaded only.
             ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnServiceChanged;
             if ((_wired = V2PurchaseHead.Service) is { } svc)
             {

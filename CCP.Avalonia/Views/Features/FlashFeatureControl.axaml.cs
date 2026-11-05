@@ -149,16 +149,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        private void OnGetRowChanged() => RefreshV2Box();
-
         // WPF FlashFeatureControl.xaml.cs:81: rebuild without overwriting the saved style.
-        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() =>
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(OnGetRowChanged);
+
+        // WPF FlashFeatureControl.xaml.cs:81-85 rebuilds on every grant change, including revokes.
+        private void OnGetRowChanged()
         {
+            // WPF FlashFeatureControl.xaml.cs:75,81-85 also refreshes the exit state on grants.
+            RefreshExitRow();
+            if (RowMotion.IsVisible == Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)
+                && RowShatter.IsVisible == Platform.PrizeOwnership.OwnsFlashV2())
+            {
+                RefreshV2Box();
+                return;
+            }
             var wasLoading = _isLoading;
             _isLoading = true;
             try { BuildMotionPicker(); }
             finally { _isLoading = wasLoading; }
-        });
+        }
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
         /// no motion, Shatter or Get it row is left.</summary>
