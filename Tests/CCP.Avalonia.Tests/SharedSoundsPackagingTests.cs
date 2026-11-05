@@ -37,7 +37,8 @@ public sealed class SharedSoundsPackagingTests
                             "companion_audio/mods/builtin-locked", "companion_audio/mods/builtin-sissyhypno" };
         string[] packExt = { ".mp3", ".wav", ".ogg", ".m4a" };
         // The temporary in-box Circe override (WPF $(CirceNeutralInBoxOverride), mirrored) is the one exception.
-        var inBox = CirceList(WpfCsproj()).Select(p => Path.GetFileName(p)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // The list is written with backslashes (MSBuild paths): split them by hand, Path.GetFileName keeps them on Linux.
+        var inBox = CirceList(WpfCsproj()).Select(p => p.Split('\\')[^1]).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var shipped = packed
             .Select(d => Path.Combine(new[] { sounds }.Concat(d.Split('/')).ToArray()))
             .Where(Directory.Exists)

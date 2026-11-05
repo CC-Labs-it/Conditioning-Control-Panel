@@ -20,14 +20,15 @@ public sealed class Sync7AudioTests
     [Fact]
     public async Task PanicStopsCompanionClipsWithTheEngineOffAndFinishedClipsAreForgotten()
     {
-        var previous = CoreAudio.PlayStoppableProvider;
+        var previous = CompanionEffects.PlayAudioClip;
         var finishes = new List<Action>();
         int stops = 0;
-        CoreAudio.PlayStoppableProvider = (_, _, _, started, finished) =>
+        // Companion clips open through PlayAudioClip (WPF AudioService.PlaySound), a stoppable voice, not the one-shot provider.
+        CompanionEffects.PlayAudioClip = (_, _, started, finished) =>
         {
-            started?.Invoke(TimeSpan.FromSeconds(10));
-            finishes.Add(finished!);
-            return () => { stops++; finished?.Invoke(); };
+            started(TimeSpan.FromSeconds(10));
+            finishes.Add(finished);
+            return new Clip(() => { stops++; finished(); });
         };
         try
         {
@@ -44,7 +45,13 @@ public sealed class Sync7AudioTests
             panic.Stop(null);
             Assert.Equal(3, stops);
         }
-        finally { CompanionEffects.StopAudio(); CoreAudio.PlayStoppableProvider = previous; }
+        finally { CompanionEffects.StopAudio(); CompanionEffects.PlayAudioClip = previous; }
+    }
+
+    private sealed class Clip(Action onDispose) : MindWipePlayer.IVoice
+    {
+        public double Volume { set { } }
+        public void Dispose() => onDispose();
     }
 
     [Theory]
@@ -88,9 +95,11 @@ public sealed class Sync7AudioTests
         var previous = CoreAudio.PlayOneShotProvider;
         var opener = MantraWindow.DroneOpener;
         var volume = CoreSettings.Current.MasterVolume;
+        var dial = CoreSettings.Current.MantraDroneVolume;
         var drone = new Drone();
         float? tone = null;
         CoreSettings.Current.MasterVolume = master;
+        CoreSettings.Current.MantraDroneVolume = 30;   // the WPF default dial (#4080)
         MantraWindow.DroneOpener = _ => drone;
         CoreAudio.PlayOneShotProvider = (_, v, _, _, _) => tone = v;
         MantraWindow? window = null;
@@ -99,7 +108,8 @@ public sealed class Sync7AudioTests
             window = new MantraWindow();
             window.Show();
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(ToneWav.VlcVolume(0.05 * ToneWav.DronePeak * master / 100.0), drone.Last);
+            // WPF MantraWindow.DroneGain (#4080): idle level x drone dial x master, then the file peak.
+            Assert.Equal(ToneWav.VlcVolume(MantraWindow.DroneGain(0.05f, 30, master) * ToneWav.DronePeak), drone.Last);
             typeof(MantraWindow).GetMethod("PlayTone", BindingFlags.NonPublic | BindingFlags.Static)!
                 .Invoke(null, new object[] { 440.0, 100 });
             Assert.Equal(0.15f * master / 100f, tone!.Value, 5);
@@ -110,6 +120,7 @@ public sealed class Sync7AudioTests
             CoreAudio.PlayOneShotProvider = previous;
             MantraWindow.DroneOpener = opener;
             CoreSettings.Current.MasterVolume = volume;
+            CoreSettings.Current.MantraDroneVolume = dial;
         }
         return Task.CompletedTask;
     });
@@ -124,6 +135,8 @@ public sealed class Sync7AudioTests
         var opener = MantraWindow.DroneOpener;
         var settings = CoreSettings.Current;
         var volume = settings.MasterVolume;
+        var dial = settings.MantraDroneVolume;
+        settings.MantraDroneVolume = 30;   // the WPF default dial (#4080)
         var drone = new Drone();
         MantraWindow.DroneOpener = _ => drone;
         var window = new MantraWindow();
@@ -140,7 +153,7 @@ public sealed class Sync7AudioTests
             settings.MasterVolume = 0;
             Assert.Equal(0, drone.Last);
             settings.MasterVolume = 25;
-            Assert.Equal(ToneWav.VlcVolume(0.05 * ToneWav.DronePeak * 0.25), drone.Last);
+            Assert.Equal(ToneWav.VlcVolume(MantraWindow.DroneGain(0.05f, 30, 25) * ToneWav.DronePeak), drone.Last);
             Task.Run(() => settings.MasterVolume = 0).GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, drone.Last);
@@ -162,6 +175,7 @@ public sealed class Sync7AudioTests
             window.Close();
             MantraWindow.DroneOpener = opener;
             settings.MasterVolume = volume;
+            settings.MantraDroneVolume = dial;
         }
         return Task.CompletedTask;
     });

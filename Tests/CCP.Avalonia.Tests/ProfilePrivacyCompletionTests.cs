@@ -131,7 +131,8 @@ public sealed class ProfilePrivacyCompletionTests
         Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_id_copied"), label.Text);
         if (changeCard) tab.DisplayProfileEntry(new LeaderboardRow { DisplayName = "next", DiscordId = "654321" });
         await opening.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.True(clock.ElapsedMilliseconds >= 1500);
+        // Task.Delay(1500) completes on the millisecond timer tick; the Stopwatch is finer and can read 1499.x.
+        Assert.True(clock.ElapsedMilliseconds >= 1500 - 20, $"restored after {clock.ElapsedMilliseconds} ms");
         Assert.Equal(changeCard ? "next" : "other", label.Text);
     });
 

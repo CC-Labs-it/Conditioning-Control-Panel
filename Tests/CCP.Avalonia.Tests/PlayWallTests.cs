@@ -412,6 +412,9 @@ public sealed class PlayWallTests
             var (loggedIn, lab, owns, prevServer, prevShell) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider,
                 RacingAccess.IsGrantedProvider, GameWindow.Server, ExternalOpener.Shell);
             var prevFree = CoreEntitlement.IsFreeTodayProvider;
+            // The doors route to the Glassroad page; the Linux first-race card (B2) has GameWindowTests.FirstRace.
+            var prevLinuxCard = GameWindow.UseLinuxRaceCard;
+            GameWindow.UseLinuxRaceCard = () => false;
             bool isLoggedIn = false, isLab = false;
             string? freeKey = null;
             CoreAccount.IsLoggedInProvider = () => isLoggedIn;
@@ -516,6 +519,7 @@ public sealed class PlayWallTests
                 shell.Close();
                 (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, CoreEntitlement.IsFreeTodayProvider) = (loggedIn, lab, owns, prevFree);
                 CoreEntitlement.HasPremiumProvider = prevPremium;
+                GameWindow.UseLinuxRaceCard = prevLinuxCard;
                 (GameWindow.Server, ExternalOpener.Shell, CorePaths.EffectiveAssetsProvider) = (prevServer, prevShell, prevAssets);
                 service.SealForReset();
                 CoreSettings.ServiceProvider = prevSettings;
