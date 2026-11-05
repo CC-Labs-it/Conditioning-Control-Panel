@@ -42,9 +42,8 @@ public partial class MainShellWindow
     internal void ImportEnhancementFiles(string[] paths)
     {
         if (paths.Length == 0) return;
-        // ponytail: the existing hub rescans on navigation and after this batch; a watcher
-        // remains separate shell work. Dispose this batch's library/timer immediately.
-        using var library = new EnhancementLibrary();
+        EnsureDeeperLibrary();
+        if (_deeperLibrary is not { } library) return;
         var result = EnhancementImportBatch.Run(library, paths);
         if (result.LastImportedPath != null && Path.GetDirectoryName(paths[0]) is { Length: > 0 } source)
         {
