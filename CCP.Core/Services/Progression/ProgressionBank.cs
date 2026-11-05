@@ -9,8 +9,9 @@ namespace ConditioningControlPanel
     /// <see cref="CoreProgression.AddXPProvider"/> with <see cref="Add"/>: the login gate, the XP add and the
     /// level loop with <c>HighestLevelEver</c>.
     /// ponytail: of the skill multiplier only Pink Rush's 3x is applied (sparkle boosts, streak power, night
-    /// shift, early bird and event boost are not, so owners are under-awarded, which errs safe), no skill
-    /// points - they land with their ported feature. Companion XP: CompanionCore.AddCompanionXP. Level achievements listen to <see cref="LevelUp"/>; quests listen to <see cref="QuestAwarded"/>
+    /// shift, early bird and event boost are not, so owners are under-awarded, which errs safe). Each level
+    /// gained credits <see cref="PointsPerLevel"/> Sparkle (WPF SkillTreeService.OnLevelUp, shared with web
+    /// XP claims as WPF SpendXPOnLevels is). Companion XP: CompanionCore.AddCompanionXP. Level achievements listen to <see cref="LevelUp"/>; quests listen to <see cref="QuestAwarded"/>
     /// (the Avalonia head feeds it to QuestService.TrackXPEarned, as WPF AddXP:120 does).
     /// </summary>
     public static class ProgressionBank
@@ -21,6 +22,13 @@ namespace ConditioningControlPanel
         /// <summary>Amount and source after the award (WPF XPAwarded; the sync nudge listens).</summary>
         public static event Action<double, string>? Awarded;
         public static event Action<double, string>? QuestAwarded; // WPF AddXP:120, excludes AddClaimedXP:140-175
+
+        /// <summary>WPF SkillTreeService.PointsPerLevel: Sparkles credited per level gained.</summary>
+        public const int PointsPerLevel = 1;
+
+        /// <summary>Sparkles a level-up credited, once per level (WPF SkillTreeService.OnLevelUp:636 ->
+        /// AchievementService.TrackSkillPointsEarned, the lifetime "earned" stat).</summary>
+        public static event Action<int>? SkillPointsAwarded;
 
         // WPF Services/Progression/ProgressionService.cs:123-126: display gets adjusted XP and the level-loop result.
         public sealed record XpAward(double Amount, XPSource Source, bool LeveledUp);
@@ -84,17 +92,29 @@ namespace ConditioningControlPanel
         private static void SpendAndRaise(Models.AppSettings s, double amount, double adjusted, string? source)
         {
             var epoch = ProfileAdopt.Epoch(s);
-            var levels = new System.Collections.Generic.List<int>();
+            var levels = new System.Collections.Generic.List<(int Level, int Before, int After)>();
             for (var need = XpCurve.GetXPForLevel(s.PlayerLevel, epoch); s.PlayerXP >= need; need = XpCurve.GetXPForLevel(s.PlayerLevel, epoch))
             {
                 s.PlayerXP -= need;
                 s.PlayerLevel++;
                 if (s.PlayerLevel > s.HighestLevelEver) s.HighestLevelEver = s.PlayerLevel;
-                levels.Add(s.PlayerLevel);
-                Log.Information("Level up! Now level {Level}", s.PlayerLevel);
+                // WPF ProgressionService.cs:288 -> SkillTreeService.OnLevelUp:627-648: the level's Sparkle and the
+                // season peak (PlayerLevel itself can be wiped at a rollover).
+                var before = s.SkillPoints;
+                s.SkillPoints += PointsPerLevel;
+                s.SeasonPeakLevel = Math.Max(s.SeasonPeakLevel, s.PlayerLevel);
+                levels.Add((s.PlayerLevel, before, s.SkillPoints));
+                Log.Information("Level up! Now level {Level}; awarded {Points} skill point(s), total {Total}", s.PlayerLevel, PointsPerLevel, s.SkillPoints);
             }
             CoreSettings.Save();
-            foreach (var l in levels) LevelUp?.Invoke(l);
+            foreach (var (level, before, after) in levels)
+            {
+                LevelUp?.Invoke(level);
+                try { SkillPointsAwarded?.Invoke(after - before); }
+                catch (Exception ex) { Log.Debug("SkillPointsAwarded subscriber failed: {E}", ex.Message); }
+                // Only after the save, as WPF: the header wallet's reward cue (presentation only).
+                SparklePointRewards.PublishCredit(before, after, SparklePointSource.LevelUp);
+            }
             if (source != null) QuestAwarded?.Invoke(amount, source);
             Awarded?.Invoke(amount, source ?? "Other");
             // WPF ProgressionService.cs:120,125-126,240-249: presentation runs last and cannot break an award.

@@ -744,6 +744,8 @@ namespace ConditioningControlPanel.Avalonia
                 StartRichPresence();
                 // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
                 ProgressionBank.LevelUp += level => { if (!Settings.Current.OfflineMode) DiscordRpc?.UpdateLevel(level); };
+                // WPF SkillTreeService.OnLevelUp:636: a level-up Sparkle counts toward the lifetime earned stat.
+                ProgressionBank.SkillPointsAwarded += points => Achievements?.TrackSkillPointsEarned(points);
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.

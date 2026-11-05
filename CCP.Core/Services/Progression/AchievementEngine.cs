@@ -179,6 +179,14 @@ internal sealed class AchievementEngine
         if (Progress.GazePops >= AchievementRules.HandsFreeGazePops) TryUnlockExclusive("hands_free");
     }
 
+    /// <summary>WPF AchievementService.TrackSkillPointsEarned:823: the lifetime Sparkles-earned stat.</summary>
+    public void TrackSkillPointsEarned(int amount)
+    {
+        if (amount <= 0) return;
+        Progress.TotalSkillPointsEarned += amount;
+        _isDirty = true;
+    }
+
     /// <summary>WPF Services/GamificationBridge.cs:361-380: count every send, then check milestones.</summary>
     public void TrackCompanionMessage()
     {
