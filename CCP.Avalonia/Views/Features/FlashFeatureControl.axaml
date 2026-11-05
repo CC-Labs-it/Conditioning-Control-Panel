@@ -264,7 +264,7 @@
 
                             <!-- Flashes v2 ownership comes from PrizeOwnership, never a setting.
                                  The Get it row keeps the box open while unowned; owned prizes expose
-                                 motion and Shatter. Rounded corners, draggable and Jackpot Remix remain unported. -->
+                                 motion and Shatter. Rounded rendering is tracked separately; Jackpot Remix remains unported. -->
                             <Border x:Name="BoxFlashV2" IsVisible="False" Margin="0,10,0,2"
                                     CornerRadius="10" Padding="12,8,12,6" BorderThickness="1"
                                     Background="#14FFE08A" BorderBrush="#33FFE08A"
@@ -314,6 +314,12 @@
                                         <TextBlock Grid.Column="2" x:Name="TxtDriftSpeed" Text="1x" HorizontalAlignment="Right"
                                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                                    FontSize="13" FontWeight="Bold"/>
+                                    </Grid>
+                                    <Grid x:Name="RowDraggable" Height="34" Background="Transparent" ColumnDefinitions="*,Auto" IsVisible="False"
+                                          ToolTip.Tip="{loc:Str tooltip_flash_draggable}">
+                                        <TextBlock Text="{loc:Str setting_flash_draggable}" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <CheckBox Grid.Column="1" x:Name="ChkFlashDraggable" Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                                     </Grid>
                                     <Grid x:Name="RowShatter" Height="34" Background="Transparent" IsVisible="False"
                                           ToolTip.Tip="{loc:Str tooltip_flash_shatter}">
