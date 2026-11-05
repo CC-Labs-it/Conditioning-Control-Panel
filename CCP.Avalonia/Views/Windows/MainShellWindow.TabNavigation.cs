@@ -139,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void ShowTab(string? tab)
         {
             tab = (tab ?? string.Empty).ToLowerInvariant();
+            if (TryRedirectMovedTab(tab)) return;
             // WPF :228 TryRedirectSilentTab, at the door before anything counts the old key.
             if (Array.IndexOf(SilentRedirectKeys, tab) >= 0
                 && Services.UI.NavSections.Redirects.TryGetValue(tab, out var moved)) { ShowTab(moved.Tab); return; }

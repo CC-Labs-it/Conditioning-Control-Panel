@@ -106,10 +106,12 @@ public sealed class NavRailPaintTests
         Assert.False(social.Badge.IsVisible);
     });
 
-    [Fact]
-    public void Hover_NudgesTheMedallionArt() => Run(MotionLevel.Off, w =>
+    [Theory]
+    [InlineData(NavSections.Home)]
+    [InlineData(NavSections.Social)]
+    public void Hover_NudgesTheMedallionArt(string section) => Run(MotionLevel.Off, w =>
     {
-        var home = Row(w, NavSections.Home);
+        var home = Row(w, section);
         var at = home.Button.TranslatePoint(new Point(home.Button.Bounds.Width / 2, 20), w)!.Value;
         w.MouseMove(at, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();

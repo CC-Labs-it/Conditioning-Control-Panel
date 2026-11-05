@@ -15,7 +15,7 @@
 // ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
 // motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
+// (PaintDepthRail/Hud/Home/Quests), the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
 
 using System;
@@ -37,6 +37,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _sectionStripWired;
 
         internal SectionTabStrip? PageStrip => Named<SectionTabStrip>("SectionStrip");
+
+        // The vault's old key is now silent; only Together still needs the moved note.
+        internal const int NavMovedNoteLimit = 3;
+        private bool TryRedirectMovedTab(string tab)
+        {
+            if (tab != "together" || !NavSections.Redirects.TryGetValue(tab, out var to)) return false;
+            ShowTab(to.Tab);
+            var settings = CoreSettings.Current;
+            if (settings.NavMovedToastHits < NavMovedNoteLimit)
+            {
+                settings.NavMovedToastHits++;
+                CoreSettings.Save();
+                PageStrip?.ShowMovedNote(Loc.GetF("nav_moved_toast",
+                    Loc.Get(NavSections.Find(to.Section)!.LabelKey),
+                    Loc.Get(NavStripTable.PageLabelKey(to.Tab) ?? string.Empty)));
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(() => GlowNavKey(to.Tab));
+            }
+            return true;
+        }
 
         /// <summary>The tab a section returns to (its remembered tab, else its default). WPF :97.</summary>
         internal static string NavLastTabFor(string section) =>
