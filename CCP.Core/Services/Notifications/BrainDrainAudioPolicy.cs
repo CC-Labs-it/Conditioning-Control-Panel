@@ -24,4 +24,7 @@ public static class BrainDrainAudioPolicy
         foreach (var file in Enumerate(legacy)) files.TryAdd(Path.GetFileName(file), file);
         return files.Values.ToArray();
     }
+    public static TimeSpan Interval(bool highRefresh) => TimeSpan.FromMilliseconds(highRefresh ? 500 : 5000);
+    public static double Probability(int intensity, TimeSpan interval) => Math.Clamp(intensity, 1, 100) / 100.0 * interval.TotalSeconds / 60;
+    public static double Volume(int master, int own) => Math.Clamp(master, 0, 100) / 100.0 * Math.Clamp(own, 0, 100) / 100;
 }

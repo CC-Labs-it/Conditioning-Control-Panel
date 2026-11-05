@@ -43,6 +43,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsForYouOnScreen);
 
+        public void Freeze() => SubliminalWhisperShow.FreezeForVideo();
+        public void FinishFreeze(bool cancelled) => SubliminalWhisperShow.FinishVideoFreeze(cancelled);
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library

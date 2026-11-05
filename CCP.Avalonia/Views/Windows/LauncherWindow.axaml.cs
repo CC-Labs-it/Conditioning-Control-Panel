@@ -18,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.Prizes;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -67,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF _statusTimer: the status line and the stats, every second while shown.</summary>
         private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
-        /// <summary>Reveal snapshot for every registered card, including unrevealed cards (WPF _revealedAtBuild).</summary>
+        /// <summary>Each available tile's reveal state at build (WPF LauncherWindow.xaml.cs:524).</summary>
         private readonly Dictionary<string, bool> _revealedAtBuild = new(StringComparer.OrdinalIgnoreCase);
 
         public LauncherWindow()
@@ -79,13 +80,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             XpTrack.SizeChanged += (_, _) => RefreshStats();
             _statusTimer.Tick += (_, _) => { RefreshStatus(); RefreshStats(); RefreshSpReadout(); };
             CoreMods.ModChanged += OnModChanged;
-            Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
+            PrizeGrants.GrantsChanged += OnGrantsChanged;
             Closed += (_, _) =>
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
                 CoreMods.ModChanged -= OnModChanged;
-                Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
+                PrizeGrants.GrantsChanged -= OnGrantsChanged;
             };
             // WPF OnIsVisibleChanged -> OnShown / OnHidden.
             PropertyChanged += (_, e) =>
@@ -427,13 +428,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug(ex, "[Launcher] RefreshMod failed"); }
         }
 
-        private void OnGrantsChanged()
-        {
-            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(OnGrantsChanged); return; }
-            RefreshTiles(LauncherTileTrigger.GrantsChanged);
-        }
-
-        /// <summary>WPF OnModChanged: repaint the pill and tiles on the dispatcher.</summary>
+        /// <summary>WPF OnModChanged: the pill at once, the tiles a dispatcher turn later (ccp-bugs #1292).
+        /// Grant changes redraw when a tile reveal changes.</summary>
         private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
         {
             RefreshMod();
@@ -441,6 +437,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         });
 
         /// <summary>WPF RefreshTiles: redraw when Core's LauncherTileRefresh says the event changed a tile.</summary>
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() => RefreshTiles(LauncherTileTrigger.GrantsChanged));
+
         internal void RefreshTiles(LauncherTileTrigger trigger)
         {
             try
@@ -580,12 +578,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _artDrifts.Clear();
             _revealedAtBuild.Clear();
             foreach (var card in LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id)))
-            {
-                bool revealed = Revealed(card.Id);
-                _revealedAtBuild[card.Id] = revealed;
-                if (revealed) GamesGrid.Children.Add(CreateTile(card));
-            }
-            SeatGrid();
+                _revealedAtBuild[card.Id] = Revealed(card.Id);
+            foreach (var card in VisibleCards) GamesGrid.Children.Add(CreateTile(card));
+            SeatGrid();   // the wander timer keeps running and picks from the new tiles; the CTA sheen is untouched
         }
 
         /// <summary>WPF GamesColumn_SizeChanged / FitTiles (LauncherWindow.xaml.cs:550): columns and card

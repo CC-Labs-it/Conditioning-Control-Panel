@@ -74,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                UpdateXPBarLoginState();
                 var s = CoreSettings.Current;
                 var level = s.PlayerLevel;
                 var xp = s.PlayerXP;

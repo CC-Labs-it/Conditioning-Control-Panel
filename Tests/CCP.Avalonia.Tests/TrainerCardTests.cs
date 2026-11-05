@@ -205,6 +205,56 @@ public sealed partial class AccountSeedTests
     }
 
     [Fact]
+    public async Task Logout_ClearsCardAndDropsPendingRequests()
+    {
+        var s = CoreSettings.Current;
+        var old = (s.OfflineMode, LeaderboardTabView.NewClient);
+        var wire = new CardWire();
+        try
+        {
+            s.OfflineMode = false;
+            LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (global::Avalonia.Application.Current is null)
+                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                var card = w.ProfilePage!;
+                await card.OpenProfileAsync("Nyx");
+                Assert.True(card.FindControl<Grid>("ProfileCardWrapper")!.IsVisible);
+                await w.LogoutAsync();
+                Assert.False(card.FindControl<Grid>("ProfileCardWrapper")!.IsVisible);
+                Assert.True(card.FindControl<Border>("NoProfileSelected")!.IsVisible);
+                w.Close();
+
+                // A board search that finishes after logout must not show a card.
+                wire.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var w2 = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                var pending = w2.ProfilePage!.OpenProfileAsync("Nyx");
+                await w2.LogoutAsync();
+                wire.Gate.SetResult();
+                await pending;
+                Assert.False(w2.ProfilePage.FindControl<Grid>("ProfileCardWrapper")!.IsVisible);
+                w2.Close();
+
+                // A lookup for a displayed row must not restore badges after logout.
+                wire.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var w3 = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                w3.ProfilePage!.DisplayProfileEntry(new LeaderboardRow { DisplayName = "Nyx" });
+                await w3.LogoutAsync();
+                wire.Gate.SetResult();
+                for (var i = 0; i < 20; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+                Assert.False(w3.ProfilePage.FindControl<Border>("StaffBadge")!.IsVisible);
+                Assert.Null(w3.ProfilePage.FindControl<ItemsControl>("ProfileAchievementGrid")!.ItemsSource);
+                w3.Close();
+            });
+        }
+        finally { (s.OfflineMode, LeaderboardTabView.NewClient) = old; }
+    }
+
+    [Fact]
     public void TrainerCardText_MatchesWpfRules()
     {
         Assert.Equal(("1.2M", "3.4k", "999"), (TrainerCardText.Number(1_234_567), TrainerCardText.Number(3_420), TrainerCardText.Number(999)));
