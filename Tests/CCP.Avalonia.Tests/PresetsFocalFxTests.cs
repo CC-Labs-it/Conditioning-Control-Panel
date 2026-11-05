@@ -68,6 +68,9 @@ public sealed class PresetsFocalFxTests
     {
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        // Show ran the Full-motion arrival, which owns TranslateTransform.Y at animation priority for ~260 ms of
+        // real time and masks the hover's -2. Re-arriving at Off cancels it and snaps, as a tab switch would.
+        view.IsVisible = false; view.IsVisible = true; Settle();
         var chip = view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(b => b.Tag is string);
         host.MouseMove(Center(host, chip)); Settle();
         var scale = Assert.IsType<TransformGroup>(chip.RenderTransform).Children.OfType<ScaleTransform>().Single();

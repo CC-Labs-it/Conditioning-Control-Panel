@@ -4,6 +4,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Prizes;
 using Xunit;
+using SpiralInPath = ConditioningControlPanel.Services.BubbleSpiralPath;
 
 namespace ConditioningControlPanel.Tests;
 

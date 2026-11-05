@@ -110,6 +110,13 @@ namespace ConditioningControlPanel.Models
         [JsonProperty("avatar_id", NullValueHandling = NullValueHandling.Ignore)]
         public string? AvatarId { get; set; }
 
+        /// <summary>
+        /// Prize Counter frame id (<c>profile.frame.*</c>, <c>prime.frame.*</c>; ShopCosmetics) drawn around
+        /// the avatar wherever the card's owner is drawn. Ignore-null so older payloads stay byte-identical.
+        /// </summary>
+        [JsonProperty("frame_id", NullValueHandling = NullValueHandling.Ignore)]
+        public string? FrameId { get; set; }
+
         [JsonProperty("accent")]
         public string? Accent { get; set; }
 
@@ -145,6 +152,7 @@ namespace ConditioningControlPanel.Models
         public bool IsEmpty =>
             string.IsNullOrWhiteSpace(BannerId) &&
             string.IsNullOrWhiteSpace(AvatarId) &&
+            string.IsNullOrWhiteSpace(FrameId) &&
             string.IsNullOrWhiteSpace(Accent) &&
             string.IsNullOrWhiteSpace(TitleId) &&
             (PinnedAchievements == null || PinnedAchievements.Count == 0) &&
@@ -156,6 +164,7 @@ namespace ConditioningControlPanel.Models
         {
             BannerId = BannerId,
             AvatarId = AvatarId,
+            FrameId = FrameId,
             Accent = Accent,
             TitleId = TitleId,
             PinnedAchievements = new List<string>(PinnedAchievements ?? new List<string>()),
@@ -188,6 +197,11 @@ namespace ConditioningControlPanel.Models
         /// or null to skip. Only enforced when <paramref name="unlockedAchievementIds"/> is also
         /// non-null - a gate we cannot check against real unlock data must never strip a loadout
         /// (VIEWED cards, early boot).</param>
+        /// <param name="knownFrameIds">Prize Counter frame ids this build ships, or null to skip.</param>
+        /// <param name="shopGrants">Shop item id to its grant (<c>cos.&lt;id&gt;</c>), or null to skip.</param>
+        /// <param name="ownedGrants">The card owner's grants, or null when unknowable. A shop avatar or
+        /// frame is dropped only when BOTH this and <paramref name="shopGrants"/> are known and the grant
+        /// is missing - same reasoning as the achievement gate.</param>
         public static ProfileCosmetics Sanitize(
             ProfileCosmetics? raw,
             ISet<string>? knownBannerIds = null,
@@ -196,7 +210,10 @@ namespace ConditioningControlPanel.Models
             ISet<string>? knownDecoIds = null,
             ISet<string>? knownCharmIds = null,
             ISet<string>? knownAvatarIds = null,
-            IReadOnlyDictionary<string, string>? wardrobeAchievementGates = null)
+            IReadOnlyDictionary<string, string>? wardrobeAchievementGates = null,
+            ISet<string>? knownFrameIds = null,
+            IReadOnlyDictionary<string, string>? shopGrants = null,
+            ISet<string>? ownedGrants = null)
         {
             var clean = new ProfileCosmetics();
             if (raw == null) return clean;
@@ -209,9 +226,20 @@ namespace ConditioningControlPanel.Models
                     clean.BannerId = banner;
 
                 // ---- preset avatar ----
+                bool OwnsShopItem(string itemId)
+                {
+                    if (shopGrants == null || ownedGrants == null) return true;
+                    return !shopGrants.TryGetValue(itemId, out var grant) || ownedGrants.Contains(grant);
+                }
+
                 var avatar = Trim(raw.AvatarId);
-                if (avatar != null && (knownAvatarIds == null || knownAvatarIds.Contains(avatar)))
+                if (avatar != null && (knownAvatarIds == null || knownAvatarIds.Contains(avatar)) && OwnsShopItem(avatar))
                     clean.AvatarId = avatar;
+
+                // ---- Prize Counter frame ----
+                var frame = Trim(raw.FrameId);
+                if (frame != null && (knownFrameIds == null || knownFrameIds.Contains(frame)) && OwnsShopItem(frame))
+                    clean.FrameId = frame;
 
                 // ---- accent ----
                 var accent = Trim(raw.Accent);
