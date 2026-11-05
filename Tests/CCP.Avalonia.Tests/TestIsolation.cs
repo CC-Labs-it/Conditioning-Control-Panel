@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Headless;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -56,10 +57,11 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
-            // The first test owns the process-wide font manager. Always install the shipped
-            // Inter/AppFonts fallbacks before any per-test setup can omit them (Segoe UI Black).
+            // The first test owns the platform for the whole process. Use the shipped fonts here,
+            // before a class-specific setup can omit them and make later shell tests order-dependent.
             if (Application.Current is null)
-                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             Current = ProcessStateSnapshot.Take();
