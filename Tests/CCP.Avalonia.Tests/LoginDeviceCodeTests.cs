@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using Newtonsoft.Json.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -10,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -198,8 +200,8 @@ public sealed class LoginDeviceCodeTests
     private static async Task Run(Wire wire, Func<LoginDialog, Clock, AppSettings, Task> body)
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (oldGet, oldSet) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
         var secrets = new Dictionary<string, string?>(); // memory only: never the keyring
@@ -216,6 +218,8 @@ public sealed class LoginDeviceCodeTests
         AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
         AccountSeed.Sync = null;
         ExternalOpener.Shell = _ => true; // never a real browser
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        LocalizationManager.Instance.SetLanguage("de"); // prove status/error text is localized, not English literals
         var shell = new MainShellWindow();
         try
         {
@@ -234,6 +238,7 @@ public sealed class LoginDeviceCodeTests
         }
         finally
         {
+            LocalizationManager.Instance.SetLanguage(language);
             foreach (var w in shell.OwnedWindows.ToList()) w.Close();
             shell.Close();
             CoreSettings.ServiceProvider = null;
@@ -243,14 +248,33 @@ public sealed class LoginDeviceCodeTests
         }
     }
 
-    [Fact]
-    public Task TheBrowserConfirmationSignsInAfterPollingEveryThreeSeconds()
+    [Theory]
+    [InlineData(false, null, null)]
+    [InlineData(true, true, null)]
+    [InlineData(true, false, null)]
+    [InlineData(false, true, null)]
+    [InlineData(false, false, null)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public Task TheBrowserConfirmationSignsInAfterPollingEveryThreeSeconds(bool bare, bool? needsName, bool? nestedName)
     {
+        var confirmed = JObject.Parse(bare
+            ? """{"auth_token":"tok-dev","unified_id":"u_dev"}"""
+            : """{"auth_token":"tok-dev","unified_id":"u_dev","user":{"unified_id":"u_dev","display_name":"Bambi Dev"}}""");
+        if (needsName is bool needed) confirmed["needs_display_name"] = needed;
+        if (confirmed["user"] is JObject user)
+        {
+            user["display_name"] = needsName == true ? "Old name" : needsName == false ? null : "Bambi Dev";
+            if (nestedName is bool nested) user["needs_display_name"] = nested;
+        }
         var wire = new Wire(T0.AddMinutes(10),
             (HttpStatusCode.Accepted, "{}"),
-            (HttpStatusCode.OK, """{"auth_token":"tok-dev","unified_id":"u_dev","user":{"unified_id":"u_dev","display_name":"Bambi Dev"}}"""));
+            (HttpStatusCode.OK, confirmed.ToString()));
         return AvaloniaTestDispatcher.RunAsync(() => Run(wire, async (dialog, clock, s) =>
             {
+                var shell = Assert.IsType<MainShellWindow>(dialog.Owner);
+                // Oppose the server flag: its answer must win for either local name state.
+                s.UserDisplayName = needsName == true ? "Old name" : null;
                 clock.Advance(TimeSpan.FromSeconds(2.9));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(0, wire.Polls); // WPF waits 3 s before the first poll
@@ -265,6 +289,9 @@ public sealed class LoginDeviceCodeTests
                 await dialog.DevicePoll;
                 Assert.Equal(2, wire.Polls);
                 Assert.Equal("device_code", dialog.Result?.Provider);
+                Assert.Equal(needsName, dialog.Result?.ServerNeedsDisplayName);
+                if (needsName == true) await Until(() => shell.OwnedWindows.OfType<DisplayNameDialog>().Any());
+                else { Dispatcher.UIThread.RunJobs(); Assert.Empty(shell.OwnedWindows.OfType<DisplayNameDialog>()); }
                 Assert.Equal("u_dev", s.UnifiedId);
                 Assert.Equal("tok-dev", s.AuthToken);
                 Assert.Equal("u_dev", CoreAccount.UnifiedUserId);
@@ -316,13 +343,22 @@ public sealed class LoginDeviceCodeTests
             }));
     }
 
+    [Fact]
+    public Task CopyUsesRawCodeAndLocalizedFeedback() => AvaloniaTestDispatcher.RunAsync(() =>
+        Run(new Wire(T0.AddMinutes(1)), async (dialog, clock, settings) =>
+        {
+            Click(dialog.FindControl<Button>("BtnDeviceCodeCopy")!);
+            await Until(() => dialog.FindControl<TextBlock>("TxtDeviceStatus")!.Text == Loc.Get("login_device_copied"));
+            Assert.Equal("ABCDEF", await dialog.Clipboard!.TryGetTextAsync());
+        }));
+
     /// <summary>WPF BrowserLauncher.OpenUrlOrPrompt: a sign-in link no browser takes is copied and the user told so.</summary>
     [Fact]
     public Task AnUnopenableSignInLinkIsCopiedAndExplained() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldShell = ExternalOpener.Shell;
         ExternalOpener.Shell = _ => false; // nothing handles the link

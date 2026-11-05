@@ -124,6 +124,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private int _step;
         private double _scale = 1;
         private double _alpha;
+        private bool _gentle;
+        private int _riseMs, _fadeMs;
 
         /// <summary>--render-all: one sample strike so the PNG shows the bolt, flash and colours.</summary>
         public ChaosEStimOverlay() : this(sample: true) { }
@@ -176,6 +178,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return new Point(x, y);
             }
             _tick.Stop();
+            _gentle = !ConditioningControlPanel.Services.Safety.GentleVisuals.AllowFlicker;
+            _riseMs = ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(0);
+            _fadeMs = ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(M.FadeMs);
+            SetAlpha(_gentle ? 0 : M.StrikeOpacity);
             Draw(boltsPx.Select(b => (Local(b.From), Local(b.To))).ToList());
             _start = Clock.GetTimestamp();
             _tick.Start();
@@ -191,7 +197,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void Draw(IReadOnlyList<(Point A, Point B)> bolts)
         {
-            SetAlpha(M.StrikeOpacity);
             _canvas.Children.Clear();
             _segments.Clear();
             _lines.Clear();
@@ -239,8 +244,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             double ms = Clock.GetElapsedTime(_start).TotalMilliseconds;
             int step = M.FlickerStep(ms);
-            if (step > _step) { _step = step; Jitter(); }
-            var op = M.StrikeOpacityAt(ms);
+            if (!_gentle && step > _step) { _step = step; Jitter(); }
+            var op = _gentle ? M.GentleStrikeOpacityAt(ms, _riseMs, _fadeMs) : M.StrikeOpacityAt(ms);
             if (op is double o) { SetAlpha(o); return; }
             _tick.Stop();
             _canvas.Children.Clear();
@@ -248,6 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         internal bool IsTicking => _tick.IsEnabled;
+        internal IReadOnlyList<Point> FirstBoltPoints => _lines[0].Core.Points!.ToArray();
         internal int BoltCount => _segments.Count;
         internal double StrikeAlpha => _alpha;
     }

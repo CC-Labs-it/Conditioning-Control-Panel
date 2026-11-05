@@ -75,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             id = ResolveDoor(id);   // 7.2: public race doors always open the 3D race
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
             if (live != null)
@@ -87,7 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
                 return live;
             }
-            try { if (spec.Gate != null && !spec.Gate()) return null; }
+            try { if (spec.Id != JustDropId && spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             // WPF PieceByPieceHostService.cs:165-168: refocus is free; failed setup still counts.
             if (spec.Id == PbpId)
@@ -146,10 +147,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static bool SameOrigin(Uri a, Uri b) =>
             a.IsAbsoluteUri && b.IsAbsoluteUri && a.Scheme == b.Scheme && a.Authority == b.Authority;
 
-        /// <summary>WPF ChaosWebViewHost.OnWebMessage's same-document guard.</summary>
+        /// <summary>WPF ChaosWebViewHost.cs:238,1704 fences transferred documents; JustDropHostService.cs:105-108
+        /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
+        /// use its last completed top-level URL, as Intake does.</summary>
         private void OnPageMessage(string json)
         {
-            if (PageUrl == null || Web.CurrentUrl == null || !SameOrigin(Web.CurrentUrl, PageUrl)) return;
+            if (PageUrl == null || Web.CurrentUrl == null) return;
+            if (Spec.Id == JustDropId
+                ? !JustDropHandoff.IsSite(Web.CurrentUrl)
+                : !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(Web.CurrentUrl, PageUrl)) return;
             HandleMessage(json);
         }
 

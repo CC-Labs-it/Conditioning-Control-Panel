@@ -168,6 +168,29 @@ public sealed partial class GameWindowTests
         Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(true, S(95), S(95), true, busy: true));
     }
 
+    /// <summary>B2 (owner 2026-10-29): the Linux race host says <c>caps.scrolller: false</c> outright, so the page
+    /// offers My files / Off (boot.js reads <c>init.caps.scrolller ? feed : null</c>); Windows keeps the WPF caps.</summary>
+    [Fact]
+    public void Glassroad_Init_LinuxHostOffersNoRemotePictures()
+    {
+        var old = GlassroadHostRules.LinuxHostOverride;
+        try
+        {
+            GlassroadHostRules.LinuxHostOverride = true;
+            Assert.False(GlassroadHostRules.RemotePicturesOffered);
+            var caps = GlassroadHostRules.InitFrame("u_1", "Kit", 2, false, 0.75, 0.5, picturesOn: true)["caps"]!;
+            Assert.Equal(JTokenType.Boolean, caps["scrolller"]!.Type);
+            Assert.False((bool)caps["scrolller"]!);
+            GlassroadHostRules.LinuxHostOverride = false;
+            Assert.True(GlassroadHostRules.RemotePicturesOffered);
+            caps = GlassroadHostRules.InitFrame("u_1", "Kit", 2, false, 0.75, 0.5, picturesOn: true)["caps"]!;
+            Assert.True((bool)caps["scrolller"]!["consent"]!);
+            Assert.Equal("device", (string?)caps["scrolller"]!["origin"]);
+            Assert.False((bool)GlassroadHostRules.InitFrame(null, null, 0, false, 1, 1)["caps"]!["scrolller"]!["consent"]!);
+        }
+        finally { GlassroadHostRules.LinuxHostOverride = old; }
+    }
+
     [Fact]
     public void Glassroad_Init_SignedInAndSignedOut()
     {

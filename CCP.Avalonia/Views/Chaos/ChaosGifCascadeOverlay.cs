@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool Refused;
         private static ChaosGifCascadeOverlay? _active;
         private static int _generation;
+        internal static Func<int, AppSettings, List<string>> PickForTests = PickFiles;
 
         internal static ChaosGifCascadeOverlay? Active => _active;
         internal static Task? LastPick { get; private set; }
@@ -53,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             int generation = _generation;
             int batch = GifCascade.BatchSize(spawnRatePerSec, durationSec);
             var s = CoreSettings.Current;
-            LastPick = Task.Run(() => PickFiles(batch, s)).ContinueWith(t => Dispatcher.UIThread.Post(() =>
+            LastPick = Task.Run(() => PickForTests(batch, s)).ContinueWith(t => Dispatcher.UIThread.Post(() =>
             {
                 if (generation != _generation) return; // panic/run end wins over a pending pool pick
                 try { ShowWithFiles(t.IsCompletedSuccessfully ? t.Result : new List<string>(), spawnRatePerSec, durationSec, gifSize, fallSpeed, opacity, startScale); }

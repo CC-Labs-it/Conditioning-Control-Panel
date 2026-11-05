@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -22,6 +23,22 @@ namespace CCP.Avalonia.Tests;
 /// (Assets/bubblecount-2s.mp4); only a missing libvlc skips, and never on Linux CI.</summary>
 public sealed class BubbleCountGameTests
 {
+    [Fact]
+    public Task PlaybackWaitsForLoadedLayout() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var clip = Path.GetTempFileName();
+        var w = new BubbleCountWindow(clip, BubbleCountScheduler.Difficulty.Medium, false, _ => { });
+        try
+        {
+            w.Opened += (_, _) => { Assert.True(w.IsVisible); Assert.Null(BubbleCountWindow.Sink); };
+            w.Show(); Assert.True(w.IsVisible); Assert.Null(BubbleCountWindow.Sink);
+        }
+        finally { BubbleCountWindow.ForceCloseAll(); File.Delete(clip); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public async Task PlaysAnswersAndHonoursStrictAndPanic()
     {
@@ -56,7 +73,11 @@ public sealed class BubbleCountGameTests
             {
                 await AvaloniaTestDispatcher.RunAsync(async () =>
                 {
-                    ShellTestPlatform.Ensure();
+                    if (Application.Current is null)
+                        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                            .UseSkia()
+                            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                            .SetupWithoutStarting();
 
                     async Task Open(bool strict, Action<BubbleCountWindow>? assertPlaying = null)
                     {

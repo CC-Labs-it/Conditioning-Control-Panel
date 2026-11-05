@@ -217,15 +217,14 @@ public sealed class LoginRetryTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var oldLogin = CoreAccount.IsLoggedInProvider;
-        MainShellWindow? shell = null;
+        var oldLoggedIn = CoreAccount.IsLoggedInProvider;
+        CoreAccount.IsLoggedInProvider = () => true; // signed out, the chip opens the sign-in dialog instead (P02)
+        var shell = new MainShellWindow();
         try
         {
-            CoreAccount.IsLoggedInProvider = () => true;
-            shell = new MainShellWindow();
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            Assert.True(CoreAccount.IsLoggedIn);
+            CoreAccount.IsLoggedInProvider = () => true; // WPF MainWindow.UiUpdates.cs:508-525: signed-in navigation.
             Click(shell.Named<Button>("BtnAccountChip")!);
             Assert.Empty(shell.OwnedWindows.OfType<LoginDialog>());
             var page = shell.AppSettingsPage!;
@@ -236,9 +235,9 @@ public sealed class LoginRetryTests
         }
         finally
         {
-            shell?.Close();
-            CoreAccount.IsLoggedInProvider = oldLogin;
+            shell.Close();
             Dispatcher.UIThread.RunJobs();
+            CoreAccount.IsLoggedInProvider = oldLoggedIn;
         }
     });
 }

@@ -39,6 +39,7 @@ Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Down => "\u2193" :: tr
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 
 # --- content (c).3: emoji inside head-authored sentences ---
+Views/Chaos/ChaosRunHost.cs :: $"◈ {boon.Name}" :: WPF ChaosModeService.cs:434 authored announcer copy, drawn as outlined text (content (c).3)
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ☠ RELAPSE — one more loop :: WPF ChaosModeService.cs:1083 announcer copy, the line itself is drawn as outlined text (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ⏳ ten seconds. make them count. :: WPF ChaosModeService.cs:1073 run event-feed sentence (content (c).3)
@@ -52,9 +53,11 @@ Views/Chaos/ChaosRunHost.cs :: ♥ resistance crumbles :: run event-feed sentenc
 Views/Chaos/ChaosRunHost.cs :: 📿 the collar holds :: run event-feed sentence, WPF ChaosModeService.cs:2106 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 📿 unleashed — the field :: run event-feed sentence, WPF ChaosModeService.cs:2115 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 💥 {name} triggered! :: run event-feed sentence, WPF ChaosModeService.cs:2127 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ×{t} :: localized streak announcer multiplier, WPF ChaosModeService.cs:3082
 Views/Chaos/ChaosRunHost.cs :: ⏱ last breath! x :: run event-feed sentence, WPF ChaosModeService.cs:2040 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🐌 slow burn! x3 :: run event-feed sentence, WPF ChaosModeService.cs:2048 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ✔ snapped {spec :: run event-feed sentence, WPF ChaosModeService.cs:2049 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ♥ {Loc.Get("chaos_resistance_regrows")} :: fixed marker in the localized run event-feed sentence, WPF ChaosModeService.cs:2434 (content (c).3)
 
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
 Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations
@@ -76,6 +79,7 @@ Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry Gem = Ge
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry SparkShape = Geometry.Parse( :: path: D6 art - twinkle and ink-burst particle geometry in the WPF clipboard scene, not a control icon
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry Arrow = Geometry.Parse( :: path: D6 art - animated next-slip pointer inside the WPF clipboard illustration, not a navigation icon
 Views/AvatarTube/AvatarTubeWindow.axaml :: <Path x:Name="FuseCandleFlame" :: path: D6 art - AvatarTube fuse candle flame
+Views/Windows/MainShellWindow.NavCoin.cs :: coin.Specular = new Path :: path: D6 art - nav coin specular crescent (depth wave 10), not an icon slot
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: _curvePath = new Path :: path: D6 art - rule-editor curve
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: canvas.Children.Add(new Path :: path: D6 art - rule-editor keyframe curve (one site)
 Views/Deeper/DeeperEditorWindow.axaml :: <Path x:Name="WaveformPath" :: path: D6 art - waveform
@@ -128,3 +132,5 @@ Tours/TutorialService.cs :: * :: verbatim: import (Stack rule 4, trunk 557d9aac3
 Views/Windows/MainShellWindow.IntakeNudge.cs :: Glyph = "🎟️" :: InboxItem.Glyph is row data copied from WPF Marquee.cs:1087; InboxFlyout owns the icon rendering
 # --- brand marks ---
 Controls/HoverBubbleBar.cs :: new Path :: path: Discord brand logo from WPF HoverBubbleBar and SettingsTabView; no Fluent equivalent
+# --- font probes (not render sites) ---
+Platform/FontGuard.cs :: "Segoe MDL2 Assets", "Segoe UI Emoji" :: font: not an icon site - WPF Services/UI/FontGuard.cs probes these installed families for an unreadable file; nothing renders with them

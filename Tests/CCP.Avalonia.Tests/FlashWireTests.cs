@@ -106,10 +106,10 @@ public sealed class FlashWireTests
         var flashes = new List<(Bitmap, PixelRect, string, Screen)> {
             (Picture(), rect, "b.png", screen), (Picture(), rect, "c.png", screen) };
         var ticks = new List<Action>();
-        var schedule = FlashOverlay.RunSpawnLater;
+        var schedule = FlashOverlay.After;
         try
         {
-            FlashOverlay.RunSpawnLater = (tick, _) => ticks.Add(tick);
+            FlashOverlay.After = (tick, _) => ticks.Add(tick);
             var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
             var generation = (int)typeof(FlashOverlay).GetField("_generation", flags)!.GetValue(null)!;
             var completed = 0;
@@ -131,7 +131,7 @@ public sealed class FlashWireTests
             Assert.Equal(platformRefused ? 1 : 2, xp.Count);
             Assert.Equal(1, completed);
         }
-        finally { FlashOverlay.RunSpawnLater = schedule; }
+        finally { FlashOverlay.After = schedule; }
     });
 
     [Fact]
