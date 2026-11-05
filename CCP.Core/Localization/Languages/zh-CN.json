@@ -8721,5 +8721,10 @@
   "shop_item_bubbles_v2_name": "泡泡 v2",
   "shop_item_rt_bundle_1_name": "Racing Thoughts 合集 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts 合集 2",
-  "shop_item_rt_bundle_3_name": "Racing Thoughts 合集 3"
+  "shop_item_rt_bundle_3_name": "Racing Thoughts 合集 3",
+  "lock_voice_hint_off": "说出短语，无需打字（离线麦克风）。没有麦克风时可使用文字输入。",
+  "lock_voice_hint_on": "已开启。说出短语即可关闭卡片。如果麦克风听不到，仍可使用文字输入。",
+  "lock_voice_hint_no_mic": "未检测到麦克风。连接麦克风之前，锁定卡片将使用文字输入。",
+  "lock_voice_hint_load_failed": "已找到语音模型，但无法加载。请删除 {0} 中额外添加的模型，然后重启。",
+  "lock_voice_hint_no_model": "尚未安装语音模型。在此之前，锁定卡片将使用文字输入。请将 vosk-model-small-en-us-0.15 解压到 {0}。"
 }

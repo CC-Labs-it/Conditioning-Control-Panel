@@ -8962,5 +8962,10 @@
   "shop_item_bubbles_v2_name": "Bolle v2",
   "shop_item_rt_bundle_1_name": "Pacchetto Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pacchetto Racing Thoughts 2",
-  "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3"
+  "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3",
+  "lock_voice_hint_off": "Pronuncia la frase invece di digitarla (microfono offline). Senza microfono puoi digitare.",
+  "lock_voice_hint_on": "Attivo. Pronuncia la frase per chiudere la scheda. Puoi digitare se il microfono non ti sente.",
+  "lock_voice_hint_no_mic": "Nessun microfono rilevato. Le schede di blocco useranno il testo finché non ne colleghi uno.",
+  "lock_voice_hint_load_failed": "Modello vocale trovato, ma impossibile caricarlo. Rimuovi i modelli aggiuntivi in {0}, poi riavvia.",
+  "lock_voice_hint_no_model": "Modello vocale non ancora installato. Le schede di blocco useranno il testo nel frattempo. Estrai vosk-model-small-en-us-0.15 in {0}"
 }

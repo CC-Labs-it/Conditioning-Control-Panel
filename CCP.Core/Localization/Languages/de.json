@@ -8212,5 +8212,10 @@
   "shop_item_bubbles_v2_name": "Blasen v2",
   "shop_item_rt_bundle_1_name": "Racing Thoughts Paket 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts Paket 2",
-  "shop_item_rt_bundle_3_name": "Racing Thoughts Paket 3"
+  "shop_item_rt_bundle_3_name": "Racing Thoughts Paket 3",
+  "lock_voice_hint_off": "Sprich den Satz laut aus, statt ihn zu tippen (Offline-Mikrofon). Ohne Mikrofon bleibt die Texteingabe verfügbar.",
+  "lock_voice_hint_on": "Aktiv. Sprich den Satz, um die Karte zu schließen. Du kannst weiter tippen, wenn das Mikrofon dich nicht hört.",
+  "lock_voice_hint_no_mic": "Kein Mikrofon erkannt. Sperrkarten verwenden die Texteingabe, bis eines angeschlossen ist.",
+  "lock_voice_hint_load_failed": "Sprachmodell gefunden, konnte aber nicht geladen werden. Entferne zusätzlich installierte Modelle unter {0} und starte neu.",
+  "lock_voice_hint_no_model": "Sprachmodell noch nicht installiert. Sperrkarten verwenden vorerst die Texteingabe. Entpacke vosk-model-small-en-us-0.15 nach {0}"
 }

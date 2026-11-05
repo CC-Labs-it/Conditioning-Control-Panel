@@ -8965,5 +8965,10 @@
   "shop_item_bubbles_v2_name": "Bubbles V2",
   "shop_item_rt_bundle_1_name": "Racing Thoughts Vol. 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts Vol. 2",
-  "shop_item_rt_bundle_3_name": "Racing Thoughts Vol. 3"
+  "shop_item_rt_bundle_3_name": "Racing Thoughts Vol. 3",
+  "lock_voice_hint_off": "Say the phrase out loud instead of typing it (offline mic). Falls back to typing if no mic.",
+  "lock_voice_hint_on": "On. Speak the phrase to dismiss the card. Typing stays available if the mic can't hear you.",
+  "lock_voice_hint_no_mic": "No microphone detected. Lock cards will use typing until one is connected.",
+  "lock_voice_hint_load_failed": "Speech model found but it would not load. Remove any extra model you added under {0}, then restart.",
+  "lock_voice_hint_no_model": "Speech model not installed yet. Lock cards will use typing until it is. Unzip vosk-model-small-en-us-0.15 into {0}"
 }
