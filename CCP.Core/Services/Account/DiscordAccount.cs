@@ -270,7 +270,7 @@ namespace ConditioningControlPanel.Services
             if (!isWhitelisted) return;
             if (_settings() is { } s)
             {
-                s.PatreonPremiumValidUntil = DateTime.UtcNow.AddHours(25);
+                EntitlementTierRule.ExtendPremiumTo(s, DateTime.UtcNow.AddHours(25));
                 CoreSettings.Save();
             }
             _whitelistPeer?.Invoke()?.SetWhitelistStatus(true);

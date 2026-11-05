@@ -11,8 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 
 /// <summary>PORTED from ConditioningControlPanel/Services/FirstShow/FirstShowAudio.cs: the recorded cue named by
 /// <see cref="FirstShowScript.CueAsset"/> at <see cref="FirstShowScript.CueScale"/> of master (:30-40); master 0 is silence;
-/// a new cue stops the last. Each landed speech card gets WPF's deterministic bleepese burst.
-/// Cue resolution stays on the base path; PR #3277 owns cue overrides and cue suppression.</summary>
+/// a new cue stops the last. Each landed speech card gets WPF's deterministic bleepese burst (Speak :19, EmiVox).
+/// Cues resolve through CoreModArt with ContentLocator fallback (WPF ModResourceResolver :37); suppression matches WPF :18.</summary>
 internal sealed class FirstShowAudio : IDisposable
 {
     private Action? _stopCue, _stopVoice;
@@ -37,11 +37,11 @@ internal sealed class FirstShowAudio : IDisposable
     }
     public void Cue(string name)
     {
-        if (_disposed || Volume <= 0) return;
+        if (_disposed || CoreAudio.IsOutputSuppressed || Volume <= 0) return;
         try
         {
             var rel = FirstShowScript.CueAsset(name).Replace('/', Path.DirectorySeparatorChar);
-            var path = ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel));
+            var path = CoreModArt.AudioOverridePath(rel) ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel));
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
             Stop(ref _stopCue);
             _stopCue = Play(path, (float)(Volume * FirstShowScript.CueScale), "first-show-cue");
