@@ -138,8 +138,10 @@ public sealed partial class AccountSeedTests
         }
     }
 
-    [Fact]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(750)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(int renderDelayMs)
     {
         var s = CoreSettings.Current;
         var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
@@ -151,7 +153,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -167,6 +169,9 @@ public sealed partial class AccountSeedTests
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
                 w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                Assert.DoesNotContain(wire.Seen, r => r.Contains("/user/lookup"));
+                await Task.Delay(renderDelayMs); // emulate a slow render between clicks
                 // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
                 // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
                 var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;

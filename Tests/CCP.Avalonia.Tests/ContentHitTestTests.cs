@@ -11,7 +11,6 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
-using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -30,9 +29,8 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().WithInterFont().With(AppFonts.Options(systemEmoji: false))
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             // This probes static hit geometry, not tab entrance or hover animation progress.
             ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
@@ -52,6 +50,7 @@ public sealed class ContentHitTestTests
                 // probe mid-entrance. Suspected, not reproduced: CI misses only ever hit the first awareness probes,
                 // inside the 620 ms entrance (hero hit ScrollContentPresenter, Windows CI 2026-10-30).
                 w.CompleteTabTransition();
+                Assert.Equal(1.0, w.Named<Control>(panelName)!.Opacity);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
