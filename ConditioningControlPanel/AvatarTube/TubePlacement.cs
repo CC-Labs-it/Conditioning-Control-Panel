@@ -43,14 +43,6 @@ namespace ConditioningControlPanel.AvatarTubeLayout
         public const double CornerRadius = 20;
         public const double MinWidth = 120;
 
-        /// <param name="canvas">The area the bubble can physically paint in (the tube window).</param>
-        /// <param name="workArea">The monitor work area the avatar is on, in the same units.</param>
-        /// <param name="obstacle">The main window when the tube is docked to it, else null.</param>
-        /// <param name="avatar">The avatar's box (her head is its top edge).</param>
-        /// <param name="configuredMaxWidth">The bubble's own MaxWidth (380 normally, 600 for chat history).</param>
-        /// <param name="chrome">Horizontal padding + border of the bubble (outer width minus content width).</param>
-        /// <param name="edgeGap">Daylight kept from the work area's edges (defaults to <see cref="Gap"/>).</param>
-        /// <param name="measure">Outer size of the bubble when laid out at a given outer max width.</param>
         /// <summary>
         /// ccp-bugs #1535: the avatar box the bubble is placed against while the chat box is open.
         /// Its top rises to the chat box's top when the box overlaps her column, so "above her head"
@@ -63,6 +55,14 @@ namespace ConditioningControlPanel.AvatarTubeLayout
             return Box.FromEdges(avatar.X, input.Y, avatar.Right, avatar.Bottom);
         }
 
+        /// <param name="canvas">The area the bubble can physically paint in (the tube window).</param>
+        /// <param name="workArea">The monitor work area the avatar is on, in the same units.</param>
+        /// <param name="obstacle">The main window when the tube is docked to it, else null.</param>
+        /// <param name="avatar">The avatar's box (her head is its top edge).</param>
+        /// <param name="configuredMaxWidth">The bubble's own MaxWidth (380 normally, 600 for chat history).</param>
+        /// <param name="chrome">Horizontal padding + border of the bubble (outer width minus content width).</param>
+        /// <param name="edgeGap">Daylight kept from the work area's edges (defaults to <see cref="Gap"/>).</param>
+        /// <param name="measure">Outer size of the bubble when laid out at a given outer max width.</param>
         public static BubblePlan Place(Box canvas, Box workArea, Box? obstacle, Box avatar,
             double configuredMaxWidth, double chrome, Func<double, (double W, double H)> measure,
             double edgeGap = Gap)
