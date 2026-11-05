@@ -233,6 +233,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // window its native move/resize/maximize for a colour. Left native and untinted.
             Opened += (_, _) => OpenPlayers.Add(this);
             Closed += (_, _) => { OpenPlayers.Remove(this); try { (Owner as Window)?.Activate(); } catch { } };
+            // WPF EnhancementPlayerWindow.xaml.cs:111-114: friends see "in Deeper" while the player is on
+            // screen. Loaded/Closed rather than the constructor, so a window that never shows never publishes.
+            Loaded += (_, _) => { try { Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Deeper); } catch (Exception ex) { Log.Debug(ex, "[Friends] enter Deeper"); } };
+            Closed += (_, _) => { try { Platform.FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Deeper); } catch (Exception ex) { Log.Debug(ex, "[Friends] leave Deeper"); } };
 
             _statusPill = this.FindControl<Border>("StatusPill")!;
             _statusPillText = this.FindControl<TextBlock>("StatusPillText")!;
@@ -315,6 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _videoBrowser.NavigationCompleted += OnVideoNavigationCompleted;
             _videoBrowser.WebMessage += OnVideoWebMessage;
             _btnPictureInPicture.Click += (_, _) => BtnPictureInPicture_Click();
+            _sliderVolume.Value = CoreSettings.Current.DeeperPlayerVolume;
             _sliderVolume.PropertyChanged += SliderVolume_PropertyChanged;
 
             foreach (var pill in new[] { _pillAll, _pillActions, _pillEngine, _pillErrors })
@@ -868,7 +873,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             if (!_isVideoMode || !_videoNavigated)
             {
-                IngestErrorLine("playback engine unavailable on this platform: audio is not played here");
+                IngestErrorLine("video playback unavailable");
                 return;
             }
 
@@ -966,6 +971,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _volumeBeforeMute = null;
             // WPF EnhancementPlayerWindow.xaml.cs:1017-1025.
             if (_localAudio != null) _localAudio.Volume = (int)_sliderVolume.Value;
+            var volume = (int)_sliderVolume.Value;
+            if (CoreSettings.Current.DeeperPlayerVolume != volume)
+            {
+                CoreSettings.Current.DeeperPlayerVolume = volume;
+                CoreSettings.Save();
+            }
         }
 
         // ====================================================================================
@@ -1399,6 +1410,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (!string.Equals(ed.LoadedFilePath, path, StringComparison.OrdinalIgnoreCase)) continue;
                 if (ed.WindowState == WindowState.Minimized) ed.WindowState = WindowState.Normal;
                 ed.Activate();
+                return;
+            }
+
+            // WPF MainWindow.DeeperTab.cs:628: shell ownership refreshes the hub on close.
+            if ((Owner as Windows.MainShellWindow ?? Windows.MainShellWindow.Current) is { IsVisible: true } mainShell)
+            {
+                mainShell.OpenDeeperEditorFromPlayer(path);
                 return;
             }
 

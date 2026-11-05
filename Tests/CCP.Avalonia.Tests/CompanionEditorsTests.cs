@@ -5,9 +5,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -200,6 +202,9 @@ public sealed class CompanionEditorsTests
         try
         {
             shell.Show();
+            shell.CompleteTabTransition();
+            // Park subsequent entrances so pointer success cannot depend on runner speed.
+            shell.TabClock = new SteppedTime();
             shell.ShowTab("companion");
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!

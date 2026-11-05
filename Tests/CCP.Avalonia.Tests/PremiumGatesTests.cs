@@ -7,6 +7,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Models;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -22,7 +23,7 @@ public sealed class PremiumGatesTests
     };
 
     private static readonly string[] Bands =
-        { "PlayLockGaze", "PlayLockFocusGaze", "PlayLockRemote", "PlayLockLockdown", "PlayLockBlink", "PlayLockFyp", "PlayLockBreakout" };
+        { "PlayLockGaze", "PlayLockFocusGaze", "PlayLockRemote", "PlayLockLockdown", "PlayLockBlink", "PlayLockFyp", "PlayLockBreakout", "PlayLockDtrh", "PlayLockArcademy" };
 
     /// <summary>Decision "Entitlement lapse: startup write deferred": navigation/startup clears a lapsed
     /// flag in memory and leaves settings.json alone; the next entitlement event writes it.</summary>
@@ -32,7 +33,12 @@ public sealed class PremiumGatesTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var oldSeam = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreSettings.ServiceProvider);
@@ -90,7 +96,12 @@ public sealed class PremiumGatesTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider);
@@ -126,6 +137,17 @@ public sealed class PremiumGatesTests
                 bool Stamped(string badge) => shell.Named<Control>("PlayTab")!.FindControl<TierBadge>(badge)!.FreeToday;
                 Assert.True(Stamped("PlayBadgeRemote"));
                 Assert.False(Stamped("PlayBadgeFyp"));
+
+                // DtRH's own drop day, independent of the Remote/For You gifts (WPF MainWindow.PlayTab.cs:130,184).
+                CoreEntitlement.IsFreeTodayProvider = k => k == "dtrh";
+                Show("play");
+                Assert.False(Banded("PlayLockDtrh"));
+                Assert.True(Banded("PlayLockArcademy"));
+                Assert.True(Stamped("PlayBadgeDtrh"));
+                CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is Basic in 7.2.2: an owner gets no gift
+                Show("play");
+                Assert.False(Stamped("PlayBadgeDtrh"));
+                CoreEntitlement.HasPremiumProvider = null;
 
                 // The other three pool keys lift their own veils (WPF RefreshEntitlementVeils).
                 CoreEntitlement.IsFreeTodayProvider = k => k is "takeover" or "voice" or "haptics";
@@ -175,6 +197,75 @@ public sealed class PremiumGatesTests
                 (s.AutonomyModeEnabled, s.KeywordTriggersEnabled) = oldFlags;
                 global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.KeywordTriggersPanel.Inform = oldInform;
                 shell.Close();
+            }
+        });
+    }
+    /// <summary>WPF MainWindow.Patreon.cs:196: a lapsed Takeover entitlement stops the running chant
+    /// loop, not just its flag.</summary>
+    [Fact]
+    public void Lapse_StopsTheRunningMantraChant()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var chant = global::ConditioningControlPanel.Avalonia.App.MantraChant;
+            var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
+                CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider,
+                global::ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Instance);
+            var s = CoreSettings.Current;
+            var oldFlag = s.MantraChantEnabled;
+            // A mod with one voiced mantra, so the loop really runs; no audio device is opened.
+            var id = "lapse-" + Guid.NewGuid().ToString("N");
+            var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-" + id);
+            var dir = System.IO.Path.Combine(root, "resources", "sounds", "companion_audio");
+            System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "p.mp3"), "audio");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "mantras.json"),
+                "{\"mantras\":[{\"id\":\"a\",\"phrase\":\"Obey\",\"promptAudio\":\"p.mp3\"}]}");
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                global::ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Instance = null;
+                CoreMods.ActiveModIdProvider = () => id;
+                CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = id }, root, false);
+                CoreEntitlement.HasPremiumProvider = () => true;
+                s.MantraChantEnabled = true;
+                chant.StopAndDisarm(); // launch must clear a persisted opt-in without starting audio
+                Assert.False(s.MantraChantEnabled);
+                Assert.False(chant.IsRunning);
+                using (var exiting = new global::ConditioningControlPanel.Avalonia.Platform.MantraChantHost())
+                {
+                    exiting.Start();
+                    Assert.True(exiting.IsRunning);
+                    exiting.Dispose(); // exit tears down a running loop
+                    Assert.False(exiting.IsRunning);
+                }
+                s.MantraChantEnabled = true;
+                chant.Start();
+                Assert.True(chant.IsRunning);
+                (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (() => false, null);
+                shell.RefreshEntitlementVeils();
+                Assert.False(s.MantraChantEnabled);
+                Assert.False(chant.IsRunning);
+            }
+            finally
+            {
+                chant.Stop();
+                (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
+                    CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider,
+                    global::ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Instance) = old;
+                s.MantraChantEnabled = oldFlag;
+                shell.Close();
+                try { System.IO.Directory.Delete(root, true); } catch { }
             }
         });
     }

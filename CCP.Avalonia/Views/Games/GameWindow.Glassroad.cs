@@ -1,6 +1,5 @@
 // PORTED from ConditioningControlPanel/Services/Glassroad/GlassroadHostService.cs (feat/glassroad-a 5121933ee):
-// GLASSROAD, the 3D race (Assets/web/glassroad/index.html), private preview behind CCP_GLASSROAD=1. With the switch
-// on, the Racing Thoughts door opens this page instead (GameWindow.Launch); without it nothing changes for anyone.
+// GLASSROAD, the 3D race (Assets/web/glassroad/index.html), Prime only including solo (WPF #3126, #3132).
 // INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s, then defaults with no net) but says ready only once
 // shaders are warm, so init is posted at the page's load (NavigationCompleted, this engine's nearest seam to WPF's
 // DOMContentLoaded), on the first message and on ready (a repeat is harmless). The relay signs as the player, so it
@@ -14,11 +13,11 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
-using ConditioningControlPanel.Localization;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -28,24 +27,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string GlassroadId = "glassroad";
 
-        /// <summary>The door switch's raw value; tests swap it rather than the process env.</summary>
-        internal static Func<string?> GlassroadDoorEnv { get; set; } =
-            () => Environment.GetEnvironmentVariable(GlassroadHostRules.DoorEnv);
-
-        /// <summary>The live read of the door switch. Never throws.</summary>
-        internal static bool GlassroadDoorOpen() { try { return GlassroadHostRules.DoorOpen(GlassroadDoorEnv()); } catch { return false; } }
-
-        /// <summary>WPF LauncherCatalogue "race": with the switch on, every Racing Thoughts door opens Glassroad.</summary>
+        /// <summary>All Racing Thoughts doors resolve here. The Linux host lane can replace this routing seam.</summary>
         internal static string ResolveDoor(string id) =>
-            string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) && GlassroadDoorOpen() ? GlassroadId : id;
+            string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) ? GlassroadId : id;
 
-        /// <summary>A direct launch of the page needs the switch too.</summary>
-        internal static bool GlassroadGate()
-        {
-            if (GlassroadDoorOpen()) return true;
-            Log.Information("GlassroadHost: launch refused, {Env} is not 1", GlassroadHostRules.DoorEnv);
-            return false;
-        }
+        /// <summary>WPF 7.2 GlassroadHostService.PrimeAllowed: tier 2, solo included, no daily-free bypass.</summary>
+        internal static bool GlassroadLocked() => !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
+
+        internal static bool GlassroadGate() => TierGate.DemandLab(Loc.Get("launcher_game_race_title"));
 
         internal static Action<string> GlassroadNoteEvent { get; set; } = key => App.FeatureDayLog?.Note(key);
 
@@ -119,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants, GlassroadToysConnected, GlassroadPicturesOn()));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, GlassroadPicturesOn(), PrizeOwnership.Grants, GlassroadToysConnected));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }

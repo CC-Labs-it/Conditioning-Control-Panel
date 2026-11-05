@@ -9,23 +9,19 @@
 //
 // PORTED to the tab itself (CCP.Avalonia/Views/Tabs/AssetsTabView.axaml.cs, entered from
 // OnTabShown "assets"): RefreshAssetTree (local images/videos), BuildFolderTree, the folder and
-// thumbnail checks, Select/Deselect All, thumbnails (images; videos keep the placeholder), preview
+// thumbnail checks, Select/Deselect All, image/video thumbnails, preview
 // and reveal, the asset counts and the preset combo + Save As/Update/Delete. AssetPresetService
 // .OnlineChannelsReset is seeded in App startup (main 03af6e8bb). The Content Packs node, encrypted
 // image thumbnails, pack checks/counts and preview live in AssetsTabView.Packs.cs, using ContentPackStore.
 //
-// The rest, by blocker:
-//   App.ContentPacks - RefreshPacksAsync, BtnRefreshPacks_Click, BtnPackDownload_Click,
-//     BtnPackActivate_Click, BtnPackUpgrade_Click, BtnDeleteDownloadedPacks_Click, and the four
-//     OnPack* progress/auth/rate-limit callbacks.
-//   Pack video thumbnails - WPF Windows shell thumbnailer needs a portable replacement.
-//   The OS - BtnCreatorDiscord_Click, BtnPackPatreon_Click (pack cards only).
-//   Pack preview rotation - StartPackPreviewRotation, StopPackPreviewRotation, LoadPreviewImagesFromUrlsAsync,
-//     GetPackPreviewFileStem (pure, and held with the rotation that is its only caller).
-//   Phrase presets - InitializePhrasePresets and its four handlers (no control on this tab).
-//   WPF input - PacksScrollViewer_PreviewMouseWheel, HorizontalScrollViewer_PreviewMouseWheel,
-//     InnerScrollViewer_PreviewMouseWheel. Avalonia has no PreviewMouseWheel; these are the
-//     nested-scroller workaround and need re-deriving, not porting.
+// Re-cut shell-assets: local/pack video thumbnails and Windows image shell fallback live in
+// AssetsTabView.Packs.cs:37 and AssetsTabView.axaml.cs:320 (WPF Assets.cs:801-806, :921-937).
+// Phrase presets already live in WorkshopAccordion.PhrasePresets.cs:20; enabled counts now use
+// the existing editor catalogue (:54, :61, :91), as WPF Assets.cs:1790 and Patreon.cs:1403-1406.
+// Nested keyword/patch-note wheels forward through Helpers/ParentWheel.cs:12, matching WPF
+// Assets.cs:444-457. Quests' horizontal-only viewer already bubbles vertical wheel input.
+// The pack strip is unreachable in WPF (MainWindow.xaml.cs:205, PacksSectionEnabled = false).
+// Its cards, download/activate/upgrade, links, callbacks and preview rotation remain unported.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

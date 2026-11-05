@@ -122,7 +122,6 @@ public class Sync7bEntitlementTests {
         var grace = DateTime.UtcNow.AddDays(2); s.PatreonPremiumValidUntil = grace; s.PatreonLabValidUntil = grace; s.ServerTierSeen = 1;
         var seenList = s.SeenFeatureIntros; seenList.Add("isolation-probe"); var seen = seenList.ToArray();
         typeof(EntitlementRefresh).GetField("_answeredIdentity", BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, "baseline");
-        typeof(EntitlementRefresh).GetField("_lastFocus", BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, DateTime.UtcNow);
         CheckoutWatch.Disarm(); CheckoutWatch.NoteOpened("https://patreon.com/checkout"); var before = EntitlementTestScope.Fields.Select(f => f.GetValue(null)).ToArray();
         Assert.Throws<InvalidOperationException>((Action)(() => { using var failed = new EntitlementTestScope(); s.UnifiedId = "failure"; throw new InvalidOperationException(); })); Assert.Equal("baseline", s.UnifiedId);
         Func<Task>[] tests = {

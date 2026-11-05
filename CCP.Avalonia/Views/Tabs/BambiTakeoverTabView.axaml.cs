@@ -571,10 +571,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             s.WallpaperEnabled = keep;
             CoreSettings.Save();
             PanelWallpaperDuration.IsVisible = !keep;
-            // ponytail: WPF also puts the original wallpaper straight back when this goes off
-            // (App.Wallpaper.Deactivate) and warns on an empty library when it goes on
-            // (MainWindow.StartStop.cs WarnIfWallpaperLibraryEmpty). Needs
-            // ConditioningControlPanel/Services/WallpaperService.cs, which is Win32.
+            if (keep) Shell?.WarnIfWallpaperLibraryEmpty(); // WPF MainWindow.Autonomy.cs:435
+            // ponytail: WPF MainWindow.Autonomy.cs:430-431 restores the original wallpaper on uncheck; needs a platform wallpaper service.
         }
 
         /// <summary>WPF MainWindow.Autonomy.cs:329. The folder is saved for Takeover's wallpaper
@@ -625,8 +623,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (s.MantraChantEnabled == on) return;
             s.MantraChantEnabled = on;
             CoreSettings.Save();
-            // ponytail: WPF then calls App.MantraChant.Start()/Stop() and re-reads the hint. Needs
-            // ConditioningControlPanel/Services/MantraChantService.cs.
+            if (on) App.MantraChant.Start(); else App.MantraChant.Stop();
+            TxtMantraChantHint.Text = Loc.Get(App.MantraVoice.HasVoicedMantras()
+                ? "desc_mantra_chant" : "desc_mantra_chant_none");
         }
 
         private void SldMantraChantVolume_Changed(object? sender, RangeBaseValueChangedEventArgs e)
@@ -635,7 +634,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_isLoading) return;
             CoreSettings.Current.MantraChantVolume = e.NewValue;
             CoreSettings.Save();
-            // ponytail: WPF also live-applies to a clip already playing (App.MantraChant.ApplyVolume).
+            App.MantraChant.ApplyVolume();
         }
 
         private void SldMantraChantGap_Changed(object? sender, RangeBaseValueChangedEventArgs e)

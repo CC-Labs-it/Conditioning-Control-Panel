@@ -53,6 +53,8 @@ internal static class PrizeOwnership
     }
     internal static void WatchShutdown() => Dispatcher.UIThread.ShutdownStarted += (_, _) => _shutdown = true;
     internal static bool Held(string id) => Service.Grants.Contains(id);
+    /// <summary>The held grant ids, for the Racing Thoughts garage's kart rows (WPF GlassroadHostService init.grants).</summary>
+    internal static string[] Grants => Service.Grants.ToArray();
     internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
     {
         Service.ApplySnapshot(accountId, revision, grants);
@@ -68,8 +70,6 @@ internal static class PrizeOwnership
     internal static event Action? GrantsChanged;
     /// <summary>The desk's name for <see cref="GrantsChanged"/>.</summary>
     internal static event Action? DeskGrantsChanged { add => GrantsChanged += value; remove => GrantsChanged -= value; }
-    /// <summary>The signed-in account's held grants (the garage's owned frame).</summary>
-    internal static string[] Grants => Service.Grants.ToArray();
     /// <summary>Null until the signed-in account has a revisioned snapshot: unknown grants keep stored picks.</summary>
     internal static ISet<string>? KnownGrants() => Service.Revision > 0 && Service.HoldsCurrentAccount
         ? new HashSet<string>(Service.Grants, StringComparer.Ordinal) : null;

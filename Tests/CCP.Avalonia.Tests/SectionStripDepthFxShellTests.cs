@@ -130,6 +130,7 @@ public sealed class SectionStripDepthFxShellTests
 
                 // The real pointer path (P04): moving onto a rest pill lifts it, pressing drops
                 // its face, releasing springs it back and chooses it.
+                HeadlessInput.RenderLiveTree(w);
                 var ramp0 = strip.Part("ramp")!.Pill;
                 var at = ramp0.TranslatePoint(new Point(ramp0.Bounds.Width / 2, ramp0.Bounds.Height / 2), w)!.Value;
                 w.MouseMove(at);

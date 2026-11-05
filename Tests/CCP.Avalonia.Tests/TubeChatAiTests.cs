@@ -73,6 +73,9 @@ public sealed class TubeChatAiTests
             var policy = tube.FindControl<Border>("PolicyBadge")!;
             var aiBadge = tube.FindControl<Border>("AiBadge")!;
 
+            tube.OpenChatInput();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tube.FindControl<Border>("InputPanel")!.IsVisible);
             input.Text = "hello there";
             await tube.SendChatAsync();
             Dispatcher.UIThread.RunJobs();

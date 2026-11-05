@@ -197,7 +197,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             var text = Loc.Get("premium_spark_label");
             if (string.IsNullOrWhiteSpace(text) || text == "premium_spark_label") text = "PREMIUM";
-            var typeface = new Typeface(new FontFamily("Segoe UI Black, Segoe UI"), FontStyle.Normal, FontWeight.Black);
+            // WPF Controls/Header/PremiumSpark.xaml.cs:450 prefers Segoe; bundled Inter covers hosts without it.
+            var typeface = new Typeface(new FontFamily("Segoe UI Black, Segoe UI, avares://Avalonia.Fonts.Inter/Assets#Inter"), FontStyle.Normal, FontWeight.Black);
             var group = new GeometryGroup { FillRule = FillRule.NonZero };
             double x = 0;
             foreach (var ch in text.ToUpper(CultureInfo.CurrentCulture))

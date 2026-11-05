@@ -18,12 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
     /// and the settings hook is inlined for the reason spelled out in
     /// <see cref="BubbleCountFeatureControl"/>.
     ///
-    /// <para>The font combo is real rather than two placeholders:
-    /// <c>FontManager.Current.SystemFonts</c> is the cross-platform half of the WPF
-    /// <c>Helpers.FontPickerHelper</c>, and each row previews in its own face exactly as
-    /// <c>Populate</c> did. What does not carry over is that helper's <c>Fredoka (bundled)</c>
-    /// sentinel: the face ships as a WPF <c>pack://</c> Resource and is not packed on this head,
-    /// so offering it would name a font nothing can resolve.</para>
+    /// <para>Installed fonts preview per row; the bundled Fredoka sentinel resolves through AppFonts.</para>
     ///
     /// <para>Still head-side: the flash SURFACE (Views/Overlays/SubliminalOverlay) and the
     /// mod-aware feature art. The loop itself is not - the enable toggle, the interval and the
@@ -56,8 +51,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnManageMessages.Click += BtnManageMessages_Click;
             BtnAdvanced.Click += BtnAdvanced_Click;
 
-            Loaded += (_, _) => RebindToCurrentSettings();
-            Unloaded += (_, _) => Unhook();
+            Loaded += (_, _) => { RebindToCurrentSettings(); CoreMods.ModChanged += OnModChanged; };
+            Unloaded += (_, _) => { Unhook(); CoreMods.ModChanged -= OnModChanged; };
 
             Helpers.ModArt.BindFeaturePlates(this, "features/subliminal.png", HeroArt, SideArt);
 
@@ -102,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             }
             if (names.Length == 0) names = new[] { FontFallback };
 
-            foreach (var name in names)
+            foreach (var name in new[] { "Fredoka (bundled)" }.Concat(names))
             {
                 // Tag carries the value that gets stored; Content is what the row shows. Each row
                 // renders in its own face, so the list reads as a real preview, as on WPF.
@@ -110,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 {
                     Content = name,
                     Tag = name,
-                    FontFamily = new FontFamily($"{name}, {FontFallback}"),
+                    FontFamily = name == "Fredoka (bundled)" ? new FontFamily(Platform.AppFonts.Fredoka) : new FontFamily($"{name}, {FontFallback}"),
                     FontSize = 14,
                 });
             }
@@ -171,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(RefreshSilentHint);
 
         internal void RefreshSilentHint() => TxtWhispersSilentHint.IsVisible =
-            CoreSettings.Current.SubAudioEnabled && ConditioningControlPanel.Services.SpokenClipRule.AnySilent(
+            ChkWhispers.IsChecked == true && ConditioningControlPanel.Services.SpokenClipRule.AnySilent(
                 CoreSettings.Current.SubliminalPool.Where(x => x.Value).Select(x => x.Key),
                 Overlays.SubliminalWhisperShow.HasRecordedVoice);
 
@@ -248,6 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (s.SubAudioEnabled == on) return;
             s.SubAudioEnabled = on;
             CoreSettings.Save();
+            RefreshSilentHint();
         }
 
         private void SliderWhisperVol_Changed(object? sender, RangeBaseValueChangedEventArgs e)
@@ -324,8 +320,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 s.RemovedDefaultSubliminals.Remove(key);
 
             s.SubliminalPool = dialog.ResultData;
-            RefreshSilentHint();
             CoreSettings.Save();
+            RefreshSilentHint();
             Log.Information("Subliminal pool updated: {Count} items", dialog.ResultData.Count);
         }
 

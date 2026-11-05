@@ -78,10 +78,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
+        // WPF ShowOverlaySustained: voice owns a runtime hold, never the saved feature flag.
+        // ponytail: retain the request through asynchronous decode; panic clears it even if no window opened.
+        internal static double? VoiceOpacity { get; private set; }
+        internal static void SetVoiceHold(Visual host, bool on)
+        {
+            VoiceOpacity = on ? Math.Clamp(CoreSettings.Current.SpiralOpacity / 100.0, 0, 1) : null;
+            Refresh(host);
+        }
+        // WPF Session/SessionEngine.cs:799,814: a later session tick overwrites the
+        // sustained opacity, while its visibility hold remains owned by the voice action.
+        internal static bool ApplySessionOpacity(double? percent)
+        {
+            if (VoiceOpacity == null || percent == null) return false;
+            var next = Math.Clamp(percent.Value / 100.0, 0, 1);
+            var changed = VoiceOpacity != next;
+            VoiceOpacity = next;
+            return changed;
+        }
+        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
         internal static double PaintedOpacity => SpiralFrames.Paint(
-            Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+            VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
@@ -105,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -236,8 +256,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
         /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
         private static bool ShouldShow()
-            => App.Sessions?.IsPaused != true
-               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true);
+            => !RemoteCommands.OverlaysStopped && (RemoteCommands.OverlayRunning || (App.Sessions?.IsPaused != true
+               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true)));
 
         private static void BeginDecode(Visual host, string path)
         {
@@ -261,7 +281,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// pixels (the corner GIF decodes to the pixels its overlay occupies, WPF CornerGifMedia).</param>
         /// <param name="maxFrames">When &gt; 0, at most this many frames are kept, strided across the whole
         /// animation (the chaos wash keeps 40, WPF ChaosFlashOverlay.cs:222 after the #476 OOM).</param>
-        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0)
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
+            List<TimeSpan>? frameDurations = null)
         {
             var frames = new List<Bitmap>();
             try
@@ -287,13 +308,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var full = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var canvas = new SKBitmap(full);
                 using var scaled = new SKBitmap(new SKImageInfo(plan.Width, plan.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
-                for (var i = 0; i < count && frames.Count < plan.Frames; i++)
+                for (var i = 0; i < count && (frameDurations != null
+                    ? i < (long)plan.Frames * plan.Step : frames.Count < plan.Frames); i++)
                 {
                     // canvas holds frame i-1. Reuse it only when that is the frame i builds on; otherwise
                     // (restore-previous disposal) the codec decodes the required frame itself.
                     var required = i < info.Length ? info[i].RequiredFrame : -1;
                     var r = codec.GetPixels(full, canvas.GetPixels(), new SKCodecOptions(i, required == i - 1 ? i - 1 : -1));
                     if (r != SKCodecResult.Success && r != SKCodecResult.IncompleteInput) break;
+                    if (frameDurations != null)
+                    {
+                        // A sampled frame holds for the sum of the source frames it replaces.
+                        // Unlike ambient spirals, round GIFs keep long holds and unequal delays.
+                        if (i % plan.Step == 0) frameDurations.Add(TimeSpan.Zero);
+                        var ms = i < info.Length ? info[i].Duration : 100;
+                        frameDurations[^1] += TimeSpan.FromMilliseconds(ms > 0 ? ms : 100);
+                    }
                     if (i % plan.Step != 0) continue;
                     canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
                     frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
@@ -305,6 +335,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             catch (Exception ex)
             {
                 Log.Warning("Spiral: failed to decode {Path}: {E}", CornerGifPlanner.LogWhere(path), ex.Message);
+                // A duration is recorded before its bitmap; drop it if that bitmap threw.
+                if (frameDurations?.Count > frames.Count)
+                    frameDurations.RemoveRange(frames.Count, frameDurations.Count - frames.Count);
                 return (frames, TimeSpan.FromMilliseconds(50));
             }
         }

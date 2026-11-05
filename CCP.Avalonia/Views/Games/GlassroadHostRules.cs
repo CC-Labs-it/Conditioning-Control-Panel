@@ -43,7 +43,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// desktop: a signed-out player gets <c>identity: null</c> and the lobby asks them to sign in. <c>songs</c>
         /// stays empty: the private race song never ships in the app.</summary>
         public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-            bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null, bool toysConnected = false, bool picturesOn = false)
+            bool gentleOn, double gentleFadeSeconds, double gentleSpeed, bool picturesOn = false,
+            IEnumerable<string>? grants = null, bool toysConnected = false)
         {
             bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
             return new JObject

@@ -252,6 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// probe; the constructor can still fail after it passes, and a caller about to drive the
         /// page through script needs to know about this control, not about the machine.
         /// </summary>
+        // WPF MainWindow.Browser.cs:2740-2818 moves the existing page without reloading.
         internal IDisposable? BeginReparenting() => _web?.BeginReparenting();
 
         public bool HasEngine => _web is not null || ScriptInvoker != null;

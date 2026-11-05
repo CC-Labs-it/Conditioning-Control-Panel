@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Threading;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -22,7 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private bool _announcementArmed, _announcementClosed;
         private ITimer? _announcementTimer;
-        private readonly HashSet<string> _routedAnnouncements = new(StringComparer.Ordinal);
+        private string? _presentedAnnouncementId;
 
         private void InitializeServerAnnouncement()
         {
@@ -54,9 +52,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var make = AnnouncementClient;
                 if (_announcementClosed || make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
-                if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
-                // A scheduled or overlapping response must not refile a row the user already opened.
-                if (!_routedAnnouncements.Add(a.Id!)) return;
+                if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId
+                    || a.Id == _presentedAnnouncementId) return;
+                _presentedAnnouncementId = a.Id;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
                 _serverAnnouncementShownThisLaunch = true; // WPF Marquee.cs:913: claim even when parked.

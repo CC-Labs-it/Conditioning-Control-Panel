@@ -3,11 +3,12 @@
 // OnSessionProgressUpdated (:1838), OnSessionStarted (:1891), OnSessionStopped (:1936) and
 // BtnStopSession_Click (:1983); plus the stop-session branch of BtnStart_Click (MainWindow.StartStop.cs:58).
 // The head owns one Core SessionRunner (App.Sessions), which runs only the ported subset - flash,
-// subliminal, bouncing text, lock cards (docs/avalonia-decisions.html).
+// subliminal, bouncing text, lock cards and mandatory videos (docs/avalonia-decisions.html).
 // BtnPauseSession_Click (:2021) too.
-// ponytail: dropped, each with no service on this head: remote gates, program/punch-card/Bark/profile-sync hooks, the
-// Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).
-// ponytail: the start confirm still uses OK/Cancel rather than WPF's "▶ Start Session"/"Not yet".
+// ponytail: remaining gaps include remote gates and punch-card/Bark/profile-sync hooks.
+// Video teardown is synchronous (MandatoryVideoOverlay.CloseAll); playback gets WPF's 3s recap wait.
+// ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
+// "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
 
 using System;
 using System.Threading.Tasks;
@@ -59,8 +60,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try
                 {
                     Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
+                    // WPF Presets.cs:1616-1622 -> StartStop.cs:345-350: before session overrides.
+                    if (!CoreEngine.IsRunning && !RemoteControllerConnected && !CoreSettings.Current.AudioOnlySession)
+                        WarnIfFlashLibraryEmpty();
+                    App.Achievements?.CheckRelapse();
+                    StartEngineRamp(); // WPF Presets.cs:1618: capture user values before session overrides.
                     runner.Start(session);
                     AnnounceProgramSessionStarted(); // WPF Presets.cs:2013
+                    Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session); // WPF SessionEngine.cs:247
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
                     StartConditioningTimeTracker();   // ... and StartEngine :423
@@ -104,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");
             runner.Stop(completed: false);
+            App.Achievements?.TrackPanicPressed(); // WPF SessionEngine.cs:477-478, every confirmed early stop
             Platform.AccountSeed.Sync?.Nudge("session end");   // explicit end: the runner no longer counts as running
         }
 
@@ -125,6 +133,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StartEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;
+                    // WPF Presets.cs:2125-2126 -> StartStop.cs:345-350: a panic stopped the engine.
+                    if (!CoreEngine.IsRunning && !RemoteControllerConnected && !CoreSettings.Current.AudioOnlySession)
+                        WarnIfFlashLibraryEmpty();
                     r.Resume();
                     PinkFilterOverlay.Refresh(this);
                     SpiralOverlay.Refresh(this);
@@ -138,6 +149,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty));
             if (!confirmed || !runner.IsRunning) return;
             runner.Pause();
+            // WPF SessionEngine.cs:530 -> OverlayService.Stop:471: pause drops sustained holds too.
+            SpiralOverlay.Stop();
+            PinkFilterOverlay.Stop();
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
@@ -192,7 +206,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
         internal void SetPauseButton(bool paused)
         {
-            RefreshBarStatus();
             if (Named<Button>("BtnPauseSession") is not { } b) return;
             b.IsVisible = true;
             if (Named<TextBlock>("TxtPauseIcon") is { } icon) icon.Text = paused ? "\u25B6" : "\u23F8";
@@ -201,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             b.Bind(ToolTip.TipProperty, paused || count == 0
                 ? (Binding)new StrExtension(paused ? "tooltip_resume_session" : "tooltip_pause_session_100_xp_penalty_per_pause").ProvideValue(null!)
                 : new Binding { Source = Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", count) });
+            RefreshBarStatus();
         }
 
         /// <summary>WPF OnSessionProgressUpdated (+ OnSessionStarted's red button): the lock heartbeat
@@ -213,11 +227,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshSessionFeatureLock(force: false);
             Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
+            // WPF Session/SessionEngine.cs:799,814: ramps reclaim opacity after a voice command.
+            PinkFilterOverlay.ApplySessionOpacity(runner.PinkOpacity);
+            var voiceSpiralChanged = SpiralOverlay.ApplySessionOpacity(runner.SpiralOpacity);
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
             // The same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823), only when the start or the
             // ramp moved it: a Refresh enumerates screens and probes the file. A landing decode refreshes itself.
             var spiralKey = (CoreSettings.Current.SpiralEnabled, runner.SpiralOpacity);
-            if (spiralKey != _spiralTickKey) { _spiralTickKey = spiralKey; SpiralOverlay.Refresh(this); }
+            if (voiceSpiralChanged || spiralKey != _spiralTickKey) { _spiralTickKey = spiralKey; SpiralOverlay.Refresh(this); }
             if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
             var remaining = runner.Remaining;
             var showCountdown = CoreSettings.Current.ShowSessionCountdown != false;
@@ -236,16 +253,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
-        internal void RefreshBarStatus()
+        /// <summary>WPF RefreshBarStatus: repaint from the session clock, without saving settings.</summary>
+        private void RefreshBarStatus() => RefreshBarStatus(Named<TextBlock>("TxtPresetsStatus"));
+
+        internal static void RefreshBarStatus(TextBlock? status)
         {
-            if (Named<TextBlock>("TxtPresetsStatus") is not { } label) return;
-            label.IsVisible = true;
-            label.Text = App.Sessions is { IsRunning: true, CurrentSession: { } session } runner
-                ? SessionClockLabel.BarStatus(session.GetModeAwareName(), runner.Elapsed, runner.Remaining,
-                    session.DurationMinutes <= 0, CoreSettings.Current.ShowSessionCountdown,
-                    runner.IsPaused ? $" [{Loc.Get("label_paused")}]" : "",
-                    Loc.Get("label_session_bar_left"), Loc.Get("label_session_bar_elapsed"))
-                : CoreEngine.IsRunning ? Loc.Get("label_running") : "";
+            if (status is null) return;
+            status.IsVisible = true;
+            if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner)
+            {
+                status.Text = CoreEngine.IsRunning ? Loc.Get("label_running") : "";
+                return;
+            }
+            status.Text = SessionClockLabel.BarStatus(session.GetModeAwareName(), runner.Elapsed,
+                runner.Remaining, openEnded: session.DurationMinutes <= 0,
+                showCountdown: CoreSettings.Current.ShowSessionCountdown,
+                pauseIndicator: runner.IsPaused ? " [" + Loc.Get("label_paused") + "]" : "",
+                Loc.Get("label_session_bar_left"), Loc.Get("label_session_bar_elapsed"));
         }
 
         /// <summary>WPF OnSessionLogReady + ShowSessionSummaryWhenClear: the recap opens by itself,
@@ -255,12 +279,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Set by <see cref="EndProgramSessionQuietly"/>; the next recap is skipped once.</summary>
         private bool _suppressNextSessionSummary;
 
+        internal Func<TimeSpan, Task> SessionSummaryDelay = delay => Task.Delay(delay);
+
         internal void OnSessionLogReady(object? sender, SessionLogReadyEventArgs e)
         {
             if (_windowClosed || _exitRequested) return;
             if (_suppressNextSessionSummary) { _suppressNextSessionSummary = false; return; }
             var log = e.Log;
-            Dispatcher.UIThread.Post(() =>
+            Dispatcher.UIThread.Post(async () =>
             {
                 if (_windowClosed || _exitRequested) return;
                 // WPF MainWindow.Presets.cs:1709: the run that just ended is a receipt now; after the
@@ -268,11 +294,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshTakeawayShelf();
                 try
                 {
+                    await SessionSummaryPresentation.WaitForVideoAsync(
+                        () => CoreEngine.Video?.IsPlaying == true, SessionSummaryDelay,
+                        () => _windowClosed || _exitRequested);
+                    if (_windowClosed || _exitRequested) return;
                     var dialog = new SessionCompleteWindow(log);
                     // WPF MainWindow.Presets.cs:1790 (#1303): under a lock card, pop quiz or Bubble
                     // Count cover the recap opens passive - non-modal, not activated - and only one.
-                    // ponytail: videoUp is false until the head has a VideoService.IsPlaying.
-                    var passive = SessionSummaryPresentation.Decide(false, LockCardWindow.IsAnyOpen(),
+                    // WPF MainWindow.Presets.cs:1784: recheck playback after waiting; timeout stays passive.
+                    var passive = SessionSummaryPresentation.Decide(CoreEngine.Video?.IsPlaying == true, LockCardWindow.IsAnyOpen(),
                         PopQuizWindow.IsAnyOpen(), BubbleCountWindow.IsAnyOpen()) == SessionSummaryPresentation.Mode.Passive;
                     dialog.Topmost = !passive;   // WPF MainWindow.Presets.cs:1799
                     if (passive)

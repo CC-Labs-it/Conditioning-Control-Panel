@@ -91,7 +91,7 @@ public sealed class AmbientBeatLoopsTests
         "Views/Dialogs/ProfilePrivacyDialog.axaml", "Views/Dialogs/RoadmapStepPopup.axaml",
         "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml", "Views/Tabs/AchievementsTabView.axaml", "Views/Tabs/ChasterTabView.axaml",
         "Views/Tabs/DiscordTabView.axaml", "Views/Tabs/ExclusivesTabView.axaml", "Views/Tabs/LeaderboardTabView.axaml",
-        "Views/Tabs/LockdownTabView.axaml", "Views/Tabs/PlayTabView.axaml", "Views/Tabs/QuestsTabView.axaml",
+        "Views/Tabs/LockdownTabView.axaml", "Views/Tabs/QuestsTabView.axaml",
         "Views/Tabs/SettingsTabView.axaml", "Views/Windows/AchievementPopup.axaml", "Views/Windows/AnnouncementPopup.axaml",
         "Views/Windows/BubbleCountResultWindow.axaml", "Views/Windows/BubbleCountWindow.axaml", "Views/Windows/FeatureIntroPopup.axaml",
         "Views/Windows/LauncherWindow.axaml", "Views/Windows/LockCardWindow.axaml", "Views/Windows/MainShellWindow.axaml",
@@ -128,8 +128,8 @@ public sealed class AmbientBeatLoopsTests
         "Views/Controls/SeasonRecapCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
         "Views/Overlays/AttentionTestTarget.cs", "Views/Overlays/FlashOverlay.cs", "Views/Overlays/SpiralOverlay.cs",
         "Views/Tabs/AchievementsTabView.Fx.cs", "Views/Tabs/ChasterTabView.Ladder.cs", "Views/Tabs/LockdownTabView.axaml.cs",
-        "Views/Tabs/StudioTabView.Fx.cs", "Views/Windows/EmiDesk/EmiBookWindow.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
-        "Views/Windows/LauncherWindow.Veil.cs", "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MantraWindow.axaml.cs",
+        "Views/Tabs/StudioTabView.Fx.cs", "Views/Windows/EmiDesk/EmiBookWindow.axaml.cs",
+        "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MantraWindow.axaml.cs",
         "Views/Windows/QuizWindow.axaml.cs", "Views/Windows/WebcamCalibrationWindow.axaml.cs",
     };
 

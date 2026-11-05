@@ -32,6 +32,9 @@ namespace ConditioningControlPanel
         /// cards, the pink tint). Runs after every Stop, running or not.</summary>
         public static volatile Action? StoppedHook;
 
+        /// <summary>The head's start work, after the engine is running (WPF StartStop.cs:365-367).</summary>
+        public static volatile Action? StartedHook;
+
         /// <summary>The head's pop-quiz scheduler (it owns the <see cref="IPopQuizHost"/>); null
         /// on a head with no pop-quiz window.</summary>
         public static volatile PopQuizScheduler? PopQuiz;
@@ -46,13 +49,13 @@ namespace ConditioningControlPanel
         /// Not idempotent in TotalSessions, exactly as WPF; callers start only when stopped.</summary>
         public static void Start()
         {
+            RemoteCommands.ReleaseOverlayStop();
             var s = CoreSettings.Current;
             s.TotalSessions++;
             CoreSettings.Save();
 
             // #668 Audio-Only Hypno (WPF :304): the visual features sit the session out.
-            // ponytail: WPF also starts the layered audio bed (LayeredAudio.Start(ignoreMasterToggle: true));
-            // no head here has it in Core yet - add it with the audio-layers port.
+            // The head starts the layered audio bed through StartedHook.
             bool audioOnly = s.AudioOnlySession;
             if (!audioOnly) CoreFlash.Start();   // it checks FlashEnabled itself
             if (!audioOnly && s.SubliminalEnabled) CoreSubliminal.Start();
@@ -74,6 +77,8 @@ namespace ConditioningControlPanel
             StartedUtc = DateTime.UtcNow;
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
                 s.FlashEnabled, s.SubliminalEnabled, s.LockCardEnabled, s.BouncingTextEnabled);
+            try { StartedHook?.Invoke(); }
+            catch (Exception ex) { Log.Warning(ex, "Engine start hook failed"); }
         }
 
         /// <summary>WPF StopEngine: stop every driven service whether or not the engine ran (panic
@@ -97,6 +102,7 @@ namespace ConditioningControlPanel
                 catch (Exception ex) { Log.Warning(ex, "Brain Drain stop failed"); }
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
                 _running = false;
+                RemoteCommands.StopOverlays(); // remote-only overlays must not survive Stop or panic
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }
                 catch (Exception ex) { Log.Warning(ex, "Engine stop hook failed"); }

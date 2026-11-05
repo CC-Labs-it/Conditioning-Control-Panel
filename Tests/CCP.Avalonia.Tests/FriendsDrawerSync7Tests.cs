@@ -135,7 +135,8 @@ public sealed partial class FriendsDrawerTests
             Assert.Equal(race.Room, room); await svc.TickAsync(); Assert.Contains("joined", wire.Polls.Last());
             FriendsLanding.OpenRace = _ => false; FriendsLanding.OnKnockDone(race with { Id = "0123456789abcdef" }, KnockOutcome.Go);
             await svc.TickAsync(); Assert.Contains("declined", wire.Polls.Last()); Assert.DoesNotContain("joined", wire.Polls.Last());
-            Assert.False(FriendsLanding.CanJoin(race with { Destination = InviteDestination.Breakout }));
+            // Breakout joins through its demo door now (FriendsBreakoutJoinTests); Goon still has no host here.
+            Assert.False(FriendsLanding.CanJoin(race with { Destination = InviteDestination.Goon }));
         }
         finally { FriendsLanding.OpenRace = open; FriendsLanding.Service = service; CoreEntitlement.HasLabProvider = lab; svc.Dispose(); }
     });

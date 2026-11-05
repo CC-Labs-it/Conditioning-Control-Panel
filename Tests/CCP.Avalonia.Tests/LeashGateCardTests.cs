@@ -205,6 +205,58 @@ public sealed class LeashGateCardTests
         Assert.True(browser.IsVisible);
     });
 
+    private sealed class SteppedClock : TimeProvider
+    {
+        public long Now = 1_000_000;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
+
+    /// <summary>Nov 4 review, #4384: a controller joining and leaving while the gate is up must not bring the
+    /// browser back over Panic and Cut; the gate hands it back when it goes. A tour still up keeps it hidden
+    /// the same way.</summary>
+    [Fact]
+    public void ControllerLeavingUnderTheGate_KeepsTheBrowserHidden_UntilTheGateGoes() => Run(punished: true, (shell, launcher, _) =>
+    {
+        var oldTime = MainShellWindow.RemoteOverlayTime;
+        var clock = new SteppedClock();
+        MainShellWindow.RemoteOverlayTime = clock;
+        try
+        {
+            var browser = shell.LeashBrowser!;
+            var overlay = shell.Named<Border>("RemoteControlOverlay")!;
+            browser.IsVisible = true;
+            PressTile(launcher);
+            Assert.True(shell.LeashGate!.IsUp);
+            Assert.False(browser.IsVisible);
+
+            overlay.IsVisible = true;          // a controller joins over the gate (ShowRemoteControlOverlay)
+            shell.HideRemoteControlOverlay();  // and leaves; the fade runs out
+            clock.Now += MainShellWindow.RemoteOverlayFadeOut.Ticks;
+            shell.RemoteOverlayTick();
+            Assert.False(overlay.IsVisible);
+            Assert.False(browser.IsVisible);   // the gate is still up
+
+            var oldSurfaces = PanicSurfaces.All;
+            PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
+            try { Click(Find(shell, "leash-gate-panic")); }
+            finally { PanicSurfaces.All = oldSurfaces; }
+            Assert.False(shell.LeashGate.IsUp);
+            Assert.True(browser.IsVisible);    // the gate hands it back
+
+            // The help tour's overlay is a cover too: the remote overlay going never shows it over a tour.
+            shell.SetTutorialOverlay(true);
+            overlay.IsVisible = true;
+            shell.HideRemoteControlOverlay();
+            clock.Now += MainShellWindow.RemoteOverlayFadeOut.Ticks;
+            shell.RemoteOverlayTick();
+            Assert.False(browser.IsVisible);
+            shell.SetTutorialOverlay(false);
+            Assert.True(browser.IsVisible);
+        }
+        finally { MainShellWindow.RemoteOverlayTime = oldTime; }
+    });
+
     [Fact]
     public void NoPunishment_TileOpensItsGame() => Run(punished: false, (shell, launcher, _) =>
     {

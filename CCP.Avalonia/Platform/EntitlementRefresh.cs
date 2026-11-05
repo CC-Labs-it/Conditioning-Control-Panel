@@ -14,7 +14,6 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class EntitlementRefresh
 {
     private static int _inFlight;
-    private static DateTime _lastFocus;
     private static string? _answeredIdentity;
     internal static bool ServerAnsweredThisRun => !string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
         && _answeredIdentity != null && _answeredIdentity == CoreSettings.Current.UnifiedId;
@@ -29,14 +28,14 @@ internal static class EntitlementRefresh
         if (Hooked.TryAdd(window, window)) window.Activated += (_, _) => Activation(window is Views.Windows.MainShellWindow);
     });
 
+    /// <summary>Any window coming back after a checkout link re-reads the tier and the provider. A plain return
+    /// to the panel is AccountSeed.OnAppFocusedAsync's (WPF EntitlementTierSync.OnAppFocused, one read per 20 s),
+    /// so this hook never adds a second profile read for it.</summary>
     internal static Task OnActivated(bool shell)
     {
         if (CoreSettings.Current.OfflineMode) return Task.CompletedTask;
-        var now = DateTime.UtcNow;
-        var checkout = CheckoutWatch.TakeCheck(now);
-        if (!checkout && (!shell || now - _lastFocus < TimeSpan.FromSeconds(20))) return Task.CompletedTask;
-        _lastFocus = now;
-        return CheckAsync(checkout, afterCheckout: checkout);
+        if (!CheckoutWatch.TakeCheck(DateTime.UtcNow)) return Task.CompletedTask;
+        return CheckAsync(true, afterCheckout: true);
     }
 
     internal static async Task<JustSubscribedOutcome> CheckAsync(bool validatePatreon = true, bool afterCheckout = false)
@@ -86,19 +85,15 @@ internal static class EntitlementRefresh
         // WPF EntitlementTierSync.Offer -> ApplyOnUi: the one grace-aware tier path (a rise unlocks, a tier
         // renews the grace, the same lower reading 90 s later closes it), never a rise-only write.
         AccountSeed.ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), source);
-        AdoptPatreon(s, id, user);
+        // WPF EntitlementTierSync.OfferPatreon on the same read.
+        AccountSeed.ApplyPatreonReading(new PatreonActiveReading(user.PatreonIsActive,
+            Services.Invites.InviteRules.ParseUtc(user.PatreonConfirmedAtRaw), user.PatreonTier), source);
         if (EffectiveTier > before) CheckoutWatch.Disarm();
         Changed?.Invoke();
         return true;
     }
 
-    /// <summary>WPF EntitlementTierSync.OfferPatreon: restamp the Patreon-active reading; a tier on the read
-    /// means the server answered for this identity this run.</summary>
-    internal static void AdoptPatreon(AppSettings s, string id, V2AuthService.V2User user)
-    {
-        PatreonActiveRule.Restamp(s, new PatreonActiveReading(user.PatreonIsActive,
-            Services.Invites.InviteRules.ParseUtc(user.PatreonConfirmedAtRaw), user.PatreonTier), DateTime.UtcNow);
-        if (EntitlementTierRule.ParseTier(user.EffectiveTierRaw).HasValue) _answeredIdentity = id;
-        CoreSettings.Save();
-    }
+    /// <summary>WPF EntitlementTierSync.ServerAnsweredThisRun: set by every tier reading for this identity
+    /// (<see cref="AccountSeed.ApplyTierReading"/>: profile load, heartbeat, focus and checkout reads).</summary>
+    internal static void NoteAnswered(string id) => _answeredIdentity = id;
 }
