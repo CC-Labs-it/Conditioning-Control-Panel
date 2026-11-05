@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Services
     public sealed class SyncPush
     {
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
-            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
+            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements | SyncBody.Field.TotalConditioningMinutes;
         public const SyncBody.Field Privacy = SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus
             | SyncBody.Field.ShareProfilePicture | SyncBody.Field.PublicShareAvatar
             | SyncBody.Field.GoonShareAvatar | SyncBody.Field.GoonShareDm;
@@ -174,6 +174,7 @@ namespace ConditioningControlPanel.Services
             UnifiedId = s.UnifiedId,
             Xp = (int)ProfileAdopt.TotalXp(s),
             Level = s.PlayerLevel,
+            TotalConditioningMinutes = s.TotalConditioningMinutes,
             DescentEpoch = Descent.DescentEpochs.ClientEpoch,
             Achievements = achievements?.Distinct().OrderBy(a => a, StringComparer.Ordinal).ToList(),
             Cosmetics = cosmetics,
@@ -329,6 +330,10 @@ namespace ConditioningControlPanel.Services
             }, TaskScheduler.Default);
         }
 
+        /// <summary>A heartbeat reply's body, off the UI thread. It carries the server's effective_tier
+        /// (WPF ProfileSyncService hands the same body to EntitlementTierSync.Offer).</summary>
+        public Action<string>? HeartbeatBody;
+
         /// <summary>WPF StartHeartbeat: one now, then every 120 s.</summary>
         public void StartHeartbeat()
         {
@@ -350,7 +355,7 @@ namespace ConditioningControlPanel.Services
         {
             var s = CoreSettings.Current;
             if (!SignedIn(s)) return Task.FromResult(false);
-            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession());
+            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession(), HeartbeatBody);
         }
     }
 }

@@ -212,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>WPF EmiFace.PixelFont: the SHIPPED Press Start 2P, system monospace behind it.</summary>
         private static readonly FontFamily PixelFont =
-            new FontFamily("avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Consolas, monospace");
+            ConditioningControlPanel.Avalonia.Platform.FontGuard.Startup.Family("avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Consolas, monospace");
 
         // ---------------------------------------------------------------- state
 

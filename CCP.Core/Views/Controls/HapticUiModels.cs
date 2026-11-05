@@ -414,6 +414,8 @@ namespace ConditioningControlPanel.Views.Controls
                     // (HapticService.SetSyncPatternAsync). No legacy twin exists, so None is correct.
                     Ly(HapticLayer.Pattern, "🌊", "haptics_row_deeper", "haptics_hint_deeper",
                        HapticRowLegacyBinding.None),
+                    // Racing Thoughts 3D: its steady buzz is this layer, its pulses read the same rule (RaceHapticDirector).
+                    Ly(HapticLayer.Race, "🏁", "haptics_row_race", "haptics_hint_race", HapticRowLegacyBinding.None),
                 }),
             };
         }
