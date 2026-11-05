@@ -6,6 +6,8 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Serilog;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
@@ -19,6 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class AssetsTabView
     {
         private bool _meterWired;
+        internal Button? OnlineHelpButton { get; private set; }
 
         /// <summary>WPF ScrolllerCredit.HomeLink.</summary>
         internal const string ScrolllerHome = "https://scrolller.com";
@@ -37,13 +40,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 BtnOnlineOfficialNice.Click += (_, _) => OnlineOfficialNice();
                 // The credit is the shared ScrolllerCreditLine: its own link opens scrolller.com and refuses under
                 // Strict Lock, Lockdown or a Chaos run (a second click handler here would open it twice).
-                ToolTip.SetTip(OnlineMeterHelp, HelpText());
+                OnlineHelpButton = LeashHelpButton.Create(() => new OnlineMediaHelpSlip(), "online-help");
+                OnlineMeterHelpHost.Content = OnlineHelpButton;
             }
             catch (Exception ex) { Log.Warning(ex, "Online meter wiring failed"); }
             RefreshOnlineMeter();
         }
 
-        /// <summary>The "?" slip as one tooltip: the title, then every paragraph (OnlineMeterRules.HelpParagraphKeys).</summary>
+        internal void PinOnlineHelp()
+        {
+            WireOnlineMeter();
+            OnlineMeterCard.BringIntoView();
+            if (OnlineHelpButton is { } help) LeashHelpButton.Pin(help);
+        }
+
+        /// <summary>The help text: the title, then every paragraph (OnlineMeterRules.HelpParagraphKeys).</summary>
         internal static string HelpText() =>
             string.Join("\n\n", new[] { Loc.Get(OnlineMeterRules.HelpTitleKey) }.Concat(OnlineMeterRules.HelpParagraphs(Loc.Get)));
 

@@ -615,7 +615,7 @@
                users ever see. The Ken Burns drift (scale 1.00 -> 1.04 over 40s) lives on THIS
                border and not on ImgLogo or on LogoFlipHost: both of those transforms are owned
                by other animations and would snap the drift back to 1.0. -->
-          <Border x:Name="LogoFaceLogo" CornerRadius="12" ClipToBounds="True"
+          <Border x:Name="LogoFaceLogo" CornerRadius="12" ClipToBounds="True" Margin="24"
                   RenderTransformOrigin="50%,50%">
             <Border.RenderTransform>
               <ScaleTransform ScaleX="1" ScaleY="1"/>
@@ -657,7 +657,7 @@
                Every piece of copy here is state-dependent and is written by
                ApplyIntakePassFaceState(); the {loc:Str} values are the available-state
                defaults. -->
-          <Border x:Name="IntakePassFace"
+          <Border x:Name="IntakePassFace" Margin="24"
                   IsVisible="False"
                   Background="{DynamicResource ElevatedSurfaceBrush}"
                   BorderBrush="{DynamicResource GlassBorderBrush}"

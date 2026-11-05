@@ -1,10 +1,17 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using Avalonia.Controls;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -81,6 +88,106 @@ public sealed class OnlineMeterSurfaceTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task Dashboard_faces_have_matching_insets_and_rounded_clipping() => Run(() =>
+    {
+        var tab = new SettingsTabView();
+        var logo = tab.FindControl<global::Avalonia.Controls.Border>("LogoFaceLogo")!;
+        var pass = tab.FindControl<global::Avalonia.Controls.Border>("IntakePassFace")!;
+        Assert.Equal(new Thickness(24), logo.Margin);
+        Assert.Equal(logo.Margin, pass.Margin);
+        Assert.True(logo.ClipToBounds);
+        Assert.Equal(new CornerRadius(12), logo.CornerRadius);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Daily_share_slip_uses_the_shared_title_and_all_paragraphs() => Run(() =>
+    {
+        var slip = new ConditioningControlPanel.Avalonia.Views.Controls.OnlineMediaHelpSlip();
+        var texts = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(slip)
+            .OfType<TextBlock>().Select(t => t.Text).ToArray();
+        Assert.Equal(new[] { Loc.Get(OnlineMeterRules.HelpTitleKey) }
+            .Concat(OnlineMeterRules.HelpParagraphs(Loc.Get)), texts);
+        var paragraphs = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(slip)
+            .OfType<TextBlock>().Skip(1).ToArray();
+        Assert.All(paragraphs.SkipLast(1), p => Assert.Equal(18, p.LineHeight));
+        Assert.Equal(FriendsDrawer.Mono, paragraphs[^1].FontFamily);
+        Assert.True(double.IsNaN(paragraphs[^1].LineHeight));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Clicking_the_spent_pill_closes_the_hover_before_navigating() => Run(() =>
+    {
+        CoreSettings.Current.Welcomed = true;
+        CoreSettings.Current.HasAcceptedAgeVerification = true;
+        CoreSettings.Current.MediaSource = "mixed";
+        CoreSettings.Current.RemoteMediaConsented = true;
+        var limits = new[] { ScrolllerAllowance.DailyBytes(ScrolllerPlan.Free), ScrolllerAllowance.DailyBytes(ScrolllerPlan.Basic),
+            ScrolllerAllowance.DailyBytes(ScrolllerPlan.Prime), ScrolllerAllowance.FreeFirstDayBytes };
+        var policy = (ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        ScrolllerPolicy.Apply(true, null);
+        ScrolllerAllowance.ApplyLimits(0, 0, 0, 0); // live state stays spent when Assets refreshes the meter
+        var shell = new MainShellWindow();
+        shell.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            shell.PaintOnlineMeterPill(State(100, spent: true));
+            shell.UpdateLayout();
+            var pill = shell.OnlinePill!;
+            var at = pill.TranslatePoint(new Point(pill.Bounds.Width / 2, pill.Bounds.Height / 2), shell)!.Value;
+            shell.MouseMove(at, RawInputModifiers.None);
+            Assert.True(pill.IsPointerOver);
+            Assert.NotNull(shell.OnlineHoverHelp);
+            shell.MouseDown(at, MouseButton.Left, RawInputModifiers.None);
+            shell.MouseUp(at, MouseButton.Left, RawInputModifiers.None);
+            Assert.Null(shell.OnlineHoverHelp);
+            Assert.Equal("assets", shell.CurrentTab);
+            Assert.True(pill.IsPointerOver); // the pointer never left to trigger the hover leave timer
+        }
+        finally
+        {
+            shell.Close();
+            ScrolllerAllowance.ApplyLimits(limits[0] / ScrolllerAllowance.MB, limits[1] / ScrolllerAllowance.MB,
+                limits[2] / ScrolllerAllowance.MB, limits[3] / ScrolllerAllowance.MB);
+            ScrolllerPolicy.Apply(policy.Enabled, policy.MaxClipShortSide);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Daily_share_help_pins_from_the_spent_card_and_contains_every_paragraph() => Run(() =>
+    {
+        CoreSettings.Current.Welcomed = true;
+        CoreSettings.Current.HasAcceptedAgeVerification = true;
+        CoreSettings.Current.MediaSource = "mixed";
+        CoreSettings.Current.RemoteMediaConsented = true;
+        var shell = new MainShellWindow();
+        shell.Show();
+        try
+        {
+            shell.PaintOnlineMeterPill(State(100, spent: true));
+            shell.OpenOnlineMeterHover();
+            Assert.NotNull(shell.OnlineHoverHelp);
+            shell.OnlineHoverHelp!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<AssetsTabView>("AssetsTab")!;
+            var help = tab.OnlineHelpButton!;
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashHelpButton.IsOpen(help));
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashHelpButton.IsPinned(help));
+            var slip = ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashHelpButton.Slip(help)!;
+            Assert.Equal("online-help-slip", slip.Tag);
+            var text = string.Join("\n", global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(slip)
+                .OfType<TextBlock>().Select(t => t.Text));
+            foreach (var key in OnlineMeterRules.HelpParagraphKeys) Assert.Contains(Loc.Get(key), text);
+            Assert.Null(shell.OnlineHoverHelp);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false, false, false, true)]
     [InlineData(true, false, false, false)]
@@ -110,8 +217,16 @@ public sealed class OnlineMeterSurfaceTests
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+        {
+            var fonts = AppFonts.Options();
+            // Match the app's bundled fonts, including portable aliases for Windows-only faces.
+            var mappings = new Dictionary<string, FontFamily>(fonts.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(AppFonts.Inter);
+            fonts.FontFamilyMappings = mappings;
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(fonts).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        }
         LocalizationManager.Instance.SetLanguage("en");
         await body();
     });

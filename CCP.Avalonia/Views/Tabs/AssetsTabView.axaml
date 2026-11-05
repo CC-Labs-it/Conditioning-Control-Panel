@@ -301,12 +301,8 @@
                             <TextBlock DockPanel.Dock="Left" Text="{loc:Str online_meter_label}" FontSize="12.5" FontWeight="SemiBold"
                                        Foreground="#E6FFFFFF" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <!-- The "?": how the daily share works (OnlineMeterRules.HelpParagraphKeys). -->
-                            <Border x:Name="OnlineMeterHelp" DockPanel.Dock="Left" Width="16" Height="16" CornerRadius="8"
-                                    Background="#241838" BorderBrush="#66B99CFF" BorderThickness="1" Cursor="Help"
-                                    VerticalAlignment="Center" Margin="0,0,14,0">
-                                <TextBlock Text="?" FontSize="10" FontWeight="Bold" Foreground="#B99CFF"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                            <ContentControl x:Name="OnlineMeterHelpHost" DockPanel.Dock="Left"
+                                            VerticalAlignment="Center" Margin="0,0,14,0"/>
                             <TextBlock x:Name="TxtOnlineMeterPct" DockPanel.Dock="Right" FontSize="17" FontWeight="Bold"
                                        Foreground="#FF69B4" MinWidth="52" TextAlignment="Right" VerticalAlignment="Center" Margin="14,0,0,0"/>
                             <Border Height="8" CornerRadius="4" Background="#2E2E4A" VerticalAlignment="Center" ClipToBounds="True">
