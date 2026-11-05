@@ -621,6 +621,35 @@ public sealed partial class GameWindowTests
     });
 
     // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
+    [Fact]
+    public void PieceByPiece_LobbyIntentsFollowIdentityAndFreshSpectateUsesSettings() => RunBoard(() =>
+    {
+        Assert.Null(GameWindow.OpenChessLobby("join", "invalid"));
+        Assert.Null(GameWindow.OpenChessLobby("spectate", "invalid"));
+        var window = GameWindow.OpenChessLobby("host")!;
+        window.PbpOsAnimations = () => Task.FromResult(true);
+        var sent = new List<JObject>();
+        window.Posted += json => sent.Add(JObject.Parse(json));
+        Assert.Empty(sent);
+        window.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal("host", (string?)sent.Last()["mode"]);
+        Assert.Same(window, GameWindow.OpenChessLobby("join", "p_table"));
+        Assert.Equal("p_table", (string?)sent.Last()["target"]);
+        GameWindow.OpenChessLobby("spectate", "m_0123456789abcdef");
+        Assert.Equal("spectate", (string?)sent.Last()["mode"]);
+        Assert.Equal("m_0123456789abcdef", (string?)sent.Last()["matchId"]);
+        window.Close();
+        window = GameWindow.OpenChessLobby("spectate", "m_fedcba9876543210")!;
+        window.PbpOsAnimations = () => Task.FromResult(true);
+        sent.Clear(); window.Posted += json => sent.Add(JObject.Parse(json));
+        window.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal("m_fedcba9876543210", (string?)sent.First()["spectateMatchId"]);
+        Assert.Equal(2, sent.Count);
+        window.HandleMessage("{\"type\":\"ready\"}"); Assert.Equal(2, sent.Count);
+        GameWindow.CloseAllForPanic();
+        Assert.Empty(GameWindow.OpenWindowsForTests());
+    });
     private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
@@ -766,36 +795,13 @@ public sealed partial class GameWindowTests
         }
     });
 
-    /// <summary>WPF CaucusHostService.Launch :132 + LauncherCatalogue :234: no track, no race (and no tile here,
-    /// where WPF draws the mystery card); an owned track opens it from the launcher after the leash check; panic closes it.</summary>
-    [Fact]
-    public void Race_DoorAndLauncher_LeashGate_AndPanic()
+    // Retained 2D bridge regressions run directly, never through a production door.
+    private static GameWindow OpenRetiredRace()
     {
-        RunRace(null, (launcher, _, _) =>
-        {
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
-            Assert.Null(GameWindow.Launch("race"));
-            Assert.False(GameWindow.IsAnyOpen());
-        });
-        RunRace("rt.original.03", (launcher, _, _) =>
-        {
-            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
-            launcher.Hide();
-            int gates = 0;
-            MainShellWindow.LeashGateDueProvider = () => true;
-            MainShellWindow.PresentLeashGateProvider = _ => gates++;
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, gates);
-            Assert.False(GameWindow.IsAnyOpen());
-            MainShellWindow.LeashGateDueProvider = () => false;
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(GameWindow.IsAnyOpen());
-            PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(GameWindow.IsAnyOpen());
-        });
+        var w = new GameWindow(new GameWindow.Game("race", "launcher_game_race_title", "dtrh/race.html"));
+        w.Load(GameWindow.Server());
+        w.Show();
+        return w;
     }
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
@@ -803,12 +809,12 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
     {
-        var w = GameWindow.Launch("race")!;
+        var w = OpenRetiredRace();
         Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
@@ -833,7 +839,8 @@ public sealed partial class GameWindowTests
         var tracks = new HashSet<string> { "rt.original.03" };
         RacingAccess.IsGrantedProvider = tracks.Contains;
         launcher.BuildTiles();
-        var w = GameWindow.Launch("race")!;
+        // WPF #3126: no production door opens the 2D bridge; its grant regressions run on it directly.
+        var w = OpenRetiredRace();
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         tracks.Add("rt.original.04");
@@ -851,10 +858,11 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
         Assert.False(w.RaceWatchRunning);
+        // WPF 7.2 LauncherCatalogue.cs:238: the Racing Thoughts tile is always revealed (Prime padlock), owned tracks or not.
         tracks.Clear();
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
         Dispatcher.UIThread.RunJobs();
-        Assert.DoesNotContain(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
             c => Equals(c.Tag, "race"));
         tracks.Add("rt.original.00");
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
@@ -868,7 +876,7 @@ public sealed partial class GameWindowTests
     {
         var granted = true;
         RacingAccess.IsGrantedProvider = id => granted && id == "rt.original.03";
-        var w = GameWindow.Launch("race")!;
+        var w = OpenRetiredRace();
         granted = false;
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
         granted = true;
@@ -885,7 +893,7 @@ public sealed partial class GameWindowTests
         var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var now = t0;
         GameWindow.RaceUtcNow = () => now;                // stepped clock (P08); RunRace restores it
-        var w = GameWindow.Launch("race")!;
+        var w = OpenRetiredRace();
         Assert.True(w.RaceWatchRunning);                // WPF Launch arms the watch
         Assert.Equal("idle", w.CheckRaceHeartbeat(t0.AddSeconds(60)));
         w.HandleMessage("{\"type\":\"ready\"}");
@@ -964,7 +972,7 @@ public sealed partial class GameWindowTests
         WithTrackFiles((_, _) => { decodes++; return Tone(4); }, files =>
         {
             var player = new FakeTrackPlayer();
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             using (var real = w.RaceNewPlayer!()) Assert.IsType<RaceTrackPlayer>(real);   // this head's own player
             w.RaceNewPlayer = () => player;
             w.RacePickFile = () => Task.FromResult<string?>(files[0]);
@@ -1012,7 +1020,7 @@ public sealed partial class GameWindowTests
     {
         WithTrackFiles(null, files =>
         {
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             w.RaceNewPlayer = null;   // a build with no player
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -1047,7 +1055,7 @@ public sealed partial class GameWindowTests
             return Tone(3);
         }, files =>
         {
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             w.RaceNewPlayer = () => new FakeTrackPlayer();
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -1607,7 +1615,7 @@ public sealed partial class GameWindowTests
     /// <summary>Each hosted game's kept-Escape page and frame (WPF KeptEscapeType per host: the board reads
     /// pbp:escape, the race / Breakout / DtRH pages kept-escape). FYP and Just Drop do not pause on Escape.</summary>
     [Theory]
-    [InlineData("race", "Race", "kept-escape")]
+    [InlineData("race", "Glassroad", "kept-escape")]
     [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]

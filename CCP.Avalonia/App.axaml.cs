@@ -18,6 +18,10 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
+        /// <summary>The haunted-UI layer that rides a running lockdown (WPF App.Possession; Core director,
+        /// this head's effects and attribution). Arms only when a lockdown starts with Possession on.</summary>
+        public static global::ConditioningControlPanel.Services.Possession.PossessionDirector? Possession { get; internal set; }
+
         /// <summary>The playlist player, null until a service is installed.</summary>
         public static Services.AudioPlayer.IAudioPlaylistService? AudioPlaylist { get; private set; }
 
@@ -173,6 +177,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static MantraService Mantra { get; } = new();
         /// <summary>WPF App.MantraVoice: the active mod's Spoken Mantras (mantras.json).</summary>
         internal static MantraVoiceService MantraVoice { get; } = new();
+        internal static Platform.MantraChantHost MantraChant { get; } = new();
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
@@ -610,6 +615,7 @@ namespace ConditioningControlPanel.Avalonia
                 CloudAutoBackup = new AutoSettingsBackup(() => Views.Controls.AppSettings.AccountSettingsSection.NewBackup());
                 CoreSettingsHooks.CloudBackup = () => CloudAutoBackup.RunAsync(CoreSettings.Current, Settings?.RestoredFromBackup == true);
                 Platform.SecretStore.Seed();
+                Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
@@ -628,6 +634,8 @@ namespace ConditioningControlPanel.Avalonia
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
                 CorePaths.EnsureCustomAssetsDirectories(Settings.Current.CustomAssetsPath);
+                // WPF ConditioningControlPanel/App.xaml.cs:3494-3503: never auto-start.
+                MantraChant.StopAndDisarm();
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -646,6 +654,11 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
                 var lockdown = LockdownService.Current;
+                // WPF App.xaml.cs:3506-3515: the haunt that rides the lockdown timer, its ember tick / dip
+                // cues and the one remembered charge a Full Doki lockdown leaves. Constructing it costs
+                // nothing: it arms only when a lockdown starts with LockdownPossessionEnabled on.
+                try { Possession = global::ConditioningControlPanel.Avalonia.Possession.PossessionAvaloniaHead.Install(lockdown); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Possession install failed (non-fatal)"); }
                 lockdown.LockdownDeactivated += () =>
                 {
                     try { Quests?.TrackLockdownCompleted(lockdown.LastActiveDuration); }
@@ -691,6 +704,7 @@ namespace ConditioningControlPanel.Avalonia
                     Views.Overlays.SubliminalWhisperShow.Phrase(text);
                     NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
                 };
+                CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
                 CoreSubliminal.RunStateChanged = running =>
                 {
@@ -742,10 +756,10 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // WPF App.xaml.cs:3218: funscripts follow the primary video playhead.
-                Services.Haptics.FunScriptService.SubscribePlaybackTime =
+                // ponytail: no EMI Desk moment (HapticService.EmiDeskFire unseeded; WPF App.xaml.cs:3225).
+                // WPF App.xaml.cs:3218: follow the primary mandatory video playhead.
+                ConditioningControlPanel.Services.Haptics.FunScriptService.SubscribePlaybackTime =
                     Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
-                // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
@@ -785,6 +799,17 @@ namespace ConditioningControlPanel.Avalonia
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
+                    SkillPurchase.Current = new SkillPurchase
+                    {
+                        SyncBeforeRetry = sync.SyncBeforeRetryAsync,
+                        PointsSpent = cost => Achievements?.TrackSkillPointsSpent(cost),
+                        LifetimeSpentReconciled = total => Achievements?.ReconcileLifetimePointsSpent(total),
+                    };
+                    SkillPurchase.Current.SkillUnlocked += (_, id) =>
+                    {
+                        Platform.BarkHead.Engine?.Raise("SkillUnlocked", c => c.Set("skill", id));
+                        if (id == Models.PinkRushRules.SkillId) Dispatcher.UIThread.Post(Views.Windows.PinkRushHost.Start);
+                    };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
@@ -932,6 +957,8 @@ namespace ConditioningControlPanel.Avalonia
                 };
                 IntakePunchCard = new IntakePunchCardService();
                 WireIntakeSessionCredit(Sessions);
+                // WPF Services/Session/SessionEngine.cs:396: clear session presence on every stop.
+                Platform.FriendsHead.WatchSessionStop(Sessions);
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)
@@ -1033,6 +1060,7 @@ namespace ConditioningControlPanel.Avalonia
                 // (WPF leaves it unseeded = all available). Seeded before the service so it is never unset.
                 CoreProgram.TaskAvailableProvider = Platform.ProgramCapabilities.IsAvailable;
                 Programs = new Services.Program.ProgramService();
+                Platform.ChasterHead.AttachPrograms(Programs);   // WPF ChasterHooks.cs:65-69
                 CoreQuests.TrackProgramVerifierProvider = (category, amount) => Programs?.TrackVerifier(category, amount);   // WPF App.xaml.cs:413
 
                 // WPF App.xaml.cs:447: ritual photos file through the roadmap. Lazy - the shell creates its
@@ -1217,7 +1245,8 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.BouncingTextOverlay.Stop();
             Views.Overlays.ChaosFlashOverlay.CloseActive();
             Views.Overlays.CornerGifOverlay.StopAll();
-            Views.Overlays.SpiralOverlay.CloseAll();   // WPF StopEngine -> App.Overlay.Stop(); panic and exit too
+            Views.Overlays.SpiralOverlay.Stop();       // WPF StopEngine -> App.Overlay.Stop(); panic and exit too; drops the voice hold
+            Views.Overlays.PinkFilterOverlay.Stop();   // WPF MainWindow.StartStop.cs:527 Overlay.Stop
         }
 
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
@@ -1415,6 +1444,7 @@ namespace ConditioningControlPanel.Avalonia
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.KeywordTriggerHead.Stop(); } catch { }
             try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
+            try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
@@ -1455,6 +1485,7 @@ namespace ConditioningControlPanel.Avalonia
             try { CoreHaptics.Service?.Dispose(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
+            try { Possession?.Dispose(); } catch { /* WPF App.OnExit:6527: every haunted control back, ember stripped */ }
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
             try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }

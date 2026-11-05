@@ -45,6 +45,7 @@ public sealed class PremiumCelebrationTests
             s.SeenFeatureIntros.Remove(TierCelebration.KeyT1);
             s.SeenFeatureIntros.Remove(TierCelebration.KeyT2);
             s.SeenFeatureIntros.Remove(TierCelebration.LegacyKey);
+            s.WhatMovedCardShown = 1;   // the What-moved card is an owned window, so a live rise would count the user busy
             bool premium = premiumAtLaunch, lab = false;
             void Grant(bool p, bool l) { premium = p; lab = l; }
             StartupLadder.ResetForTests();
@@ -103,6 +104,176 @@ public sealed class PremiumCelebrationTests
         return title;
     }
 
+    [Fact]
+    public void VoiceMuteStopsCurrentClipWithoutDroppingTheBubble() => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = true;
+        shell.ShowAvatarTube();
+        s.AvatarMuted = false;
+        s.CompanionVoiceLinesMuted = false;
+        s.MasterVolume = 80;
+        var clip = Path.GetTempFileName(); var stopped = 0;
+        var oldAudio = CoreAudio.PlayStoppableProvider;
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => stopped++;
+        try
+        {
+            var tube = shell.Tube!; Assert.NotNull(tube);
+            tube.GigglePriority("hi", phraseAudioPath: clip, barkVoice: true);
+            Dispatcher.UIThread.RunJobs();
+            shell.ApplyVoiceMute(true);
+            Assert.Equal(1, stopped);
+            Assert.True(tube.HasBubbleUp);
+            tube.SetWindowMute(true);
+            shell.ApplyVoiceMute(false);
+            Assert.False(CoreSettings.Current.AvatarMuted);
+            Assert.Same(tube, shell.Tube);
+            Assert.False(tube.IsMuted);
+        }
+        finally { CoreAudio.PlayStoppableProvider = oldAudio; File.Delete(clip); }
+        Assert.Same(oldAudio, CoreAudio.PlayStoppableProvider);
+    });
+    [Fact]
+    public void VoiceGrammarReachesMuteRestoreAndClampedVolumeActions() => Run(false, (shell, opened, grant) =>
+    {
+        shell.ShowTab("appsettings");
+        Dispatcher.UIThread.RunJobs();
+        var audio = shell.AppSettingsPage!.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AudioSettingsSection>("SectionAudio")!;
+        var slider = audio.FindControl<Slider>("SliderMaster")!;
+        var host = shell.VoiceCmds.Host;
+        CoreSettings.Current.MasterVolume = 43;
+        host.ActionFor("mute")!();
+        Assert.Equal(0, CoreSettings.Current.MasterVolume);
+        Assert.Equal(0, slider.Value);
+        Assert.True(CoreSettings.Current.AvatarMuted);
+        host.ActionFor("mute")!();
+        host.ActionFor("unmute")!();
+        Assert.Equal(43, CoreSettings.Current.MasterVolume);
+        Assert.Equal(43, slider.Value);
+        Assert.True(CoreSettings.Current.SubAudioEnabled);
+        shell.SetMasterVolume(98);
+        host.ActionFor("louder")!();
+        Assert.Equal(100, CoreSettings.Current.MasterVolume);
+        shell.SetMasterVolume(2);
+        host.ActionFor("quieter")!();
+        Assert.Equal(0, CoreSettings.Current.MasterVolume);
+    });
+    [Fact]
+    public void TierChangeRepaintsEffectiveAiPermissionWithoutDestroyingSavedChoice() => Run(false, (shell, opened, grant) =>
+    {
+        CoreSettings.Current.CompanionPrompt.AllowAiToControlEffects = true;
+        var permissions = new ConditioningControlPanel.Avalonia.Views.Controls.Companion.AiPermissionsGrid();
+        var window = new Window { Content = permissions };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var toggle = permissions.FindControl<CheckBox>("ChkCapEffects")!;
+            Assert.False(toggle.IsChecked == true);
+            grant(true, true);
+            AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(toggle.IsChecked == true);
+            grant(false, false);
+            AccountSeed.SubscribeStar!.NotifyEntitlementRaised((PatreonTier)0);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(toggle.IsChecked == true);
+            Assert.True(CoreSettings.Current.CompanionPrompt.AllowAiToControlEffects);
+        }
+        finally { window.Close(); }
+    });
+    /// <summary>WPF OnGraceClosed -> UpdateUnlockablesVisibility: a confirmed lower reading raises GraceClosed, never
+    /// TierChanged, and the effective AI-effects tick still has to drop (the saved choice stays).</summary>
+    [Fact]
+    public void GraceCloseRepaintsEffectiveAiPermissionWithoutDestroyingSavedChoice() => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.CompanionPrompt.AllowAiToControlEffects = true;
+        s.UnifiedId = "lapsing-account";
+        s.AuthToken = "test-token";
+        s.PatreonTier = 2;
+        grant(true, true);
+        var permissions = new ConditioningControlPanel.Avalonia.Views.Controls.Companion.AiPermissionsGrid();
+        var window = new Window { Content = permissions };
+        var clock = AccountSeed.UtcNow;
+        var start = DateTime.UtcNow;
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var toggle = permissions.FindControl<CheckBox>("ChkCapEffects")!;
+            Assert.True(toggle.IsChecked == true);
+            AccountSeed.UtcNow = () => start;
+            AccountSeed.ApplyTierReading(0, "heartbeat");
+            grant(false, false);
+            AccountSeed.UtcNow = () => start.AddSeconds(90);
+            AccountSeed.ApplyTierReading(0, "heartbeat");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, s.PatreonTier);                 // the grace closed
+            Assert.False(toggle.IsChecked == true);
+            Assert.True(s.CompanionPrompt.AllowAiToControlEffects);
+        }
+        finally { AccountSeed.UtcNow = clock; window.Close(); }
+    });
+    [Fact]
+    public void LiveRiseIgnoresLegacyFlagAndFirstLaunchQuietButBusyRiseStaysInInbox() => Run(false, (shell, opened, grant) =>
+    {
+        Celebration(opened, TierCelebration.KeyT1);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.SeenFeatureIntros.Add(TierCelebration.LegacyKey);
+        CoreSettings.Current.PatreonTier = 0;
+        CoreSettings.Current.UnifiedId = "test-account";
+        CoreSettings.Current.AuthToken = "test-token";
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        grant(true, false);
+        AccountSeed.ApplyTierReading(1, "test");   // the one tier path: heartbeat, profile load and focus refresh all land here
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(opened, w => w is FeatureIntroPopup);
+        var ring = shell.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("ProfileBubbleGlowRing")!;
+        Assert.Equal(global::Avalonia.Media.Color.FromRgb(0xFF, 0xD7, 0x00),
+            Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(ring.Stroke).Color);
+        Assert.Contains(TierCelebration.KeyT1, CoreSettings.Current.SeenFeatureIntros);
+        Celebration(opened, TierCelebration.KeyT1);
+        MainShellWindow.IsStartupDialogShowing = true;
+        try
+        {
+            grant(true, true);
+            AccountSeed.ApplyTierReading(2, "test");
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(opened, w => w is FeatureIntroPopup);
+            Assert.Equal(global::Avalonia.Media.Color.FromRgb(0x5E, 0xE6, 0xFF),
+                Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(ring.Stroke).Color);
+            Assert.Contains(StartupLadder.Inbox.Items, i => i.Key == "intro:" + TierCelebration.KeyT2);
+            Assert.DoesNotContain(TierCelebration.KeyT2, CoreSettings.Current.SeenFeatureIntros);
+        }
+        finally { MainShellWindow.IsStartupDialogShowing = false; }
+    });
+    [Fact]
+    public void ProviderChangesRebuildProgramsAndRepaintTakeoverLock() => Run(false, (shell, opened, grant) =>
+    {
+        Celebration(opened, TierCelebration.KeyT1);
+        var programs = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ProgramsTabView>("ProgramsTab")!;
+        programs.IsVisible = true;
+        programs.RefreshPrograms();
+        var list = programs.FindControl<ListBox>("ProgramLibraryList")!;
+        var before = list.Items.Cast<object>().ToArray();
+        Assert.NotEmpty(before);
+        var takeover = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>("BambiTakeoverTab")!;
+        shell.RefreshEntitlementVeils();   // every navigation: WPF never rebuilds Programs here
+        Assert.Same(before[0], list.Items.Cast<object>().First());
+        shell.RefreshTierDependentViews();
+        Assert.True(takeover.FindControl<Control>("AutonomyLocked")!.IsVisible);
+        grant(true, false);
+        AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level1);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(takeover.FindControl<Control>("AutonomyLocked")!.IsVisible);
+        Assert.True(takeover.FindControl<Control>("AutonomyUnlocked")!.IsVisible);
+        Assert.NotSame(before[0], list.Items.Cast<object>().First());
+        grant(false, false);
+        AccountSeed.SubscribeStar!.NotifyEntitlementRaised((PatreonTier)0);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(takeover.FindControl<Control>("AutonomyLocked")!.IsVisible);
+    });
     [Fact]
     public void SubscribeStarTierChangeCelebratesEachTierOnce() => Run(premiumAtLaunch: false, (shell, opened, grant) =>
     {

@@ -15,8 +15,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     ///
     /// WPF forwards the controls to MainWindow. This head restores trigger settings here
     /// and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// Manage Phrases forwards to the owning shell and refreshes the active count on close;
+    /// Edit triggers is hoisted to the Workshop host.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
@@ -24,6 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         private bool _attached;
         private TriggerSettings? _observed;
 
+        /// <summary>WPF BtnEditTriggers_Click (MainWindow.Patreon.cs:1539): the Workshop host opens the editor.</summary>
+        public event EventHandler? EditTriggersRequested;
         public event EventHandler? PhrasePresetSelectionChanged;
         public event EventHandler? SavePhrasePresetRequested;
         public event EventHandler? DeletePhrasePresetRequested;
@@ -39,6 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             this.FindControl<Button>("BtnManagePhrases")!.Click += (sender, e) =>
                 this.FindAncestorOfType<MainShellWindow>()?.BtnManagePhrases_Click(sender, e);
 
+            this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += (_, _) => EditTriggersRequested?.Invoke(this, EventArgs.Empty);
+
             var toggle = this.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
             var panel = this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
             var slider = this.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
@@ -49,17 +53,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 panel.IsVisible = toggle.IsChecked == true;
                 if (_loading) return;
                 CoreSettings.Current.TriggerModeEnabled = toggle.IsChecked == true;
-                CoreSettings.Save();
+                CoreSettings.Save();   // the tube restarts its trigger timer on the change (WPF :1512)
             };
             slider.ValueChanged += (_, _) =>
             {
                 var value = (int)slider.Value;
                 intervalText.Text = $"{value}s";
                 if (_loading) return;
+                // WPF MainWindow.Patreon.cs:1527-1537 only updates the value on a slider move (no save per tick);
+                // the tube restarts its trigger timer on the change.
                 CoreSettings.Current.TriggerIntervalSeconds = value;
-                CoreSettings.Save();
             };
             SyncFromSettings();
+            AttachedToVisualTree += (_, _) => RefreshPhraseCount();
+        }
+
+        // WPF MainWindow.Patreon.cs:1403-1406. Uses the editor pool, including voice and bark rows.
+        internal void RefreshPhraseCount()
+        {
+            this.FindControl<TextBlock>("TxtPhraseCount")!.Text = Loc.GetF("label_active_phrase_count",
+                Dialogs.CompanionPhraseEditorDialog.ActivePhraseCount());
         }
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -98,7 +111,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 Dispatcher.UIThread.Post(SyncFromSettings);
         }
 
-        private void SyncFromSettings()
+        // WPF MainWindow.CompanionTab.cs:44-51 SyncCompanionTabUI.
+        internal void SyncFromSettings()
         {
             _loading = true;
             try
@@ -111,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             }
             finally { _loading = false; }
         }
+
     }
 
     /// <summary>
@@ -124,10 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         public string LocRandomPhrasesHint => Loc.Get("label_random_conditioning_phrases_with_audio");
         public string LocInterval => Loc.Get("label_interval");
 
-        // Both of these are STATIC keys holding the at-rest value, not formatted strings: the WPF
-        // head overwrites them with plain interpolation once real data arrives
-        // ($"{value}s" at MainWindow.Patreon.cs:1235, $"{count} active" at :1132). No Loc.GetF
-        // anywhere on this cell, so there is no format key to look up.
+        // Static initial labels. Interval updates locally; active count is formatted above.
         public string LocIntervalValue => Loc.Get("label_60s");
         public string LocPhraseCount => Loc.Get("label_0_active");
 

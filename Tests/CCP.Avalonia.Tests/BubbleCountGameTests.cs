@@ -81,31 +81,39 @@ public sealed class BubbleCountGameTests
 
                     async Task<BubbleCountWindow> Open(bool strict)
                     {
-                        // Observe actual decoded frames on the UI thread, then park playback before
-                        // its two-second end can hide the window ahead of the awaiting test.
-                        void HoldAtThirdFrame()
+                        s.BubbleCountStrictLock = strict;
+                        var ready = new TaskCompletionSource<BubbleCountWindow>();
+                        using var opened = Window.WindowOpenedEvent.AddClassHandler<BubbleCountWindow>((w, _) =>
                         {
-                            if (BubbleCountWindow.Sink?.FrameCount == 3)
-                                BubbleCountWindow.Player!.SetPause(true);
-                        }
-                        BubbleCountWindow.FramePresented += HoldAtThirdFrame;
-                        try
-                        {
-                            s.BubbleCountStrictLock = strict;
-                            b.Trigger(forceTest: true);
-                            Assert.True(b.IsBusy);
-                            Assert.Empty(BubbleCountWindow.OpenWindows);        // the 800 ms lead-in
-                            // 20 s, not 5: a cold LibVLC on the windows-latest runner (plugin scan, loaded shard) has
-                            // missed 5 s on unrelated lanes; the loop exits as soon as frames arrive.
-                            for (var i = 0; i < 400 && (BubbleCountWindow.OpenWindows.Count == 0 || (BubbleCountWindow.Sink?.FrameCount ?? 0) < 3 || (BubbleCountWindow.Player?.IsPlaying ?? true)); i++) await Task.Delay(50);
-                            var w = Assert.Single(BubbleCountWindow.OpenWindows);
-                            Assert.True(BubbleCountWindow.Sink!.FrameCount >= 3, "frames decoded");
-                            Assert.Same(BubbleCountWindow.Sink.Bitmap, w.VideoImage.Source);
-                            Assert.False(BubbleCountWindow.Player!.IsPlaying, "playback held after three real frames");
-                            Assert.True(w.Topmost && w.IsVisible);
-                            return w;
-                        }
-                        finally { BubbleCountWindow.FramePresented -= HoldAtThirdFrame; }
+                            // WindowOpened precedes Show/Opened. Subscribe after the game's own
+                            // Opened handler has installed its decoder, then observe presented frames.
+                            w.Opened += (_, _) =>
+                            {
+                                var sink = BubbleCountWindow.Sink!;
+                                void Presented()
+                                {
+                                    if (sink.FrameCount < 3) return;
+                                    sink.FramePresented -= Presented;
+                                    try
+                                    {
+                                        // Hold real playback while checking strict/panic input. Polling a
+                                        // two-second clip could observe the hidden result-screen window.
+                                        BubbleCountWindow.Player!.SetPause(true);
+                                        Assert.Same(w, Assert.Single(BubbleCountWindow.OpenWindows));
+                                        Assert.True(sink.FrameCount >= 3, "frames decoded");
+                                        Assert.Same(sink.Bitmap, w.VideoImage.Source);
+                                        Assert.True(w.Topmost && w.IsVisible);
+                                        ready.TrySetResult(w);
+                                    }
+                                    catch (Exception error) { ready.TrySetException(error); }
+                                }
+                                sink.FramePresented += Presented;
+                            };
+                        });
+                        b.Trigger(forceTest: true);
+                        Assert.True(b.IsBusy);
+                        Assert.Empty(BubbleCountWindow.OpenWindows); // the 800 ms lead-in
+                        return await ready.Task.WaitAsync(TimeSpan.FromSeconds(20));
                     }
 
                     // Non-strict: the 2 s clip ends, the answer window asks, the right count wins.
@@ -116,9 +124,10 @@ public sealed class BubbleCountGameTests
                     var noted = RecentSounds.Shared.Snapshot().Last(e => e.Player == "bubblecount-video");
                     Assert.Equal(("clip.mp4", true), (noted.File, noted.EngineRunning));
                     CoreSession.IsSessionRunningProvider = prevSession;
-                    BubbleCountWindow.Player!.SetPause(false);
+                    BubbleCountWindow.Player!.SetPause(false); // the real EndReached opens the answer window
                     for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
+                    Assert.All(BubbleCountWindow.OpenWindows, w => Assert.False(w.IsVisible));
                     Assert.Equal(2, BubbleCountWindow.LastVideoDurationSeconds, 0);   // LengthChanged replaced the 30 s fallback
                     r.FindControl<TextBox>("TxtAnswer")!.Text = r.CorrectAnswer.ToString();
                     r.FindControl<TextBox>("TxtAnswer")!.Focus();

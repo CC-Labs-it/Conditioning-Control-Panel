@@ -453,13 +453,14 @@
                                             <!-- Rung readout. The digits above are never allowed to lie
                                                  (POSSESSION.md), so THIS is where "how haunted is it right
                                                  now" gets to be legible: a word plus five pips, driven from
-                                                 OnLockdownActivated / RungChanged in MainWindow.Lab.cs. -->
+                                                 OnLockdownActivated / RungChanged in MainWindow.Lab.cs.
+                                                 Hidden until Possession paints it (MainShellWindow.Possession.cs). -->
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <TextBlock x:Name="TxtPossessionRung"
+                                                <TextBlock x:Name="TxtPossessionRung" IsVisible="False"
                                                            Text="" FontSize="11.5" FontWeight="SemiBold"
                                                            Foreground="#FF8A5C" VerticalAlignment="Center"
                                                            Margin="0,0,10,0"/>
-                                                <StackPanel x:Name="PossessionPips"
+                                                <StackPanel x:Name="PossessionPips" IsVisible="False"
                                                             Orientation="Horizontal" VerticalAlignment="Center">
                                                     <Border Width="8" Height="8" CornerRadius="4" Margin="0,0,5,0" Background="#33FF8A5C"/>
                                                     <Border Width="8" Height="8" CornerRadius="4" Margin="0,0,5,0" Background="#33FF8A5C"/>

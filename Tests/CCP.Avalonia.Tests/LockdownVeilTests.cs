@@ -668,4 +668,37 @@ public sealed class LockdownVeilTests
         }
         finally { s.BubbleCountStrictLock = false; }
     });
+
+    [Fact]
+    public void ActivationFlash_UsesElapsedClockTime_AndExpiresAt600Ms() => Run((shell, ld) =>
+    {
+        var time = new SteppedTime { Now = TimeSpan.FromSeconds(10).Ticks };
+        shell.LockdownFlashTime = time;
+        ld.Activate(TimeSpan.FromMinutes(30));
+        Frame();
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
+        var root = shell.Named<Grid>("RootGrid")!;
+        Assert.Equal(1, flash.Opacity);
+
+        time.Now += TimeSpan.FromMilliseconds(300).Ticks;
+        shell.StepLockdownFlash();
+        Assert.Equal(0.25, flash.Opacity, 3);
+        time.Now += TimeSpan.FromMilliseconds(299).Ticks;
+        shell.StepLockdownFlash();
+        Assert.Same(flash, shell.LockdownFlash);
+        Assert.Contains(flash, root.Children);
+        Assert.True(flash.Opacity > 0);
+        time.Now += TimeSpan.FromMilliseconds(1).Ticks;
+        shell.StepLockdownFlash();
+        Assert.Null(shell.LockdownFlash);
+        Assert.DoesNotContain(flash, root.Children);
+    });
+
+    private sealed class SteppedTime : TimeProvider
+    {
+        public long Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now;
+    }
+
 }

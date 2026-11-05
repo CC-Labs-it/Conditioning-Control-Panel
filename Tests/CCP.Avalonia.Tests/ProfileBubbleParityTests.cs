@@ -348,6 +348,7 @@ public sealed class ProfileBubbleParityTests : IDisposable
         closed.SetValue(null, false); // a live app, not the final-teardown state left by a panic test
         FlashOverlay.After = (then, delay) => timers.Add((then, delay));
         FlashOverlay.Present = (_, _, _) => outcome != "refused";
+        var placeholder = new FlashOverlayWindow(new RenderTargetBitmap(new PixelSize(1, 1)));
         try
         {
             global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed("flash");
@@ -358,7 +359,10 @@ public sealed class ProfileBubbleParityTests : IDisposable
                 new PixelRect(0, 0, 1, 1), "test.png", shell.Screens.All[0]));
             if (outcome == "shown") pictures.Add((new RenderTargetBitmap(new PixelSize(1, 1)),
                 new PixelRect(2, 0, 1, 1), "second.png", shell.Screens.All[0]));
-            FlashOverlay.Schedule(pictures, 1000, 300, FlashOverlay.Generation, outcome == "cap" ? 0 : 30,
+            // Each spawn reads the live cap (WPF FlashService.cs:1705-1711): a full screen is the "cap" case.
+            if (outcome == "cap")
+                for (int i = 0, cap = FlashOverlay.Cap(CoreSettings.Current, ambient: false); i < cap; i++) FlashOverlay.Active.Add((placeholder, default));
+            FlashOverlay.Schedule(pictures, 1000, 300, FlashOverlay.Generation,
                 1, TimeSpan.Zero, TimeSpan.FromSeconds(30), false, false, 0, null);
             Assert.Equal(DateTime.MinValue, field.GetValue(shell));
             if (outcome == "empty") Assert.Empty(timers);
@@ -378,6 +382,8 @@ public sealed class ProfileBubbleParityTests : IDisposable
         }
         finally
         {
+            FlashOverlay.Active.RemoveAll(e => e.Window == placeholder);
+            placeholder.Close();
             FlashOverlay.CloseAll(final: false);
             (FlashOverlay.After, FlashOverlay.Present) = saved;
             closed.SetValue(null, wasClosed);

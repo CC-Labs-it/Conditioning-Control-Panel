@@ -348,8 +348,7 @@ public sealed class ChaosFlashOverlayTests
     [Fact]
     public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation() => AvaloniaTestDispatcher.Run(() =>
     {
-        // Decode creates Avalonia bitmaps; do not depend on another test initializing the platform.
-        Setup();
+        Setup(); // Bitmap creation needs Skia even when this is the first test in the process.
         var gif = WriteGif(out var dir);
         try
         {

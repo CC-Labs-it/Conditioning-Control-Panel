@@ -283,8 +283,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ponytail: ported: premium gate, double warning, Activate, panel swap, clock, the secret
         // phrase, the Emergency Exit breath; the title-bar badge, blood-red theme and activation flash
         // are MainShellWindow.Lockdown.cs; the Strict toggles grey themselves (HoldWhileLockdown).
-        // Not on this head: the Possession haunt/readout (no director yet), the Dose keeper and
-        // the system-key hook (Linux has none, so the warning does not promise it).
+        // The Possession haunt, its readout and first-run rules are MainShellWindow.Possession.cs (App.Possession).
+        // Not on this head: the Dose keeper and the system-key hook (Linux has none, so the warning
+        // does not promise it).
 
         /// <summary>The head's live Lockdown (null in renders and tests that set none).</summary>
         internal static LockdownService? Lockdown => LockdownService.Current;
@@ -307,10 +308,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtLockdownExit.IsVisible = false;
             TxtLockdownExit.Text = "";
             TxtEmergencyExitNotice.IsVisible = false;
-            // Readout is Possession's; with no director on this head it stays collapsed (WPF hides it
-            // too whenever Possession is off).
-            TxtPossessionRung.IsVisible = false;
-            PossessionPips.IsVisible = false;
+            // The rung readout is Possession's (MainShellWindow.Possession.cs, WPF Lab.cs:884-986): it shows,
+            // paints and clears itself on the same Lockdown events, so the panel swap never touches it here
+            // (a hide here, queued after its paint, blanked it for the whole run; WPF's tab never touches it).
             UpdateEmergencyExitPulse();
             // WPF ApplyLockdownTheme / RestoreLockdownTheme (Lab.cs:1188/1211): the card goes crimson
             // on #1A0A0A; the override is dropped on exit, which leaves the XAML gradients (the values
@@ -346,9 +346,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ld.Activate(TimeSpan.FromMinutes(minutes));
         }
 
-        /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper,
-        /// Possession: none run here; system keys off Windows, where nothing blocks them) and with the
-        /// platform's safety valve.</summary>
+        /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper: none
+        /// runs here; system keys off Windows, where nothing blocks them) and with the platform's safety
+        /// valve. Possession runs on this head (App.Possession), so its paragraph is WPF's.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg, bool windows)
@@ -364,7 +364,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
+            AppendPossessionConsent(warn, cfg, Possession.PossessionAvaloniaHead.HasFullDokiEffects());
             return warn.ToString();
+        }
+
+        /// <summary>WPF MainWindow.Lab.cs:94-107: Possession gets its own paragraph, because "was that a bug?"
+        /// has to be answerable BEFORE the room starts moving (POSSESSION.md, "clarity in front"). The Full
+        /// Doki line names the themed fake-crash scares only when this head carries one.</summary>
+        internal static void AppendPossessionConsent(System.Text.StringBuilder warn, Models.AppSettings cfg, bool fullDokiScares)
+        {
+            if (!cfg.LockdownPossessionEnabled) return;
+            var intensityName = cfg.LockdownPossessionIntensity switch
+            {
+                0 => "Gentle",
+                2 => "Full Doki",
+                _ => "Eerie",
+            };
+            warn.Append("\n- Possession is ON (").Append(intensityName)
+                .Append("): the app's own UI will misbehave, on purpose.\n")
+                .Append("  Ember glow = it was Lockdown, not a bug. Nothing you see is real damage.");
+            if (cfg.LockdownPossessionIntensity == 2 && fullDokiScares)
+                warn.Append("\n- Full Doki adds themed fake-crash scares. They are theatre.");
         }
 
         private void BtnGateUnlock_Click(object? sender, RoutedEventArgs e) => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnGateUnlock_Click(sender, e);

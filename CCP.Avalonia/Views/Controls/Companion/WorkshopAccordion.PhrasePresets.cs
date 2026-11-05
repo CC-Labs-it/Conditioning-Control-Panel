@@ -25,6 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 preset.ApplyToSettings();
                 CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
                 CoreSettings.Save();
+                parts.Triggers.RefreshPhraseCount();
                 Log.Information("Loaded phrase preset: {Name} ({Count} phrases)", preset.Name, preset.ActivePhraseCount);
             };
             parts.Triggers.SavePhrasePresetRequested += async (_, _) => await SavePhrasePresetAsync();
