@@ -299,6 +299,9 @@ internal static class AccountSeed
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
+        if (s.UnifiedId != id || s.OfflineMode) return false;
+        // WPF ProfileSyncService: the profile read seeds ownership before the garage opens (#3854).
+        PrizeOwnership.Feed.Apply(id, user.UnifiedId, user.Prizes, "V2 profile");
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
         // WPF ProfileSyncService read-before-write: the Patreon confirmation keeps a Discord sign-in's grace alive.

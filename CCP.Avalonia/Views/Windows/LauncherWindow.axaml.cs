@@ -38,23 +38,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
                 // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
-                // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
-                ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
+                // WPF 7.2 LauncherCatalogue: always revealed, Prime padlock; Launch paints the refusal.
+                ["race"] = (Games.GameWindow.GlassroadLocked, _ => Games.GameWindow.Launch("race")),
                 // WPF LauncherCatalogue :241: Basic (or the daily-free drop); GameWindow.Launch runs DemandPremium.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
-
-        /// <summary>WPF LauncherEntry.IsRevealed: a race without a track is WPF's mystery card pointing at the
-        /// Back Room counter. Neither exists on this head, so the unrevealed tile is left out.</summary>
-        private static bool Revealed(string id) =>
-            !string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) || Services.Race.RacingAccess.CanLaunch
-            || Games.GameWindow.GlassroadDoorOpen();   // WPF revealed: GlassroadRules.DoorOpenNow() || CanLaunch
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>
         internal static bool CanStartGame(string id) => Destinations.ContainsKey(id);
 
-        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id) && Revealed(c.Id));
+        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id));
+
+        /// <summary>WPF LauncherEntry.IsRevealed: no card on this head has a reveal probe (null = always revealed).
+        /// Since 7.2 the race tile wears the Prime padlock instead of a mystery face (LauncherCatalogue.cs:238).</summary>
+        private static bool Revealed(string id) => true;
 
         private static LauncherWindow? _window;
 

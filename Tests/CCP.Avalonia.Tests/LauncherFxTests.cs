@@ -518,11 +518,15 @@ public sealed class LauncherFxTests
             var first = grid.Children[0];
             PrizeOwnership.ApplySnapshot("u-launch", 1, new[] { "unrelated.prize" });
             Assert.Same(first, grid.Children[0]);
-            Assert.DoesNotContain(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
+            // WPF 7.2 LauncherCatalogue.cs:238: the Racing Thoughts tile is always revealed (Prime padlock), so a
+            // track grant or revocation changes no tile and restages nothing.
+            Assert.Contains(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
             PrizeOwnership.ApplySnapshot("u-launch", 2, new[] { "unrelated.prize", track });
+            Assert.Same(first, grid.Children[0]);
             Assert.Contains(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
             PrizeOwnership.ApplySnapshot("u-launch", 3, new[] { "unrelated.prize" });
-            Assert.DoesNotContain(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
+            Assert.Same(first, grid.Children[0]);
+            Assert.Contains(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
         }
         finally
         {

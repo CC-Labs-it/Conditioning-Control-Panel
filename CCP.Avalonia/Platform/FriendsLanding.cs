@@ -143,6 +143,7 @@ internal static partial class FriendsLanding
     {
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
         InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
@@ -151,7 +152,7 @@ internal static partial class FriendsLanding
     internal static string KnockLine(InboxItem item)
     {
         if (item.Kind == SendKind.Invite)
-            return string.Format(Str("friends_land_invite_line", "invites you to {0}"), DestinationName(item.Destination));
+            return string.Format(Str("friends_land_invite_line", "invites you to {0}"), LandingRules.WithCourse(DestinationName(item.Destination), item.Track));
         return item.Watch?.Kind == WatchKind.Flavour ? Str("friends_land_flavour_line", "sends you a flavour") : Str("friends_land_watch_line", "sends you a watch");
     }
 

@@ -49,6 +49,8 @@ internal static class PrizeOwnership
     }
     internal static void WatchShutdown() => Dispatcher.UIThread.ShutdownStarted += (_, _) => _shutdown = true;
     internal static bool Held(string id) => Service.Grants.Contains(id);
+    /// <summary>The held grant ids, for the Racing Thoughts garage's kart rows (WPF GlassroadHostService init.grants).</summary>
+    internal static string[] Grants => Service.Grants.ToArray();
     internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants) => Service.ApplySnapshot(accountId, revision, grants);
     internal static void ResetHeld() => Service.Clear();
     internal static bool Matches(string? spec, string id) =>
