@@ -30,11 +30,11 @@ public sealed class ChasterBookedPopTests
             var (place, cursor, time, frames) = (ChasterBookedPop.Place, ChasterBookedPop.Cursor, ChasterBookedPop.Time, ChasterBookedPop.Frames);
             var oldClock = MainShellWindow.ChasterClock;
             var (fakeFrames, fakeTime) = (new FakeFrames(), new SteppedTime());
+            MainShellWindow.ChasterClock = fakeTime; // merge admission and pop lifetime share the stepped clock
             ChasterBookedPop.Place = (_, _) => placeable;
             ChasterBookedPop.Cursor = () => null;
             // The shell decides whether to coalesce; the pop clock only drives its lifetime.
             // Both must stand still while RunJobs drains a slow CI dispatcher.
-            MainShellWindow.ChasterClock = fakeTime;
             ChasterBookedPop.Time = fakeTime;
             ChasterBookedPop.Frames = fakeFrames;
             try
@@ -83,6 +83,21 @@ public sealed class ChasterBookedPopTests
         Assert.True(pop.Gone);                             // its life closes it, and the clock parks
         Assert.Empty(ChasterBookedPop.Live);
         Assert.Equal(0, frames.Count);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ABookingAtTheCoalescingBoundaryStartsANewPop() => WithSeams(true, async (chaster, shell, frames, time) =>
+    {
+        chaster.NoteAt("attention", Bubble);
+        Dispatcher.UIThread.RunJobs();
+        var first = Assert.Single(ChasterBookedPop.Live);
+        time.Advance(TimeSpan.FromMilliseconds(BookedFlashPlan.CoalesceMs));
+        chaster.NoteAt("typo", Bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, ChasterBookedPop.Live.Count);
+        Assert.Contains(first, ChasterBookedPop.Live);
+        Assert.Equal(2, frames.Count);
         await Task.CompletedTask;
     });
 
