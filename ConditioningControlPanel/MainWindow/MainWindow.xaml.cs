@@ -369,6 +369,7 @@ namespace ConditioningControlPanel
             _keyboardHook.KeyReleased += OnLeashKeyReleased;
             _keyboardHook.KeyPressedWithVkCode += (key, vkCode) => App.KeywordTriggers?.OnKeyPressed(key, vkCode);
             App.KeywordTriggers?.SetSessionActiveCallback(() => _sessionEngine?.IsRunning == true);
+            App.KeywordTriggers?.SetSessionPausedCallback(() => _sessionEngine?.IsRunning == true && _sessionEngine.IsPaused);
             if (App.Settings.Current.KeywordTriggersEnabled && KeywordTriggerService.HasAccess())
                 App.KeywordTriggers?.Start();
             if (App.Settings.Current.PanicKeyEnabled || App.Settings.Current.KeywordTriggersEnabled)
