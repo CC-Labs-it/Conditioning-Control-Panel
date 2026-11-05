@@ -25,6 +25,19 @@ internal sealed class AchievementEngine
         Progress = store.Load();
     }
 
+    // WPF Services/Progression/AchievementService.cs:642-680. Keep the <=10s boundary (including clock rollback).
+    public void TrackPanicPressed(DateTime? now = null)
+    {
+        Progress.LastPanicPressTime = now ?? DateTime.Now;
+        IsDirty = true;
+    }
+
+    public void CheckRelapse(DateTime? now = null)
+    {
+        if (Progress.LastPanicPressTime is { } last && ((now ?? DateTime.Now) - last).TotalSeconds <= 10)
+            TryUnlock("relapse");
+    }
+
     public AchievementProgress Progress { get; private set; }
 
     /// <summary>Set by any mutation; cleared by a save; re-armed by a failed write.</summary>
