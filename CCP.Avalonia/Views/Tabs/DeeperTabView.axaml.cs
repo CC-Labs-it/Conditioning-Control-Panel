@@ -400,6 +400,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Rebuilds the rows without a rescan - a submission badge changed.</summary>
         public void Refresh() => ApplyFilter();
 
+        // WPF MainWindow.DeeperSubmissions.cs:162-164: search the full library, even hidden rows.
+        internal EnhancementLibraryEntry? FindEntry(string path) =>
+            _allEntries.FirstOrDefault(entry => PathsEqual(entry.FilePath, path));
+
         internal EnhancementLibraryEntry? SelectedEntry => FilteredEntries.FirstOrDefault(r => r.IsSelected)?.Entry;
 
         /// <summary>WPF SelectDeeperRow (MainWindow.DeeperHub.cs:673). Returns the row index or -1.</summary>

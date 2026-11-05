@@ -123,3 +123,5 @@ Tours/TutorialService.cs :: * :: verbatim: import (Stack rule 4, trunk 557d9aac3
 
 # --- brand marks ---
 Controls/HoverBubbleBar.cs :: new Path :: path: Discord brand logo from WPF HoverBubbleBar and SettingsTabView; no Fluent equivalent
+# --- font probes (not render sites) ---
+Platform/FontGuard.cs :: "Segoe MDL2 Assets", "Segoe UI Emoji" :: font: not an icon site - WPF Services/UI/FontGuard.cs probes these installed families for an unreadable file; nothing renders with them
