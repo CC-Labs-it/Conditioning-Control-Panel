@@ -94,6 +94,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
+        /// <summary>WPF MainWindow.StartStop.cs:365-367: Audio Only forces the existing layered bed.</summary>
+        internal void OnEngineStarted()
+        {
+            if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
+        }
+
         /// <summary>WPF StopEngine. Saved flags are left alone; <see cref="OnEngineStopped"/> clears the screen.
         /// A running session is paused first, not ended (panic, tray Stop): WPF MainWindow.xaml.cs:1726.</summary>
         internal static void StopEngine()
@@ -111,6 +117,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
             Deeper.ScreenShake.Stop();
+            // WPF MainWindow.StartStop.cs:533-547: preserve only the standalone bed, release ducking.
+            if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
+            Platform.LibVlcAudio.Instance?.ForceUnduck();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);
