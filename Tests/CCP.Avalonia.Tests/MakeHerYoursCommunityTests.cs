@@ -48,7 +48,7 @@ public sealed class MakeHerYoursCommunityTests
     public Task CommunityLinkFromTheShellBrowsesCancelsInstallsAndReadoutUsesInstalledName() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreSettings.ServiceProvider;
         var settings = new SettingsService();

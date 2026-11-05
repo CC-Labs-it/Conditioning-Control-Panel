@@ -104,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF LockCardService.Stop(dismissOpenCards: true); :2041 StopAdHocEffects closes lock cards after the engine/media stop.
             new("lock-cards", _ => MainShellWindow.StopLockCards(), After: ["engine", "leash-task"]),
             new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
+            new("companion-community", _ => Controls.Companion.Runtime.WorkshopCommunityCell.StopForPanic()), // P06: old lane also closed these modals.
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             // WPF Features/VideoFeatureControl.xaml.cs:533 error box; also close it on panic.

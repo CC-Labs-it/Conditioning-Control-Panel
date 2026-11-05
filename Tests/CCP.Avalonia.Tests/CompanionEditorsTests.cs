@@ -191,9 +191,10 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        // Freeze entrance motion so the pointer probes a stationary target.
-        CoreSettings.Current.MotionLevel = MotionLevel.Off;
-        var shell = new MainShellWindow();
+        service.Current.MotionLevel = MotionLevel.Full;
+        service.Current.GentleVisuals = false;
+        var clock = new SteppedClock();
+        var shell = new MainShellWindow { TabClock = clock };
         ToolTip.SetServiceEnabled(shell, false);
         try
         {
@@ -202,6 +203,11 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // Exercise an active entrance without relying on the runner's wall clock.
+            clock.Now = TimeSpan.FromMilliseconds(80).Ticks;
+            shell.TickTabTransition();
+            Assert.NotNull(shell.EnteringTab);
+            shell.CompleteTabTransition(); // P08: settle motion before sampling mouse hit geometry.
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
@@ -219,7 +225,10 @@ public sealed class CompanionEditorsTests
                 shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
                 shell.UpdateLayout();
                 HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
-                var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                var center = new Point(button.Bounds.Width / 2, button.Bounds.Height / 2);
+                var at = button.TranslatePoint(center, shell)!.Value;
+                shell.StepTabTransition(620);
+                Assert.Equal(at, button.TranslatePoint(center, shell)!.Value); // settled hit geometry
                 Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);

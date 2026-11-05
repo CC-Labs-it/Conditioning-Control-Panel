@@ -2,6 +2,11 @@ using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Companion;
 using Serilog;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -15,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class CompanionHead
 {
     private static IDisposable? _drainTimer, _activeTimer;
+    private static CommunityPromptService? _prompts;
 
     internal static bool Started => _drainTimer != null;
 
@@ -23,7 +29,22 @@ internal static class CompanionHead
         if (Started) return;
         try { CompanionCore.Start(); } catch (Exception ex) { Log.Warning(ex, "CompanionCore start failed"); }
         CoreModsHooks.ActiveCompanionProvider = () => CompanionCore.ActiveCompanion;
-        CoreModsHooks.SwitchCompanion = id => CompanionCore.SwitchCompanion(id);
+        // WPF App.xaml.cs:2708-2713 and CompanionService.cs:439: mod switches warn too.
+        var prompts = _prompts = new CommunityPromptService();
+        prompts.ValidationAdvisory += (_, count) =>
+        {
+            var epoch = WorkshopCommunityCell.PanicEpoch;
+            Dispatcher.UIThread.Post(async () =>
+            {
+                if (epoch == WorkshopCommunityCell.PanicEpoch && ReferenceEquals(_prompts, prompts))
+                    await WorkshopCommunityCell.ShowPromptDialogAsync(MainShellWindow.Current,
+                        new MessageDialog(Loc.Get("community_prompt_warning_title"), Loc.GetF("community_prompt_warning_body", count), false));
+            });
+        };
+        CoreModsHooks.SwitchCompanion = id =>
+        {
+            if (ReferenceEquals(_prompts, prompts)) CompanionCore.SwitchCompanion(id, prompts);
+        };
 
         // ponytail: WPF runs this timer only under Brain Parasite; here DrainTick returns at once for other perks.
         _drainTimer = DispatcherTimer.Run(() => { try { CompanionCore.DrainTick(DateTime.UtcNow); } catch (Exception ex) { Log.Debug("Drain tick: {E}", ex.Message); } return true; },
@@ -37,5 +58,7 @@ internal static class CompanionHead
         _drainTimer?.Dispose();
         _activeTimer?.Dispose();
         _drainTimer = _activeTimer = null;
+        _prompts?.Dispose();
+        _prompts = null;
     }
 }
