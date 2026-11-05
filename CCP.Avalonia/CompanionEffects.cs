@@ -125,11 +125,32 @@ namespace ConditioningControlPanel.Avalonia
                     Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: true, aiGenerated: aiGenerated));
         }
 
+        private static readonly object AudioGate = new();
+        private static readonly Dictionary<object, Action> AudioStops = new();
+
+        internal static void StopAudio()
+        {
+            Action[] stops;
+            lock (AudioGate) { stops = AudioStops.Values.ToArray(); AudioStops.Clear(); }
+            foreach (var stop in stops)
+                try { stop(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Companion audio stop failed"); }
+        }
+
         /// <summary>True once the clip is really playing, false when refused or it never starts.</summary>
         internal static async Task<bool> PlayAudio(string path)
         {
             var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            CoreAudio.PlayOneShot(path, 1f, "ai", _ => started.TrySetResult(true), () => started.TrySetResult(false));
+            var key = new object();
+            bool finished = false;
+            lock (AudioGate)
+            {
+                var stop = CoreAudio.PlayStoppable(path, 1f, "ai", _ => started.TrySetResult(true), () =>
+                {
+                    lock (AudioGate) { finished = true; AudioStops.Remove(key); }
+                    started.TrySetResult(false);
+                });
+                if (!finished) AudioStops[key] = stop;
+            }
             return await Task.WhenAny(started.Task, Task.Delay(10_000)) == started.Task && started.Task.Result;
         }
 
