@@ -8240,5 +8240,6 @@
   "shop_item_rt_bundle_2_name": "Racing Thoughts バンドル2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts バンドル3",
   "chaos_dvd_title": "ポルノDVD",
-  "chaos_dvd_loading": "読み込み中"
+  "chaos_dvd_loading": "読み込み中",
+  "chaos_inescapable_unlock_tip": "さらに深くへ続く扉。鍵はToyboxで買える。Relentlessで{0}回の降下を終え、Devoted（{1}回の降下）に到達してから、✦{2}で習得。"
 }
