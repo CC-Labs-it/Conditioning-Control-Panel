@@ -2,6 +2,7 @@
 // half of the Glassroad host. Kept in the head under its own name so the WPF copy (which sees Core internals) never
 // meets a twin when feat/glassroad-a lands on port/7.2. The window glue is GameWindow.Glassroad.cs.
 using System;
+using ConditioningControlPanel.Services.Glassroad;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -9,7 +10,8 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Avalonia.Views.Games
 {
     /// <summary>The hidden door, the host init frame (protocol v2) and the relay's signing rule. No I/O, no
-    /// statics beyond the env read, so every rule is tested without a window.</summary>
+    /// statics beyond the env read and the one OS read (<see cref="LinuxHost"/>, with a test seam), so every rule
+    /// is tested without a window.</summary>
     internal static class GlassroadHostRules
     {
         /// <summary>The env switch that turns the Racing Thoughts door into the Glassroad door. Preview only.</summary>
@@ -24,6 +26,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>True when the env value opens the door: exactly "1".</summary>
         public static bool DoorOpen(string? envValue) => string.Equals(envValue?.Trim(), "1", StringComparison.Ordinal);
+
+        /// <summary>Test seam for <see cref="LinuxHost"/>: null = the running OS.</summary>
+        internal static bool? LinuxHostOverride;
+
+        /// <summary>The race host's one OS read. Everything the B2 Linux picture rule touches (the init caps, the
+        /// consent ask, the stills pool) goes through <see cref="RemotePicturesOffered"/>, never its own OS check.</summary>
+        internal static bool LinuxHost => LinuxHostOverride ?? OperatingSystem.IsLinux();
+
+        /// <summary>Whether this host may offer Scrolller pictures at all
+        /// (<see cref="GlassroadPictures.HostOffersRemote"/>). My files and Off stay on every host.</summary>
+        internal static bool RemotePicturesOffered => GlassroadPictures.HostOffersRemote(LinuxHost);
 
         /// <summary>The host init frame (glassroad CONTRACT.md section 7). <c>caps.net</c> is always true on the
         /// desktop: a signed-out player gets <c>identity: null</c> and the lobby asks them to sign in. <c>songs</c>
@@ -42,7 +55,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ["platform"] = "desktop", ["net"] = true, ["relayBase"] = null, ["texturableRemote"] = false,
                     ["gamepad"] = true, ["touch"] = false, ["forceRenderer"] = null, ["hostSfx"] = false,
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
-                    ["scrolller"] = new JObject { ["consent"] = picturesOn, ["origin"] = "device" },
+                    // B2: a host that offers no Scrolller pictures says so outright (boot.js: `init.caps.scrolller ? feed : null`,
+                    // the Options card then has My files / Off). The Linux shell's request gate is a 7.2.x follow-up.
+                    ["scrolller"] = RemotePicturesOffered
+                        ? (JToken)new JObject { ["consent"] = picturesOn, ["origin"] = "device" }
+                        : new JValue(false),
                 },
                 ["identity"] = signedIn
                     ? new JObject

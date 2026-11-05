@@ -18,7 +18,19 @@ public class GlassroadPicturesTests
     [InlineData(true, "local", true, false, true)]
     [InlineData(false, "online", true, false, false)]
     public void Gate(bool? own, string? source, bool consent, bool offline, bool expected)
-        => Assert.Equal(expected, GlassroadPictures.On(own, source, consent, offline));
+        => Assert.Equal(expected, GlassroadPictures.On(own, source, consent, offline, hostOffersRemote: true));
+
+    /// <summary>B2 (owner 2026-10-29): the Linux race host offers no Scrolller pictures, whatever the settings say.</summary>
+    [Fact]
+    public void LinuxHostOffersNoRemotePictures()
+    {
+        Assert.False(GlassroadPictures.HostOffersRemote(linuxHost: true));
+        Assert.True(GlassroadPictures.HostOffersRemote(linuxHost: false));
+        // The strongest Windows yes (own press, app consent, online source) stays no on a host that offers nothing.
+        Assert.False(GlassroadPictures.On(true, "online", true, false, hostOffersRemote: false));
+        Assert.False(GlassroadPictures.On(null, "online", true, false, hostOffersRemote: false));
+        Assert.True(GlassroadPictures.On(true, "online", true, false, hostOffersRemote: true));
+    }
 
     [Fact]
     public void FeedWrapsBoundsAndLabelsStills()

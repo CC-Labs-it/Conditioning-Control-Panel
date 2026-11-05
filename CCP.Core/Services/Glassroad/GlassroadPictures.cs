@@ -11,8 +11,15 @@ internal static class GlassroadPictures
     public const int Rows = 12;
     public const int Step = 6;
 
-    public static bool On(bool? own, string? source, bool consent, bool offline)
-        => consent && !offline && (own == true || (own == null
+    /// <summary>B2 (owner 2026-10-29, handoff-1029/B2-RT-LINUX-DECISIONS.md): the Linux race host offers no Scrolller
+    /// pictures until the shell's request gate lands (a 7.2.x follow-up); the player keeps My files and Off. Every
+    /// other host follows the WPF rule. The head reads the OS once (GlassroadHostRules.LinuxHost) and passes it here.</summary>
+    public static bool HostOffersRemote(bool linuxHost) => !linuxHost;
+
+    /// <summary>WPF GlassroadRules.PicturesOn behind <see cref="HostOffersRemote"/>: a host that offers no remote
+    /// pictures is off whatever the settings say, and no caller can leave the rule out.</summary>
+    public static bool On(bool? own, string? source, bool consent, bool offline, bool hostOffersRemote)
+        => hostOffersRemote && consent && !offline && (own == true || (own == null
             && !string.Equals(source ?? "local", "local", StringComparison.OrdinalIgnoreCase)));
 
     public static JObject Feed(IReadOnlyList<string> urls, int offset, IEnumerable<(string Id, string Label)> catalog)

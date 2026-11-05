@@ -53,7 +53,8 @@ internal sealed partial class GameWindow
     private static bool GlassroadPicturesOn()
     {
         var s = CoreSettings.Current;
-        return GlassroadPictures.On(s.GlassroadPictures, s.MediaSource, s.HasRemoteMediaConsent, s.OfflineMode);
+        return GlassroadPictures.On(s.GlassroadPictures, s.MediaSource, s.HasRemoteMediaConsent, s.OfflineMode,
+            GlassroadHostRules.RemotePicturesOffered);
     }
 
     internal async Task SetGlassroadPicturesAsync(JObject o)
@@ -63,6 +64,13 @@ internal sealed partial class GameWindow
         var s = CoreSettings.Current;
         bool want = o["value"]?.Type == JTokenType.Boolean && (bool)o["value"]!;
         bool asked = o["ask"]?.Type == JTokenType.Boolean && (bool)o["ask"]!;
+        if (want && !GlassroadHostRules.RemotePicturesOffered)
+        {
+            // B2: this host offers no Scrolller pictures. Nothing is asked, nothing is written; the page hears no
+            // and keeps My files / Off.
+            Post(new { type = "setting", key = GlassroadPictures.SettingKey, value = false });
+            return;
+        }
         try
         {
             bool consent = false, newConsent = false;
