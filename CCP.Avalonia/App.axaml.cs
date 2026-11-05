@@ -18,6 +18,10 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
+        /// <summary>The haunted-UI layer that rides a running lockdown (WPF App.Possession; Core director,
+        /// this head's effects and attribution). Arms only when a lockdown starts with Possession on.</summary>
+        public static global::ConditioningControlPanel.Services.Possession.PossessionDirector? Possession { get; internal set; }
+
         /// <summary>The playlist player, null until a service is installed.</summary>
         public static Services.AudioPlayer.IAudioPlaylistService? AudioPlaylist { get; private set; }
 
@@ -607,6 +611,11 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
                 var lockdown = LockdownService.Current;
+                // WPF App.xaml.cs:3506-3515: the haunt that rides the lockdown timer, its ember tick / dip
+                // cues and the one remembered charge a Full Doki lockdown leaves. Constructing it costs
+                // nothing: it arms only when a lockdown starts with LockdownPossessionEnabled on.
+                try { Possession = global::ConditioningControlPanel.Avalonia.Possession.PossessionAvaloniaHead.Install(lockdown); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Possession install failed (non-fatal)"); }
                 lockdown.LockdownDeactivated += () =>
                 {
                     try { Quests?.TrackLockdownCompleted(lockdown.LastActiveDuration); }
@@ -1385,6 +1394,7 @@ namespace ConditioningControlPanel.Avalonia
             try { CoreHaptics.Service?.Dispose(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
+            try { Possession?.Dispose(); } catch { /* WPF App.OnExit:6527: every haunted control back, ember stripped */ }
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
             try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }

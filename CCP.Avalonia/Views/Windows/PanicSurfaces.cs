@@ -115,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("companion-knowledge-editor", _ => Dialogs.KnowledgeLinkEditorDialog.CloseForPanic()),
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("screen-shake", _ => Deeper.ScreenShake.Stop()),
-            new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
+            new("possession", _ => { App.Possession?.UndoAll(); Possession.PossessionRuntime.UndoAllLive(); }),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             // WPF Features/VideoFeatureControl.xaml.cs:533 error box; also close it on panic.
             new("video-test-error", _ => Features.VideoFeatureControl.CloseTestErrorsForPanic()),
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
