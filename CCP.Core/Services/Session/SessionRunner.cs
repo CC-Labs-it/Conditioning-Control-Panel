@@ -118,9 +118,7 @@ namespace ConditioningControlPanel.Services
                 // WPF starts the engine first: saved standalone slots claim the corner before the session.
                 CoreCornerGif.Refresh();
             }
-            // SessionEngine.cs:223 (#1304): the session owns Mind Wipe, so the global one the engine
-            // just started does not play through it. ponytail: the session's own escalating Mind Wipe
-            // (StartSession) is not ported; a session plays none.
+            // SessionEngine.cs:207-230: the session owns Mind Wipe, including its delayed start.
             CoreMindWipe.Stop();
             // WPF SessionEngine.cs:1492-1496. ponytail: the session's Brain Drain timeline is not ported.
             CoreEngine.StopBrainDrain?.Invoke();
@@ -164,6 +162,12 @@ namespace ConditioningControlPanel.Services
             }
             Apply(session.Settings, s);
             ApplyBubbles(session, s);
+
+            // WPF SessionEngine.cs:213-228: escalating Mind Wipe now or at its minute.
+            var mw = session.Settings;
+            if (mw.MindWipeEnabled)
+                StartAt("mind wipe", mw.MindWipeStartMinute,
+                    () => CoreMindWipe.StartSession(mw.MindWipeBaseMultiplier, mw.MindWipeVolume / 100.0), () => { });
 
             // SessionEngine.cs:198: raised at start whenever admitted (WPF does not read the start
             // minute here either; the Tick re-raise below is the delayed-start path).
@@ -272,6 +276,7 @@ namespace ConditioningControlPanel.Services
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
             CoreBubbles.Stop(); // WPF SessionEngine.cs:521
+            CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
             RemoteCommands.StopOverlays();   // WPF SessionEngine.cs:530: pause stops all overlays
             CoreAudio.StopSound();   // WPF SessionEngine.cs:532, companion Audio action too
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
@@ -295,6 +300,9 @@ namespace ConditioningControlPanel.Services
             if (ss.SubliminalEnabled && !_deferred.IsPending("subliminal")) CoreSubliminal.Start();
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
+            // WPF SessionEngine.cs:575 resumes with plain Start, not StartSession.
+            if (ss.MindWipeEnabled && !_deferred.IsPending("mind wipe"))
+                CoreMindWipe.Start(ss.MindWipeBaseMultiplier, ss.MindWipeVolume / 100.0);
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
             if (ss.BubblesEnabled) CoreBubbles.Start(); // WPF SessionEngine.cs:570
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
@@ -501,6 +509,7 @@ namespace ConditioningControlPanel.Services
             _timer?.Dispose();
             _timer = null;
             _deferred.Clear();
+            CoreMindWipe.Stop();   // WPF SessionEngine.cs:368
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:372
             CloseCornerGif(handBack: true);   // SessionEngine.cs:356
 
