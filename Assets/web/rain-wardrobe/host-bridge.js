@@ -20,6 +20,26 @@ export const hosted = params.get('host') === 'ccp';
  *  https://ccp.rain-assets/ to a local folder (CCP_RAIN_ASSETS_DIR or <user data>/rain-assets). */
 export const BIG_ASSETS = hosted ? 'https://ccp.rain-assets/' : '/rain-assets/';
 
+/** Boot facts the page needs before init (init only lands after rain-ready, ~30 s in): the companion's
+ *  name, the cover's localised lines, Calm, and the big files' sizes for a true progress bar. */
+export const bootCompanion = hosted ? params.get('companion') : null;
+export const bootCalm = hosted && params.get('calm') === '1';
+export const bootStrings = (() => {
+  try {
+    const raw = hosted ? JSON.parse(params.get('strings') || 'null') : null;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === 'string' && v.trim()));
+  } catch { return {}; }
+})();
+export const bootSizes = (() => {
+  const out = {};
+  for (const pair of (hosted && params.get('sizes') || '').split(',')) {
+    const [name, n] = pair.split(':');
+    if (name && Number(n) > 0) out[name] = Number(n);
+  }
+  return out;
+})();
+
 export const reviewAllowed = !hosted && params.get('review') === '1';
 export const qaAllowed = !hosted && params.get('qa') === '1';
 
