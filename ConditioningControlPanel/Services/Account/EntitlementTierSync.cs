@@ -10,7 +10,8 @@ namespace ConditioningControlPanel.Services
     /// The live half of <see cref="EntitlementTierRule"/>: takes an <c>effective_tier</c> reading
     /// from the heartbeat, the read-before-write profile read or a focus refresh, and on a rise
     /// stamps the grace windows, saves, and tells the app. Buy on the site, click back into the
-    /// app, unlocked about a second later.
+    /// app, unlocked about a second later. A drop that a second reading confirms ends the grace
+    /// (<see cref="EntitlementTierRule.ApplyReading"/>).
     /// </summary>
     public static class EntitlementTierSync
     {
@@ -21,8 +22,13 @@ namespace ConditioningControlPanel.Services
         public static event Action<int>? TierRaised;
 
         /// <summary>Raised on the UI thread after a reading the lapse rows care about was applied
-        /// (a Lower verdict stored, or cleared again).</summary>
+        /// (a Lower verdict stored or cleared again). A close raises GraceClosed instead.</summary>
         public static event Action? ReadingApplied;
+
+        /// <summary>Raised on the UI thread after a confirmed reading ended a grace window, so doors
+        /// repaint and the closed row posts, in that order. Deliberately not TierChanged: that path
+        /// celebrates and barks a tier-up.</summary>
+        public static event Action? GraceClosed;
 
         /// <summary>
         /// True once the server has answered with a tier THIS run. The lapse row and the lapse
@@ -35,6 +41,20 @@ namespace ConditioningControlPanel.Services
         private static DateTime _lastFocusCheckUtc = DateTime.MinValue;
         private static int _focusInFlight;
         private static int? _lastLowerLogged;
+        private static string? _pendingUid;
+        private static GracePending? _pending;
+
+        /// <summary>A session, the engine, Lockdown or a game is running: the window closes after it,
+        /// never during. A close switches premium features off.</summary>
+        private static bool HoldGraceClose()
+        {
+            try
+            {
+                return App.IsSessionRunning || App.IsEngineRunning || App.Lockdown?.IsActive == true
+                    || Safety.GameSurfaces.AnyOwnsTheScreen();
+            }
+            catch { return true; }
+        }
 
         /// <summary>Only for V2 accounts: a unified id and a token to prove it.</summary>
         private static bool SignedInWithV2(AppSettings? s)
@@ -66,16 +86,41 @@ namespace ConditioningControlPanel.Services
                 if (serverTier.HasValue) ServerAnsweredThisRun = true;
 
                 var verdict = EntitlementTierRule.Decide(settings!.PatreonTier, serverTier);
+                var nowUtc = DateTime.UtcNow;
 
-                // The lapse rows' only input from here (ConversionRules.DecideLapse): a lower
-                // reading is remembered, an agreeing or higher one forgets it. Never an access input.
-                var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, serverTier, settings.ServerTierSeen);
-                if (seen != settings.ServerTierSeen)
+                var before = EffectiveTierNow();
+                // A different account starts its own confirmation.
+                if (_pendingUid != settings.UnifiedId)
                 {
-                    settings.ServerTierSeen = seen;
-                    if (verdict != EntitlementVerdict.Rise) App.Settings?.Save(); // a rise saves below
+                    _pendingUid = settings.UnifiedId;
+                    _pending = null;
+                }
+                var outcome = EntitlementTierRule.ApplyReading(settings, verdict, serverTier, _pending, HoldGraceClose, nowUtc);
+                _pending = outcome.Pending;
+                if (outcome.Closed) App.Logger?.Information("[Entitlement] {Source}: server tier {Server} closed the grace window", source, serverTier);
+
+                // The old lapse rows' input: a lower reading is remembered, an agreeing or higher one
+                // forgets it. A close moved the stored tier to the reading, so it is no longer lower.
+                var seen = EntitlementTierRule.ServerTierSeenAfter(outcome.Closed ? EntitlementVerdict.Same : verdict, serverTier, settings.ServerTierSeen);
+                var seenMoved = seen != settings.ServerTierSeen;
+                if (seenMoved) settings.ServerTierSeen = seen;
+                if ((outcome.Dirty || seenMoved) && verdict != EntitlementVerdict.Rise) App.Settings?.Save(); // a rise saves below
+                if (seenMoved && !outcome.Closed)
+                {
                     try { ReadingApplied?.Invoke(); }
                     catch (Exception ex) { App.Logger?.Debug("[Entitlement] ReadingApplied handler failed: {Error}", ex.Message); }
+                }
+                if (outcome.Closed)
+                {
+                    try { GraceClosed?.Invoke(); }
+                    catch (Exception ex) { App.Logger?.Warning(ex, "[Entitlement] GraceClosed handler failed"); }
+                }
+                else if (verdict != EntitlementVerdict.Rise && EffectiveTierNow() is var after && after > before)
+                {
+                    // The renewal brought back a lapsed window (a payer away over 14 days): the same
+                    // refresh a rise gets, or the doors stay locked until something else repaints.
+                    CheckoutWatch.Disarm();
+                    App.Patreon?.NotifyEntitlementRaised(after >= 2 ? PatreonTier.Level2 : PatreonTier.Level1);
                 }
 
                 switch (verdict)
@@ -94,11 +139,11 @@ namespace ConditioningControlPanel.Services
                         break;
 
                     case EntitlementVerdict.Lower:
-                        // Recorded, never applied (see EntitlementVerdict.Lower). Logged once per value.
+                        // The stored tier stays for the lapse rows (see EntitlementVerdict.Lower). Logged once per value.
                         if (_lastLowerLogged != serverTier)
                         {
                             _lastLowerLogged = serverTier;
-                            App.Logger?.Information("[Entitlement] {Source}: server tier {Server} below stored {Local}; keeping the grace window",
+                            App.Logger?.Information("[Entitlement] {Source}: server tier {Server} below stored {Local}",
                                 source, serverTier, settings.PatreonTier);
                         }
                         break;
