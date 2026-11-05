@@ -183,8 +183,6 @@ public sealed class PresetsFocalFxTests
             var manager = new SessionManager(files); manager.LoadAllSessions();
             var added = 0; manager.SessionAdded += _ => added++;
             var view = new PresetsTabView(); view.UseSessionManager(manager);
-            // Keep the real entrance animation at its first frame while disk sync and rendering run.
-            // A loaded runner can spend longer than the 220 ms fade in Settle().
             var animationClock = new SharedDeeperThemeTests.StepClock();
             view.SetValue(SharedDeeperThemeTests.StepClock.Property, animationClock.Instance);
             host = new Window { Width = 1200, Height = 900, Content = view }; host.Show(); host.Activate(); Settle();
@@ -205,12 +203,16 @@ public sealed class PresetsFocalFxTests
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
-            animationClock.Step(0);
+            // Reproduce a loaded runner: wall time must not choose the frame being asserted.
+            System.Threading.Thread.Sleep(600); Settle();
+            animationClock.Step(0); animationClock.Step(100);
             Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
             animationClock.Step(1000);
             Assert.All(rack.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
+            animationClock.Step(1000);
+            Assert.All(rack.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
         }
         finally
         {

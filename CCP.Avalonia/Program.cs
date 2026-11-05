@@ -132,6 +132,9 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--wave-timer-check") >= 0)
                 return OverlayCheck.RunWaveTimer();
 
+            if (Array.IndexOf(args, "--x11-managed-raise-check") >= 0)
+                return X11OverlayProbe.RunManagedRaise(direct: Array.IndexOf(args, "--direct-raise-control") >= 0);
+
             // --overlay-check opens one click-through override-redirect overlay per screen and
             // reads map state, override_redirect, depth, input shape and geometry back from the
             // X server. Non-zero on any mismatch. Safe on a live session (transparent, no input).

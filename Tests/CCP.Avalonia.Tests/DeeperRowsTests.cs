@@ -25,8 +25,7 @@ public sealed class DeeperRowsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -60,15 +59,16 @@ public sealed class DeeperRowsTests
 
     private sealed class FakeAudio : IDeeperLocalAudio
     {
-        public bool Playing, Disposed;
+        public bool Playing, Disposed, Rejects;
         public int Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
-        public bool Play() { Playing = true; return true; }
-        public event Action? Failed;
+        public void Play() { if (Rejects) throw new InvalidOperationException("Audio transport could not start"); Playing = true; }
         public void Pause() => Playing = false;
         public event Action? Ended;
+        public event Action? Failed;
         public void End() { Playing = false; Ended?.Invoke(); }
+        public void Fail() { Playing = false; Failed?.Invoke(); }
         public void Dispose() => Disposed = true;
     }
 
@@ -114,6 +114,22 @@ public sealed class DeeperRowsTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
             Assert.Equal("0:00", editor.TxtCurrentTime.Text);
+
+            // A start the transport rejects leaves the editor stopped, and the next press tries again.
+            fake.Rejects = true;
+            Click(editor.BtnPlayPause);
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            fake.Rejects = false;
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
+            Assert.Equal(IconKind.Pause, editor.PlayPauseGlyph.Kind);
+
+            // A playback error after the start does the same.
+            fake.Fail();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
         }
         finally
         {
@@ -177,16 +193,17 @@ public sealed class DeeperRowsTests
         }
     });
 
+
     /// <summary>MediaPlayer as the transport sees it: Playing fires on every start AND resume.</summary>
     private sealed class FakeEngine : DeeperLocalAudio.IEngine
     {
         public LibVLCSharp.Shared.VLCState State { get; set; } = LibVLCSharp.Shared.VLCState.NothingSpecial;
+        public int Volume { get; set; }
         public long Time { get; set; }
         public long Length => 6000;
-        public int Volume { get; set; }
         public int Stops;
-        public bool StartSucceeds = true;
-        public bool Play() { State = LibVLCSharp.Shared.VLCState.Opening; return StartSucceeds; }
+        public bool Starts = true;
+        public bool Play() { Volume = 100; State = LibVLCSharp.Shared.VLCState.Opening; return Starts; }
         public void SetPause(bool pause) => State = pause ? LibVLCSharp.Shared.VLCState.Paused : LibVLCSharp.Shared.VLCState.Playing;
         public void Stop() { Stops++; State = LibVLCSharp.Shared.VLCState.Stopped; }
     }
@@ -196,29 +213,27 @@ public sealed class DeeperRowsTests
     {
         var e = new FakeEngine();
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
-        e.StartSucceeds = false;
-        Assert.False(t.Play());
-        e.StartSucceeds = true;
-        var errors = 0;
-        t.Failed += () => errors++;
-        t.OnError();
-        Assert.Equal(1, errors);
+        e.State = LibVLCSharp.Shared.VLCState.Playing; t.Volume = 135; Assert.Equal(100, e.Volume);
+        t.Volume = -1; Assert.Equal(0, e.Volume);
+        foreach (var (linear, native) in new[] { (25, 63), (50, 79), (75, 91), (80, 93) })
+        { t.Volume = linear; Assert.Equal(native, e.Volume); Assert.Equal(linear, t.Volume); }
+        e.State = LibVLCSharp.Shared.VLCState.NothingSpecial;
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
         // Seek before playback: taken by the first Playing, never again.
-        t.Volume = 37;
         t.PositionSeconds = 3;
         t.Play();
         e.State = LibVLCSharp.Shared.VLCState.Playing;
-        e.Volume = 0; // the backend can ignore a pre-Playing volume
         t.OnPlaying();
+        Assert.Equal(93, e.Volume);
         Assert.Equal(3000, e.Time);
-        Assert.Equal(37, e.Volume);
         Assert.Equal(6, t.DurationSeconds);               // exact length once playing
         e.Time = 4000;
         t.Pause();
         t.Play();
+        e.Volume = 100; // The new output on resume also loses the earlier native level.
         t.OnPlaying();
+        Assert.Equal(93, e.Volume);
         Assert.Equal(4000, e.Time);
 
         // Seek while playing, play on, pause, resume: resume must not jump back to the seek.
@@ -230,21 +245,14 @@ public sealed class DeeperRowsTests
         t.OnPlaying();
         Assert.Equal(7000, e.Time);
 
-        t.Volume = 200;
-        Assert.Equal(100, e.Volume);
-        t.Volume = -1;
-        Assert.Equal(0, e.Volume);
-        t.PositionSeconds = 100;
-        Assert.Equal(6000, e.Time);
-        t.PositionSeconds = -1;
-        Assert.Equal(0, e.Time);
-
         // Pause (or panic) while the clip is still opening stops it rather than letting it start.
         e.State = LibVLCSharp.Shared.VLCState.Stopped;
         t.Play();
         Assert.Equal(LibVLCSharp.Shared.VLCState.Opening, e.State);
         t.Pause();
         Assert.Equal(LibVLCSharp.Shared.VLCState.Stopped, e.State);
+        e.Starts = false; Assert.Throws<InvalidOperationException>(t.Play);
+        var failed = false; t.Failed += () => failed = true; t.OnError(); Assert.True(failed);
     }
 
     [Fact]

@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_grOpen) return;
             _grOpen = true;
+            CoreSettings.Current.PropertyChanged += OnGlassroadSettingsChanged;
             _grEarlyInitSent = _grPinged = false;
             _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
             _grLastLoadingUtc = null;
@@ -72,8 +73,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_grOpen) return;
             _grOpen = false;
+            CoreSettings.Current.PropertyChanged -= OnGlassroadSettingsChanged;
             try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _grWatch = null;
+            DisposeGlassroadPictures();
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("GlassroadHost: closed");
         }
@@ -87,7 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, GlassroadPicturesOn()));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
@@ -130,6 +133,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         // The page's loading bar moved (glassroad CONTRACT.md): a long build may follow.
                         _grLastLoadingUtc = DateTime.UtcNow;
                         break;   // unclaimed, as before: the shell frames still see it
+                    case "set-setting":
+                        _ = SetGlassroadPicturesAsync(o);
+                        return true;
+                    case "scrolller-niches":
+                        SetGlassroadNiches(o);
+                        return true;
                     case "net":
                         OnGlassroadNet(o);
                         return true;

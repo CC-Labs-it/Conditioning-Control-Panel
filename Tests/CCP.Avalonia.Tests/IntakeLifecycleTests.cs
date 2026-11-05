@@ -24,9 +24,7 @@ public sealed class IntakeLifecycleTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }

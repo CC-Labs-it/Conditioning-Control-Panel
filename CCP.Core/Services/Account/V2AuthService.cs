@@ -196,6 +196,9 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("curve_epoch")]
             public int? CurveEpoch { get; set; }
 
+            [JsonProperty("total_conditioning_minutes")]
+            public double? TotalConditioningMinutes { get; set; }
+
             [JsonProperty("current_season")]
             public string? CurrentSeason { get; set; }
 
@@ -756,6 +759,17 @@ namespace ConditioningControlPanel.Services
             {
                 return false;
             }
+        }
+
+        // WPF Services/Settings/ProfileSyncService.cs:4130-4144.
+        public async Task<bool?> IsDisplayNameAvailableAsync(string name)
+        {
+            try
+            {
+                var json = await _http.GetStringAsync($"{SERVER_URL}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
+                return (bool?)JObject.Parse(json)["available"];
+            }
+            catch { return null; }
         }
 
         /// <summary>

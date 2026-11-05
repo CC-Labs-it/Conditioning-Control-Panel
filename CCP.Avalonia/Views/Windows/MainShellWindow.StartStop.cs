@@ -4,7 +4,7 @@
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
 // ponytail: still missing, each with no service on this head: the remote-control gate,
 // Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler and the hero FX.
+// ramp starts and the scheduler.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private async void BtnStart_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
+            FlashStartIgnition(); // WPF MainWindow.StartStop.cs:40
             if (RemoteControllerConnected) return;   // WPF StartStop.cs:43: a controller drives
             if ((CoreEngine.IsRunning || App.Sessions?.IsRunning == true) && RefuseStopUnderLockdown()) return;
             // WPF MainWindow.StartStop.cs:58: a running session asks first; declining keeps everything on.
@@ -140,6 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new StrExtension(running ? "label_stop" : "label_start").ProvideValue(null!));
             RefreshBarStatus();
+            ApplyStartHeroState();
         }
     }
 }

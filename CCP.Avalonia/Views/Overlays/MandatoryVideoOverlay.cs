@@ -43,6 +43,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsForYouOnScreen);
 
+        public void Freeze() => SubliminalWhisperShow.FreezeForVideo();
+        public void FinishFreeze(bool cancelled) => SubliminalWhisperShow.FinishVideoFreeze(cancelled);
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library
@@ -84,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
             DurationOf = LengthOf,
+            CascadeIsRaining = () => Views.Chaos.ChaosGifCascadeOverlay.IsRaining,
             // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
             PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
         };

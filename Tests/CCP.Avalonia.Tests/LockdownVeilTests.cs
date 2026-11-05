@@ -32,6 +32,7 @@ namespace CCP.Avalonia.Tests;
 /// the panel half is a table of every control WPF greys or refuses under Lockdown.</summary>
 public sealed class LockdownVeilTests
 {
+    private sealed class FrozenTime : TimeProvider { public override long GetTimestamp() => 0; }
     private static void Run(Action<MainShellWindow, LockdownService> body, TimeProvider? beatTime = null)
     {
         AvaloniaTestDispatcher.Run(() =>
@@ -277,6 +278,17 @@ public sealed class LockdownVeilTests
                 // programs 3a (P05; WPF has no gate): each lifecycle door says Lockdown before anything else
                 ("program Enroll", () => _ = shell.EnrollProgramAsync("first_week"),
                     () => !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
+                ("program locked account door", () =>
+                {
+                    var premiumBeforeAttempt = CoreEntitlement.HasPremiumProvider;
+                    try
+                    {
+                        CoreEntitlement.HasPremiumProvider = () => false;
+                        _ = shell.EnrollProgramAsync("presentation");
+                    }
+                    finally { CoreEntitlement.HasPremiumProvider = premiumBeforeAttempt; }
+                },
+                    () => shell.CurrentTab == "appsettings" || !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
                 ("program Withdraw", () => _ = shell.WithdrawProgramAsync(),
                     () => programs.ActiveEnrollment == null || !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
                 ("program Start session", () => _ = shell.StartProgramSessionAsync(),
