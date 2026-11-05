@@ -25,9 +25,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <see cref="TopLevelFrameSource"/> (WPF CompositionTarget.Rendering, dt clamped at 0.1 s); the
     /// subscription drops when the last logo retires. The window lives until <see cref="CloseActive"/>.
     ///
-    /// <para>ponytail: no caller yet - the Porn DVD toy and Intrusive Thoughts live in the unported
-    /// ChaosModeService toy/boon layer. Also absent: bubble pops on contact (PopBubblesInRect - no
-    /// chaos bubble field), the Spanker smack and the rabbit split, and RaiseActive above a video.</para>
+    /// <para>The Porn DVD toy is launched by ChaosRunHost. Part B: Intrusive Thoughts,
+    /// Spanker smack, rabbit split, per-logo hosts and RaiseActive above video.</para>
     /// </summary>
     internal static class ChaosDvdOverlay
     {
@@ -45,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static Canvas? _canvas;
         private static IFrameSource? _source;
         private static TimeSpan? _last;
+        private static Point _origin;
         private static readonly Dictionary<ChaosDvdLogo, OutlinedTextBlock> Labels = new();
         private static readonly Action<TimeSpan> OnFrameAction = OnFrame;
 
@@ -88,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var primary = screens.FirstOrDefault(s => s.IsPrimary) ?? screens[0];
             var wa = primary.WorkingArea;
             var k = primary.Scaling > 0 ? primary.Scaling : 1.0;
+            _origin = new Point(wa.X / k, wa.Y / k);
             Flock.Left = 0;
             Flock.Top = 0;
             Flock.Right = wa.Width / k;
@@ -179,6 +180,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Canvas.SetLeft(t, l.X);
                 Canvas.SetTop(t, l.Y);
                 t.Opacity = l.Opacity;
+                // WPF ChaosDvdOverlay.cs:388-390: collide after moving, never while retiring.
+                if (l.FadeOutSec < 0 && !f.Spawned.Contains(l))
+                    BubbleOverlay.PopChaosInRect(new Rect(_origin.X + l.X, _origin.Y + l.Y, l.W, l.H));
             }
             if (f.BounceCue) PlaySfx("dvd_bounce", 0.35f);
             if (f.LaunchCue) PlaySfx("dvd_launch", 0.35f);
