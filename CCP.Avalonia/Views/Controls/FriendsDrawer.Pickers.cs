@@ -3,8 +3,8 @@
 // each opens inline in the card, over IFriendsService.
 // The action buttons carry WPF's MDL2 glyphs as Fluent icons (E8A7/E7C9/E714, fluent-icons 2026-10-10).
 // ponytail: no Pop() juice and no FriendsSfx sounds (.Juice.cs / FriendsSfx are not on this head). The Goon
-// and chess tiles stay shut here: GoonHostService and PieceByPieceHostService are WPF-only, so this head
-// can neither open a room nor a board (FriendsInviteCodes is the seam that lights them when they move).
+// tile stays shut here: GoonHostService is WPF-only, so this head
+// cannot open a Goon room. Chess challenges use the shared game host.
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -282,13 +282,12 @@ public sealed partial class FriendsDrawer
     private void ShowNote(string friendId, string key) { _results[friendId] = (Loc.Get(key), true); Render(); }
 }
 
-/// <summary>WPF InviteCodes + CatalogueWatches. This head hosts neither a Goon room nor a chess board, so
-/// both tiles are shut ("not on this build"); whoever ports a host sets these.</summary>
+/// <summary>WPF InviteCodes + CatalogueWatches. Chess uses the game host; Goon waits for its host.</summary>
 internal static class FriendsInviteCodes
 {
     public static Func<string?> GoonCode { get; set; } = () => null;
-    public static Func<string, TimeSpan, Task<string?>> ChallengeFriend { get; set; } = (_, _) => Task.FromResult<string?>(null);
-    public static Func<bool> HostsChess { get; set; } = () => false;
+    public static Func<string, TimeSpan, Task<string?>> ChallengeFriend { get; set; } = ConditioningControlPanel.Avalonia.Views.Games.GameWindow.ChallengePbpFriend;
+    public static Func<bool> HostsChess { get; set; } = () => true;
     public static Func<IReadOnlyList<(string Id, string Title)>> CatalogueWatches { get; set; } = () => Array.Empty<(string, string)>();
 
     /// <summary>The loc key of why a tile is shut, or null when it can be sent.</summary>

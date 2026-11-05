@@ -119,7 +119,25 @@ namespace ConditioningControlPanel
             SetHelpContent(HapticsTab.HelpBtnVideoHapticSync, "VideoHapticSync");
             SetHelpContent(DiscordTab.HelpBtnDiscordProfile, "DiscordProfile");
             SetHelpContent(LeaderboardTab.HelpBtnLeaderboard, "Leaderboard");
+
+            // 7.2 Help pages (the How-to overlay rows): the Prize Counter and Rain, all loc keys.
+            // The header icon is a plain TextBlock, so BMP glyphs only (no colour emoji).
+            Controls.HelpPopover.Attach(BtnHelpPrizeCounter, BuildLocHelp("PrizeCounter", "help_counter", "✦"));
+            Controls.HelpPopover.Attach(BtnHelpRain, BuildLocHelp("RainV2", "help_rain", "☂"));
+            // RainV2Gate off (7.2.0): no Help row for an avatar nobody can switch to.
+            if (!Services.Companion.RainV2Gate.On) HelpRainRow.Visibility = Visibility.Collapsed;
         }
+
+        /// <summary>A Help page whose every line is a loc key: <c>&lt;stem&gt;_title</c>, <c>_what</c>, <c>_tip1</c>..<c>_tip3</c>, <c>_how</c>.</summary>
+        internal static HelpContent BuildLocHelp(string sectionId, string stem, string icon) => new()
+        {
+            SectionId = sectionId,
+            Icon = icon,
+            Title = Loc.Get(stem + "_title"),
+            WhatItDoes = Loc.Get(stem + "_what"),
+            Tips = new List<string> { Loc.Get(stem + "_tip1"), Loc.Get(stem + "_tip2"), Loc.Get(stem + "_tip3") },
+            HowItWorks = Loc.Get(stem + "_how"),
+        };
 
         private void SetHelpContent(Button helpButton, string sectionId)
         {
@@ -1233,8 +1251,8 @@ namespace ConditioningControlPanel
 
         /// <summary>
         /// The LIVERY tier of a DailyFreeService key: which sign the reveal face wears before the
-        /// FREE TODAY stamp lands on it. Every pool feature is a Tier 1 exclusive except the
-        /// descent, which is the wall's Tier 2 door (Play's DTRH hero wears the same diamond).
+        /// FREE TODAY stamp lands on it. Every key is a Tier 1 exclusive; the descent joined them
+        /// when it moved to Basic on 2026-10-31.
         /// An unknown key gets 0, i.e. no sign - the same silence the box falls back to when it
         /// cannot name the day's feature either.
         ///
@@ -1244,8 +1262,7 @@ namespace ConditioningControlPanel
         /// </summary>
         private static int MysteryFeatureTier(string? key) => key switch
         {
-            "dtrh" => 2,
-            "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1,
+            "dtrh" or "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1,
             _ => 0,
         };
 

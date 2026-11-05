@@ -44,9 +44,12 @@ jobs:
           path: ~/.cache/ccp-test/vosk
           key: vosk-model-small-en-us-0.15-30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
       - run: bash .github/scripts/fetch-vosk-model.sh
-      - run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release
+      - run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --filter 'FullyQualifiedName!=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget'
         env:
           CCP_REQUIRE_VOSK: "1"
+      # A fresh testhost keeps background work from the suite out of the frame measurement.
+      - name: Test Board frame budget (isolated process)
+        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --no-build --filter 'FullyQualifiedName=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget'
       - name: Test Core settings publication (isolated profile)
         run: dotnet test Tests/CCP.Core.Settings.Tests/CCP.Core.Settings.Tests.csproj -c Release
       - name: Test release-content packs (loopback fake server, isolated profile)
@@ -242,7 +245,10 @@ jobs:
       - name: Test app suite
         run: dotnet test Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
       - name: Test Core suite
-        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release
+        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --filter 'FullyQualifiedName!=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget'
+      # A fresh testhost keeps background work from the suite out of the frame measurement.
+      - name: Test Board frame budget (isolated process)
+        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --no-build --filter 'FullyQualifiedName=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget'
       - name: Test Core settings publication (isolated profile)
         run: dotnet test Tests/CCP.Core.Settings.Tests/CCP.Core.Settings.Tests.csproj -c Release
       - name: Test release-content packs (loopback fake server, isolated profile)
@@ -391,7 +397,23 @@ jobs:
         # scope=windows (hybrid rgate): the Linux shards ran locally, so only the Windows total is checked here.
         os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.scope == 'windows' && '["windows"]' || '["linux", "windows"]') }}
     steps:
+      # Artifact blob transfers can exhaust the action's internal retries even after every
+      # shard passed. Retry the whole action for fresh download URLs; the final failure is fatal.
       - uses: actions/download-artifact@v4
+        id: download_shards
+        continue-on-error: true
+        with:
+          pattern: avalonia-${{ matrix.os }}-shard-*
+          path: shards
+      - uses: actions/download-artifact@v4
+        id: retry_shards
+        if: steps.download_shards.outcome == 'failure'
+        continue-on-error: true
+        with:
+          pattern: avalonia-${{ matrix.os }}-shard-*
+          path: shards
+      - uses: actions/download-artifact@v4
+        if: steps.retry_shards.outcome == 'failure'
         with:
           pattern: avalonia-${{ matrix.os }}-shard-*
           path: shards
@@ -422,6 +444,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash .github/scripts/core-guards.sh
+      - run: python3 .github/scripts/test_avalonia_coverage.py
+      - name: Check tester steps cover the parity ledger
+        run: bash .github/scripts/test-plan-coverage.sh
       # The port docs parse: every ledger table row on one line, main-sync meta totals match, the dashboard builds
       # (shallow checkout, so its over-time chart has one point here; that is fine for a build check).
       - run: |
