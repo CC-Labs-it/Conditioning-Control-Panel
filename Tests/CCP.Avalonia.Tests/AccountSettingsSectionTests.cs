@@ -41,11 +41,10 @@ public sealed class AccountSettingsSectionTests
     private static Task RunAsync(Func<MainShellWindow, AccountSettingsSection, AppSettings, Dictionary<string, string?>, Task> body) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
+            var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
             if (Application.Current is null)
-                // The production builder includes Inter and AppFonts registration for this headless host.
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            else builder.AfterSetupCallback(builder); // Register shipped fonts regardless of test order.
             var oldGet = CoreSecrets.RetrieveProvider;
             var oldSet = CoreSecrets.StoreProvider;
             var oldSettings = CoreSettings.ServiceProvider;

@@ -22,6 +22,10 @@
             <TextBlock Theme="{StaticResource Type.PageTitle}" Text="{loc:Str nav_tab_permissions}"/>
             <TextBlock Theme="{StaticResource Type.PageSubtitle}" Text="{loc:Str companion_page_permissions_intro}" TextWrapping="Wrap" Margin="0,4,0,16"/>
             <ContentControl x:Name="PermissionsHost" Focusable="False"/>
+            <!-- WPF PermissionsPage.xaml (#4078): the companion's offers keep a reachable off switch. -->
+            <CheckBox x:Name="ChkAsks" Click="ChkAsks_Click" Margin="0,14,0,0" Foreground="{DynamicResource TextLightBrush}" ToolTip.Tip="{loc:Str companion_asks_toggle_hint}">
+                <TextBlock Text="{loc:Str companion_asks_toggle}" Foreground="{DynamicResource TextLightBrush}"/>
+            </CheckBox>
             <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,14,0,0">
                 <Run Text="{loc:Str companion_page_permissions_takeover}"/><InlineUIContainer BaselineAlignment="Baseline"><Button x:Name="LinkOpenTakeover" Theme="{StaticResource InlineLink}" Click="OpenTakeover_Click"><TextBlock FontSize="12" Text="{loc:Str companion_page_open_takeover}"/></Button></InlineUIContainer>
             </TextBlock>

@@ -15,6 +15,19 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class FypRulesTests
 {
+    [Fact]
+    public void Gaze_TransformsMixedDpiAndMonitorOrigins_ClampsOutside()
+    {
+        var p = FypRules.GazePoint(300, 200, 2, -1920, 100, true, -1520, 300, 1.25, 800, 400);
+        Assert.Equal(0.2, p.X, 8);
+        Assert.Equal(0.4, p.Y, 8);
+        Assert.True(p.Inside);
+        p = FypRules.GazePoint(-10, 500, 99, 9999, 9999, false, 0, 0, 1, 100, 100);
+        Assert.Equal(0, p.X);
+        Assert.Equal(1, p.Y);
+        Assert.False(p.Inside);
+    }
+
     private static AppSettings Fresh() => new();
 
     [Fact]

@@ -1,7 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Headless;
-using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -57,19 +57,17 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
-            // The platform and font manager are process-wide. Initialize before any test can
-            // claim them with a bare builder; match AmbientBeatLoopsTests.Setup's portable faces.
+            // The first test owns the platform for the whole process. Use the shipped fonts here,
+            // before a class-specific setup can omit them and make later shell tests order-dependent.
             if (Application.Current is null)
-            {
-                var options = ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
-                var mappings = new Dictionary<string, FontFamily>(options.FontFamilyMappings!);
-                mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
-                options.FontFamilyMappings = mappings;
-                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(options)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            }
             Current = ProcessStateSnapshot.Take();
+            // A get-only singleton retained queued toasts, old hosts and live sticky keys across tests.
+            // The snapshot restores the original service after each test; each body gets fresh state.
+            ConditioningControlPanel.Avalonia.App.Notifications = new();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time = new ConditioningControlPanel.Avalonia.Platform.StartupLadder.TestClock();
