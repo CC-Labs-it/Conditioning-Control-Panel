@@ -118,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         and the one-shot file:// pin are real) and InvokeScript is ExecuteScriptAsync. What
     ///         genuinely has no counterpart is ZoomFactor, AddScriptToExecuteOnDocumentCreatedAsync
     ///         and ContainsFullScreenElementChanged. Zoom stays stubbed; fullscreen uses page messages.</item>
-    ///   <item>Dark title bars remain unported. Fullscreen uses Avalonia windows.</item>
+    ///   <item>Dark title bars are tinted globally by Win32Window on Windows. Fullscreen uses Avalonia windows.</item>
     /// </list>
     /// </summary>
     public partial class EnhancementPlayerWindow : Window
@@ -219,10 +219,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             AvaloniaXamlLoader.Load(this);
 
-            // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
-            // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
-            // SystemDecorations="None" plus a hand-drawn bar, which would cost this resizable
-            // window its native move/resize/maximize for a colour. Left native and untinted.
+            // Windows title bars are tinted globally by Win32Window; Linux keeps native decoration.
+            // RestoreOwnerOnClose:
             Opened += (_, _) => LivePlayers.Add(this);
             Closed += (_, _) => { LivePlayers.Remove(this); try { (Owner as Window)?.Activate(); } catch { } };
 
