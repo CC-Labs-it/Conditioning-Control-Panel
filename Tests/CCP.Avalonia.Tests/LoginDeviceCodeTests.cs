@@ -10,6 +10,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -117,6 +118,8 @@ public sealed class LoginDeviceCodeTests
         AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
         AccountSeed.Sync = null;
         ExternalOpener.Shell = _ => true; // never a real browser
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        LocalizationManager.Instance.SetLanguage("de"); // prove status/error text is localized, not English literals
         var shell = new MainShellWindow();
         try
         {
@@ -130,11 +133,12 @@ public sealed class LoginDeviceCodeTests
             await Until(() => dialog.FindControl<StackPanel>("DeviceCodePanel")!.IsVisible);
             Assert.Equal("ABC-DEF", dialog.FindControl<TextBlock>("TxtDeviceCode")!.Text);
             Assert.Equal(V2DeviceCodeService.VerificationUrl, dialog.FindControl<TextBox>("TxtVerificationUrl")!.Text);
-            Assert.Equal("Waiting for browser confirmation...", dialog.FindControl<TextBlock>("TxtDeviceStatus")!.Text);
+            Assert.Equal(Loc.Get("login_device_waiting"), dialog.FindControl<TextBlock>("TxtDeviceStatus")!.Text);
             await body(dialog, clock, s);
         }
         finally
         {
+            LocalizationManager.Instance.SetLanguage(language);
             foreach (var w in shell.OwnedWindows.ToList()) w.Close();
             shell.Close();
             CoreSettings.ServiceProvider = null;
@@ -207,7 +211,7 @@ public sealed class LoginDeviceCodeTests
                 clock.Advance(TimeSpan.FromSeconds(3)); // past the server's expires_at: no second poll
                 await Until(() => dialog.OwnedWindows.OfType<MessageDialog>().Any());
                 var box = dialog.OwnedWindows.OfType<MessageDialog>().Single();
-                Assert.Equal("Sign-in code expired. Please try again.", box.FindControl<TextBlock>("TxtMessage")!.Text);
+                Assert.Equal(Loc.Get("login_device_expired"), box.FindControl<TextBlock>("TxtMessage")!.Text);
                 box.Close();
                 await dialog.DevicePoll;
                 Assert.Equal(1, wire.Polls);
@@ -238,6 +242,15 @@ public sealed class LoginDeviceCodeTests
                 await Until(() => shell.OwnedWindows.OfType<DisplayNameDialog>().Any());
             }));
     }
+
+    [Fact]
+    public Task CopyUsesRawCodeAndLocalizedFeedback() => AvaloniaTestDispatcher.RunAsync(() =>
+        Run(new Wire(T0.AddMinutes(1)), async (dialog, clock, settings) =>
+        {
+            Click(dialog.FindControl<Button>("BtnDeviceCodeCopy")!);
+            await Until(() => dialog.FindControl<TextBlock>("TxtDeviceStatus")!.Text == Loc.Get("login_device_copied"));
+            Assert.Equal("ABCDEF", await dialog.Clipboard!.TryGetTextAsync());
+        }));
 
     /// <summary>WPF BrowserLauncher.OpenUrlOrPrompt: a sign-in link no browser takes is copied and the user told so.</summary>
     [Fact]

@@ -824,7 +824,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         private async void BtnLoginDeviceCode_Click()
         {
-            ShowLoading("Generating sign-in code...");
+            ShowLoading(Loc.Get("login_device_generating"));
             try
             {
                 var resp = await DeviceCodes().InitiateAsync();
@@ -866,7 +866,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ? $"{code[..3]}-{code[3..]}"
                 : code;
             _txtVerificationUrl.Text = VerificationUrl;
-            _txtDeviceStatus.Text = "Waiting for browser confirmation...";
+            _txtDeviceStatus.Text = Loc.Get("login_device_waiting");
         }
 
         /// <summary>WPF used Process.Start with UseShellExecute; Avalonia's Launcher is the
@@ -896,7 +896,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     // Hard expiry against the server-issued expires_at.
                     if (Clock.GetUtcNow() > _deviceCodeExpiresAt)
                     {
-                        await HandleDeviceCodeError("Sign-in code expired. Please try again.");
+                        await HandleDeviceCodeError(Loc.Get("login_device_expired"));
                         return;
                     }
 
@@ -912,26 +912,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                         case V2DeviceCodeService.PollStatus.Pending:
                             intervalMs = 3000;
                             consecutiveUnknown = 0;
-                            _txtDeviceStatus.Text = "Waiting for browser confirmation...";
+                            _txtDeviceStatus.Text = Loc.Get("login_device_waiting");
                             break;
 
                         case V2DeviceCodeService.PollStatus.Expired:
-                            await HandleDeviceCodeError("Sign-in code expired. Please try again.");
+                            await HandleDeviceCodeError(Loc.Get("login_device_expired"));
                             return;
 
                         case V2DeviceCodeService.PollStatus.NotFound:
-                            await HandleDeviceCodeError("Sign-in code wasn't recognized. Please try again.");
+                            await HandleDeviceCodeError(Loc.Get("login_device_failed"));
                             return;
 
                         case V2DeviceCodeService.PollStatus.RateLimited:
                         case V2DeviceCodeService.PollStatus.ServiceUnavailable:
                             intervalMs = Math.Min(intervalMs * 2, 30000);
-                            _txtDeviceStatus.Text = "Connection busy, retrying...";
+                            _txtDeviceStatus.Text = Loc.Get("login_device_retrying");
                             break;
 
                         case V2DeviceCodeService.PollStatus.BadRequest:
                         case V2DeviceCodeService.PollStatus.Unauthorized:
-                            await HandleDeviceCodeError("Sign-in failed. Please try again.");
+                            await HandleDeviceCodeError(Loc.Get("login_device_failed"));
                             return;
 
                         case V2DeviceCodeService.PollStatus.Unknown:
@@ -939,11 +939,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                             consecutiveUnknown++;
                             if (consecutiveUnknown >= 5)
                             {
-                                await HandleDeviceCodeError("Lost connection to server. Please try again.");
+                                await HandleDeviceCodeError(Loc.Get("login_device_lost"));
                                 return;
                             }
                             intervalMs = Math.Min(intervalMs * 2, 30000);
-                            _txtDeviceStatus.Text = "Connection issue, retrying...";
+                            _txtDeviceStatus.Text = Loc.Get("login_device_retrying");
                             break;
                     }
 
@@ -954,7 +954,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             catch (Exception ex)
             {
                 Log.Error(ex, "[DeviceCode] Poll loop crashed");
-                await HandleDeviceCodeError("Unexpected error. Please try again.");
+                await HandleDeviceCodeError(Loc.Get("login_device_failed"));
             }
         }
 
@@ -962,7 +962,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             if (string.IsNullOrEmpty(result.AuthToken) || string.IsNullOrEmpty(result.UnifiedId))
             {
-                await HandleDeviceCodeError("Server returned an incomplete response.");
+                await HandleDeviceCodeError(Loc.Get("login_device_failed"));
                 return;
             }
             _deviceCts?.Cancel();
@@ -1012,7 +1012,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 if (Clipboard is null) return;
                 await Clipboard.SetTextAsync(_deviceCode);
-                _txtDeviceStatus.Text = "Code copied. Paste in your browser.";
+                _txtDeviceStatus.Text = Loc.Get("login_device_copied");
             }
             catch (Exception)
             {
