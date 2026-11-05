@@ -12,6 +12,8 @@
 // XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
 //
 // Remaining: THE BANK counter hold depends on the pot/flight host (MainShellWindow.BankFx.cs).
+// Level-up particles live in MainShellWindow.EventFx.cs (CelebrateLevelUp); HeroMoments calls it, one burst.
+// Save tick/ripple is live through BtnSave_Click (MainShellWindow.Settings.cs) -> FlashSaveAbsorb (HeroMoments.cs).
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
 

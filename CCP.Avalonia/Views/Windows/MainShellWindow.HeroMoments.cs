@@ -25,8 +25,8 @@ public partial class MainShellWindow
     private LinearGradientBrush? _startCharge;
     private bool _chargeApplied, _dipInFlight;
     private Action? _stopLevelSound;
-    private readonly EventBurstLayer _levelBurst = new();
-    internal int LevelBurstCount => _levelBurst.Count;
+    // One level-up burst: EventFx's CelebrateLevelUp owns it (panic stops it via StopEventFx).
+    internal int LevelBurstCount => _eventBursts.Count;
     internal bool StartHeroRunning => _startHero?.IsRunning == true;
     internal bool StartIgniting => _startIgnition?.IsRunning == true;
     internal bool SaveAbsorbing => _saveAbsorb?.IsRunning == true;
@@ -192,7 +192,7 @@ public partial class MainShellWindow
         if (_heroClosed) return;
         FlashLevelUp();
         PopLevelChip();
-        if (Named<Border>("XPBarTrack") is { } track) _levelBurst.Fire(track, 110, rightEdge: true);
+        CelebrateLevelUp();
         UpdateLevelDisplay();
         Platform.OsNotifications.Show(Loc.Get("toast_level_up_title"), Loc.GetF("toast_level_up_body", level));
         PlayHeroLevelSound();

@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
@@ -83,6 +84,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (!_modHooked)
             {
                 CoreMods.ModChanged += OnModChanged;
+                // WPF UpdateCompanionCardsUI -> SyncHero runs on every switch and level-up, not only on a card click.
+                CompanionCore.Switched += OnCompanionSwitched;
+                CompanionCore.LevelUp += OnCompanionLevelUp;
                 _modHooked = true;
             }
 
@@ -97,9 +101,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Observe(null);
             StopAmbientLoop();
 
-            if (_modHooked) CoreMods.ModChanged -= OnModChanged;
+            if (_modHooked)
+            {
+                CoreMods.ModChanged -= OnModChanged;
+                CompanionCore.Switched -= OnCompanionSwitched;
+                CompanionCore.LevelUp -= OnCompanionLevelUp;
+            }
             _modHooked = false;
         }
+
+        private void OnCompanionSwitched(CompanionId id) => RefreshFromCore();
+        private void OnCompanionLevelUp(CompanionId id, int level) => RefreshFromCore();
+
+        private void RefreshFromCore() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_modHooked) ApplyAvatarArt();
+        });
 
         /// <summary>ModChanged can be raised off the UI thread; marshal before touching the art.</summary>
         private void OnModChanged(object? sender, ModPackage mod)
