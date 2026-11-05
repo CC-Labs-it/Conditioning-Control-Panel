@@ -68,7 +68,8 @@ public sealed class AdaptiveSideArtTests
     }
 
     // Haptics and RemoteControl: their Avalonia ports dropped the art column (parity views-tab-haptics).
-    private static readonly string[] NoArtColumn = { "HapticsTabView", "RemoteControlTabView" };
+    // WallpaperFeatureControl: no Wallpaper door on this head (owner, 2026-11-01), so no twin.
+    private static readonly string[] NoArtColumn = { "HapticsTabView", "RemoteControlTabView", "WallpaperFeatureControl" };
 
     /// <summary>Every WPF view with CollapseBelow has an Avalonia twin carrying the same threshold(s).</summary>
     [Fact]
@@ -85,7 +86,7 @@ public sealed class AdaptiveSideArtTests
         var wpf = Directory.GetFiles(Path.Combine(root, "ConditioningControlPanel"), "*.xaml", SearchOption.AllDirectories)
             .Where(f => Values(f).Length > 0).ToArray();
 
-        Assert.Equal(23, wpf.Length);
+        Assert.Equal(24, wpf.Length);
         var checkedViews = 0;
         foreach (var w in wpf)
         {
