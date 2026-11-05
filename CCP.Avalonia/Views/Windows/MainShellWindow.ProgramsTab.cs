@@ -18,9 +18,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         /// <summary>
-        /// Maps the Core catalogue to browse rows (WPF BuildProgramBrowseList :596-680). A card is
-        /// enrollable only with a writable service whose CanEnroll agrees; no service, a read-only
-        /// one, a locked card or a refusal shows the reason instead.
+        /// Maps the Core catalogue to browse rows (WPF BuildProgramBrowseList :549-649). A card is
+        /// enrollable only with a writable service whose CanEnroll agrees; otherwise it shows
+        /// the refusal reason. Locked cards open Account (WPF App Info).
         /// </summary>
         internal static IReadOnlyList<ProgramBrowseItem> BuildProgramBrowseItems(
             IReadOnlyList<ProgramDefinition> library, ProgramService? svc = null)
@@ -65,13 +65,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     AccentBrush = accent,
                     IsLocked = locked,
                     ActionText = Loc.Get(locked ? "btn_program_locked" : "btn_program_enroll"),
-                    IsActionEnabled = canEnroll,
-                    ActionOpacity = canEnroll ? 1.0 : 0.5,
-                    // A refused card never blames a missing pledge (programs_locked_hint promises a
-                    // pledge unlocks it, and no premium program is finishable here yet); a program
-                    // this head can never finish says what it is missing (programs-3a decision).
+                    IsActionEnabled = locked || canEnroll,
+                    ActionOpacity = locked || canEnroll ? 1.0 : 0.5,
+                    // WPF :624-628: locked cards open App Info. Keep the capability reason on programs this
+                    // head cannot finish, so opening Account never promises an unavailable feature.
                     ReasonText = canEnroll ? null : ProgramService.UnavailableReason(definition, Platform.ProgramCapabilities.IsAvailable)
-                                 ?? Loc.Get("programs_unavailable"),
+                                 ?? Loc.Get(locked ? "programs_locked_hint" : "programs_unavailable"),
                     ReasonVisible = !canEnroll,
                     CardOpacity = locked ? 0.72 : 1.0
                 });
@@ -103,14 +102,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void RefreshProgramsTab() => Named<ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
 
-        /// <summary>WPF BtnProgramEnroll_Click :1999: CanEnroll BEFORE the dialog, Enroll only on a confirmed one.</summary>
+        /// <summary>WPF BtnProgramEnroll_Click :1968: CanEnroll BEFORE the dialog, Enroll only on a confirmed one.</summary>
         internal async Task EnrollProgramAsync(string? programId)
         {
             try
             {
                 var svc = App.Programs;
                 var def = svc?.Library.FirstOrDefault(p => string.Equals(p.Id, programId, StringComparison.OrdinalIgnoreCase));
-                if (svc == null || def == null || svc.IsReadOnly) return;
+                if (svc == null || def == null) return;
+                // WPF :1982: the premium card opens App Info before enrollment checks. This
+                // head's existing App Info route is Settings > Account (ShowTab("patreon")).
+                if (def.Tier == ProgramTier.Premium && !CoreEntitlement.HasPremium)
+                {
+                    OpenAppSettingsSection("account");
+                    return;
+                }
+                if (svc.IsReadOnly) return;
                 if (await ProgramRefusedByLockdown()) return;
                 if (!svc.CanEnroll(def, out var reason))
                 {

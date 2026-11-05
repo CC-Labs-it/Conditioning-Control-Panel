@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -46,7 +48,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public KeywordTriggersPanel()
         {
             AvaloniaXamlLoader.Load(this);
-            Helpers.ParentWheel.Attach(this.FindControl<ScrollViewer>("ParentWheelScroll")!);
 
             _expander = this.FindControl<Expander>("KeywordTriggersExpander")!;
             _drawerGlow = this.FindControl<Border>("KeywordDrawerGlow")!;
@@ -74,6 +75,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 CoreSettings.Save();
             };
 
+            // WPF KeywordTriggersPanel.xaml:192-193 / MainWindow.Assets.cs:444-456 redirects
+            // the custom list wheel to the nearest outer ScrollViewer.
+            var listScroll = this.FindControl<ScrollViewer>("KeywordTriggerScroller")!;
+            listScroll.AddHandler(PointerWheelChangedEvent, OnTriggerListWheel, RoutingStrategies.Tunnel);
+
             SyncFromSettings();
 
             var sliders = new[]
@@ -83,6 +89,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             };
             foreach (var name in sliders)
                 this.FindControl<Slider>(name)!.ValueChanged += OnSliderChanged;
+        }
+
+        private void OnTriggerListWheel(object? sender, PointerWheelEventArgs e)
+        {
+            if (sender is not ScrollViewer inner ||
+                inner.GetVisualAncestors().OfType<ScrollViewer>().FirstOrDefault() is not { } outer) return;
+            // Avalonia reports one unit per notch; WPF's e.Delta is 120 per notch.
+            outer.Offset = new Vector(outer.Offset.X, Math.Clamp(outer.Offset.Y - e.Delta.Y * 120,
+                0, Math.Max(0, outer.Extent.Height - outer.Viewport.Height)));
+            e.Handled = true;
         }
 
         protected override void OnAttachedToVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
