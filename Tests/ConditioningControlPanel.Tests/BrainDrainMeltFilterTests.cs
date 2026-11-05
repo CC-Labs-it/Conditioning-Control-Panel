@@ -15,6 +15,7 @@ namespace ConditioningControlPanel.Tests;
 /// that band off-frame. A gaussian has its own soft edge which the plain-blur path has always
 /// shown, so melt is measured against that baseline rather than against zero.
 /// </summary>
+[Collection(nameof(SkiaRasterBudgetCollection))]
 public class BrainDrainMeltFilterTests
 {
     private const float NoiseCellFraction = 0.20f;

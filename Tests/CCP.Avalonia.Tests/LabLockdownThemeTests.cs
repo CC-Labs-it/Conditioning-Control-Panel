@@ -54,6 +54,15 @@ public sealed class LabLockdownThemeTests
     });
 
     [Fact]
+    public void PossessionNeverOffersTheLiveLockdownBadgeOrItsChildren() => Run((shell, ld) =>
+    {
+        ld.Activate(TimeSpan.FromMinutes(30)); Dispatcher.UIThread.RunJobs();
+        shell.UpdateLayout();
+        var badge = shell.Named<Border>("LockdownBadge")!; Assert.True(badge.IsEffectivelyVisible);
+        shell.MouseMove(badge.TranslatePoint(new Point(5, 5), shell)!.Value);
+        Assert.DoesNotContain(shell.GetPossessionTargets(), t => ReferenceEquals(t.Visual, badge) || global::Avalonia.VisualTree.VisualExtensions.IsVisualAncestorOf(badge, (Visual)t.Visual));
+    });
+    [Fact]
     public void ActivationPaintsTheCardAndLevelGlow_ExitRestoresTheirOriginalBindings() => Run((shell, ld) =>
     {
         shell.ShowTab("lockdown");
