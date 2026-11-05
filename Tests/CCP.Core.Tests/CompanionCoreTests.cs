@@ -26,6 +26,71 @@ public sealed class CompanionCoreTests : IDisposable
         (_s.ActiveCompanionId, _s.CompanionPerk, _s.PlayerXP, _s.PlayerLevel, _s.HighestLevelEver, _s.StrictLockEnabled, _s.OfflineMode, _s.OfflineUsername) = _old;
         _s.CompanionProgressData = _oldProgress;
     }
+    [Fact]
+    public void PromptStoreFailureStillCompletesTheSwitch()
+    {
+        var folder = System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName);
+        var backup = folder + Guid.NewGuid().ToString("N"); var hadFolder = System.IO.Directory.Exists(folder);
+        var oldAssigned = _s.GetCompanionPromptId(1); CompanionId? announced = null;
+        Action<CompanionId> on = id => announced = id;
+        if (hadFolder) System.IO.Directory.Move(folder, backup);
+        CompanionCore.Switched += on;
+        try
+        {
+            System.IO.Directory.CreateDirectory(CorePaths.UserData);
+            System.IO.File.WriteAllText(folder, "block directory creation");
+            _s.ActiveCompanionId = 0;
+            _s.SetCompanionPromptId(1, "assigned");
+            Assert.False(InstalledCommunityPrompts.ApplyAssigned((CompanionId)1));
+            Assert.True(CompanionCore.SwitchCompanion((CompanionId)1)); Assert.Equal(1, _s.ActiveCompanionId);
+            Assert.Equal((CompanionId)1, announced);
+        }
+        finally
+        {
+            CompanionCore.Switched -= on;
+            System.IO.File.Delete(folder);
+            if (hadFolder) System.IO.Directory.Move(backup, folder);
+            _s.SetCompanionPromptId(1, oldAssigned);
+        }
+    }
+
+    [Fact]
+    public void SwitchAppliesInstalledAssignmentBeforeAnnouncingTheCompanion()
+    {
+        var folder = System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName);
+        System.IO.Directory.CreateDirectory(folder);
+        var id = "roster-test-" + Guid.NewGuid().ToString("N");
+        var path = System.IO.Path.Combine(folder, id + ".json");
+        var oldPrompt = _s.CompanionPrompt;
+        var oldActive = _s.ActiveCommunityPromptId;
+        var oldAssigned = _s.GetCompanionPromptId(1);
+        var oldMode = _s.SlutModeEnabled;
+        try
+        {
+            _s.SlutModeEnabled = false;
+            _s.ActiveCompanionId = 0;
+            _s.SetCompanionPromptId(1, id);
+            System.IO.File.WriteAllText(path, "{\"Name\":\"Test persona\",\"PromptSettings\":{\"Personality\":\"a calm voice\"}}");
+            string? seen = null;
+            Action<CompanionId> on = _ => seen = _s.ActiveCommunityPromptId;
+            CompanionCore.Switched += on;
+            try { CompanionCore.SwitchCompanion((CompanionId)1); }
+            finally { CompanionCore.Switched -= on; }
+            Assert.Equal(id, seen);
+            Assert.Equal("a calm voice", _s.CompanionPrompt.Personality);
+            Assert.True(_s.CompanionPrompt.UseCustomPrompt);
+            CompanionCore.SwitchCompanion((CompanionId)0);
+            Assert.Equal(id, _s.ActiveCommunityPromptId); // unassigned leaves the current voice alone
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+            _s.SetCompanionPromptId(1, oldAssigned);
+            _s.CompanionPrompt = oldPrompt;
+            _s.ActiveCommunityPromptId = oldActive;
+            _s.SlutModeEnabled = oldMode;
+        }
+    }
 
     [Fact]
     public void TheModifierIsWpfsPerkTable()

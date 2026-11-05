@@ -87,10 +87,12 @@ public sealed class Sync7AudioTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreAudio.PlayOneShotProvider;
         var opener = MantraWindow.DroneOpener;
-        var volume = CoreSettings.Current.MasterVolume;
+        var settings = CoreSettings.Current;
+        var levels = (settings.MasterVolume, settings.MantraDroneVolume);
         var drone = new Drone();
         float? tone = null;
-        CoreSettings.Current.MasterVolume = master;
+        settings.MasterVolume = master;
+        settings.MantraDroneVolume = 30;
         MantraWindow.DroneOpener = _ => drone;
         CoreAudio.PlayOneShotProvider = (_, v, _, _, _) => tone = v;
         MantraWindow? window = null;
@@ -99,7 +101,8 @@ public sealed class Sync7AudioTests
             window = new MantraWindow();
             window.Show();
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(ToneWav.VlcVolume(0.05 * ToneWav.DronePeak * master / 100.0), drone.Last);
+            // port/7.2 DroneGain (#4080): level x drone dial x master from the first frame.
+            Assert.Equal(ToneWav.VlcVolume(MantraWindow.DroneGain(0.05f, 30, master) * ToneWav.DronePeak), drone.Last);
             typeof(MantraWindow).GetMethod("PlayTone", BindingFlags.NonPublic | BindingFlags.Static)!
                 .Invoke(null, new object[] { 440.0, 100 });
             Assert.Equal(0.15f * master / 100f, tone!.Value, 5);
@@ -109,51 +112,54 @@ public sealed class Sync7AudioTests
             window?.Close();
             CoreAudio.PlayOneShotProvider = previous;
             MantraWindow.DroneOpener = opener;
-            CoreSettings.Current.MasterVolume = volume;
+            (settings.MasterVolume, settings.MantraDroneVolume) = levels;
         }
         return Task.CompletedTask;
     });
+
+    /// <summary>The idle drone follows master changes on the float tick (port/7.2 polls MasterVolume
+    /// there), including a change made off the UI thread, and a stopped drone is never touched again.</summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task IdleDroneFollowsVolumeChangesAndUnhooksOnStop(bool panic) => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task IdleDroneFollowsVolumeChangesAndStaysStoppedAfterStop(bool panic) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var opener = MantraWindow.DroneOpener;
         var settings = CoreSettings.Current;
-        var volume = settings.MasterVolume;
+        var levels = (settings.MasterVolume, settings.MantraDroneVolume);
         var drone = new Drone();
         MantraWindow.DroneOpener = _ => drone;
         var window = new MantraWindow();
         var flags = BindingFlags.NonPublic | BindingFlags.Instance;
         void Call(string method) => typeof(MantraWindow).GetMethod(method, flags)!.Invoke(window, null);
-        bool Subscribed() => (typeof(ConditioningControlPanel.Models.AppSettings)
-            .GetField("PropertyChanged", flags)!.GetValue(settings) as Delegate)?
-            .GetInvocationList().Any(d => ReferenceEquals(d.Target, window)) == true;
+        void Tick() => typeof(MantraWindow).GetMethod("FloatTimer_Tick", flags)!.Invoke(window, new object?[] { null, EventArgs.Empty });
         try
         {
             settings.MasterVolume = 100;
+            settings.MantraDroneVolume = 100;
             Call("StartDrone");
             Assert.True(drone.Last > 0);
             settings.MasterVolume = 0;
+            Tick();
             Assert.Equal(0, drone.Last);
             settings.MasterVolume = 25;
-            Assert.Equal(ToneWav.VlcVolume(0.05 * ToneWav.DronePeak * 0.25), drone.Last);
+            Tick();
+            Assert.Equal(ToneWav.VlcVolume(MantraWindow.DroneGain(0.05f, 100, 25) * ToneWav.DronePeak), drone.Last);
             Task.Run(() => settings.MasterVolume = 0).GetAwaiter().GetResult();
-            Dispatcher.UIThread.RunJobs();
+            Tick();
             Assert.Equal(0, drone.Last);
-            Assert.True(Subscribed());
             if (panic)
             {
                 typeof(MantraWindow).GetField("_open", BindingFlags.NonPublic | BindingFlags.Static)!.SetValue(null, window);
                 MantraWindow.StopForPanic();
             }
             else Call("Cleanup");
-            Assert.False(Subscribed());
             var stopped = drone.Last;
             settings.MasterVolume = 100;
+            Tick();
             Assert.Equal(stopped, drone.Last);
         }
         finally
@@ -161,7 +167,7 @@ public sealed class Sync7AudioTests
             Call("Cleanup");
             window.Close();
             MantraWindow.DroneOpener = opener;
-            settings.MasterVolume = volume;
+            (settings.MasterVolume, settings.MantraDroneVolume) = levels;
         }
         return Task.CompletedTask;
     });
