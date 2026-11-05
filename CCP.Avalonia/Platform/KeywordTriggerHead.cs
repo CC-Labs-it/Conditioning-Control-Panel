@@ -22,7 +22,7 @@ internal static class KeywordTriggerHead
     private static int _generation;
     internal static void Sync()
     {
-        if (CoreSettings.Current.KeywordTriggersEnabled)
+        if (CoreSettings.Current.KeywordTriggersEnabled && KeywordAudioRuntime.HasAccess)
         {
             Engine.Start();
             if (!_subscribed && OperatingSystem.IsWindows() &&
@@ -122,14 +122,16 @@ internal sealed class KeywordAudioRuntime
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
-    internal void Start() { IsActive = true; _input.Clear(); }
+    // WPF KeywordTriggerService.cs:176-188: access gate, and Start must preserve a live buffer.
+    internal static bool HasAccess => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness");
+    internal void Start() { if (IsActive || !HasAccess) return; IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
 
     private bool Accept(string? process, bool own)
     {
         var s = CoreSettings.Current;
         if (!IsActive || !s.KeywordTriggersEnabled ||
-            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
+            !HasAccess) return false;
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
@@ -188,7 +190,8 @@ internal sealed class KeywordAudioRuntime
 
     private void Play(PlayAudioAction audio)
     {
-        if (string.IsNullOrEmpty(audio.FilePath)) return;
+        // WPF KeywordTriggerService.cs:1398,1841-1855: unsolicited audio requires an engine or session.
+        if ((!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) || string.IsNullOrEmpty(audio.FilePath)) return;
         var path = audio.FilePath;
         if (!Path.IsPathRooted(path))
         {
@@ -215,6 +218,8 @@ internal sealed class KeywordAudioRuntime
                 {
                     if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
                     token.ThrowIfCancellationRequested();
+                    // Old lane's stricter hold: also check after every repeat gap.
+                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return; }
                     _stop?.Invoke();
                     var last = i == count - 1;
                     _stop = CoreAudio.PlayStoppable(path,
