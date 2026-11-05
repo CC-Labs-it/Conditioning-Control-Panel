@@ -72,6 +72,18 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ================= Prize Counter frame ================= -->
+                <Border x:Name="FrameSection" CornerRadius="10" Padding="14,12,14,10" Margin="0,0,0,12"
+                        Background="#B3252542" BorderBrush="#33FFD700" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Str profile_customize_frame}" Foreground="#FFD700"
+                                   FontSize="12" FontWeight="Bold" Margin="0,0,0,3"/>
+                        <TextBlock Text="{loc:Str profile_customize_frame_hint}" Foreground="#8079A3"
+                                   FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                        <WrapPanel x:Name="FrameHost"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- ================= accent ================= -->
                 <Border CornerRadius="10" Padding="14,12,14,10" Margin="0,0,0,12"
                         Background="#B3252542" BorderBrush="#33FF69B4" BorderThickness="1">
