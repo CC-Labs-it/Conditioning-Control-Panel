@@ -97,11 +97,5 @@ public sealed class ContentHitTestTests
     private static bool Inside(Visual v, Point p, Visual root)
         => v.TranslatePoint(default, root) is { } tl && v.TranslatePoint(new Point(v.Bounds.Width, v.Bounds.Height), root) is { } br
            && new Rect(tl, br).Contains(p);
-    // Hold the entrance at its first frame until the test explicitly settles it.
-    // A fast runner must exercise the same pending animation as Windows CI.
-    private sealed class FrozenTime : TimeProvider
-    {
-        public override long GetTimestamp() => 0;
-    }
 
 }
