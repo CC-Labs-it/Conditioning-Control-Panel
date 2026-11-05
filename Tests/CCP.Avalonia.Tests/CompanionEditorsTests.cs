@@ -198,7 +198,8 @@ public sealed class CompanionEditorsTests
         settings.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         CoreSettings.Current.PerformanceMode = false;
-        var shell = new MainShellWindow { TabClock = new SteppedClock() };
+        var clock = new SteppedClock();
+        var shell = new MainShellWindow { TabClock = clock };
         ToolTip.SetServiceEnabled(shell, false);
         try
         {
@@ -232,6 +233,14 @@ public sealed class CompanionEditorsTests
                 Assert.True(button.IsEffectivelyVisible);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
+                // Advancing the clock before dispatch must not move the settled target.
+                clock.Now = TimeSpan.FromMilliseconds(620).Ticks;
+                shell.TickTabTransition();
+                HeadlessRendering.RenderLiveTree(shell);
+                Assert.Equal(at, button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value);
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)),
+                    $"{button.Content}: hit {hit?.GetType().Name} at {at}");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
