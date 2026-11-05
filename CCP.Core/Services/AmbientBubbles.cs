@@ -46,7 +46,7 @@ namespace ConditioningControlPanel.Services
     }
 
     /// <summary>
-    /// One plain ambient bubble (WPF <c>Bubble</c> with spec == null, FloatUp): the motion, wobble,
+    /// One ambient bubble (WPF BubbleService.cs:3314-3377,4081-4091): the motion, wobble,
     /// breathe and pop-burst math of <c>Bubble.AnimateFrame</c>, one logical step (~30 ms) per
     /// <see cref="Step"/>. Positions are WPF's: DIPs of the bubble's own screen (screen px / scaling),
     /// top-left of the <see cref="Size"/> box. The head only draws and hit-tests.
@@ -60,8 +60,15 @@ namespace ConditioningControlPanel.Services
         private double _treatMs;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
-        private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
+        private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
+
+        /// <summary>The concrete Bubbles v2 motion this bubble flies (never Mix).</summary>
+        public BubbleMotionStyle Motion { get; private set; } = BubbleMotionStyle.FloatUp;
+        /// <summary>WPF _spiralFade: opacity multiplier over the last stretch of a Spiral In path.</summary>
+        public double MotionFade { get; private set; } = 1.0;
+        private double _spiralCx, _spiralCy, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir;
+        private BubbleSpiralPath.State _spiral;
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
         /// <summary>WPF's fuse tick: 32 ms per logical step (BubbleService.cs:4149).</summary>
@@ -78,11 +85,14 @@ namespace ConditioningControlPanel.Services
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
         // WPF Bubble motion rows (:3334-3361, :4095-4122); FloatUp needs only _top.
-        public Chaos.ChaosMotion Motion { get; private set; }
-        private double _vx, _vy, _startY, _left, _right, _bottom;
+        // Ambient trigger bubbles fly their spec's chaos motion row; plain ambient bubbles use Motion (Bubbles v2).
+        public Chaos.ChaosMotion TriggerMotion { get; private set; }
+        private double _vx, _vy, _startY, _left, _right;
 
         public enum Result { Alive, Missed, Done, Detonated, Defused }
 
+        /// <summary>The linked shield-bearer (WPF BubbleService.cs:2708-2709,2730).</summary>
+        public AmbientBubble? Escort { get; set; }
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
@@ -145,19 +155,39 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF Bubble ctor for a plain ambient bubble. <paramref name="area"/> is the screen's
         /// working area in px, <paramref name="scaling"/> its DPI scale.</summary>
         public static AmbientBubble Spawn(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, AppSettings s, double? modScale, bool clickable)
+            double scaling, AppSettings s, double? modScale, bool clickable, MotionLevel level,
+            BubbleMotionStyle motion = BubbleMotionStyle.FloatUp)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = clickable };
             b.Size = BubbleSizing.Scale(r.Next(BubbleSizing.BaseMinDip, BubbleSizing.BaseMaxDip), s.BubblesSize, modScale);
             b._speed = 1.0 + r.NextDouble();   // 1.0 to 2.0 DIP/step
             var boost = s.BubbleSpeedBoost;      // dashboard speed slider, up to +500%
             if (boost > 0) b._speed *= 1.0 + Math.Clamp(boost, 0, 500) / 100.0;
+            // Bubbles v2: the owned styles honour MotionLevel.Reduced at half speed (FloatUp untouched).
+            if (motion == BubbleMotionStyle.Mix) motion = BubbleMotionStyle.FloatUp;
+            b.Motion = motion;
+            if (motion != BubbleMotionStyle.FloatUp) b._speed *= BubbleMotionRoll.SpeedMult(level);
             b._animType = r.Next(4);
             b._wobbleOffset = r.NextDouble() * 100;
             b.Angle = r.Next(360);
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
-            b.Y = (areaY + areaH) / scaling;   // start at the bottom
+            b._bottom = (areaY + areaH) / scaling + 50;
+            b.Y = motion == BubbleMotionStyle.Rain
+                ? areaY / scaling - b.Size          // Rain: start just above the top
+                : (areaY + areaH) / scaling;        // start at the bottom
+            if (motion == BubbleMotionStyle.SpiralIn)
+            {
+                // WPF: spawn on a ring around the screen centre at a random angle, either direction.
+                b._spiralCx = (areaX + areaW / 2.0) / scaling;
+                b._spiralCy = (areaY + areaH / 2.0) / scaling;
+                b._spiralR0 = BubbleSpiralPath.StartRadius(Math.Min(areaW, areaH) / scaling);
+                b._spiralRadial = b._speed * BubbleSpiralPath.RadialPerSpeed;
+                b._spiralTurns = BubbleSpiralPath.Turns(level);
+                b._spiralDir = r.Next(2) == 0 ? 1 : -1;
+                b._spiral = BubbleSpiralPath.Start(b._spiralR0, r.NextDouble() * Math.PI * 2);
+                b.PlaceOnSpiral();
+            }
             return b;
         }
 
@@ -178,7 +208,7 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;
-            b.Motion = motion;
+            b.TriggerMotion = motion;
             b._left = areaX / scaling;
             b._right = (areaX + areaW) / scaling - b.Size;
             b._bottom = (areaY + areaH) / scaling + 50;
@@ -297,7 +327,7 @@ namespace ConditioningControlPanel.Services
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
             bool exited;
-            switch (Motion)
+            switch (TriggerMotion)
             {
                 case Chaos.ChaosMotion.RainDown:
                     Y += _speed; X = _startX + offset; exited = Y > _bottom; break;
@@ -313,10 +343,31 @@ namespace ConditioningControlPanel.Services
                     X += _vx; Y = _startY + offset;
                     exited = _vx > 0 ? X > _right + Size : X < _left - Size; break;
                 default:
-                    Y -= _speed; X = _startX + offset; exited = Y < _top; break;
+                    switch (Motion)
+                    {
+                        case BubbleMotionStyle.SpiralIn:
+                            // Reaching the core is an exit like floating off the top: never a pop.
+                            _spiral = BubbleSpiralPath.Step(_spiral, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir, 1);
+                            PlaceOnSpiral();
+                            MotionFade = _spiral.Fade;
+                            return _spiral.Done ? Result.Missed : Result.Alive;
+                        case BubbleMotionStyle.Rain:
+                            Y += _speed;
+                            X = _startX + offset;
+                            return Y > _bottom ? Result.Missed : Result.Alive;
+                        default:
+                            Y -= _speed; X = _startX + offset; exited = Y < _top; break;
+                    }
+                    break;
             }
             if (!exited) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
+        }
+
+        private void PlaceOnSpiral()
+        {
+            X = _startX = _spiralCx + Math.Cos(_spiral.Angle) * _spiral.Radius - Size / 2.0;
+            Y = _spiralCy + Math.Sin(_spiral.Angle) * _spiral.Radius - Size / 2.0;
         }
     }
 

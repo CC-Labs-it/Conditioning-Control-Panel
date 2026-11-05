@@ -2,15 +2,14 @@
 // hover readout and the corner clock, driven by Core DescentCountdownService (App.DescentCountdown).
 // Plus the live zero opener of WPF Services/Descent/DescentShowDirector.cs:130-170.
 //
-// ponytail: the chrome dimming is not ported - DescentFuseChrome (WPF head) and this head's
-// RefreshThemeAwareElements do not share a dim step, so the neutral chrome never darkens here.
 // Zero handling and the bounded post-zero retry are in MainShellWindow.DescentFuseShows.cs. The
 // shows themselves are retired on both heads (DescentFuseWindow.ShowsRetired); room SFX remain a follow-up.
 using System;
-using Avalonia.Animation;
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Styling;
+using Avalonia.Markup.Xaml.MarkupExtensions;
+using Avalonia.Threading;
 using ConditioningControlPanel.Services.Descent;
 using Serilog;
 
@@ -21,6 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly IBrush FuseGoldBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xB0, 0x52));
         private static readonly IBrush FuseNeutralDigits = new SolidColorBrush(Color.FromRgb(0xC9, 0xC4, 0xD6));
 
+        private int _fuseLastDimStep;
+        private bool _fuseClosed;
         private TextBlock? _fuseTooltipDigits;
         private global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _fuseBreath;
 
@@ -31,12 +32,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var fuse = App.DescentCountdown;
                 if (fuse is null) return;
-                fuse.PhaseChanged += (_, e) => ApplyFusePhase(e.Current);
-                fuse.Tick += (_, remaining) => OnFuseTick(remaining);
+                void PhaseChanged(object? sender, DescentFusePhaseChangedEventArgs e) { if (!_fuseClosed) ApplyFusePhase(e.Current); }
+                void Tick(object? sender, TimeSpan remaining) { if (!_fuseClosed) OnFuseTick(remaining); }
+                var settings = CoreSettings.Current;
+                void SettingsChanged(object? sender, PropertyChangedEventArgs e)
+                {
+                    if (e.PropertyName != nameof(settings.DescentMigrationCompleted)) return;
+                    // WPF DescentMigrationService.cs:233-234 calls MainWindow.DescentFuse.cs:60-64.
+                    // An ack can arrive after zero has disarmed the countdown's timer.
+                    if (Dispatcher.UIThread.CheckAccess()) RefreshFuseChrome();
+                    else Dispatcher.UIThread.Post(RefreshFuseChrome);
+                }
+                fuse.PhaseChanged += PhaseChanged;
+                fuse.Tick += Tick;
                 InitializeFuseShows(fuse);
+                settings.PropertyChanged += SettingsChanged;
+                // WPF MainWindow.DescentFuse.cs:101-109 guards shutdown; also release subscriptions here.
+                Closed += (_, _) =>
+                {
+                    _fuseClosed = true;
+                    fuse.PhaseChanged -= PhaseChanged;
+                    fuse.Tick -= Tick;
+                    settings.PropertyChanged -= SettingsChanged;
+                    _fuseBreath?.Stop();
+                };
+                // AttachModSwitch already painted the live step; avoid a second palette rewrite.
+                _fuseLastDimStep = fuse.DimStep;
                 ApplyFusePhase(fuse.LastAnnouncedPhase);
             }
             catch (Exception ex) { Log.Debug("[Fuse] Header surfaces could not be wired: {E}", ex.Message); }
+        }
+
+        // WPF MainWindow.DescentFuse.cs:122-129,209-213: repaint only when the step changes.
+        private void RefreshFuseChrome()
+        {
+            if (_fuseClosed) return;
+            var step = App.DescentCountdown?.DimStep ?? 0;
+            if (step == _fuseLastDimStep) return;
+            _fuseLastDimStep = step;
+            RefreshThemeAwareElements();
         }
 
         private void OnFuseTick(TimeSpan remaining)
@@ -48,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (Named<TextBlock>("FuseCornerDigits") is { } digits) digits.Text = text;
                 ApplyFusePresence();
             }
+            RefreshFuseChrome();
         }
 
         /// <summary>WPF ApplyFusePhase: the whole surface state for a phase, from scratch.</summary>
@@ -85,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     else ToolTip.SetTip(spark, NewFuseTip(_fuseTooltipDigits = new TextBlock
                     {
                         Text = remaining,
-                        FontFamily = new FontFamily("Consolas, Courier New, monospace"),
+                        [!TextBlock.FontFamilyProperty] = new DynamicResourceExtension("Font.Mono"),
                         FontSize = 14,
                         Foreground = FuseNeutralDigits,
                     }));
@@ -109,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ApplyFusePresence();
                 }
             }
+            RefreshFuseChrome();
         }
 
         private static Border NewFuseTip(TextBlock digits) => new()
@@ -139,6 +175,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return null;
             }
             return DescentFuseWindow.Open(DescentShowKind.Live);
+        }
+        /// <summary>
+        /// WPF DescentShowDirector.RunFirstLightReveal (:428-475): bring the shell forward, then
+        /// <see cref="BeginSpiralFirstLight"/>. No arguments, no server; since the ceremony retired
+        /// the owner's capture rig is its only caller there too. No window = the reveal is skipped,
+        /// the unlock is not lost.
+        /// </summary>
+        internal static void RunFirstLightReveal()
+        {
+            if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(RunFirstLightReveal);
+                return;
+            }
+            try
+            {
+                Log.Information("[Fuse] First light: the spiral is being revealed to this account for the first time.");
+                if (Current is not { IsLoaded: true } main)
+                {
+                    Log.Debug("[Fuse] First light: no main window - the spiral is unlocked, the reveal is skipped.");
+                    return;
+                }
+                try
+                {
+                    if (main.WindowState == WindowState.Minimized) main.WindowState = WindowState.Normal;
+                    main.Activate();
+                }
+                catch (Exception ex) { Log.Debug("[Fuse] First light could not bring the window forward: {Error}", ex.Message); }
+                main.BeginSpiralFirstLight();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[Fuse] The first-light reveal failed on the way to the spiral room. The spiral itself is unlocked.");
+            }
+        }
+
+        /// <summary>WPF MainWindow.SpiralRoom.cs:96: navigate through the real door FIRST (the
+        /// tab's entry repaint must not stomp the reveal), then let the room play it.</summary>
+        internal void BeginSpiralFirstLight()
+        {
+            try
+            {
+                ShowTab(SpiralRoom.TabKey);
+                Named<Tabs.SpiralTabView>("SpiralTab")?.BeginFirstLight();
+            }
+            catch (Exception ex) { Log.Warning(ex, "[Spiral] the first light could not open in the room"); }
         }
     }
 }
