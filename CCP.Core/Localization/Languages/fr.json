@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Planification active",
+  "scheduler_started_body": "Séance démarrée automatiquement selon le planning.",
+  "scheduler_ended_title": "Planification",
+  "scheduler_ended_body": "La séance planifiée est terminée.",
   "title_select_companion_personality": "Choisir la personnalité IA de {0}",
   "filter_personality_json_files": "Fichiers JSON de personnalité",
   "audio_device_unnamed": "(sans nom)",

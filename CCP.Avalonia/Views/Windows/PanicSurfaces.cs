@@ -96,8 +96,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // all precede StopEngine. WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does,
             // so the leash task parks before StopEngine and before its lock card closes.
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
+            // WPF MainWindow.xaml.cs:1900-1902: panic is a manual stop for this schedule.
+            new("scheduler", sh => sh?.Scheduler.NoteManualStop(CoreSettings.Current, sh.SchedulerNow())),
             new("engine", _ => MainShellWindow.StopEngine(),
-                After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task"]),
+                After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "scheduler"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.

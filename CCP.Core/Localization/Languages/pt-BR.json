@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Agendamento ativo",
+  "scheduler_started_body": "Sessão iniciada automaticamente conforme o agendamento.",
+  "scheduler_ended_title": "Agendamento",
+  "scheduler_ended_body": "A sessão agendada terminou.",
   "title_select_companion_personality": "Selecionar personalidade de IA para {0}",
   "filter_personality_json_files": "Arquivos JSON de personalidade",
   "audio_device_unnamed": "(sem nome)",

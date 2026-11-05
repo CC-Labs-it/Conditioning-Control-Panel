@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Расписание активно",
+  "scheduler_started_body": "Сеанс автоматически запущен по расписанию.",
+  "scheduler_ended_title": "Расписание",
+  "scheduler_ended_body": "Запланированный сеанс завершён.",
   "title_select_companion_personality": "Выбрать личность ИИ для {0}",
   "filter_personality_json_files": "Файлы личности JSON",
   "audio_device_unnamed": "(без имени)",

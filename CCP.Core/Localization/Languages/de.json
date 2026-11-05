@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Zeitplan aktiv",
+  "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",
+  "scheduler_ended_title": "Zeitplan",
+  "scheduler_ended_body": "Geplante Sitzung beendet.",
   "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
   "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
   "audio_device_unnamed": "(unbenannt)",

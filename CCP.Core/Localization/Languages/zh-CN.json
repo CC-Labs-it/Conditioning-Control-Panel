@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "计划已启用",
+  "scheduler_started_body": "会话已按计划自动开始。",
+  "scheduler_ended_title": "计划",
+  "scheduler_ended_body": "计划会话已结束。",
   "title_select_companion_personality": "为{0}选择 AI 人格",
   "filter_personality_json_files": "人格 JSON 文件",
   "audio_device_unnamed": "(未命名)",

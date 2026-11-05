@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Scheduler Active",
+  "scheduler_started_body": "Session auto-started based on schedule.",
+  "scheduler_ended_title": "Scheduler",
+  "scheduler_ended_body": "Scheduled session ended.",
   "title_select_companion_personality": "Select AI Personality for {0}",
   "filter_personality_json_files": "Prompt JSON files",
   "audio_device_unnamed": "(unnamed)",

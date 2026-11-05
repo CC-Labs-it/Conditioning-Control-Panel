@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "일정 활성화",
+  "scheduler_started_body": "일정에 따라 세션이 자동으로 시작되었습니다.",
+  "scheduler_ended_title": "일정",
+  "scheduler_ended_body": "예정된 세션이 종료되었습니다.",
   "title_select_companion_personality": "{0}의 AI 성격 선택",
   "filter_personality_json_files": "성격 JSON 파일",
   "audio_device_unnamed": "(이름 없음)",
