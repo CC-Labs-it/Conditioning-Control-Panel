@@ -41,6 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
+        public void Freeze() => SubliminalWhisperShow.FreezeForVideo();
+        public void FinishFreeze(bool cancelled) => SubliminalWhisperShow.FinishVideoFreeze(cancelled);
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library
@@ -63,6 +65,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private WriteableBitmap? _fill;
         private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
         private long _watchedMs;
+
+        // WPF Services/Video/VideoService.cs:2783: the primary player's raw millisecond clock
+        // (raised through PlaybackTimeMsChanged below).
+        internal void ReportPlaybackTime(long milliseconds)
+        {
+            Interlocked.Exchange(ref _watchedMs, milliseconds);
+            RaisePlaybackTime(milliseconds);
+        }
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
         private bool _healUsed, _strict;
@@ -223,6 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
             _player.TimeChanged += (_, e) =>
             {
+                if (_player != live) return;
                 Interlocked.Exchange(ref _watchedMs, e.Time);
                 RaisePlaybackTime(e.Time);
             };
