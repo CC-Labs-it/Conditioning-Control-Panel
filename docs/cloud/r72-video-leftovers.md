@@ -65,3 +65,7 @@ Current review implementation references: `CCP.Avalonia/Views/Features/VideoFeat
 The video mod-switch test also reused a second app bootstrap without Inter. It now calls the fixture's existing `EnsureApp`, so either plate test can run first without a font-registration failure; all behavior assertions are unchanged.
 
 Review validation: Release build completed with zero errors; 16 focused plate, video and isolation tests passed with zero skips, and the Community test passed separately. Core tests: 4636 passed, 5 existing Vosk skips, 0 failed. Core guards, documentation self-check and the ten-language key-presence check passed. No WPF source or safety behavior changed.
+
+## Merge with port/7.2
+
+port/7.2 already shipped the same video plates and Test error dialog (fin4 re-cut, `VideoFeatureCompletionTests`). The merge keeps port/7.2's `VideoFeatureControl` implementation (`VideoHeroArt`/`VideoSideArt`, panic-closable error box) and takes only this lane's localized error copy (`title_error`, `msg_error_triggering_video_0`). The `BindFeaturePlates` call, the `HeroArt`/`SideArt` names and `VideoFeatureLeftoverTests` described above were dropped; the optional `heroWidth` parameter on `ModArt.BindFeaturePlates` remains.

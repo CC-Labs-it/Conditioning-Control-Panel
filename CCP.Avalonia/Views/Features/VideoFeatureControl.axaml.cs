@@ -5,6 +5,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
@@ -41,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields, and everything below reads them.
             InitializeComponent();
+            _heroWash = VideoHeroArt.Background;
+            _sideWash = VideoSideArt.Background;
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             CmbMonitor.DropDownOpened += (_, _) => PopulateMonitors();
@@ -66,7 +72,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnTestVideo.Click += BtnTestVideo_Click;
 
             LoadFromSettings();
-            Helpers.ModArt.BindFeaturePlates(this, "features/mandatory_videos.png", HeroArt, SideArt, heroWidth: 480);
         }
 
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
@@ -78,6 +83,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+            CoreMods.ModChanged += OnModChanged;
+            ApplyFeatureArt();
             RebindToCurrentSettings();
         }
 
@@ -85,8 +92,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            CoreMods.ModChanged -= OnModChanged;
+            ClearFeatureArt();
             Unhook();
             base.OnDetachedFromVisualTree(e);
+        }
+
+        private Bitmap? _heroArt, _sideArt;
+        private readonly IBrush? _heroWash, _sideWash; // the authored plates, restored on detach
+
+        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_hooked != null) ApplyFeatureArt();
+        });
+
+        private void ApplyFeatureArt()
+        {
+            // WPF Features/VideoFeatureControl.xaml.cs:563-586, .xaml:18/403: decode, paint, mod repaint.
+            Paint(VideoHeroArt, ref _heroArt, 480, true);
+            Paint(VideoSideArt, ref _sideArt, 800, false);
+        }
+
+        private static void Paint(Border plate, ref Bitmap? previous, int width, bool hero)
+        {
+            var art = Helpers.ModArt.TryLoad("features/mandatory_videos.png", width);
+            if (art == null) return; // WPF null resolve keeps the authored plate standing.
+            plate.Background = new ImageBrush(art)
+            {
+                Stretch = Stretch.UniformToFill,
+                AlignmentX = hero ? AlignmentX.Right : AlignmentX.Center,
+                Opacity = hero ? 0.9 : 1,
+            };
+            previous?.Dispose();
+            previous = art;
+        }
+
+        private void ClearFeatureArt()
+        {
+            VideoHeroArt.Background = _heroWash;
+            VideoSideArt.Background = _sideWash;
+            _heroArt?.Dispose(); _sideArt?.Dispose();
+            _heroArt = _sideArt = null;
         }
 
         private void OnCurrentReplaced() => Dispatcher.UIThread.Post(RebindToCurrentSettings);
@@ -429,17 +475,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
         internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
 
-        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = ReportFault(TestVideoAsync());
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = ShowTestFailure(TestVideoAsync());
 
-        // WPF BtnTestVideo_Click's catch: log, then tell the user ("Error triggering video: ...").
-        private async Task ReportFault(Task run)
+        private static readonly HashSet<MessageDialog> TestErrors = new();
+
+        internal static void CloseTestErrorsForPanic()
+        {
+            foreach (var dialog in TestErrors.ToArray()) dialog.Close();
+        }
+
+        // WPF Features/VideoFeatureControl.xaml.cs:530-533: report Test errors with one OK.
+        private async Task ShowTestFailure(Task run)
         {
             try { await run; }
             catch (Exception ex)
             {
-                Serilog.Log.Error(ex, "Error in BtnTestVideo_Click");
-                if (TopLevel.GetTopLevel(this) is Window owner)
-                    await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_error"), Loc.GetF("msg_error_triggering_video_0", ex.Message));
+                Log.Error(ex, "Error in BtnTestVideo_Click");
+                if (TopLevel.GetTopLevel(this) is not Window owner) return;
+                var dialog = new MessageDialog(Loc.Get("title_error"), Loc.GetF("msg_error_triggering_video_0", ex.Message), showCancel: false);
+                TestErrors.Add(dialog);
+                try { await dialog.ShowDialogSafe(owner); }
+                finally { TestErrors.Remove(dialog); }
             }
         }
 
