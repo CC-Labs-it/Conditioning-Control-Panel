@@ -23,7 +23,9 @@ public partial class LeashTabView : UserControl
         _resolve = service;
         InitializeComponent();
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
-        DetachedFromVisualTree += (_, _) => Unsubscribe();
+        // WPF Controls/Leash/LeashDrawerSection.cs:37-59: bind when hosted and release when detached.
+        AttachedToVisualTree += (_, _) => { LeashHead.ServiceChanged += OnServiceChanged; OnServiceChanged(); };
+        DetachedFromVisualTree += (_, _) => { LeashHead.ServiceChanged -= OnServiceChanged; Unsubscribe(); };
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) Unsubscribe(); };
     }
 
@@ -42,6 +44,15 @@ public partial class LeashTabView : UserControl
     {
         if (_service != null) { _service.SnapshotChanged -= OnSnapshot; _service.ReceiptsChanged -= Render; }
         foreach (var card in _holders.Values) card.Fold();
+    }
+    private void OnServiceChanged()
+    {
+        if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(OnServiceChanged);
+            return;
+        }
+        if (IsEffectivelyVisible && VisualRoot != null) OnShown();
     }
     private void OnSnapshot(LeashSnapshot _) => Render();
 
