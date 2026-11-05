@@ -114,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
             new("roster-personality", _ => Controls.Companion.WorkshopAccordion.CloseRosterMessagesForPanic()),
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
+            new("screen-shake", _ => Deeper.ScreenShake.Stop()),
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("chaster-booked-pop", _ => Overlays.ChasterBookedPop.CloseAll()),
             // WPF Features/VideoFeatureControl.xaml.cs:533 error box; also close it on panic.

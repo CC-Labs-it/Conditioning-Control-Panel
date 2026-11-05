@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -42,6 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         public WriteableBitmap? Bitmap { get; private set; }
         public int FrameCount => Volatile.Read(ref _frames);
+        private readonly TaskCompletionSource _secondFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        /// <summary>Completes when the second frame is shown (tests await it instead of polling).</summary>
+        internal Task SecondFrame => _secondFrame.Task;
         internal event Action? FramePresented;
         public bool Freed { get { lock (_lock) return _buffer == IntPtr.Zero; } }
 
@@ -104,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 for (var y = 0; y < _height; y++)
                     Unsafe.CopyBlockUnaligned(ref At(fb.Address + y * fb.RowBytes), ref At(_buffer + y * rowBytes), (uint)rowBytes);
             }
-            Interlocked.Increment(ref _frames);
+            if (Interlocked.Increment(ref _frames) >= 2) _secondFrame.TrySetResult();
             _frame();
             FramePresented?.Invoke();
         }
