@@ -30,7 +30,7 @@ public sealed class AmbientBubblesTests
     {
         var s = new AppSettings();
         var f = new AmbientBubbleField();
-        var b = AmbientBubble.Spawn(new Random(1), 0, 0, 0, 1920, 1080, 1, s, null, true);
+        var b = AmbientBubble.Spawn(new Random(1), 0, 0, 0, 1920, 1080, 1, s, null, true, MotionLevel.Full);
         Assert.Equal(1080, b.Y);                                // WPF: starts at the bottom
         Assert.InRange(b.Size, BubbleSizing.BaseMinDip, BubbleSizing.BaseMaxDip);
         f.Bubbles.Add(b);
@@ -41,7 +41,7 @@ public sealed class AmbientBubblesTests
         for (var i = 0; i < 2000 && f.Bubbles.Count > 0; i++) missed += f.Step();
         Assert.Equal(1, missed);                                // left through the top
 
-        var p = AmbientBubble.Spawn(new Random(2), 0, 0, 0, 1920, 1080, 1, s, null, true);
+        var p = AmbientBubble.Spawn(new Random(2), 0, 0, 0, 1920, 1080, 1, s, null, true, MotionLevel.Full);
         f.Bubbles.Add(p);
         Assert.Equal(5, f.Pop(p, s));
         Assert.Equal(0, f.Pop(p, s));                           // never twice
@@ -57,7 +57,7 @@ public sealed class AmbientBubblesTests
         var s = new AppSettings();
         var f = new AmbientBubbleField();
         var r = new Random(3);
-        while (f.CanSpawn(s)) f.Bubbles.Add(AmbientBubble.Spawn(r, 0, 0, 0, 1920, 50000, 1, s, null, true));
+        while (f.CanSpawn(s)) f.Bubbles.Add(AmbientBubble.Spawn(r, 0, 0, 0, 1920, 50000, 1, s, null, true, MotionLevel.Full));
         Assert.Equal(40, f.Bubbles.Count);
         f.Step();
         var before = GC.GetAllocatedBytesForCurrentThread();
