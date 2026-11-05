@@ -146,10 +146,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "quiz_once" when CoreEngine.PopQuiz != null => () => CoreEngine.PopQuiz?.Show(),
             "count_once" when CoreEngine.BubbleCount != null => () => CoreEngine.BubbleCount?.Trigger(forceTest: true),
             "mantra" => () => { }, // Core returns this intent to the existing spoken-mantra funnel.
-            "mute" => () => ApplyVoiceMute(true),
-            "unmute" => () => ApplyVoiceMute(false),
-            "louder" => () => SetVoiceMasterVolume(CoreSettings.Current.MasterVolume + 15),
-            "quieter" => () => SetVoiceMasterVolume(CoreSettings.Current.MasterVolume - 15),
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
             "takeover_on" => () => Autonomy.Start(),
@@ -162,29 +158,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _ => null,
         };
 
-        // WPF MainWindow.Patreon.cs:2233 ApplyVoiceMute / :2286 AdjustMasterVolume. Keep the last audible
-        // volume across repeated mutes; unmute without a prior mute uses WPF's 70% fallback.
-        private int _voicePreMuteVolume;
-
-        private void ApplyVoiceMute(bool muted)
-        {
-            var s = CoreSettings.Current;
-            if (muted && s.MasterVolume > 0) _voicePreMuteVolume = s.MasterVolume;
-            s.SubAudioEnabled = !muted;
-            s.AvatarMuted = muted;
-            if (muted) _avatarTubeWindow?.StopVoiceLineAudio();
-            SetVoiceMasterVolume(muted ? 0 : _voicePreMuteVolume > 0 ? _voicePreMuteVolume : 70);
-            SyncHero();   // WPF SyncQuickControlsUI -> CompanionRoom?.SyncHero() (MainWindow.Patreon.cs:2209)
-        }
-
-        private void SetVoiceMasterVolume(int value)
-        {
-            CoreSettings.Current.MasterVolume = Math.Clamp(value, 0, 100);
-            CoreSettings.Save();
-            Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
-            MandatoryVideoOverlay.Instance.UpdateVolume();
-            Controls.AppSettings.AudioSettingsBinder.RaiseChanged();
-        }
+        // Mute, unmute, louder and quieter run MainShellWindow.Patreon.cs ApplyVoiceMute / AdjustMasterVolume
+        // (WPF MainWindow.Patreon.cs:2233 / :2286, Core VoiceAudioState keeps the pre-mute volume and the 70% fallback).
 
         /// <summary>WPF TriggerPanicFromRemote: the spoken safe word. Hard rule 6 (owner, 2026-10-22, WPF
         /// 769373c28): it reaches exactly as far as the panic key (Core VoicePanicReach). Under Lockdown or
