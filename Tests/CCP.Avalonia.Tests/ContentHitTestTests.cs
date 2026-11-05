@@ -18,7 +18,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>Keincheck's hit_test put points in the tab content on the window template's Panel. This
 /// proves real pointer input in the content area at the default size reaches the control drawn
-/// there after entrances: every visible, enabled, unclipped button in four tabs is the hit-test result at its own
+/// there: every visible, enabled, unclipped button in four tabs is the hit-test result at its own
 /// centre and receives a headless press there. The press is swallowed at the button's tunnel so no
 /// click side effect runs.</summary>
 public sealed class ContentHitTestTests
@@ -69,12 +69,7 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
-                    w.MouseMove(p);
-                    HeadlessRendering.RenderLiveTree(w);
-                    p = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
                     var hit = w.InputHitTest(p) as Visual;
-                    // Hover/press can replace the template and detach the visual returned by this hit.
-                    var hitsButton = hit is not null && (hit == b || b.IsVisualAncestorOf(hit));
                     // On a recurrence, report timing and the visuals held in the rendered frame.
                     var probe = $"{sinceShow.ElapsedMilliseconds} ms after ShowTab, under {string.Join(">", w.GetVisualsAt(p).Take(6).Select(v => $"{v.GetType().Name}/{(v as Control)?.Name}"))}";
                     bool pressed = false;
@@ -84,7 +79,7 @@ public sealed class ContentHitTestTests
                     w.MouseUp(p, MouseButton.Left);
                     Dispatcher.UIThread.RunJobs();
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
-                    if (!hitsButton || !pressed)
+                    if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
                         misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}; {probe}");
                 }
                 Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
