@@ -240,6 +240,7 @@ public sealed class V2GetItRowTests
             EnsureApp();
             var s = CoreSettings.Current;
             var (id, token, offline, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted);
+            var unified = CoreAccount.UnifiedUserId;
             var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
             var secrets = new System.Collections.Generic.Dictionary<string, string?>();
             CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
@@ -263,6 +264,7 @@ public sealed class V2GetItRowTests
                 Assert.Equal(1, opened);
 
                 (s.UnifiedId, s.AuthToken) = ("u-bubbles", "t-bubbles");
+                CoreAccount.UnifiedUserId = "u-bubbles";   // ownership binds to the session account (WPF App.UnifiedUserId)
                 row.Apply();
                 Assert.Equal(V2PurchaseRowState.Unavailable, row.Row.State);
                 PrizeOwnership.ApplySnapshot("u-bubbles", 1, new[] { PrizeOwnership.BubbleRain });
@@ -283,6 +285,7 @@ public sealed class V2GetItRowTests
             finally
             {
                 host?.Close();
+                CoreAccount.UnifiedUserId = unified;
                 PrizeOwnership.ResetHeld();
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted) = (id, token, offline, seam);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);

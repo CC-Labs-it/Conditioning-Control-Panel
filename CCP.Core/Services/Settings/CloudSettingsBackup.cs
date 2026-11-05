@@ -395,15 +395,19 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The "Backup now" upload (WPF BackupSettingsAsync with force: true). False when there is
         /// no account, no token, offline, over budget, or the server refused.</summary>
-        public async Task<bool> BackupAsync(AppSettings settings)
+        public async Task<bool> BackupAsync(AppSettings settings) => (await BackupWithStatusAsync(settings)).Ok;
+
+        /// <summary><see cref="BackupAsync"/> plus the refusing status (413 = too large: the automatic backup
+        /// stops for the session, WPF ProfileSyncService.cs:4582-4588); null status when nothing was sent.</summary>
+        internal async Task<(bool Ok, HttpStatusCode? Refused)> BackupWithStatusAsync(AppSettings settings)
         {
-            if (settings.OfflineMode) return false;
+            if (settings.OfflineMode) return (false, null);
             var unifiedId = settings.UnifiedId;
-            if (string.IsNullOrEmpty(unifiedId)) return false;
+            if (string.IsNullOrEmpty(unifiedId)) return (false, null);
             if (string.IsNullOrEmpty(settings.AuthToken))
             {
                 Log.Debug("Settings backup skipped (no auth token)");
-                return false;
+                return (false, null);
             }
             try
             {
@@ -414,7 +418,7 @@ namespace ConditioningControlPanel.Services
                 if (!slot.Ok)
                 {
                     Log.Warning("Settings backup skipped: the current backup could not be read, so its file paths could not be kept");
-                    return false;
+                    return (false, null);
                 }
                 CarryPathFields(obj, SlotSettings(slot.Backup));
                 var encoded = SettingsBackupBudget.Encode(obj);
@@ -423,21 +427,21 @@ namespace ConditioningControlPanel.Services
                     Log.Warning("Settings backup skipped: {Size} bytes encoded is over the {Max} budget even after trimming [{Trimmed}]. Largest: {Largest}",
                         encoded.Base64.Length, SettingsBackupBudget.MaxEncodedBytes, string.Join(",", encoded.Trimmed),
                         string.Join(", ", SettingsBackupBudget.LargestProperties(obj).Select(x => $"{x.Name}={x.Bytes}")));
-                    return false;
+                    return (false, null);
                 }
                 if (encoded.Trimmed.Count > 0)
                     Log.Information("Settings backup trimmed to fit: left out {Trimmed}", string.Join(",", encoded.Trimmed));
 
                 var body = new { unified_id = unifiedId, settings_data = encoded.Base64, app_version = CoreReleaseContent.AppVersion };
                 using var response = await PostAsync("/v2/user/backup-settings", settings, body);
-                if (!await SucceededAsync(response, "Settings backup")) return false;
+                if (!await SucceededAsync(response, "Settings backup")) return (false, response.StatusCode);
                 Log.Information("Settings backed up to cloud ({Size} bytes compressed)", encoded.Compressed.Length);
-                return true;
+                return (true, null);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Settings backup failed");
-                return false;
+                return (false, null);
             }
         }
 

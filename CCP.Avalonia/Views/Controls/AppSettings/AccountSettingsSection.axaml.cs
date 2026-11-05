@@ -511,6 +511,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             label.Key = "btn_backing_up";
             try
             {
+                App.CloudAutoBackup?.NoteForced();   // WPF BackupSettingsAsync(force: true) stamps the debounce
                 if (await NewBackup().BackupAsync(CoreSettings.Current))
                 {
                     await Tell(Owner, Loc.Get("title_backup_complete"), Loc.Get("msg_settings_backed_up_to_cloud_successfully"));

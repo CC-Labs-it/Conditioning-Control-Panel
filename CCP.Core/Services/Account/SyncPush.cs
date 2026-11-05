@@ -412,11 +412,8 @@ namespace ConditioningControlPanel.Services
             {
                 if (reply["total_conditioning_minutes"] is { Type: JTokenType.Integer or JTokenType.Float } minutes)
                 {
-                    if (minutes.Value<double>() > s.TotalConditioningMinutes)
-                    {
-                        s.TotalConditioningMinutes = minutes.Value<double>();
-                        LifetimeLifted?.Invoke();
-                    }
+                    // Take-higher through ProfileAdopt, whose ConditioningMinutesLifted the head rebaselines on.
+                    if (ProfileAdopt.AdoptConditioningMinutes(s, minutes.Value<double>())) LifetimeLifted?.Invoke();
                     _knownProgress |= SyncBody.Field.TotalConditioningMinutes;
                 }
                 if (reply["companion_progress"] is JObject companions)

@@ -70,6 +70,9 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         /// <summary>WPF AchievementService.cs:947-954: flush even when an autosave already cleared IsDirty.</summary>
+        /// <summary>The automatic cloud settings backup (WPF ProfileSyncService.BackupSettingsAsync, force: false).</summary>
+        internal static AutoSettingsBackup? CloudAutoBackup { get; private set; }
+
         internal static void SaveAchievementsOnExit(DispatcherTimer? timer, AchievementEngine? engine)
         {
             try { timer?.Stop(); }
@@ -591,6 +594,10 @@ namespace ConditioningControlPanel.Avalonia
                 if (OperatingSystem.IsWindows()) Platform.DuckRecovery.RecoverWpfJournalAtLaunch(CorePaths.UserData);
                 // Secrets first: SettingsService's auth-token migration asks CoreSecrets.HasStore on load.
                 Platform.PrizeOwnership.WatchShutdown();
+                // WPF App.xaml.cs:696-697: every settings save (and the exit flush) offers the automatic cloud
+                // backup; AutoSettingsBackup holds WPF's five-minute debounce, daily-backup guard and 413 stop.
+                CloudAutoBackup = new AutoSettingsBackup(() => Views.Controls.AppSettings.AccountSettingsSection.NewBackup());
+                CoreSettingsHooks.CloudBackup = () => CloudAutoBackup.RunAsync(CoreSettings.Current, Settings?.RestoredFromBackup == true);
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
@@ -762,8 +769,9 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown, DescentReader = Descent, LifetimeLifted = () => FeatureDayLog?.Rebaseline("v2 cloud merge"),
-                          Prizes = Platform.PrizeOwnership.Feed };
+                        // A minutes lift rebaselines the day log once, through ProfileAdopt.ConditioningMinutesLifted
+                        // (RebaselineDayLogAfterCloudMerge), for the profile read and the sync reply alike.
+                        { Countdown = DescentCountdown, DescentReader = Descent, Prizes = Platform.PrizeOwnership.Feed };
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));

@@ -246,13 +246,14 @@ namespace ConditioningControlPanel.Services
         /// to today (the "1,000-minute day" bug).</summary>
         public static event Action<AppSettings>? ConditioningMinutesLifted;
 
-        // WPF ProfileSyncService: cloud minutes can lift the local total, never reduce it.
-        private static void AdoptConditioningMinutes(AppSettings settings, double? cloudMinutes)
+        // WPF ProfileSyncService: cloud minutes can lift the local total, never reduce it. True when it lifted.
+        internal static bool AdoptConditioningMinutes(AppSettings settings, double? cloudMinutes)
         {
             if (cloudMinutes is not { } minutes || !double.IsFinite(minutes)
-                || minutes <= settings.TotalConditioningMinutes) return;
+                || minutes <= settings.TotalConditioningMinutes) return false;
             settings.TotalConditioningMinutes = minutes;
             ConditioningMinutesLifted?.Invoke(settings);
+            return true;
         }
     }
 }
