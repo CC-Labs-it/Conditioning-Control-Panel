@@ -70,11 +70,11 @@ public sealed class CompanionShellEventsTests
         var overlay = shell.GetLogicalDescendants().OfType<CompanionHeroCard>().Single()
             .FindControl<Border>("PrgCompanion0FlashOverlay")!;
         var header = shell.FindControl<Border>("XPBarFlashOverlay")!;
-        var clock = new SharedDeeperThemeTests.StepClock();
+        var clock = new TestAnimationClock();
         foreach (var bar in new[] { header, overlay })
         {
             Assert.Equal(0, bar.Opacity);
-            bar.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+            bar.SetValue(TestAnimationClock.Property, clock.Instance);
         }
         CompanionCore.DrainTick(DateTime.UtcNow);
         // WPF MainWindow.Companion.cs:116-130: 250 ms EaseOut forward, then auto-reverse.

@@ -81,9 +81,6 @@ public sealed class BubbleCountGameTests
 
                     async Task<BubbleCountWindow> Open(bool strict)
                     {
-                        var visibleOnFrame = new TaskCompletionSource<bool>(); // WPF BubbleCountWindow.xaml.cs:1398-1401 hides the game at completion.
-                        using var opened = Window.WindowOpenedEvent.AddClassHandler<BubbleCountWindow>((w, _) =>
-                            w.VideoImage.PropertyChanged += (_, e) => { if (e.Property == Image.SourceProperty && w.VideoImage.Source != null) visibleOnFrame.TrySetResult(w.Topmost && w.IsVisible); });
                         s.BubbleCountStrictLock = strict;
                         var ready = new TaskCompletionSource<BubbleCountWindow>();
                         using var opened = Window.WindowOpenedEvent.AddClassHandler<BubbleCountWindow>((w, _) =>
