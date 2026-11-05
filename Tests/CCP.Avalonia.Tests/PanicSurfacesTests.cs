@@ -86,6 +86,7 @@ public sealed class PanicSurfacesTests
         "emergency-exit",
         "intake",
         "leash-task",
+        "deeper-tutorial",
         "tour",
         "games",
         "first-show", "quest-stamps", "quest-voice",
