@@ -24,6 +24,15 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Pages
             if (CompanionPageHost.Room(_owner)?.FindName("PermissionsZone") is AiPermissionsGrid grid)
                 CompanionPageHost.Adopt(grid, PermissionsHost);
             CompanionPageHost.Tab(_owner)?.Vm.Sync();
+            ChkAsks.IsChecked = App.Settings?.Current?.CompanionAsksEnabled != false;
+        }
+
+        private void ChkAsks_Click(object sender, RoutedEventArgs e)
+        {
+            if (App.Settings?.Current is not { } settings) return;
+            settings.CompanionAsksEnabled = ChkAsks.IsChecked == true;
+            try { App.Settings.Save(); }
+            catch (System.Exception ex) { App.Logger?.Debug("Asks toggle not saved: {E}", ex.Message); }
         }
 
         private void OpenTakeover_Click(object sender, RoutedEventArgs e) => _owner?.ShowTab("bambitakeover");
