@@ -765,7 +765,15 @@ namespace ConditioningControlPanel
         /// startup-order accident can never silently mute the app.
         /// </summary>
         public static bool PerkNotificationsSuppressed
-            => Settings?.Current?.SuppressPerkNotifications == true;
+            => !Models.PerkEffectsRules.ShowsCards(Settings?.Current?.PerkEffects ?? Models.PerkEffectsMode.Full);
+
+        /// <summary>
+        /// False only when Perk effects is Off (owner, 2026-11-05): no Pink Rush screen wash, no
+        /// lucky gold glow, no lucky or Sparkle Boost sparkles. Same null-safe, read-at-raise-time
+        /// contract as <see cref="PerkNotificationsSuppressed"/>; payouts never read it.
+        /// </summary>
+        public static bool PerkEffectsShown
+            => Models.PerkEffectsRules.ShowsVisuals(Settings?.Current?.PerkEffects ?? Models.PerkEffectsMode.Full);
 
         /// <summary>
         /// Whether a conditioning session is currently running. Set by MainWindow.

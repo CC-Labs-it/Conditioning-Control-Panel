@@ -1104,7 +1104,10 @@ public class BubbleService : IDisposable
         // that paid nothing gets the ordinary pop: no gold glow, no lucky sparkle burst.
         var paidLucky = isLucky && paidXp > 0;
         var hasSparkleBoost = (App.SkillTree?.GetSparkleBoostTier() ?? 0) > 0 && (App.Settings?.Current?.FlashGlowEnabled ?? true);
-        bubble.SetLucky(paidLucky, hasSparkleBoost);
+        // Perk effects Off (owner, 2026-11-05): a plain pop, no gold glow or sparkle burst. The
+        // 20x and the boost XP were paid above either way.
+        var perkFx = App.PerkEffectsShown;
+        bubble.SetLucky(paidLucky && perkFx, hasSparkleBoost && perkFx);
 
         // Play appropriate sound (the avatar easter-egg pop comes through 50% louder)
         PlayPopSound(paidLucky, bubble.AvatarPopVolumeMult);

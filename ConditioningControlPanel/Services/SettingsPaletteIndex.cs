@@ -758,8 +758,8 @@ namespace ConditioningControlPanel.Services
             Setting("intake_nudge", "label_intake_nudge_enabled", "🔔", "notifications",
                     new[] { "ChkIntakeNudge" }, "set2_section_notifications", "intake pass reminder nudge weekly");
             Setting("suppress_perk_notifications", "label_suppress_perk_notifications", "🔕", "notifications",
-                    new[] { "ChkSuppressPerkNotifications" }, "set2_section_notifications",
-                    "silence mute perk popup toast lucky 10x 20x xp multiplier pink rush quest complete ping sound immersion");
+                    new[] { "CmbPerkEffects" }, "set2_section_notifications",
+                    "perk effects silence mute popup toast lucky 10x 20x xp multiplier pink rush wash glow sparkle sparkly quest complete ping sound immersion off");
             Setting("banner_pool", "banner_pool_enabled", "💬", "notifications",
                     new[] { "ChkBannerPool" }, "set2_section_notifications",
                     "banner header line pool taglines trivia rotating message");
