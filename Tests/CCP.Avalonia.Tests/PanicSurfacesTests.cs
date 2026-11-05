@@ -95,6 +95,7 @@ public sealed class PanicSurfacesTests
         "voice-capture",
         "companion-conversation",
         "ai-followups",
+        "billboard-calendar",
         "blink-trainer",
         "shell-hero",
         "camera",
