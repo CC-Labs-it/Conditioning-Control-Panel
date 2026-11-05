@@ -675,9 +675,13 @@ namespace ConditioningControlPanel
         private void RefreshEscHint()
         {
             if (TxtEscHint == null) return;
-            TxtEscHint.Text = EscClosesCard
-                ? Loc.Get("label_press_esc_to_close")
-                : Loc.GetF("label_strict_only_panic_key_closes", App.Settings?.Current?.PanicKey ?? "?");
+            // #1547: Escape is the default panic key, so on a strict card it still ends the card
+            // through panic. Say so instead of "only the panic key (Escape) closes this".
+            var panicKey = App.Settings?.Current?.PanicKey;
+            var hintKey = LockCardStrictCopy.HintKey(EscClosesCard, panicKey);
+            TxtEscHint.Text = hintKey == LockCardStrictCopy.HintOnlyPanicKey
+                ? Loc.GetF(hintKey, panicKey ?? "?")
+                : Loc.Get(hintKey);
         }
 
         private void Window_KeyDown(object sender, KeyEventArgs e)
