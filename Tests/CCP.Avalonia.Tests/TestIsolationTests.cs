@@ -10,6 +10,14 @@ namespace CCP.Avalonia.Tests;
 /// seams that leaked before (PLAYBOOK P02) and really puts each one back.</summary>
 public class TestIsolationTests
 {
+    [Fact]
+    public void HeadlessBootstrapIncludesShippedFontFallbacks() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Comic Sans MS, Segoe UI", "Consolas, Courier New" })
+            Assert.NotNull(new global::Avalonia.Media.Typeface(family,
+                weight: global::Avalonia.Media.FontWeight.Black).GlyphTypeface);
+    });
+
     /// <summary>The first test in a testhost decides the Avalonia platform for every later one. A setup
     /// with headless drawing (no Skia) made later text measure differently and bitmaps read garbage, so
     /// ChasterRaffleCardLayout, BlinkTrainerSession and EmiBookDemo failed only after it (flake-layout).</summary>
@@ -31,7 +39,66 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Fact]
+    public void SharedPlatformUsesTheProductionFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+            var face = new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                weight: global::Avalonia.Media.FontWeight.Bold);
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyph), "bundled bold Inter must resolve without system fonts");
+            Assert.Equal("Inter", glyph!.FamilyName);
+        });
+
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
+
+    // Run this alone in a fresh testhost: no fixture may decide the process-wide font setup.
+    [Fact]
+    public System.Threading.Tasks.Task TheHookInitializesTheShippedFontsBeforeAnyFixture() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            foreach (var name in new[] { "fonts:Inter#Inter", "Fredoka, Segoe UI" })
+            {
+                var face = new global::Avalonia.Media.Typeface(name);
+                Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyphs), name);
+                Assert.True(glyphs!.CharacterToGlyphMap.TryGetGlyph('A', out var glyph));
+                Assert.NotEqual((ushort)0, glyph);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        });
+
+    [Fact]
+    public void EveryTestStartsWithPortableFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+        foreach (var (family, expected) in new[]
+        {
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter, "Inter"),
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka, "Fredoka Light"),
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono, "Noto Sans Mono"),
+        })
+        {
+            var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family),
+                global::Avalonia.Media.FontStyle.Normal, global::Avalonia.Media.FontWeight.Bold);
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyphs), family);
+            Assert.Equal(expected, glyphs!.FamilyName);
+        }
+    });
+
+    [Fact]
+    public void TheFirstTestGetsTheApplicationsFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.NotNull(global::Avalonia.Application.Current);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+            // Shell construction measures this label before any test can repair a missing font setup.
+            Assert.NotNull(new ConditioningControlPanel.Avalonia.Controls.PremiumSpark());
+        });
 
     [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
@@ -41,6 +108,7 @@ public class TestIsolationTests
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
     [InlineData(typeof(CoreMods), nameof(CoreMods.MakeModAwareProvider))]
+    [InlineData(typeof(AvApp), nameof(AvApp.Notifications))]
     [InlineData(typeof(AvApp), nameof(AvApp.Ai))]
     [InlineData(typeof(AvApp), nameof(AvApp.Brain))]
     [InlineData(typeof(ConditioningControlPanel.Services.LockdownService), nameof(ConditioningControlPanel.Services.LockdownService.Current))]
@@ -57,10 +125,12 @@ public class TestIsolationTests
         var before = hadFile ? File.ReadAllText(settingsFile) : null;
         var user = CoreAccount.UnifiedUserId;
         var provider = CoreSettings.ServiceProvider;
+        var notifications = AvApp.Notifications;
         var chat = CoreSettings.Current.AiChatEnabled;
 
         var snapshot = ProcessStateSnapshot.Take();
         CoreAccount.UnifiedUserId = "leaked-user";
+        AvApp.Notifications = new();
         CoreSettings.Current.AiChatEnabled = !chat;
         CoreSettings.ServiceProvider = () => null;
         File.WriteAllText(settingsFile, "{\"leaked\":true}");
@@ -71,6 +141,7 @@ public class TestIsolationTests
 
         Assert.Equal(user, CoreAccount.UnifiedUserId);
         Assert.Same(provider, CoreSettings.ServiceProvider);
+        Assert.Same(notifications, AvApp.Notifications);
         Assert.Equal(chat, CoreSettings.Current.AiChatEnabled);
         Assert.Equal(hadFile, File.Exists(settingsFile));
         if (hadFile) Assert.Equal(before, File.ReadAllText(settingsFile));
