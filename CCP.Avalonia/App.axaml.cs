@@ -463,6 +463,7 @@ namespace ConditioningControlPanel.Avalonia
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
+            ConditioningControlPanel.Services.Chaos.ChaosRunState.IconResolver = Views.Chaos.ChaosBoonBarArt.Resolve;
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
