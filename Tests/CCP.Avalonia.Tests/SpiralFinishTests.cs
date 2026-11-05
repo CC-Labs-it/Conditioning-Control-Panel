@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Platform;
+using System.Runtime.CompilerServices;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -59,6 +61,7 @@ public sealed class SpiralFinishTests
             using var server = new WebAssetServer(root.FullName);
             var oldServer = GameWindow.Server;
             var oldShell = ExternalOpener.Shell;
+            var oldSelect = ExternalOpener.SelectInFileManager;
             var oldAudio = CoreAudio.PlayOneShotProvider;
             var oldAudioPath = CoreModArt.AudioOverridePathProvider;
             var oldVolume = CoreSettings.Current.MasterVolume;
@@ -68,6 +71,8 @@ public sealed class SpiralFinishTests
             var host = new Window { Content = card };
             var slug = "test-" + Guid.NewGuid().ToString("N")[..12];
             string? revealed = null;
+            string? selected = null;
+            ExternalOpener.SelectInFileManager = path => { selected = path; return true; };
             ExternalOpener.Shell = path => { revealed = path; return true; };
             host.Show();
             try
@@ -100,8 +105,13 @@ public sealed class SpiralFinishTests
                 Assert.True((bool)messages.Last(m => (string?)m["type"] == "loom-result")["ok"]!);
                 Send(new { type = "loom-reveal", slug = "../outside" });
                 Assert.Null(revealed);
+                Assert.Null(selected);
                 Send(new { type = "loom-reveal", slug });
-                Assert.Equal(Path.GetDirectoryName(path), revealed); // portable file manager opens the containing folder
+                Assert.Equal(Path.GetFullPath(path), selected);
+                Assert.Null(revealed);
+                ExternalOpener.SelectInFileManager = _ => false;
+                Send(new { type = "loom-reveal", slug });
+                Assert.Equal(Path.GetDirectoryName(path), revealed);
                 float? cueVolume = null;
                 CoreSettings.Current.MasterVolume = 50;
                 CoreModArt.AudioOverridePathProvider = p => p == "chaos/test.mp3" ? path : null;
@@ -123,11 +133,57 @@ public sealed class SpiralFinishTests
             {
                 GameWindow.CloseAllForPanic(); host.Close();
                 GameWindow.Server = oldServer; ExternalOpener.Shell = oldShell;
+                ExternalOpener.SelectInFileManager = oldSelect;
                 CoreAudio.PlayOneShotProvider = oldAudio; CoreModArt.AudioOverridePathProvider = oldAudioPath;
                 CoreSettings.Current.MasterVolume = oldVolume;
                 DtrhLoomStore.Delete(slug); CoreSettings.Current.SpiralPath = savedPath;
                 root.Delete(true);
             }
+        });
+
+    [Theory]
+    [InlineData("windows")]
+    [InlineData("gtk")]
+    [InlineData("wpe")]
+    public Task Loom_uses_its_own_browser_profile_without_changing_other_games(string engine)
+        => Run(() =>
+        {
+            // Exercise the registered callback without creating a native browser.
+            var type = engine switch
+            {
+                "windows" => typeof(WindowsWebView2EnvironmentRequestedEventArgs),
+                "gtk" => typeof(GtkWebViewEnvironmentRequestedEventArgs),
+                _ => typeof(LinuxWpeWebViewEnvironmentRequestedEventArgs),
+            };
+            var field = typeof(ConditioningControlPanel.Avalonia.Views.Controls.WebHost)
+                .GetField("EnvironmentRequested", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var loom = new GameWindow(GameWindow.Games["loom"]);
+            var game = new GameWindow();
+            try
+            {
+                var args = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+                var callback = Assert.IsType<Action<WebViewEnvironmentRequestedEventArgs>>(field.GetValue(loom.Web));
+                callback(args);
+                var folder = Path.Combine(CorePaths.UserData, "browser_data_loom");
+                Assert.True(Directory.Exists(folder));
+                switch (args)
+                {
+                    case WindowsWebView2EnvironmentRequestedEventArgs win:
+                        Assert.Equal(folder, win.UserDataFolder);
+                        break;
+                    case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                        Assert.Equal(folder, gtk.BaseDataDirectory);
+                        Assert.Equal(Path.Combine(folder, "cache"), gtk.BaseCacheDirectory);
+                        break;
+                    case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                        Assert.Equal(folder, wpe.DataDirectory);
+                        Assert.Equal(Path.Combine(folder, "cache"), wpe.CacheDirectory);
+                        break;
+                }
+                Assert.Null(field.GetValue(game.Web));
+            }
+            finally { loom.Close(); game.Close(); }
+            return Task.CompletedTask;
         });
 
     [Fact]
