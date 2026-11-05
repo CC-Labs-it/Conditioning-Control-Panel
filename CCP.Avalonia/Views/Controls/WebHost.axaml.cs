@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// possible here, unlike what the first pass of these views assumed) and
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
-    /// NewWindowRequested, GoBack/GoForward, Stop and Refresh; nothing needs
+    /// GoBack/GoForward, Stop and Refresh; nothing needs
     /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
     /// injection, and no fullscreen-element signal.
     ///
@@ -57,6 +57,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// pointed at pages the app itself chose.
         /// </summary>
         public Func<Uri, bool>? AllowNavigation { get; set; }
+        internal bool SuppressNewWindows { get; set; }
+        internal event Action? BrowserProcessFailed;
+        private IDisposable? _failureWatch;
+        internal void OnBrowserProcessFailed() => BrowserProcessFailed?.Invoke();
+        internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
 
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
@@ -322,8 +327,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
+                    _web.AdapterDestroyed += (_, _) => { try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; } };
                     _web.NavigationStarted += OnNavigationStarted;
-                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
+                    _web.NavigationCompleted += (_, e) => {
+                        // The native core exists now; subscribe before observers can reveal a scene.
+                        if (BrowserProcessFailed != null && _failureWatch == null)
+                            try { _failureWatch = Platform.TrailerBrowserPolicy.Attach(_web.TryGetPlatformHandle(), OnBrowserProcessFailed); }
+                            catch (Exception ex) { Log.Debug(ex, "Trailer failure subscription failed"); OnBrowserProcessFailed(); }
+                        OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
+                    };
+                    _web.NewWindowRequested += (_, e) => { if (SuppressNewWindows) e.Handled = true; };
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
