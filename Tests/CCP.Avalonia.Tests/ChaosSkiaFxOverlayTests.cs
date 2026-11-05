@@ -62,6 +62,7 @@ public sealed class ChaosSkiaFxOverlayTests
             Assert.Null(ChaosSkiaFxOverlay.Active);
 
             ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.ResetForTests();   // an earlier test may have latched the refusal
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.FramesForTests = frames;
 
@@ -158,6 +159,7 @@ public sealed class ChaosSkiaFxOverlayTests
         {
             s.ChaosSkiaFxEnabled = true;
             ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.ResetForTests();   // an earlier test may have latched the refusal
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.FramesForTests = new SteppedFrames();
 
@@ -211,6 +213,7 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosSkiaFxOverlay.CloseActive();
             CoreSettings.Current.ChaosSkiaFxEnabled = true;
             ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.ResetForTests();   // an earlier test may have latched the refusal
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.FramesForTests = new SteppedFrames();
             var b = new AmbientBubble
