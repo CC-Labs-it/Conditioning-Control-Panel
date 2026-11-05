@@ -76,6 +76,7 @@ Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry Gem = Ge
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry SparkShape = Geometry.Parse( :: path: D6 art - twinkle and ink-burst particle geometry in the WPF clipboard scene, not a control icon
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry Arrow = Geometry.Parse( :: path: D6 art - animated next-slip pointer inside the WPF clipboard illustration, not a navigation icon
 Views/AvatarTube/AvatarTubeWindow.axaml :: <Path x:Name="FuseCandleFlame" :: path: D6 art - AvatarTube fuse candle flame
+Views/Windows/MainShellWindow.NavCoin.cs :: coin.Specular = new Path :: path: D6 art - nav coin specular crescent (depth wave 10), not an icon slot
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: _curvePath = new Path :: path: D6 art - rule-editor curve
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: canvas.Children.Add(new Path :: path: D6 art - rule-editor keyframe curve (one site)
 Views/Deeper/DeeperEditorWindow.axaml :: <Path x:Name="WaveformPath" :: path: D6 art - waveform
