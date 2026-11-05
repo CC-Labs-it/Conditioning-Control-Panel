@@ -20,12 +20,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// the next waits and is re-routed once it has gone.
     /// WPF Services/Startup/StartupPresenter.cs:247,350,554: defer until the modal queue drains.
     /// Upgrade What's New holds passive offers until its modal host settles (ModalPending).
-    /// ponytail: launcher hold and game-host park still await their startup hosts.
+    /// ponytail: game-host park still awaits its startup host.
     /// </summary>
     internal static class StartupLadder
     {
         internal static bool ModalPending;
         internal static int PresentationGeneration { get; private set; }
+
+        // WPF StartupPresenter.cs:133,140; LauncherHost.cs:266 releases on panel open.
+        internal static bool LauncherHolding { get; private set; }
+        internal static void Hold() => LauncherHolding = true;
+        internal static void Release() => LauncherHolding = false;
 
         public static StartupInbox Inbox { get; } = new();
 
@@ -59,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
             LadderBusy = ModalPending,
+            LauncherHolding = LauncherHolding,
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
@@ -161,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static void ResetForTests()
         {
             ModalPending = false;
+            LauncherHolding = false;
             _firstLaunchUntilUtc = null;
             _lastPassiveUtc = null;
             CancelDeferred();

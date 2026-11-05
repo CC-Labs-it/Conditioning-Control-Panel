@@ -201,12 +201,7 @@ internal static class EmergencyExitHostService
     }
 
     /// <summary>Random game, never the same one twice in a row within a lockdown.</summary>
-    private static string PickGame()
-    {
-        var pool = Games.Where(g => !string.Equals(g, _lastGame, StringComparison.Ordinal)).ToArray();
-        if (pool.Length == 0) pool = Games;
-        return pool[Rng.Next(pool.Length)];
-    }
+    private static string PickGame() => EmergencyExitRules.Pick(_lastGame, Rng);
 
     private static string NormalizeGame(string? game)
     {
@@ -303,29 +298,7 @@ internal static class EmergencyExitHostService
         }
         catch (Exception ex) { App.Logger?.Debug("EmergencyExit: mod read failed: {E}", ex.Message); }
 
-        string honorific, subject;
-        switch (id)
-        {
-            case "builtin-bambisleep":
-                honorific = "good girl"; subject = "Bambi"; break;
-            case "builtin-sissyhypno":
-                honorific = "sissy"; subject = "sissy"; break;
-            // builtin-locked's warden calls the user "pet" / "good pet" / "sweet thing" in every
-            // lockdown_on/off/tick line; "pet" is the one that is gender-neutral and reads as a
-            // NAME in "Confirm you are NOT a pet", which is what the captcha needs it for.
-            case "builtin-locked":
-                honorific = "pet"; subject = "pet"; break;
-            // No mod and CCP Default have no persona to speak as, so they use the house pet name
-            // (VocabTokens.VanillaPetName, "sweetie") for the same reason builtin-locked uses "pet":
-            // it is gender-neutral and reads as a NAME in "Confirm you are NOT a sweetie".
-            case "":
-            case "builtin-ccp-default":
-                honorific = VocabTokens.VanillaPetName; subject = VocabTokens.VanillaPetName; break;
-            default:
-                honorific = string.IsNullOrWhiteSpace(petName) ? VocabTokens.VanillaPetName : petName!.Trim();
-                subject = string.IsNullOrWhiteSpace(name) ? VocabTokens.VanillaPetName : name;
-                break;
-        }
+        var (honorific, subject) = EmergencyExitRules.Address(id, name, petName);
 
         return new { id, name = string.IsNullOrWhiteSpace(name) ? id : name, honorific, subject };
     }
@@ -425,7 +398,7 @@ internal static class EmergencyExitHostService
         // inside the game is not a way to leave. The roll only exists for a completed one.
         double chance = SendBackChance(game);
         double roll = Rng.NextDouble();
-        bool sendback = result != "completed" || roll < chance;
+        bool sendback = EmergencyExitRules.SendBack(game, result, roll);
         var outcome = sendback ? "sendback" : "escape";
 
         App.Logger?.Information(
@@ -465,14 +438,7 @@ internal static class EmergencyExitHostService
     /// the other three are a two-in-three exit. The roll lives here and never in JS, because JS is
     /// the one part of this feature the user can edit.
     /// </summary>
-    private static double SendBackChance(string game) => game switch
-    {
-        "labyrinth" => 1.0,
-        "password" => 0.33,
-        "jigsaw" => 0.33,
-        "captcha" => 0.33,
-        _ => 0.33,
-    };
+    private static double SendBackChance(string game) => EmergencyExitRules.SendBackChance(game);
 
     /// <summary>The outro card gets <see cref="OutroFailsafe"/> to play and post <c>outro-done</c>.
     /// After that the window closes regardless: the verdict is already applied, so the card is
