@@ -2,6 +2,14 @@ using System;
 using System.IO;
 using System.Linq;
 using Avalonia;
+using Avalonia.Fonts.Inter;
+using ConditioningControlPanel.Avalonia.Platform;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Localization;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -28,7 +36,7 @@ public sealed class JustDropWindowTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
@@ -117,6 +125,79 @@ public sealed class JustDropWindowTests
         Assert.Equal(40, paid);                           // untimed first play: a taste (Core settlement)
         Assert.Equal(0, posted);                          // the site never gets the local games' init
         Assert.True(w.IsVisible);                         // and no game frame closes it
+    });
+
+    [Fact]
+    public void ShopStripTogglesAndBothEscapeRoutesRestoreTheWindow() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var w = Open()!;
+        var grid = Assert.IsType<Grid>(w.Content);
+        Assert.Equal(1, Grid.GetRow(w.Web));
+        Assert.Equal(2, grid.RowDefinitions.Count);
+        var toggle = Assert.Single(w.GetVisualDescendants().OfType<Button>(), b => b.Name == "JustDropFullscreen");
+        Assert.Equal(Loc.Get("btn_fullscreen"), toggle.Content);
+        var panelState = shell.WindowState;
+        w.WindowState = WindowState.Maximized;
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(WindowState.FullScreen, w.WindowState);
+        Assert.Equal(Loc.Get("btn_exit_fullscreen"), toggle.Content);
+        Assert.True(toggle.IsVisible);
+        Assert.Equal(Loc.Get("tooltip_fill_the_screen_esc_brings_the_window_back"), ToolTip.GetTip(toggle));
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        LocalizationManager.Instance.SetLanguage(language == "de" ? "en" : "de");
+        Assert.Equal(Loc.Get("btn_exit_fullscreen"), toggle.Content);
+        LocalizationManager.Instance.SetLanguage(language);
+        typeof(WindowBase).GetMethod("HandleActivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(w, null);
+        Assert.True(w.Topmost);
+        typeof(WindowBase).GetMethod("HandleDeactivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(w, null);
+        Assert.False(w.Topmost);
+        typeof(WindowBase).GetMethod("HandleActivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(w, null);
+        Assert.True(w.Topmost);
+        Assert.Equal(panelState, shell.WindowState); // browsing never ducks the panel
+        w.HandleMessage("{\"type\":\"ccp-host-escape\"}");
+        Assert.Equal(WindowState.Maximized, w.WindowState);
+        Assert.False(w.Topmost);
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        w.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        Assert.Equal(WindowState.Maximized, w.WindowState);
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(WindowState.Maximized, w.WindowState);
+
+        string? injected = null;
+        w.Web.ScriptInvoker = script => { injected = script; return System.Threading.Tasks.Task.FromResult<string?>(null); };
+        w.Web.OnNavigationCompleted(new Uri("https://app.cclabs.app/dashboard/express"));
+        Assert.Equal(GameWindow.JustDropEscapeScript, injected);
+        Assert.Contains("},true)", injected);
+        Assert.DoesNotContain("preventDefault", injected);
+    });
+
+    [Fact]
+    public void ShopStripUsesTheExistingThemeAndItsHoverAndPressedFeedback() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var w = Open()!;
+        var chrome = Assert.IsType<Border>(Assert.IsType<Grid>(w.Content).Children[0]);
+        var bar = Assert.IsType<DockPanel>(chrome.Child);
+        var title = Assert.Single(bar.Children.OfType<TextBlock>());
+        var toggle = Assert.Single(bar.Children.OfType<Button>());
+        Assert.Same(w.FindResource("SmallPinkButton"), toggle.Theme);
+        Assert.Same(w.FindResource("PanelBgBrush"), chrome.Background);
+        Assert.Same(w.FindResource("TransparentPink40Brush"), chrome.BorderBrush);
+        Assert.Same(w.FindResource("PinkBrush"), title.Foreground);
+        Assert.Same(w.FindResource("PinkBrush"), toggle.Background);
+        toggle.ApplyTemplate();
+        var face = Assert.Single(toggle.GetVisualDescendants().OfType<Border>(), b => b.Name == "border");
+        ((IPseudoClasses)toggle.Classes).Set(":pointerover", true);
+        Assert.Same(w.FindResource("PinkButtonHoveredBrush"), face.Background);
+        ((IPseudoClasses)toggle.Classes).Set(":pressed", true);
+        Assert.Same(w.FindResource("AccentPressedBrush"), face.Background);
+        ((IPseudoClasses)toggle.Classes).Set(":pressed", false);
+        ((IPseudoClasses)toggle.Classes).Set(":pointerover", false);
+        Assert.Same(w.FindResource("PinkBrush"), face.Background);
     });
 
     [Fact]
