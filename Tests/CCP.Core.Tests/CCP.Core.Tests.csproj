@@ -17,11 +17,16 @@
     <IsPublishable>false</IsPublishable>
     <AssemblyName>CCP.Core.Tests</AssemblyName>
     <RootNamespace>CCP.Core.Tests</RootNamespace>
+    <DefineConstants>$(DefineConstants);CCP_PRIZE_FEED_CORE_TESTS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel.Tests\OnlineMeterRulesTests.cs" Link="OnlineMeterRulesTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\FloatingVideoFrameTests.cs" Link="FloatingVideoFrameTests.cs" />
+    <!-- This exit helper has no WPF dependency: execute its existing safety tests on Linux too. -->
+    <Compile Include="..\..\ConditioningControlPanel\Services\Diagnostics\UiThreadExit.cs" Link="UiThreadExit.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\UiThreadExitTests.cs" Link="UiThreadExitTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\ProfileSyncPrizesFeedTests.cs" Link="PrizesFeedTests.cs" />
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
     <Compile Include="..\ConditioningControlPanel.Tests\SourceRoots.cs" Link="SourceRoots.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />

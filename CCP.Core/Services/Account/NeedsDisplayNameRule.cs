@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -30,19 +28,6 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static bool ShouldAsk(bool signedIn, string? displayName, bool? serverSaysNeeded)
             => signedIn && (serverSaysNeeded ?? string.IsNullOrWhiteSpace(displayName));
-
-        /// <summary>Required-name save shared by heads; a refusal chooses the inline error.</summary>
-        public static async Task<(bool success, string? error, string? newName)> SaveRequiredAsync(string name,
-            Func<string, Task<(bool success, string? error, string? newName)>> save,
-            Func<string, Task<bool?>> available)
-        {
-            // check-name also reports the asker's own name as taken; the rename accepts it.
-            var result = await save(name);
-            if (result.success) return result;
-            if (await available(name) == false)
-                return (false, Localization.Loc.GetF("login_name_already_taken", name), null);
-            return result;
-        }
 
         /// <summary>The first candidate that is not blank, trimmed, or null when every one is.</summary>
         public static string? FirstName(params string?[] candidates)

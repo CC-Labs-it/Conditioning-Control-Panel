@@ -60,10 +60,31 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The achievement engine (achievements.json), or null on the headless render path.
         /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
         internal static AchievementEngine? Achievements { get; private set; }
+        private DispatcherTimer? _achievementSaveTimer;
+
+        /// <summary>WPF AchievementService.cs:99-107: periodically save dirty progress off the UI thread.</summary>
+        internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine)
+        {
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            timer.Tick += (_, _) => _ = engine.SaveIfDirtyAsync();
+            timer.Start();
+            return timer;
+        }
+
+        /// <summary>WPF AchievementService.cs:947-954: flush even when an autosave already cleared IsDirty.</summary>
+        /// <summary>The automatic cloud settings backup (WPF ProfileSyncService.BackupSettingsAsync, force: false).</summary>
+        internal static AutoSettingsBackup? CloudAutoBackup { get; private set; }
+
+        internal static void SaveAchievementsOnExit(DispatcherTimer? timer, AchievementEngine? engine)
+        {
+            try { timer?.Stop(); }
+            finally { engine?.Save(); } // the store serializes this with any pending background write
+        }
 
         /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
         /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
+        private static void RebaselineDayLogAfterCloudMerge(global::ConditioningControlPanel.Models.AppSettings _) => FeatureDayLog?.Rebaseline("v2 cloud merge");
 
         /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
         /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.html).</summary>
@@ -156,7 +177,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
-        /// Core settings; the perfect-week bonus stays unseeded (the WPF "service is null" answer).
+        /// Core settings; the perfect-week bonus uses Core rules from WPF SkillTreeService.cs:461-527.
         /// Programs (TrackVerifier) is seeded next to the ProgramService below.</summary>
         private static void StartQuests()
         {
@@ -172,6 +193,7 @@ namespace ConditioningControlPanel.Avalonia
                 return true;
             };
             CoreQuests.PlayCompletionEffectsProvider = PlayQuestCompletionEffects;
+            WireQuestRewards(Sessions);
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).
@@ -185,7 +207,7 @@ namespace ConditioningControlPanel.Avalonia
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
             definitions.QuestDefinitionsUpdated += () => Quests?.CheckAndGenerateQuests();
             // WPF ProgressionService.AddXP:120 feeds every award to the "earn X XP" quests.
-            ProgressionBank.Awarded += (amount, _) => Quests?.TrackXPEarned((int)amount);
+            ProgressionBank.QuestAwarded += (amount, _) => Quests?.TrackXPEarned((int)amount);
         }
 
         /// <summary>WPF App.xaml.cs:414. WPF plays SystemSounds.Exclamation; Linux has no stock
@@ -471,8 +493,18 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void Initialize()
         {
+            // Core cannot read the running build's version - the entry assembly is whichever
+            // head started the process, and Core is not it. Reading the version is a head job,
+            // so this head reports its own; unseeded, CoreReleaseContent answers "0.0.0".
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            CoreReleaseContent.AppVersionProvider = () =>
+                version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
+            // WPF App.xaml.cs:4982-4985: notes for a returning account without a backup.
+            CoreReleaseContent.PatchNotesProvider = () => ReleaseNotes.Current;
+
             AvaloniaXamlLoader.Load(this);
             ConditioningControlPanel.Services.Chaos.ChaosRunState.IconResolver = Views.Chaos.ChaosBoonBarArt.Resolve;
+            Platform.FontGuard.Startup.Verify(Resources, OperatingSystem.IsWindows()); // before any window, including the splash
             ConditioningControlPanel.Services.PlayerLook.KnownIdsProvider = () =>
                 (ConditioningControlPanel.Services.ShopCosmeticsRegistry.AllAvatarIds(), ConditioningControlPanel.Services.ShopCosmeticsRegistry.FrameIds());
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
@@ -576,6 +608,11 @@ namespace ConditioningControlPanel.Avalonia
                 // back; the Windows ducker queues behind it. Linux recovers on the pactl queue after vlc.Seed below.
                 if (OperatingSystem.IsWindows()) Platform.DuckRecovery.RecoverWpfJournalAtLaunch(CorePaths.UserData);
                 // Secrets first: SettingsService's auth-token migration asks CoreSecrets.HasStore on load.
+                Platform.PrizeOwnership.WatchShutdown();
+                // WPF App.xaml.cs:696-697: every settings save (and the exit flush) offers the automatic cloud
+                // backup; AutoSettingsBackup holds WPF's five-minute debounce, daily-backup guard and 413 stop.
+                CloudAutoBackup = new AutoSettingsBackup(() => Views.Controls.AppSettings.AccountSettingsSection.NewBackup());
+                CoreSettingsHooks.CloudBackup = () => CloudAutoBackup.RunAsync(CoreSettings.Current, Settings?.RestoredFromBackup == true);
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
@@ -691,12 +728,6 @@ namespace ConditioningControlPanel.Avalonia
                 });
                 CoreBubbles.RefreshFrequencyAction = Views.Overlays.BubbleOverlay.RefreshFrequency;
 
-                // Core cannot read the running build's version - the entry assembly is whichever
-                // head started the process, and Core is not it. Reading the version is a head job,
-                // so this head reports its own; unseeded, CoreReleaseContent answers "0.0.0".
-                var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                CoreReleaseContent.AppVersionProvider = () =>
-                    version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
                 // WPF App.xaml.cs:2567-2576, after the version seed (the honest user-agent carries it): the Scrolller
                 // licence switch (launch + every 30 min), the device cache's books, and the hourly 24 h sweep.
                 Platform.ScrolllerHead.Start();
@@ -723,6 +754,8 @@ namespace ConditioningControlPanel.Avalonia
                 StartRichPresence();
                 // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
                 ProgressionBank.LevelUp += level => { if (!Settings.Current.OfflineMode) DiscordRpc?.UpdateLevel(level); };
+                // WPF SkillTreeService.OnLevelUp:636: a level-up Sparkle counts toward the lifetime earned stat.
+                ProgressionBank.SkillPointsAwarded += points => Achievements?.TrackSkillPointsEarned(points);
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
@@ -864,6 +897,9 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     var vlc = new Platform.LibVlcAudio();
                     vlc.Seed();
+                    Platform.BrainDrainPlayer.Instance = new Platform.BrainDrainPlayer(vlc.PrepareVoice);
+                    CoreEngine.StartBrainDrain = Platform.BrainDrainPlayer.Instance.Start;
+                    CoreEngine.StopBrainDrain = Platform.BrainDrainPlayer.Instance.Stop;
                     // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.
                     vlc.StartDuckJournal(Path.Combine(CorePaths.UserData, Platform.DuckRecovery.PulseFileName));
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
@@ -929,6 +965,8 @@ namespace ConditioningControlPanel.Avalonia
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                _achievementSaveTimer?.Stop();
+                _achievementSaveTimer = StartAchievementAutosave(Achievements);
                 WireAchievementUnlocks(Achievements);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
@@ -936,6 +974,9 @@ namespace ConditioningControlPanel.Avalonia
                 // Its loss must not cost the launch.
                 try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
                 catch (Exception exDayLog) { Serilog.Log.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
+                // WPF ProfileSyncService.cs:2187: minutes another device banked belong to other days, not today.
+                ProfileAdopt.ConditioningMinutesLifted -= RebaselineDayLogAfterCloudMerge;
+                ProfileAdopt.ConditioningMinutesLifted += RebaselineDayLogAfterCloudMerge;
                 CoreProgram.UnlockAchievementProvider = id => Achievements?.TryUnlock(id);
                 // WPF App.xaml.cs: the invite ladder's badges and the invites wire (friends' proxy and
                 // door; a sandbox reaches only a loopback CCP_FRIENDS_API_URL, else nothing is sent).
@@ -1349,6 +1390,7 @@ namespace ConditioningControlPanel.Avalonia
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.KeywordTriggerHead.Stop(); } catch { }
+            try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
@@ -1364,9 +1406,8 @@ namespace ConditioningControlPanel.Avalonia
             var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 
-            // WPF AchievementService.Dispose saves synchronously; only when dirty here, so an idle exit
-            // never rewrites the file (or rotates its .bak) - it may be shared with the WPF head.
-            try { if (Achievements is { IsDirty: true } a) a.Save(); } catch { /* the store logs write failures */ }
+            // WPF AchievementService.Dispose always saves synchronously, including a queued autosave.
+            try { SaveAchievementsOnExit(_achievementSaveTimer, Achievements); } catch { /* the store logs write failures */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }

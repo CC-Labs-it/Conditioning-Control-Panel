@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_grOpen) return;
             _grOpen = true;
+            CoreSettings.Current.PropertyChanged += OnGlassroadSettingsChanged;
             _grEarlyInitSent = _grPinged = false;
             _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
             _grLastLoadingUtc = null;
@@ -89,8 +90,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_grHaptics != null) _grHaptics.ConnectionChanged -= OnGlassroadToys;
             _grHaptics = null;
             GlassroadHapticDirector.Stop();
+            CoreSettings.Current.PropertyChanged -= OnGlassroadSettingsChanged;
             try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _grWatch = null;
+            DisposeGlassroadPictures();
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("GlassroadHost: closed");
         }
@@ -116,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants, GlassroadToysConnected));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants, GlassroadToysConnected, GlassroadPicturesOn()));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
@@ -167,6 +170,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         return true;
                     case "open-prize-counter":
                         return true; // B3: no shop on this head.
+                    case "set-setting":
+                        _ = SetGlassroadPicturesAsync(o);
+                        return true;
+                    case "scrolller-niches":
+                        SetGlassroadNiches(o);
+                        return true;
                     case "net":
                         OnGlassroadNet(o);
                         return true;

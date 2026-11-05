@@ -14,6 +14,20 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed partial class AccountSeedTests
 {
+    /// <summary>The prize feed queues each snapshot on the UI thread (WPF PostPrizeWork): let it land.</summary>
+    private static void DrainPrizes()
+    {
+        if (Application.Current is null) return;   // no UI thread yet: the feed ran inline
+        AvaloniaTestDispatcher.Run(() => global::Avalonia.Threading.Dispatcher.UIThread.RunJobs());
+    }
+
+    /// <summary>A /v2/user/sync reply's prizes block, through the sync push's feed.</summary>
+    private static void SyncSnapshot(string account, PrizesBlock? prizes)
+    {
+        PrizeOwnership.Feed.Apply(account, account, prizes, "V2 sync");
+        DrainPrizes();
+    }
+
     [Fact]
     public void StartupSyncUnlocksOwnedTiles_WithoutCounterOrOwnershipOverride() => WithFreshInstall(async () =>
     {
@@ -25,6 +39,7 @@ public sealed partial class AccountSeedTests
             Assert.Null(PrizeOwnership.KnownGrants());
             Assert.True(await AccountSeed.LoadProfileAsync());
             Assert.NotEmpty(wire.Syncs);
+            DrainPrizes();
             Assert.True(PrizeOwnership.Held("cos.profile.frame.gilt"));
             Assert.True(PrizeOwnership.IsGranted("cos.profile.avatar.emi-pixel"));
             await AvaloniaTestDispatcher.RunAsync(() =>
@@ -50,17 +65,18 @@ public sealed partial class AccountSeedTests
                 return Task.CompletedTask;
             });
             // Old or absent snapshots cannot revoke grants. A newer empty snapshot can.
-            PrizeOwnership.ApplySyncSnapshot("u1", new PrizesBlock { Revision = 3, Grants = new() });
-            PrizeOwnership.ApplySyncSnapshot("u1", null);
+            SyncSnapshot("u1", new PrizesBlock { Revision = 3, Grants = new() });
+            SyncSnapshot("u1", null);
             Assert.True(PrizeOwnership.Held("cos.profile.frame.gilt"));
-            CoreSettings.Current.UnifiedId = "u2";
+            CoreSettings.Current.UnifiedId = CoreAccount.UnifiedUserId = "u2";
             Assert.False(PrizeOwnership.Held("cos.profile.frame.gilt"));
-            PrizeOwnership.ApplySyncSnapshot("u1", new PrizesBlock { Revision = 9, Grants = new() });
-            CoreSettings.Current.UnifiedId = "u1";
+            SyncSnapshot("u1", new PrizesBlock { Revision = 9, Grants = new() });
+            CoreSettings.Current.UnifiedId = CoreAccount.UnifiedUserId = "u1";
             Assert.True(PrizeOwnership.Held("cos.profile.frame.gilt"));
-            PrizeOwnership.ApplySyncSnapshot("u1", new PrizesBlock { Revision = 5, Grants = new() });
+            SyncSnapshot("u1", new PrizesBlock { Revision = 5, Grants = new() });
             Assert.Empty(PrizeOwnership.KnownGrants()!);
             await AccountSeed.Logout();
+            DrainPrizes();
             Assert.Null(PrizeOwnership.KnownGrants());
         }
         finally { PrizeOwnership.ResetHeld(); }
@@ -77,11 +93,12 @@ public sealed partial class AccountSeedTests
         try
         {
             Assert.NotEmpty(wire.Syncs);
-            CoreSettings.Current.UnifiedId = "u2";
+            CoreSettings.Current.UnifiedId = CoreAccount.UnifiedUserId = "u2";
             wire.Hold.SetResult();
             Assert.False(await pending);
+            DrainPrizes();
             Assert.Null(PrizeOwnership.KnownGrants());
-            CoreSettings.Current.UnifiedId = "u1";
+            CoreSettings.Current.UnifiedId = CoreAccount.UnifiedUserId = "u1";
             Assert.False(PrizeOwnership.Held("cos.profile.frame.gilt"));
         }
         finally { wire.Hold.TrySetResult(); await pending; PrizeOwnership.ResetHeld(); }

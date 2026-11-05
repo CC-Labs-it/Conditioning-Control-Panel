@@ -30,7 +30,7 @@ public sealed class ContentHitTestTests
         {
             if (!System.OperatingSystem.IsWindows()) AmbientBeatLoopsTests.Setup();
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             // This probes static hit geometry, not tab entrance or hover animation progress.

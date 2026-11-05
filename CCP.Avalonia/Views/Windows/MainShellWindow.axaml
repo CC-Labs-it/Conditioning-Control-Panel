@@ -70,6 +70,10 @@
         DragDrop.AllowDrop="True">
 
     <Window.Resources>
+        <SolidColorBrush x:Key="AccountChipTier1Brush" Color="#FFD700"/>
+        <SolidColorBrush x:Key="AccountChipTier2Brush" Color="#B47BFF"/>
+        <SolidColorBrush x:Key="AccountChipNeutralBrush" Color="#3D3D60"/>
+
         <!-- ===================== THE SECTION RAIL (WPF MainWindow.xaml:20-135) =====================
              One row per NavSections section, always labelled, inside the 96px column. Template parts
              MainShellWindow.NavRail.cs paints: Background = the row tint (hue at 0x33, shown by
@@ -910,7 +914,7 @@
                                 </ControlTemplate>
                             </Button.Template>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock x:Name="TxtAccountChipBadge" Text="🔒" FontSize="10"
+                                <fx:IconGlyph x:Name="TxtAccountChipBadge" Kind="LockClosed" Size="10"
                                            Margin="0,0,5,0" VerticalAlignment="Center"
                                            IsVisible="False"/>
                                 <TextBlock x:Name="TxtAccountChipName" Text="{loc:Str account_chip_sign_in}"
@@ -2881,7 +2885,7 @@
             Background="#B00A0514" BorderBrush="#40E0B052" BorderThickness="1">
         <StackPanel>
             <TextBlock x:Name="FuseCornerDigits" Text=""
-                       FontFamily="Consolas, Courier New, monospace" FontSize="15"
+                       FontFamily="{DynamicResource Font.Mono}" FontSize="15"
                        Foreground="#FFC9C4D6" HorizontalAlignment="Center"/>
             <TextBlock x:Name="FuseCornerPresence" Text="" IsVisible="False"
                        FontSize="10" Margin="0,3,0,0" Foreground="#8AC9C4D6"

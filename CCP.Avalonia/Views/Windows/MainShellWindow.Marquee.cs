@@ -190,11 +190,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            var displayName = ConditioningControlPanel.Services.NeedsDisplayNameRule.FirstName(s.UserDisplayName,
-                AccountSeed.Patreon?.DisplayName, AccountSeed.Discord?.DisplayName, AccountSeed.SubscribeStar?.DisplayName);
-            secondary.Text = displayName != null ? Loc.GetF("label_welcome_back_0", displayName)
-                : CoreAccount.IsLoggedIn ? Loc.Get("banner_signed_in_no_name")
-                : Loc.Get("label_welcome_consider_logging_in_with_patreon_for");
+            // WPF MainWindow.Marquee.cs:135-154 uses this shared name rule and copy.
+            // AccountSeed.RestoreSession:91-104: a stored id alone is not a session on this head.
+            var displayName = Services.NeedsDisplayNameRule.FirstName(s.UserDisplayName,
+                Platform.AccountSeed.Patreon?.DisplayName, Platform.AccountSeed.Discord?.DisplayName);
+            secondary.Text = displayName is not null
+                ? Loc.GetF("label_welcome_back_0", displayName)
+                : Loc.Get(CoreAccount.IsLoggedIn
+                    ? "banner_signed_in_no_name" : "label_welcome_consider_logging_in_with_patreon_for");
         }
 
         private void BannerRotationTimer_Tick(object? sender, EventArgs e)

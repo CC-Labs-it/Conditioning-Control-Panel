@@ -31,29 +31,11 @@ public class NeedsDisplayNameRuleTests
     public void Asks_only_a_signed_in_account_with_no_name(bool signedIn, string? name, bool? flag, bool expected)
         => Assert.Equal(expected, NeedsDisplayNameRule.ShouldAsk(signedIn, name, flag));
 
-    [Theory]
-    [InlineData(true, false)] // own existing name: rename accepts it even though check-name says taken
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(false, null)]
-    public async Task Required_save_tries_rename_before_checking_availability(bool success, bool? available)
+    [Fact]
+    public void FirstNameSkipsBlankCandidatesAndTrimsTheFirstName()
     {
-        var calls = new List<string>();
-        var result = await NeedsDisplayNameRule.SaveRequiredAsync("Own name", name =>
-        {
-            Assert.Equal("Own name", name); calls.Add("rename");
-            return Task.FromResult((success, success ? null : (string?)"Server refusal", success ? (string?)"Saved name" : null));
-        }, name =>
-        {
-            Assert.Equal("Own name", name); calls.Add("check");
-            return Task.FromResult(available);
-        });
-        Assert.Equal(success ? new[] { "rename" } : new[] { "rename", "check" }, calls);
-        Assert.Equal(success, result.success);
-        Assert.Equal(success ? "Saved name" : null, result.newName);
-        Assert.Equal(success ? null : available == false
-            ? ConditioningControlPanel.Localization.Loc.GetF("login_name_already_taken", "Own name")
-            : "Server refusal", result.error);
+        Assert.Equal("Echo", NeedsDisplayNameRule.FirstName("", "  ", null, " Echo ", "Later"));
+        Assert.Null(NeedsDisplayNameRule.FirstName("", null, "   "));
     }
 
     [Fact]
@@ -61,13 +43,6 @@ public class NeedsDisplayNameRuleTests
     {
         Assert.Equal("CCP.Core", typeof(NeedsDisplayNameRule).Assembly.GetName().Name);
         Assert.False(File.Exists(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Account", "NeedsDisplayNameRule.cs")));
-    }
-
-    [Fact]
-    public void FirstName_skips_blank_names_and_returns_null_when_all_are_blank()
-    {
-        Assert.Equal("Echo", NeedsDisplayNameRule.FirstName("", "  ", null, " Echo ", "Later"));
-        Assert.Null(NeedsDisplayNameRule.FirstName("", null, "   "));
     }
 
     [Theory]

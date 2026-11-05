@@ -18,6 +18,13 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public class LobbyDepthSeamTests
 {
+    /// <summary>A headless shell at Motion Off (moved here with the #3802 coin tests, now covered by NavRailCoinTests).</summary>
+    internal static void WithShell(System.Action<global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); global::ConditioningControlPanel.CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
+        var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        try { body(w); } finally { w.Close(); NavBadges.ResetForTests(); }
+    });
     internal static void Setup()
     {
         if (Application.Current != null) return;
@@ -77,7 +84,7 @@ public class LobbyDepthSeamTests
         finally { host.Close(); }
     });
     [Fact]
-    public void WashFeedsTheExistingRailAndQuestsPainters() => NavCoinDepthTests.WithShell(w =>
+    public void WashFeedsTheExistingRailAndQuestsPainters() => WithShell(w =>
     {
         foreach (var tab in new[] { "play", "quests" })
         {

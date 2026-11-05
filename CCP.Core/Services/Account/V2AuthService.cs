@@ -199,6 +199,9 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("curve_epoch")]
             public int? CurveEpoch { get; set; }
 
+            [JsonProperty("total_conditioning_minutes")]
+            public double? TotalConditioningMinutes { get; set; }
+
             [JsonProperty("current_season")]
             public string? CurrentSeason { get; set; }
 
@@ -761,8 +764,7 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>Check availability to choose an inline error after a refused rename.
-        /// Null means the server could not answer; the rename route still decides.</summary>
+        // WPF Services/Settings/ProfileSyncService.cs:4130-4144.
         public async Task<bool?> IsDisplayNameAvailableAsync(string name)
         {
             try
@@ -770,11 +772,7 @@ namespace ConditioningControlPanel.Services
                 var json = await _http.GetStringAsync($"{SERVER_URL}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
                 return (bool?)JObject.Parse(json)["available"];
             }
-            catch (Exception ex)
-            {
-                Log.Debug("Display name check failed: {Error}", ex.Message);
-                return null;
-            }
+            catch { return null; }
         }
 
         /// <summary>

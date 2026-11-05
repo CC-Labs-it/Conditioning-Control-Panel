@@ -107,6 +107,29 @@ public sealed partial class GameWindowTests
         Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(true, S(95), S(95), true, busy: true));
     }
 
+    /// <summary>B2 (owner 2026-10-29): the Linux race host says <c>caps.scrolller: false</c> outright, so the page
+    /// offers My files / Off (boot.js reads <c>init.caps.scrolller ? feed : null</c>); Windows keeps the WPF caps.</summary>
+    [Fact]
+    public void Glassroad_Init_LinuxHostOffersNoRemotePictures()
+    {
+        var old = GlassroadHostRules.LinuxHostOverride;
+        try
+        {
+            GlassroadHostRules.LinuxHostOverride = true;
+            Assert.False(GlassroadHostRules.RemotePicturesOffered);
+            var caps = GlassroadHostRules.InitFrame("u_1", "Kit", 2, false, 0.75, 0.5, picturesOn: true)["caps"]!;
+            Assert.Equal(JTokenType.Boolean, caps["scrolller"]!.Type);
+            Assert.False((bool)caps["scrolller"]!);
+            GlassroadHostRules.LinuxHostOverride = false;
+            Assert.True(GlassroadHostRules.RemotePicturesOffered);
+            caps = GlassroadHostRules.InitFrame("u_1", "Kit", 2, false, 0.75, 0.5, picturesOn: true)["caps"]!;
+            Assert.True((bool)caps["scrolller"]!["consent"]!);
+            Assert.Equal("device", (string?)caps["scrolller"]!["origin"]);
+            Assert.False((bool)GlassroadHostRules.InitFrame(null, null, 0, false, 1, 1)["caps"]!["scrolller"]!["consent"]!);
+        }
+        finally { GlassroadHostRules.LinuxHostOverride = old; }
+    }
+
     [Fact]
     public void Glassroad_Init_SignedInAndSignedOut()
     {
@@ -244,18 +267,21 @@ public sealed partial class GameWindowTests
     {
         var s = CoreSettings.Current;
         var oldSync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync;
+        var oldAccount = CoreAccount.UnifiedUserId;
         using var wire = new GrProfileHttp { ProfileGrants = profileGrants };
         var v2 = new V2AuthService(() => s, wire);
-        var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire);
+        // The production construction: NewSync seeds the sync push with PrizeOwnership.Feed.
+        var sync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.NewSync(() => Array.Empty<string>(), () => false, wire);
         try
         {
             ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = profileGrants ? null : sync;
-            s.UnifiedId = wire.Account;
+            s.UnifiedId = CoreAccount.UnifiedUserId = wire.Account;
             s.AuthToken = "tok";
             s.OfflineMode = false;
             ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
             Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
             sync.StopHeartbeat();
+            Dispatcher.UIThread.RunJobs();   // the feed queues each snapshot on the UI thread (WPF PostPrizeWork)
             var w = GameWindow.Launch(GameWindow.GlassroadId)!;
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -273,18 +299,22 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.Contains(wire.Grant, sent.Last(o => (string?)o["type"] == "owned")["grants"]!.Values<string>());
             foreach (var (answer, revision) in new[] { ("wrong", 999L), (wire.Account, 1L) })
-                ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplyProfile(wire.Account, answer,
+                ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed.Apply(wire.Account, answer,
                     new ConditioningControlPanel.Models.PrizesBlock { Revision = revision, Grants = new() { "cos.kart.body.old" } }, "stale");
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { wire.Grant }, ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
-            s.UnifiedId = "other";
-            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.NoteAccount("other");
-            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplyProfile(wire.Account, wire.Account,
+            s.UnifiedId = CoreAccount.UnifiedUserId = "other";
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed.NoteAccount("other");
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed.Apply(wire.Account, wire.Account,
                 new ConditioningControlPanel.Models.PrizesBlock { Revision = 999, Grants = new() { wire.Grant } }, "late");
+            Dispatcher.UIThread.RunJobs();
             Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
-            s.UnifiedId = wire.Account;
-            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.NoteAccount(wire.Account);
+            s.UnifiedId = CoreAccount.UnifiedUserId = wire.Account;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed.NoteAccount(wire.Account);
+            Dispatcher.UIThread.RunJobs();
             Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
             Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
+            Dispatcher.UIThread.RunJobs();
             ConditioningControlPanel.Avalonia.Platform.AccountSeed.Logout(accountDeleted: true).GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(sent.Last(o => (string?)o["type"] == "owned")["grants"]!);
@@ -298,6 +328,7 @@ public sealed partial class GameWindowTests
             GameWindow.CloseAllForPanic();
             ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
             ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = oldSync;
+            CoreAccount.UnifiedUserId = oldAccount;
         }
     });
 

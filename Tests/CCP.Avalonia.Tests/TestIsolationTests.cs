@@ -1,5 +1,11 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using CCP.Avalonia.Testing;
 using System.IO;
 using System.Linq;
+using Avalonia;
+using Avalonia.Headless;
 using ConditioningControlPanel;
 using Xunit;
 using PanicAftermath = ConditioningControlPanel.Services.Safety.PanicAftermath;
@@ -17,6 +23,15 @@ public class TestIsolationTests
         foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Comic Sans MS, Segoe UI", "Consolas, Courier New" })
             Assert.NotNull(new global::Avalonia.Media.Typeface(family,
                 weight: global::Avalonia.Media.FontWeight.Black).GlyphTypeface);
+    });
+
+    [Fact]
+    public void TheHookRegistersTheHeadsFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(
+            global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter));
+        Assert.NotNull(face.GlyphTypeface);
     });
 
     /// <summary>The first test in a testhost decides the Avalonia platform for every later one. A setup
@@ -40,7 +55,47 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Fact]
+    public async System.Threading.Tasks.Task BundledFontsAreReadyBeforeAnyFixtureChoosesThePlatform()
+    {
+        await CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            // Model a fixture that only asks for Skia/headless. The shared hook must have
+            // already installed the production font collections and family mappings.
+            if (global::Avalonia.Application.Current is null)
+                global::Avalonia.AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            foreach (var family in new[] { "fonts:Inter#Inter", "Fredoka" })
+            {
+                var typeface = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family));
+                Assert.Contains(family.Contains("Inter") ? "Inter" : family, typeface.GlyphTypeface.FamilyName);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        });
+    }
+
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
+
+    /// <summary>The isolation hook supplies desktop fonts before any fixture, independent of test order.</summary>
+    [Fact]
+    public void TheHookProvidesDesktopFontsBeforeAnyFixture() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(Application.Current);
+        foreach (var (family, weight) in new[]
+        {
+            ("fonts:Inter#Inter", FontWeight.Normal),
+            ("Segoe UI Black, Segoe UI", FontWeight.Black),
+            ("Fredoka, Segoe UI", FontWeight.DemiBold),
+            ("Consolas, Courier New, monospace", FontWeight.Bold),
+        })
+        {
+            var text = new TextBlock { Text = "Ready 123", FontFamily = new FontFamily(family), FontWeight = weight };
+            text.Measure(Size.Infinity);
+            Assert.True(text.DesiredSize.Width > 0, family);
+            Assert.True(text.DesiredSize.Height > 0, family);
+        }
+    });
 
     [Fact]
     public void TheFirstTestGetsTheApplicationsFontConfiguration() =>

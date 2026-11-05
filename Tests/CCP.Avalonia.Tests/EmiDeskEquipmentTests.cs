@@ -25,6 +25,7 @@ public sealed partial class AccountSeedTests
         var toy = CoreSettings.Current.EmiDeskToy;
         var stamp = CoreSettings.Current.EmiDeskEquipUpdatedMs;
         var owed = CoreSettings.Current.EmiDeskEquipPushOwed;
+        var account = CoreAccount.UnifiedUserId;
         try
         {
             PrizeOwnership.ResetHeld();
@@ -34,7 +35,7 @@ public sealed partial class AccountSeedTests
             using var options = new OptionsCleanup(new EmiOptionsWindow(desk.Window));
             var hats = options.Window.FindControl<WrapPanel>("DeskHatPicks")!.Children.Cast<RadioButton>().ToArray();
             Assert.Equal(3,hats.Length); Assert.False(hats[1].IsEnabled); Assert.False(hats[2].IsEnabled);
-            var sync = new ConditioningControlPanel.Services.SyncPush(() => null, () => false, new EquipmentWire());
+            var sync = AccountSeed.NewSync(() => null, () => false, new EquipmentWire());   // seeded with PrizeOwnership.Feed
             sync.MarkLoaded(null); Assert.True(await sync.PushAsync("fresh launch"));
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             hats = options.Window.FindControl<WrapPanel>("DeskHatPicks")!.Children.Cast<RadioButton>().ToArray();
@@ -51,6 +52,7 @@ public sealed partial class AccountSeedTests
         {
             PrizeOwnership.ResetHeld(); ConditioningControlPanel.Services.ProviderSubscription.PrizesSink = sink;
             (s.UnifiedId, s.AuthToken, s.OfflineMode) = identity;
+            CoreAccount.UnifiedUserId = account;
             CoreSettings.Current.EmiDeskHat = hat; CoreSettings.Current.EmiDeskToy = toy;
             CoreSettings.Current.EmiDeskEquipUpdatedMs = stamp; CoreSettings.Current.EmiDeskEquipPushOwed = owed;
         }

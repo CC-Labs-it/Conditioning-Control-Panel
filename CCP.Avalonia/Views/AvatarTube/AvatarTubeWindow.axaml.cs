@@ -1226,7 +1226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///         emotive-portrait pose swap against the voice; that system did not port, so a
         ///         lead-in would be a pause with nothing happening in it.</item>
         ///   <item>EMI Desk's <c>NoteAvatarSpeaking</c>: its only consumer is her line engine,
-        ///         which is not on this head. Her <c>AvatarMuted</c> IS honoured below, as WPF
+        ///         whose voice-hold tail is still missing here. Her <c>AvatarMuted</c> IS honoured below, as WPF
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
         /// </list>
         ///

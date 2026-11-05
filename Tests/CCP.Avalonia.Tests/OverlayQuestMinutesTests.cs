@@ -8,8 +8,8 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>WPF AchievementService:239/276: Pink Filter / Spiral quest minutes, 1 s ticks only while the
-/// overlay shows, late ticks credited up to the 3 minute sleep ceiling. Stepped clock, no real timer wait (P08).</summary>
+/// <summary>WPF AchievementService:228/249: Pink Filter / Spiral quest minutes, 1 s ticks only while the
+/// overlay shows, intervals over three minutes dropped. Stepped clock, no real timer wait (P08).</summary>
 public sealed class OverlayQuestMinutesTests
 {
     [Fact]
@@ -25,14 +25,13 @@ public sealed class OverlayQuestMinutesTests
         for (var i = 0; i < 60; i++) { now += TimeSpan.FromSeconds(1); counter.Sample(true); }
         Assert.Equal(1.0, credited.Sum(), 6);
 
-        now += TimeSpan.FromSeconds(30);         // a minimised panel: credit the full late interval
+        now += TimeSpan.FromSeconds(30);         // delayed UI tick still counts
         counter.Sample(true);
         Assert.Equal(1.5, credited.Sum(), 6);
-        now += TimeSpan.FromSeconds(6);          // an ordinary late tick
+        now += TimeSpan.FromSeconds(6);
         counter.Sample(true);
         Assert.Equal(1.6, credited.Sum(), 6);
-
-        now += TimeSpan.FromMinutes(3);
+        now += TimeSpan.FromMinutes(3);          // inclusive ceiling
         counter.Sample(true);
         Assert.Equal(4.6, credited.Sum(), 6);
         now += TimeSpan.FromMinutes(3) + TimeSpan.FromTicks(1);
@@ -44,6 +43,20 @@ public sealed class OverlayQuestMinutesTests
         now += TimeSpan.FromSeconds(1);
         counter.Sample(false);
         Assert.Equal(4.6, credited.Sum(), 6);
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF AchievementService:252: the spiral going off screen restarts its continuous run.</summary>
+    [Fact]
+    public Task HidingRunsTheHiddenHookAndShowingDoesNot() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var hidden = 0;
+        var counter = new OverlayQuestMinutes(_ => { }, () => hidden++) { Clock = () => TimeSpan.Zero };
+        counter.Follow(true);
+        counter.Follow(true);
+        Assert.Equal(0, hidden);
+        counter.Follow(false);
+        Assert.Equal(1, hidden);
         return Task.CompletedTask;
     });
 }
