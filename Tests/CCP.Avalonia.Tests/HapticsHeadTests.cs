@@ -22,6 +22,14 @@ namespace CCP.Avalonia.Tests;
 /// (MockProviderV2, an Intiface address nobody listens on) - never a real toy.</summary>
 public sealed class HapticsHeadTests
 {
+    private static void EnsureApplication()
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
+
     private static void WithHaptics(bool premium, bool mock, Action<HapticService, ConcurrentQueue<string>> body)
     {
         var s = CoreSettings.Current.Haptics;
@@ -47,6 +55,29 @@ public sealed class HapticsHeadTests
             (s.V2.Provider("mock").Enabled, s.V2.Provider("buttplug").Enabled, s.V2.Provider("lovense").Enabled) = (old.Item7, old.Item8, old.Item9);
         }
     }
+
+    [Fact]
+    public void AllToyPatternPreviewsWorkWithMasterOffAndStopOnHide() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApplication();
+        WithHaptics(premium: true, mock: true, (h, toasts) =>
+        {
+            Assert.True(h.ConnectAsync().Result);
+            var tab = new HapticsTabView();
+            var host = new Window { Content = tab };
+            host.Show();
+            try
+            {
+                tab.CmbPatternToy.SelectedIndex = 0;
+                tab.BtnPatternPlay.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.True(Wait(() => toasts.Any(t => t.Contains('%'))));
+                tab.IsVisible = false;
+                Assert.True(tab.LastPreview.Wait(3000));
+                Assert.False(tab.PreviewRunning);
+            }
+            finally { host.Close(); }
+        });
+    });
 
     private static bool Wait(Func<bool> done, int ms = 3000)
     {

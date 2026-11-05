@@ -108,7 +108,12 @@ namespace ConditioningControlPanel.Services
         public void Start(Session session)
         {
             if (IsRunning) throw new InvalidOperationException("A session is already running. Stop it first.");
-            if (!CoreEngine.IsRunning) CoreEngine.Start();
+            if (!CoreEngine.IsRunning)
+            {
+                CoreEngine.Start();
+                // WPF starts the engine first: saved standalone slots claim the corner before the session.
+                CoreCornerGif.Refresh();
+            }
             // SessionEngine.cs:207-230: the session owns Mind Wipe, including its delayed start.
             CoreMindWipe.Stop();
 
