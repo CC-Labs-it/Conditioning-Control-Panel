@@ -6,10 +6,10 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Input;
-using Avalonia.VisualTree;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -193,7 +193,10 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
+        // Freeze entrance motion so the pointer probes a stationary target.
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
         var shell = new MainShellWindow();
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
@@ -213,9 +216,15 @@ public sealed class CompanionEditorsTests
                 shell.UpdateLayout();
                 // This link template draws only its TextBlock; Button padding is not a hit surface.
                 var label = button.GetVisualDescendants().OfType<TextBlock>().Single();
+                // BringIntoView needs current bounds; a pending page layout can scroll the wrong
+                // rectangle on Windows. Settle layout and rendering before injecting real input.
                 label.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                shell.UpdateLayout();
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
+                shell.UpdateLayout();
+                HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
                 var at = label.TranslatePoint(new Point(label.Bounds.Width / 2, label.Bounds.Height * vertical), shell)!.Value;
                 Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);

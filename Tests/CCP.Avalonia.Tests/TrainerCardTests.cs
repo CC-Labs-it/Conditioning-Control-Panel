@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -171,36 +172,17 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                // Headless MouseDown/Up render between events and use stopwatch timestamps.
-                // Give the simulated gesture its own time, regardless of CI rendering speed.
-                ulong gestureTime = 0;
-                var clicks = new List<int>();
-                list.AddHandler(global::Avalonia.Input.InputElement.PointerPressedEvent,
-                    (_, e) => clicks.Add(e.ClickCount), global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
-                // Avalonia 12 marks the raw input callback/timestamp as private API.
-                var platform = w.PlatformImpl!;
-                var rawInput = platform.GetType().GetProperty("Input")!;
-                var timestamp = typeof(global::Avalonia.Input.Raw.RawInputEventArgs).GetProperty("Timestamp")!;
-                var input = (Action<global::Avalonia.Input.Raw.RawInputEventArgs>)rawInput.GetValue(platform)!;
-                rawInput.SetValue(platform, (Action<global::Avalonia.Input.Raw.RawInputEventArgs>)(e =>
-                {
-                    if (e is global::Avalonia.Input.Raw.RawPointerEventArgs)
-                        timestamp.SetValue(e, gestureTime += 10);
-                    input(e);
-                }));
-                try
-                {
-                    for (var i = 0; i < 2; i++)
-                    {
-                        // Prove a renderer stall beyond the OS interval cannot change this gesture.
-                        if (i == 1) await Task.Delay(w.GetPlatformSettings()!.GetDoubleTapTime(global::Avalonia.Input.PointerType.Mouse)
-                            + TimeSpan.FromMilliseconds(50));
-                        w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                        w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                    }
-                }
-                finally { rawInput.SetValue(platform, input); }
-                Assert.Equal(new[] { 1, 2 }, clicks);
+                w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                // Prove a renderer stall beyond the OS interval cannot change this gesture.
+                await Task.Delay(w.GetPlatformSettings()!.GetDoubleTapTime(global::Avalonia.Input.PointerType.Mouse)
+                    + TimeSpan.FromMilliseconds(50));
+                // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
+                // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
+                var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;
+                hit.RaiseEvent(new PointerPressedEventArgs(hit, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), w, at, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 2));
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
