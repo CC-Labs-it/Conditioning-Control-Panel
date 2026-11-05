@@ -38,10 +38,12 @@ public sealed class SubjectsFxTests
         var clock = new Clock();
         SetClock(clock);
         Window? window = null;
+        TaskCompletionSource<PbpLobbyReply>? discovery = null;
         try
         {
             CoreSettings.Current.MotionLevel = MotionLevel.Full;
             var view = new AvailableSubjectsTabView();
+            discovery = HoldDiscovery(view);
             var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
             Paint(view, 9);
             window = new Window { Width = 1300, Height = 700, Content = view };
@@ -51,6 +53,8 @@ public sealed class SubjectsFxTests
             view.IsVisible = true;
             Dispatcher.UIThread.RunJobs();
             var cards = Enumerable.Range(0, 9).Select(i => list.ContainerFromIndex(i)!).ToArray();
+            Assert.True(view.Discovery.IsWatched);
+            Assert.False(discovery.Task.IsCompleted);
             Assert.Equal(0, cards[0].Opacity);
             Assert.Equal(10, Assert.IsType<TranslateTransform>(cards[0].RenderTransform).Y);
             Step(view, clock, 100);
@@ -79,6 +83,8 @@ public sealed class SubjectsFxTests
         finally
         {
             window?.Close();
+            discovery?.TrySetResult(PbpLobbyReply.Empty);
+            Dispatcher.UIThread.RunJobs();
             SetClock(TimeProvider.System);
             service.SaveImmediate();
             CoreSettings.ServiceProvider = previous;
@@ -96,15 +102,19 @@ public sealed class SubjectsFxTests
         var clock = new Clock();
         SetClock(clock);
         Window? window = null;
+        TaskCompletionSource<PbpLobbyReply>? discovery = null;
         try
         {
             CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
             var view = new AvailableSubjectsTabView();
+            discovery = HoldDiscovery(view);
             Paint(view, 3);
             window = new Window { Width = 1300, Height = 700, Content = view };
             window.Show();
             Dispatcher.UIThread.RunJobs();
             var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
+            Assert.True(view.Discovery.IsWatched);
+            Assert.False(discovery.Task.IsCompleted);
             Assert.Equal(0, list.ContainerFromIndex(0)!.Opacity); // Reduced still permits interaction entrances
             Step(view, clock, 600);
             Assert.Equal(1, list.ContainerFromIndex(0)!.Opacity);
@@ -118,6 +128,8 @@ public sealed class SubjectsFxTests
         finally
         {
             window?.Close();
+            discovery?.TrySetResult(PbpLobbyReply.Empty);
+            Dispatcher.UIThread.RunJobs();
             SetClock(TimeProvider.System);
             service.SaveImmediate();
             CoreSettings.ServiceProvider = previous;
@@ -133,6 +145,7 @@ public sealed class SubjectsFxTests
         var clock = new Clock();
         SetClock(clock);
         MainShellWindow? shell = null;
+        TaskCompletionSource<PbpLobbyReply>? discovery = null;
         try
         {
             CoreSettings.Current.MotionLevel = MotionLevel.Full;
@@ -141,11 +154,14 @@ public sealed class SubjectsFxTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(MotionLevel.Full, CoreSettings.Current.MotionLevel);
             var view = shell.Named<AvailableSubjectsTabView>("AvailableSubjectsTab")!;
+            discovery = HoldDiscovery(view);
             var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
             Paint(view, 3); // the Lobby keeps its snapshot across the repaint on arrival
             shell.OpenNavSection("social");
             Dispatcher.UIThread.RunJobs();
             Assert.True(view.IsEffectivelyVisible);
+            Assert.True(view.Discovery.IsWatched);
+            Assert.False(discovery.Task.IsCompleted);
             Assert.Equal(0, list.ContainerFromIndex(0)!.Opacity);
             Assert.True(view.SubjectsFxRunning);
             shell.ShowTab("settings");
@@ -156,11 +172,28 @@ public sealed class SubjectsFxTests
         finally
         {
             shell?.Close();
+            discovery?.TrySetResult(PbpLobbyReply.Empty);
+            Dispatcher.UIThread.RunJobs();
             CoreSettings.Current.MotionLevel = motion;
             SetClock(TimeProvider.System);
         }
         return Task.CompletedTask;
     });
+
+    // These clock-stepped FX tests own the painted snapshot. Keep discovery in flight until
+    // close so its signed-out/empty reply cannot replace the rows under animation. The page
+    // still takes a real polling lease; LobbyPageTests covers completed discovery rounds.
+    private static TaskCompletionSource<PbpLobbyReply> HoldDiscovery(AvailableSubjectsTabView view)
+    {
+        var reply = new TaskCompletionSource<PbpLobbyReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+        view.ReadGates = () => LobbyGates.From(true, false, false);
+        view.Discovery.SignedIn = () => true;
+        view.Discovery.FetchChess = _ => reply.Task;
+        view.Discovery.FetchGoon = _ => Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty);
+        view.Discovery.FetchRace = _ => Task.FromResult(RaceOpenReply.Empty);
+        view.Discovery.ReadFriends = () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>();
+        return reply;
+    }
 
     // WPF staggers AvailableSubjectsList, which is the Lobby's Open column (MainWindow.SubjectsFx.cs:94).
     private static void Paint(AvailableSubjectsTabView view, int open) => view.PaintSnapshot(
