@@ -642,7 +642,6 @@ namespace ConditioningControlPanel.Models
             set { _lastPerfectWeekStreakAwarded = Math.Max(0, value); OnPropertyChanged(); }
         }
 
-        private bool _suppressPerkNotifications = false;
         /// <summary>
         /// Silences the ANNOUNCEMENT of a progression payout - never the payout. When true the
         /// app stops raising the four interrupting celebrations meadow reported as immersion
@@ -660,12 +659,42 @@ namespace ConditioningControlPanel.Models
         /// would be solving the wrong half.
         ///
         /// Defaults false: nobody's experience changes until they ask for it.
+        ///
+        /// 2026-11-05: now a view of <see cref="PerkEffects"/> (true = anything but Full). Still
+        /// written to disk so an older build reading a newer file keeps the cards off; reading
+        /// true lifts Full to NoCards and never lowers Off (<see cref="PerkEffectsRules.FromLegacySuppress"/>).
         /// </summary>
         [JsonProperty]
         public bool SuppressPerkNotifications
         {
-            get => _suppressPerkNotifications;
-            set { _suppressPerkNotifications = value; OnPropertyChanged(); }
+            get => _perkEffects != PerkEffectsMode.Full;
+            set
+            {
+                var next = PerkEffectsRules.FromLegacySuppress(_perkEffects, value);
+                if (next == _perkEffects) return;
+                _perkEffects = next;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PerkEffects));
+            }
+        }
+
+        private PerkEffectsMode _perkEffects = PerkEffectsMode.Full;
+        /// <summary>
+        /// Settings > Notifications "Perk effects: Full / No cards / Off" (owner, 2026-11-05). See
+        /// <see cref="PerkEffectsMode"/>. XP never depends on it.
+        /// </summary>
+        [JsonProperty]
+        public PerkEffectsMode PerkEffects
+        {
+            get => _perkEffects;
+            set
+            {
+                var next = PerkEffectsRules.Clamp(value);
+                if (next == _perkEffects) return;
+                _perkEffects = next;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SuppressPerkNotifications));
+            }
         }
 
         #region Bark system
