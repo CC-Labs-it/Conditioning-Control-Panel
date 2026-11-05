@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Scheduler Active",
+  "scheduler_started_body": "Session auto-started based on schedule.",
+  "scheduler_ended_title": "Scheduler",
+  "scheduler_ended_body": "Scheduled session ended.",
   "upgrade_notes_title_fmt": "What's New in v{0}",
   "upgrade_notes_tour_button": "Show me around (60s)",
   "devices_always_on_title": "Always-on microphone",

@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Programación activa",
+  "scheduler_started_body": "Sesión iniciada automáticamente según el horario.",
+  "scheduler_ended_title": "Programación",
+  "scheduler_ended_body": "La sesión programada terminó.",
   "upgrade_notes_title_fmt": "Novedades de v{0}",
   "upgrade_notes_tour_button": "Mostrar recorrido (60 s)",
   "devices_always_on_title": "Micrófono siempre activo",

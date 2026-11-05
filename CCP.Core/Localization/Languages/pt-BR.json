@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Agendamento ativo",
+  "scheduler_started_body": "Sessão iniciada automaticamente conforme o agendamento.",
+  "scheduler_ended_title": "Agendamento",
+  "scheduler_ended_body": "A sessão agendada terminou.",
   "upgrade_notes_title_fmt": "Novidades da v{0}",
   "upgrade_notes_tour_button": "Mostrar o tour (60 s)",
   "devices_always_on_title": "Microfone sempre ativo",

@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Planification active",
+  "scheduler_started_body": "Séance démarrée automatiquement selon le planning.",
+  "scheduler_ended_title": "Planification",
+  "scheduler_ended_body": "La séance planifiée est terminée.",
   "upgrade_notes_title_fmt": "Nouveautés de la v{0}",
   "upgrade_notes_tour_button": "Voir la visite (60 s)",
   "devices_always_on_title": "Microphone toujours actif",

@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Pianificazione attiva",
+  "scheduler_started_body": "Sessione avviata automaticamente secondo il programma.",
+  "scheduler_ended_title": "Pianificazione",
+  "scheduler_ended_body": "La sessione programmata è terminata.",
   "upgrade_notes_title_fmt": "Novità della v{0}",
   "upgrade_notes_tour_button": "Mostra il tour (60 s)",
   "audio_device_unnamed": "(senza nome)",

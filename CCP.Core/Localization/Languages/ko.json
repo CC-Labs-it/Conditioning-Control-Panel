@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "일정 활성화",
+  "scheduler_started_body": "일정에 따라 세션이 자동으로 시작되었습니다.",
+  "scheduler_ended_title": "일정",
+  "scheduler_ended_body": "예정된 세션이 종료되었습니다.",
   "upgrade_notes_title_fmt": "v{0}의 새로운 기능",
   "upgrade_notes_tour_button": "둘러보기 (60초)",
   "devices_always_on_title": "항상 켜진 마이크",

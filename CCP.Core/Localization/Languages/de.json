@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Zeitplan aktiv",
+  "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",
+  "scheduler_ended_title": "Zeitplan",
+  "scheduler_ended_body": "Geplante Sitzung beendet.",
   "upgrade_notes_title_fmt": "Neu in v{0}",
   "upgrade_notes_tour_button": "Rundgang starten (60 s)",
   "devices_always_on_title": "Dauerhaft aktives Mikrofon",

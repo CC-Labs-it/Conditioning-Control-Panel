@@ -34,10 +34,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body",
                     "btn_stop_session_yes", "btn_stop_session_no");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning)
+                {
+                    // WPF StartStop.cs:101-111: a stop by hand inside the window holds the scheduler off.
+                    Scheduler.NoteManualStop(CoreSettings.Current, SchedulerNow());
+                    StopEngine();
+                }
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); App.Achievements?.TrackPanicPressed(); StopEngine(); }
+            if (CoreEngine.IsRunning)
+            {
+                Serilog.Log.Information("Start button: stopping the engine");
+                Scheduler.NoteManualStop(CoreSettings.Current, SchedulerNow());
+                App.Achievements?.TrackPanicPressed();
+                StopEngine();
+            }
             else StartEngineFromUser();
         }
 
@@ -45,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (Core PanicAftermath); the scheduler, programs, a remote or the Lockdown keeper never do.</summary>
         internal void StartEngineFromUser()
         {
+            Scheduler.NoteManualStart();
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             StartEngine(systemInitiated: false);
         }

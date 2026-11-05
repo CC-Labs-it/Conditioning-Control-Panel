@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "スケジュール有効",
+  "scheduler_started_body": "スケジュールに従ってセッションを自動的に開始しました。",
+  "scheduler_ended_title": "スケジュール",
+  "scheduler_ended_body": "予定されたセッションが終了しました。",
   "upgrade_notes_title_fmt": "v{0} の新機能",
   "upgrade_notes_tour_button": "使い方を見る (60秒)",
   "devices_always_on_title": "常時オンのマイク",

@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Расписание активно",
+  "scheduler_started_body": "Сеанс автоматически запущен по расписанию.",
+  "scheduler_ended_title": "Расписание",
+  "scheduler_ended_body": "Запланированный сеанс завершён.",
   "upgrade_notes_title_fmt": "Что нового в v{0}",
   "upgrade_notes_tour_button": "Показать обзор (60 с)",
   "devices_always_on_title": "Постоянно включённый микрофон",
