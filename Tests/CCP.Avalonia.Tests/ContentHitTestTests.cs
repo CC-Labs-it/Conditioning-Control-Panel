@@ -11,6 +11,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -61,6 +62,10 @@ public sealed class ContentHitTestTests
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
+                    // The previous probe can hover a help button. Its independent popup timer is not
+                    // covered by ToolTip.SetServiceEnabled and can obscure the next control.
+                    w.MouseMove(new Point(0, 0));
+                    HelpPopover.CloseActive();
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
                     HeadlessRendering.RenderLiveTree(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
