@@ -133,6 +133,7 @@ public sealed class PanicSurfacesTests
         "speak-cue",
         "companion-transcript",
         "possession",
+        "video-test-error",
         "attention-test",
         "audio-duck",
         "descent-fuse",
