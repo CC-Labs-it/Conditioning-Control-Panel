@@ -225,10 +225,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Platform.EntitlementRefresh.Changed += TierOnNoticePass;
             Activated += (_, _) => TierOnNoticePass();
             Closed += (_, _) => Platform.EntitlementRefresh.Changed -= TierOnNoticePass;
-            System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            var patreon = Platform.AccountSeed.Patreon;
+            var substar = Platform.AccountSeed.SubscribeStar;
+            var closed = false;
+            System.EventHandler<Models.PatreonTier> tier = (sender, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                // WPF OnPatreonTierChanged: Programs rebuilds on a tier change only, not on every navigation.
-                Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+                if (closed) return;   // a repaint queued before Close is dropped, as in MainShellWindow.SubscribeStar.cs (P41)
+                // WPF OnPatreonTierChanged: Programs rebuilds on a tier change only, not on every navigation. A SubscribeStar
+                // change rebuilds it once, in InitializeSubscribeStarDependents (WPF OnSubscribeStarTierChanged).
+                if (ReferenceEquals(sender, patreon)) Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
                 RefreshTierDependentViews();
                 RefreshProfileBubble();
                 MaybeShowPremiumCelebration();
@@ -242,12 +247,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF OnGraceClosed: the veils repaint from App.axaml.cs; Programs gate on the same entitlement at build time.
             void GraceClosed() => Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
             Platform.AccountSeed.GraceClosed += GraceClosed;
-            var patreon = Platform.AccountSeed.Patreon;
-            var substar = Platform.AccountSeed.SubscribeStar;
             if (patreon != null) patreon.TierChanged += tier;
             if (substar != null) substar.TierChanged += tier;
             Closed += (_, _) =>
             {
+                closed = true;
                 Activated -= Focused;
                 Platform.AccountSeed.TierRaised -= OnEntitlementTierRaised;
                 Platform.AccountSeed.GraceClosed -= GraceClosed;

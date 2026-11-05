@@ -84,6 +84,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void Subscribe(bool on)
         {
+            // Back on screen: a RaffleChanged missed while hidden may have dropped the card (another
+            // account), so it repaints from PageRaffleCard, as WPF's OpenLadder does before it opens.
+            if (on) PaintLadder();
             if (!on) HeroTitle.Stop(); // WPF Fx.cs:262 on hide, linked or not
             if (on && _subscribed == null && ChasterHead.Service is { } c)
             {

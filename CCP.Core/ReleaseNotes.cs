@@ -1,11 +1,6 @@
 namespace ConditioningControlPanel
 {
-    /// <summary>
-    /// Release notes for heads that do not compile the WPF UpdateService (the Avalonia head reads them
-    /// through CoreReleaseContent.PatchNotesProvider). The WPF UpdateService.CurrentPatchNotes literal stays
-    /// the source on main; this is a byte-for-byte copy of its body, pinned by ReleaseNotesParityTests, so a
-    /// main to port catch-up that bumps the notes fails until this copy follows.
-    /// </summary>
+    /// <summary>Canonical release notes for every head. Update with Version.props at release.</summary>
     public static class ReleaseNotes
     {
         public const string Current =

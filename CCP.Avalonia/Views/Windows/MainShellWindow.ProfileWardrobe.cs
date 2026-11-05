@@ -70,12 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Applies a sanitized wardrobe loadout - identical for your card and a viewed one.</summary>
         private void ApplyProfileWardrobe(ProfileCosmetics cosmetics)
         {
-            if (ProfilePage?.ProfileHeroAvatar is { } avatar)
-            {
-                avatar.FrameId = cosmetics.FrameId;
-                // This head has no remote profile-picture loader. A null also clears the previous card.
-                avatar.AvatarImage = Helpers.ModArt.AvatarPreset(cosmetics.AvatarId);
-            }
+            // WPF MainWindow.ProfileWardrobe.cs: the frame only. The preset avatar shares the picture slot
+            // and reaches it through ApplyProfileAvatarPreset alone (#847: never over a pending picture).
+            if (ProfilePage?.ProfileHeroAvatar is { } avatar) avatar.FrameId = cosmetics.FrameId;
             ApplyProfileAvatarDecoration(cosmetics.AvatarDeco, cosmetics.DecoTransform);
             ApplyProfileCharms(cosmetics.Charms, cosmetics.CharmTransforms);
         }
