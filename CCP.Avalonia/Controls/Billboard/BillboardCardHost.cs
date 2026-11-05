@@ -444,7 +444,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
 
         /// <summary>WPF Slide: the registered art view, a poster, or a plain ground, and the shade.
         /// The slide's Tag carries the art's lifecycle.</summary>
-        private static Control BuildSlide(DeckCard card)
+        private Control BuildSlide(DeckCard card)
         {
             var root = new Grid { Background = new SolidColorBrush(Color.FromRgb(0x0c, 0x0d, 0x1a)) };
             Control? art = null;
@@ -457,8 +457,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             }
             else if (card.Spec.ArtKey == BuiltInArtKeys.Poster && card.Spec.ArtData is string poster)
             {
-                try { root.Children.Add(new Image { Stretch = Stretch.UniformToFill, Source = new Bitmap(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + poster))) }); }
-                catch (Exception ex) { Log.Debug("Billboard poster {Poster} did not load: {E}", poster, ex.Message); }
+                var view = new PosterArtView(poster, _stage);
+                root.Children.Add(view);
+                root.Tag = view;
             }
             if (!DashboardBillboard.IsFullBleed(card.Spec))
             {
