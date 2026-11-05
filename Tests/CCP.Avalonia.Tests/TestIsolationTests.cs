@@ -40,26 +40,36 @@ public class TestIsolationTests
     }
 
     [Fact]
-    public System.Threading.Tasks.Task EveryTestStartsWithProductionFonts() =>
-        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+    public void SharedPlatformUsesTheProductionFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
-            // FontManager is process-wide: a test that wins startup must not omit app fonts.
-            Assert.NotNull(global::Avalonia.Application.Current);
-            Assert.Contains("Inter", global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
-            foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Fredoka, Segoe UI", "Cascadia Mono, Consolas, Courier New" })
-            {
-                var text = new global::Avalonia.Controls.TextBlock
-                {
-                    Text = "PREMIUM Wi", FontFamily = new global::Avalonia.Media.FontFamily(family),
-                    FontSize = 16, FontWeight = global::Avalonia.Media.FontWeight.Black
-                };
-                text.Measure(global::Avalonia.Size.Infinity);
-                Assert.True(text.DesiredSize.Width > 0, family);
-            }
-            return System.Threading.Tasks.Task.CompletedTask;
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+            var face = new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                weight: global::Avalonia.Media.FontWeight.Bold);
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyph), "bundled bold Inter must resolve without system fonts");
+            Assert.Equal("Inter", glyph!.FamilyName);
         });
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
+
+    // Run this alone in a fresh testhost: no fixture may decide the process-wide font setup.
+    [Fact]
+    public System.Threading.Tasks.Task TheHookInitializesTheShippedFontsBeforeAnyFixture() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            foreach (var name in new[] { "fonts:Inter#Inter", "Fredoka, Segoe UI" })
+            {
+                var face = new global::Avalonia.Media.Typeface(name);
+                Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyphs), name);
+                Assert.True(glyphs!.CharacterToGlyphMap.TryGetGlyph('A', out var glyph));
+                Assert.NotEqual((ushort)0, glyph);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        });
 
     [Fact]
     public void TheFirstTestGetsTheApplicationsFontConfiguration() =>
