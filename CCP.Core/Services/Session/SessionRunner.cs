@@ -22,8 +22,9 @@ namespace ConditioningControlPanel.Services
     /// The session-scoped corner GIF too: admission, start/end minute, pause hide, stop handback and
     /// the #474 live edits; the head draws it through <see cref="CoreCornerGif.SessionShowHandler"/>.
     ///
-    /// ponytail: not driven here - video, bubble count, mind wipe, brain drain,
-    /// ducking, phase events,
+    /// Mandatory videos and the session audio duck level follow WPF SessionEngine too.
+    ///
+    /// ponytail: not driven here - bubble count, brain drain, phase events,
     /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
@@ -222,6 +223,13 @@ namespace ConditioningControlPanel.Services
                     _deferred.Defer("audio whispers", ss.AudioWhispersStartMinute, () => CoreSettings.Current.SubAudioEnabled = true);
             }
 
+            // WPF Services/Session/SessionEngine.cs:1400-1403.
+            if (ss.AudioDuckLevel > 0)
+            {
+                s.AudioDuckingEnabled = true;
+                s.DuckingLevel = ss.AudioDuckLevel;
+            }
+
             s.BouncingTextEnabled = ss.BouncingTextEnabled;
             CoreBouncingText.Stop();   // WPF stops first to reset state, enabled or not
             if (ss.BouncingTextEnabled)
@@ -241,6 +249,16 @@ namespace ConditioningControlPanel.Services
                     () => LockCardScheduler.Instance.Start(RemainingMinutes), LockCardScheduler.Instance.Stop);
             }
             else LockCardScheduler.Instance.Stop();
+
+            // WPF Services/Session/SessionEngine.cs:1528-1547.
+            s.MandatoryVideosEnabled = ss.MandatoryVideosEnabled;
+            if (ss.MandatoryVideosEnabled)
+            {
+                if (ss.VideosPerHour.HasValue) s.VideosPerHour = ss.VideosPerHour.Value;
+                StartAt("mandatory videos", ss.MandatoryVideosStartMinute,
+                    () => CoreEngine.Video?.Start(), () => CoreEngine.Video?.Stop());
+            }
+            else CoreEngine.Video?.Stop();
 
             // SessionEngine.cs:1627: pop quiz is a user-level toggle (AppSettings), not per-session.
             if (s.PopQuizEnabled) CoreEngine.PopQuiz?.Start();
@@ -278,6 +296,7 @@ namespace ConditioningControlPanel.Services
             CoreBouncingText.Stop();
             CoreBubbles.Stop(); // WPF SessionEngine.cs:521
             CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
+            CoreEngine.Video?.Stop();   // WPF SessionEngine.cs:531
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
@@ -302,6 +321,7 @@ namespace ConditioningControlPanel.Services
                 CoreMindWipe.Start(ss.MindWipeBaseMultiplier, ss.MindWipeVolume / 100.0);
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
             if (ss.BubblesEnabled) CoreBubbles.Start(); // WPF SessionEngine.cs:570
+            if (ss.MandatoryVideosEnabled && !_deferred.IsPending("mandatory videos")) CoreEngine.Video?.Start();   // WPF :580
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
             var minutes = Elapsed.TotalMinutes;
             if (!CornerGifShown && CanRaiseCornerGif(ss) && minutes >= ss.CornerGifStartMinute
