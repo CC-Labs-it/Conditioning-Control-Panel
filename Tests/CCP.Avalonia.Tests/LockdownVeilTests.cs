@@ -547,13 +547,18 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
         var flash = Assert.IsType<Border>(shell.LockdownFlash);
+        Assert.Equal(1, flash.Opacity);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
         Assert.Equal(1.0, flash.Opacity);
         clock.Milliseconds += 300;
         shell.StepLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        clock.Milliseconds += 300;
+        clock.Milliseconds += 299;
+        shell.StepLockdownFlash();
+        Assert.Same(flash, shell.LockdownFlash);
+        Assert.Contains(flash, root.Children);
+        clock.Milliseconds += 1;
         shell.StepLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
