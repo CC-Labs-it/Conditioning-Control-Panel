@@ -29,7 +29,7 @@ public sealed class FeaturePlateArtTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             LocalizationManager.Instance.SetLanguage("en");
 
@@ -44,6 +44,7 @@ public sealed class FeaturePlateArtTests
             Assert.Equal(0.9, hero.Opacity);
             Assert.Equal(AlignmentX.Right, hero.AlignmentX);
             Assert.Equal(Stretch.UniformToFill, side.Stretch);
+            Assert.Same(hero.Source, side.Source); // default binding shares one 800px decode
             Assert.Equal(800, Width(hero)); // decoded to WPF's 800px cap
             Assert.NotEqual(400, Height(hero));
 

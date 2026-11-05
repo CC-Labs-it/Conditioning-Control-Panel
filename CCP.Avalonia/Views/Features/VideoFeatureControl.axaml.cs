@@ -492,7 +492,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             {
                 Log.Error(ex, "Error in BtnTestVideo_Click");
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
-                var dialog = new MessageDialog("Error", $"Error triggering video: {ex.Message}", showCancel: false);
+                var dialog = new MessageDialog(Loc.Get("title_error"), Loc.GetF("msg_error_triggering_video_0", ex.Message), showCancel: false);
                 TestErrors.Add(dialog);
                 try { await dialog.ShowDialogSafe(owner); }
                 finally { TestErrors.Remove(dialog); }
