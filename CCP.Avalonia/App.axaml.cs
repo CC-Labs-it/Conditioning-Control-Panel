@@ -1272,6 +1272,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Views.Overlays.HapticMockToast.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback close failed"); }
 
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
+            Platform.OsNotifications.Shutdown();
 
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
