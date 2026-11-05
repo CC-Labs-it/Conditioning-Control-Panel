@@ -185,6 +185,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser").ProvideValue(null!));
             // The placeholder belongs to the card; the popped-out host stays visible in its window.
             BrowserWebHost.IsVisible = popped || !prompt;
+            // Replace only a stuck Loading: Offline/Ready (UpdateOfflineModeUI, whose about:blank park and reload
+            // land here too) own the line, as WPF writes them whether or not the engine is up.
+            if (!BrowserWebHost.HasEngine && BrowserStatusLoading()) SetBrowserFailure(BrowserWebHost.FailureStatusKey);
+        }
+
+        private bool BrowserStatusLoading() => string.Equals(IconText.Bare(TxtBrowserStatus.Text).Trim(),
+            IconText.BareLoc("label_loading").Trim(), StringComparison.OrdinalIgnoreCase);
+
+        private void SetBrowserFailure(string key)
+        {
+            TxtBrowserStatus.Bind(TextBlock.TextProperty, LocBinding(key));
+            TxtBrowserStatus.Foreground = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(255, 107, 107));
         }
 
         /// <summary>WPF BrowserLoadingText_Click: initially load the mod's default. Subsequent Reload uses the selected
