@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.15";
+        public const string AppVersion = "7.2.2";
 
         /// <summary>
         /// Patch notes shared by both heads - update ReleaseNotes.Current with Version.props.
