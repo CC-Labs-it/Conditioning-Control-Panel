@@ -77,6 +77,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private WebHost? BrowserView => BrowserPage?.FindControl<WebHost>("BrowserWebHost");
 
+        /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
+        internal void PanicPauseBrowserMedia()
+        {
+            if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+        }
+
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
         /// WPF, including the "both deselected after an external link" case.</summary>
         private string SiteHomeUrl() =>
