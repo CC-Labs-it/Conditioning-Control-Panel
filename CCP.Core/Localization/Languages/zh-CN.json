@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "无法打开播放器",
+  "deeper_open_player_failed_fmt": "无法打开 Deeper 播放器:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "无法打开编辑器",
+  "deeper_open_editor_failed_fmt": "无法打开 Deeper 编辑器:\n\n{0}: {1}",
   "chaos_toy_buzz": "振动中。按住并扫过",
   "chaos_toy_snap_all": "解除了。全部。",
   "chaos_toy_snap_live": "解除了。所有活跃气泡都已松开",

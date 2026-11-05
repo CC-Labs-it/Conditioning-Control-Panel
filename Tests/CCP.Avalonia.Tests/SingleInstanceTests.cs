@@ -56,6 +56,22 @@ namespace CCP.Avalonia.Tests
             Assert.Null(got);                                   // a bare relaunch
         }
 
+        [Theory]
+        [InlineData(242)]
+        [InlineData(243)]
+        [InlineData(1024)]
+        public void MediaPayloadsSurviveThePipeLengthBoundary(int length)
+        {
+            var payload = "deeper:edit\n" + new string('x', length);
+            var suffix = "_test_" + Guid.NewGuid().ToString("N");
+            string? got = null;
+            using var primary = SingleInstance.Claim(suffix, p => { got = p; return Task.CompletedTask; });
+            var t = new Thread(() => SingleInstance.Claim(suffix, _ => Task.CompletedTask, payload));
+            t.Start();
+            Assert.True(t.Join(TimeSpan.FromSeconds(20)));
+            Assert.Equal(payload, got);
+        }
+
         /// <summary>A sandbox profile (CCP_USERDATA_DIR, as kc and the tests use) never wakes or blocks the
         /// user's real instance: its mutex/pipe names carry a per-directory suffix; a shipped build has none.</summary>
         [Fact]

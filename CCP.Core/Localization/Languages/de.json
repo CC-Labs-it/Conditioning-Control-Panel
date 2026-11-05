@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "Player konnte nicht geöffnet werden",
+  "deeper_open_player_failed_fmt": "Deeper Player konnte nicht geöffnet werden:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "Editor konnte nicht geöffnet werden",
+  "deeper_open_editor_failed_fmt": "Deeper Editor konnte nicht geöffnet werden:\n\n{0}: {1}",
   "chaos_toy_buzz": "es summt. halten und streichen",
   "chaos_toy_snap_all": "gelöst. alles.",
   "chaos_toy_snap_live": "gelöst. alle aktiven Blasen sind frei",

@@ -210,6 +210,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     else OpenFor(panel);
                     return;
                 }
+                var media = Services.Deeper.DeeperFileOpen.Decode(payload);
+                if (media.Action != null && media.Path != null)
+                {
+                    // WPF App.xaml.cs:2209-2213 restores the shell before dispatch.
+                    if (_window != null) _window.OpenPanel(p => p.HandlePendingFileOpen(media.Action, media.Path));
+                    else
+                    {
+                        panel.ShowFromTray();
+                        panel.HandlePendingFileOpen(media.Action, media.Path);
+                    }
+                    return;
+                }
                 var (kind, id) = LauncherHandoff.Decode(payload);
                 Log.Information("[Launcher] second instance asked for {Kind} {Id}", kind, id);
                 switch (kind)
