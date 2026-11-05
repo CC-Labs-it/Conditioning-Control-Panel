@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Controls;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -9,6 +10,23 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// the panel is open, on Avalonia's message-pumping UI thread. No key or pointer history is kept.</summary>
 internal sealed class Win32OptionsDismiss : IDisposable
 {
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    private static extern uint GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
+    private static extern uint SetWindowLong(IntPtr hwnd, int index, uint value);
+
+    // WPF Windows/EmiDesk/EmiOptionsWindow.xaml.cs:108-114: tool window, no activation.
+    internal static uint PassiveStyle(uint extendedStyle)
+        => extendedStyle | Win32Overlay.WsExToolWindow | Win32Overlay.WsExNoActivate;
+
+    internal static void PreventActivation(Window window)
+    {
+        if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } handle) return;
+        // Avalonia rebuilds styles when decorations/taskbar properties change.
+        Win32Properties.AddWindowStylesCallback(window, (style, ex) => (style, PassiveStyle(ex)));
+        SetWindowLong(handle.Handle, -20, PassiveStyle(GetWindowLong(handle.Handle, -20)));
+    }
+
     private const int MouseHook = 14, KeyboardHook = 13;
     private const int LeftDown = 0x0201, RightDown = 0x0204, KeyDown = 0x0100, SysKeyDown = 0x0104;
     private delegate IntPtr HookProc(int code, IntPtr message, IntPtr data);

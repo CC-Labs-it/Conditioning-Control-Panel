@@ -265,12 +265,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // Keep the base pat feedback gate alongside shared clock-driven chain playback.
+        // Keep the base pat feedback gate and port/7.2's speech timer alongside shared clock-driven chain playback.
         // WPF Services/EmiDesk/EmiChainPlayer.cs:31 supplies the corresponding player gate.
         private EmiChainPlayback? _player;
         private EmiChainPlayback Player => _player ??= new EmiChainPlayback(TossClock,
             action => Dispatcher.UIThread.Post(action));
-        public bool ChainLive => _patFeedback is not null || _player?.IsLive == true;
+        public bool ChainLive => _patFeedback is not null || _speechTimer != null || _player?.IsLive == true;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -904,6 +904,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (_finishDismiss != null && chain.Id != "wink") return;
             if (_summonChainLive && chain.Id != "wake") FinishSummon();
             StopPatFeedback();
+            CancelSpeech();
             StopIdleBeats();
             Player.Play(chain, new EmiChainHooks
             {
@@ -923,8 +924,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
+        // WPF Bubble.cs:503-540; timing comes from the existing shared Core chain.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
-            => PlayChain(EmiChains.MakeSay(line, reactionFace, EmiChains.SayHoldMs(line)), done);
+        {
+            // Same gates as PlayChain: a line never cuts the dismissal outro, and it cuts the wake chain
+            // after completing the summon (WPF React.cs:132-138 / Fx.cs:143-202).
+            if (PresentationActive || _finishDismiss != null) return;
+            if (_summonChainLive) FinishSummon();
+            BeginSpeech(line, reactionFace, done);
+        }
 
         internal void StopForPanic()
         {
@@ -938,6 +946,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             StopPatFeedback();
             _player?.Cancel();
+            CancelSpeech();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -2300,6 +2309,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 DisarmPet();
                 _summonEpoch++;
                 CancelChain();
+                CancelHold();
                 TearDownReactions();
 
                 try { OnTearDownCore(); }
@@ -2671,8 +2681,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>ponytail: needs App.EmiDesk.ResetOnboarding() - the QA gesture replay.</summary>
         private void ResetOnboarding() { }
 
-        /// <summary>ponytail: needs App.EmiDesk.Fire(...) - her own event bus.</summary>
-        private void FireDeskEvent(string name) { }
+        /// <summary>WPF EmiDeskService.cs:661: widget moments feed the shared line engine.</summary>
+        private void FireDeskEvent(string name) => EmiDeskService.Instance.Fire(name);
 
         // ---------------------------------------------------------------- teardown
 
@@ -2701,6 +2711,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownReactions();
                 TearDownVox();
                 CancelChain();
+                CancelHold();
                 SweepFx(all: true);
                 Close();
             }
@@ -2727,6 +2738,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelChain(); CancelHold();
             }
             catch (Exception ex)
             {
