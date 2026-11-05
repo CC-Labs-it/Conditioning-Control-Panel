@@ -246,9 +246,8 @@ public sealed class LauncherWindowTests
         Assert.True(launcher.IsVisible);
         Assert.False(shell.IsVisible);
 
-        // Only the destinations this head has: the Breakout demo, Piece by Piece and Down the Rabbit Hole game hosts,
-        // then the intake tab.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "dtrh", "intake" }, Tiles(launcher));
+        // Only the destinations this head has: the game hosts and the intake tab.
+        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "race", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));
@@ -519,11 +518,31 @@ public sealed class LauncherWindowTests
         Assert.Equal("gradedintake", shell.CurrentTab);
         Assert.False(LauncherWindow.Instance!.IsVisible);
 
-        LauncherWindow.Boot = BootDecision.GameFirst("race");   // a WPF game with no host on this head
+        LauncherWindow.Boot = BootDecision.GameFirst("goon");   // a WPF game with no host on this head
         LauncherWindow.RouteBoot(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(shell.IsVisible);
         Assert.True(LauncherWindow.Instance!.IsVisible);
+    });
+
+    [Fact]
+    public void BootIntoRace_BelowPrime_ShowsLauncherAfterRefusal() => Run(shell =>
+    {
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        int denied = 0;
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreEntitlement.HasLabProvider = () => false;
+            CoreEntitlement.ShowDeniedHandler = _ => denied++;
+            LauncherWindow.Boot = BootDecision.GameFirst("race");
+            LauncherWindow.RouteBoot(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, denied);
+            Assert.False(shell.IsVisible);
+            Assert.True(LauncherWindow.Instance!.IsVisible);
+        }
+        finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
     });
 
     [Fact]

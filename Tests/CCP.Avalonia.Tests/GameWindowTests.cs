@@ -617,12 +617,14 @@ public sealed partial class GameWindowTests
     private static void RunRace(string? owned, Action<LauncherWindow, List<double>, List<double>> body) => Run((_, launcher) =>
     {
         var (oldOwns, oldBank, oldXp, oldAssets, oldClock) = (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.RaceUtcNow);
+        var oldLab = CoreEntitlement.HasLabProvider;
         var lib = Directory.CreateTempSubdirectory("race-lib-").FullName;
         var xp = new List<double>();
         var sparks = new List<double>();
         try
         {
             CoreAccount.IsLoggedInProvider = () => true;
+            CoreEntitlement.HasLabProvider = () => true;
             RacingAccess.IsGrantedProvider = id => id == owned;
             GameWindow.RaceBankSparks = input => { sparks.Add(input.Score); return 7; };
             CoreProgression.AddXPProvider = (amount, _) => xp.Add(amount);
@@ -632,19 +634,29 @@ public sealed partial class GameWindowTests
         finally
         {
             (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.RaceUtcNow) = (oldOwns, oldBank, oldXp, oldAssets, oldClock);
+            CoreEntitlement.HasLabProvider = oldLab;
             Directory.Delete(lib, true);
         }
     });
 
-    /// <summary>WPF CaucusHostService.Launch :132 + LauncherCatalogue :234: no track, no race (and no tile here,
-    /// where WPF draws the mystery card); an owned track opens it from the launcher after the leash check; panic closes it.</summary>
+    // The 2D host is retired but its protocol tests still exercise its window directly.
+    private static GameWindow OpenLegacyRace()
+    {
+        Assert.True(GameWindow.RaceGate());
+        var w = new GameWindow(GameWindow.Games["race"]);
+        w.Load(GameWindow.Server());
+        w.Show();
+        return w;
+    }
+
+    /// <summary>The retired host still rejects a missing track. The current launcher respects the leash and panic.</summary>
     [Fact]
     public void Race_DoorAndLauncher_LeashGate_AndPanic()
     {
         RunRace(null, (launcher, _, _) =>
         {
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
-            Assert.Null(GameWindow.Launch("race"));
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+            Assert.False(GameWindow.RaceGate());
             Assert.False(GameWindow.IsAnyOpen());
         });
         RunRace("rt.original.03", (launcher, _, _) =>
@@ -673,7 +685,7 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
     {
-        var w = GameWindow.Launch("race")!;
+        var w = OpenLegacyRace();
         Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
@@ -705,7 +717,7 @@ public sealed partial class GameWindowTests
         var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var now = t0;
         GameWindow.RaceUtcNow = () => now;                // stepped clock (P08); RunRace restores it
-        var w = GameWindow.Launch("race")!;
+        var w = OpenLegacyRace();
         Assert.True(w.RaceWatchRunning);                // WPF Launch arms the watch
         Assert.Equal("idle", w.CheckRaceHeartbeat(t0.AddSeconds(60)));
         w.HandleMessage("{\"type\":\"ready\"}");
@@ -784,7 +796,7 @@ public sealed partial class GameWindowTests
         WithTrackFiles((_, _) => { decodes++; return Tone(4); }, files =>
         {
             var player = new FakeTrackPlayer();
-            var w = GameWindow.Launch("race")!;
+            var w = OpenLegacyRace();
             using (var real = w.RaceNewPlayer!()) Assert.IsType<RaceTrackPlayer>(real);   // this head's own player
             w.RaceNewPlayer = () => player;
             w.RacePickFile = () => Task.FromResult<string?>(files[0]);
@@ -832,7 +844,7 @@ public sealed partial class GameWindowTests
     {
         WithTrackFiles(null, files =>
         {
-            var w = GameWindow.Launch("race")!;
+            var w = OpenLegacyRace();
             w.RaceNewPlayer = null;   // a build with no player
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -867,7 +879,7 @@ public sealed partial class GameWindowTests
             return Tone(3);
         }, files =>
         {
-            var w = GameWindow.Launch("race")!;
+            var w = OpenLegacyRace();
             w.RaceNewPlayer = () => new FakeTrackPlayer();
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));

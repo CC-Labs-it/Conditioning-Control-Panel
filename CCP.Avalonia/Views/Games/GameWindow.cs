@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Basic door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
-            // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
+            // WPF GlassroadHostService: the Prime-only 3D race (GameWindow.Glassroad.cs).
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
 
@@ -73,13 +73,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
         internal static GameWindow? Launch(string id)
         {
-            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
+            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            try { if (spec.Gate != null && !spec.Gate()) return null; }
+            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
             if (live != null) { live.Activate(); return live; }
-            try { if (spec.Gate != null && !spec.Gate()) return null; }
-            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();

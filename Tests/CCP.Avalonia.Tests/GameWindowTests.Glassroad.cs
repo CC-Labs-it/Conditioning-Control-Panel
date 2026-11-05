@@ -42,11 +42,13 @@ public sealed partial class GameWindowTests
     {
         var (oldDoor, oldOwns, oldHttp, oldBase) = (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
+        var oldLab = CoreEntitlement.HasLabProvider;
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
             GameWindow.GlassroadDoorEnv = () => door;
+            CoreEntitlement.HasLabProvider = () => true;
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
             GameWindow.PbpServerBase = () => GrBase;
@@ -59,10 +61,30 @@ public sealed partial class GameWindowTests
         }
         finally
         {
+            CoreEntitlement.HasLabProvider = oldLab;
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Glassroad_PreviewRequiresPrime(bool prime)
+    {
+        var old = (GameWindow.GlassroadDoorEnv, CoreEntitlement.HasLabProvider, CoreEntitlement.ShowDeniedHandler);
+        try
+        {
+            GameWindow.GlassroadDoorEnv = () => "1";
+            CoreEntitlement.HasLabProvider = () => prime;
+            CoreEntitlement.ShowDeniedHandler = _ => { };
+            Assert.Equal(prime, GameWindow.GlassroadGate());
+        }
+        finally
+        {
+            (GameWindow.GlassroadDoorEnv, CoreEntitlement.HasLabProvider, CoreEntitlement.ShowDeniedHandler) = old;
+        }
+    }
 
     // ---- pure rules ----
 
@@ -161,32 +183,112 @@ public sealed partial class GameWindowTests
 
     // ---- the window ----
 
-    /// <summary>Door shut: the page cannot be opened and the race tile stays hidden without a track. Door open: the
-    /// Racing Thoughts tile shows, Play opens Glassroad (not dtrh/race.html), and panic closes it.</summary>
-    [Fact]
-    public void Glassroad_DoorHidesIt_TheRaceTileOpensIt_PanicClosesIt()
+    /// <summary>WPF always shows the Prime race and routes it to Glassroad in both switch states.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("1")]
+    public void Glassroad_RaceDoorRequiresPrimeAndOpens3D(string? door) => RunGlassroad(door, (shell, launcher, _) =>
     {
-        RunGlassroad(null, (_, _, _) =>
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        int denied = 0;
+        try
         {
-            Assert.Equal("race", GameWindow.ResolveDoor("race"));
-            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
-            Assert.False(GameWindow.IsAnyOpen());
-        });
-        RunGlassroad("1", (shell, launcher, _) =>
-        {
+            CoreEntitlement.ShowDeniedHandler = _ => denied++;
+            CoreEntitlement.HasLabProvider = () => false;
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+            Assert.True(LauncherWindow.Destinations["race"].Locked());
+            launcher.Play(LauncherCards.Find("race")!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, denied);
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Null(GameWindow.Launch("race"));
+            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
+            Assert.Equal(3, denied);
+            CoreEntitlement.HasLabProvider = () => true;
+            Assert.False(LauncherWindow.Destinations["race"].Locked());
             launcher.Play(LauncherCards.Find("race")!);
             Dispatcher.UIThread.RunJobs();
             var w = Assert.Single(GameWindow.OpenWindowsForTests());
             Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
             Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
-            Assert.Same(w, GameWindow.Launch("race"));                 // one live window, focused
+            Assert.Same(w, GameWindow.Launch("race"));
             PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());
-        });
-    }
+        }
+        finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+    });
+
+    [Fact]
+    public void Glassroad_LaunchChecksPrimeBeforeFocusingLiveWindow() => RunGlassroad(null, (_, _, _) =>
+    {
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        int denied = 0;
+        try
+        {
+            CoreEntitlement.ShowDeniedHandler = _ => denied++;
+            var w = GameWindow.Launch("race")!;
+            Assert.NotNull(w);
+            CoreEntitlement.HasLabProvider = () => false;
+            Assert.Null(GameWindow.Launch("race"));
+            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
+            Assert.Equal(2, denied);
+            Assert.Same(w, Assert.Single(GameWindow.OpenWindowsForTests()));
+            CoreEntitlement.HasLabProvider = () => true;
+            Assert.Same(w, GameWindow.Launch("race"));
+        }
+        finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+    });
+
+    // The Node fixture executes the real page bridge, while the host half is the headless GameWindow.
+    [Fact]
+    public void Glassroad_WebKitPageExchangesInitReadyAndHeartbeatWithHost() => RunGlassroad(null, (_, _, _) =>
+    {
+        var w = GameWindow.Launch("race")!;
+        var start = new System.Diagnostics.ProcessStartInfo("node")
+        {
+            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.ArgumentList.Add(GlassroadCarrierFixture());
+        using var page = System.Diagnostics.Process.Start(start)!;
+        page.StandardInput.AutoFlush = true;
+        JObject Next()
+        {
+            var line = page.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(15)).GetAwaiter().GetResult();
+            Assert.True(line != null, line == null ? page.StandardError.ReadToEnd() : "");
+            return JObject.Parse(line!);
+        }
+        try
+        {
+            var boot = Next();
+            Assert.Equal("bridge", (string?)boot["event"]);
+            Assert.True((bool)boot["hosted"]!);
+            int hostInit = 0;
+            w.Posted += json => { hostInit++; page.StandardInput.WriteLine(json); };
+            w.Web.OnNavigationCompleted(w.PageUrl);
+            var received = Next();
+            Assert.Equal("init", (string?)received["event"]);
+            Assert.Equal("desktop", (string?)received["init"]!["caps"]!["platform"]);
+            Assert.Equal("discord:12", (string?)received["init"]!["identity"]!["unifiedId"]);
+            var ready = Next();
+            Assert.Equal("ready", (string?)JObject.Parse((string)ready["json"]!)["type"]);
+            w.Web.OnWebMessage((string)ready["json"]!);
+            Assert.True(w.IsReady);
+            Assert.Equal(2, hostInit);
+            Assert.Equal("second-init", (string?)Next()["event"]);
+            page.StandardInput.WriteLine("tick");
+            var beat = Next();
+            Assert.Equal("heartbeat", (string?)JObject.Parse((string)beat["json"]!)["type"]);
+            w.Web.OnWebMessage((string)beat["json"]!);
+            Assert.True(w.IsReady);
+        }
+        finally { if (!page.HasExited) page.Kill(entireProcessTree: true); }
+    });
+
+    private static string GlassroadCarrierFixture([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+        System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(here)!, "..", "..",
+            "Assets", "web", "glassroad", "tests", "avalonia-carrier-fixture.mjs"));
 
     /// <summary>Init goes out at load, on the first message and at ready; the relay signs as the host's player, sends
     /// only /v2/race/ (judged signed), never the room-signed result; exit and menu-back close; a silent page is pinged
