@@ -3,7 +3,6 @@ using System.IO;
 using ConditioningControlPanel.Services;
 using Xunit;
 namespace CCP.Core.Tests;
-// WPF Services/LockCard/BrainDrainService.cs:103-114,162-181.
 public class BrainDrainAudioPolicyTests
 {
     [Fact]
@@ -29,4 +28,16 @@ public class BrainDrainAudioPolicyTests
         }
         finally { Directory.Delete(root, true); }
     }
+    [Theory]
+    [InlineData(false, 5)] [InlineData(true, 0.5)]
+    public void CadenceAndProbabilityMatchWpf(bool high, double seconds)
+    {
+        var interval = BrainDrainAudioPolicy.Interval(high);
+        Assert.Equal(seconds, interval.TotalSeconds);
+        Assert.Equal(0.5 * seconds / 60, BrainDrainAudioPolicy.Probability(50, interval), 10);
+    }
+    [Theory]
+    [InlineData(50, 40, 0.2)] [InlineData(-10, 100, 0)] [InlineData(200, 200, 1)]
+    public void VolumeMultipliesAndClamps(int master, int own, double gain)
+        => Assert.Equal(gain, BrainDrainAudioPolicy.Volume(master, own), 8);
 }

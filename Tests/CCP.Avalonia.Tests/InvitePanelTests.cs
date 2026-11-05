@@ -10,6 +10,9 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls.Invites;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -57,6 +60,35 @@ public sealed class InvitePanelTests
 
     private static IEnumerable<T> All<T>(Control root) => root.GetLogicalDescendants().OfType<T>();
     private static T? Tagged<T>(Control root, string tag) where T : Control => All<T>(root).FirstOrDefault(c => c.Tag as string == tag);
+
+    [Fact]
+    public Task BothInviteFacesFollowTheGuardedMonoResource() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsurePlatform();
+        var app = Application.Current!;
+        var original = app.Resources[FontGuard.MonoResourceKey];
+        var panel = Panel(new Wire(Mine, "{}"));
+        var host = new Window { Content = panel };
+        try
+        {
+            new FontGuard(name => { if (name == "Cascadia Mono") throw new UnauthorizedAccessException(); })
+                .Verify(app.Resources, windows: true);
+            var guarded = Assert.IsType<FontFamily>(app.Resources[FontGuard.MonoResourceKey]);
+            await panel.RefreshAsync(force: true);
+            host.ApplyStyling();
+            var codes = All<TextBlock>(panel).Where(t => t.Text?.StartsWith("BAMBI-", StringComparison.Ordinal) == true).ToArray();
+            Assert.Equal(2, codes.Length);
+            Assert.All(codes, code => Assert.Equal(guarded, code.FontFamily));
+            panel.ShowRedeemFace();
+            var box = Tagged<TextBox>(panel, "invite-code")!;
+            Assert.Equal(guarded, box.FontFamily);
+            var replacement = new FontFamily(AppFonts.Mono);
+            app.Resources[FontGuard.MonoResourceKey] = replacement;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(replacement, box.FontFamily);
+        }
+        finally { host.Close(); app.Resources[FontGuard.MonoResourceKey] = original; }
+    });
 
     [Fact]
     public Task ASubscriberSeesTheirCodesAndTheLadder() => AvaloniaTestDispatcher.RunAsync(async () =>

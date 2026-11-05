@@ -17,14 +17,16 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private const double Box = 560;
         private AmbientFxCanvas? _layer;
 
+        /// <summary>Bursts fired (test hook).</summary>
+        internal int Count { get; private set; }
+
+        // Release the transient surface on panic/close.
         internal void Stop()
         {
             _layer?.Stop();
-            (_layer?.Parent as Panel)?.Children.Remove(_layer!);
+            if (_layer?.Parent is Panel host) host.Children.Remove(_layer);
+            _layer = null;
         }
-
-        /// <summary>Bursts fired (test hook).</summary>
-        internal int Count { get; private set; }
 
         /// <summary>Bursts <paramref name="count"/> sparks on <paramref name="anchor"/>'s centre, or on its right
         /// edge (FxBurstSpot.RightEdge: the cap of a bar that just filled), in <paramref name="color"/> (null: the

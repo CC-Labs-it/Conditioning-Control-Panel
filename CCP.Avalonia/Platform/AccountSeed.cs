@@ -35,6 +35,7 @@ internal static class AccountSeed
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
     internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
     {
+        PrizeOwnership.Seed();
         make ??= prefix => new ProviderSubscription(prefix);
         makeDiscord ??= peer => new DiscordAccount(() => peer);
         ProviderSubscription patreon, substar;
@@ -45,7 +46,6 @@ internal static class AccountSeed
             Log.Warning(ex, "Account providers unavailable: signed out, no entitlement");
             return false;
         }
-        ProviderSubscription.PrizesSink = PrizeOwnership.ApplyProfile;
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
@@ -136,7 +136,9 @@ internal static class AccountSeed
     {
         try
         {
-            if (!await LoadProfileCoreAsync(v2 ?? NewV2())) return false;
+            var uid = CoreSettings.Current.UnifiedId;
+            if (!await LoadProfileCoreAsync(v2 ?? NewV2()) || CoreSettings.Current.UnifiedId != uid) return false;
+            LoadedProfileUid = uid;
             ProfileLoaded?.Invoke();
             return true;
         }
@@ -153,6 +155,7 @@ internal static class AccountSeed
 
     /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
     internal static event Action? ProfileLoaded;
+    internal static string? LoadedProfileUid; // WPF ProfileSync.HasLoadedProfile, scoped to this account
 
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
@@ -222,8 +225,7 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
-        PrizeOwnership.NoteAccount(id);
-        if (Sync is { } prizeSync) prizeSync.PrizesReceived = (account, prizes) => PrizeOwnership.ApplyProfile(account, account, prizes, "V2 sync");
+        PrizeOwnership.Feed.NoteAccount(id);
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
         {
@@ -231,15 +233,18 @@ internal static class AccountSeed
             return false;
         }
         if (s.UnifiedId != id || s.OfflineMode) return false;
-        PrizeOwnership.ApplyProfile(id, user.UnifiedId, user.Prizes, "V2 profile");
+        // WPF ProfileSyncService: the profile read seeds ownership before the garage opens (#3854).
+        PrizeOwnership.Feed.Apply(id, user.UnifiedId, user.Prizes, "V2 profile");
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
-        ProfileAdopt.AdoptReadBeforeWrite(s, user);
+        ProfileAdopt.AdoptReadBeforeWrite(s, user, adoptConditioningMinutes: true);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
         {
             sync.MarkLoaded(user.Achievements);
+            // The read above lifted conditioning minutes take-higher (WPF ProfileSyncService:3205-3217).
+            if (user.TotalConditioningMinutes.HasValue) sync.NoteProgressRead(SyncBody.Field.TotalConditioningMinutes);
             sync.StartHeartbeat();
             await sync.PushAsync("after load");
         }
@@ -278,14 +283,15 @@ internal static class AccountSeed
         s.UnifiedId = null;
         s.AuthToken = null;
         s.UserDisplayName = null;
-        PrizeOwnership.ResetHeld();
         s.HasLinkedDiscord = false;
         s.HasLinkedPatreon = false;
         ProgressionClear.Apply(s);
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
         App.Achievements?.Reset();
-        Sync?.Reset();
+        // SyncPush.Reset clears its Prizes feed (seeded with PrizeOwnership.Feed); unseeded, clear it here.
+        if (Sync is { } push) push.Reset();
+        else PrizeOwnership.Feed.Clear();
     }
 
     /// <summary>All three validate at once, as WPF starts them (App.xaml.cs). Never throws.</summary>

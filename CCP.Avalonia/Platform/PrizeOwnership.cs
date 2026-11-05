@@ -1,82 +1,58 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Prizes;
-
-namespace ConditioningControlPanel.Avalonia.Platform
+using Serilog;
+namespace ConditioningControlPanel.Avalonia.Platform;
+internal static class PrizeOwnership
 {
-    /// <summary>Account-scoped server ownership from profile reads, sync, provider validation and purchase replies.
-    /// Core OwnershipService rejects other accounts and older revisions. Nothing is persisted or uploaded.</summary>
-    internal static class PrizeOwnership
+    internal const string FlashDriftBounce = PrizeGrants.FlashDriftBounce;
+    internal const string FlashPendulum = PrizeGrants.FlashPendulum;
+    internal const string JackpotRemix = PrizeGrants.JackpotRemix;
+    internal const string BubbleRain = PrizeGrants.BubbleRain;
+    internal const string BubbleSpiralIn = PrizeGrants.BubbleSpiralIn;
+    internal static bool OwnsFlashV2() => IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum);
+    internal static bool FlashV2Owned() => IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum) || IsGranted(JackpotRemix);
+    internal static bool BubbleV2Owned() => IsGranted(BubbleRain) || IsGranted(BubbleSpiralIn);
+    internal static readonly string? OverrideSpec = OwnershipService.ReadDebugOverride();
+    private static readonly OwnershipService Service = new(() => CoreAccount.UnifiedUserId, OverrideSpec, Raise);
+    internal static readonly PrizesFeed Feed = new(() => Service, () => CoreAccount.UnifiedUserId, Post);
+    internal static Func<string, bool> IsGranted = PrizeGrants.IsGranted;
+    /// <summary>WPF PrizeGrants.GrantsChanged under this head's older name.</summary>
+    internal static event Action? Changed { add => PrizeGrants.GrantsChanged += value; remove => PrizeGrants.GrantsChanged -= value; }
+    static PrizeOwnership() => PrizeGrants.Attach(Service);
+    internal static void Seed()
     {
-        /// <summary>Core prize ids, shared with the WPF ownership gate.</summary>
-        internal const string FlashDriftBounce = PrizeGrants.FlashDriftBounce;
-        internal const string FlashPendulum = PrizeGrants.FlashPendulum;
-        internal const string JackpotRemix = PrizeGrants.JackpotRemix;
-        internal const string BubbleRain = PrizeGrants.BubbleRain;
-        internal const string BubbleSpiralIn = PrizeGrants.BubbleSpiralIn;
-        internal static bool OwnsFlashV2() => IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum);
-
-        /// <summary>The DEBUG override spec, read once; always null in Release.</summary>
-        internal static readonly string? OverrideSpec = OwnershipService.ReadDebugOverride();
-
-        /// <summary>Test seam: the owned-check every caller uses.</summary>
-        internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
-
-        /// <summary>WPF GrantsChanged: snapshot grants changed, possibly off the UI thread.</summary>
-        internal static event Action? Changed;
-        private static readonly object Gate = new();
-        private static readonly OwnershipService Owned = new(() => FriendsHead.Identity()?.UnifiedId, null, a => a());
-        private static string? _account;
-        static PrizeOwnership() => Owned.OwnershipChanged += (_, _) => Changed?.Invoke();
-        internal static string[] Grants => Owned.Grants.ToArray();
-        internal static bool Held(string id) => Owned.IsGranted(id);
-
-        internal static void NoteAccount(string? account)
-        {
-            lock (Gate)
-            {
-                if (account == null || account != FriendsHead.Identity()?.UnifiedId || account == _account) return;
-                _account = account;
-                Owned.Clear();
-            }
-        }
-
-        internal static void ApplyProfile(string? requested, string? answered, ConditioningControlPanel.Models.PrizesBlock? prizes, string source)
-        {
-            lock (Gate)
-            {
-                if (requested == null || requested != FriendsHead.Identity()?.UnifiedId) return;
-                NoteAccount(requested);
-                if (requested == answered && prizes?.Grants != null)
-                    Owned.ApplySnapshot(requested, prizes.Revision, prizes.Grants);
-            }
-        }
-
-        internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
-        {
-            lock (Gate)
-            {
-                if (accountId != FriendsHead.Identity()?.UnifiedId) return;
-                NoteAccount(accountId);
-                Owned.ApplySnapshot(accountId, revision, grants);
-            }
-        }
-
-        internal static void ResetHeld()
-        {
-            lock (Gate) { _account = null; Owned.Clear(); }
-        }
-
-        /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
-        internal static bool FlashV2Owned() =>
-            IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum) || IsGranted(JackpotRemix);
-
-        /// <summary>WPF V2Badges.BubbleOwned: either ambient bubble motion.</summary>
-        internal static bool BubbleV2Owned() => IsGranted(BubbleRain) || IsGranted(BubbleSpiralIn);
-
-        /// <summary>Core OwnershipService's override rules over one comma list.</summary>
-        internal static bool Matches(string? spec, string id) =>
-            !string.IsNullOrEmpty(id) && OwnershipService.MatchesOverride(OwnershipService.ParseOverride(spec), id);
+        ProviderSubscription.PrizesSink = (requested, answered, prizes, source) => Feed.Apply(requested, answered, prizes, source);
+        BackRoomApi.DefaultApplyPrizes = ApplySnapshot;
     }
+    private static volatile bool _shutdown;
+    private static void Raise(Action work)
+    {
+        if (Application.Current == null || Dispatcher.UIThread.CheckAccess()) { if (!_shutdown) work(); }
+        else Post(work);
+    }
+    private static void Post(Action work)
+    {
+        void Safe()
+        {
+            if (_shutdown) return;
+            try { work(); }
+            catch (Exception ex) { Log.Debug("[Prizes] ownership update failed: {Error}", ex.Message); }
+        }
+        if (Application.Current == null) Safe();
+        else Dispatcher.UIThread.Post(Safe);
+    }
+    internal static void WatchShutdown() => Dispatcher.UIThread.ShutdownStarted += (_, _) => _shutdown = true;
+    internal static bool Held(string id) => Service.Grants.Contains(id);
+    /// <summary>The held grant ids, for the Racing Thoughts garage's kart rows (WPF GlassroadHostService init.grants).</summary>
+    internal static string[] Grants => Service.Grants.ToArray();
+    internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants) => Service.ApplySnapshot(accountId, revision, grants);
+    internal static void ResetHeld() => Service.Clear();
+    internal static bool Matches(string? spec, string id) =>
+        !string.IsNullOrEmpty(id) && OwnershipService.MatchesOverride(OwnershipService.ParseOverride(spec), id);
 }
