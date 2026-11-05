@@ -140,10 +140,13 @@ public sealed partial class AccountSeedTests
     }
 
     [Theory]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full)]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced)]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off)]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(ConditioningControlPanel.Models.MotionLevel motion)
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, 0)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, 750)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, 0)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, 750)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off, 0)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off, 750)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(ConditioningControlPanel.Models.MotionLevel motion, int renderDelayMs)
     {
         var s = CoreSettings.Current;
         var old = (s.OfflineMode, s.MotionLevel, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
@@ -174,9 +177,9 @@ public sealed partial class AccountSeedTests
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
                 w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                // Prove a renderer stall beyond the OS interval cannot change this gesture.
-                await Task.Delay(w.GetPlatformSettings()!.GetDoubleTapTime(global::Avalonia.Input.PointerType.Mouse)
-                    + TimeSpan.FromMilliseconds(50));
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                Assert.DoesNotContain(wire.Seen, r => r.Contains("/user/lookup"));
+                await Task.Delay(renderDelayMs); // emulate a slow render between clicks
                 // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
                 // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
                 var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;

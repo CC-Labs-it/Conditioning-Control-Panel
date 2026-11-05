@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -193,9 +193,9 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        // Freeze entrance motion so the pointer probes a stationary target.
-        CoreSettings.Current.MotionLevel = MotionLevel.Off;
-        var shell = new MainShellWindow();
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
         ToolTip.SetServiceEnabled(shell, false);
         try
         {
@@ -204,7 +204,11 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.NotNull(shell.EnteringTab);
+            // Dispatcher jobs do not advance animation time. Settle the entrance before sampling hit geometry.
+            shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
