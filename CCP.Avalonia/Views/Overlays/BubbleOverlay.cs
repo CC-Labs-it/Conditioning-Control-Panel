@@ -34,11 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
-    /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
-    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
-    /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
-    /// (no AchievementService on this head; quests are credited).</para>
+    /// <para>ponytail: ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In),
+    /// Brain Drain, Natasha's red bubble, the avatar egg, lucky gold glow/sparkles
+    /// and the milestone popup remain unported.
+    /// Gaze pops, pop haptics, mod pop audio and achievement credit are wired.
+    /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
     /// </summary>
     internal static class BubbleOverlay
     {
@@ -302,6 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
+            if (b.Popping) return;   // WPF BubbleService.cs:4647 rejects an already popping bubble.
             if (b.Spec != null) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
@@ -310,15 +311,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped
             var master = s.MasterVolume / 100f;
             var vol = (float)Math.Pow(master * (s.BubblesVolume / 100f), 1.5);
-            var dir = Path.Combine(AppContext.BaseDirectory, "Resources", "sounds");
-            var path = b.Lucky
-                ? Path.Combine(dir, $"chime{Field.Random.Next(1, 4)}.mp3")   // lucky: a chime replaces the pop, at 0.35x
-                : Path.Combine(dir, "bubbles", new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)]);
-            if (b.Lucky) vol *= 0.35f;
-            CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
+            var (path, chime) = ResolvePopSound(b.Lucky, s.SuppressPerkNotifications, Field.Random);
+            if (chime) vol *= 0.35f;
+            if (File.Exists(path)) CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
+            App.Achievements?.TrackBubblePopped();   // WPF BubbleService.cs:1117
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+        }
+
+        // WPF BubbleService.cs:2191-2236: mod audio, perk opt-out and missing-chime fallback.
+        internal static (string Path, bool Chime) ResolvePopSound(bool lucky, bool suppressed, Random random)
+        {
+            string Resolve(string cue) => CoreModArt.AudioOverridePath(cue)
+                ?? Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", cue);
+            if (lucky && !suppressed)
+            {
+                var chime = Resolve($"chime{random.Next(1, 4)}.mp3");
+                if (File.Exists(chime)) return (chime, true);
+            }
+            return (Resolve("bubbles/" + new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[random.Next(3)]), false);
         }
 
         internal static void OnFrame(TimeSpan now)
@@ -462,7 +474,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var b = bubbles[i];
                 if (b.Screen != Index || !b.Clickable || b.Popping || b.Size <= 0) continue;
-                // WPF BubbleService.cs:3023-3027: physical-pixel hit disc;
+                // WPF BubbleService.cs:661/:3023-3027: the shared-host hook tests a physical-pixel disc;
                 // :581 and :3013 exclude non-clickable and popping bubbles.
                 // Both native backends already accept unions of rectangles: rasterise each
                 // physical pixel row, clipped to this screen. Keep the buffer across frames.
