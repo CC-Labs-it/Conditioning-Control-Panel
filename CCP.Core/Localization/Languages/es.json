@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Novedades de v{0}",
+  "upgrade_notes_tour_button": "Mostrar recorrido (60 s)",
   "devices_always_on_title": "Micrófono siempre activo",
   "devices_always_on_body": "La palabra de activación mantiene el micrófono abierto mientras Takeover está en marcha para que ella pueda oírte llamarla.\n\nTodo permanece sin conexión. El audio se procesa en tu dispositivo y nunca se graba ni se envía.\n\n¿Activar la escucha continua?",
   "audio_device_unnamed": "(sin nombre)",

@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Neu in v{0}",
+  "upgrade_notes_tour_button": "Rundgang starten (60 s)",
   "devices_always_on_title": "Dauerhaft aktives Mikrofon",
   "devices_always_on_body": "Das Aktivierungswort hält das Mikrofon während Takeover ständig offen, damit sie deinen Ruf hören kann.\n\nAlles bleibt offline. Audio wird auf deinem Gerät verarbeitet und weder aufgezeichnet noch übertragen.\n\nDauerhaftes Zuhören einschalten?",
   "audio_device_unnamed": "(unbenannt)",

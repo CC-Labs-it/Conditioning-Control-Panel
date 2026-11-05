@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "v{0} 版本更新",
+  "upgrade_notes_tour_button": "查看导览 (60秒)",
   "devices_always_on_title": "始终开启的麦克风",
   "devices_always_on_body": "启用唤醒词后，Takeover 运行期间麦克风将持续开启，以便她听到你的呼唤。\n\n一切均离线运行。音频仅在你的设备上处理，不会被录制或发送。\n\n开启持续聆听？",
   "audio_device_unnamed": "(未命名)",

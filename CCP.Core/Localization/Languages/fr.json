@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Nouveautés de la v{0}",
+  "upgrade_notes_tour_button": "Voir la visite (60 s)",
   "devices_always_on_title": "Microphone toujours actif",
   "devices_always_on_body": "Le mot d’activation garde le microphone ouvert pendant Takeover pour qu’elle puisse vous entendre l’appeler.\n\nTout reste hors ligne. Le son est traité sur votre appareil, sans enregistrement ni transmission.\n\nActiver l’écoute continue ?",
   "audio_device_unnamed": "(sans nom)",

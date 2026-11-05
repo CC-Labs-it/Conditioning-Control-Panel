@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "v{0} の新機能",
+  "upgrade_notes_tour_button": "使い方を見る (60秒)",
   "devices_always_on_title": "常時オンのマイク",
   "devices_always_on_body": "ウェイクワードを使うと、Takeover の実行中はマイクが常に開いたままになり、彼女を呼ぶ声を聞き取れます。\n\nすべてオフラインで動作します。音声はデバイス上で処理され、録音も送信もされません。\n\n常時リスニングを有効にしますか？",
   "audio_device_unnamed": "(名前なし)",

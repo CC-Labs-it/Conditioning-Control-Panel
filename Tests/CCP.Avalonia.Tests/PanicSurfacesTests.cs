@@ -89,6 +89,7 @@ public sealed class PanicSurfacesTests
         "deeper-tutorial",
         "tour",
         "games",
+        "upgrade-intro",
         "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
         "companion-conversation",
