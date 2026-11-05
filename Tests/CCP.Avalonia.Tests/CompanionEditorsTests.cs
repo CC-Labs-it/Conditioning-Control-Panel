@@ -231,7 +231,7 @@ public sealed class CompanionEditorsTests
                 await Until(() => shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Any());
                 var editor = shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Single();
                 Click(editor.FindControl<Button>("BtnCancel")!);
-                await Until(() => !editor.IsVisible);
+                await Until(() => !editor.IsVisible && shell.IsEnabled);
             }
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = null; }
