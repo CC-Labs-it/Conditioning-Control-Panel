@@ -133,6 +133,7 @@ public sealed class PanicSurfacesTests
         "tube-speech",
         "lock-cards",
         "speak-cue",
+        "roster-personality",
         "companion-transcript",
         "possession",
         "chaster-booked-pop",
