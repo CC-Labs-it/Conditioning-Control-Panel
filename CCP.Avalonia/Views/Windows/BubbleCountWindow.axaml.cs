@@ -104,7 +104,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
         internal static VlcFrameSink? Sink => _sink;
         internal static MediaPlayer? Player => _player;
-        internal static event Action? FramePresented;
 
         // Multi-monitor support - static shared state
         private static readonly object _cleanupLock = new();
@@ -414,11 +413,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _player = player;
             _sink = new VlcFrameSink(player, () => _media,
                 bmp => { foreach (var w in _allWindows) w._videoImage.Source = bmp; },
-                () =>
-                {
-                    foreach (var w in _allWindows) w._videoImage.InvalidateVisual();
-                    FramePresented?.Invoke();
-                });
+                () => { foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
             // LibVLC raises these on its own thread; the game is torn down only on the UI thread.
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
