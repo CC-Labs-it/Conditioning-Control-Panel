@@ -12,7 +12,7 @@
      writing down here rather than rediscovering it 193 times.
 
      Shared themes used by the ported views live here. MainWindow.xaml still has unported
-     implicit scroll/tree styles and keyed session/art/emote themes; see theme-main-window
+     implicit tree styles and keyed session/art/emote themes; see theme-main-window
      in docs/avalonia-parity.html for the named follow-up lane.
      Controls.xaml keys are shared here, including the three Deeper button themes.
      Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
@@ -106,7 +106,7 @@
   </ControlTheme>
 
   <!-- Current WPF Resources/Theme/MainWindow.xaml:739: 22px help chrome and owner tooltip delays.
-       ponytail: Avalonia has no ShowDuration property; the 60-second lifetime needs a UI seam. -->
+       Ordinary help expires after 60 seconds; interactive HelpPopover keeps its own lifetime. -->
   <ControlTheme x:Key="HelpButtonStyle" TargetType="Button">
     <Setter Property="Width" Value="22"/>
     <Setter Property="Height" Value="22"/>
@@ -118,6 +118,7 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
     <Setter Property="Margin" Value="8,0,0,0"/>
     <Setter Property="Padding" Value="0"/>
+    <Setter Property="fx:ToolTipLifetime.Duration" Value="60000"/>
     <Setter Property="ToolTip.ShowDelay" Value="100"/>
     <Setter Property="ToolTip.BetweenShowDelay" Value="0"/>
     <Setter Property="Template">
@@ -725,6 +726,74 @@
         </Grid>
       </ControlTemplate>
     </Setter>
+  </ControlTheme>
+
+  <!-- MainWindow.xaml:341. The implicit Slider: every slider that names no theme is a PinkSlider
+       (Height 18 / Margin 0 already folded into PinkSlider above). -->
+  <ControlTheme x:Key="{x:Type Slider}" TargetType="Slider" BasedOn="{StaticResource PinkSlider}"/>
+
+  <!-- MainWindow.xaml:409-500. The app-wide ScrollBar: 8px, a faint PanelAccent track, a
+       neutral thumb that turns pink under the pointer and while dragged, no arrow buttons.
+       The two track halves are WPF's LineUp/LineDown commands, so they are named as Avalonia's
+       line buttons (a click steps one SmallChange, not a page). The thumb paints its own
+       Background so a window-local ScrollBar style (ChaosHudWindow) can still tint it. -->
+  <ControlTheme x:Key="InvisibleRepeatButton" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="RepeatButton">
+        <Border Background="Transparent"/>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="SimpleCuteThumb" TargetType="Thumb">
+    <Setter Property="MinWidth" Value="6"/>
+    <Setter Property="MinHeight" Value="30"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Background" Value="{DynamicResource PanelAccentHoverBrush}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Thumb">
+        <Border x:Name="Bd" Opacity="0.9" Background="{TemplateBinding Background}"
+                CornerRadius="{TemplateBinding CornerRadius}"/>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover"><Setter Property="Background" Value="{DynamicResource PinkBrush}"/></Style>
+    <Style Selector="^:pointerover /template/ Border#Bd"><Setter Property="Opacity" Value="0.85"/></Style>
+    <Style Selector="^:pressed"><Setter Property="Background" Value="{DynamicResource PinkBrush}"/></Style>
+    <Style Selector="^:pressed /template/ Border#Bd"><Setter Property="Opacity" Value="1"/></Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ScrollBar">
+        <Grid Background="{TemplateBinding Background}">
+          <Border x:Name="TrackBg" Background="{DynamicResource PanelAccentBrush}" CornerRadius="4"
+                  Opacity="0.2" Margin="1"/>
+          <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}"
+                 Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                 Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}">
+            <Track.DecreaseButton>
+              <RepeatButton x:Name="PART_LineUpButton" Theme="{StaticResource InvisibleRepeatButton}"/>
+            </Track.DecreaseButton>
+            <Track.IncreaseButton>
+              <RepeatButton x:Name="PART_LineDownButton" Theme="{StaticResource InvisibleRepeatButton}"/>
+            </Track.IncreaseButton>
+            <Thumb x:Name="ThumbElement" Theme="{StaticResource SimpleCuteThumb}"/>
+          </Track>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:horizontal"><Setter Property="Height" Value="8"/></Style>
+    <Style Selector="^:horizontal /template/ Track#PART_Track"><Setter Property="IsDirectionReversed" Value="False"/></Style>
+    <Style Selector="^:horizontal /template/ Thumb#ThumbElement">
+      <Setter Property="MinWidth" Value="30"/>
+      <Setter Property="MinHeight" Value="6"/>
+    </Style>
+    <Style Selector="^:vertical"><Setter Property="Width" Value="8"/></Style>
+    <Style Selector="^:vertical /template/ Track#PART_Track"><Setter Property="IsDirectionReversed" Value="True"/></Style>
+    <Style Selector="^:disabled /template/ Border#TrackBg"><Setter Property="Opacity" Value="0.1"/></Style>
   </ControlTheme>
 
   <!-- MainWindow.xaml:1234. Restyles the Fluent ComboBox parts rather than replacing the
