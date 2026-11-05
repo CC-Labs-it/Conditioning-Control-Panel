@@ -1,7 +1,4 @@
-// WPF MainWindow.ChromeFx.cs:204-460; finite tab entrances and first-visit door pulses.
-// NOT ported: WPF's 100 ms outgoing fade (FadeOutgoingTab). It re-shows the tab just left, and here
-// every tab's timers and FX follow IsVisible (P01); a snapshot fade cost a full-scale render per switch
-// on the UI thread (fin-shell-tab-navigation review P1). The leaving tab is cut; named under Missing.
+// WPF MainWindow.ChromeFx.cs:204-460; finite entrances, retained outgoing fade and door pulses.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +9,7 @@ using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -37,7 +35,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void AnimateTabIn(Control? tab, string key)
         {
-            CompleteTabTransition();
             if (tab == null) return;
             tab.IsHitTestVisible = true;
             tab.Opacity = 1;
@@ -59,6 +56,62 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _tabTransitionTimer.Start();
         }
 
+        private Control? _leavingTab;
+        internal Control? LeavingTab => _leavingTab;
+
+        // WPF ChromeFx.cs:303-339. Keep only the compositor drawing alive. The logical tab
+        // stays hidden, so IsVisible-driven services stop once and never restart for the fade.
+        // No tree traversal, bitmap allocation or synchronous render on the switch path.
+        private void FadeLeavingTab(string target)
+        {
+            CompleteTabTransition();
+            if (!AmbientFxCanvas.Env.AllowTransitions || ChromeFxNav.IsAirspaceTab(CurrentTab)
+                || !TabPanels.TryGetValue(CurrentTab, out var oldName) || oldName == target
+                || Named<Control>(oldName) is not { IsVisible: true } old
+                || ElementComposition.GetElementVisual(old) is not { } visual) return;
+            _leavingTab = old;
+            old.IsHitTestVisible = false;
+        }
+
+        private void StartLeavingTabFade()
+        {
+            if (_leavingTab is not { } old || ElementComposition.GetElementVisual(old) is not { } visual) return;
+            // The renderer first synchronizes the hidden tab. Install the overrides in the
+            // same commit after that sync; an interrupted navigation invalidates this callback.
+            visual.Compositor.RequestCompositionUpdate(() =>
+            {
+                if (_leavingTab != old) return;
+                var visible = visual.Compositor.CreateBooleanKeyFrameAnimation();
+                visible.Duration = TimeSpan.FromMilliseconds(100);
+                visible.InsertKeyFrame(0, true);
+                visible.InsertKeyFrame(1, false);
+                var opacity = visual.Compositor.CreateScalarKeyFrameAnimation();
+                opacity.Duration = visible.Duration;
+                opacity.InsertKeyFrame(0, 1, new LinearEasing());
+                opacity.InsertKeyFrame(1, 0, new LinearEasing());
+                visual.StartAnimation("Visible", visible);
+                visual.StartAnimation("Opacity", opacity);
+            });
+        }
+
+        private void CompleteLeavingTab()
+        {
+            if (_leavingTab is not { } old) return;
+            _leavingTab = null;
+            old.IsHitTestVisible = true;
+            if (ElementComposition.GetElementVisual(old) is not { } visual) return;
+            // Replace finite clocks on the next commit, including rapid return before the
+            // original 100 ms expires. Do not let an old fade hide a newly active page.
+            visual.Compositor.RequestCompositionUpdate(() =>
+            {
+                if (_leavingTab == old) return;
+                visual.StopAnimation("Visible");
+                visual.StopAnimation("Opacity");
+                visual.Visible = old.IsVisible;
+                visual.Opacity = (float)old.Opacity;
+            });
+        }
+
         // P08: pointer tests settle the actual entrance before reading hit geometry. No wall-clock sleeps.
         internal void CompleteTabTransition() => StepTabTransition(620);
 
@@ -67,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void StepTabTransition(double ms)
         {
+            if (ms >= 100) CompleteLeavingTab();
             static double Ease(double elapsed, double duration)
             {
                 var t = Math.Clamp(elapsed / duration, 0, 1);

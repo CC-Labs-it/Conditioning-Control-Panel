@@ -168,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             EmiDesk.EmiTargets.NoteTabOpened(tab); // WPF counts after the bark hook (TabNavigation.cs:298).
 
+            FadeLeavingTab(target);
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);
@@ -175,6 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF AnimateTabIn on every arm of the switch (MainShellWindow.TabTransitions.cs).
             AnimateTabIn(this.FindControl<Control>(target), tab);
+            StartLeavingTabFade();
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;

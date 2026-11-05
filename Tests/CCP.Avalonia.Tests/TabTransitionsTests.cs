@@ -173,7 +173,7 @@ public sealed class TabTransitionsTests
     });
 
     [Fact]
-    public Task LeavingTabIsCutWithoutASnapshotAndRapidReturnIsClickable() => Run(shell =>
+    public Task LeavingTabFadesWithoutASnapshotOrRestartingServicesAndRapidReturnIsClickable() => Run(shell =>
     {
         shell.ShowTab("quests");
         Step(shell, 620);
@@ -181,17 +181,98 @@ public sealed class TabTransitionsTests
         var host = (Panel)quests.Parent!;
         var children = host.Children.Count;
         shell.ShowTab("achievements");
-        // Review P1: no outgoing snapshot render; the leaving tab is cut, as on base.
+        // WPF ChromeFx.cs:303-339, with logical visibility kept false throughout.
+        Assert.Same(quests, shell.LeavingTab);
+        Assert.False(quests.IsHitTestVisible);
         Assert.False(quests.IsVisible);
         Assert.Equal(children, host.Children.Count);
         Assert.Empty(host.Children.OfType<Image>());
         Step(shell, 50);
+        Assert.Same(quests, shell.LeavingTab);
+        Assert.False(quests.IsVisible);
         shell.ShowTab("quests"); // an unfinished entrance never wins a late completion
         Step(shell, 620);
         Assert.True(quests.IsVisible);
         Assert.True(quests.IsHitTestVisible);
         Assert.Equal(1, quests.Opacity);
         Assert.Equal(1, shell.Named<Control>("AchievementsTab")!.Opacity);
+    });
+
+    [Fact]
+    public Task HiddenOutgoingTabStillDrawsUntilFadeCleanup() => Run(shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        var outgoing = shell.Named<ContentControl>("QuestsTab")!;
+        var incoming = shell.Named<ContentControl>("AchievementsTab")!;
+        var saved = (outgoing.Content, incoming.Content);
+        shell.TabClock = new SteppedTime();
+        try
+        {
+            outgoing.Content = new Border { Background = Brushes.Magenta };
+            incoming.Content = new Border { Background = Brushes.Black };
+            shell.ShowTab("quests");
+            shell.CompleteTabTransition();
+            using var before = shell.CaptureRenderedFrame(); // materialize retained drawing
+            var point = outgoing.TranslatePoint(new Point(outgoing.Bounds.Width / 2, outgoing.Bounds.Height / 2), shell)!.Value;
+            Assert.NotEqual(0u, Rgb(before!, point));
+            shell.ShowTab("achievements");
+            // CaptureRenderedFrame drains many frames. Sample exactly one compositor frame.
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            using var fading = shell.GetLastRenderedFrame();
+            Assert.False(outgoing.IsVisible);
+            var pixel = Rgb(fading!, point);
+            // A real compositor frame may already be partway through the fade. Require
+            // magenta dominance rather than assuming its first sample is fully opaque.
+            var green = (pixel >> 8) & 0xFF;
+            Assert.True((pixel & 0xFF) > green + 32 && ((pixel >> 16) & 0xFF) > green + 32,
+                $"Expected the outgoing magenta page, got {pixel:X6}");
+            shell.CompleteTabTransition();
+            using var after = shell.CaptureRenderedFrame();
+            Assert.Equal(0u, Rgb(after!, point)); // the incoming black page owns the pixel now
+        }
+        finally { shell.CompleteTabTransition(); (outgoing.Content, incoming.Content) = saved; }
+    });
+
+    private static uint Rgb(global::Avalonia.Media.Imaging.Bitmap bitmap, Point point)
+    {
+        var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+        try
+        {
+            var scale = bitmap.PixelSize.Width / bitmap.Size.Width;
+            bitmap.CopyPixels(new PixelRect((int)(point.X * scale), (int)(point.Y * scale), 1, 1), buffer, 4, 4);
+            return (uint)System.Runtime.InteropServices.Marshal.ReadInt32(buffer) & 0xFFFFFFu;
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer); }
+    }
+
+    [Fact]
+    public Task OutgoingFadeExpiresAt100MsCutsAirspaceAndCancelsOnOffAndClose() => Run(shell =>
+    {
+        shell.ShowTab("quests");
+        shell.CompleteTabTransition();
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        shell.ShowTab("achievements");
+        Assert.NotNull(shell.LeavingTab);
+        Step(shell, 99);
+        Assert.NotNull(shell.LeavingTab);
+        Step(shell, 100);
+        Assert.Null(shell.LeavingTab);
+        shell.ShowTab("settings");
+        shell.ShowTab("quests");
+        Assert.Null(shell.LeavingTab); // WPF ChromeFx.cs:241: native airspace cuts
+        shell.ShowTab("quests");
+        Assert.Null(shell.LeavingTab); // aliases and same panel never fade themselves
+        shell.ShowTab("achievements");
+        Assert.NotNull(shell.LeavingTab);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        shell.ShowTab("quests");
+        Assert.Null(shell.LeavingTab);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        shell.ShowTab("achievements");
+        Assert.NotNull(shell.LeavingTab);
+        shell.Close();
+        Assert.Null(shell.LeavingTab);
     });
 
     [Fact]
