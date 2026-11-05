@@ -144,6 +144,9 @@ internal sealed class KeywordAudioRuntime
     private long? _duckGeneration;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
+    // WPF KeywordTriggerService.cs:72,135,1196: record each accepted fire before notifying.
+    internal KeywordFireLog Fires { get; } = new();
+    internal event Action<KeywordTrigger>? TriggerFired;
     internal bool IsActive { get; private set; }
     // WPF KeywordTriggerService.cs:176-188: access gate, and Start must preserve a live buffer.
     internal static bool HasAccess => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness");
@@ -188,6 +191,8 @@ internal sealed class KeywordAudioRuntime
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
+            Fires.Record(t, "Keyboard", now);
+            TriggerFired?.Invoke(t);
         }
         // WPF KeywordTriggerService DispatchMergedAsync (b9368d963): matched and cooled down, but held during a panic's quiet.
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced())
@@ -211,15 +216,29 @@ internal sealed class KeywordAudioRuntime
         foreach (var comment in comments) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
     }
 
-    // WPF KeywordTriggerService.cs:393-432. Null OCR words draw no highlight.
-    // Feed, quest and achievement recording remain part B.
+    // WPF KeywordTriggerService.cs:393-432: gated synthetic fire, no saved trigger/audio lookup; the
+    // avatar comment dispatches (WPF DispatchResponseAsync). Null OCR words draw no highlight.
     internal void FireDemo(string keyword, string source)
     {
-        if (string.IsNullOrWhiteSpace(keyword) ||
-            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
-        var demo = new KeywordTrigger { Id = "tutorial:demo", Keyword = keyword };
-        _ = KeywordAvatarComment.DispatchAsync(new AvatarCommentAction
-        { FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false }, demo);
+        if (string.IsNullOrWhiteSpace(keyword)) return;
+        if (!(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        var demo = new KeywordTrigger
+        {
+            Id = "tutorial:demo", Keyword = keyword, MatchType = KeywordMatchType.PlainText, Enabled = true,
+            VisualEffect = KeywordVisualEffect.HighlightOnly,
+            Actions = new() { new HighlightAction { Enabled = true },
+                new AvatarCommentAction { Enabled = true, FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false } },
+        };
+        try
+        {
+            var now = Now();
+            // WPF KeywordTriggerService.cs:139,426: demos bypass checks but still mute the word.
+            _cooldowns.Record(demo, CoreSettings.Current, now.ToUniversalTime());
+            Fires.Record(demo, source, now);
+            TriggerFired?.Invoke(demo);
+            _ = KeywordAvatarComment.DispatchAsync((AvatarCommentAction)demo.Actions[1], demo);
+        }
+        catch (Exception ex) { Log.Debug(ex, "FireDemo failed"); }
     }
 
     internal void StopAudio()
