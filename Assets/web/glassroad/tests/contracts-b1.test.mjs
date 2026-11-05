@@ -14,7 +14,7 @@ const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url
 
 test('threshold: nine rows of 3 to 4 item boxes across the extended lap and bubble clusters', () => {
   const rows = new Map();
-  for (const it of json.items.filter((i) => i.kind === 'box')) rows.set(it.node, (rows.get(it.node) || 0) + 1);
+  for (const it of json.items.filter((i) => i.kind === 'box' && !(i.liftM > 0))) rows.set(it.node, (rows.get(it.node) || 0) + 1);
   assert.equal(rows.size, 9, 'rows ' + rows.size);
   for (const [node, n] of rows) assert.ok(n >= 3 && n <= 4, 'row at node ' + node + ' has ' + n);
   const bubbles = json.items.filter((i) => i.kind === 'bubble');

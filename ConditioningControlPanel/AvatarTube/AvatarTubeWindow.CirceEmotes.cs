@@ -166,8 +166,9 @@ namespace ConditioningControlPanel
             // whatever the set; otherwise today's (mod, set) answer. The setting is never changed here.
             // A baked look (RainPackHash) plays its pack folder; a missing or corrupt pack plays the
             // embedded clips (lane R8).
+            // RainV2Gate off: a saved "v2" plays V1 and stays saved.
             return Services.Companion.RainPackPlayback.ResolveTubeFolder(
-                App.Settings?.Current?.AvatarGeneration,
+                Services.Companion.AvatarGenerationRule.Effective(App.Settings?.Current?.AvatarGeneration),
                 EmoteGenerationFolder(modId, Services.Companion.AvatarGenerationRule.V2),
                 App.Settings?.Current?.RainPackHash,
                 hash => Services.Companion.RainPackStore.CreateDefault().TryGetFolder(hash),
@@ -302,7 +303,7 @@ namespace ConditioningControlPanel
         /// <summary>True while the tube plays Rain (the wardrobe door shows only then). Follows the V1/V2
         /// setting through the folder: V2 on a mod with a v2 row plays that row's folder (embedded, or later
         /// an absolute baked pack), V1 never does.</summary>
-        internal bool IsRainLookActive => _circeEmoteMode
+        internal bool IsRainLookActive => _circeEmoteMode && Services.Companion.RainV2Gate.On
             && (IsRainFolder(_emoteFolder)
                 || Services.Companion.RainPackPlayback.IsPackFolder(_emoteFolder)
                 || (Services.Companion.AvatarGenerationRule.IsV2(App.Settings?.Current?.AvatarGeneration)
@@ -312,7 +313,9 @@ namespace ConditioningControlPanel
                         StringComparison.OrdinalIgnoreCase)));
 
         private void MenuItemRainWardrobe_Click(object sender, RoutedEventArgs e)
-            => Services.Companion.RainWardrobeHostService.Open();
+        {
+            if (Services.Companion.RainV2Gate.On) Services.Companion.RainWardrobeHostService.Open();
+        }
 
         private static List<(string modId, int set, string folder)> LoadEmoteRegistry()
         {

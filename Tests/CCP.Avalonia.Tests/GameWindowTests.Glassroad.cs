@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Threading;
+using Avalonia.Controls;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Race;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -20,6 +22,7 @@ namespace CCP.Avalonia.Tests;
 public sealed partial class GameWindowTests
 {
     private const string GrBase = "http://race.test";
+    private const double LoadingAged = 121;
     private const string GrRace = GlassroadHostRules.AllowedPathPrefix;
 
     private sealed class GrHttp : System.Net.Http.HttpMessageHandler
@@ -36,14 +39,16 @@ public sealed partial class GameWindowTests
     }
 
     /// <summary>Signed in, no Racing Thoughts track, the door at <paramref name="door"/>, the relay on a fake transport.</summary>
-    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body) => Run((shell, launcher) =>
+    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body, bool lab = true) => Run((shell, launcher) =>
     {
         var (oldDoor, oldOwns, oldHttp, oldBase) = (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
+        var oldLab = CoreEntitlement.HasLabProvider;
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
+            CoreEntitlement.HasLabProvider = () => lab;
             GameWindow.GlassroadDoorEnv = () => door;
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
@@ -57,10 +62,46 @@ public sealed partial class GameWindowTests
         }
         finally
         {
+            CoreEntitlement.HasLabProvider = oldLab;
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
     });
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(false, "1")]
+    [InlineData(true, null)]
+    [InlineData(true, "1")]
+    public void PlayRaceOpensGlassroadAndRequiresLab(bool lab, string? preview)
+        => RunGlassroad(preview, (shell, _, _) =>
+        {
+            CoreEntitlement.HasPremiumProvider = () => true; // Tier 1 alone must still be refused.
+            var denied = new List<TierVerdict>();
+            var oldDenied = CoreEntitlement.ShowDeniedHandler;
+            CoreEntitlement.ShowDeniedHandler = v => denied.Add(v);
+            try
+            {
+                shell.ShowTab("play");
+                shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
+                    .FindControl<global::Avalonia.Controls.Button>("BtnPlayRacingThoughts")!
+                    .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                if (!lab)
+                {
+                    Assert.Empty(GameWindow.OpenWindowsForTests());
+                    Assert.False(Assert.Single(denied).Allowed);
+                    return;
+                }
+                Assert.Empty(denied);
+                var w = Assert.Single(GameWindow.OpenWindowsForTests());
+                Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
+                Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
+                PanicSurfaces.All.Single(p => p.Id == "games").Stop(shell);
+                Assert.False(GameWindow.IsAnyOpen());
+            }
+            finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+        }, lab);
 
     // ---- pure rules ----
 
@@ -84,6 +125,25 @@ public sealed partial class GameWindowTests
     {
         Assert.Equal(pass, HostNetPathRule.TryBuild(GrBase, path, GrRace, out var uri));
         if (pass) Assert.Equal("race.test", uri!.Host);
+    }
+
+    /// <summary>WPF 7.2.2 GlassroadHostTests (#1543): a page building a course is waited for, up to 90 s.</summary>
+    [Fact]
+    public void Glassroad_Watch_ABusyPageIsWaitedFor()
+    {
+        static TimeSpan S(double s) => TimeSpan.FromSeconds(s);
+        Assert.True(GlassroadHostRules.IsBusy(S(10)));
+        Assert.False(GlassroadHostRules.IsBusy(null));
+        Assert.False(GlassroadHostRules.IsBusy(GlassroadHostRules.LoadingWindow));
+        Assert.Equal(PbpHostRules.WatchStep.Idle, GlassroadHostRules.Watch(false, S(40), S(40), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(false, S(46), S(46), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Idle, GlassroadHostRules.Watch(false, S(60), S(60), false, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(false, S(91), S(91), false, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Ok, GlassroadHostRules.Watch(true, S(1), S(19), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Ping, GlassroadHostRules.Watch(true, S(25), S(25), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(true, S(30), S(30), true, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Ok, GlassroadHostRules.Watch(true, S(60), S(60), true, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(true, S(95), S(95), true, busy: true));
     }
 
     [Fact]
@@ -151,7 +211,7 @@ public sealed partial class GameWindowTests
             Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
             Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
             Assert.False(GameWindow.IsAnyOpen());
-        });
+        }, lab: false);
         RunGlassroad("1", (shell, launcher, _) =>
         {
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
@@ -215,9 +275,16 @@ public sealed partial class GameWindowTests
 
         var now = DateTime.UtcNow;
         Assert.Equal("ok", w.CheckGlassroadWatch(now));
+        // #1543: a `loading` frame marks the page busy, so a silent, pinged page is waited for instead of closed.
+        w.Web.OnWebMessage("{\"type\":\"loading\",\"stage\":\"boudoir\",\"p\":0.5}");
         Assert.Equal("ping", w.CheckGlassroadWatch(now.AddSeconds(25)));
+        Assert.Equal("ok", w.CheckGlassroadWatch(now.AddSeconds(60)));
+        Assert.True(GameWindow.IsAnyOpen());
+        w.Web.OnWebMessage("{\"type\":\"heartbeat\"}");
+        now = DateTime.UtcNow.AddSeconds(LoadingAged);   // the loading frame has aged out: back to ping, then close
+        Assert.Equal("ping", w.CheckGlassroadWatch(now));
         Assert.Equal("ping", (string?)sent.Last()["type"]);
-        Assert.Equal("closed", w.CheckGlassroadWatch(now.AddSeconds(30)));
+        Assert.Equal("closed", w.CheckGlassroadWatch(now.AddSeconds(5)));
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
 
