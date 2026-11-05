@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -77,8 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         folder, so the preview shares a cookie jar with every other WebHost. Stubbed because NativeWebView has no counterpart at
     ///         all: ZoomFactor, ContainsFullScreenElementChanged (and the fullscreen reparent it
     ///         drove), and AddScriptToExecuteOnDocumentCreatedAsync.</item>
-    ///   <item><b>Win32.</b> <c>WindowChromeHelper.ApplyDarkTitleBar</c> (DwmSetWindowAttribute),
-    ///         <c>RestoreOwnerOnClose</c>, <c>System.Windows.Forms.Screen.FromHandle</c> +
+    ///   <item><b>Win32.</b> <c>System.Windows.Forms.Screen.FromHandle</c> +
     ///         <c>WindowInteropHelper</c> (the borderless-fullscreen preview window).
     ///         <c>VisualTreeHelper.GetDpi</c> is NOT one of these any more: TopLevel.RenderScaling
     ///         is its twin and the gaze picker uses it - see BeginGazePick in the RuleEditor
@@ -256,14 +256,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             SelectRule(_enhancement.Rules.FirstOrDefault());
         }
 
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+        // Instance-scoped so headless tests can observe the actual window's DWM requests.
+        internal bool? TitleBarWindowsOverride { get; set; }
+        internal Func<DeeperEditorWindow, IntPtr>? TitleBarHandleOverride { get; set; }
+        internal Action<IntPtr, int, int>? TitleBarAttributeOverride { get; set; }
+
+        private static void SetTitleBarAttribute(IntPtr hwnd, int attribute, int value)
+        {
+            DwmSetWindowAttribute(hwnd, attribute, ref value, sizeof(int));
+        }
+
+        internal static void ApplyDarkTitleBar(bool isWindows, IntPtr hwnd, Action<IntPtr, int, int> apply,
+            string? accentHex)
+        {
+            if (!isWindows || hwnd == IntPtr.Zero) return;
+            CoreMods.TryParseHexColor(accentHex, out var rgb);
+            var (r, g, b) = rgb;
+            int caption = r | (g << 8) | (b << 16);
+            int text = 0.299 * r + 0.587 * g + 0.114 * b > 150 ? 0x260816 : 0xFFFFFF;
+            try
+            {
+                apply(hwnd, 20, 1);
+                apply(hwnd, 35, caption);
+                apply(hwnd, 34, caption);
+                apply(hwnd, 36, text);
+            }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+        }
+
         public DeeperEditorWindow(Enhancement enhancement, string? filePath)
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
 
-            // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
-            // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
-            // SystemDecorations="None" plus a hand-drawn bar, which would cost this resizable
-            // window its native move/resize/maximize for a colour. Left native and untinted.
+            Opened += (_, _) => ApplyDarkTitleBar(TitleBarWindowsOverride ?? OperatingSystem.IsWindows(),
+                TitleBarHandleOverride?.Invoke(this) ?? TryGetPlatformHandle()?.Handle ?? IntPtr.Zero,
+                TitleBarAttributeOverride ?? SetTitleBarAttribute,
+                CoreMods.AccentColorHexProvider is null ? null : CoreMods.AccentColorHex);
             Closed += (_, _) => { try { (Owner as Window)?.Activate(); } catch { } };
             Opened += (_, _) => s_open.Add(this);
             Closed += (_, _) => s_open.Remove(this);
