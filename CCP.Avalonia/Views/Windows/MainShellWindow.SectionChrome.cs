@@ -14,7 +14,7 @@
 //
 // The edge lift laps at Full and rests at Reduced. Still missing: the edge fog the band thins for
 // (AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthHud/Home), the "Moved" redirects and their note, and the "Cloud sync
+// (PaintDepthHome), the "Moved" redirects and their note, and the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
 
 using System;
@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var hue = NavStripRules.Accent(section);
                 PaintSectionInk(section);
                 PaintDepthRail(hue); // WPF MainWindow.SectionChrome.cs:166
+                PaintDepthHud(hue);
                 Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView>("QuestsTab")?.PaintDepthQuests(hue);
                 var level = CoreSettings.Current.MotionLevel;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
