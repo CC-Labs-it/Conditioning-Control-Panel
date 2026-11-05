@@ -571,8 +571,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 PlacementTarget = host,
                 Placement = PlacementMode.Bottom,
-                // Bottom placement centres horizontally, so symmetric shadow padding needs no X compensation.
-                VerticalOffset = 10 - 24,
+                // WPF MainWindow.QuestStamps.cs:809-811. Avalonia 12 hands the child's Margin to the popup
+                // positioner (PopupRoot.ArrangeSetBounds, OverlayPopupHost.ArrangeOverride), so the 24 px shadow
+                // room never moves the card: the offsets are WPF's own, with no margin compensation.
+                VerticalOffset = 10,
                 HorizontalOffset = -6,
                 IsLightDismissEnabled = false,
                 IsHitTestVisible = false,

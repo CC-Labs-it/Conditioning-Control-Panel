@@ -131,16 +131,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     FontSize = 12.5, Margin = new Thickness(0, 3, 0, 12),
                     Foreground = new SolidColorBrush(Color.FromArgb(0xD9, 255, 255, 255)), TextWrapping = TextWrapping.Wrap }, buttons,
             } };
+            var card = new Border { CornerRadius = new CornerRadius(14), Padding = new Thickness(16, 12),
+                MinWidth = 240, MaxWidth = 340, Background = new SolidColorBrush(Color.Parse("#F51B1026")),
+                BorderBrush = new SolidColorBrush(NavStripRules.WithAlpha(_hue, 0.85)), BorderThickness = new Thickness(1.5), Child = body };
             var popup = new Popup
             {
                 PlacementTarget = target, Placement = PlacementMode.Bottom, VerticalOffset = 8,
                 IsLightDismissEnabled = true,
-                Child = new Border { CornerRadius = new CornerRadius(14), Padding = new Thickness(16, 12),
-                    MinWidth = 240, MaxWidth = 340, Background = new SolidColorBrush(Color.Parse("#F51B1026")),
-                    BorderBrush = new SolidColorBrush(NavStripRules.WithAlpha(_hue, 0.85)), BorderThickness = new Thickness(1.5), Child = body },
+                Child = card,
             };
             ((ISetLogicalParent)popup).SetParent(this); // Avalonia needs a tree owner to show the card.
             _confirm = popup;
+            // Keys inside a popup never reach the shell (a Popup has no interactive parent), so the card closes
+            // itself on Escape and hands focus back to its pill, as PR #3461 did. The panic key is read by the
+            // low-level hooks (Win32PanicKey, X11PanicKey), never by this routed event, so marking it handled
+            // cannot shadow panic.
+            card.KeyDown += (_, e) =>
+            {
+                if (e.Key != global::Avalonia.Input.Key.Escape) return;
+                CloseConfirm();
+                e.Handled = true;
+                PillFor(tab.Key)?.Focus();
+            };
             popup.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_confirm, popup)) { StopConfirmFade(); _confirm = null; _confirmTab = null; }
@@ -149,7 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // WPF PopupAnimation.Fade: a 150 ms fade at Full and Reduced, none at Off.
             popup.Opened += (_, _) =>
             {
-                if (Level == MotionLevel.Off || popup.Child is not Control card) return;
+                if (Level == MotionLevel.Off) return;
                 _confirmFade = new BeatLoop(card, seconds =>
                 {
                     card.Opacity = Math.Clamp(seconds / 0.15, 0, 1);
