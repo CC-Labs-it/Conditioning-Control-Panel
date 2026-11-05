@@ -1,13 +1,18 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Input;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.Webcam;
 using Xunit;
 
@@ -293,6 +298,8 @@ public sealed class QuickRecalHotkeyTests
         var registration = new Registration();
         int attempts = 0;
         shell.RegisterQuickRecal = (_, _) => { attempts++; return registration; };
+        var camera = new Registration();
+        shell.RegisterCameraHotkey = (_, _, _, _) => camera;
         try
         {
             (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, true, "Escape", "");
@@ -305,8 +312,10 @@ public sealed class QuickRecalHotkeyTests
             shell.StartQuickRecalHotkey(); // idempotent: one watch, one registration
             Assert.Equal(1, attempts);
             Assert.True(shell.QuickRecalHotkeyArmed);
+            Assert.True(shell.CameraHotkeyArmed);
             shell.Close();
             Assert.True(registration.Disposed);
+            Assert.True(camera.Disposed);
             Assert.False(shell.QuickRecalHotkeyArmed);
         }
         finally
@@ -316,4 +325,255 @@ public sealed class QuickRecalHotkeyTests
             (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = old;
         }
     });
+
+    [Fact]
+    public void X11Grabs_MatchKeycodeAndChordModifiers_IgnoringLockKeys()
+    {
+        Action recal = () => { }, camera = () => { };
+        var grabs = new[] { (42, 4u | 8u, recal), (45, 4u | 8u, camera) };
+        Assert.Same(recal, X11SummonChord.Match(grabs, 42, 4 | 8));
+        Assert.Same(recal, X11SummonChord.Match(grabs, 42, 4 | 8 | 2 | 16)); // Caps + Num Lock on
+        Assert.Same(camera, X11SummonChord.Match(grabs, 45, 4 | 8));
+        Assert.Null(X11SummonChord.Match(grabs, 42, 4 | 8 | 1)); // Shift added: not this chord
+        Assert.Null(X11SummonChord.Match(grabs, 43, 4 | 8));
+    }
+
+    [Fact]
+    public void CameraHotkey_ArmsTheUsersChord_GlobalOffDisarms_BadKeyFallsBackToK() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        var p = CoreSettings.Current.CompanionPrompt;
+        var old = (p.CameraShortcutKey, p.CameraShortcutModifiers, p.CameraShortcutGlobal);
+        var shell = new MainShellWindow();
+        var registration = new Registration();
+        (ChordMods Mods, string Key)? armed = null;
+        shell.RegisterCameraHotkey = (_, m, k, _) => { armed = (m, k); return registration = new Registration(); };
+        try
+        {
+            (p.CameraShortcutKey, p.CameraShortcutModifiers, p.CameraShortcutGlobal) = ("J", "Control,Shift", true);
+            shell.ApplyCameraHotkey();
+            Assert.Equal((ChordMods.Ctrl | ChordMods.Shift, "J"), armed);
+            Assert.Equal("Ctrl+Shift+J", MainShellWindow.CameraShortcutChord);
+            Assert.True(shell.CameraHotkeyArmed);
+            p.CameraShortcutGlobal = false;
+            shell.ApplyCameraHotkey();
+            Assert.True(registration.Disposed);
+            Assert.False(shell.CameraHotkeyArmed);
+            (p.CameraShortcutKey, p.CameraShortcutModifiers, p.CameraShortcutGlobal) = ("NotAKey", "", true);
+            shell.ApplyCameraHotkey();
+            Assert.Equal((ChordMods.Ctrl | ChordMods.Alt, "K"), armed);
+        }
+        finally
+        {
+            shell.StopQuickRecalHotkey();
+            shell.Close();
+            (p.CameraShortcutKey, p.CameraShortcutModifiers, p.CameraShortcutGlobal) = old;
+        }
+    });
+
+    [Fact]
+    public Task CameraHotkey_TogglesTheTracker_AndAStaleConsentAsksFirst() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        var tracker = WebcamTracker.Instance;
+        var shell = new MainShellWindow();
+        int asks = 0;
+        var toastHost = new StackPanel();
+        ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(toastHost);
+        bool grant = false;
+        shell.ShowCameraConsent = _ =>
+        {
+            asks++;
+            if (grant) (s.WebcamConsentGiven, s.WebcamConsentVersion) = (true, WebcamConsent.ConsentVersion);
+            return Task.FromResult(grant);
+        };
+        try
+        {
+            WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
+            (s.WebcamConsentGiven, s.WebcamConsentVersion) = (false, "");
+            await shell.ToggleWebcamFromHotkeyAsync();
+            Assert.Equal(1, asks);
+            Assert.False(tracker.IsRunning); // refused consent never starts the camera
+            grant = true;
+            await shell.ToggleWebcamFromHotkeyAsync();
+            Assert.Equal(2, asks);
+            Assert.True(tracker.IsRunning, tracker.LastError);
+            void AssertToast(string key)
+            {
+                var toast = Assert.IsType<Border>(toastHost.Children[^1]);
+                var grid = Assert.IsType<Grid>(toast.Child);
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.Get(key), Assert.IsType<TextBlock>(grid.Children[0]).Text);
+                Assert.Equal(TimeSpan.FromSeconds(2), Assert.IsType<global::Avalonia.Threading.DispatcherTimer>(toast.Tag).Interval);
+            }
+            AssertToast("camera_shortcut_toast_started");
+            await shell.ToggleWebcamFromHotkeyAsync();
+            Assert.Equal(2, asks);
+            Assert.False(tracker.IsRunning);
+            AssertToast("camera_shortcut_toast_stopped");
+        }
+        finally
+        {
+            await tracker.StopAsync();
+            shell.Close();
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+        }
+    });
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("wayland-0")]
+    public void QuickRecalHint_NamesBothChords_OnlyWhileBothAreArmed(string? waylandDisplay) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var oldWayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+        var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var shell = new MainShellWindow();
+        shell.RegisterQuickRecal = (_, _) => new Registration();
+        shell.RegisterCameraHotkey = (_, _, _, _) => null;
+        static TextBlock Hint() => new WebcamQuickRecalWindow().FindControl<TextBlock>("TxtHotkeyHint")!;
+        try
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", waylandDisplay);
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, true, "Escape", "");
+            shell.QuickRecalPlatformSupported = true;
+            shell.StartQuickRecalHotkey();
+            Assert.False(Hint().IsVisible); // camera chord refused: the two-chord line would lie
+            shell.StopQuickRecalHotkey();
+
+            var shell2 = new MainShellWindow();
+            shell2.RegisterQuickRecal = (_, _) => new Registration();
+            shell2.RegisterCameraHotkey = (_, _, _, _) => new Registration();
+            try
+            {
+                shell2.StartQuickRecalHotkey();
+                var hint = Hint();
+                Assert.Equal(!OperatingSystem.IsLinux() || waylandDisplay == null, hint.IsVisible);
+                if (hint.IsVisible)
+                {
+                    Assert.Contains("Ctrl+Alt+G", hint.Text);
+                    Assert.Contains(MainShellWindow.CameraShortcutChord, hint.Text);
+                }
+            }
+            finally { shell2.StopQuickRecalHotkey(); shell2.Close(); }
+            Assert.False(Hint().IsVisible);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);
+            shell.StopQuickRecalHotkey();
+            shell.Close();
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = old;
+        }
+    });
+
+    [Fact]
+    public Task CameraHotkey_InWindowFallback_RestoresShell_AndDoesNotStackConsent() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var p = s.CompanionPrompt;
+        var old = (s.WebcamConsentGiven, p.CameraShortcutGlobal, p.CameraShortcutKey, p.CameraShortcutModifiers);
+        (s.WebcamConsentGiven, p.CameraShortcutGlobal, p.CameraShortcutKey, p.CameraShortcutModifiers) = (false, false, "K", "Control,Alt");
+        var shell = new MainShellWindow();
+        shell.QuickRecalPlatformSupported = true;
+        shell.RegisterQuickRecal = (_, _) => null;
+        var held = new TaskCompletionSource<bool>();
+        int asks = 0;
+        shell.ShowCameraConsent = owner =>
+        {
+            Assert.Same(shell, owner);
+            Assert.True(shell.IsVisible);
+            Assert.NotEqual(WindowState.Minimized, shell.WindowState);
+            asks++;
+            return held.Task;
+        };
+        try
+        {
+            shell.StartQuickRecalHotkey();
+            shell.WindowState = WindowState.Minimized;
+            global::Avalonia.Input.KeyEventArgs Press(global::Avalonia.Input.KeyModifiers mods)
+            {
+                var e = new global::Avalonia.Input.KeyEventArgs { RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent,
+                    Key = global::Avalonia.Input.Key.K, KeyModifiers = mods };
+                shell.RaiseEvent(e);
+                return e;
+            }
+            Press(global::Avalonia.Input.KeyModifiers.Control);
+            Assert.Equal(0, asks);
+            Assert.True(Press(global::Avalonia.Input.KeyModifiers.Control | global::Avalonia.Input.KeyModifiers.Alt).Handled);
+            Assert.Equal(1, asks);
+            await shell.ToggleWebcamFromHotkeyAsync();
+            Assert.Equal(1, asks);
+            held.SetResult(false);
+            Assert.False(WebcamTracker.Instance.IsRunning);
+        }
+        finally
+        {
+            held.TrySetResult(false); shell.StopQuickRecalHotkey(); shell.Close();
+            (s.WebcamConsentGiven, p.CameraShortcutGlobal, p.CameraShortcutKey, p.CameraShortcutModifiers) = old;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CameraHotkey_ClosingAfterEnable_DoesNotStartUntilDialogFinished(bool finish) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamConsentDate, WebcamTracker.SourceFactory);
+        s.WebcamConsentGiven = false;
+        WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
+        var tracker = WebcamTracker.Instance;
+        var shell = new MainShellWindow();
+        try
+        {
+            var pending = shell.ToggleWebcamFromHotkeyAsync();
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<WebcamConsentDialog>());
+            void Click(string name) => dialog.FindControl<Button>(name)!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Click("BtnNext"); Click("BtnNext");
+            foreach (var name in new[] { "ChkConsent1", "ChkConsent2", "ChkConsent3" }) dialog.FindControl<CheckBox>(name)!.IsChecked = true;
+            dialog.FindControl<TextBox>("TxtConfirm")!.Text = "ENABLE";
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(dialog.FindControl<Button>("BtnEnable")!.IsEnabled);
+            Click("BtnEnable");
+            Assert.True(dialog.ConsentGiven);
+            Assert.True(WebcamConsent.IsCurrent(CoreSettings.Current));
+            Assert.False(tracker.IsRunning);
+            if (finish) Click("BtnSkipCal"); else dialog.Close();
+            await pending;
+            Assert.Equal(finish, tracker.IsRunning);
+        }
+        finally
+        {
+            await tracker.StopAsync(); shell.Close();
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamConsentDate, WebcamTracker.SourceFactory) = old;
+        }
+    });
+
+    [Fact]
+    public void X11HeldChord_FiresOnceUntilGenuineRelease()
+    {
+        int toggles = 0;
+        var grabs = new[] { (45, 12u, (Action)(() => toggles++)) };
+        var held = new Dictionary<int, PanicKeyHold>();
+        void Send(int type, long time, (int, int, long) next = default) =>
+            X11SummonChord.MatchKeyEvent(grabs, held, type, 45, 12, time, next)?.Invoke();
+        Send(2, 100); Send(2, 200); Send(2, 300); // detectable repeat: repeated presses only
+        Assert.Equal(1, toggles);
+        Send(3, 400, (2, 45, 400)); Send(2, 400); // legacy synthetic release/press pair
+        Assert.Equal(1, toggles);
+        Send(3, 500, (2, 45, 501)); Send(2, 501); // genuine release followed by a new press
+        Assert.Equal(2, toggles);
+        Send(3, 600); Send(2, 700);
+        Assert.Equal(3, toggles);
+        for (long t = 800; t < 3000; t += 100) Send(2, t); // held longer than RepeatGap, with repeats refreshing it
+        Assert.Equal(3, toggles);
+        Send(2, 3000 + (long)PanicKeyHold.RepeatGap.TotalMilliseconds); // release lost: next real press recovers
+        Assert.Equal(4, toggles);
+    }
+
 }

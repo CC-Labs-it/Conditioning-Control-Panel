@@ -147,12 +147,22 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Border Width="40" Height="40" CornerRadius="11" Margin="0,0,10,0" VerticalAlignment="Center"
-                                BorderBrush="#40FFFFFF" BorderThickness="1">
-                            <Border.Background>
-                                <ImageBrush ImageSource="{Binding Art}" Stretch="UniformToFill"/>
-                            </Border.Background>
-                        </Border>
+                        <Grid Width="40" Height="40" Margin="0,0,10,0" VerticalAlignment="Center">
+                            <Border CornerRadius="11" BorderBrush="#40FFFFFF" BorderThickness="1">
+                                <Border.Background>
+                                    <ImageBrush ImageSource="{Binding Art}" Stretch="UniformToFill"/>
+                                </Border.Background>
+                            </Border>
+                            <!-- the host's look (contract 4): their face and Prize Counter frame on the art's
+                                 corner, only when they wear something; the frame overhangs without a clip -->
+                            <Grid Tag="lobby-face" Width="22" Height="22" Margin="0,0,-7,-7" IsHitTestVisible="False"
+                                  HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                  Visibility="{Binding HasLook, Converter={StaticResource BoolToVisibility}}">
+                                <Ellipse Fill="{Binding FaceBrush}" Stroke="#1C1233" StrokeThickness="1.5"/>
+                                <Image Tag="lobby-frame" Source="{Binding FrameArt}" Stretch="Fill"
+                                       Width="{Binding FrameSize}" Height="{Binding FrameSize}" Margin="{Binding FrameMargin}"/>
+                            </Grid>
+                        </Grid>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}"
