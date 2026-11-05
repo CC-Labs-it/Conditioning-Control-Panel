@@ -1153,6 +1153,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// count through the three modes exactly as WPF LockCardService.ShowLockCard does.</summary>
         internal static void ShowNext(bool isTest) => ShowNext(isTest, null);
 
+        /// <summary>The CoreLockCard.ShowHandler hop from any thread. A ForceCloseAll between the post and
+        /// the show (panic, remote teardown, engine stop) drops the card, as WPF's synchronous show would.</summary>
+        internal static void PostNext(bool isTest)
+        {
+            var gen = CloseGeneration;
+            Dispatcher.UIThread.Post(() => { if (gen == CloseGeneration) ShowNext(isTest); });
+        }
+
         /// <param name="strict">Null: the player's own setting. The leash passes false (never a strict card).</param>
         internal static void ShowNext(bool isTest, bool? strict)
         {
@@ -1190,10 +1198,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         static LockCardWindow() =>
             PopQuizWindow.AllClosed += () => { var r = _heldForQuiz; _heldForQuiz = null; r?.Invoke(); };
 
+        /// <summary>Moves on every ForceCloseAll: a card posted before it is dropped (WPF shows synchronously).</summary>
+        internal static int CloseGeneration => System.Threading.Volatile.Read(ref _closeGeneration);
+        private static int _closeGeneration;
+
         /// <summary>Drop every card, solved or not - the panic exit. Strict mode does not survive
         /// this: <c>_isCompleted</c> is set first on each window so OnClosing cannot refuse.</summary>
         public static void ForceCloseAll()
         {
+            System.Threading.Interlocked.Increment(ref _closeGeneration);
             _heldForQuiz = null;
             var windows = _allWindows.ToList();
             _allWindows.Clear();
