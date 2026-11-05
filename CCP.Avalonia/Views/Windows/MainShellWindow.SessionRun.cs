@@ -62,6 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // WPF Presets.cs:1616-1622 -> StartStop.cs:345-350: before session overrides.
                     if (!CoreEngine.IsRunning && !RemoteControllerConnected && !CoreSettings.Current.AudioOnlySession)
                         WarnIfFlashLibraryEmpty();
+                    App.Achievements?.CheckRelapse();
+                    StartEngineRamp(); // WPF Presets.cs:1618: capture user values before session overrides.
                     runner.Start(session);
                     AnnounceProgramSessionStarted(); // WPF Presets.cs:2013
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
@@ -107,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");
             runner.Stop(completed: false);
+            App.Achievements?.TrackPanicPressed(); // WPF SessionEngine.cs:477-478, every confirmed early stop
             Platform.AccountSeed.Sync?.Nudge("session end");   // explicit end: the runner no longer counts as running
         }
 
