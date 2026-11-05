@@ -727,36 +727,13 @@ public sealed partial class GameWindowTests
         }
     });
 
-    /// <summary>WPF CaucusHostService.Launch :132 + LauncherCatalogue :234: no track, no race (and no tile here,
-    /// where WPF draws the mystery card); an owned track opens it from the launcher after the leash check; panic closes it.</summary>
-    [Fact]
-    public void Race_DoorAndLauncher_LeashGate_AndPanic()
+    // Retained 2D bridge regressions run directly, never through a production door.
+    private static GameWindow OpenRetiredRace()
     {
-        RunRace(null, (launcher, _, _) =>
-        {
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
-            Assert.Null(GameWindow.Launch("race"));
-            Assert.False(GameWindow.IsAnyOpen());
-        });
-        RunRace("rt.original.03", (launcher, _, _) =>
-        {
-            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
-            launcher.Hide();
-            int gates = 0;
-            MainShellWindow.LeashGateDueProvider = () => true;
-            MainShellWindow.PresentLeashGateProvider = _ => gates++;
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, gates);
-            Assert.False(GameWindow.IsAnyOpen());
-            MainShellWindow.LeashGateDueProvider = () => false;
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(GameWindow.IsAnyOpen());
-            PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(GameWindow.IsAnyOpen());
-        });
+        var w = new GameWindow(new GameWindow.Game("race", "launcher_game_race_title", "dtrh/race.html"));
+        w.Load(GameWindow.Server());
+        w.Show();
+        return w;
     }
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
@@ -764,7 +741,7 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
     {
-        var w = GameWindow.Launch("race")!;
+        var w = OpenRetiredRace();
         Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
@@ -796,7 +773,7 @@ public sealed partial class GameWindowTests
         var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var now = t0;
         GameWindow.RaceUtcNow = () => now;                // stepped clock (P08); RunRace restores it
-        var w = GameWindow.Launch("race")!;
+        var w = OpenRetiredRace();
         Assert.True(w.RaceWatchRunning);                // WPF Launch arms the watch
         Assert.Equal("idle", w.CheckRaceHeartbeat(t0.AddSeconds(60)));
         w.HandleMessage("{\"type\":\"ready\"}");
@@ -875,7 +852,7 @@ public sealed partial class GameWindowTests
         WithTrackFiles((_, _) => { decodes++; return Tone(4); }, files =>
         {
             var player = new FakeTrackPlayer();
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             using (var real = w.RaceNewPlayer!()) Assert.IsType<RaceTrackPlayer>(real);   // this head's own player
             w.RaceNewPlayer = () => player;
             w.RacePickFile = () => Task.FromResult<string?>(files[0]);
@@ -923,7 +900,7 @@ public sealed partial class GameWindowTests
     {
         WithTrackFiles(null, files =>
         {
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             w.RaceNewPlayer = null;   // a build with no player
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -958,7 +935,7 @@ public sealed partial class GameWindowTests
             return Tone(3);
         }, files =>
         {
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             w.RaceNewPlayer = () => new FakeTrackPlayer();
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -1419,7 +1396,7 @@ public sealed partial class GameWindowTests
     /// <summary>Each hosted game's kept-Escape page and frame (WPF KeptEscapeType per host: the board reads
     /// pbp:escape, the race / Breakout / DtRH pages kept-escape). FYP and Just Drop do not pause on Escape.</summary>
     [Theory]
-    [InlineData("race", "Race", "kept-escape")]
+    [InlineData("race", "Glassroad", "kept-escape")]
     [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]
