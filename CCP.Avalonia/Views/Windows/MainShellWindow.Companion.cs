@@ -44,7 +44,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool BuildingHiddenForBoot { get; set; }
 
         private bool _companionEventsClosed;
-        private Action? _stopCompanionLevelSound;
 
         /// <summary>WPF MainWindow.Companion.cs:35-140 event handlers; a closed shell must never receive another reward.</summary>
         private void HookCompanionEvents()
@@ -60,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CompanionCore.LevelUp -= OnCompanionLevelUp;
                 CompanionCore.XPDrained -= OnCompanionXPDrained;
                 CompanionCore.Switched -= OnCompanionSwitched;
-                StopCompanionLevelSound();
+                // The milestone sound shares the hero's level-up handle, which HeroMoments stops on close.
             };
         }
 
@@ -89,7 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var name = CoreMods.MakeModAware(CompanionDefinition.GetById(id).Name);
             if (CompanionCore.MilestoneNotification(name, level) is not { } notice) return;
             Platform.OsNotifications.Show(notice.Title, notice.Body);
-            PlayCompanionLevelSound();
+            PlayHeroLevelSound();   // WPF PlayLevelUpSound (MainWindow.xaml.cs:784-831): one handle with the player's level-up
         });
 
         private void OnCompanionXPDrained(double amount) => DispatchCompanionEvent(() =>
@@ -100,33 +99,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         });
 
         private void OnCompanionSwitched(CompanionId id) => DispatchCompanionEvent(RefreshCompanionCards);
-
-        /// <summary>WPF MainWindow/MainWindow.xaml.cs:784-831 PlayLevelUpSound: same fallbacks, curve and gain.</summary>
-        private void PlayCompanionLevelSound()
-        {
-            try
-            {
-                var root = AppDomain.CurrentDomain.BaseDirectory;
-                var path = new[]
-                {
-                    Path.Combine(root, "Resources", "sounds", "lvup.mp3"),
-                    Path.Combine(root, "Resources", "lvlup.mp3"),
-                    Path.Combine(root, "assets", "sounds", "lvlup.mp3"),
-                }.FirstOrDefault(File.Exists);
-                if (path == null) return;
-                StopCompanionLevelSound();
-                var volume = (float)Math.Pow(CoreSettings.Current.MasterVolume / 100f, 1.5) * 0.2625f;
-                _stopCompanionLevelSound = CoreAudio.PlayStoppable(path, Math.Max(0.01f, volume), "level-up");
-            }
-            catch (Exception ex) { Log.Warning(ex, "Companion level-up sound failed"); }
-        }
-
-        internal void StopCompanionLevelSound()
-        {
-            var stop = _stopCompanionLevelSound;
-            _stopCompanionLevelSound = null;
-            try { stop?.Invoke(); } catch (Exception ex) { Log.Debug(ex, "Companion level-up sound stop failed"); }
-        }
 
         // ============================== the XP-drain flash ==============================
 

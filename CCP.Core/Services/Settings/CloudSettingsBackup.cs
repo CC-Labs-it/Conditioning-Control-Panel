@@ -35,6 +35,44 @@ namespace ConditioningControlPanel.Services
         public CloudSettingsBackup(HttpMessageHandler? handler = null) =>
             _http = handler == null ? Shared.Value : V2AuthService.Configure(new HttpClient(handler));
 
+        /// <summary>WPF ProfileSyncService.cs:4257-4325: GDPR export, including one retry
+        /// after genuine auth recovery. The caller saves the pretty JSON only after consent.</summary>
+        public async Task<(bool success, string? error, string? jsonData)> ExportDataAsync(AppSettings settings)
+        {
+            if (string.IsNullOrEmpty(settings.UnifiedId))
+                return (false, Localization.Loc.Get("msg_export_login_required"), null);
+            try
+            {
+                using var first = await PostAsync("/v2/user/export-data", settings, new { unified_id = settings.UnifiedId });
+                var response = first;
+                var json = await response.Content.ReadAsStringAsync();
+                HttpResponseMessage? retry = null;
+                try
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        if (V2AuthService.MergedRecovery is { } merged && await merged(response, json))
+                            return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
+                        if (await AuthRecovery.HandleUnauthorizedAsync(response) && !string.IsNullOrEmpty(settings.AuthToken))
+                        {
+                            retry = await PostAsync("/v2/user/export-data", settings, new { unified_id = settings.UnifiedId });
+                            response = retry;
+                            json = await response.Content.ReadAsStringAsync();
+                        }
+                    }
+                    if (!response.IsSuccessStatusCode)
+                        return (false, (string?)JsonConvert.DeserializeObject<JObject>(json)?["error"] ?? Localization.Loc.GetF("msg_export_server_error_0", response.StatusCode), null);
+                    return (true, null, JToken.Parse(json).ToString(Formatting.Indented));
+                }
+                finally { retry?.Dispose(); }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Data export request failed");
+                return (false, Localization.Loc.Get("msg_export_connection_required"), null);
+            }
+        }
+
         // ---- copied unchanged from WPF ProfileSyncService.cs:4553-4635 ----
 
         /// <summary>
@@ -357,15 +395,19 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The "Backup now" upload (WPF BackupSettingsAsync with force: true). False when there is
         /// no account, no token, offline, over budget, or the server refused.</summary>
-        public async Task<bool> BackupAsync(AppSettings settings)
+        public async Task<bool> BackupAsync(AppSettings settings) => (await BackupWithStatusAsync(settings)).Ok;
+
+        /// <summary><see cref="BackupAsync"/> plus the refusing status (413 = too large: the automatic backup
+        /// stops for the session, WPF ProfileSyncService.cs:4582-4588); null status when nothing was sent.</summary>
+        internal async Task<(bool Ok, HttpStatusCode? Refused)> BackupWithStatusAsync(AppSettings settings)
         {
-            if (settings.OfflineMode) return false;
+            if (settings.OfflineMode) return (false, null);
             var unifiedId = settings.UnifiedId;
-            if (string.IsNullOrEmpty(unifiedId)) return false;
+            if (string.IsNullOrEmpty(unifiedId)) return (false, null);
             if (string.IsNullOrEmpty(settings.AuthToken))
             {
                 Log.Debug("Settings backup skipped (no auth token)");
-                return false;
+                return (false, null);
             }
             try
             {
@@ -376,7 +418,7 @@ namespace ConditioningControlPanel.Services
                 if (!slot.Ok)
                 {
                     Log.Warning("Settings backup skipped: the current backup could not be read, so its file paths could not be kept");
-                    return false;
+                    return (false, null);
                 }
                 CarryPathFields(obj, SlotSettings(slot.Backup));
                 var encoded = SettingsBackupBudget.Encode(obj);
@@ -385,21 +427,21 @@ namespace ConditioningControlPanel.Services
                     Log.Warning("Settings backup skipped: {Size} bytes encoded is over the {Max} budget even after trimming [{Trimmed}]. Largest: {Largest}",
                         encoded.Base64.Length, SettingsBackupBudget.MaxEncodedBytes, string.Join(",", encoded.Trimmed),
                         string.Join(", ", SettingsBackupBudget.LargestProperties(obj).Select(x => $"{x.Name}={x.Bytes}")));
-                    return false;
+                    return (false, null);
                 }
                 if (encoded.Trimmed.Count > 0)
                     Log.Information("Settings backup trimmed to fit: left out {Trimmed}", string.Join(",", encoded.Trimmed));
 
                 var body = new { unified_id = unifiedId, settings_data = encoded.Base64, app_version = CoreReleaseContent.AppVersion };
                 using var response = await PostAsync("/v2/user/backup-settings", settings, body);
-                if (!await SucceededAsync(response, "Settings backup")) return false;
+                if (!await SucceededAsync(response, "Settings backup")) return (false, response.StatusCode);
                 Log.Information("Settings backed up to cloud ({Size} bytes compressed)", encoded.Compressed.Length);
-                return true;
+                return (true, null);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Settings backup failed");
-                return false;
+                return (false, null);
             }
         }
 
@@ -544,13 +586,14 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>409 merged goes to contract D when the head seeded it (<see cref="V2AuthService.MergedRecovery"/>);
-        /// everything else non-2xx is a logged failure. ponytail: WPF's 401 token recovery has no twin on this
-        /// head yet (SyncPush has none either), so a 401 is a plain failure here.</summary>
+        /// WPF ProfileSyncService.cs:4623/4668/4715 recovers a 401 for the next attempt, without retrying
+        /// a backup or restore. Shared AuthRecovery owns cooldowns, provider validation and heartbeat.</summary>
         private static async Task<bool> SucceededAsync(HttpResponseMessage response, string what)
         {
             if (response.IsSuccessStatusCode) return true;
             var error = await response.Content.ReadAsStringAsync();
             if (V2AuthService.MergedRecovery is { } merged && await merged(response, error)) return false;
+            await AuthRecovery.HandleUnauthorizedAsync(response);
             Log.Warning("{What} failed: {Status} (body {Bytes} bytes)", what, (int)response.StatusCode, error?.Length ?? 0);
             return false;
         }

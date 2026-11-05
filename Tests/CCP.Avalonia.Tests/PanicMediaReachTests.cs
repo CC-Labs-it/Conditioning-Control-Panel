@@ -48,8 +48,9 @@ public sealed class PanicMediaReachTests
 
             Assert.False(Get<bool>("_isPlaying"));
             Assert.Equal(12.0, Get<double>("_currentSec"));
-            Assert.Equal(WebHostMedia.PanicPauseScript, Assert.Single(sent));
-            Assert.Equal(Loc.Get("deeper_player_status_stopped"), Get<TextBlock>("_txtStatus").Text);
+            // One Deeper player pause seam (linux-beta's copy): the page player's own pause, playhead kept; page
+            // fullscreen drops through its separate "deeper-player-fullscreen" surface (WPF ForceExitFullscreenAll).
+            Assert.Equal(DeeperPreview.Invoke("l.pause();"), Assert.Single(sent));
         }
         finally { player.Close(); }
     });
