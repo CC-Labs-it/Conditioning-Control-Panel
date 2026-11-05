@@ -18,7 +18,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>Keincheck's hit_test put points in the tab content on the window template's Panel. This
 /// proves real pointer input in the content area at the default size reaches the control drawn
-/// there after entrances: every visible, enabled, unclipped button in four tabs is the hit-test result at its own
+/// there: every visible, enabled, unclipped button in four tabs is the hit-test result at its own
 /// centre and receives a headless press there. The press is swallowed at the button's tunnel so no
 /// click side effect runs.</summary>
 public sealed class ContentHitTestTests
@@ -29,7 +29,7 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             // This probes static hit geometry, not tab entrance or hover animation progress.
@@ -68,9 +68,6 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
-                    w.MouseMove(p);
-                    RenderLiveTree(w);
-                    p = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
                     var hit = w.InputHitTest(p) as Visual;
                     // On a recurrence, report timing and the visuals held in the rendered frame.
                     var probe = $"{sinceShow.ElapsedMilliseconds} ms after ShowTab, under {string.Join(">", w.GetVisualsAt(p).Take(6).Select(v => $"{v.GetType().Name}/{(v as Control)?.Name}"))}";

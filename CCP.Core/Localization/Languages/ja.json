@@ -1,6 +1,9 @@
 {
   "audio_device_unnamed": "(名前なし)",
   "web_xp_claim_notice": "ウェブアカウントから +{0} XP。降下はアカウント全体で共通になりました。",
+  "msg_export_login_required": "データをエクスポートするにはログインが必要です",
+  "msg_export_connection_required": "データのエクスポートにはインターネット接続が必要です",
+  "msg_export_server_error_0": "サーバーエラー: {0}",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",
