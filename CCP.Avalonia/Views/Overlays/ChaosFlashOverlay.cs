@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Media.Imaging;
+using SkiaSharp;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
@@ -18,15 +19,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// random image from the flash pool held over the desktop at a low opacity, fading in, holding and
     /// fading out on the <see cref="ChaosFlashWash"/> curve. GIFs and animated webp loop; stills hold.
     ///
-    /// <para>One click-through, override-redirect <see cref="SpiralOverlayWindow"/> per screen the
-    /// stage covers (WPF StageBounds: every monitor with DualMonitorEnabled, else the primary), the way
-    /// the spiral and pink tint do. The fade is the compositor's (<see cref="X11Overlay.SetOpacity"/>)
-    /// on one-shot timers, like FlashOverlayWindow. Refused without X11 click-through and a compositor:
-    /// an opaque full-screen picture would be the opposite of a faint wash.</para>
-    ///
-    /// <para>Not ported: WPF keeps its window alive between washes (a Win32 layered-window render-thread
-    /// hang); here the windows close when the fade ends. The Back Room hero (ShowHero/StopHero) and remote
-    /// stills have no caller on this head.</para>
+    /// <para>One click-through virtual-stage window for each independent wash/hero surface. Windows
+    /// remain alive between pictures, clear after fading, and hide after eight quiet seconds.
+    /// Refused without the Win32/X11 composited overlay shim. Remote stills require the unported
+    /// remote media pool; local animation decoding reuses the spiral's bounded worker path.</para>
     /// </summary>
     internal static class ChaosFlashOverlay
     {
@@ -37,18 +33,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _refused;
         /// <summary>Tests only: forget a platform refusal so it does not leak into later tests (P02).</summary>
         internal static void ResetRefusalForTests() => _refused = false;
-        private static int _gen;
-        private static readonly List<SpiralOverlayWindow> Windows = new();
-        private static List<Bitmap> _frames = new();
-        private static int _index;
-        private static DispatcherTimer? _gifTimer;
-
-        internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
-        internal static bool IsShowing => Windows.Count > 0;
-        internal static bool IsAnimating => _gifTimer is not null;
-        /// <summary>The alpha last written to the windows.</summary>
-        internal static double Alpha { get; private set; }
+        private static readonly Surface Wash = new();
+        private static readonly Surface Hero = new();
+        private static int _heroPostGen;
+        internal static IReadOnlyList<SpiralOverlayWindow> Shown => Wash.Windows;
+        internal static IReadOnlyList<SpiralOverlayWindow> HeroShown => Hero.Windows;
+        internal static bool IsShowing => Wash.IsShowing;
+        internal static bool IsAnimating => Wash.IsAnimating;
+        internal static bool IsHeroAnimating => Hero.IsAnimating;
+        internal static double Alpha => Wash.Alpha;
         internal static Task? LastShow { get; private set; }
+        internal static Task? LastHeroShow { get; private set; }
 
         private static bool CanShow =>
             SkipPlatformChecksForTests || (!_refused && X11Overlay.IsAvailable && X11Overlay.IsCompositing);
@@ -70,113 +65,233 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            var want = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+            var want = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, MonitorTarget.FollowGlobal, s.DualMonitorEnabled, screens.Count, primary);
             if (want.Length == 0) return;
             var targets = want.Select(i => screens[i].Bounds).ToArray();
-            var fit = Math.Min(ChaosFlashWash.MaxDecodeDim, targets.Max(b => Math.Max(b.Width, b.Height)));
-            var gen = ++_gen;
             // The pick and the decode run off the UI thread: a pack pick decrypts (WPF :45-58).
-            LastShow = ShowAsync(gen, targets, durationMs, opacity, () =>
+            LastShow = Wash.ShowAsync(targets, durationMs, opacity, () =>
             {
                 var enabled = AssetFolderExclusion.Enabled(files, root, s);
                 return FlashOverlay.NextFlashPath(enabled);
-            }, fit);
+            });
         }
 
         /// <summary>A wash of one given file (tests and a future caller that picked its own).</summary>
         internal static Task ShowPath(IReadOnlyList<PixelRect> targets, string path, int durationMs, double opacity)
-            => LastShow = ShowAsync(++_gen, targets, durationMs, opacity, () => path, ChaosFlashWash.MaxDecodeDim);
+            => LastShow = Wash.ShowAsync(targets, durationMs, opacity, () => path);
 
-        private static async Task ShowAsync(int gen, IReadOnlyList<PixelRect> targets, int durationMs, double opacity,
-            Func<string?> pick, int fit)
+        /// <summary>Back Room gif-full: a separate local-only surface, spanning every screen.</summary>
+        public static void ShowHero(Visual host, string path, int durationMs, double opacity, bool still, Action? shown = null)
         {
-            var (frames, delay) = await Task.Run(() =>
+            if (string.IsNullOrEmpty(path) || !System.IO.Path.IsPathFullyQualified(path)) return;
+            var gen = _heroPostGen;
+            Dispatcher.UIThread.Post(() =>
             {
-                try { return pick() is { } p ? SpiralOverlay.Decode(p, fit, ChaosFlashWash.MaxFrames) : (new List<Bitmap>(), TimeSpan.Zero); }
-                catch (Exception ex) { Log.Debug("ChaosFlash: pick/decode failed: {E}", ex.Message); return (new List<Bitmap>(), TimeSpan.Zero); }
+                if (gen != _heroPostGen || !CanShow) return;
+                var targets = ScreenList.Enumerate(host).Select(s => s.Bounds).ToArray();
+                LastHeroShow = Hero.ShowAsync(targets, durationMs, opacity, () => path, still, shown);
             });
-            if (gen != _gen || frames.Count == 0)
-            {
-                if (frames.Count == 0) Log.Debug("ChaosFlash: no images in pool - nothing to wash");
-                foreach (var f in frames) f.Dispose();
-                return;
-            }
+        }
 
-            CloseWindows();   // a new wash swaps the picture (WPF reuses its window for the same)
-            (_frames, _index) = (frames, 0);
-            foreach (var bounds in targets)
+        internal static Task ShowHeroPath(IReadOnlyList<PixelRect> targets, string path, bool still, Action? shown = null)
+            => Hero.ShowAsync(targets, 10000, .1, () =>
+                System.IO.Path.IsPathFullyQualified(path) ? path : null, still, shown);
+
+        public static void StopHero()
+        {
+            ++_heroPostGen;
+            if (Dispatcher.UIThread.CheckAccess()) Hero.Idle();
+            else Dispatcher.UIThread.Post(Hero.Idle);
+        }
+        public static void RaiseActive()
+        {
+            foreach (var window in Wash.Windows) X11Overlay.Raise(window);
+        }
+        internal static void NextFrame() => Wash.NextFrame();
+
+        /// <summary>Run teardown, panic and exit also orphan decodes for both surfaces.</summary>
+        public static void CloseActive() { ++_heroPostGen; Wash.Close(); Hero.Close(); }
+
+        /// <summary>WPF uses one UniformToFill image over the virtual desktop, including negative origins.</summary>
+        internal static PixelRect StageBounds(IReadOnlyList<PixelRect> targets)
+        {
+            if (targets.Count == 0) return default;
+            var left = targets.Min(b => b.X);
+            var top = targets.Min(b => b.Y);
+            return new PixelRect(left, top, targets.Max(b => b.Right) - left, targets.Max(b => b.Bottom) - top);
+        }
+
+        // Reuse the existing animation decoder; only stills need WPF's larger width budget.
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int stageWidth, bool still)
+        {
+            using var codec = SKCodec.Create(path);
+            if (codec == null) return (new(), TimeSpan.Zero);
+            if (!still && codec.FrameCount > 1)
+                return SpiralOverlay.Decode(path, ChaosFlashWash.MaxDecodeDim, ChaosFlashWash.MaxFrames);
+            var width = Math.Min(codec.Info.Width, Math.Clamp(stageWidth, 640, 2560));
+            var height = Math.Max(1, (int)Math.Round(codec.Info.Height * (double)width / codec.Info.Width));
+            // WPF DecodePixelWidth: let the codec downsample (JPEG/WebP) before the final exact scale.
+            var native = codec.GetScaledDimensions((float)width / codec.Info.Width);
+            if (native.Width < width || native.Height < height) native = codec.Info.Size;
+            using var full = new SKBitmap(codec.Info.WithSize(native).WithColorType(SKColorType.Bgra8888).WithAlphaType(SKAlphaType.Premul));
+            var result = codec.GetPixels(full.Info, full.GetPixels());
+            if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
+                return (new(), TimeSpan.Zero);
+            using var scaled = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+            full.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear));
+            // Bitmap copies the pixels before the mutable worker-owned SKBitmap is disposed.
+            return (new() { new Bitmap(global::Avalonia.Platform.PixelFormat.Bgra8888,
+                global::Avalonia.Platform.AlphaFormat.Premul, scaled.GetPixels(),
+                new PixelSize(width, height), new Vector(96, 96), scaled.RowBytes) }, TimeSpan.Zero);
+        }
+
+        private sealed class Surface
+        {
+            private int _gen, _request;
+            internal readonly List<SpiralOverlayWindow> Windows = new();
+            private List<Bitmap> _frames = new();
+            private int _index;
+            private DispatcherTimer? _gifTimer;
+            internal PixelRect Bounds { get; private set; }
+            internal bool IsShowing => Windows.Count > 0 && _frames.Count > 0;
+            internal bool IsAnimating => _gifTimer is not null;
+            internal double Alpha { get; private set; }
+
+            internal async Task ShowAsync(IReadOnlyList<PixelRect> targets, int durationMs, double opacity,
+                Func<string?> pick, bool still = false, Action? shown = null)
             {
-                var w = new SpiralOverlayWindow();
-                w.Spiral.Source = frames[0];
-                // Before Show, the order FlashOverlay uses: a window that ate clicks would lock the desktop.
-                if (!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOpacity(w, 0) | !X11Overlay.SetOverrideRedirect(w, bounds)
-                    && !SkipPlatformChecksForTests)
+                if (targets.Count == 0) return;
+                var request = ++_request;
+                var bounds = StageBounds(targets);
+                string? path;
+                try { path = await Task.Run(pick); }
+                catch (Exception ex) { Log.Debug("ChaosFlash: pick failed: {E}", ex.Message); return; }
+                if (request != _request || path == null) return;
+
+                var gen = ++_gen;
+                ClearImage();
+                if (Windows.Count > 0 && Bounds != bounds) CloseWindows();
+                Bounds = bounds;
+                if (Windows.Count == 0)
                 {
-                    Log.Warning("ChaosFlash: the platform refused a click-through topmost overlay window, so no wash");
-                    _refused = true;
-                    w.Close();
-                    CloseActive();
+                    var w = new SpiralOverlayWindow();
+                    // Apply before Show: a full-stage surface must never intercept desktop clicks.
+                    var safe = X11Overlay.SetClickThrough(w, true) & X11Overlay.SetOpacity(w, 0)
+                        & X11Overlay.SetOverrideRedirect(w, bounds);
+                    if (!safe && !SkipPlatformChecksForTests)
+                    {
+                        _refused = true;
+                        w.Close();
+                        Close();
+                        return;
+                    }
+                    if (SkipPlatformChecksForTests)
+                    {
+                        w.Position = bounds.Position;
+                        w.Width = bounds.Width;
+                        w.Height = bounds.Height;
+                    }
+                    Windows.Add(w);
+                }
+                foreach (var w in Windows)
+                {
+                    X11Overlay.SetOpacity(w, 0);
+                    w.Show();
+                    X11Overlay.SetOverrideRedirect(w, bounds);
+                    X11Overlay.Raise(w); // WPF ChaosFlashOverlay.cs:72, :104: re-stack after Show
+                }
+                Alpha = 0;
+                var plan = ChaosFlashWash.For(durationMs, opacity);
+                foreach (var (at, alpha) in ChaosFlashWash.Keyframes(plan))
+                {
+                    var last = at == plan.EndMs;
+                    Schedule(() =>
+                    {
+                        if (gen != _gen) return;
+                        if (last) { Idle(cancelPending: false); return; }
+                        SetAlpha(alpha);
+                    }, TimeSpan.FromMilliseconds(at));
+                }
+                // WPF starts the envelope and acknowledges the window before the still decode.
+                try { shown?.Invoke(); }
+                catch (Exception ex) { Log.Debug("ChaosFlash: shown callback failed: {E}", ex.Message); }
+                var (frames, delay) = await Task.Run(() =>
+                {
+                    try { return Decode(path, bounds.Width, still); }
+                    catch (Exception ex) { Log.Debug("ChaosFlash: decode failed: {E}", ex.Message); return (new List<Bitmap>(), TimeSpan.Zero); }
+                });
+                if (gen != _gen)
+                {
+                    foreach (var frame in frames) frame.Dispose();
                     return;
                 }
-                w.Show();
-                Windows.Add(w);
-            }
-            Alpha = 0;
-            if (frames.Count > 1)
-            {
-                _gifTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = delay };
-                _gifTimer.Tick += (_, _) => NextFrame();
-                _gifTimer.Start();
+                (_frames, _index) = (frames, 0);
+                if (frames.Count == 0) return;
+                foreach (var w in Windows) w.Spiral.Source = frames[0];
+                if (frames.Count > 1)
+                {
+                    _gifTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = delay };
+                    _gifTimer.Tick += (_, _) => NextFrame();
+                    _gifTimer.Start();
+                }
             }
 
-            var plan = ChaosFlashWash.For(durationMs, opacity);
-            foreach (var (at, alpha) in ChaosFlashWash.Keyframes(plan))
+            internal void NextFrame()
             {
-                var last = at == plan.EndMs;
+                if (_frames.Count == 0) return;
+                _index = (_index + 1) % _frames.Count;
+                foreach (var w in Windows) w.Spiral.Source = _frames[_index];
+            }
+
+            private void SetAlpha(double alpha)
+            {
+                Alpha = alpha;
+                foreach (var w in Windows) X11Overlay.SetOpacity(w, alpha);
+            }
+
+            internal void Idle() => Idle(cancelPending: true);
+
+            private void Idle(bool cancelPending)
+            {
+                var gen = ++_gen;
+                if (cancelPending) ++_request;
+                SetAlpha(0);
+                ClearImage();
+                // WPF: retain the cleared click-through window, hide only after 8 quiet seconds.
                 Schedule(() =>
                 {
-                    if (gen != _gen) return;   // superseded by a newer wash, or closed
-                    if (last) { CloseActive(); return; }
-                    SetAlpha(alpha);
-                }, TimeSpan.FromMilliseconds(at));
+                    if (gen != _gen) return;
+                    foreach (var w in Windows) w.Hide();
+                }, TimeSpan.FromSeconds(8));
             }
-        }
 
-        /// <summary>One GIF frame on every window. Allocation-free.</summary>
-        internal static void NextFrame()
-        {
-            if (_frames.Count == 0 || Windows.Count == 0) return;
-            _index = (_index + 1) % _frames.Count;
-            foreach (var w in Windows) w.Spiral.Source = _frames[_index];
-        }
-
-        private static void SetAlpha(double alpha)
-        {
-            Alpha = alpha;
-            foreach (var w in Windows) X11Overlay.SetOpacity(w, alpha);
-        }
-
-        /// <summary>WPF CloseActive: take the wash down now (run teardown, panic, exit). Drops any
-        /// pending fade step and any decode still in flight.</summary>
-        public static void CloseActive()
-        {
-            _gen++;
-            CloseWindows();
-        }
-
-        private static void CloseWindows()
-        {
-            _gifTimer?.Stop();
-            _gifTimer = null;
-            foreach (var w in Windows)
+            private void ClearImage()
             {
-                try { w.Close(); }
-                catch (Exception ex) { Log.Debug("ChaosFlash: close failed: {E}", ex.Message); }
+                _gifTimer?.Stop();
+                _gifTimer = null;
+                foreach (var w in Windows) w.Spiral.Source = null;
+                foreach (var frame in _frames) frame.Dispose();
+                _frames.Clear();
             }
-            Windows.Clear();
-            foreach (var f in _frames) f.Dispose();
-            _frames = new List<Bitmap>();
-            Alpha = 0;
+
+            internal void Close()
+            {
+                ++_gen;
+                ++_request;
+                ClearImage();
+                SetAlpha(0);
+                CloseWindows();
+            }
+
+            private void CloseWindows()
+            {
+                foreach (var w in Windows)
+                {
+                    try { w.Close(); }
+                    catch (Exception ex) { Log.Debug("ChaosFlash: close failed: {E}", ex.Message); }
+                }
+                Windows.Clear();
+            }
         }
     }
 }

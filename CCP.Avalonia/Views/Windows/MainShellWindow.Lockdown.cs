@@ -200,8 +200,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        // The timer and stepped tests use the same monotonic elapsed time; rendering a slow
-        // headless frame must not consume the test's 600 ms animation before it can inspect it.
         internal void StepLockdownFlash() =>
             PaintLockdownFlash(LockdownFlashTime.GetElapsedTime(_lockdownFlashStarted).TotalMilliseconds);
 
