@@ -8230,5 +8230,6 @@
   "shop_item_rt_bundle_3_name": "Racing Thoughts Paket 3",
   "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
   "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
-  "awareness_add_app_tip": "'{0}' zur Liste hinzufügen"
+  "awareness_add_app_tip": "'{0}' zur Liste hinzufügen",
+  "label_active_phrase_count": "{0} aktiv"
 }

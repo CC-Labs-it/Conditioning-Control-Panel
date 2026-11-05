@@ -8977,5 +8977,6 @@
   "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3",
   "title_select_companion_personality": "Scegli la personalità IA per {0}",
   "filter_personality_json_files": "File JSON di personalità",
-  "awareness_add_app_tip": "Aggiungi '{0}' all'elenco"
+  "awareness_add_app_tip": "Aggiungi '{0}' all'elenco",
+  "label_active_phrase_count": "{0} attive"
 }

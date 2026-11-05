@@ -72,6 +72,7 @@
 //   internal void BtnImportPrompt_Click(…)
 //   internal async void BtnExportPrompt_Click(…)
 
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
@@ -82,10 +83,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // WPF MainWindow.Patreon.cs:1312. ponytail: UpdatePhraseCountDisplay skipped - the
-        // Companion tab's TxtPhraseCount needs CompanionPhraseService, still head-side.
-        internal void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => _ = new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+        // WPF MainWindow.Patreon.cs:1396-1406: refresh after the modal editor closes.
+        internal async void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            await new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+            foreach (var cell in this.GetLogicalDescendants().OfType<Controls.Companion.Runtime.WorkshopTriggersCell>())
+                cell.RefreshPhraseCount();
+        }
 
         /// <summary>WPF MainWindow.Patreon.cs RefreshEntitlementVeils. Called on every navigation, on
         /// sign-in/out (UpdateQuickLoginUI), on either provider's TierChanged and on the ? box's

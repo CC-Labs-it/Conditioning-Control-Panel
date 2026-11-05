@@ -8230,5 +8230,6 @@
   "shop_item_rt_bundle_3_name": "Racing Thoughts 번들 3",
   "title_select_companion_personality": "{0}의 AI 성격 선택",
   "filter_personality_json_files": "성격 JSON 파일",
-  "awareness_add_app_tip": "'{0}'을 목록에 추가"
+  "awareness_add_app_tip": "'{0}'을 목록에 추가",
+  "label_active_phrase_count": "{0}개 활성"
 }

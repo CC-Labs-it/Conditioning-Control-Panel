@@ -8230,5 +8230,6 @@
   "shop_item_rt_bundle_3_name": "Racing Thoughts バンドル3",
   "title_select_companion_personality": "{0}のAIパーソナリティを選択",
   "filter_personality_json_files": "パーソナリティのJSONファイル",
-  "awareness_add_app_tip": "'{0}' をリストに追加"
+  "awareness_add_app_tip": "'{0}' をリストに追加",
+  "label_active_phrase_count": "{0} 件有効"
 }

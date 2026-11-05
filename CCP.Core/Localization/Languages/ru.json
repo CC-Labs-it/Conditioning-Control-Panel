@@ -8230,5 +8230,6 @@
   "shop_item_rt_bundle_3_name": "Racing Thoughts: набор 3",
   "title_select_companion_personality": "Выбрать личность ИИ для {0}",
   "filter_personality_json_files": "Файлы личности JSON",
-  "awareness_add_app_tip": "Добавить '{0}' в список"
+  "awareness_add_app_tip": "Добавить '{0}' в список",
+  "label_active_phrase_count": "Активно: {0}"
 }

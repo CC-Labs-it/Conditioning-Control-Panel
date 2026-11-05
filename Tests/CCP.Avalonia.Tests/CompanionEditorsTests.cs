@@ -207,6 +207,8 @@ public sealed class CompanionEditorsTests
             // Read pointer geometry only after the actual tab entrance has landed (P08/P40).
             shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            shell.CompleteTabTransition();
+            Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
