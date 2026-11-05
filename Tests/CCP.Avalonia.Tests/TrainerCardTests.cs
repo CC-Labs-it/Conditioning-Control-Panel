@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -166,35 +167,17 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                // Headless MouseDown/Up render before and after each event, but their timestamps
-                // use a stopwatch. Slow CI rendering must not turn a simulated double-click into
-                // two single clicks. Keep real hit testing and gesture routing with an input clock.
-                var platform = w.PlatformImpl!;
-                var inputProperty = platform.GetType().GetProperty("Input")!;
-                var input = (Action<global::Avalonia.Input.Raw.RawInputEventArgs>)inputProperty.GetValue(platform)!;
-                var eventTime = typeof(global::Avalonia.Input.Raw.RawInputEventArgs).GetProperty("Timestamp",
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!;
-                ulong timestamp = 1000;
-                inputProperty.SetValue(platform, new Action<global::Avalonia.Input.Raw.RawInputEventArgs>(e =>
-                {
-                    if (e is global::Avalonia.Input.Raw.RawPointerEventArgs) eventTime.SetValue(e, timestamp += 10);
-                    input(e);
-                }));
-                try
-                {
-                    for (var i = 0; i < 2; i++)
-                    {
-                        w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                        w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                        if (i == 0)
-                        {
-                            Assert.False(w.ProfilePage!.IsEffectivelyVisible);
-                            Assert.DoesNotContain(wire.Seen, r => r.Contains("/user/lookup"));
-                            await Task.Delay(renderDelayMs); // emulate a slow render between clicks
-                        }
-                    }
-                }
-                finally { inputProperty.SetValue(platform, input); }
+                w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                Assert.DoesNotContain(wire.Seen, r => r.Contains("/user/lookup"));
+                await Task.Delay(renderDelayMs); // emulate a slow render between clicks
+                // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
+                // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
+                var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;
+                hit.RaiseEvent(new PointerPressedEventArgs(hit, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), w, at, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 2));
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
