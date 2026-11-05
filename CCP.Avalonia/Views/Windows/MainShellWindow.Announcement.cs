@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private bool _announcementArmed, _announcementClosed;
         private ITimer? _announcementTimer;
+        private string? _presentedAnnouncementId;
 
         private void InitializeServerAnnouncement()
         {
@@ -51,7 +52,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var make = AnnouncementClient;
                 if (_announcementClosed || make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
-                if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
+                if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId
+                    || a.Id == _presentedAnnouncementId) return;
+                _presentedAnnouncementId = a.Id;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
                 _serverAnnouncementShownThisLaunch = true; // WPF Marquee.cs:913: claim even when parked.

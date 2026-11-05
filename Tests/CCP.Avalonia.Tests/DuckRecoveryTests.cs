@@ -25,10 +25,24 @@ public sealed class DuckRecoveryTests : IDisposable
         $"\"properties\":{{\"application.process.id\":\"{pid}\",\"application.process.binary\":\"{binary}\"}}}}";
 
     [Fact]
+    public void MutedPlaybackDoesNotDuckOrJournalOtherApps()
+    {
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 0;
+        var calls = new List<string>();
+        var audio = new LibVlcAudio(args => Record(calls, args), Journal);
+        audio.Duck(80);
+        audio.Drain();
+        Assert.False(audio.IsDucked);
+        Assert.Empty(calls);
+        Assert.False(File.Exists(Journal));
+    }
+
+    [Fact]
     public void ADuckIsJournalledUntilItsUnduckHandsItBack()
     {
         var sets = new List<string>();
         var audio = new LibVlcAudio(args => args.StartsWith("-f json") ? "[" + Stream(7, OtherPid, "spotify") + "]" : Record(sets, args), Journal);
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 100; // recovery requires audible playback
         audio.Duck(80);
         audio.Drain();
         var owed = DuckRecovery.LoadPulse(Journal);
@@ -74,6 +88,7 @@ public sealed class DuckRecoveryTests : IDisposable
             if (gone) throw new InvalidOperationException("No such entity");
             return "";
         }, Journal);
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 100; // recovery requires audible playback
         audio.Duck(80);
         audio.Drain();
         gone = true;                           // the app closed while ducked
@@ -94,6 +109,7 @@ public sealed class DuckRecoveryTests : IDisposable
             if (gone) throw new InvalidOperationException("No such entity");
             return Record(sets, args);
         }, Journal);
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 100; // recovery requires audible playback
         audio.Duck(80);
         audio.Drain();
         gone = true;                           // the app's stream ended while ducked
@@ -121,12 +137,14 @@ public sealed class DuckRecoveryTests : IDisposable
             if (failOnce) { failOnce = false; throw new InvalidOperationException("busy"); }
             return Record(sets, args);
         }, Journal);
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 100; // recovery requires audible playback
         audio.Duck(80);
         audio.Drain();
         failOnce = true;                       // the hand-back misses: 65536 is parked
         audio.Unduck(-1);
         audio.Drain();
         listing = "[" + Stream(7, OtherPid, "spotify", 13107) + "]";   // still at the ducked level
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 100; // recovery requires audible playback
         audio.Duck(80);
         audio.Drain();
         Assert.Equal(new[] { "65536", "65536" }, DuckRecovery.LoadPulse(Journal)[7].Volumes);
@@ -162,6 +180,7 @@ public sealed class DuckRecoveryTests : IDisposable
         var sets = new List<string>();
         var audio = new LibVlcAudio(args => args.StartsWith("-f json") ? "[" + Stream(7, OtherPid, "spotify", 12000) + "]" : Record(sets, args), Journal);
         audio.RecoverDucks();
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 100; // recovery requires audible playback
         audio.Duck(50);
         audio.Drain();
         Assert.Equal("set-sink-input-volume 7 60000 60000", sets[0]);
