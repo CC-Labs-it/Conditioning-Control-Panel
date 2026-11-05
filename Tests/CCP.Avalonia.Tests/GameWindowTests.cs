@@ -1059,6 +1059,53 @@ public sealed partial class GameWindowTests
         }
     });
 
+    /// <summary>WPF DtrhHostService.cs:925-954: an actual page boot failure opens the
+    /// classic first run or the Warren. The Warren's FALL IN then opens the bound HUD.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Dtrh_BootError_reaches_the_classic_Hud(int completed) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var oldIntro = ChaosMeta.State.SeenIntroGuide;
+        ChaosMeta.State.RunsCompleted = completed;
+        ChaosMeta.State.SeenIntroGuide = true;
+        ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow? hub = null;
+        void Opened(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            if (sender is ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow h) hub = h;
+        }
+        using var subscription = Window.WindowOpenedEvent.AddClassHandler<Window>(Opened);
+        try
+        {
+            var web = GameWindow.Launch("dtrh")!;
+            Assert.True(web.IsVisible);
+            web.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"renderer failed\"}");
+            Assert.False(web.IsVisible);
+            if (completed == 1)
+            {
+                Assert.NotNull(hub);
+                Assert.False(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+                hub.FallIn();
+                Dispatcher.UIThread.RunJobs();
+            }
+            var host = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.Hud;
+            Assert.NotNull(host);
+            Assert.True(host.IsVisible);
+            Assert.Same(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State, host.DataContext);
+            Assert.Equal(completed == 0,
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State!.Config.ScriptedFirstRun);
+            var state = host.DataContext;
+            web.HandleMessage("{\"type\":\"boot-error\"}");
+            Assert.Same(state, ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State);
+        }
+        finally
+        {
+            ChaosMeta.State.SeenIntroGuide = oldIntro;
+            hub?.Close();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
+        }
+    });
+
     /// <summary>WPF LauncherCatalogue (Basic door, DemandPremium refusal), OnPageReady :271 (init with motionLevel
     /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
     /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
