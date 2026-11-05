@@ -8341,6 +8341,7 @@
   "btn_v7_1_9_is_out": "💖 v7.1.9 È USCITA! 💖",
   "tooltip_v7_1_9_stay_tuned": "v7.1.9 - Stay Tuned",
   "tooltip_silent_line": "Nessuna voce registrata per questa frase con questa mod: compare, ma senza audio.",
+  "title_trigger_phrases": "Frasi di attivazione",
   "hint_silent_lines": "Alcune frasi non hanno una voce registrata con questa mod: compaiono, ma senza audio.",
   "btn_browser_fold_show": "Mostra browser",
   "btn_browser_fold_hide": "Nascondi browser",

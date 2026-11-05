@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
             WirePhrasePresets(parts);
+            parts.Triggers.FindControl<Button>("BtnEditTriggersCompanion")!.Click += async (_, _) => await EditTriggersAsync();
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
