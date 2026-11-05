@@ -8,7 +8,7 @@
 // chip's padlock and the rail's gold star cannot disagree.
 //
 // ponytail: not on this head yet - the champagne v2 pill (Services/Prizes/V2Badges + PrizeGrants are
-// WPF-only) and a mod's own art framing (WPF ActiveModFraming); mod art is centre-cropped instead.
+// WPF-only).
 
 using System;
 using System.Collections.Generic;
@@ -161,7 +161,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (probe == null) continue;
                 bool modArt = CoreModArt.HasOverride(path);
                 double aspect = probe.Size.Height > 0 ? probe.Size.Width / probe.Size.Height : 0;
-                var vb = ModArtFramingRegistry.ResolveViewbox(basePath, ModArtFramingRegistry.SurfaceRailChip, modArt, aspect, null);
+                var vb = ModArtFramingRegistry.ResolveViewbox(basePath, ModArtFramingRegistry.SurfaceRailChip, modArt, aspect,
+                    modArt ? ActiveRailFraming(basePath) : null);
                 var width = FavoritesRailArt.DecodeWidthFor(vb.Width);
                 var bitmap = width > FavoritesRailArt.BaseDecodeWidth ? RailArt(path, width) ?? probe : probe;
                 grid.Children.Add(RailChipScrim(dash));
@@ -171,6 +172,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Stretch = Stretch.UniformToFill,
                     SourceRect = new RelativeRect(vb.X, vb.Y, vb.Width, vb.Height, RelativeUnit.Relative),
                 };
+            }
+            return null;
+        }
+
+        // WPF MainWindow.xaml.cs:3086: match the base resource and surface as authored.
+        private static ModArtFraming? ActiveRailFraming(string path)
+        {
+            var map = CoreMods.ActiveModPackage?.Manifest.ArtFraming;
+            if (map == null) return null;
+            foreach (var entry in map)
+            {
+                if (entry.Value == null || !string.Equals(entry.Key.Replace('\\', '/'), path, StringComparison.OrdinalIgnoreCase)) continue;
+                foreach (var surface in entry.Value)
+                    if (string.Equals(surface.Key, ModArtFramingRegistry.SurfaceRailChip, StringComparison.OrdinalIgnoreCase))
+                        return surface.Value;
+                return null;
             }
             return null;
         }

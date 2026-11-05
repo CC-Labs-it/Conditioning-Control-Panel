@@ -1,4 +1,8 @@
 using System.Collections.Generic;
+using System.IO;
+using Avalonia.Media.Imaging;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -100,6 +104,53 @@ public sealed class FavoritesRailShellTests
                 s.RailFavorites.Clear(); s.RailFavorites.AddRange(favBefore);
                 s.RailRecent.Clear(); s.RailRecent.AddRange(recentBefore);
             }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task FavoriteAndRecentCoverChipsHonorModFramingAndFallbacks()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var dir = Directory.CreateTempSubdirectory();
+            var png = Path.Combine(dir.FullName, "vibe.png");
+            using (var bitmap = new WriteableBitmap(new PixelSize(400, 200), new Vector(96, 96))) bitmap.Save(png);
+            var frame = new ModArtFraming { CenterX = 0.7, CenterY = 0.5, Zoom = 2 };
+            var manifest = new ModManifest { ArtFraming = new() { ["FEATURES\\VIBE.PNG"] = new() { ["RAILCHIP"] = frame } } };
+            var s = CoreSettings.Current;
+            s.RailFavorites.Clear(); s.RailFavorites.Add("tab.haptics");
+            s.RailRecent.Clear(); s.RailRecent.Add("tab.haptics");
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(manifest, null, false);
+            CoreModArt.OverridePathProvider = p => p == "features/vibe.png" ? png : null;
+            MainShellWindow? w = null;
+            try
+            {
+                w = new MainShellWindow(); w.Show(); Dispatcher.UIThread.RunJobs();
+                var dash = w.Named<SettingsTabView>("SettingsTab")!;
+                var favs = dash.FindControl<StackPanel>("FavoritesList")!;
+                var recent = dash.FindControl<StackPanel>("RecentList")!;
+                RelativeRect Crop(StackPanel list) => ((ImageBrush)((Button)list.Children[0]).Background!).SourceRect;
+                void Check(RelativeRect actual, ArtViewbox expected)
+                {
+                    Assert.Equal(expected.X, actual.Rect.X, 6); Assert.Equal(expected.Y, actual.Rect.Y, 6);
+                    Assert.Equal(expected.Width, actual.Rect.Width, 6); Assert.Equal(expected.Height, actual.Rect.Height, 6);
+                }
+                Check(Crop(favs), ModArtFramingRegistry.ResolveViewbox("features/vibe.png", ModArtFramingRegistry.SurfaceRailChip, true, 2, frame));
+                s.RailFavorites.Clear(); w.RefreshFavoritesRail();
+                Check(Crop(recent), ModArtFramingRegistry.ResolveViewbox("features/vibe.png", ModArtFramingRegistry.SurfaceRailChip, true, 2, frame));
+                manifest.ArtFraming!.Clear(); w.RefreshFavoritesRail();
+                Check(Crop(recent), ModArtFramingRegistry.ResolveViewbox("features/vibe.png", ModArtFramingRegistry.SurfaceRailChip, true, 2, null));
+                CoreModArt.OverridePathProvider = _ => null; w.RefreshFavoritesRail();
+                var builtIn = (ImageBrush)((Button)recent.Children[0]).Background!;
+                var image = (Bitmap)builtIn.Source!; var aspect = image.Size.Width / image.Size.Height;
+                Check(builtIn.SourceRect, ModArtFramingRegistry.ResolveViewbox("features/vibe.png", ModArtFramingRegistry.SurfaceRailChip, false, aspect, null));
+            }
+            finally { w?.Close(); dir.Delete(true); }
             return Task.CompletedTask;
         });
     }
