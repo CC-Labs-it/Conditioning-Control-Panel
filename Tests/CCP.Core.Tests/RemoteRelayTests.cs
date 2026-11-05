@@ -170,6 +170,43 @@ public sealed class RemoteRelayTests
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Local_run_and_holdings_survive_remote_end_or_disconnect(bool disconnect, bool stopOnDisconnect)
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        RemoteCommands.RefreshOverlays = () => { };
+        settings.Current.StopEffectsOnRemoteDisconnect = stopOnDisconnect;
+        var f = new FakeRelay();
+        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+        try
+        {
+            CoreEngine.Start();
+            CoreFlash.Start();
+            settings.Current.PinkFilterOpacity = 17;
+            await r.StartAsync("basic");
+            Poll(f, "{\"controller_connected\":true}"); await r.PollOnceAsync();
+            RemoteCommands.Execute("set_pink_opacity", JObject.FromObject(new { value = 30 }));
+            if (disconnect) { Poll(f, "{\"controller_connected\":false}"); await r.PollOnceAsync(); }
+            else await r.StopAsync();
+            Assert.True(CoreEngine.IsRunning);
+            Assert.True(CoreFlash.IsRunning);
+            Assert.Equal(17, settings.Current.PinkFilterOpacity);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            CoreEngine.Stop(); CoreFlash.Stop(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;
+        }
+    }
+
     [Fact]
     public void Remote_cleanup_over_a_local_run_and_panic_keep_wearer_values()
     {

@@ -332,7 +332,7 @@ namespace ConditioningControlPanel.Services
         {
             RemoteCommands.RemoteHaptics.Stop();
             Remote.RemoteWearer.ReleaseSafetyState();
-            if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
+            if (CoreEngine.IsRunning || CoreSettings.Current.StopEffectsOnRemoteDisconnect)
                 try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
         }
 

@@ -177,15 +177,19 @@ namespace ConditioningControlPanel.Services
             // (PanicAftermath). It only ever refuses; no pause mark, so the controller may still resume.
             if (force) Safety.PanicAftermath.ArmQuiet();
             if (force) StopHaptics(); else RemoteHaptics.Stop();
-            try { CoreHaptics.Service?.PanicStop(); } catch { }
-            CoreAudio.Unduck();
-            // Keep the base's wearer restoration; never clear the subject's saved switches.
-            if (force || !CoreEngine.IsRunning) StopOverlays();
-            if (force) CoreEngine.Stop();
-            else
+            // Remote session verbs are refused on this head, so a running engine is wearer-owned.
+            // WPF LeavesLocalRun returns holdings without disturbing its services or audio.
+            if (force || !CoreEngine.IsRunning)
             {
-                CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
-                CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop(); CoreMindWipe.Stop();
+                try { CoreHaptics.Service?.PanicStop(); } catch { }
+                CoreAudio.Unduck();
+                StopOverlays();
+                if (force) CoreEngine.Stop();
+                else
+                {
+                    CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
+                    CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop(); CoreMindWipe.Stop();
+                }
             }
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
