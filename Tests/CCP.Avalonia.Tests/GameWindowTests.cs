@@ -1217,7 +1217,8 @@ public sealed partial class GameWindowTests
         try
         {
             global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = launches.Add;
-            CoreEntitlement.HasLabProvider = () => false;   // RunDtrh restores it
+            // DtRH is Basic (WPF 7.2.2 keyed premium gate): a lapse is no premium and no Lab. RunDtrh restores both.
+            (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider) = (() => false, () => false);
             shell.ShowTab("play");
             Dispatcher.UIThread.RunJobs();
             shell.Named<global::Avalonia.Controls.Control>("PlayTab")!

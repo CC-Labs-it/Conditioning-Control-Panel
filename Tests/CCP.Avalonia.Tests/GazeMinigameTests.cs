@@ -512,7 +512,7 @@ public sealed class GazeMinigameTests
                     clock.Now += TimeSpan.FromMilliseconds(50);
                     win.RoundTicker_Tick(null, EventArgs.Empty);
                 }
-                Assert.Equal("GOOD GIRL", win.FindControl<TextBlock>("TxtFeedback")!.Text);
+                Assert.Equal("GOOD", win.FindControl<TextBlock>("TxtFeedback")!.Text); // unmodded praise (WPF GazeMinigameWindow.xaml.cs:1210)
             }
             void Panic()
             {
