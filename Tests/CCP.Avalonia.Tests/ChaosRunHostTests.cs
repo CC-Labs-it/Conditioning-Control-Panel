@@ -49,6 +49,8 @@ public sealed class ChaosRunHostTests
             Setup();
             FreshMeta();
             var meta = ChaosMeta.State;
+            var fieldNow = ChaosFieldFxOverlay.NowMs;
+            var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
             try
             {
                 ChaosRunHost.StartRun(Cfg());
@@ -76,16 +78,34 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(21, state.ElapsedSec, 3);
                 ChaosRunHost.ToggleManualPause();
 
+                // WPF ChaosModeService.cs:3236: EndRun closes field FX before results.
+                // Freeze the FX clock so natural expiry cannot hide a missing EndRun close.
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosFieldFxOverlay.NowMs = () => 0;
+                ChaosFieldFxOverlay.Ripple(new Point(100, 100), 430, 550);
+                var fieldFx = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
+                Assert.True(fieldFx.IsVisible && fieldFx.Clock.IsEnabled);
+
                 Ticks(160);   // to 61 s: past the 60 s run
                 Assert.False(ChaosRunHost.IsDescending);
                 Assert.Null(ChaosRunHost.Hud);
                 Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
+                Assert.Null(ChaosFieldFxOverlay.Active); // before ForceShutdown in finally
+                Assert.False(fieldFx.IsVisible);
+                Assert.False(fieldFx.Clock.IsEnabled);
+                Assert.True(fieldFx.Model.IsIdle(0, 0));
                 overlay.UpdateLayout();
                 Assert.Contains(overlay.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "BEST STREAK");
                 Assert.Equal(1, meta.RunsCompleted);   // the run counted (payout: see the FALL IN test)
                 Assert.Same(meta, ChaosMeta.State);
             }
-            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosFieldFxOverlay.NowMs = fieldNow;
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
+                FreshMeta();
+            }
             return Task.CompletedTask;
         });
     }
