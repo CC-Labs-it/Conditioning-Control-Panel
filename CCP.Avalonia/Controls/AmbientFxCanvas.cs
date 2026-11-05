@@ -1314,23 +1314,35 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 _ => 24,
             };
 
-            // FxTheme's colours are read, not computed: it writes four Color keys into the app
-            // resources from the mod palette and every consumer reads them back. Theme/Colors.xaml
-            // already carries the keys, so this is that same read path - and nothing on this head
-            // writes them yet, which means the CCP default accent until an FxTheme twin lands.
+            // Publish before CoreMods forwards ModChanged, so attached consumers see the new palette.
+            internal static void ApplyPalette(ModService? mods)
+            {
+                var resources = Application.Current?.Resources;
+                if (resources == null) return;
+                try
+                {
+                    Set("FxMist", mods?.GetMistColorRgb());
+                    Set("FxParticle", mods?.GetParticleColorRgb());
+                    Set("FxGlow", mods?.GetGlowColorRgb());
+                    Set("FxFlashTint", mods?.GetFlashTintRgb());
+                }
+                catch (Exception ex) { Log.Debug("ApplyPalette: {E}", ex.Message); }
+                void Set(string key, (byte R, byte G, byte B)? rgb)
+                {
+                    var color = rgb is { } v ? Color.FromRgb(v.R, v.G, v.B) : Fallback;
+                    resources[key + "Color"] = color;
+                    resources[key + "Brush"] = new SolidColorBrush(color);
+                }
+            }
+
             public static Color MistColor => ThemeColor("FxMistColor");
             public static Color ParticleColor => ThemeColor("FxParticleColor");
             public static Color GlowColor => ThemeColor("FxGlowColor");
             public static Color FlashTintColor => ThemeColor("FxFlashTintColor");
-
-            /// <summary>
-            /// FxTheme.MistOpacity. ponytail: the WPF original reads
-            /// <c>App.Mods.GetMistOpacity()</c>; <see cref="CoreMods"/> exposes no mist-opacity
-            /// provider, so there is nothing to call here yet - adding one is a Core change.
-            /// 1.0 is what the WPF call answers with no mod loaded, so this is the no-mod value
-            /// rather than an invented default.
-            /// </summary>
-            public static double MistOpacity => 1.0;
+            public static double MistOpacity
+            {
+                get { try { return App.Mods?.GetMistOpacity() ?? 1.0; } catch { return 1.0; } }
+            }
 
             /// <summary>FxTheme.Read's Avalonia twin: the same key out of the app resources.</summary>
             private static Color ThemeColor(string key)
