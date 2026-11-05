@@ -36,11 +36,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool ManualFramesForTests;
         internal static bool Refused;
         private static ChaosGifCascadeOverlay? _active;
+        private static int _generation;
 
         internal static ChaosGifCascadeOverlay? Active => _active;
         internal static Task? LastPick { get; private set; }
         /// <summary>The newest clip decode (tests await it, then run the posted attach).</summary>
         internal static Task? LastDecode { get; private set; }
+        internal static Action<string>? BeforeDecodeForTests;
 
         /// <summary>WPF IsRaining: a cascade is spawning or clips are still falling.</summary>
         public static bool IsRaining => _active?._cascade.IsRaining == true;
@@ -48,10 +50,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Show: draws a batch from the enabled flash pool off the UI thread, then rains it.</summary>
         public static void Show(double spawnRatePerSec, double durationSec, double gifSize, double fallSpeed, double opacity, double startScale = 1.0)
         {
+            int generation = _generation;
             int batch = GifCascade.BatchSize(spawnRatePerSec, durationSec);
             var s = CoreSettings.Current;
             LastPick = Task.Run(() => PickFiles(batch, s)).ContinueWith(t => Dispatcher.UIThread.Post(() =>
             {
+                if (generation != _generation) return; // panic/run end wins over a pending pool pick
                 try { ShowWithFiles(t.IsCompletedSuccessfully ? t.Result : new List<string>(), spawnRatePerSec, durationSec, gifSize, fallSpeed, opacity, startScale); }
                 catch (Exception ex) { Log.Debug("GifCascade.ShowWithFiles: {E}", ex.Message); }
             }), TaskScheduler.Default);
@@ -91,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Close any cascade immediately (run teardown, panic). Safe when idle.</summary>
         public static void CloseActive()
         {
+            _generation++;
             Refused = false;
             try { _active?.CloseNow(); } catch (Exception ex) { Log.Debug("GifCascade.CloseActive: {E}", ex.Message); }
         }
@@ -130,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private readonly GifCascade _cascade = new();
         private readonly Dictionary<GifCascade.Faller, Clip> _clips = new();
+        private readonly List<Task> _pendingDecodes = new();
         private readonly Canvas _canvas = new() { IsHitTestVisible = false };
         private readonly FrameClock _frames;
         private readonly DispatcherTimer _hideGrace = new() { Interval = TimeSpan.FromSeconds(8) };
@@ -138,6 +144,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private IReadOnlyList<string> _files = Array.Empty<string>();
         private long _last;
 
+        // Close remains immediate. Test teardown awaits every outstanding reader before deleting media.
+        internal Task PendingDecodes => Task.WhenAll(_pendingDecodes);
         internal GifCascade Cascade => _cascade;
         internal Canvas Surface => _canvas;
         internal bool IsAnimating => _frames.IsEnabled;
@@ -280,9 +288,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             bool animate = f.Animated;
             int px = (int)Math.Round(size * _scale);
             if (RenderProof.Rendering) { Attach(f, clip, Decode(path, px, animate)); return; }
-            LastDecode = Task.Run(() => Decode(path, px, animate)).ContinueWith(t =>
+            LastDecode = Task.Run(() =>
+            {
+                BeforeDecodeForTests?.Invoke(path);
+                return Decode(path, px, animate);
+            }).ContinueWith(t =>
                 Dispatcher.UIThread.Post(() => Attach(f, clip, t.IsCompletedSuccessfully ? t.Result : (new List<Bitmap>(), default))),
                 TaskScheduler.Default);
+            _pendingDecodes.RemoveAll(t => t.IsCompleted);
+            _pendingDecodes.Add(LastDecode);
         }
 
         private static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate)
