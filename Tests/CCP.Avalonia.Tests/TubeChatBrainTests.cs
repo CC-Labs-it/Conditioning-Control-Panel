@@ -20,7 +20,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>Tube chat routes through the Core CompanionBrain while UseCompanionBrain is on (WPF
 /// ChatInput.cs:772): the second send carries the first turn to the (loopback fake) model and the turn
-/// log lands in the brain's session file. Off, it takes the stateless call and the brain sees nothing.</summary>
+/// log lands in the brain's session file. Off, it takes the stateless call and records only display-only tube lines.</summary>
 public sealed class TubeChatBrainTests
 {
     [Theory]
@@ -88,7 +88,8 @@ public sealed class TubeChatBrainTests
 
             Assert.Equal(2, requests.Count);
             Assert.Equal(useBrain, requests[1].Contains("purple ribbon"));   // the brain carries the thread
-            Assert.Equal(useBrain ? 4 : 0, AvApp.Brain.Session.Turns.Count);
+            Assert.Equal(useBrain ? 4 : 1, AvApp.Brain.Session.Turns.Count);
+            if (!useBrain) Assert.All(AvApp.Brain.Session.Turns, t => Assert.Equal(TurnKind.TubeLine, t.Kind));
             AvApp.Brain.Flush();
             Assert.Equal(useBrain, File.Exists(sessionPath) && File.ReadAllText(sessionPath).Contains("purple ribbon"));
         }
