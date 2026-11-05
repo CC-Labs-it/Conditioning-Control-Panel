@@ -104,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
+            ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
             ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill),
             ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill),
@@ -187,11 +188,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 PlayLockLockdown.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_lockdown_mode")).Allowed;
                 PlayLockBlink.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_blink_trainer")).Allowed;
                 PlayLockFyp.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_fyp"), "fyp").Allowed;
+                PlayLockDtrh.IsVisible = Games.GameWindow.DtrhLocked();
 
                 // FREE TODAY (WPF :145): only on a door that is otherwise shut - an owner gets no gift.
                 bool premium = CoreEntitlement.HasPremium;
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
+                PlayBadgeDtrh.FreeToday = !premium && CoreEntitlement.IsFreeToday("dtrh");
 
                 RefreshPlayIntakeCard();
             }
@@ -236,6 +239,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
+
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e)
+        {
+            if (Owner is { } owner) LauncherWindow.LaunchGame(owner, Games.GameWindow.DtrhId);
+        }
 
         // ---- TOGETHER --------------------------------------------------------------------
 

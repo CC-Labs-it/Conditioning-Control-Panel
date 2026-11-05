@@ -41,6 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
+        public void Freeze() => SubliminalWhisperShow.FreezeForVideo();
+        public void FinishFreeze(bool cancelled) => SubliminalWhisperShow.FinishVideoFreeze(cancelled);
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library
@@ -101,8 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// PanicHookIsInstalled). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
 
-        /// <summary>WPF VideoService.PrimaryPlaybackTimeMsChanged (:677): the playhead the funscript
-        /// follows (FunScriptService.SubscribePlaybackTime, seeded in App). Raised on LibVLC's thread.</summary>
+        // WPF VideoService.cs:677/3537 and App.xaml.cs:3218: LibVLC's primary playhead.
         internal event Action<long>? PlaybackTimeMsChanged;
 
         internal void RaisePlaybackTime(long ms)
@@ -111,11 +112,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             catch (Exception ex) { Log.Debug("PlaybackTimeMsChanged handler error: {Error}", ex.Message); }
         }
 
-        /// <summary>The FunScriptService.SubscribePlaybackTime seam (WPF App.xaml.cs:3218-3223).</summary>
         internal static Action? SubscribePlaybackTime(Action<long> handler)
         {
-            Instance.PlaybackTimeMsChanged += handler;
-            return () => Instance.PlaybackTimeMsChanged -= handler;
+            var overlay = Instance;
+            overlay.PlaybackTimeMsChanged += handler;
+            return () => overlay.PlaybackTimeMsChanged -= handler;
         }
 
         internal IReadOnlyList<Window> Windows => _surfaces.Select(s => s.Window).ToList();
@@ -242,6 +243,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _media = new Media(vlc, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
+            // WPF VideoService.cs:3410: discover the companion script only after playback starts.
+            try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
+            catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
@@ -928,6 +932,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closing = true;
             try
             {
+                // WPF VideoService.cs:7944: stop script output before native player teardown.
+                try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
+                catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
                 _attention = _gracePaused = false;
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
