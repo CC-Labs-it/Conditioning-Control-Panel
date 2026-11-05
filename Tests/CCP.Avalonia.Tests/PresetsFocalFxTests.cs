@@ -93,6 +93,30 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task SwitchingMotionOffCancelsAnActiveEntranceBeforeHover() => WithPresets((host, view, animation) =>
+    {
+        view.IsVisible = false;
+        view.IsVisible = true; Settle(animation);
+        animation.Step(0); animation.Step(100);
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        Assert.True(row.IsAnimating(Visual.OpacityProperty), "the arrival must be active for this proof");
+        Assert.InRange(row.Opacity, 0.01, 0.99);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(row.IsAnimating(Visual.OpacityProperty)); // Reduced still permits entrances
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Settle(animation);
+        Assert.False(row.IsAnimating(Visual.OpacityProperty));
+        Assert.Equal(1, row.Opacity);
+        host.MouseMove(Center(host, row)); Settle(animation);
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.Equal(-2, slide.Y);
+        animation.Step(5000); Settle(animation);
+        Assert.Equal(-2, slide.Y); // a late entrance frame must not overwrite the hover
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view, animation) =>
     {
         view.IsVisible = false; Settle(animation);
