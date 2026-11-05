@@ -2816,6 +2816,7 @@ public partial class ChaosHubWindow : Window
             bool muted = App.Settings?.Current?.ChaosMenuMusicMuted == true;
             UpdateMuteIcon(muted);
             _music.Play();                                   // resumes where it left off (or from 0 on first open)
+            global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("chaos-hub-music", "menu_theme.mp3");
             FadeMusicTo(muted ? 0.0 : MenuMusicVol, 2.0);    // 2s fade in
         }
         catch (Exception ex) { App.Logger?.Debug("ChaosHub.StartMenuMusic: {E}", ex.Message); }
