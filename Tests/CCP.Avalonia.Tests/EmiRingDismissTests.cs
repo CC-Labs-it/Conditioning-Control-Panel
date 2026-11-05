@@ -166,12 +166,37 @@ public sealed class EmiRingDismissTests
         }
     }
 
-    // WPF Services/EmiDesk/EmiTargets.cs:295-296: both locked doors ask for Lab.
-    [Theory]
-    [InlineData("dtrh")]
-    [InlineData("intake")]
-    public void LockedDoorAsksForLabWithoutScoring(string id)
+    [Fact]
+    public void OpenDoorScoresThenFiresRingPick()
     {
+        var state = global::ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        var usage = state.Usage.ToArray();
+        var fired = new System.Collections.Generic.List<(string Moment, int UsageAtFire)>();
+        var moment = EmiTargets.Moment;
+        EmiTargets.Moment = (m, _) => fired.Add((m, state.Usage.TryGetValue("vault", out var n) ? n : 0));
+        try
+        {
+            state.Usage["vault"] = 2;
+            EmiTargets.Find("vault")!.Open();
+            Assert.Equal(new[] { ("ringPick", 3) }, fired); // counted first, then her moment
+        }
+        finally
+        {
+            EmiTargets.Moment = moment;
+            state.Usage.Clear(); foreach (var pair in usage) state.Usage[pair.Key] = pair.Value;
+        }
+    }
+
+    // WPF 7.2.2 Services/EmiDesk/EmiTargets.cs:295-296: dtrh asks for its keyed premium tier (DtRH is Basic since
+    // 2026-10-31), intake for Lab; WPF Pick :270-274 fires lockedCardTapped and never scores a padlock.
+    [Theory]
+    [InlineData("dtrh", global::ConditioningControlPanel.Models.PatreonTier.Level1)]
+    [InlineData("intake", global::ConditioningControlPanel.Models.PatreonTier.Level2)]
+    public void LockedDoorAsksForItsTierWithoutScoring(string id, global::ConditioningControlPanel.Models.PatreonTier required)
+    {
+        var moments = new System.Collections.Generic.List<string>();
+        var moment = EmiTargets.Moment;
+        EmiTargets.Moment = (m, _) => moments.Add(m);
         var state = global::ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
         var usage = state.Usage.ToArray();
         var scores = state.OpenScore.ToArray();
@@ -195,11 +220,13 @@ public sealed class EmiRingDismissTests
             var before = (state.OpenScore[id], state.UsageAt[id], state.Usage[id]);
             EmiTargets.Find(id)!.Open();
             Assert.NotNull(refusal);
-            Assert.Equal(global::ConditioningControlPanel.Models.PatreonTier.Level2, refusal!.Value.Required);
+            Assert.Equal(required, refusal!.Value.Required);
+            Assert.Equal(new[] { "lockedCardTapped" }, moments);
             Assert.Equal(before, (state.OpenScore[id], state.UsageAt[id], state.Usage[id]));
         }
         finally
         {
+            EmiTargets.Moment = moment;
             state.Usage.Clear(); foreach (var pair in usage) state.Usage[pair.Key] = pair.Value;
             state.OpenScore.Clear(); foreach (var pair in scores) state.OpenScore[pair.Key] = pair.Value;
             state.UsageAt.Clear(); foreach (var pair in usageAt) state.UsageAt[pair.Key] = pair.Value;

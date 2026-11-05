@@ -18,8 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// <para>ponytail: HIDDEN until this head has their surface: arcademy, spiral (overlay),
     /// goon and backroom. Each is a host window or overlay no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
-    /// same way an unavailable door does. Also missing: the moments WPF's Pick fires
-    /// (<c>ringPick</c>, <c>lockedCardTapped</c>) - there is no <c>App.EmiDesk.Fire</c> on this head.</para>
+    /// same way an unavailable door does. Pick fires WPF's moments (<c>ringPick</c>,
+    /// <c>lockedCardTapped</c>) through <see cref="EmiDeskService.Fire"/>.</para>
     /// </summary>
     internal static class EmiTargets
     {
@@ -128,21 +128,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     var name = Loc.Get("emi_desk_target_" + id);
                     // WPF ShowGate:295-296: intake is a Lab prompt; dtrh keeps its keyed premium prompt (DtRH is Basic).
-                    if (id == "intake")
+                    if (id == "intake") TierGate.DemandLab(name);
+                    else
                     {
-                        TierGate.DemandLab(name, null);
-                        return;
+                        string? daily = id is "awareness" or "remote" or "takeover" or "dtrh" ? id : null;
+                        if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
                     }
-                    string? daily = id is "awareness" or "remote" or "takeover" or "dtrh" ? id : null;
-                    if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
-                    return;
                 }
-                open();
+                else open();
             }
             catch (Exception ex) { Log.Warning(ex, "[EmiDesk] target {Target} failed to open", id); }
 
-            try { EmiState.NoteUsage(id); }
+            // WPF EmiTargets.cs:264-282: the door opens first, then the counter and her moment. A padlock
+            // is not counted as an open; it fires lockedCardTapped instead.
+            try
+            {
+                if (locked)
+                {
+                    Moment("lockedCardTapped", new { target = id });
+                    return;
+                }
+                EmiState.NoteUsage(id);
+                bool top = EmiSuggester.TopSlotIs(id);
+                Moment(id == "arcademy" ? "arcademyFromRing" : "ringPick", new { target = id, pickIsTop = top });
+            }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] pick bookkeeping failed for {Target}", id); }
         }
+
+        /// <summary>Test seam: where Pick's moments go (WPF App.EmiDesk.Fire).</summary>
+        internal static Action<string, object?> Moment = (moment, context) => EmiDeskService.Instance.Fire(moment, context);
     }
 }
