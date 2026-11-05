@@ -221,16 +221,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void SetAwarenessIntensity(AwarenessIntensity intensity)
         {
             if (_roomLoading) return;
-            var s = CoreSettings.Current;
-            if (s.AwarenessIntensity == intensity) return;
+            if (!StoreAwarenessIntensity(intensity)) return;
+            SyncAwareness(); // WPF MainWindow.CompanionRoom.cs:277
+        }
 
+        /// <summary>The write half of WPF SetAwarenessIntensity (MainWindow.CompanionRoom.cs:257-276), shared with a
+        /// Workshop awareness cell hosted outside the shell. False when nothing changed.</summary>
+        internal static bool StoreAwarenessIntensity(AwarenessIntensity intensity)
+        {
+            var s = CoreSettings.Current;
+            if (s.AwarenessIntensity == intensity) return false;
             s.AwarenessIntensity = intensity;
             // The migration flag is what stops a later start-up from overwriting this choice.
             s.AwarenessIntensityMigrated = true;
             CoreSettings.Save();
-
             Log.Information("Awareness intensity set to {Intensity}", intensity);
-            SyncAwareness(); // WPF MainWindow.CompanionRoom.cs:277
+            return true;
         }
 
         // WPF AwarenessVm.Sync plus its Workshop re-read. Logical descendants include zones
