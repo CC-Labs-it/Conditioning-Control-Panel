@@ -22,8 +22,8 @@ internal sealed partial class MandatoryVideoOverlay
     {
         if (!GentleVisuals.On) return;
         var cover = new Border { Background = Brushes.Black, IsHitTestVisible = false };
-        // Build's first three children are the picture; keep grace, targets and controls above black.
-        panel.Children.Insert(Math.Min(3, panel.Children.Count), cover);
+        // Build's first child is the picture (fill, scrim, video); keep grace, targets and controls above black.
+        panel.Children.Insert(Math.Min(1, panel.Children.Count), cover);
         _entranceCurtains.Add(cover);
         _gentleBackstop ??= ArmGentleBackstop(RevealGentleEntrance, TimeSpan.FromSeconds(3));
     }

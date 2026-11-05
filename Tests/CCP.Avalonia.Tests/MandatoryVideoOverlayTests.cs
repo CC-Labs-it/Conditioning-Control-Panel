@@ -339,11 +339,11 @@ public sealed class MandatoryVideoOverlayTests
                     Assert.False(v.IsPlaying || o.GracePaused, "override on: panic wins");
                     shell.Close();
 
-                    // The max-length cap (VideoMaxDurationSeconds = 1) ends the next clip.
+                    // The max-length cap (VideoMaxDurationSeconds = 1) ends the next clip. The cap counts advancing
+                    // playback (VideoPlaybackClock, #3822), so the guard samples until it trips (3 s bound).
                     s.VideoMaxDurationSeconds = 1;
                     w = await Open(strict: false);
-                    await Task.Delay(1100);
-                    o.GuardTick();
+                    await Until(() => { o.GuardTick(); return !v.IsPlaying; }, 3);
                     Assert.False(v.IsPlaying, "max-length cap ends the clip");
                     Assert.Empty(o.Windows);
                 });

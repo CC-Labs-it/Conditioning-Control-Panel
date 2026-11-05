@@ -110,7 +110,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly Stopwatch _sinceShow = new();
         private readonly Stopwatch _sinceReady = new();
 
-        internal MandatoryVideoOverlay(Func<IMandatoryPlayback>? playbackFactory = null)
+        private MandatoryVideoOverlay() : this(null) { }
+
+        /// <summary>Tests only: an injected decoder replaces LibVLC and the windows.</summary>
+        internal MandatoryVideoOverlay(Func<IMandatoryPlayback>? playbackFactory)
         {
             _playbackFactory = playbackFactory;
             Scheduler = new MandatoryVideoScheduler(this)
@@ -644,7 +647,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// that shows no frame, stalls, overruns or passes the user's max ends like a dismiss.</summary>
         internal void GuardTick()
         {
-            if (_gracePaused || PrimaryPaused || _surfaces.Count == 0 || _playback == null || !Scheduler.IsPlaying) return;
+            // The injected decoder (tests) has no windows: a live playback is the clip to guard (#3822).
+            if (_gracePaused || PrimaryPaused || _playback == null || !Scheduler.IsPlaying) return;
             SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
             // A playing clip with no frame is revealed at the budget, as WPF FloatingFirstFrame.
