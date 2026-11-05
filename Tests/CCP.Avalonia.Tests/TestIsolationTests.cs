@@ -42,26 +42,54 @@ public class TestIsolationTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task BundledFontsAreReadyBeforeAnyFixtureChoosesThePlatform()
-    {
-        await CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+    public void SharedPlatformUsesTheProductionFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
-            // Model a fixture that only asks for Skia/headless. The shared hook must have
-            // already installed the production font collections and family mappings.
-            if (global::Avalonia.Application.Current is null)
-                global::Avalonia.AppBuilder.Configure<AvApp>()
-                    .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
-            foreach (var family in new[] { "fonts:Inter#Inter", "Fredoka" })
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+            var face = new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                weight: global::Avalonia.Media.FontWeight.Bold);
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyph), "bundled bold Inter must resolve without system fonts");
+            Assert.Equal("Inter", glyph!.FamilyName);
+        });
+
+    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
+
+    // Run this alone in a fresh testhost: no fixture may decide the process-wide font setup.
+    [Fact]
+    public System.Threading.Tasks.Task TheHookInitializesTheShippedFontsBeforeAnyFixture() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            foreach (var name in new[] { "fonts:Inter#Inter", "Fredoka, Segoe UI" })
             {
-                var typeface = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family));
-                Assert.Contains(family.Contains("Inter") ? "Inter" : family, typeface.GlyphTypeface.FamilyName);
+                var face = new global::Avalonia.Media.Typeface(name);
+                Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyphs), name);
+                Assert.True(glyphs!.CharacterToGlyphMap.TryGetGlyph('A', out var glyph));
+                Assert.NotEqual((ushort)0, glyph);
             }
             return System.Threading.Tasks.Task.CompletedTask;
         });
-    }
 
-    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
+    [Fact]
+    public void EveryTestStartsWithPortableFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+        foreach (var (family, expected) in new[]
+        {
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter, "Inter"),
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka, "Fredoka Light"),
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono, "Noto Sans Mono"),
+        })
+        {
+            var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family),
+                global::Avalonia.Media.FontStyle.Normal, global::Avalonia.Media.FontWeight.Bold);
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyphs), family);
+            Assert.Equal(expected, glyphs!.FamilyName);
+        }
+    });
 
     [Fact]
     public void TheFirstTestGetsTheApplicationsFontConfiguration() =>

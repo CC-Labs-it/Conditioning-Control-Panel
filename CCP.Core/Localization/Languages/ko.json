@@ -1,6 +1,10 @@
 {
   "Chaos_Dvd_Banner": "포르노 DVD",
   "Chaos_Dvd_Loading": "📀 로딩 중",
+  "chaos_toy_buzz": "진동 중. 누른 채로 쓸기",
+  "chaos_toy_snap_all": "해제. 모두.",
+  "chaos_toy_snap_live": "해제. 모든 활성 방울이 풀렸다",
+  "chaos_toy_afterglow": "여운. 아직 남아 있다",
   "title_select_companion_personality": "{0}의 AI 성격 선택",
   "filter_personality_json_files": "성격 JSON 파일",
   "audio_device_unnamed": "(이름 없음)",
@@ -3342,6 +3346,7 @@
   "login_checking_availability": "사용 가능 여부 확인 중...",
   "login_could_not_check": "확인할 수 없었어요: {0}",
   "title_error": "오류",
+  "title_trigger_phrases": "트리거 문구",
   "title_invalid_name": "유효하지 않은 이름",
   "title_success": "성공",
   "title_confirm": "확인",

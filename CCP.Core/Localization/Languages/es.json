@@ -1,6 +1,10 @@
 {
   "Chaos_Dvd_Banner": "DVD porno",
   "Chaos_Dvd_Loading": "📀 cargando",
+  "chaos_toy_buzz": "vibra. mantén y desliza",
+  "chaos_toy_snap_all": "liberado. todo.",
+  "chaos_toy_snap_live": "liberado. todas las burbujas activas cedieron",
+  "chaos_toy_afterglow": "resplandor. perdura",
   "title_select_companion_personality": "Elegir personalidad de IA para {0}",
   "filter_personality_json_files": "Archivos JSON de personalidad",
   "audio_device_unnamed": "(sin nombre)",
@@ -3342,6 +3346,7 @@
   "login_checking_availability": "Verificando disponibilidad...",
   "login_could_not_check": "No se pudo verificar: {0}",
   "title_error": "Error",
+  "title_trigger_phrases": "Frases de activación",
   "title_invalid_name": "Nombre Inválido",
   "title_success": "Éxito",
   "title_confirm": "Confirmar",

@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para><see cref="Tick"/> is the stepped clock: the DispatcherTimer only calls it, tests call
     /// it directly. It does nothing while the overlay is hidden (P01).</para>
     /// </summary>
-    internal static class ChaosRunHost
+    internal static partial class ChaosRunHost
     {
         private static ChaosRunState? _state;
         private static ChaosHudWindow? _hud;
@@ -237,7 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnDefused(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
             Label(b, "SNAP", SnapColor);   // WPF CompleteDefuse :4577 / Pop :4684
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
@@ -270,7 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnDetonated(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
             switch (b.BrokenReason)
             {
                 case "nofocus":   // WPF OnPlayerPress :4502 + OnChannelBroken :1943
@@ -618,6 +618,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF StopKeyHook + CloseToyButtons (EndRun / ForceShutdown / overlay closed). Idempotent.</summary>
         private static void StopToys()
         {
+            StopToyEffects();
             X11PanicKey.ToyKey = null;
             X11PanicKey.ToyKeys = null;
             foreach (var b in _toyButtons.ToArray())
@@ -625,19 +626,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys :3020-3027: DVD glow and banner follow the live logos.</summary>
+        /// <summary>WPF TickActiveToys: cooldowns and temporary effect windows.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
-            foreach (var t in _state.ActiveToys)
-                t.IsEffectActive = t.Id == "porn_dvd" && ChaosDvdOverlay.AnyToyActive;
-            if (_dvdBannerOn && !ChaosDvdOverlay.AnyToyActive)
-            {
-                ChaosEffectBannerOverlay.End("dvd");
-                _dvdBannerOn = false;
-            }
+            TickToyEffects();
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -657,27 +652,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// freeze, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
+        /// <summary>WPF UseToy (:2681): gate, effect, then the once-per-save award.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
-            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
+            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && _overlay is { IsVisible: true });
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
-            // WPF ChaosModeService :2722-2734. Existing Core rules own gates and cooldown.
-            if (r == ChaosToyRules.UseResult.Fired && toy.Id == "porn_dvd" && _overlay != null)
-            {
-                int level = ChaosMeta.BoonLevel(toy.Id);
-                double speed = level switch { 1 => 0.7, 2 => 0.85, _ => 1.0 };
-                double scale = level switch { 1 => 0.8, 2 => 0.9, _ => 1.0 };
-                double power = _state.ToyPower.TryGetValue(toy.Id, out var p) ? p : 0;
-                ChaosDvdOverlay.Launch(_overlay, Math.Max(5, power), speed, scale,
-                    count: _state.MaxedBoons.Contains(toy.Id) ? 2 : 1, splitBounces: _state.DvdSplitBounces);
-                ChaosOverlayWindow.ChaosSfx.Play("dvd_launch", 0.55f);
-                ChaosEffectBannerOverlay.Show("dvd", ConditioningControlPanel.Localization.Loc.Get("Chaos_Dvd_Banner"), Color.FromRgb(0xFF, 0x69, 0xB4));
-                _dvdBannerOn = true;
-                _state.PushEvent(ConditioningControlPanel.Avalonia.Controls.IconLabel.ForKey("Chaos_Dvd_Loading").Source);
-            }
+            if (r == ChaosToyRules.UseResult.Fired && FireToyEffect(toy))
+                ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
         }
 
         private static void RunAgain()
