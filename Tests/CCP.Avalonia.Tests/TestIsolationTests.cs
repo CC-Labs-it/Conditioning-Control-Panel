@@ -4,6 +4,8 @@ using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using System.IO;
 using System.Linq;
+using Avalonia;
+using Avalonia.Headless;
 using ConditioningControlPanel;
 using Xunit;
 using PanicAftermath = ConditioningControlPanel.Services.Safety.PanicAftermath;
@@ -51,6 +53,26 @@ public class TestIsolationTests
                     .Select(_ => Path.GetFileName(f));
             }).ToList();
         Assert.Empty(bad);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task BundledFontsAreReadyBeforeAnyFixtureChoosesThePlatform()
+    {
+        await CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            // Model a fixture that only asks for Skia/headless. The shared hook must have
+            // already installed the production font collections and family mappings.
+            if (global::Avalonia.Application.Current is null)
+                global::Avalonia.AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            foreach (var family in new[] { "fonts:Inter#Inter", "Fredoka" })
+            {
+                var typeface = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family));
+                Assert.Contains(family.Contains("Inter") ? "Inter" : family, typeface.GlyphTypeface.FamilyName);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        });
     }
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
