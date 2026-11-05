@@ -194,6 +194,7 @@ public sealed class CompanionEditorsTests
         service.Current.MotionLevel = MotionLevel.Full;
         var clock = new SteppedClock();
         var shell = new MainShellWindow { TabClock = clock };
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
@@ -211,13 +212,22 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                // BringIntoView needs current bounds; a pending page layout can scroll the wrong
+                // rectangle on Windows. Settle layout and rendering before injecting real input.
+                shell.UpdateLayout();
                 button.BringIntoView();
-                ContentHitTestTests.RenderLiveTree(shell);
+                shell.UpdateLayout();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
+                shell.UpdateLayout();
+                HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 // Advancing the clock before dispatch must not move the settled target.
                 clock.Now = TimeSpan.FromMilliseconds(620).Ticks;
                 shell.TickTabTransition();
-                ContentHitTestTests.RenderLiveTree(shell);
+                HeadlessRendering.RenderLiveTree(shell);
                 Assert.Equal(at, button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value);
                 var hit = shell.InputHitTest(at) as Visual;
                 Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)),
