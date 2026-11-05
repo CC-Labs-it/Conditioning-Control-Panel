@@ -2,8 +2,8 @@
 # packaging/linux/build-tarball.sh: copy it next to this file as ConditioningControlPanel-linux-x64.tar.gz.
 # A release swaps `path:` for `url:` + `sha256:` of the uploaded asset. Not submitted to Flathub.
 # GNOME 50 already ships webkit2gtk-4.1, libsecret, libXi and libpulse; libVLC is bundled below.
-# WPE WebKit is NOT bundled although the user brief asks for it: WebHost only needs the GTK3 NativeControlHost
-# engine. Blocked on the first flatpak-builder run proving that (docs/avalonia-decisions.html, Linux package shape).
+# WPE WebKit is NOT bundled: WebHost defaults to WebKitGTK (runtime has webkit2gtk-4.1 + autoaudiosink) and WPE is
+# opt-in only (CCP_LINUX_WEBVIEW=wpe, falls back to GTK when libWPEWebKit is absent); docs/avalonia-decisions.html.
 app-id: io.github.CodeBambi.ConditioningControlPanel
 runtime: org.gnome.Platform
 runtime-version: '50'
@@ -17,10 +17,18 @@ finish-args:
   - --device=dri
   - --talk-name=org.kde.StatusNotifierWatcher
   - --talk-name=org.freedesktop.Notifications
-  - --own-name=org.kde.StatusNotifierItem-*   # tray icon; verify at first flatpak-builder run
+  # Tray: Avalonia owns org.kde.StatusNotifierItem-<pid>-<n>, n +1 per watcher restart; the app is pid 2 in the
+  # sandbox. finish-args reject a "-*" wildcard (Invalid dbus name), so the names are listed.
+  - --own-name=org.kde.StatusNotifierItem-2-0
+  - --own-name=org.kde.StatusNotifierItem-2-1
+  - --own-name=org.kde.StatusNotifierItem-2-2
+  - --own-name=org.kde.StatusNotifierItem-2-3
 modules:
   # ponytail: minimal libVLC (audio/video decode + pulse/xcb/gl output), no GUI or Lua; add modules when a format fails.
   - name: vlc
+    build-options:
+      env:
+        BUILDCC: gcc -std=gnu99   # vlc 3 configure finds no "c99" binary in the GNOME 50 Sdk
     config-opts:
       - --disable-lua
       - --disable-qt
@@ -42,8 +50,9 @@ modules:
       - /share/man
     sources:
       - type: archive
-        url: https://download.videolan.org/pub/videolan/vlc/3.0.21/vlc-3.0.21.tar.xz
-        sha256: 24dbbe1d7dfaeea0994d5def0bbde200177347136dbfe573f5b6a4cee25afbb0
+        # 3.0.24: 3.0.21 does not build against the Sdk's FFmpeg (AVCodecContext.channels removed)
+        url: https://download.videolan.org/pub/videolan/vlc/3.0.24/vlc-3.0.24.tar.xz
+        sha256: e7cab503d1d7d5849b89d2cf0e1ee60d0ef6d012407791b644b9cfc0cc225fdf
   - name: conditioning-control-panel
     buildsystem: simple
     build-commands:
