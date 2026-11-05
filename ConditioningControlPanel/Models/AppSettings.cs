@@ -5452,11 +5452,11 @@ namespace ConditioningControlPanel.Models
             set { _brainDrainEnabled = value; OnPropertyChanged(); }
         }
 
-        private int _brainDrainIntensity = 20; // 1-100%
+        private int _brainDrainIntensity = 20; // 0-100%, 0 = no clips (ccp-bugs #1536)
         public int BrainDrainIntensity
         {
             get => _brainDrainIntensity;
-            set { _brainDrainIntensity = Math.Clamp(value, 1, 100); OnPropertyChanged(); }
+            set { _brainDrainIntensity = Math.Clamp(value, 0, 100); OnPropertyChanged(); }
         }
 
         private int _brainDrainVolume = 100; // 0-100%
@@ -5789,6 +5789,18 @@ namespace ConditioningControlPanel.Models
         {
             get => _chasterFlashDodge;
             set { _chasterFlashDodge = value; OnPropertyChanged(); }
+        }
+
+        private int _chasterNatashaTriggerWeight = 1;
+
+        /// <summary>ccp-bugs #1566: how much likelier a trigger bubble is to be Natasha's red one
+        /// than a plain bubble, 1-10. 1 (the default) = the same one in ten as before. Machine-local
+        /// like every Chaster* setting.</summary>
+        [JsonProperty]
+        public int ChasterNatashaTriggerWeight
+        {
+            get => _chasterNatashaTriggerWeight;
+            set { _chasterNatashaTriggerWeight = Services.Chaster.NatashasFavourite.ClampTriggerWeight(value); OnPropertyChanged(); }
         }
 
         private int _chasterDailyLimitMinutes = 180;
@@ -8363,6 +8375,19 @@ namespace ConditioningControlPanel.Models
         {
             get => _keywordTriggersEnabled;
             set { _keywordTriggersEnabled = value; OnPropertyChanged(); }
+        }
+
+        private bool _awarenessStartOnLaunch = false;
+        /// <summary>
+        /// ccp-bugs #1562: switch Awareness (<see cref="KeywordTriggersEnabled"/>) on at launch,
+        /// like the companion's resume. Off by default, so Awareness still starts off. The launch
+        /// only flips the session flag; the usual access check starts it once the tier is known,
+        /// and the entitlement lapse switches it off again for an account without access.
+        /// </summary>
+        public bool AwarenessStartOnLaunch
+        {
+            get => _awarenessStartOnLaunch;
+            set { _awarenessStartOnLaunch = value; OnPropertyChanged(); }
         }
 
         private int _keywordBufferTimeoutMs = 3000;

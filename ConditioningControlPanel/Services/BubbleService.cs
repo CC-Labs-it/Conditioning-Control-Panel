@@ -1069,7 +1069,8 @@ public class BubbleService : IDisposable
         try
         {
             if (App.Chaster?.CanBook(Chaster.NatashasFavourite.EventId) == true
-                && Chaster.NatashasFavourite.Roll(_random))
+                && Chaster.NatashasFavourite.Roll(_random, bubble.IsAmbientTrigger,
+                       App.Settings?.Current?.ChasterNatashaTriggerWeight ?? 1))
                 bubble.MarkNatasha();
         }
         catch (Exception ex) { Diag.Swallowed(ex, "natasha mark"); }
@@ -2825,6 +2826,10 @@ internal class Bubble
     internal bool IsMagnetBubble => _isMagnetBubble;
 
     internal bool IsNatasha => _isNatasha;
+
+    /// <summary>Built as a dashboard trigger bubble (payload or not), alive or not: the spawn-time
+    /// read for Natasha's trigger weight (ccp-bugs #1566).</summary>
+    internal bool IsAmbientTrigger => _isAmbientTrigger;
 
     /// <summary>Who ended this red bubble; read by <see cref="BubbleService.NoteNatashaEnd"/>.</summary>
     internal Chaster.NatashasFavourite.PopCause NatashaCause => _natashaCause;
