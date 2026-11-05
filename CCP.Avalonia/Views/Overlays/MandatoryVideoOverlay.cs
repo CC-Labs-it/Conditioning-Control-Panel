@@ -162,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
 
+            CoverGentle(Windows, waiting: true);
             var vlc = LibVlcAudio.Shared;
             if (vlc == null)
             {
@@ -222,7 +223,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) { LibVlcAudio.ApplyPreferredDevice(live); LiftGentle(); } });
             _player.TimeChanged += (_, e) =>
             {
                 Interlocked.Exchange(ref _watchedMs, e.Time);
@@ -236,7 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
-                    Scheduler.Ended();
+                    if (_player == live) Ended();
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
@@ -290,7 +291,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
-        private Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
+        internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
             RenderOptions.SetBitmapInterpolationMode(fill, BitmapInterpolationMode.HighQuality);
@@ -905,9 +906,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            var soft = _naturalEnd; _naturalEnd = false;
             _closing = true;
             try
             {
+                if (soft) CoverGentle(Windows, waiting: false); else DropGentle();
                 // WPF VideoService.cs:7944: stop script output before native player teardown.
                 try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
                 catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
@@ -940,7 +943,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 BouncingTextOverlay.PauseForVideo(false);
                 if (FillCount > 0) Log.Information("VideoService: blur fill {Avg:F3} ms/frame over {N} frames", FillMs / FillCount, FillCount);
             }
-            finally { _closing = false; }
+            finally { if (soft) LiftGentle(); _closing = false; }
             return Interlocked.Exchange(ref _watchedMs, 0) / 1000.0;
         });
     }
