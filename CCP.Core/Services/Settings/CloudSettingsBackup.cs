@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Services
     /// The cloud settings backup for a head that is not WPF: "Backup now" and "Restore from cloud"
     /// (WPF ProfileSyncService.cs:4545-4890 + MainWindow.CloudBackup.cs). Same endpoints and bodies.
     /// <para>The exclusion list, <see cref="IsExcludedFromBackup"/> and <see cref="PreserveLocalOnlyFields"/>
-    /// are copies of WPF's, unchanged; WPF is frozen and keeps its own (P118), so this class has a new
+    /// follow WPF, with the old port lane's stricter secret and safety filtering. WPF keeps its own (P118), so this class has a new
     /// name (P25). <see cref="SettingsBackupBudget"/> moved here as is.</para>
     /// <para>On top of WPF (docs/avalonia-decisions.html, cloud settings backup): <see cref="AbsolutePathFields"/>
     /// are never uploaded and a restore always keeps this machine's values, because one account has one
@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.UserDisplayName),
             nameof(AppSettings.PatreonTier),
             nameof(AppSettings.PatreonPremiumValidUntil),
+            nameof(AppSettings.PatreonLabValidUntil),
             nameof(AppSettings.InviteGrantUntil),
             nameof(AppSettings.LastPatreonVerification),
             nameof(AppSettings.AuthToken),
@@ -63,10 +64,16 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.LastSeenUtc), // Local-only greeting timestamp — must never leave the device.
             // Documented local only: a restore on another PC must not switch presence sharing on.
             nameof(AppSettings.FriendsPresenceShared),
+            // Same reason: a restore must not switch the always-on wallpaper on without its warning.
+            nameof(AppSettings.CollageRunWithCcp),
+            // A path on this PC: means nothing elsewhere, and names the user's folders.
+            nameof(AppSettings.CollageOwnImagePath),
             nameof(AppSettings.ModPersonalityPreset),
             // Conversion rows (C9): machine-local stamps and the last server tier reading.
             // A restore must not bring back a stale reading or re-open a once-ever row.
             nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.GraceClosedTier),
+            nameof(AppSettings.GraceClosedAtUtc),
             nameof(AppSettings.InboxStamps),
             nameof(AppSettings.LastKnownEffectiveTier),
             // Free member fields mirror the server profile; the next profile read refills them.
@@ -75,6 +82,15 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ServerPaidUntil),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
+            // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
+            nameof(AppSettings.ProfileEquipAccount),
+            nameof(AppSettings.ProfileEquipUpdatedMs),
+            nameof(AppSettings.ProfileEquipPushOwed),
+            // Rain look sync state: what THIS PC owes the server and last agreed with it (WPF ProfileSyncService).
+            nameof(AppSettings.RainLookPushOwed),
+            nameof(AppSettings.RainLookAgreedUtc),
+            // What THIS PC last saw of each account's wallet net: on another PC it would invent or hide a spend.
+            nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
             // ---- not in WPF (no WPF reader): which privacy switches this install owns (SyncPush) ----
@@ -95,9 +111,12 @@ namespace ConditioningControlPanel.Services
                             && !Attribute.IsDefined(p, typeof(JsonIgnoreAttribute)))
                 .ToArray();
 
+        private static readonly string[] SecretMarkers = { "Token", "ApiKey", "Secret", "Password", "Webhook", "Credential" };
+
         /// <summary>True when a backup must not carry this property.</summary>
         internal static bool IsExcludedFromBackup(string name) =>
             ExcludedBackupProperties.Contains(name)
+            || SecretMarkers.Any(marker => name != null && name.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
             || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase))
             // The audio player's playlist is file paths on this machine: never uploaded.
             || (name != null && name.StartsWith("AudioPlaylist", StringComparison.OrdinalIgnoreCase));
@@ -127,16 +146,27 @@ namespace ConditioningControlPanel.Services
             restored.DiscordWebhookUrl = current.DiscordWebhookUrl;
             restored.LastSeenUtc = current.LastSeenUtc;
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
+            restored.CollageRunWithCcp = current.CollageRunWithCcp;
+            restored.CollageOwnImagePath = current.CollageOwnImagePath;
             // Conversion state lives on this PC only (it is left out of the backup): a restore must
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
             restored.ServerTierSeen = current.ServerTierSeen;
+            restored.LastKnownEffectiveTier = current.LastKnownEffectiveTier;
+            restored.GraceClosedTier = current.GraceClosedTier;
+            restored.GraceClosedAtUtc = current.GraceClosedAtUtc;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
+            restored.ProfileEquipAccount = current.ProfileEquipAccount;
+            restored.ProfileEquipUpdatedMs = current.ProfileEquipUpdatedMs;
+            restored.ProfileEquipPushOwed = current.ProfileEquipPushOwed;
+            restored.RainLookPushOwed = current.RainLookPushOwed;
+            restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
+            restored.WalletNetSeen = current.WalletNetSeen;
             restored.ConsentOwnedAccount = current.ConsentOwnedAccount;
             restored.ConsentOwnedFields = current.ConsentOwnedFields;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
@@ -168,7 +198,7 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.CustomAssetsPath), nameof(AppSettings.StartupVideoPath), nameof(AppSettings.SpiralPath),
             nameof(AppSettings.MindWipeAudioPath), nameof(AppSettings.WallpaperOriginalPath), nameof(AppSettings.WallpaperSourceFolder),
             nameof(AppSettings.BlinkTrainerFolders), nameof(AppSettings.DeeperRecentFiles), nameof(AppSettings.DeeperLastDirectory),
-            nameof(AppSettings.AudioLayers), nameof(AppSettings.CornerGifOverlays), nameof(AppSettings.KeywordTriggers),
+            nameof(AppSettings.AudioLayers), nameof(AppSettings.CornerGifOverlays), nameof(AppSettings.KeywordTriggers), nameof(AppSettings.KeywordTriggerPresets),
         };
 
         private static readonly System.Reflection.PropertyInfo[] PathProperties =
@@ -231,6 +261,35 @@ namespace ConditioningControlPanel.Services
                 var v = p.GetValue(current);
                 if (v is List<string> list) v = new List<string>(list);
                 p.SetValue(restored, v);
+            }
+        }
+
+        // Stricter than WPF MainWindow.CloudBackup.cs:138-160, reused from the old port lane.
+        public static void HoldSafetyFloor(AppSettings? current, AppSettings? restored)
+        {
+            if (current == null || restored == null) return;
+            foreach (var p in typeof(AppSettings).GetProperties())
+            {
+                if (p.PropertyType != typeof(bool) || !p.CanRead || !p.CanWrite) continue;
+                if (p.Name.IndexOf("StrictLock", StringComparison.Ordinal) < 0) continue;
+                if (!(bool)p.GetValue(current)! && (bool)p.GetValue(restored)!) p.SetValue(restored, false);
+            }
+            if (current.PanicKeyEnabled) restored.PanicKeyEnabled = true;
+            if (!current.ScreenOcrEnabled)
+            {
+                restored.ScreenOcrEnabled = false;
+            }
+        }
+
+        // The old lane normalizes asset-relative paths for Linux. Absolute paths stay local above.
+        internal static void NormalizeRelativePaths(AppSettings restored)
+        {
+            static HashSet<string> Slash(HashSet<string> set) => new(set.Select(p => p.Replace('\\', '/')), set.Comparer);
+            restored.ActiveAssetPaths = Slash(restored.ActiveAssetPaths);
+            foreach (var preset in restored.AssetPresets)
+            {
+                preset.DisabledAssetPaths = Slash(preset.DisabledAssetPaths);
+                preset.DisabledAssetFolders = Slash(preset.DisabledAssetFolders);
             }
         }
 
@@ -310,11 +369,16 @@ namespace ConditioningControlPanel.Services
             {
                 var data = (string?)(await FetchAsync(current))?["settings_data"];
                 if (data == null) return null;
-                var json = Unpack(data);
-                var restored = JsonConvert.DeserializeObject<AppSettings>(json,
+                var obj = JObject.Parse(Unpack(data));
+                foreach (var key in obj.Properties().Select(p => p.Name).ToList())
+                    if (IsExcludedFromBackup(PropertyNameOfJsonKey(key))) obj.Remove(key);
+                var restored = JsonConvert.DeserializeObject<AppSettings>(obj.ToString(),
                     new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
                 if (restored == null) return null;
+                // Normalize downloaded presets before KeepLocal can share this machine's preset objects.
+                NormalizeRelativePaths(restored);
                 KeepLocal(current, restored);
+                HoldSafetyFloor(current, restored);
                 Log.Information("Settings restored from cloud");
                 return restored;
             }
