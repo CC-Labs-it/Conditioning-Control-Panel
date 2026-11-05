@@ -8322,8 +8322,6 @@
   "remote_directory_listed_tip": "Ta session Remote figure dans le répertoire des sujets disponibles et attend que quelqu’un la prenne en charge.",
   "remote_directory_claimed": "Remote : pris en charge",
   "remote_directory_claimed_tip": "Une personne a pris en charge ton entrée Remote.",
-  "title_select_companion_personality": "Choisir la personnalité IA de {0}",
-  "filter_personality_json_files": "Fichiers JSON de personnalité",
   "awareness_add_app_tip": "Ajouter '{0}' à la liste",
   "label_active_phrase_count": "{0} actives",
   "remote_media_offer_title": "Des médias sans téléchargement",

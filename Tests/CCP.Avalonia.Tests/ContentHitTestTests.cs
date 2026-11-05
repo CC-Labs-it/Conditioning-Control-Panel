@@ -45,10 +45,7 @@ public sealed class ContentHitTestTests
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
             ToolTip.SetServiceEnabled(w, false);
             w.Show();
-            w.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
-            // Hold only subsequent entrances; do not change the clock of an entrance already running.
-            w.TabClock = new SteppedTime();
             var misses = new List<string>();
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {

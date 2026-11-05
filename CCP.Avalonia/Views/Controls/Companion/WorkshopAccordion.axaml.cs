@@ -62,7 +62,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             WirePhrasePresets(parts);
             parts.Triggers.EditTriggersRequested += async (_, _) => await EditTriggersAsync();
 
-
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
             // CameraShortcutRequested still needs the camera hotkey route. The webcam tracker

@@ -18,7 +18,7 @@
 // AssetsTabView.Packs.cs:37 and AssetsTabView.axaml.cs:320 (WPF Assets.cs:801-806, :921-937).
 // Phrase presets already live in WorkshopAccordion.PhrasePresets.cs:20; enabled counts now use
 // the existing editor catalogue (:54, :61, :91), as WPF Assets.cs:1790 and Patreon.cs:1403-1406.
-// Nested keyword/patch-note wheels forward through Helpers/ParentWheel.cs:12, matching WPF
+// Nested patch-note wheels forward through Helpers/ParentWheel.cs:12 (keyword list: KeywordTriggersPanel.OnTriggerListWheel), matching WPF
 // Assets.cs:444-457. Quests' horizontal-only viewer already bubbles vertical wheel input.
 // The pack strip is unreachable in WPF (MainWindow.xaml.cs:205, PacksSectionEnabled = false).
 // Its cards, download/activate/upgrade, links, callbacks and preview rotation remain unported.

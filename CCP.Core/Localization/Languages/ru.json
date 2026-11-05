@@ -8322,8 +8322,6 @@
   "remote_directory_listed_tip": "Ваша сессия Remote находится в каталоге доступных участников и ждёт, пока её выберут.",
   "remote_directory_claimed": "Remote: выбрано",
   "remote_directory_claimed_tip": "Управляющий выбрал вашу запись Remote.",
-  "title_select_companion_personality": "Выбрать личность ИИ для {0}",
-  "filter_personality_json_files": "Файлы личности JSON",
   "awareness_add_app_tip": "Добавить '{0}' в список",
   "label_active_phrase_count": "Активно: {0}",
   "remote_media_offer_title": "Медиа без скачивания",

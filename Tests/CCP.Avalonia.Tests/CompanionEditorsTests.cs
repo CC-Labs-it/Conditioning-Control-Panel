@@ -5,11 +5,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
-using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
-using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -192,29 +190,29 @@ public sealed class CompanionEditorsTests
     {
         Setup();
         var service = new SettingsService();
-        service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
-        service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         CoreSettings.ServiceProvider = () => service;
+        // Exercise the links as a returning user, independently of onboarding and intro cards.
+        var settings = CoreSettings.Current;
+        settings.Welcomed = settings.HasAcceptedAgeVerification = true;
+        settings.WhatMovedCardShown = 1;
+        settings.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         CoreSettings.Current.PerformanceMode = false;
-        var shell = new MainShellWindow { TabClock = new SteppedClock() };
+        var clock = new SteppedClock();
+        var shell = new MainShellWindow { TabClock = clock };
         ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
-            shell.CompleteTabTransition();
-            // Park subsequent entrances so pointer success cannot depend on runner speed.
-            shell.TabClock = new SteppedTime();
             shell.ShowTab("companion");
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.NotNull(shell.EnteringTab);
+            // Dispatcher jobs do not advance animation time. Settle the entrance before sampling hit geometry.
             shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
-            // Headless mouse input renders again before delivery; finish the slide/fade before
-            // BringIntoView and TranslatePoint so the captured position stays valid.
-            shell.CompleteTabTransition();
-            Assert.Null(shell.EnteringTab); // do not sample a moving pointer target
+            Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
@@ -231,8 +229,18 @@ public sealed class CompanionEditorsTests
                 shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
                 shell.UpdateLayout();
                 HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
+                Assert.True(shell.IsEnabled);
+                Assert.True(button.IsEffectivelyVisible);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
+                // Advancing the clock before dispatch must not move the settled target.
+                clock.Now = TimeSpan.FromMilliseconds(620).Ticks;
+                shell.TickTabTransition();
+                HeadlessRendering.RenderLiveTree(shell);
+                Assert.Equal(at, button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value);
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)),
+                    $"{button.Content}: hit {hit?.GetType().Name} at {at}");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();

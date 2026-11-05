@@ -8322,8 +8322,6 @@
   "remote_directory_listed_tip": "Remoteセッションは利用可能な被験者の一覧に表示され、相手が引き受けるのを待っています。",
   "remote_directory_claimed": "Remote: 引受済み",
   "remote_directory_claimed_tip": "コントローラーがあなたのRemoteの掲載を引き受けました。",
-  "title_select_companion_personality": "{0}のAIパーソナリティを選択",
-  "filter_personality_json_files": "パーソナリティのJSONファイル",
   "awareness_add_app_tip": "'{0}' をリストに追加",
   "label_active_phrase_count": "{0} 件有効",
   "remote_media_offer_title": "ダウンロード不要のメディア",

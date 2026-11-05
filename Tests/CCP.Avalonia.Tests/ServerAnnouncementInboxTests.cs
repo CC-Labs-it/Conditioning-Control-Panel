@@ -314,4 +314,24 @@ public sealed class ServerAnnouncementInboxTests
         finally { shell.Close(); }
     });
 
+    [Fact]
+    public Task ClosingDuringAnnouncementFetchCannotFileTheResponse() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        fake.AnnouncementRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var check = shell.CheckServerAnnouncementAsync();
+            Assert.Single(fake.Calls);
+            shell.Close();
+            fake.AnnouncementRelease.SetResult(true);
+            await check;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally { fake.AnnouncementRelease.TrySetResult(true); shell.Close(); }
+    });
+
 }

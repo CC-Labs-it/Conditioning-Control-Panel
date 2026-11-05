@@ -95,6 +95,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _cutClock.Observe(_playback.Time, (long)Time.GetElapsedTime(0).TotalMilliseconds);
         }
+
+        // WPF Services/Video/VideoService.cs:2783: the primary player's raw millisecond clock
+        // (raised through PlaybackTimeMsChanged below).
+        internal void ReportPlaybackTime(long milliseconds)
+        {
+            Interlocked.Exchange(ref _watchedMs, milliseconds);
+            RaisePlaybackTime(milliseconds);
+        }
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
         private bool _healUsed, _strict;
@@ -294,9 +302,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player.Paused += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) _refreshFloating?.Invoke(); });
             _player.TimeChanged += (_, e) =>
             {
+                if (_player != live) return;
                 Interlocked.Exchange(ref _watchedMs, e.Time);
-                // A retired player (heal, replace) must not drive the funscript playhead.
-                if (_player == live) RaisePlaybackTime(e.Time);
+                RaisePlaybackTime(e.Time);
             };
             _player.EndReached += (_, _) =>
             {

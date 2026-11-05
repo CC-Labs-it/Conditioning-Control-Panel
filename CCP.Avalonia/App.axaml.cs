@@ -231,6 +231,13 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
         }
 
+        // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
+        internal static void SeedHapticPlaybackTime()
+        {
+            Services.Haptics.FunScriptService.SubscribePlaybackTime =
+                Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
+        }
+
         // WPF App.xaml.cs:3199: false before the avatar exists leaves the phase retryable.
         // findAvatar is a test seam only: Application.ApplicationLifetime cannot be set after init,
         // so a headless test cannot make AvatarTubeWindow.Live non-null.
@@ -770,10 +777,9 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // ponytail: no EMI Desk moment (HapticService.EmiDeskFire unseeded; WPF App.xaml.cs:3225).
-                // WPF App.xaml.cs:3218: follow the primary mandatory video playhead.
-                ConditioningControlPanel.Services.Haptics.FunScriptService.SubscribePlaybackTime =
-                    Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
+                // WPF App.xaml.cs:3218: seed the clock before constructing the haptic service.
+                SeedHapticPlaybackTime();
+                // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();

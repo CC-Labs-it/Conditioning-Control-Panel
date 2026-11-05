@@ -138,13 +138,13 @@ public sealed class PremiumGatesTests
                 Assert.True(Stamped("PlayBadgeRemote"));
                 Assert.False(Stamped("PlayBadgeFyp"));
 
-                // DtRH's own drop day, independent of the Remote/For You gifts (WPF MainWindow.PlayTab.cs:130,184).
+                // DtRH is a Basic gift (port/7.2 DtrhLocked/DtrhGate), independent of the Remote/For You gifts.
                 CoreEntitlement.IsFreeTodayProvider = k => k == "dtrh";
                 Show("play");
                 Assert.False(Banded("PlayLockDtrh"));
                 Assert.True(Banded("PlayLockArcademy"));
                 Assert.True(Stamped("PlayBadgeDtrh"));
-                CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is Basic in 7.2.2: an owner gets no gift
+                CoreEntitlement.HasPremiumProvider = () => true;
                 Show("play");
                 Assert.False(Stamped("PlayBadgeDtrh"));
                 CoreEntitlement.HasPremiumProvider = null;

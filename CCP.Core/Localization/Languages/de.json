@@ -8322,8 +8322,6 @@
   "remote_directory_listed_tip": "Deine Remote-Sitzung ist im Verzeichnis verfügbarer Personen gelistet und wartet darauf, beansprucht zu werden.",
   "remote_directory_claimed": "Remote: beansprucht",
   "remote_directory_claimed_tip": "Eine steuernde Person hat deinen Remote-Eintrag beansprucht.",
-  "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
-  "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
   "awareness_add_app_tip": "'{0}' zur Liste hinzufügen",
   "label_active_phrase_count": "{0} aktiv",
   "remote_media_offer_title": "Medien ohne Download",

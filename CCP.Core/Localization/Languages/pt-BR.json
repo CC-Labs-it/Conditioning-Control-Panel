@@ -8322,8 +8322,6 @@
   "remote_directory_listed_tip": "Sua sessão Remote está no diretório de sujeitos disponíveis e aguarda alguém para assumir o controle.",
   "remote_directory_claimed": "Remote: assumido",
   "remote_directory_claimed_tip": "Uma pessoa assumiu seu anúncio no Remote.",
-  "title_select_companion_personality": "Selecionar personalidade de IA para {0}",
-  "filter_personality_json_files": "Arquivos JSON de personalidade",
   "awareness_add_app_tip": "Adicionar '{0}' à lista",
   "label_active_phrase_count": "{0} ativas",
   "remote_media_offer_title": "Mídia sem download",

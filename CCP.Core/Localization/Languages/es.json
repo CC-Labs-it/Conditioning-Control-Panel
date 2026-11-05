@@ -8322,8 +8322,6 @@
   "remote_directory_listed_tip": "Tu sesión Remote aparece en el directorio de sujetos disponibles y espera a que alguien la reclame.",
   "remote_directory_claimed": "Remote: reclamado",
   "remote_directory_claimed_tip": "Una persona ha reclamado tu entrada de Remote.",
-  "title_select_companion_personality": "Elegir personalidad de IA para {0}",
-  "filter_personality_json_files": "Archivos JSON de personalidad",
   "awareness_add_app_tip": "Añadir '{0}' a la lista",
   "label_active_phrase_count": "{0} activas",
   "remote_media_offer_title": "Contenido sin descargar",

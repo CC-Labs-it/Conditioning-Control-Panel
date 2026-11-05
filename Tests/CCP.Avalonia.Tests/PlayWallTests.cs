@@ -42,7 +42,7 @@ public sealed class PlayWallTests
             var (oldLogin, oldLab, oldPremium) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider);
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => true;
-            CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is Basic in WPF 7.2.2 (keyed premium gate)
+            CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is a Basic door (port/7.2 DtrhGate)
             var shell = new MainShellWindow();
             var launches = new System.Collections.Generic.List<string>();
             PlayTabView.LaunchGame = id => launches.Add(id);
@@ -215,16 +215,13 @@ public sealed class PlayWallTests
                 games.Children.Skip(4).Select(c => c.Name));
             foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
                 Assert.NotNull(C<Border>("Play" + name + "HeroPlate").Background);
-            // WPF PlayCardT2 (PlayTabView.xaml:131-132): tier-2 living-metal rim, 3 px.
-            foreach (var slot in new[] { "SlotBreakout", "SlotArcademy" })
+            // WPF PlayCardT2 (PlayTabView.xaml:131-132): tier-2 living-metal rim, 3 px; DtRH is the Basic (tier-1) card on port/7.2.
+            foreach (var (slot, tier) in new[] { ("SlotBreakout", 2), ("SlotDtrh", 1), ("SlotArcademy", 2) })
             {
                 var card = (Border)C<Grid>(slot).Children[0];
-                Assert.Equal(2, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(card));
+                Assert.Equal(tier, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(card));
                 Assert.Equal(3, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetRimThickness(card));
             }
-            // WPF PlayTabView.xaml:492 PlayCardT1: DtRH is Basic since 2026-10-31 (tier-1 rim).
-            var dtrhCard = (Border)C<Grid>("SlotDtrh").Children[0];
-            Assert.Equal(1, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(dtrhCard));
 
         });
     }

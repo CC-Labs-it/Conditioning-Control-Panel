@@ -11,11 +11,9 @@
 // The profile menu's Level/XP rail is painted from the same numbers.
 // XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
 //
-// Start charge/exhale/ignition/heartbeat, Save absorb, level-up toast and sound live in
-// MainShellWindow.HeroMoments.cs; the level-up particles ride the shell event layer (EventFx).
-// STILL MISSING vs WPF, so the row stays a stub: THE BANK counter hold (MainWindow.BankFx.cs),
-// which depends on the unported pot/flight host (MainShellWindow.BankFx.cs).
-// Save tick/ripple is live through BtnSave_Click (MainShellWindow.Settings.cs).
+// Remaining: THE BANK counter hold depends on the pot/flight host (MainShellWindow.BankFx.cs).
+// Level-up particles live in MainShellWindow.EventFx.cs (CelebrateLevelUp); HeroMoments calls it, one burst.
+// Save tick/ripple is live through BtnSave_Click (MainShellWindow.Settings.cs) -> FlashSaveAbsorb (HeroMoments.cs).
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
 

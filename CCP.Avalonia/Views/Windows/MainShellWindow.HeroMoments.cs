@@ -25,7 +25,7 @@ public partial class MainShellWindow
     private LinearGradientBrush? _startCharge;
     private bool _chargeApplied, _dipInFlight;
     private Action? _stopLevelSound;
-    // The level burst rides the shell event layer (EventFx CelebrateLevelUp), the only level burst source.
+    // One level-up burst: EventFx's CelebrateLevelUp owns it (panic stops it via StopEventFx).
     internal int LevelBurstCount => _eventBursts.Count;
     internal bool StartHeroRunning => _startHero?.IsRunning == true;
     internal bool StartIgniting => _startIgnition?.IsRunning == true;

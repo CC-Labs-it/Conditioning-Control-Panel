@@ -267,6 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             QueueVaultZones();
             RefreshJustSubscribed();
             RetintVaultChrome();
+            RefreshHeaderArt();
             // WPF MainWindow.Exclusives.cs:969: Plans repaints plates and its throttled invites.
             if (_plansMode)
             {
@@ -274,7 +275,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _ = this.FindControl<Controls.Invites.InvitePanel>("InvitesCard")!.RefreshAsync();
                 return;
             }
-            RefreshHeaderArt();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.

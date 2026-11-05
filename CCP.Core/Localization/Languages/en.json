@@ -9071,8 +9071,6 @@
   "remote_directory_listed_tip": "Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.",
   "remote_directory_claimed": "Remote: claimed",
   "remote_directory_claimed_tip": "A controller has claimed your Remote listing.",
-  "title_select_companion_personality": "Select AI Personality for {0}",
-  "filter_personality_json_files": "Prompt JSON files",
   "awareness_add_app_tip": "Add '{0}' to the list",
   "label_active_phrase_count": "{0} active",
   "remote_media_offer_title": "Media without the download",

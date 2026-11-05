@@ -169,7 +169,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 (Binding)new StrExtension(running ? "label_stop" : "label_start").ProvideValue(null!));
             RefreshBarStatus();
             if (App.Sessions?.IsRunning == true) OnSessionTick();
-            ApplyStartHeroState();
+            // Cosmetic, and also reached from OnEngineStopped (panic, stop): a throw here must not skip the
+            // pause-button / session-label / RefreshSessionFeatureLock steps that follow it there.
+            try { ApplyStartHeroState(); }
+            catch (System.Exception ex) { Serilog.Log.Debug(ex, "[Shell] start hero state"); }
         }
     }
 }
