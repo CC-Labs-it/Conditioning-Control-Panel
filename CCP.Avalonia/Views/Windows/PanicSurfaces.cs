@@ -106,6 +106,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player"]),
+            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.Stop();
+                Overlays.PinkFilterOverlay.CloseAll(); Overlays.SpiralOverlay.CloseAll(); }),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.

@@ -81,15 +81,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(
-            Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+        internal static double PaintedOpacity => SpiralFrames.Paint(HasTimedPayload
+            ? Math.Max(CoreSettings.Current.SpiralEnabled && ShouldShow() ? SliderFraction : 0, PayloadHold.Opacity) : SliderFraction);
+        private static double SliderFraction => Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1);
+
+        internal static readonly TimedOverlayHold PayloadHold = new();
+        internal static bool HasTimedPayload => PayloadHold.IsActive;
+        internal static void ShowTimed(Visual host, int ms, double opacity)
+        {
+            var release = PayloadHold.Acquire(opacity);
+            Refresh(host);
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                if (release()) Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
+        }
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (!HasTimedPayload && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -146,7 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Log.Warning("Spiral: the platform refused a click-through topmost overlay window, so the spiral is not shown");
                     _refused = true;
                     w.Close();
-                    CloseAll();
+                    CloseWindows();
                     return;
                 }
                 w.Show();
@@ -185,6 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _configuredPath = null;
             _randomizeAtStart = null;
             _repicked = false;
+            PayloadHold.Clear();
             CloseWindows();
         }
 

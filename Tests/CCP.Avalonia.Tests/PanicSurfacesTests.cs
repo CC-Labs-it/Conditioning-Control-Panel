@@ -133,6 +133,7 @@ public sealed class PanicSurfacesTests
         "browser-media",
         "deeper-player",
         "engine",
+        "bubble-host",
         "flash",
         "pink-rush",
         "corner-gif",
