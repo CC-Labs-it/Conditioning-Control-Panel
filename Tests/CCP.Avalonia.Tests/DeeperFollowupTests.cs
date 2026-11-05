@@ -26,9 +26,7 @@ public sealed class DeeperFollowupTests
 {
     private static void Setup()
     {
-        if (Application.Current == null)
-            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options())
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup(); // shared Skia + bundled-font setup for Linux headless
     }
 
     private static void Click(Control host, string name)

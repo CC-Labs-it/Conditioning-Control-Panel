@@ -29,14 +29,16 @@ public sealed class ServerAnnouncementInboxTests
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        public TaskCompletionSource<bool>? AnnouncementRelease;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             lock (Calls) Calls.Add(r.Method + " " + path + r.RequestUri.Query + " " + r.Content?.ReadAsStringAsync().Result);
+            if (path == "/config/announcement" && AnnouncementRelease != null) await AnnouncementRelease.Task;
             var body = path == "/config/announcement"
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 
@@ -132,12 +134,25 @@ public sealed class ServerAnnouncementInboxTests
 
             var popup = Assert.Single(opened);
             Assert.Equal("The Spiral is open", popup.FindControl<TextBlock>("TxtTitle")!.Text);
+            await shell.CheckServerAnnouncementAsync(); // a delayed launch check cannot repost an opened row
             Assert.Empty(StartupLadder.Inbox.Items);
             ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7));
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(StartupLadder.Inbox.Items); // the startup timer must not re-file the row just opened
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task AClosedShellCannotPostIntoTheNextShellsInbox() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        shell.Show();
+        shell.Close();
+        await shell.CheckServerAnnouncementAsync();
+        Assert.Empty(fake.Calls);
+        Assert.Empty(StartupLadder.Inbox.Items);
     });
 
     [Fact]
@@ -187,6 +202,26 @@ public sealed class ServerAnnouncementInboxTests
             Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement", StringComparison.Ordinal)));
         }
         finally { shell.Close(); }
+    });
+
+    [Fact]
+    public Task ClosingDuringAnnouncementFetchCannotFileTheResponse() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        fake.AnnouncementRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var check = shell.CheckServerAnnouncementAsync();
+            Assert.Single(fake.Calls);
+            shell.Close();
+            fake.AnnouncementRelease.SetResult(true);
+            await check;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally { fake.AnnouncementRelease.TrySetResult(true); shell.Close(); }
     });
 
 }

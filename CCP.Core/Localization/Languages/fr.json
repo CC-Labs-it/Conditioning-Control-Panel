@@ -1,4 +1,10 @@
 {
+  "chaos_toy_buzz": "ça vibre. maintiens et balaie",
+  "chaos_toy_snap_all": "libéré. tout.",
+  "chaos_toy_snap_live": "libéré. toutes les bulles actives ont cédé",
+  "chaos_toy_afterglow": "rémanence. elle persiste",
+  "title_select_companion_personality": "Choisir la personnalité IA de {0}",
+  "filter_personality_json_files": "Fichiers JSON de personnalité",
   "audio_device_unnamed": "(sans nom)",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
@@ -3338,6 +3344,7 @@
   "login_checking_availability": "Vérification de la disponibilité...",
   "login_could_not_check": "Impossible de vérifier : {0}",
   "title_error": "Erreur",
+  "title_trigger_phrases": "Phrases de déclenchement",
   "title_invalid_name": "Nom Invalide",
   "title_success": "Succès",
   "title_confirm": "Confirmer",
