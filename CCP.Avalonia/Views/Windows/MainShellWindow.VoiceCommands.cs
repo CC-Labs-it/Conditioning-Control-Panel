@@ -5,8 +5,8 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, shake, deeper,
-// session pause/resume, volume/mute, video pause/resume) are left out of the grammar.
+// seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, deeper,
+// volume/mute) are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -128,6 +128,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "bubbles_off" when CoreBubbles.StopAction != null => CoreBubbles.Stop,
             "video_on" when CoreEngine.Video != null => () => CoreEngine.Video?.Trigger(),
             "video_off" when CoreEngine.Video != null => () => CoreEngine.Video?.Stop(),
+            "video_pause" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PausePrimary,
+            "video_resume" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PlayPrimary,
+            "shake_once" => () => Deeper.ScreenShake.Shake(60, 1200),
+            "pause" => PauseSessionFromRemote,
+            "resume" => ResumeSessionFromRemote,
             "flash_once" when CoreFlash.ShowProvider != null => () => CoreFlash.ShowProvider?.Invoke(),
             "subliminals_on" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Start,
             "subliminals_off" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Stop,
