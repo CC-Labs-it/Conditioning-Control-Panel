@@ -22,12 +22,12 @@ namespace ConditioningControlPanel.Services
     /// The session-scoped corner GIF too: admission, start/end minute, pause hide, stop handback and
     /// the #474 live edits; the head draws it through <see cref="CoreCornerGif.SessionShowHandler"/>.
     ///
-    /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
+    /// ponytail: not driven here - video, bubble count, brain drain,
     /// ducking, phase events,
     /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
-    public sealed class SessionRunner
+    public sealed partial class SessionRunner
     {
         private readonly DeferredStartQueue _deferred = new();
         private readonly Stopwatch _stopwatch = new();
@@ -149,6 +149,7 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Log.Warning(ex, "[Session] Settings journal not written"); }
             }
             Apply(session.Settings, s);
+            ApplyBubbles(session, s);
 
             // WPF SessionEngine.cs:213-228: escalating Mind Wipe now or at its minute.
             var mw = session.Settings;
@@ -262,13 +263,15 @@ namespace ConditioningControlPanel.Services
             LockCardScheduler.Instance.Stop();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
+            CoreBubbles.Stop(); // WPF SessionEngine.cs:521
             CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
 
         /// <summary>SessionEngine.ResumeSession (SessionEngine.cs:554): restart only what has reached its
-        /// start minute; a still-deferred start fires from Tick as before.</summary>
+        /// start minute; a still-deferred start fires from Tick as before. Bubbles use the session
+        /// switch even before a delayed start or between bursts (SessionEngine.cs:570).</summary>
         public void Resume()
         {
             if (!IsRunning || !IsPaused || CurrentSession is not { } session) return;
@@ -285,6 +288,7 @@ namespace ConditioningControlPanel.Services
             if (ss.MindWipeEnabled && !_deferred.IsPending("mind wipe"))
                 CoreMindWipe.Start(ss.MindWipeBaseMultiplier, ss.MindWipeVolume / 100.0);
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
+            if (ss.BubblesEnabled) CoreBubbles.Start(); // WPF SessionEngine.cs:570
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
             var minutes = Elapsed.TotalMinutes;
             if (!CornerGifShown && CanRaiseCornerGif(ss) && minutes >= ss.CornerGifStartMinute
@@ -302,7 +306,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF MainTimer_Tick (SessionEngine.cs:609-662): complete, phase, deferred starts.
         /// The timer posts it with the real clock; tests call it with any elapsed.</summary>
-        internal void Tick(TimeSpan elapsed)
+        internal void Tick(TimeSpan elapsed, DateTime? wallTime = null)
         {
             var session = CurrentSession;
             if (!IsRunning || IsPaused || session == null) return;
@@ -345,6 +349,7 @@ namespace ConditioningControlPanel.Services
                     Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
                 }
             }
+            TickBubbles(session.Settings, minutes, wallTime ?? DateTime.Now);
             TickCornerGif(session.Settings, minutes);
             Ticked?.Invoke();
         }
