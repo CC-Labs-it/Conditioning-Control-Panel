@@ -80,12 +80,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
             RebindToCurrentSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -147,6 +149,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
+        // WPF FlashFeatureControl.xaml.cs:81: rebuild without overwriting the saved style.
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(OnGetRowChanged);
+
         // WPF FlashFeatureControl.xaml.cs:81-85 rebuilds on every grant change, including revokes.
         private void OnGetRowChanged()
         {

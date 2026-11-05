@@ -151,6 +151,7 @@ public sealed class V2GetItRowTests
         {
             EnsureApp();
             var s = CoreSettings.Current;
+            var unified = CoreAccount.UnifiedUserId;
             var (id, token, offline, sp, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted);
             var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
             var secrets = new System.Collections.Generic.Dictionary<string, string?>();
@@ -161,6 +162,7 @@ public sealed class V2GetItRowTests
             try
             {
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints) = ("u-buy", "t-buy", false, 50);
+                CoreAccount.UnifiedUserId = "u-buy";
                 PrizeOwnership.IsGranted = g => PrizeOwnership.Held(g);
                 PrizeOwnership.ResetHeld();
                 var svc = V2PurchaseHead.Create(null, "http://127.0.0.1:9", new System.Net.Http.HttpClient(h))!;
@@ -222,6 +224,7 @@ public sealed class V2GetItRowTests
             {
                 host?.Close();
                 V2PurchaseHead.Service = null;
+                CoreAccount.UnifiedUserId = unified;
                 PrizeOwnership.ResetHeld();
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted) = (id, token, offline, sp, seam);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
@@ -237,6 +240,7 @@ public sealed class V2GetItRowTests
             EnsureApp();
             var s = CoreSettings.Current;
             var (id, token, offline, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted);
+            var unified = CoreAccount.UnifiedUserId;
             var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
             var secrets = new System.Collections.Generic.Dictionary<string, string?>();
             CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
@@ -260,6 +264,7 @@ public sealed class V2GetItRowTests
                 Assert.Equal(1, opened);
 
                 (s.UnifiedId, s.AuthToken) = ("u-bubbles", "t-bubbles");
+                CoreAccount.UnifiedUserId = "u-bubbles";   // PrizeOwnership binds grants to the unified account
                 row.Apply();
                 Assert.Equal(V2PurchaseRowState.Unavailable, row.Row.State);
                 PrizeOwnership.ApplySnapshot("u-bubbles", 1, new[] { PrizeOwnership.BubbleRain });
@@ -281,6 +286,7 @@ public sealed class V2GetItRowTests
             {
                 host?.Close();
                 PrizeOwnership.ResetHeld();
+                CoreAccount.UnifiedUserId = unified;
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted) = (id, token, offline, seam);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
             }

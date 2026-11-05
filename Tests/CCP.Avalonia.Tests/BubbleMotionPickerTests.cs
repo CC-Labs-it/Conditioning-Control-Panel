@@ -94,6 +94,7 @@ public sealed class BubbleMotionPickerTests
         {
             settings.OfflineMode = false;
             settings.UnifiedId = "bubble-owner";
+            CoreAccount.UnifiedUserId = "bubble-owner";   // PrizeOwnership binds grants to the unified account
             CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "test-token" : null;
             PrizeOwnership.IsGranted = PrizeOwnership.Held;
             PrizeOwnership.ResetHeld();

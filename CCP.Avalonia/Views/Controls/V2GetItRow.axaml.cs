@@ -75,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // sign-out moves the row too (P41: subscribed on attach, dropped on detach).
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
             // WPF Controls/V2GetItRow.xaml.cs:68,81: grants repaint while loaded only.
-            PrizeOwnership.Changed += OnServiceChanged;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnServiceChanged;
             if ((_wired = V2PurchaseHead.Service) is { } svc)
             {
                 svc.Changed += OnServiceChanged;
@@ -89,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
-            PrizeOwnership.Changed -= OnServiceChanged;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnServiceChanged;
             if (_wired is { } svc)
             {
                 svc.Changed -= OnServiceChanged;
