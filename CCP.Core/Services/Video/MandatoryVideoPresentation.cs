@@ -9,6 +9,15 @@ namespace ConditioningControlPanel.Services.Video
     /// </summary>
     internal static class MandatoryVideoPresentation
     {
+        /// <summary>Floating video's gentle rise from black, starting at the first decoded frame.
+        /// Videos keep normal playback speed, as on the current WPF head.</summary>
+        public static double PictureOpacity(bool hasFrame, double sinceFrameSeconds, double fadeSeconds)
+        {
+            if (fadeSeconds <= 0) return 1;
+            if (!hasFrame) return 0;
+            return Math.Clamp(sinceFrameSeconds / fadeSeconds, 0, 1);
+        }
+
         /// <summary>
         /// Floating is a comfort option for an ordinary video only. Anything that covers the screen
         /// ON PURPOSE keeps covering it: a strict video (Strict Lock, Lock Card, Possession, a
