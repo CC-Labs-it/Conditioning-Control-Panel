@@ -19,6 +19,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -44,6 +45,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The host's own clock inside a descent (P08); tests step it.</summary>
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
+        // WPF DtrhHostService.OnBootError and LaunchLegacyFallback (:923-955).
+        internal static bool DtrhBootFailedThisSession { get; set; }
+
+        internal static void LaunchDtrhLegacy()
+        {
+            try
+            {
+                if (ChaosRunHost.IsActive) return;
+                if (ChaosHubWindow.Current is { } current) { current.Activate(); return; }
+                ChaosMeta.Init();   // WPF loads the active slot at startup (App.xaml.cs:2766)
+                if (ChaosMeta.State.RunsCompleted == 0)
+                {
+                    ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                    return;
+                }
+                new ChaosHubWindow().Show();
+            }
+            catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
+        }
+
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
         private JObject? _dtrhLastProgress;
@@ -67,6 +88,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "boot-error":
+                    if (_closing) return true;
+                    Log.Warning("DtrhHost: page boot-error: {Msg}; opening classic game", (string?)o["msg"]);
+                    DtrhBootFailedThisSession = true;
+                    Close();
+                    LaunchDtrhLegacy();
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();

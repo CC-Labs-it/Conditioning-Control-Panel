@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -30,15 +31,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// FlashOverlayWindow; the rise is a TranslateTransform on the label. Both are sampled from
     /// <see cref="ChaosPopTextMotion"/> on the shared 30 fps <see cref="BeatLoop"/>.</para>
     ///
-    /// <para>ponytail: nothing calls <see cref="Show"/> yet. Every WPF caller is the bubble field
-    /// (BubbleService.ShowChaosLabel), the toys (ripple "gathering…") or the payout (pop score,
-    /// gold, focus refill, first-time bonus) - none ported to <see cref="ChaosRunHost"/>. WPF
+    /// <para>The run host calls <see cref="Show"/> for bubble and score words. Toy and some payout
+    /// callers remain missing. WPF
     /// <c>RaiseActive</c> (re-stack above a mandatory video) waits on the same
     /// RaiseGameLayerAboveVideo port; a freshly mapped override-redirect window is already on top.</para>
     /// </summary>
     internal sealed class ChaosPopText : Window
     {
         internal static readonly ChaosPopPool<ChaosPopText> Pool = new(ChaosPopTextMotion.POOL_MAX);
+        private static long _generation;
 
         /// <summary>Click-through + invisible + override-redirect at <paramref name="rect"/> (screen
         /// px), before the first map. False = the platform refused; the word is dropped. Test seam.</summary>
@@ -55,12 +56,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             try
             {
+                long generation = Volatile.Read(ref _generation);
                 if (!ChaosPopTextMotion.ShouldShow(text, CoreSettings.Current.ChaosAnnouncerEnabled)) return;
                 Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
-                        if (!PlatformCanShow()) return;
+                        if (generation != Volatile.Read(ref _generation) || !PlatformCanShow()) return;
                         var w = Pool.Acquire(() => new ChaosPopText(sample: false));
                         w?.Play(anchorXDip, anchorYDip, text, color);   // null = pool exhausted: drop the word
                     }
@@ -76,6 +78,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             void Run()
             {
+                // Discard shows queued before this teardown, including ones posted from another thread.
+                Interlocked.Increment(ref _generation);
                 foreach (var w in Pool.All) { try { w.Close(); } catch (Exception ex) { Log.Debug("ChaosPopText close: {E}", ex.Message); } }
                 Pool.Clear();
             }
