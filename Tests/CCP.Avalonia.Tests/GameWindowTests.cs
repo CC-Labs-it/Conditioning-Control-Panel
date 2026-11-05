@@ -1204,6 +1204,8 @@ public sealed partial class GameWindowTests
             CoreSettings.Current.OfflineMode = offline;
             FunnelPageMessage.ResetForTests();
         }
+    });
+
     /// <summary>WPF LauncherCatalogue.cs:243-248: the Play door asks DtRH's gate before Launch, so lapsed access with
     /// a descent still open is refused instead of refocusing it.</summary>
     [Fact]

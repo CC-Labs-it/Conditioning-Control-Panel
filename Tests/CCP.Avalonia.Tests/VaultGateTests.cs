@@ -607,6 +607,8 @@ public sealed class VaultGateTests
             ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl = baseUrl;
             PlanCatalog.Reset();
         }
+    });
+
     /// <summary>WPF MainWindow.QuestsTab.cs:96 OpenPricedCard: the spent toast's CTA opens the priced intake
     /// card, except for a patron whose grant died, who is sent to Reconnect instead. One test, one shell:
     /// two shells built around a seeded SettingsService break later VaultGate tests.</summary>
@@ -700,9 +702,6 @@ public sealed class VaultGateTests
         if (global::Avalonia.Application.Current is not null) return;
         global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
             .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
-        global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
             .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
