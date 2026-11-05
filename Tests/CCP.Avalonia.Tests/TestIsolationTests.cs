@@ -99,6 +99,20 @@ public class TestIsolationTests
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 
     [Fact]
+    public void RestorePutsPanicQuietHoldAndCountBack()
+    {
+        var snapshot = ProcessStateSnapshot.Take();
+        var count = ConditioningControlPanel.Services.Safety.PanicAftermath.PanicCount;
+        var quiet = ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced();
+        var held = ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart;
+        ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+        snapshot.Restore();
+        Assert.Equal(count, ConditioningControlPanel.Services.Safety.PanicAftermath.PanicCount);
+        Assert.Equal(quiet, ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+        Assert.Equal(held, ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart);
+    }
+
+    [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()
     {
         var settingsFile = Path.Combine(TestUserDataProfile.Root, "settings.json");

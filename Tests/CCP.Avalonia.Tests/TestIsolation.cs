@@ -261,6 +261,12 @@ internal sealed class ProcessStateSnapshot
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 
+        // Panic entry points mutate private stamps, rather than assigning public seams.
+        // Keep their quiet window, engine hold and count from leaking into the next test.
+        foreach (var field in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath)
+                     .GetFields(AnyStatic).Where(f => !f.IsInitOnly && !f.IsLiteral))
+            found.Add(field);
+
         // Every `Type.Member =` a test writes, through `using Alias = ...;` too.
         var alias = new Regex(@"^using\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;", RegexOptions.Multiline);
         var assign = new Regex(@"(?<![\w.])(?:global::)?((?:\w+\.)*\w+)\.(\w+)\s*=(?![=>])");

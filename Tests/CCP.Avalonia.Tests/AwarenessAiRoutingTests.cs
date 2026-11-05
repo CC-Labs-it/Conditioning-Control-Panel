@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -25,7 +26,7 @@ namespace CCP.Avalonia.Tests;
 /// never does, nor does anything with v2 on or the consent revoked.</summary>
 public sealed class AwarenessAiRoutingTests
 {
-    private static async Task WithTube(bool v2, bool consent, Func<AvatarTubeWindow, List<string>, Task> body)
+    private static async Task WithTube(bool v2, bool consent, Func<AvatarTubeWindow, List<string>, Task> body, bool show = true)
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -75,7 +76,7 @@ public sealed class AwarenessAiRoutingTests
         var tube = new AvatarTubeWindow(null);
         try
         {
-            tube.Show();
+            if (show) tube.Show();
             Dispatcher.UIThread.RunJobs();
             tube._startupTime = DateTime.MinValue;
             tube.FindControl<Border>("SpeechBubble")!.IsVisible = false;
@@ -102,6 +103,66 @@ public sealed class AwarenessAiRoutingTests
 
     private static ActivityChangedEventArgs Gaming() =>
         new(ActivityCategory.Gaming, ActivityCategory.Unknown, "Steam", "Steam", "Steam Library");
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task EngineOffReactionsKeepTextWithoutAudio(bool preset) => AvaloniaTestDispatcher.RunAsync(() =>
+        WithTube(v2: preset, consent: true, async (tube, requests) =>
+        {
+            var s = CoreSettings.Current;
+            s.MasterVolume = 80;
+            s.AvatarMuted = false;
+            s.CompanionSpeaksIdleWhenEngineOff = false;
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            CoreSession.IsSessionPausedProvider = () => false;
+            var panicState = typeof(ConditioningControlPanel.Services.Safety.PanicAftermath)
+                .GetFields(BindingFlags.Static | BindingFlags.NonPublic).Where(f => !f.IsInitOnly)
+                .Select(f => (Field: f, Value: f.GetValue(null))).ToArray();
+            global::ConditioningControlPanel.Avalonia.App.WindowAwareness.Stop();
+            ResetCooldowns();
+            var plays = 0;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
+            CoreMods.ActiveModIdProvider = () => "ccp";
+            var clip = Path.GetTempFileName();
+            CoreModArt.OverridePathProvider = name => name.StartsWith("sounds/giggle") ? clip : null;
+            Action? delayed = null;
+            tube.SpeechDelayScheduler = (_, fire) => { delayed = fire; return () => { }; };
+            try
+            {
+                ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+                if (preset) for (int i = 0; i < 4; i++) tube.NextPresetGiggleSound();
+                await tube.ReactToActivityAsync(Gaming());
+                Dispatcher.UIThread.RunJobs();
+                var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+                Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+                Assert.False(string.IsNullOrWhiteSpace(text.Text));
+                Assert.Equal(0, plays);
+                tube.EndSpeechBubble();
+                text.Text = "";
+                if (preset) for (int i = 0; i < 4; i++) tube.NextPresetGiggleSound();
+                await tube.ReactStillOnAsync(Gaming());
+                Dispatcher.UIThread.RunJobs();
+                delayed?.Invoke();
+                Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+                Assert.False(string.IsNullOrWhiteSpace(text.Text));
+                Assert.Equal(0, plays);
+                tube.EndSpeechBubble();
+                s.CompanionSpeaksIdleWhenEngineOff = true;
+                ResetCooldowns();
+                if (preset) for (int i = 0; i < 4; i++) tube.NextPresetGiggleSound();
+                await tube.ReactToActivityAsync(Gaming());
+                Dispatcher.UIThread.RunJobs();
+                if (preset) delayed?.Invoke();
+                Assert.Equal(1, plays);
+            }
+            finally
+            {
+                foreach (var (field, value) in panicState) field.SetValue(null, value);
+                File.Delete(clip);
+            }
+        }, show: false));
 
     [Fact]
     public Task ADeniedOrIncognitoTitleNeverReachesTheAiButAnAllowedOneDoes() => AvaloniaTestDispatcher.RunAsync(() =>

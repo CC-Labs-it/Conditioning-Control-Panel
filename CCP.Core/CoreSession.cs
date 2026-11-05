@@ -38,6 +38,14 @@ namespace ConditioningControlPanel
             get { try { return IsSessionRunningProvider?.Invoke() ?? false; } catch { return false; } }
         }
 
+        /// <summary>The active runner's pause state; a paused session does not enable idle audio.</summary>
+        public static volatile Func<bool>? IsSessionPausedProvider;
+
+        public static bool IsSessionPaused
+        {
+            get { try { return IsSessionPausedProvider?.Invoke() ?? false; } catch { return false; } }
+        }
+
         // The running session's hold on the phrase pools, for the mod service's per-mod backup
         // (#906). WPF reads each through SessionEngine.Active, so "no active session" is folded
         // into every delegate: unseeded, or seeded with no session running, answers no-op /

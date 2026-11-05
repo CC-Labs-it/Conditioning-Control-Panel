@@ -111,6 +111,15 @@
                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
         </Grid>
 
+        <Grid Margin="0,6,0,0">
+            <StackPanel Margin="0,0,44,0">
+                <TextBlock Text="{loc:Str label_idle_voice_engine_off}" Theme="{StaticResource CmpCellLabelStyle}"/>
+                <TextBlock Text="{loc:Str label_idle_voice_engine_off_hint}" Theme="{StaticResource CmpCellHintStyle}"/>
+            </StackPanel>
+            <CheckBox x:Name="ChkIdleVoiceEngineOffCompanion" Theme="{DynamicResource ToggleStyle}"
+                      HorizontalAlignment="Right" VerticalAlignment="Center"/>
+        </Grid>
+
         <!-- TUBE GLASS: MIDNIGHT (Prize Counter restock, 2026-08-26). Always VISIBLE and greyed
              out until the counter has sold it - a prize you cannot see is a prize nobody knows
              to want. Its row seeds and re-arms itself in the code-behind on every reveal rather

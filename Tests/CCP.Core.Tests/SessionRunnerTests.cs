@@ -43,6 +43,7 @@ public sealed class SessionRunnerTests : IDisposable
         _runner.Stop();
         CoreEngine.Stop();
         CoreSession.IsSessionRunningProvider = null;
+        CoreSession.IsSessionPausedProvider = null;
         CoreSession.NoteUserPhrasePoolEdit = null;
         CoreSession.ReapplyPhrasePoolOverrides = null;
         CoreSession.UserPhrasePoolsWhileOverriding = null;
@@ -202,6 +203,7 @@ public sealed class SessionRunnerTests : IDisposable
             _runner.Pause();   // already paused: no second charge
 
             Assert.True(_runner.IsPaused && _runner.IsRunning && CoreSession.IsSessionRunning);
+            Assert.True(CoreSession.IsSessionPaused);
             Assert.Equal((1, 100), (_runner.PauseCount, _runner.XPPenalty));
             Assert.False(CoreFlash.IsRunning || CoreSubliminal.IsRunning || LockCardScheduler.Instance.IsRunning);
             var frozen = _runner.Elapsed;
@@ -210,6 +212,7 @@ public sealed class SessionRunnerTests : IDisposable
             Assert.Equal(frozen, _runner.Elapsed);
 
             _runner.Resume();
+            Assert.False(CoreSession.IsSessionPaused);
             _runner.Tick(TimeSpan.FromSeconds(60));
 
             var level = CoreSettings.Current.PlayerLevel;
