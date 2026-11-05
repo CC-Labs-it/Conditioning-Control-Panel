@@ -56,8 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 var value = (int)slider.Value;
                 intervalText.Text = $"{value}s";
                 if (_loading) return;
+                // WPF MainWindow.Patreon.cs:1527-1537 only updates the value on a slider move (no save per tick).
                 CoreSettings.Current.TriggerIntervalSeconds = value;
-                CoreSettings.Save();
             };
             SyncFromSettings();
         }
@@ -98,7 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 Dispatcher.UIThread.Post(SyncFromSettings);
         }
 
-        private void SyncFromSettings()
+        // WPF MainWindow.CompanionTab.cs:44-51 SyncCompanionTabUI.
+        internal void SyncFromSettings()
         {
             _loading = true;
             try

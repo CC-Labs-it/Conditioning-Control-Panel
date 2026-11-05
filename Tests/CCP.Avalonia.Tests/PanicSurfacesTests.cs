@@ -135,6 +135,7 @@ public sealed class PanicSurfacesTests
         "lock-cards",
         "speak-cue",
         "companion-knowledge-editor",
+        "companion-community",
         "companion-transcript",
         "possession",
         "video-test-error",

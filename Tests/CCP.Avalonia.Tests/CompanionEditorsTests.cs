@@ -202,6 +202,11 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // Exercise an active entrance without relying on the runner's wall clock.
+            clock.Now = TimeSpan.FromMilliseconds(80).Ticks;
+            shell.TickTabTransition();
+            Assert.NotNull(shell.EnteringTab);
+            shell.CompleteTabTransition(); // P08: settle motion before sampling mouse hit geometry.
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
