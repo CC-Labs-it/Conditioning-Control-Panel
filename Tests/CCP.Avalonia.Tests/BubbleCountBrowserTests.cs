@@ -165,6 +165,7 @@ public sealed class BubbleCountBrowserTests {
             Assert.True(host.CanPlayPath(game.Clip));
             BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
                 ok => { Assert.False(ok); game.Completed++; });
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();   // playback, and its failure, start on Loaded
             Assert.Equal(1, game.Completed);
             Assert.True(BrowserVideoSurface.StoodDown);
             Assert.False(host.CanPlayPath(game.Clip));
