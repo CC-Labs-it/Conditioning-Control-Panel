@@ -2,6 +2,7 @@
 // half of the Glassroad host. Kept in the head under its own name so the WPF copy (which sees Core internals) never
 // meets a twin when feat/glassroad-a lands on port/7.2. The window glue is GameWindow.Glassroad.cs.
 using System;
+using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 
@@ -61,6 +62,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ["riseMs"] = GentleVisuals.RiseFloorMs,
             ["speed"] = GentleVisuals.ClampSpeed(speed),
         };
+
+        // ---- watchdog (WPF GlassroadRules.Watch, 7.2.2 75aa68b92, ccp-bugs #1543) ----
+        // A course build (Boudoir) holds the page's main thread, so its heartbeat goes silent while it works.
+        // WPF also counts a WebView2 "render process unresponsive" report as busy; this head's WebView has no
+        // such event, so only the page's own `loading` frame marks it busy here.
+
+        /// <summary>The longest silence a busy page gets. Panic and the title-bar X still close at once.</summary>
+        public static readonly TimeSpan BusyLimit = TimeSpan.FromSeconds(90);
+
+        /// <summary>How long a page <c>loading</c> frame counts as "busy" after it lands.</summary>
+        public static readonly TimeSpan LoadingWindow = TimeSpan.FromSeconds(120);
+
+        public static bool IsBusy(TimeSpan? sinceLoadingFrame)
+            => sinceLoadingFrame is { } s && s >= TimeSpan.Zero && s < LoadingWindow;
+
+        /// <summary>One 5 s tick. Before ready: close after <see cref="PbpHostRules.BootDeadline"/> with no page
+        /// message at all (<see cref="BusyLimit"/> while busy). After ready: silent past 20 s gets one ping, then a
+        /// close on the next tick, unless the page is busy and silent for less than <see cref="BusyLimit"/>.</summary>
+        public static PbpHostRules.WatchStep Watch(bool ready, TimeSpan sinceProgress, TimeSpan sinceHeartbeat, bool pinged, bool busy)
+        {
+            if (!ready) return sinceProgress < (busy ? BusyLimit : PbpHostRules.BootDeadline) ? PbpHostRules.WatchStep.Idle : PbpHostRules.WatchStep.Close;
+            if (sinceHeartbeat.TotalSeconds <= PbpHostRules.HeartbeatSilenceSeconds) return PbpHostRules.WatchStep.Ok;
+            if (!pinged) return PbpHostRules.WatchStep.Ping;
+            return busy && sinceHeartbeat < BusyLimit ? PbpHostRules.WatchStep.Ok : PbpHostRules.WatchStep.Close;
+        }
 
         /// <summary>
         /// Sign one page call for the desktop door of the race lobby: the server reads <c>unified_id</c> from the

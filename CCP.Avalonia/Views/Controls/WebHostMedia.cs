@@ -15,6 +15,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// </summary>
     internal static class WebHostMedia
     {
+        /// <summary>WPF b9368d963 (MainWindow.xaml.cs PanicEndBrowserMedia, EnhancementPlayerWindow.PanicPauseAll): a
+        /// panic pauses every page video/audio (playhead kept) and drops page fullscreen. Never latches the Workshop pause.</summary>
+        internal const string PanicPauseScript = "(function(){var pause=function(d){try{"
+            + "d.querySelectorAll('video,audio').forEach(function(e){e.pause();});"
+            + "if(d.fullscreenElement)d.exitFullscreen();"
+            + "d.querySelectorAll('iframe').forEach(function(f){try{if(f.contentDocument)pause(f.contentDocument);}catch(e){}});"
+            + "}catch(e){}};pause(document);})();";
+
         /// <summary>The script for a mute state. Idempotent: running it twice installs one observer.</summary>
         internal static string MuteScript(bool muted) =>
             "(function(m){try{" +
@@ -40,13 +48,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         /// <summary>WPF's live pause switch mutes, then pauses/resumes top-document media.
-        /// It does not alter the saved Home mute preference, and resuming restores that preference rather than
-        /// unmuting outright (WPF unmutes, leaving the header icon saying "muted" over audible sound).</summary>
-        internal static async Task<bool> SetPausedAsync(this WebHost host, bool paused)
+        /// The saved Home mute preference stays unchanged. Resume restores it by default; the tube menu
+        /// passes false to unmute transiently, as WPF AvatarTubeWindow.ChatInput.cs:1407 does.</summary>
+        internal static async Task<bool> SetPausedAsync(this WebHost host, bool paused, bool preserveSavedMute = true)
         {
             host.MediaPaused = paused;
             if (!host.HasEngine) return false;
-            var muted = await host.SetMutedAsync(paused || CoreSettings.Current.BrowserVideoMuted);
+            var muted = await host.SetMutedAsync(paused || (preserveSavedMute && CoreSettings.Current.BrowserVideoMuted));
             var result = await host.InvokeScriptAsync(Services.BrowserMediaPlaybackScript.ForPaused(paused));
             return muted && result?.Trim('"') == (paused ? "paused" : "playing");
         }
