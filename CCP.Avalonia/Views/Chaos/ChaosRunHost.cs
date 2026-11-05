@@ -110,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _overlay.OnDismissed = OnOverlayClosed;
                 _overlay.Show();
                 ChaosEffectBannerOverlay.EnsureCreated();   // WPF :410 birth the banner window NOW, not mid-chaos
+                Overlays.ChaosFieldFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:411
                 _overlay.ShowCountdown(BeginRun, shortFlash: isRestart);   // 1s flash on RunAgain
             }
             catch (Exception ex)
