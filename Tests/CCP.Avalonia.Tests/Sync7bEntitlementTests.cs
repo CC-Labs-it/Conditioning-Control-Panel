@@ -33,7 +33,8 @@ public class Sync7bEntitlementTests {
         var user = new V2AuthService.V2User { EffectiveTierRaw = new JValue(1), PatreonTier = 1,
             PatreonIsActive = true, PatreonConfirmedAtRaw = new JValue(now) };
         CheckoutWatch.NoteOpened("https://patreon.com/checkout"); Assert.True(EntitlementRefresh.Apply(s, "sync7b", user));
-        Assert.Equal(now.AddDays(14), s.PatreonPremiumValidUntil); Assert.False(CheckoutWatch.TakeCheck(DateTime.UtcNow));
+        // The reading goes through AccountSeed.ApplyTierReading (WPF EntitlementTierSync.ApplyOnUi): a tier renews the grace from the read time (#4073), and the Patreon restamp never lowers it.
+        Assert.True(s.PatreonPremiumValidUntil >= now.AddDays(14)); Assert.True(s.PatreonPremiumValidUntil <= DateTime.UtcNow.AddDays(14)); Assert.False(CheckoutWatch.TakeCheck(DateTime.UtcNow));
         Assert.True(EntitlementRefresh.ServerAnsweredThisRun); s.AuthToken = null;
         s.PatreonPremiumValidUntil = null; Assert.False(EntitlementRefresh.Apply(s, "sync7b", user));
         Assert.Null(s.PatreonPremiumValidUntil);
