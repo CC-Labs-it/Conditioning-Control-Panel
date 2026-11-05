@@ -173,7 +173,7 @@ public sealed partial class AccountSeedTests
                 // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
                 // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
                 var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;
-                hit.RaiseEvent(new PointerPressedEventArgs(hit, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), w, at, 0,
+                hit.RaiseEvent(new PointerPressedEventArgs(hit, new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), PointerType.Mouse, true), w, at, 0,
                     new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 2));
                 w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
