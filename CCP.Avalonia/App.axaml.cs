@@ -746,6 +746,17 @@ namespace ConditioningControlPanel.Avalonia
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
+                    SkillPurchase.Current = new SkillPurchase
+                    {
+                        SyncBeforeRetry = sync.SyncBeforeRetryAsync,
+                        PointsSpent = cost => Achievements?.TrackSkillPointsSpent(cost),
+                        LifetimeSpentReconciled = total => Achievements?.ReconcileLifetimePointsSpent(total),
+                    };
+                    SkillPurchase.Current.SkillUnlocked += (_, id) =>
+                    {
+                        Platform.BarkHead.Engine?.Raise("SkillUnlocked", c => c.Set("skill", id));
+                        if (id == Models.PinkRushRules.SkillId) Dispatcher.UIThread.Post(Views.Windows.PinkRushHost.Start);
+                    };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>

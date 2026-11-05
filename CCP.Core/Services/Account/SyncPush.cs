@@ -131,6 +131,8 @@ namespace ConditioningControlPanel.Services
         public Descent.DescentCountdownService? Countdown { get; set; }
         public Descent.DescentService? DescentReader { get; set; }
         public DateTime? LastSyncTime { get; private set; }
+        private int _syncSuccesses;
+        internal Func<TimeSpan, Task> PurchaseRetryDelay = Task.Delay;
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -284,6 +286,7 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 LastSyncTime = UtcNow();
+                Interlocked.Increment(ref _syncSuccesses);
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
@@ -314,6 +317,19 @@ namespace ConditioningControlPanel.Services
                 return false;
             }
             finally { _gate.Release(); }
+        }
+
+        // WPF ProfileSyncService.cs:3964. Only successful syncs count, never a 429/409 cooldown stamp.
+        public async Task<bool> SyncBeforeRetryAsync()
+        {
+            var landed = Volatile.Read(ref _syncSuccesses);
+            if (!await _gate.WaitAsync(Cooldown)) return false;
+            _gate.Release();
+            if (Volatile.Read(ref _syncSuccesses) != landed || await PushAsync("purchase-retry")) return true;
+            var left = LastSyncTime is { } last ? Cooldown - (UtcNow() - last) : TimeSpan.Zero;
+            if (left <= TimeSpan.Zero || left > Cooldown) return false;
+            await PurchaseRetryDelay(left + TimeSpan.FromMilliseconds(250));
+            return await PushAsync("purchase-retry");
         }
 
         /// <summary>WPF NudgeSyncSoon: one coalesced push, 3 s out or just past the cooldown.</summary>
