@@ -42,6 +42,16 @@ public class TestIsolationTests
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
+    [Theory]
+    [InlineData("fonts:Inter#Inter")]
+    [InlineData("Fredoka")]
+    public void SharedBootstrapRegistersFontsBeforeTheTestBody(string family) => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(family), out var glyphs));
+        Assert.NotNull(glyphs);
+    });
+
     [Fact]
     public void TheFirstTestGetsTheApplicationsFontConfiguration() =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>

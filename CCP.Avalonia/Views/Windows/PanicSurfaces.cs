@@ -59,6 +59,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
             new("quiz", _ => QuizWindow.ForceCloseAll()), // WPF MainWindow.xaml.cs:2080
+            // Stricter than WPF App.xaml.cs:1830 KillAllAudio, which misses DeeperPlayer.
+            // Reuse the player stop/close cleanup (WPF EnhancementPlayerWindow.xaml.cs:836,2621).
+            new("deeper-player-audio", _ => Deeper.EnhancementPlayerWindow.StopAllAudioForPanic()),
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
