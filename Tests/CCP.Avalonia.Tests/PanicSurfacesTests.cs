@@ -108,6 +108,7 @@ public sealed class PanicSurfacesTests
         "chaos-field-fx",
         "chaos-skia-fx",
         "chaos-intro",
+        "scrolller-web",
         "settings-palette",
         "keyword-triggers",
         "haptics",
