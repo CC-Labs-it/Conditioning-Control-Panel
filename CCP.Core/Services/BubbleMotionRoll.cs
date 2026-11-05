@@ -9,13 +9,13 @@ namespace ConditioningControlPanel.Services;
 ///
 /// The picker in the Bubbles options stores a <see cref="BubbleMotionStyle"/>; every spawn
 /// resolves it here to ONE concrete style for that bubble. Ownership comes from
-/// <see cref="PrizeGrants"/> and never from settings, so a synced profile carrying a style the
+/// grants passed by the head and never from settings, so a synced profile carrying a style the
 /// account does not own simply floats up. MotionLevel is honoured on the way through: Off is
 /// plain FloatUp whatever the picker says, Reduced halves the v2 speed and the spiral turns.
 ///
-/// Nothing in here touches WPF; the live wrappers at the bottom are the only App reads.
+/// Shared by the WPF and Avalonia heads; live ownership and settings reads stay in each head.
 /// </summary>
-public static class AmbientBubbleMotion
+public static class BubbleMotionRoll
 {
     /// <summary>True when the concrete style is usable with the given grants (Mix needs any v2 style).</summary>
     public static bool IsOwned(BubbleMotionStyle style, bool rainOwned, bool spiralOwned) => style switch
@@ -58,18 +58,6 @@ public static class AmbientBubbleMotion
     /// <summary>Speed multiplier for the v2 styles at a motion level (FloatUp is never scaled).</summary>
     public static double SpeedMult(MotionLevel level) => level == MotionLevel.Reduced ? 0.5 : 1.0;
 
-    // ---- live reads (UI thread, at spawn / repaint) ----
-
-    public static bool RainOwned => PrizeGrants.IsGranted(PrizeGrants.BubbleRain);
-    public static bool SpiralInOwned => PrizeGrants.IsGranted(PrizeGrants.BubbleSpiralIn);
-    /// <summary>Either ambient prize style. One spelling, in <see cref="V2Badges"/>, because the
-    /// dashboard tile and the side rail's chips light off the very same question.</summary>
-    public static bool AnyV2Owned => V2Badges.BubbleOwned();
-
-    /// <summary>The concrete style for one ambient spawn, from the current picker + grants + motion level.</summary>
-    public static BubbleMotionStyle RollForSpawn(Random random) =>
-        Resolve(App.Settings?.Current?.BubbleMotionStyle ?? BubbleMotionStyle.FloatUp,
-                RainOwned, SpiralInOwned, MotionFx.Level, random.NextDouble());
 }
 
 /// <summary>
@@ -79,7 +67,7 @@ public static class AmbientBubbleMotion
 /// to land the requested number of turns exactly when the radius reaches the core. The fade
 /// runs over the last <see cref="FadeBandDip"/> DIPs of radius and hits 0 at the core.
 /// </summary>
-public static class SpiralInPath
+public static class BubbleSpiralPath
 {
     /// <summary>Start radius as a fraction of the shorter screen dimension.</summary>
     public const double StartRadiusFrac = 0.42;

@@ -34,7 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static readonly OwnershipService HeldOwnership = new(
             () => FriendsHead.Identity()?.UnifiedId, overrideSpec: null, raise: action => action());
 
-        static PrizeOwnership() => HeldOwnership.OwnershipChanged += (_, _) => Changed?.Invoke();
+        // PrizeGrants.GrantsChanged too: WPF OwnershipService -> PrizeGrants.GrantsChanged (the bubble motion picker listens there).
+        static PrizeOwnership() => HeldOwnership.OwnershipChanged += (_, _) => { Changed?.Invoke(); PrizeGrants.RaiseGrantsChanged(); };
 
         /// <summary>WPF GrantsChanged: snapshot grants changed, possibly off the UI thread.</summary>
         internal static event Action? Changed;
