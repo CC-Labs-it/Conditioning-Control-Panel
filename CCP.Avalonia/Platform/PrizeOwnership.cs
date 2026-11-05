@@ -23,6 +23,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: the owned-check every caller uses.</summary>
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
+        /// <summary>Any accepted snapshot for the signed-in account, changed or not: the chess page re-sends its grants.</summary>
+        internal static event Action? GrantsChanged;
+
         // Reuse Core's account/revision rules and change detection for every snapshot source.
         private static readonly OwnershipService HeldOwnership = new(
             () => FriendsHead.Identity()?.UnifiedId, overrideSpec: null, raise: action => action());
@@ -46,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 NoteAccount(accountId);
                 HeldOwnership.ApplySnapshot(accountId, revision, grants);
             }
+            GrantsChanged?.Invoke();
         }
 
         /// <summary>A newly signed-in account starts with nothing held, and the change is raised.</summary>
@@ -66,9 +70,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 if (requested == null || requested != FriendsHead.Identity()?.UnifiedId) return;
                 NoteAccount(requested);
-                if (requested == answered && prizes?.Grants != null)
-                    HeldOwnership.ApplySnapshot(requested, prizes.Revision, prizes.Grants);
+                if (requested != answered || prizes?.Grants == null) return;
+                HeldOwnership.ApplySnapshot(requested, prizes.Revision, prizes.Grants);
             }
+            GrantsChanged?.Invoke();
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
