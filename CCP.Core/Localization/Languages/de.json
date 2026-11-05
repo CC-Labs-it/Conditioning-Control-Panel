@@ -1,6 +1,10 @@
 {
   "devices_always_on_title": "Dauerhaft aktives Mikrofon",
   "devices_always_on_body": "Das Aktivierungswort hält das Mikrofon während Takeover ständig offen, damit sie deinen Ruf hören kann.\n\nAlles bleibt offline. Audio wird auf deinem Gerät verarbeitet und weder aufgezeichnet noch übertragen.\n\nDauerhaftes Zuhören einschalten?",
+  "chaos_toy_buzz": "es summt. halten und streichen",
+  "chaos_toy_snap_all": "gelöst. alles.",
+  "chaos_toy_snap_live": "gelöst. alle aktiven Blasen sind frei",
+  "chaos_toy_afterglow": "nachglühen. es bleibt",
   "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
   "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
   "audio_device_unnamed": "(unbenannt)",
@@ -3342,6 +3346,7 @@
   "login_checking_availability": "Verfügbarkeit wird geprüft...",
   "login_could_not_check": "Konnte nicht prüfen: {0}",
   "title_error": "Fehler",
+  "title_trigger_phrases": "Trigger-Phrasen",
   "title_invalid_name": "Ungültiger Name",
   "title_success": "Erfolg",
   "title_confirm": "Bestätigen",
