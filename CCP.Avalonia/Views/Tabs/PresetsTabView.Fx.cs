@@ -135,7 +135,7 @@ public partial class PresetsTabView
         return group;
     }
 
-    private void PrepareChipFx(Control chip)
+    internal void PrepareChipFx(Control chip)
     {
         CardTransforms(chip);
         chip.PointerEntered += (_, _) => ScaleCard(chip, 1.02, 150);
