@@ -76,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (Whisper(text))
             {
-                if (SubliminalWhisper.IsFreezePhrase(text)) ScheduleReset(SubliminalWhisper.ResetDelayMs);
+                if (SubliminalWhisper.IsFreezePhrase(text)) ScheduleReset();
                 CoreProgression.AddXP(20, "Subliminal");
             }
             else
