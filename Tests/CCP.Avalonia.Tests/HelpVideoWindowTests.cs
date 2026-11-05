@@ -144,6 +144,102 @@ public sealed class HelpVideoWindowTests
         finally { File.Delete(clip); }
     }
 
+    [Fact]
+    public Task PanicClosesCurrentHelpWindowAndIsSafeWhenIdle() => Run(() =>
+    {
+        HelpVideoWindow.Show(new HelpContent { SectionId = "PanicHelpTest", Title = "Help", WhatItDoes = "Help" }, null);
+        var win = Current()!;
+        try
+        {
+            var stop = PanicSurfaces.All.Single(x => x.Id == "help-video");
+            stop.Stop(null);
+            Assert.False(win.IsVisible);
+            Assert.Null(Current());
+            stop.Stop(null);
+        }
+        finally { win.Close(); }
+    });
+
+    [Fact]
+    public Task StalledHelpDecoderDoesNotBlockLaterPanicSteps() => RunAsync(async () =>
+    {
+        HelpVideoWindow.Show(new HelpContent { SectionId = "StalledHelpTest", Title = "Help" }, null);
+        var win = Current()!;
+        using var release = new System.Threading.ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        win.BeforeNativeStop = () =>
+        {
+            entered.TrySetResult();
+            release.Wait(TimeSpan.FromSeconds(5)); // bounded even with broken synchronous cleanup
+            exited.TrySetResult();
+        };
+        var all = PanicSurfaces.All;
+        var later = false;
+        PanicSurfaces.All = new[]
+        {
+            all.Single(x => x.Id == "help-video"),
+            new PanicSurfaces.Surface("later-engine-haptics", _ => later = true)
+        };
+        try
+        {
+            PanicSurfaces.StopAll("stalled help decoder test");
+            Assert.True(later);
+            Assert.False(win.IsVisible);
+            Assert.Null(Current());
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(exited.Task.IsCompleted); // the later step ran while cleanup was stalled
+            Assert.NotNull(win.NativeTeardown);
+            Assert.False(win.NativeTeardown!.IsCompleted);
+        }
+        finally
+        {
+            release.Set();
+            PanicSurfaces.All = all;
+            if (win.NativeTeardown != null) await win.NativeTeardown.WaitAsync(TimeSpan.FromSeconds(5));
+            win.BeforeNativeStop = null;
+            win.Close();
+        }
+    });
+
+    [Fact]
+    public async Task PanicKeepsDecoderBufferUntilNativeTeardownCompletes()
+    {
+        try { _ = new LibVlcAudio("--aout=dummy"); }
+        catch (Exception e) { Assert.Skip("libvlc not installed: " + e.Message); }
+        await RunAsync(async () =>
+        {
+            var clip = Path.Combine(AppContext.BaseDirectory, "Assets", "help-clip-audio-2s.mp4");
+            HelpVideoWindow.Show(new HelpContent { SectionId = "RetainedHelpTest", Title = "Help", ClipFile = clip }, null);
+            var win = Current()!;
+            var sink = win.Sink!;
+            using var release = new System.Threading.ManualResetEventSlim();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var frame = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            win.FrameShown += () => frame.TrySetResult();
+            try
+            {
+                await frame.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.False(sink.Freed);
+                win.BeforeNativeStop = () => { entered.TrySetResult(); release.Wait(TimeSpan.FromSeconds(5)); };
+                PanicSurfaces.All.Single(x => x.Id == "help-video").Stop(null);
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.False(win.IsVisible);
+                Assert.Null(win.Player);
+                Assert.False(sink.Freed); // callback buffer belongs to the stalled decoder
+                Assert.False(win.NativeTeardown!.IsCompleted);
+            }
+            finally
+            {
+                release.Set();
+                if (win.NativeTeardown != null) await win.NativeTeardown.WaitAsync(TimeSpan.FromSeconds(5));
+                win.BeforeNativeStop = null;
+                win.Close();
+            }
+            Assert.True(sink.Freed);
+        });
+    }
+
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 

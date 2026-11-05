@@ -43,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
             // Stricter than WPF MainWindow.Patreon.cs:1544: panic discards pending trigger edits.
             new("workshop-trigger-editor", _ => Controls.Companion.WorkshopAccordion.CloseTriggerEditorForPanic()),
+            new("help-video", _ => HelpVideoWindow.CloseCurrent(forPanic: true)), // Stricter than WPF MainWindow.xaml.cs:2017: include tutorial media in stop-all.
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).

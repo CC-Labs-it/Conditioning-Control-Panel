@@ -20,6 +20,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- This exit helper has no WPF dependency: execute its existing safety tests on Linux too. -->
+    <Compile Include="..\..\ConditioningControlPanel\Services\Diagnostics\UiThreadExit.cs" Link="UiThreadExit.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\UiThreadExitTests.cs" Link="UiThreadExitTests.cs" />
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
   </ItemGroup>

@@ -115,6 +115,7 @@ public sealed class PanicSurfacesTests
         "perfect-week-bonus",
         "keyword-triggers",
         "haptics",
+        "help-video",
         "intake",
         "friend-notices", "knock-cards",
         "leash-task",
