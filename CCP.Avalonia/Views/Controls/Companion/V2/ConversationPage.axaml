@@ -45,7 +45,10 @@
         <Grid ColumnDefinitions="84,*,Auto">
           <Border Width="66" Height="80" CornerRadius="18" Margin="0,0,18,0" BorderBrush="#62406B" BorderThickness="1" ClipToBounds="True">
             <Border.Background><RadialGradientBrush><GradientStop Color="#53365F" Offset="0"/><GradientStop Color="#211429" Offset="1"/></RadialGradientBrush></Border.Background>
-            <Image Source="{Binding Hero.Portrait}" Height="68" Stretch="Uniform" IsHitTestVisible="False"/>
+            <Grid>
+              <fx:AmbientFxCanvas x:Name="StageDust" IsHitTestVisible="False"/>
+              <Image Source="{Binding Hero.Portrait}" Height="68" Stretch="Uniform" IsHitTestVisible="False"/>
+            </Grid>
           </Border>
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,18,0">
             <StackPanel Orientation="Horizontal">
