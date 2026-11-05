@@ -34,11 +34,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static string SubAudioDir => Path.Combine(AppContext.BaseDirectory, "Resources", "sub_audio");
 
         /// <summary>Test seams: the card, and the clock every delay runs on.</summary>
-        internal static Action<string> Draw = text => Dispatcher.UIThread.Post(() =>
+        internal static Action<string> DrawNow = text =>
         {
             if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
                 SubliminalOverlay.Show(host, text);
-        });
+        };
+        internal static Action<string> Draw = text =>
+        {
+            var gen = Volatile.Read(ref _gen);
+            Dispatcher.UIThread.Post(() =>
+            {
+                // WPF SubliminalService.cs:612-620: Stop retires arrivals waiting on the UI queue too.
+                if (Volatile.Read(ref _gen) == gen) DrawNow(text);
+            });
+        };
         internal static Action<int, Action> After = (ms, then) => Task.Delay(ms).ContinueWith(_ => then());
         internal static Func<double> Roll = () => { lock (Rng) return Rng.NextDouble(); };
 
