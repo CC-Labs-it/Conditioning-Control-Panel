@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Tests;
 /// card, the PNG codec behind Core's <see cref="BoardPicture.PngDecoder"/> and the art view. The
 /// pure rules (wire, picture, effects, raster) are pinned in CCP.Core.Tests' BoardTilesTests.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class BoardServiceTests
 {
     public BoardServiceTests() => BoardPng.Install(); // App startup does this in the app

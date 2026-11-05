@@ -29,8 +29,8 @@ public sealed class FeatureCardFxTests
         card.DashboardDepth = true;
         var travel = ((TransformGroup)card.FindControl<Panel>("PressFace")!.RenderTransform!)
             .Children.OfType<TranslateTransform>().Single();
-        var clock = new SharedDeeperThemeTests.StepClock();
-        travel.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+        var clock = new TestAnimationClock();
+        travel.SetValue(TestAnimationClock.Property, clock.Instance);
         window.UpdateLayout();
         var at = card.TranslatePoint(new Point(80, 100), window)!.Value;
         window.MouseMove(at);
