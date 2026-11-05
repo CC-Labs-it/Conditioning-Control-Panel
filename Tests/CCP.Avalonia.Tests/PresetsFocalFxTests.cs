@@ -113,8 +113,11 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
+        var clock = new SteppedAnimationClock();
+        view.SetValue(SteppedAnimationClock.Property, clock.Instance);
         view.IsVisible = false; Settle();
         view.IsVisible = true; Settle();
+        clock.Step(0);
         var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
         var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
         Assert.Contains(panel.Children.OfType<Border>(), c => c.Opacity < 1);
@@ -182,7 +185,9 @@ public sealed class PresetsFocalFxTests
             var a = Write("sync_a", 30); Write("sync_b", 20);
             var manager = new SessionManager(files); manager.LoadAllSessions();
             var added = 0; manager.SessionAdded += _ => added++;
+            var clock = new SteppedAnimationClock();
             var view = new PresetsTabView(); view.UseSessionManager(manager);
+            view.SetValue(SteppedAnimationClock.Property, clock.Instance);
             host = new Window { Width = 1200, Height = 900, Content = view }; host.Show(); host.Activate(); Settle();
             var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
             string[] Ids() => rack.Children.OfType<Border>().Select(b => ((Session)b.Tag!).Id).Where(id => id.StartsWith("sync_")).ToArray();
@@ -198,10 +203,14 @@ public sealed class PresetsFocalFxTests
             view.IsVisible = false; Settle();
             Write("sync_c", 1);
             view.IsVisible = true; Settle();
+            // Hold the first entrance frame regardless of disk/layout time on the runner.
+            clock.Step(0);
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
             Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
+            clock.Step(1000); Settle();
+            Assert.All(rack.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
         }
