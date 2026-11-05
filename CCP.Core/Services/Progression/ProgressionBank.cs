@@ -22,6 +22,10 @@ namespace ConditioningControlPanel
         public static event Action<double, string>? Awarded;
         public static event Action<double, string>? QuestAwarded; // WPF AddXP:120, excludes AddClaimedXP:140-175
 
+        // WPF Services/Progression/ProgressionService.cs:123-126: display gets adjusted XP and the level-loop result.
+        public sealed record XpAward(double Amount, XPSource Source, bool LeveledUp);
+        public static event Action<XpAward>? XPAwarded;
+
         public static void Add(double amount, string source)
         {
             var s = CoreSettings.Current;
@@ -46,7 +50,7 @@ namespace ConditioningControlPanel
             Log.Information("XP awarded: +{Amount} from {Source} (now {Now})", adjusted, source, s.PlayerXP);
             // WPF AddXP:117: the active companion gets the BASE amount, after the gates, before the level loop.
             Services.Companion.CompanionCore.AddCompanionXP(amount, source);
-            SpendAndRaise(s, amount, source);
+            SpendAndRaise(s, amount, adjusted, source);
         }
 
         /// <summary>WPF ProgressionService.AddClaimedXP: web XP the server already earned - the login gate and the level
@@ -62,7 +66,7 @@ namespace ConditioningControlPanel
             }
             s.PlayerXP += amount;
             Log.Information("Web XP claim applied: +{Amount} (now {Now})", amount, s.PlayerXP);
-            SpendAndRaise(s, amount, null);   // no quest award: WPF AddClaimedXP:140-175 tracks achievement XP only
+            SpendAndRaise(s, amount, amount, null);   // no quest award: WPF AddClaimedXP:140-175 tracks achievement XP only
             // WPF AnnounceFirstWebXpClaim: spend the seen flag beside the toast on the UI thread.
             // No new surface: use the head's existing passive notification presenter.
             if (CoreProgram.NotifyProvider == null || !CoreDispatch.HasUiThread) return;
@@ -77,7 +81,7 @@ namespace ConditioningControlPanel
             });
         }
 
-        private static void SpendAndRaise(Models.AppSettings s, double amount, string? source)
+        private static void SpendAndRaise(Models.AppSettings s, double amount, double adjusted, string? source)
         {
             var epoch = ProfileAdopt.Epoch(s);
             var levels = new System.Collections.Generic.List<int>();
@@ -93,6 +97,17 @@ namespace ConditioningControlPanel
             foreach (var l in levels) LevelUp?.Invoke(l);
             if (source != null) QuestAwarded?.Invoke(amount, source);
             Awarded?.Invoke(amount, source ?? "Other");
+            // WPF ProgressionService.cs:120,125-126,240-249: presentation runs last and cannot break an award.
+            // A web claim (no source) is XPSource.Other with its exact amount, as WPF AddClaimedXP raises it.
+            try
+            {
+                XPAwarded?.Invoke(new XpAward(adjusted,
+                    Enum.TryParse<XPSource>(source, out var parsed) ? parsed : XPSource.Other, levels.Count > 0));
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("XPAwarded subscriber failed: {E}", ex.Message);
+            }
         }
     }
 }
