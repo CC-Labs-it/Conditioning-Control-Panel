@@ -171,6 +171,7 @@ public sealed partial class AccountSeedTests
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
+                w.CaptureRenderedFrame()?.Dispose();
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var name = ((LeaderboardRow)row.DataContext!).DisplayName;
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
