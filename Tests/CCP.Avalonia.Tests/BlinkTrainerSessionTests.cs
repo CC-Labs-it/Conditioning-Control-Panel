@@ -127,7 +127,7 @@ public sealed class BlinkTrainerSessionTests
                 Assert.Matches(@"\d\d:\d\d", tab.FindControl<TextBlock>("BlinkTrainerStatusText")!.Text);
                 Assert.True(tab.LivePreview);
                 Assert.False(tab.DemoRunning);
-                tab.OnStagePreviewBlink();
+                Blink(tab);
                 var a = tab.FindControl<Image>("BlinkTrainerStageImageA")!;
                 var b = tab.FindControl<Image>("BlinkTrainerStageImageB")!;
                 Assert.Equal(1, Math.Max(a.Opacity, b.Opacity));
@@ -168,6 +168,60 @@ public sealed class BlinkTrainerSessionTests
         public bool Open() { Gate.Wait(TimeSpan.FromSeconds(10)); return true; }
         public bool Read(Mat bgr) { bgr.Create(480, 640, MatType.CV_8UC3); bgr.SetTo(Scalar.All(0)); Thread.Sleep(10); return true; }
         public void Dispose() => Disposed = true;
+    }
+
+    /// <summary>A stage blink, then the dispatcher pumped until its off-thread still decode has landed.</summary>
+    private static void Blink(BlinkTrainerTabView tab)
+    {
+        tab.OnStagePreviewBlink();
+        SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return tab.LiveDecode is not { IsCompleted: false }; }, 10_000);
+    }
+
+
+    /// <summary>WPF cdda883ac (ccp-bugs #1512, MainWindow.BlinkTrainer.cs:529-598): the stage's still decodes
+    /// off the UI thread, so the blink returns before it lands, and a decode overtaken by a newer pick
+    /// (here a video) is dropped instead of covering it.</summary>
+    [Fact]
+    public void Stage_DecodesAStillOffTheUiThread_AndDropsAStaleOne()
+    {
+        WithSession((dir, _) =>
+        {
+            var oldPremium = CoreEntitlement.HasPremiumProvider;
+            var oldVideos = CoreSettings.Current.BlinkTrainerIncludeVideos;
+            CoreSettings.Current.BlinkTrainerIncludeVideos = true;
+            File.WriteAllBytes(Path.Combine(dir, "clip.mp4"), new byte[] { 0 });   // never decoded: LibVLC is not set up here
+            CoreEntitlement.HasPremiumProvider = () => true;
+            var tab = new BlinkTrainerTabView { IsVisible = false };
+            var host = new Window { Width = 1400, Height = 1000, Content = tab };
+            host.Show();
+            try
+            {
+                tab.IsVisible = true;
+                Dispatcher.UIThread.RunJobs();
+                var a = tab.FindControl<Image>("BlinkTrainerStageImageA")!;
+                var b = tab.FindControl<Image>("BlinkTrainerStageImageB")!;
+                Blink(tab);
+                if (tab.StageVideoPath == null) Blink(tab);   // two assets alternate: now on the video
+                Assert.NotNull(tab.StageVideoPath);
+
+                tab.OnStagePreviewBlink();   // the still: the handler returns before it is decoded
+                Assert.NotNull(tab.StageVideoPath);   // WPF stops the video only once the still has landed
+                Assert.NotNull(tab.LiveDecode);
+                Assert.False(tab.LiveDecode!.IsCompleted);
+                Assert.Equal(0, Math.Max(a.Opacity, b.Opacity));
+
+                Blink(tab);   // the video pick comes first; the still's late landing is dropped
+                Assert.True(tab.LiveDecode!.IsCompleted);
+                Assert.NotNull(tab.StageVideoPath);
+                Assert.Equal(0, Math.Max(a.Opacity, b.Opacity));
+            }
+            finally
+            {
+                host.Close();
+                CoreEntitlement.HasPremiumProvider = oldPremium;
+                CoreSettings.Current.BlinkTrainerIncludeVideos = oldVideos;
+            }
+        });
     }
 
     /// <summary>One sandboxed run with consent, a folder, a fake camera and headless overlays; restores everything.</summary>
@@ -343,7 +397,7 @@ public sealed class BlinkTrainerSessionTests
                 bool sawVideo = false, sawImage = false;
                 for (int i = 0; i < 4; i++)   // two assets, never the same twice: they alternate
                 {
-                    tab.OnStagePreviewBlink();
+                    Blink(tab);
                     if (tab.StageVideoPath != null)
                     {
                         Assert.EndsWith("clip.mp4", tab.StageVideoPath);

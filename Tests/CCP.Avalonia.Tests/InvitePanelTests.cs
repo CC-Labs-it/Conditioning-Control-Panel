@@ -50,7 +50,7 @@ public sealed class InvitePanelTests
     private static void EnsurePlatform()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -163,9 +163,11 @@ public sealed class InvitePanelTests
             ld.Activate(TimeSpan.FromMinutes(30));
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
             Assert.False(vault.IsVisible);
+            Assert.Equal("achievements", shell.CurrentTab);
             ld.Deactivate();
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
-            Assert.True(vault.IsVisible);
+            Assert.Equal("appsettings", shell.CurrentTab);
+            Assert.Equal("account", shell.AppSettingsPage!.CheckedSectionKey);
         }
         finally
         {
@@ -185,17 +187,34 @@ public sealed class InvitePanelTests
             InviteApi.DefaultIdentity = () => ("u_me", "tok");
             shell.Show();
             var ticket = shell.Named<Button>("BtnInviteTicket")!;
-            var card = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("ExclusivesTab")!.FindControl<InvitePanel>("InvitesHost")!;
+            var card = shell.AppSettingsPage!.SectionAccount.PlansView.FindControl<InvitePanel>("InvitesCard")!;
             string reply = Mine;
-            card.Api = () => new InviteApi(new HttpClient(new Wire(reply, "{}")), () => ("u_me", "tok"), "http://127.0.0.1:9");
-            await card.RefreshAsync(force: true); // the card's read repaints the ticket
+            var wire = new Wire(reply, "{}");
+            card.Api = () => new InviteApi(new HttpClient(wire), () => ("u_me", "tok"), "http://127.0.0.1:9");
+            shell.RefreshExclusivesTab(); // the shell reads the Plans card and its answer repaints the ticket
+            Assert.Contains("mine", wire.Ops);
             Assert.True(ticket.IsVisible);
             Assert.True(shell.InviteWobbleRunning);
+            wire.Ops.Clear();
+            shell.RefreshExclusivesTab();
+            Assert.Empty(wire.Ops); // normal shell refresh obeys the card's 30-second throttle
+            Assert.Equal(TimeSpan.FromMilliseconds(300), shell.InvitesCardSettle); // WPF's settle
+            shell.InvitesCardSettle = TimeSpan.Zero;
+            bool broughtIntoView = false;
+            card.AddHandler(Control.RequestBringIntoViewEvent, (_, _) => broughtIntoView = true);
+            shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
+            await shell.InvitesCardOpened.WaitAsync(TimeSpan.FromSeconds(10)); // then a forced read, even inside the throttle
+            Assert.Contains("mine", wire.Ops);
+            Assert.Equal("appsettings", shell.CurrentTab);
+            Assert.Equal("account", shell.AppSettingsPage.CheckedSectionKey);
+            Assert.True(card.IsVisible);
+            Assert.True(broughtIntoView);
             shell.Hide();
             Assert.False(shell.InviteWobbleRunning); // no ticks while the panel is hidden
             shell.Show();
             Assert.True(shell.InviteWobbleRunning);
             reply = """{"ok":true,"codes":[{"code":"BAMBI-BBBB","state":"converted","invitee_name":"Mia"}]}""";
+            card.Api = () => new InviteApi(new HttpClient(new Wire(reply, "{}")), () => ("u_me", "tok"), "http://127.0.0.1:9");
             await card.RefreshAsync(force: true);
             Assert.False(ticket.IsVisible);
             Assert.False(shell.InviteWobbleRunning);
@@ -205,6 +224,40 @@ public sealed class InvitePanelTests
             InviteApi.DefaultIdentity = oldId;
             shell.Close();
         }
+    });
+
+    [Fact]
+    public Task PlansRepaintRefreshesItsInviteCard() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsurePlatform();
+        InviteApi.DefaultIdentity = () => ("u_me", "tok");
+        CoreEntitlement.HasLabProvider = () => false;
+        CoreEntitlement.HasPremiumProvider = () => false;
+        var plans = new ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView { PlansMode = true };
+        var card = plans.FindControl<InvitePanel>("InvitesCard")!;
+        var wire = new Wire(Mine, "{}");
+        card.Api = () => new InviteApi(new HttpClient(wire), () => ("u_me", "tok"), "http://127.0.0.1:9");
+        CoreEntitlement.HasPremiumProvider = () => true;
+        plans.RefreshVault();
+        Assert.Same(plans.FindControl<Border>("TierPlate1"), plans.LitPlate);
+        Assert.Contains("mine", wire.Ops);
+        Assert.True(card.IsVisible);
+        return Task.CompletedTask; // shared isolation restores the providers
+    });
+
+    [Fact]
+    public Task ReopeningAccountRefreshesTheActivePlansCopy() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsurePlatform();
+        InviteApi.DefaultIdentity = () => ("u_me", "tok");
+        var account = new ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection();
+        var plans = account.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("PlansView")!;
+        var wire = new Wire(Mine, "{}");
+        plans.FindControl<InvitePanel>("InvitesCard")!.Api = () =>
+            new InviteApi(new HttpClient(wire), () => ("u_me", "tok"), "http://127.0.0.1:9");
+        account.OnSectionShown();
+        Assert.Contains("mine", wire.Ops);
+        return Task.CompletedTask;
     });
 
     [Fact]
