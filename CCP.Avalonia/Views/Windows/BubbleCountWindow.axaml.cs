@@ -62,9 +62,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// teardown safety with no counterpart here), the metadata-cache duration (LengthChanged corrects
     /// the 30 s fallback within a second) and VideoDiag.</para>
     ///
-    /// <para><c>Loaded</c> became <c>Opened</c>: WPF's Loaded fires synchronously inside Show(),
-    /// which ShowOnAllMonitors' completion de-duplication leans on, and Avalonia's Opened is the
-    /// event with that timing (Loaded is posted after layout).</para>
+    /// <para>Opened validates the path synchronously so an invalid clip completes once inside Show().
+    /// Loaded starts playback after layout, as WPF does. Starting in Opened lets a short clip finish
+    /// while a cold window is still laying out, before the user sees the game.</para>
     /// </summary>
     public partial class BubbleCountWindow : Window
     {
@@ -369,7 +369,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _videoImage.Source = _sink?.Bitmap;
                     return;
                 }
-                if (!StartPlayback()) CloseAllWindows(false);
+                // WPF OnLoaded (BubbleCountWindow.xaml.cs:508): do not spend the clip while
+                // Show is still laying out a cold window. Missing-file failure above stays synchronous.
+                void StartWhenLoaded(object? s, global::Avalonia.Interactivity.RoutedEventArgs args)
+                {
+                    Loaded -= StartWhenLoaded;
+                    try { if (!_gameCompleted && !_isCleaningUp && IsVisible && !StartPlayback()) CloseAllWindows(false); }
+                    catch { CloseAllWindows(false); }
+                }
+                Loaded += StartWhenLoaded;
             }
             catch
             {

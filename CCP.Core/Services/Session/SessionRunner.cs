@@ -121,6 +121,8 @@ namespace ConditioningControlPanel.Services
             // just started does not play through it. ponytail: the session's own escalating Mind Wipe
             // (StartSession) is not ported; a session plays none.
             CoreMindWipe.Stop();
+            // WPF SessionEngine.cs:1492-1496. ponytail: the session's Brain Drain timeline is not ported.
+            CoreEngine.StopBrainDrain?.Invoke();
 
             var s = CoreSettings.Current;
             CurrentSession = session;
@@ -270,6 +272,7 @@ namespace ConditioningControlPanel.Services
             CoreBouncingText.Stop();
             CoreBubbles.Stop(); // WPF SessionEngine.cs:521
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
+            CoreEngine.StopBrainDrain?.Invoke();   // WPF SessionEngine.cs:529
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
 

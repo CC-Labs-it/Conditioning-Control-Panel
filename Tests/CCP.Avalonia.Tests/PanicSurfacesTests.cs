@@ -85,6 +85,7 @@ public sealed class PanicSurfacesTests
     {
         "emergency-exit",
         "perfect-week-bonus",
+        "brain-drain-audio",
         "intake",
         "leash-task",
         "deeper-tutorial",
