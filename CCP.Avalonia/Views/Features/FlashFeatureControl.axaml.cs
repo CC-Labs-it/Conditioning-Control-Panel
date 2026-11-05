@@ -66,7 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderDriftSpeed.ValueChanged += SliderDriftSpeed_Changed;
 
             // WPF OnLoaded: Configure, then RowChanged re-measures the box (OnGetRowChanged -> RefreshV2Box).
-            RowGetFlashesV2.RowChanged += (_, _) => RefreshV2Box();
+            RowGetFlashesV2.RowChanged += (_, _) => OnGetRowChanged();
             RowGetFlashesV2.Configure(ConditioningControlPanel.Services.Prizes.V2PurchaseRule.FlashesPrizeId, "v2_get_flash_blurb", "section_flash_v2");
 
             LoadFromSettings();
@@ -86,14 +86,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
-            Platform.PrizeOwnership.GrantsChanged += OnGrantsChanged;
             RebindToCurrentSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
-            Platform.PrizeOwnership.GrantsChanged -= OnGrantsChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -156,10 +154,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        private void OnGrantsChanged() => Dispatcher.UIThread.Post(OnGetRowChanged);
-
+        // WPF FlashFeatureControl.xaml.cs:81-85 rebuilds on every grant change, including revokes.
         private void OnGetRowChanged()
         {
+            // WPF FlashFeatureControl.xaml.cs:75,81-85 also refreshes the exit state on grants.
+            RefreshExitRow();
+            if (RowMotion.IsVisible == Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)
+                && RowShatter.IsVisible == Platform.PrizeOwnership.OwnsFlashV2())
+            {
+                RefreshV2Box();
+                return;
+            }
             var wasLoading = _isLoading;
             _isLoading = true;
             try { BuildMotionPicker(); }

@@ -230,10 +230,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 // "not confirmed" is the honest answer and the box reverts.
                 var owner = TopLevel.GetTopLevel(this) as Window;
                 var confirmed = owner != null && await Dialogs.WarningDialog.ShowDoubleWarningAsync(owner,
-                    "Strict Lock Card",
-                    "• You will NOT be able to escape lock cards with ESC\n" +
-                    "• You MUST type the phrase the required number of times\n" +
-                    "• This can be very restrictive!");
+                    // #1547 (WPF 7.2.2): never promise Esc can't end a card while Escape is the panic key.
+                    Loc.Get(LockCardStrictCopy.ConfirmTitle),
+                    Loc.GetF(LockCardStrictCopy.ConfirmBodyKey(s.PanicKey), s.PanicKey ?? "?"));
 
                 if (!confirmed)
                 {
