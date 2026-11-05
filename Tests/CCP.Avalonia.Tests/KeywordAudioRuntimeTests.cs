@@ -135,6 +135,31 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(2, played.Count(x => x.Path != "stopped"));
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LostAccessOrMasterGatePreservesPartialInput(bool loseAccess) => Run((engine, s, played) =>
+    {
+        engine.Character('s');
+        if (loseAccess) CoreEntitlement.HasPremiumProvider = () => false;
+        else s.KeywordTriggersEnabled = false;
+        engine.Character('x'); // a rejected key must not enter the retained buffer
+        CoreEntitlement.HasPremiumProvider = () => true;
+        s.KeywordTriggersEnabled = true;
+        Type(engine, "it");
+        Assert.Single(played);
+    });
+
+    [Fact]
+    public void KeyboardDetachClearsPartialInput() => Run((_, s, played) =>
+    {
+        KeywordTriggerHead.Engine.Start();
+        KeywordTriggerHead.Engine.Character('s');
+        KeywordTriggerHead.DetachKeyboard();
+        Type(KeywordTriggerHead.Engine, "it");
+        Assert.Empty(played);
+    });
+
     [Fact]
     public void BlockedAppDropsThePartialBuffer() => Run((engine, s, played) =>
     {

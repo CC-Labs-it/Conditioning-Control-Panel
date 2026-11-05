@@ -43,6 +43,7 @@ internal static class KeywordTriggerHead
     internal static void DetachKeyboard()
     {
         Interlocked.Increment(ref _generation);
+        Engine.ClearInput();
         if (_subscribed) Win32PanicKey.KeyDown -= OnKey;
         _subscribed = false;
     }
@@ -126,6 +127,7 @@ internal sealed class KeywordAudioRuntime
     internal static bool HasAccess => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness");
     internal void Start() { if (IsActive || !HasAccess) return; IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
+    internal void ClearInput() => _input.Clear();
 
     private bool Accept(string? process, bool own)
     {
