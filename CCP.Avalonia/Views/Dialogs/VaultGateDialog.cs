@@ -366,10 +366,11 @@ public sealed class VaultGateDialog : Window
 
     /// <summary>What each tier really adds (d9a6d972f's audit): Basic over free, Prime over Basic.</summary>
     private static readonly string[] BasicPerks =
-        { "vaultgate_basic_1", "vaultgate_basic_2", "vaultgate_basic_3", "vaultgate_basic_4", "vaultgate_basic_5", "vaultgate_basic_6", "vaultgate_basic_7", "vaultgate_basic_8", "vaultgate_basic_9" };
+        { "vaultgate_basic_1", "vaultgate_basic_10", "vaultgate_basic_2", "vaultgate_basic_3", "vaultgate_basic_4", "vaultgate_basic_5", "vaultgate_basic_6", "vaultgate_basic_7", "vaultgate_basic_8", "vaultgate_basic_9" };
     // WPF 2a1fd1e88: unlimited Graded Intake moved from Prime (prime_5, key deleted) to Basic (basic_9).
+    // WPF bc242aeb6 + b127d4d96: DTRH moved to Basic (prime_2 deleted, basic_10); Racing Thoughts 3D heads Prime (prime_8).
     private static readonly string[] PrimePerks =
-        { "vaultgate_prime_1", "vaultgate_prime_2", "vaultgate_prime_3", "vaultgate_prime_4", "vaultgate_prime_6", "vaultgate_prime_7" };
+        { "vaultgate_prime_8", "vaultgate_prime_1", "vaultgate_prime_3", "vaultgate_prime_4", "vaultgate_prime_6", "vaultgate_prime_7" };
 
     private static Control Perks(bool lab, double size)
     {
