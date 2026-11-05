@@ -1222,8 +1222,23 @@ namespace ConditioningControlPanel.Views.Tabs
                     PaintRowLit(id, on.Contains(id));
                 }
                 ChkFlashDodge.IsChecked = App.Settings?.Current?.ChasterFlashDodge == true;
+                var weight = App.Settings?.Current?.ChasterNatashaTriggerWeight ?? 1;
+                SliderNatashaTriggerWeight.Value = weight;
+                TxtNatashaTriggerWeight.Text = $"{weight}x";
+                if (weight != 1) NatashaFold.IsOpen = true;
             }
             finally { _loading = false; }
+        }
+
+        /// <summary>ccp-bugs #1566: 1 = a trigger bubble is red as often as a plain one (one in
+        /// ten); 5 = five times as often. Read at each bubble's spawn, so it applies at once.</summary>
+        private void SliderNatashaTriggerWeight_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            var weight = Services.Chaster.NatashasFavourite.ClampTriggerWeight((int)Math.Round(e.NewValue));
+            if (TxtNatashaTriggerWeight != null) TxtNatashaTriggerWeight.Text = $"{weight}x";
+            if (_loading || App.Settings?.Current is not { } settings) return;
+            settings.ChasterNatashaTriggerWeight = weight;
+            App.Settings?.Save();
         }
 
         /// <summary>Red flashes, with a 4 s ring to dodge them, or no red flashes at all (the
