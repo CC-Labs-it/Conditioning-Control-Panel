@@ -110,6 +110,7 @@ public sealed class PanicSurfacesTests
         "chaos-skia-fx",
         "chaos-intro",
         "settings-palette",
+        "perfect-week-bonus",
         "keyword-triggers",
         "haptics",
         "intake",
