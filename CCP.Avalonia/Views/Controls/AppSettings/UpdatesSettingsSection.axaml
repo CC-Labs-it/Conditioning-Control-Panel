@@ -66,7 +66,7 @@
                         </Button>
                     </Grid>
 
-                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="ParentWheelScroll" MaxHeight="180" VerticalScrollBarVisibility="Auto">
                         <TextBlock x:Name="TxtPatchNotes" Text=""
                                    Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
                                    TextWrapping="Wrap"/>

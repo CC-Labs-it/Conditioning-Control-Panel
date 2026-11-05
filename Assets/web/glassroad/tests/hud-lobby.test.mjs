@@ -4,13 +4,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  hostGate, isPrime, signedIn, tableRows, rowStartsIn, startsLabel, pollDue, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS,
-  applySeats, applySeat, seatName, seatBadges, raceTags, seatRows, readyCount, canStart, lookChoices, cycleLook, lookLabel,
+  tableLine, hostGate, isPrime, signedIn, tableRows, rowStartsIn, startsLabel, pollDue, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS,
+  applySeats, applySeat, seatName, seatBadges, raceTags, seatRows, readyCount, canStart, hostSeat, lobbyNote, holdNote, hostMoved, lookChoices, cycleLook, lookLabel,
   loadLook, saveLook, LOOK_KEY, countdown, serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, trackName,
 } from '../hud/lobbyMath.js';
 import { PRESETS, POSE_BASE, presetOf, poseOf, presetByPose, poseHoldS, emoteAllowed, isPreset, CLIP_S } from '../hud/presets.js';
 import { LOOK_OUTFITS, LOOK_VEHICLES, DEFAULT_LOOK, ABORTS, CLOSE, TYPES } from '../net/protocol.js';
 import { BOT_NAMES } from '../hud/format.js';
+import { COURSES } from '../track/catalog.js';
 
 const G = fileURLToPath(new URL('..', import.meta.url));
 const json = (f) => JSON.parse(readFileSync(G + f, 'utf8'));
@@ -54,6 +55,9 @@ test('open tables: starts-in counts down on the list clock', () => {
   assert.equal(startsLabel(12), 'Starts in 12 s');
   assert.equal(startsLabel(90), 'Starts in 2 min');
   assert.equal(trackName('threshold'), 'Threshold');
+  assert.equal(trackName('keep'), 'The Keep');
+  assert.equal(trackName('goonworks'), 'GOONWORKS');
+  assert.equal(tableLine({ host: 'Ana', friend: true, laps: 2 }, null), 'Host Ana (friend), 2 laps, Host starts');
   assert.equal(trackName('glass-bay'), 'Glass-bay');
 });
 
@@ -68,7 +72,7 @@ test('polling every 15 s like Goon, quick match retry clamped', () => {
 
 test('host form: steps wrap, lane keeper stays off on open tables, body matches the lobby route', () => {
   let f = cleanHost(HOST_DEFAULTS);
-  assert.deepEqual(f, { mode: 'open', laps: 3, seats: 8, botFill: true, laneKeeper: false });
+  assert.deepEqual(f, { mode: 'open', track: null, laps: 3, seats: 8, botFill: true, laneKeeper: false });
   assert.equal(stepHost(f, 'laps', -1).laps, 2);
   assert.equal(stepHost({ ...f, laps: 9 }, 'laps', 1).laps, 1);
   assert.equal(stepHost({ ...f, seats: 2 }, 'seats', -1).seats, 8);
@@ -79,6 +83,8 @@ test('host form: steps wrap, lane keeper stays off on open tables, body matches 
   assert.equal(f.laneKeeper, true);
   assert.equal(stepHost(f, 'mode', 1).laneKeeper, false, 'switching back to open drops it');
   assert.equal(stepHost(f, 'botFill', 1).botFill, false);
+  assert.equal(hostBody({ track: 'keep' }, null, 'threshold').track, 'keep', 'the host form names its course');
+  assert.equal(hostBody({ track: 'nowhere' }, null, 'mainframe').track, 'mainframe', 'never a course this build does not have');
   const body = hostBody({ mode: 'open', laps: 12, seats: 1, laneKeeper: true }, { outfit: 'emi-outfit-cheer', vehicle: 'nope' });
   assert.deepEqual(body, { track: 'threshold', mode: 'open', seats: 2, laps: 9, botFill: true, laneKeeper: false,
     look: { outfit: 'emi-outfit-cheer', vehicle: 'emi-teacup-kart' } });
@@ -90,6 +96,37 @@ const SEATS = [
   { seat: 1, kind: 'human', name: 'Bo', platform: 'phone', look: { outfit: 'emi-outfit-swim', vehicle: 'emi-vehicle-petal' }, host: false, ready: false, idle: false, left: false },
   { seat: 3, kind: 'bot', name: 'EMI bot', platform: null, look: { outfit: 'emi-outfit-pool', vehicle: 'emi-vehicle-trinket' }, host: false, ready: false, idle: false, left: false },
 ];
+
+test('the load hold says who the start is waiting on', () => {
+  const s = applySeats(SEATS);
+  const name = s[1].name;
+  assert.equal(holdNote(s, [], 0), '');
+  assert.equal(holdNote(s, [1], 0), 'Waiting for ' + name + ' to load');
+  assert.equal(holdNote(s, [1], 1), 'Still loading, the race waits for you');
+  assert.equal(holdNote(s, [0, 1], 0), 'Waiting for 2 players to load');
+  assert.equal(holdNote(s, [5], 0), '', 'an empty seat is nobody to wait for');
+});
+
+test('host start (owner 2026-10-30): joiners wait for the host, a hand-off says who hosts now', () => {
+  const s = applySeats(SEATS);
+  assert.equal(hostSeat(s), 0);
+  assert.equal(lobbyNote(s, 0, 'open'), 'Open table, 1 of 2 ready');
+  assert.equal(lobbyNote(s, 1, 'open'), 'Waiting for the host, 1 of 2 ready');
+  assert.equal(lobbyNote(s, 1, 'friends'), 'Waiting for the host, 1 of 2 ready');
+  const quick = applySeats(SEATS.map((x) => ({ ...x, host: false })));
+  assert.equal(hostSeat(quick), -1);
+  assert.equal(lobbyNote(quick, 1, 'open'), 'Open table, 1 of 2 ready', 'a quick room has nobody to wait for');
+  // the host leaves the lobby: the room blanks seat 0 and hands the role to seat 1 in one seats list
+  const after = applySeats([{ ...SEATS[1], host: true }, SEATS[2]]);
+  assert.equal(hostMoved(s, after, 1), 'You are the host now');
+  assert.equal(hostMoved(s, after, 3), 'Bo is the host now');
+  assert.equal(hostMoved(s, s, 1), '');
+  assert.equal(hostMoved(quick, after, 1), '', 'no host before: nothing moved');
+  assert.equal(canStart(after, 1, 'lobby'), true);
+  const src = readFileSync(fileURLToPath(new URL('../hud/lobby.js', import.meta.url)), 'utf8');
+  assert.ok(!src.includes('Starts by itself'), 'an open table no longer starts by itself');
+  assert.ok(src.includes("'Anyone can join. You start it'"));
+});
 
 test('seats: the room list fills eight seats, one seat message updates one seat', () => {
   assert.ok(TYPES.seatList(SEATS), 'fixture is a valid wire seat list');
@@ -246,4 +283,60 @@ test('wiring: one Race online door opens the lobby in the card; no free text inp
   assert.ok(!/<input|<textarea|contenteditable/.test(lobby), 'no text entry');
   assert.ok(!/\buid\b[^;]*innerHTML|data-uid/.test(lobby), 'uids never reach the DOM');
   assert.ok(/"lb-leave"\]'\)\?\.focus/.test(lobby), 'Escape in a room only moves focus to Leave');
+});
+
+// ---- the Your look picker: owned only, and the extras ride the room look message (fix wave 2, F4c) ------------------
+
+import { ownedChoices, fitLook, lookKeys } from '../hud/lobbyMath.js';
+import { roomLook } from '../net/protocol.js';
+
+test('look picker: offers only the rides and outfits this account has, plus each owned extra', () => {
+  const none = lookChoices(null, null, ownedChoices([], new Set()));
+  assert.deepEqual(none.vehicle.map((c) => c.id), ['emi-teacup-kart', 'emi-vehicle-lovebomb'], 'the teacup and the free kart');
+  assert.equal(none.outfit.some((c) => /pit-crew|ringmaster|ballerina/.test(c.id || '')), false, 'no shop outfit unowned');
+  assert.equal(none.paint, undefined); assert.equal(none.umbrella, undefined); assert.equal(none.trail, undefined);
+  const rich = lookChoices(null, null, ownedChoices(['cos.kart.body.petal', 'cos.kart.outfit.ballerina', 'cos.kart.paint.pattern-bundle', 'cos.kart.umbrella.lace', 'cos.prime.trail.podium'], new Set()));
+  assert.ok(rich.vehicle.some((c) => c.id === 'emi-vehicle-petal'));
+  assert.ok(!rich.vehicle.some((c) => c.id === 'emi-vehicle-trinket'), 'an unowned body stays out');
+  assert.ok(rich.outfit.some((c) => c.id === 'emi-outfit-ballerina'));
+  assert.deepEqual(rich.paint.map((c) => c.id), [null, 'hearts', 'spiral']);
+  assert.deepEqual(rich.umbrella.map((c) => c.id), [null, 'lace']);
+  assert.deepEqual(rich.trail.map((c) => c.id), [null, 'podium']);
+  assert.deepEqual(lookKeys({ vehicle: 'emi-vehicle-petal' }, rich), ['outfit', 'vehicle', 'umbrella', 'trail'], 'paint needs a custom skin');
+  const skin = 'e7a7c080344ed74b80f1cdd7c94e7dfff1d20';
+  assert.deepEqual(lookKeys({ vehicle: 'emi-vehicle-petal', skin }, rich), ['outfit', 'vehicle', 'paint', 'umbrella', 'trail']);
+  assert.equal(lookChoices().owned, undefined, 'no ownership: every wire id, as before');
+});
+
+test('look picker: an unowned pick comes off, the extras cycle to none and back, the message keeps them', () => {
+  const c = lookChoices(null, null, ownedChoices(['cos.kart.umbrella.lace'], new Set()));
+  const fit = fitLook({ outfit: 'emi-outfit-ballerina', vehicle: 'emi-vehicle-trinket', umbrella: 'lace', trail: 'podium' }, c);
+  assert.deepEqual(fit, { outfit: null, vehicle: 'emi-vehicle-lovebomb', umbrella: 'lace' });
+  const off = cycleLook(fit, 'umbrella', 1, c);
+  assert.equal('umbrella' in off, false, 'none takes the key off');
+  assert.deepEqual(cycleLook(off, 'umbrella', 1, c).umbrella, 'lace');
+  assert.deepEqual(roomLook(fit), { outfit: null, vehicle: 'emi-vehicle-lovebomb', umbrella: 'lace' });
+  assert.deepEqual(fitLook(fit, lookChoices()), fit, 'choices without ownership leave a look alone');
+});
+
+test('look picker: the lobby sends the whole look, and boot hands it the garage ownership', () => {
+  const lobby = readFileSync(fileURLToPath(new URL('../hud/lobby.js', import.meta.url)), 'utf8');
+  assert.match(lobby, /send\(\{ t: 'look', \.\.\.roomLook\(st\.look\) \}\)/);
+  assert.doesNotMatch(lobby, /send\(\{ t: 'look', outfit: st\.look\.outfit, vehicle: st\.look\.vehicle \}\)/);
+  const boot = readFileSync(fileURLToPath(new URL('../boot.js', import.meta.url)), 'utf8');
+  assert.match(boot, /lookOwned:\(\)=>ownedChoices\(shared\.owned\.grants,unlockedSet\(loadRecord\(\)\)\)/);
+});
+
+test('the host picks the course: it wraps, and brings its own laps unless the host changed them', () => {
+  let f = cleanHost({ ...HOST_DEFAULTS, track: 'threshold', laps: 3 });
+  const seen = [];
+  for (let i = 0; i < 5; i++) { f = stepHost(f, 'track', 1); seen.push([f.track, f.laps]); }
+  assert.deepEqual(seen, [['mainframe', 3], ['keep', 2], ['boudoir', 2], ['goonworks', 2], ['threshold', 3]]);
+  assert.equal(stepHost(f, 'track', -1).track, 'goonworks');
+  const mine = stepHost(stepHost(f, 'laps', 1), 'track', 1);
+  assert.equal(mine.laps, 4, 'a hand-picked lap count stays');
+});
+
+test('every course in the catalog carries the lap count of its track file', () => {
+  for (const c of COURSES) assert.equal(JSON.parse(readFileSync(new URL('../tracks/' + c.id + '.json', import.meta.url), 'utf8')).laps, c.laps, c.id);
 });

@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para><see cref="Tick"/> is the stepped clock: the DispatcherTimer only calls it, tests call
     /// it directly. It does nothing while the overlay is hidden (P01).</para>
     /// </summary>
-    internal static class ChaosRunHost
+    internal static partial class ChaosRunHost
     {
         private static ChaosRunState? _state;
         private static ChaosHudWindow? _hud;
@@ -135,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
             // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
+            if (ChaosMeta.IsBoonActive("e_stim")) ChaosEStimOverlay.EnsureCreated();   // WPF ChaosModeService.cs:453
             _state.StartShields = _state.Shields;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
@@ -235,7 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnDefused(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
             Label(b, "SNAP", SnapColor);   // WPF CompleteDefuse :4577 / Pop :4684
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
@@ -268,7 +269,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnDetonated(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
             switch (b.BrokenReason)
             {
                 case "nofocus":   // WPF OnPlayerPress :4502 + OnChannelBroken :1943
@@ -615,6 +616,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF StopKeyHook + CloseToyButtons (EndRun / ForceShutdown / overlay closed). Idempotent.</summary>
         private static void StopToys()
         {
+            StopToyEffects();
             X11PanicKey.ToyKey = null;
             X11PanicKey.ToyKeys = null;
             foreach (var b in _toyButtons.ToArray())
@@ -622,14 +624,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys' toy loop. ponytail: no toy effect runs on this head yet (they
-        /// live with the bubble field), so the glow state drops on the next tick.</summary>
+        /// <summary>WPF TickActiveToys: cooldowns and temporary effect windows.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
-            foreach (var t in _state.ActiveToys) t.IsEffectActive = false;
+            TickToyEffects();
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -649,13 +650,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// freeze, DVD, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
+        /// <summary>WPF UseToy (:2681): gate, effect, then the once-per-save award.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
-            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
+            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && _overlay is { IsVisible: true });
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+            if (r == ChaosToyRules.UseResult.Fired && FireToyEffect(toy))
+                ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
         }
 
         private static void RunAgain()
