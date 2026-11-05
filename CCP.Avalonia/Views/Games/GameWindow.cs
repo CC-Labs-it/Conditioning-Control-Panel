@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, Windows.MainShellWindow? panel = null)
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
@@ -83,6 +83,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
+            if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
+                window.AttachJustDropOwner(shell);
             return window;
         }
 
@@ -93,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == JustDropId) Web.EnvironmentRequested += ConfigureJustDropEnvironment;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
