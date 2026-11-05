@@ -26,6 +26,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>The game can play at all (Avalonia: the shared LibVLC loaded). False skips it,
         /// as WPF skips before counting it started (BubbleCountService.cs:373).</summary>
         bool CanPlay => true;
+        bool CanPlayPath(string path) => CanPlay;
         /// <summary>WPF For You guard: only the visible, non-ghosted feed owns the screen.</summary>
         bool FeedOwnsTheScreen => false;
         /// <summary>WPF #1418: take/release the mandatory video's bouncing-text hold.</summary>
@@ -250,7 +251,7 @@ namespace ConditioningControlPanel.Services
         {
             var path = PickNext();
             if (path == null) return false;
-            if (!_host.CanPlay)
+            if (!_host.CanPlayPath(path))
             {
                 // WPF's skip: not a loss - a failed count would start the strict WRONG! WATCH AGAIN loop.
                 Log.Warning("BubbleCountService: skipping game - video playback is not available");
