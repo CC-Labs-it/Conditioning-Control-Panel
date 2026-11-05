@@ -870,8 +870,7 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- Day-complete banner. The scale pop is dropped with the rest
-                                         of the storyboards; it rested at 1. -->
+                                    <!-- Day-complete banner: once-per-day WPF spring on the shared beat. -->
                                     <Border x:Name="TodayCompleteBanner" IsVisible="False"
                                             Padding="14,10" CornerRadius="10" Margin="0,14,0,0"
                                             HorizontalAlignment="Left"
@@ -1056,7 +1055,7 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="tabs:ProgramTaskItem">
-                                            <Border Width="360" MinHeight="92" Margin="0,0,10,10" Padding="14,12"
+                                            <Border x:Name="TaskCard" Width="360" MinHeight="92" Margin="0,0,10,10" Padding="14,12"
                                                     CornerRadius="12"
                                                     Opacity="{Binding RowOpacity}"
                                                     Background="{DynamicResource SurfaceBgBrush}"
@@ -1109,7 +1108,7 @@
                                                          (DoneChipForeground), not from a fixed near-white:
                                                          a pale program accent rendered the tick white on
                                                          white. -->
-                                                    <Border Grid.Column="2" Width="22" Height="22" CornerRadius="11"
+                                                    <Border x:Name="TaskDoneChip" Grid.Column="2" Width="22" Height="22" CornerRadius="11"
                                                             VerticalAlignment="Top" HorizontalAlignment="Right"
                                                             IsVisible="{Binding DoneChipVisible}"
                                                             Background="{Binding StatusBrush}"

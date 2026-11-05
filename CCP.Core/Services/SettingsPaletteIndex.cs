@@ -145,6 +145,10 @@ namespace ConditioningControlPanel.Services
         /// (head-only, reads App). Unset (Avalonia): the game has a Core LauncherCards card.</summary>
         public static volatile Func<string, bool>? GameAvailableProvider;
 
+        /// <summary>A head with no Wallpaper door (Dynamic is DirectComposition, Static and Own write
+        /// through a Windows API) says false here. Unseeded: the row stays.</summary>
+        public static volatile Func<bool>? WallpaperDoorAvailableProvider;
+
         internal static bool JustDropDoorAvailable()
         {
             try { return JustDropDoorAvailableProvider?.Invoke() ?? false; }
@@ -716,6 +720,7 @@ namespace ConditioningControlPanel.Services
             Setting("enable_deeper", "setting_deeper_enable", "🌊", "general",
                     new[] { "ChkEnableDeeper" }, "set2_section_general", "deeper enable tab");
 
+
             // Devices - webcam
             Setting("webcam_device", "set2_palette_webcam_device", "📷", "devices",
                     new[] { "CmbWebcamDevice" }, "set2_section_devices", "webcam camera device select");
@@ -896,7 +901,7 @@ namespace ConditioningControlPanel.Services
             // ---- Studio rack modules ---------------------------------------------------
             // One row per module so "bubble pop" opens Bubble Pop, not the rack's first module.
             // Haptics and Scheduler/Ramp are not here: they are pills with rows of their own.
-            void Rack(string key, string labelKey, string glyph, string aliases) =>
+            void Rack(string key, string labelKey, string glyph, string aliases, Func<bool>? available = null) =>
                 list.Add(new SettingsPaletteEntry
                 {
                     Id = "rack." + key,
@@ -905,6 +910,7 @@ namespace ConditioningControlPanel.Services
                     TabKey = "studio",
                     RackKey = key,
                     StripLeadingGlyph = true,
+                    IsAvailable = available,
                     ContextKeys = new[] { GroupNav, "nav_door_studio" },
                     Aliases = aliases,
                 });
@@ -914,6 +920,11 @@ namespace ConditioningControlPanel.Services
             Rack("subliminal", "section_subliminals_2", "💭", "subliminal subliminals words");
             Rack("spiral", "label_spiral_overlay", "🌀", "spiral overlay");
             Rack("pinkfilter", "label_pink_filter", "💗", "pink filter tint");
+            Rack("wallpaper", "set2_section_wallpaper", "🖼️",
+                 "wallpaper desktop background collage live wallpaper engine static dynamic moving animated gif webp " +
+                 "own image pick my own picture browse file rotate new wallpaper every interval seconds " +
+                 "run with ccp always on all the time while open keep",
+                 () => WallpaperDoorAvailableProvider?.Invoke() ?? true);
             Rack("visuals", "section_visuals", "👁", "visuals");
             Rack("bubbles", "label_bubble_pop", "🫧", "bubbles bubble pop");
             Rack("bubblecount", "label_bubble_count", "🔢", "bubble count counting");

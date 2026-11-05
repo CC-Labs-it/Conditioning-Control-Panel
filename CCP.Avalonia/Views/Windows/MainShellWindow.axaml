@@ -69,6 +69,10 @@
         DragDrop.AllowDrop="True">
 
     <Window.Resources>
+        <SolidColorBrush x:Key="AccountChipTier1Brush" Color="#FFD700"/>
+        <SolidColorBrush x:Key="AccountChipTier2Brush" Color="#B47BFF"/>
+        <SolidColorBrush x:Key="AccountChipNeutralBrush" Color="#3D3D60"/>
+
         <!-- ===================== THE SECTION RAIL (WPF MainWindow.xaml:20-135) =====================
              One row per NavSections section, always labelled, inside the 96px column. Template parts
              MainShellWindow.NavRail.cs paints: Background = the row tint (hue at 0x33, shown by
@@ -619,22 +623,6 @@
                     <fx:ChasterRailChip x:Name="ChasterRail"/>
                     <Border Height="1" Background="{DynamicResource PanelAccentBrush}" Margin="10,4,10,4"/>
                     <fx:DescentFuseRailChip x:Name="FuseRailChip"/>
-                    <!-- The Web App launcher. WPF moved it to a Play Games card (7e50c9381), which this
-                         head does not have yet (sync6-nav-rail-c), so it stays here as a slim pill. -->
-                    <Button x:Name="DoorWebApp" Height="26" Margin="6,2,7,2" Cursor="Hand"
-                            Click="DoorWebApp_Click" ToolTip.Tip="{loc:Str tooltip_nav_door_webapp}">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border CornerRadius="14" Background="#14FFFFFF" BorderBrush="#5EC8F2" BorderThickness="1">
-                                    <ContentPresenter Content="{TemplateBinding Content}"
-                                                      ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                        <TextBlock x:Name="TxtNavWebAppLabel" Text="{loc:Str nav_door_webapp}" FontSize="11" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextLightBrush}" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    </Button>
                     <!-- THE GEAR. Tag "appsettings" (the tab key "settings" is the dashboard). -->
                     <Button x:Name="DoorSettings" Tag="appsettings" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_settings}" AutomationProperties.Name="{loc:Str nav_door_settings}">
@@ -895,7 +883,7 @@
                                 </ControlTemplate>
                             </Button.Template>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock x:Name="TxtAccountChipBadge" Text="🔒" FontSize="10"
+                                <fx:IconGlyph x:Name="TxtAccountChipBadge" Kind="LockClosed" Size="10"
                                            Margin="0,0,5,0" VerticalAlignment="Center"
                                            IsVisible="False"/>
                                 <TextBlock x:Name="TxtAccountChipName" Text="{loc:Str account_chip_sign_in}"
@@ -1228,8 +1216,8 @@
                             </ControlTheme>
                         </ComboBox.ItemContainerTheme>
                     </ComboBox>
-                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_1_15_is_out}"
-                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_1_15_settle_down}"
+                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_2_2_is_out}"
+                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_2_2_second_lap}"
                             FontSize="11" FontWeight="Bold" Cursor="Hand">
                         <Button.Theme>
                             <ControlTheme TargetType="Button">
@@ -2409,6 +2397,9 @@
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <!-- WPF MainWindow.xaml:2683 (nav rework): replay the current What moved card. -->
+                                <Button x:Name="BtnFirstShowReplay" Grid.Row="1" Content="{loc:Str first_show_replay}" Click="BtnFirstShowReplay_Click"
+                                        Theme="{StaticResource PinkButton}" FontSize="20" FontWeight="Bold"
+                                        HorizontalAlignment="Stretch" Padding="22,16" Margin="0,18,0,0"/>
                                 <Button x:Name="BtnHelpWhatMoved" Grid.Row="2" Content="{loc:Str help_whatmoved}" Click="BtnWhatMovedReplay_Click"
                                         Theme="{StaticResource SecondaryButton}" FontSize="14"
                                         HorizontalAlignment="Stretch" Padding="18,9" Margin="0,8,0,0"/>
@@ -2820,7 +2811,7 @@
             Background="#B00A0514" BorderBrush="#40E0B052" BorderThickness="1">
         <StackPanel>
             <TextBlock x:Name="FuseCornerDigits" Text=""
-                       FontFamily="Consolas, Courier New, monospace" FontSize="15"
+                       FontFamily="{DynamicResource Font.Mono}" FontSize="15"
                        Foreground="#FFC9C4D6" HorizontalAlignment="Center"/>
             <TextBlock x:Name="FuseCornerPresence" Text="" IsVisible="False"
                        FontSize="10" Margin="0,3,0,0" Foreground="#8AC9C4D6"

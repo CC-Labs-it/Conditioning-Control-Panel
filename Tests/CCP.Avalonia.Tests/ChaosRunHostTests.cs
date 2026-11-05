@@ -100,6 +100,8 @@ public sealed class ChaosRunHostTests
         {
             Setup();
             var meta = ChaosMeta.State;
+            var oldPointer = ChaosRunHost.ReadToyPointer;
+            ChaosRunHost.ReadToyPointer = () => null;
             int pockets = meta.ToyPockets;
             bool hadActive = meta.ActiveLifetimeBoons.Contains("vibe_popping");
             bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("vibe_popping", out int level);
@@ -154,6 +156,7 @@ public sealed class ChaosRunHostTests
             finally
             {
                 ChaosRunHost.ForceShutdown(); shell.Close();
+                ChaosRunHost.ReadToyPointer = oldPointer;
                 meta.ToyPockets = pockets;
                 if (!hadActive) meta.ActiveLifetimeBoons.Remove("vibe_popping");
                 if (hadLevel) meta.LifetimeBoonLevels["vibe_popping"] = level; else meta.LifetimeBoonLevels.Remove("vibe_popping");
