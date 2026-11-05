@@ -58,6 +58,44 @@ public sealed class QuestShellCompletionTests
         }
     });
 
+    [Fact]
+    public void CompletionVoiceHonoursOptOutAndBothStopPathsCutIt() => Run((shell, quests) =>
+    {
+        var oldBuild = ConditioningControlPanel.Services.Flash.FlashVoicePool.Build;
+        var oldPlay = CoreAudio.PlayStoppableProvider;
+        var file = Path.GetTempFileName();
+        int played = 0, stopped = 0;
+        try
+        {
+            ConditioningControlPanel.Services.Flash.FlashVoicePool.Reset();
+            ConditioningControlPanel.Services.Flash.FlashVoicePool.Build = _ => new List<string> { file };
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { played++; return () => stopped++; };
+            CoreSettings.Current.FlashAudioEnabled = false;
+            quests.TrackBubblesPopped(10_000);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, played);
+            CoreSettings.Current.SuppressPerkNotifications = false;
+            quests.TrackSpiralMinutes(10_000);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, played);
+            AvApp.StopDesktopOverlays();
+            Assert.Equal(1, stopped);
+            for (int i = 0; i < 200; i++) quests.TrackFlashImage();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, played);
+            PanicSurfaces.All.Single(s => s.Id == "quest-voice").Stop(shell);
+            Assert.Equal(2, stopped);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop();
+            ConditioningControlPanel.Services.Flash.FlashVoicePool.Build = oldBuild;
+            ConditioningControlPanel.Services.Flash.FlashVoicePool.Reset();
+            CoreAudio.PlayStoppableProvider = oldPlay;
+            File.Delete(file);
+        }
+    });
+
     private static AmbientFxCanvas[] BurstLayers(Control anchor) =>
         OverlayLayer.GetOverlayLayer(anchor)!.Children.OfType<AmbientFxCanvas>().Where(c => c.Width == 560).ToArray();
 

@@ -1151,7 +1151,9 @@
                         <TextBlock x:Name="TxtRaffleTicketOn" FontSize="12" Foreground="#FFC9B8D8" Margin="2,4,0,0" Visibility="Collapsed"/>
                     </StackPanel>
                     <TextBlock x:Name="TxtLadderState" FontSize="12" Foreground="#FFC9B8D8" Margin="2,6,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
-                    <TextBlock Text="{loc:Str chaster_added_note}" FontSize="11" Foreground="#FFA898B8" Margin="2,10,0,0" TextWrapping="Wrap"/>
+                    <!-- the server's raffle total is NET of every removal (keyholder too, owner 2026-10-21);
+                         the PC's gross "added only" note misled a player into reading 0:00:00 as lost time -->
+                    <TextBlock Text="{loc:Str chaster_raffle_net_note}" FontSize="11" Foreground="#FFA898B8" Margin="2,10,0,0" TextWrapping="Wrap"/>
                     <Grid Margin="2,2,0,0">
                         <TextBlock Text="{loc:Str chaster_raffle_rule}" FontSize="11" Foreground="#FFA898B8" TextWrapping="Wrap" Margin="0,0,48,0"/>
                         <TextBlock HorizontalAlignment="Right" VerticalAlignment="Bottom" FontSize="11">
