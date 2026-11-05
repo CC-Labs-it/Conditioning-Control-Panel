@@ -120,6 +120,19 @@
                                           DropDownOpened="CmbMonitor_DropDownOpened"
                                           SelectionChanged="CmbMonitor_Changed"/>
                             </Grid>
+
+                            <!-- #1546: tint under spirals, subliminals, bubbles and text instead of over them. -->
+                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_pink_filter_under_effects}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_pink_filter_under_effects}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkUnderEffects"
+                                          Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                          Checked="ChkUnderEffects_Changed" Unchecked="ChkUnderEffects_Changed"/>
+                            </Grid>
                         </StackPanel>
                     </Grid>
                 </Border>
