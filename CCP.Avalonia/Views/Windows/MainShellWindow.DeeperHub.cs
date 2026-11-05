@@ -5,8 +5,7 @@
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
 // Import picker/drop and the shared batch live in MainShellWindow.DeeperImport.cs.
-// Still out (shell-deeper-hub): startup demo seeding,
-// and duration probing. The tab's tour uses the existing head tour lifecycle.
+// Library lifecycle follows WPF App.xaml.cs:3418,6541 and MainWindow.DeeperTab.cs:677-689.
 
 using System;
 using System.Collections.Generic;
@@ -45,36 +44,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DeeperTabViewModel? DeeperModel => Named<DeeperTabView>("DeeperTab")?.DataContext as DeeperTabViewModel;
 
         /// <summary>Reloads the local index when the Deeper view is attached or the tab opens.</summary>
-        // WPF MainWindow.DeeperTab.cs:677-689: refresh only the visible hub.
         private EnhancementLibrary? _deeperLibrary;
-        private EnhancementLibrary DeeperLibrary
+        private bool _deeperHubClosed;
+        internal void InitializeDeeperHub()
         {
-            get
+            if (_deeperHubClosed) return;
+            EnsureDeeperLibrary();
+            ReloadDeeperLibraryFromDisk();
+        }
+
+        /// <summary>Creates the watched library once, without a rescan (import reloads once itself).</summary>
+        private void EnsureDeeperLibrary()
+        {
+            if (_deeperHubClosed) return;
+            if (_deeperLibrary == null)
             {
-                if (_deeperLibrary != null) return _deeperLibrary;
                 _deeperLibrary = new EnhancementLibrary();
                 _deeperLibrary.LibraryChanged += OnDeeperLibraryChanged;
                 Closed += (_, _) =>
                 {
+                    _deeperHubClosed = true;
                     _deeperLibrary.LibraryChanged -= OnDeeperLibraryChanged;
                     _deeperLibrary.Dispose();
                 };
-                return _deeperLibrary;
             }
         }
 
-        private void OnDeeperLibraryChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
-        {
-            if (Named<DeeperTabView>("DeeperTab")?.IsVisible == true) ReloadDeeperLibraryFromDisk();
-        });
+        private void OnDeeperLibraryChanged(object? sender, EventArgs e)
+            => Dispatcher.UIThread.Post(() => { if (!_deeperHubClosed && Named<DeeperTabView>("DeeperTab") is { IsVisible: true }) ReloadDeeperLibraryFromDisk(); });
 
-        internal void InitializeDeeperHub()
+        private void ReloadDeeperLibraryFromDisk()
         {
-            _ = DeeperLibrary;
-            ReloadDeeperLibraryFromDisk();
+            if (Named<DeeperTabView>("DeeperTab") is { DataContext: DeeperTabViewModel model } view)
+                model.ReloadLibrary(probeDurations: view.IsVisible);
         }
-
-        private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
 
         /// <summary>WPF ApplyDeeperFilterAndSort after a submission record changed: repaint badges.</summary>
         internal void RefreshDeeperLibraryRows() => DeeperModel?.Refresh();

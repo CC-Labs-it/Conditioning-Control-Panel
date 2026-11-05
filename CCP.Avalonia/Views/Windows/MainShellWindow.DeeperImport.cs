@@ -42,7 +42,9 @@ public partial class MainShellWindow
     internal void ImportEnhancementFiles(string[] paths)
     {
         if (paths.Length == 0) return;
-        var result = EnhancementImportBatch.Run(DeeperLibrary, paths);
+        EnsureDeeperLibrary();
+        if (_deeperLibrary is not { } library) return;
+        var result = EnhancementImportBatch.Run(library, paths);
         if (result.LastImportedPath != null && Path.GetDirectoryName(paths[0]) is { Length: > 0 } source)
         {
             CoreSettings.Current.DeeperLastDirectory = source;
