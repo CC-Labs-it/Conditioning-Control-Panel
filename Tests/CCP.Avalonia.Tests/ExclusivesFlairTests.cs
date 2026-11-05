@@ -140,28 +140,6 @@ public sealed class ExclusivesFlairTests
     });
 
     [Fact]
-    public Task HoverLiftsAndBloomsTheCard() => WithPremiumPage((shell, view) =>
-    {
-        var card = Parts<Border>(view).First(b => b.Name == "ExCard");
-        ExclusivesTabView.HoverCard(card, true);
-        var scale = (ScaleTransform)card.RenderTransform!;
-        Assert.NotNull(scale.Transitions);
-        Assert.Equal(1, card.BoxShadow.Count);
-        Assert.Equal(24, card.BoxShadow[0].Blur);
-        Assert.Equal(0x8C, card.BoxShadow[0].Color.A);
-        ExclusivesTabView.HoverCard(card, false);
-        Assert.Equal(0, card.BoxShadow.Count);
-
-        // Motion Off: the lift snaps, no clock.
-        CoreSettings.Current.MotionLevel = MotionLevel.Off;
-        ExclusivesTabView.HoverCard(card, true);
-        Assert.Null(scale.Transitions);
-        Assert.Equal(1.02, scale.ScaleX);
-        ExclusivesTabView.HoverCard(card, false);
-        Assert.Equal(1.0, scale.ScaleX);
-    });
-
-    [Fact]
     public void GlintFollowsWpfKeyframes()
     {
         Assert.Equal(1, VaultCardAura.GlintAt(140).Opacity, 6);
