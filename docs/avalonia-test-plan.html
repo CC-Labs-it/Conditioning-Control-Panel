@@ -668,9 +668,11 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <li>Default mod, companion on: open a tab with a voice line (e.g. Leaderboard). Expect a speech bubble and the voice, at most one per minute. WPF <code>MainWindow/MainWindow.xaml.cs:1755</code>. Rows: <code>feat-companion-barks</code>, <code>companion-ccp-default-voice</code>.</li>
 <li>Master volume 0: text only. Companion muted: text, no voice. WPF <code>Services/Companion/BarkService.cs</code>. Rows: <code>feat-companion-barks</code>.</li>
 <li><strong>[SAFETY] developers re-check this before release.</strong> Press panic while she speaks. Expect the voice cut at once. WPF <code>Services/Companion/BarkService.cs</code>. Rows: <code>feat-companion-barks</code>.</li>
+<li>Engine stopped, no session: wait out the companion idle interval. Expect an idle bubble with no voice; start the engine and the next idle line is voiced. Right after a panic, idle lines stay silent until the quiet window ends, then resume on their own. WPF <code>Services/Companion/CompanionIdleVoice.cs:60</code>, <code>AvatarTube/AvatarTubeWindow.Speech.cs:1571-1624</code>. Rows: <code>barks-wpf-b</code>.</li>
+<li>Subliminals with whisper audio on: while a whisper plays, and a quarter second after, ordinary companion lines wait; safety lines still speak. WPF <code>Services/AudioService.cs:948</code>, <code>Services/Companion/BarkService.cs:1668</code>. Rows: <code>barks-wpf-b</code>.</li>
 </ol>
 <h3 id="other">Other</h3>
-<ol start="9">
+<ol start="11">
 <li>Friends drawer: feed, trail, blocked list, presence setting (feed and trail are not on this build yet: <code>feat-friends-feed</code> is missing). WPF <code>Services/Friends/FriendsLanding.cs</code>. Rows: <code>feat-friends-feed</code>, <code>feat-friends-blocked-presence</code>, <code>feat-friends-landing</code>.</li>
 <li>Flash card: exit and stay options behave as on Windows. WPF <code>Features/FlashFeatureControl.xaml:166-193</code>. Rows: <code>feat-flash-exit-stay</code>.</li>
 <li>Haptics -&gt; Intiface address: type a host without <code>ws://</code>; it connects the same as Windows. WPF <code>CCP.Core/Services/Haptics/ButtplugUrl.cs</code>. Rows: <code>feat-intiface-url</code>.</li>
@@ -686,6 +688,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <li>[ ] <code>feat-friends-blocked-presence</code> - WPF <code>Controls/Friends/FriendsBlockList.cs</code></li>
 <li>[ ] <code>feat-friends-landing</code> - WPF <code>Services/Friends/FriendsLanding.cs</code></li>
 <li>[ ] <code>feat-companion-barks</code> - WPF <code>MainWindow/MainWindow.xaml.cs:1755</code></li>
+<li>[ ] <code>barks-wpf-b</code> - WPF <code>Services/Companion/CompanionIdleVoice.cs:60</code></li>
 <li>[ ] <code>feat-leash-receipts-hold</code> - WPF <code>CCP.Core/Services/Leash/LeashReceipts.cs</code></li>
 <li>[ ] <code>feat-flash-exit-stay</code> - WPF <code>Features/FlashFeatureControl.xaml:166-193</code></li>
 <li>[ ] <code>feat-brain-drain-keep-clear</code> - WPF <code>CCP.Core/Services/Notifications/BrainDrainKeepClear.cs</code></li>
@@ -1006,7 +1009,6 @@ changes served unchanged from <code>Assets/web/dtrh</code> (automated-only: byte
 </ol>
 <h2 id="rows-with-no-manual-check">Rows with no manual check</h2>
 <ul>
-<li>Automated-only: <code>barks-wpf-b</code> (status missing) - WPF's bark engine handing its decisions to the shared engine; nothing on screen changes. Test companion voice lines through section 7 steps 6-8.</li>
 </ul>
 
 <script>

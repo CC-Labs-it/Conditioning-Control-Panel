@@ -29,6 +29,18 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class TubeContentGatesTests
 {
+    [Theory] // Shared palette must not capture the thread that first touches a pure tube helper.
+    [InlineData("MenuRed")]
+    [InlineData("MenuGreen")]
+    [InlineData("MenuPatreon")]
+    [InlineData("MenuLocked")]
+    public void SharedMenuPaletteHasNoDispatcherOwner(string name)
+    {
+        var brush = typeof(AvatarTubeWindow).GetField(name,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
+        Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableBrush>(brush);
+    }
+
     private static void Setup()
     {
         if (Application.Current is null)

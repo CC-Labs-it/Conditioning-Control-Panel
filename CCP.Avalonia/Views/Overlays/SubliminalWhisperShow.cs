@@ -21,8 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// (TriggerSubliminalWithHapticPattern :563).</para>
     /// <para>A new whisper cuts the previous one, and <see cref="StopAll"/> (Stop, tray Stop everything)
     /// silences one mid-play and drops a card still waiting behind it (WPF StopAudio + the
-    /// ShowSubliminalVisuals arrival guard). ponytail: no MarkWhisperAudio (no bark engine on this
-    /// head). Video Freeze defers Reset until playback ends.</para>
+    /// ShowSubliminalVisuals arrival guard). Video Freeze defers Reset until playback ends.</para>
     /// </summary>
     internal static class SubliminalWhisperShow
     {
@@ -131,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var gen = CoreAudio.DuckGeneration;
             Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // WPF PlayWhisperAudio: StopAudio first
             _stopWhisper = CoreAudio.PlayStoppable(path, SubliminalWhisper.Volume(s.MasterVolume, s.SubAudioVolume), "whisper",
+                onStarted: duration => Platform.BarkHead.Engine?.MarkWhisperAudio(duration.TotalSeconds),
                 onFinished: () => After(SubliminalWhisper.UnduckDelayMs, () => CoreAudio.Unduck(gen)));
             if (Volatile.Read(ref _gen) != entry) Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // Stop raced the start
             Log.Debug("Playing subliminal audio: {Path}", Path.GetFileName(path));

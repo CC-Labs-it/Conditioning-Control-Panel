@@ -13,6 +13,38 @@ namespace CCP.Avalonia.Tests;
 /// no Reset. Uses the shipped neutral freeze/reset clips linked into the output (no mod layer here).</summary>
 public sealed class SubliminalWhisperShowTests
 {
+    [Fact]
+    public void AudibleWhisperStartHoldsTheBarkFloor() => With(true, 0.5, _ =>
+    {
+        var saved = (ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine, CoreSettings.Current.AvatarEnabled);
+        try
+        {
+            CoreSettings.Current.AvatarEnabled = true;
+            var rule = new ConditioningControlPanel.Services.Bark.BarkRule
+            {
+                Id = "whisper-floor", Trigger = "AttentionCheckFail",
+                VariantPool = new() { new("look") },
+            };
+            var engine = new ConditioningControlPanel.Services.Bark.BarkEngine(() =>
+                new ConditioningControlPanel.Services.Bark.BarkRuleSet(new[] { rule })) { Speak = _ => { } };
+            engine.Start();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = engine;
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, _) =>
+            {
+                started?.Invoke(TimeSpan.FromSeconds(10));
+                return () => { };
+            };
+            SubliminalWhisperShow.Phrase("reset");
+            Assert.False(engine.Raise("AttentionCheckFail"));
+            Assert.True(engine.Raise("AttentionCheckFail", guaranteed: true));
+        }
+        finally
+        {
+            SubliminalWhisperShow.StopAll();
+            (ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine, CoreSettings.Current.AvatarEnabled) = saved;
+        }
+    });
+
     private sealed record Run(List<string> Log, List<(int Ms, Action Then)> Timers);
 
     private static void With(bool audible, double roll, Action<Run> body)
