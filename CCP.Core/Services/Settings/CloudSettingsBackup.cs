@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Services
     /// The cloud settings backup for a head that is not WPF: "Backup now" and "Restore from cloud"
     /// (WPF ProfileSyncService.cs:4545-4890 + MainWindow.CloudBackup.cs). Same endpoints and bodies.
     /// <para>The exclusion list, <see cref="IsExcludedFromBackup"/> and <see cref="PreserveLocalOnlyFields"/>
-    /// are copies of WPF's, unchanged; WPF is frozen and keeps its own (P118), so this class has a new
+    /// follow WPF, with the old port lane's stricter secret and safety filtering. WPF keeps its own (P118), so this class has a new
     /// name (P25). <see cref="SettingsBackupBudget"/> moved here as is.</para>
     /// <para>On top of WPF (docs/avalonia-decisions.html, cloud settings backup): <see cref="AbsolutePathFields"/>
     /// are never uploaded and a restore always keeps this machine's values, because one account has one
@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.UserDisplayName),
             nameof(AppSettings.PatreonTier),
             nameof(AppSettings.PatreonPremiumValidUntil),
+            nameof(AppSettings.PatreonLabValidUntil),
             nameof(AppSettings.InviteGrantUntil),
             nameof(AppSettings.LastPatreonVerification),
             nameof(AppSettings.AuthToken),
@@ -110,9 +111,12 @@ namespace ConditioningControlPanel.Services
                             && !Attribute.IsDefined(p, typeof(JsonIgnoreAttribute)))
                 .ToArray();
 
+        private static readonly string[] SecretMarkers = { "Token", "ApiKey", "Secret", "Password", "Webhook", "Credential" };
+
         /// <summary>True when a backup must not carry this property.</summary>
         internal static bool IsExcludedFromBackup(string name) =>
             ExcludedBackupProperties.Contains(name)
+            || SecretMarkers.Any(marker => name != null && name.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
             || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase))
             // The audio player's playlist is file paths on this machine: never uploaded.
             || (name != null && name.StartsWith("AudioPlaylist", StringComparison.OrdinalIgnoreCase));
@@ -150,6 +154,7 @@ namespace ConditioningControlPanel.Services
             restored.ServerTierSeen = current.ServerTierSeen;
             restored.GraceClosedTier = current.GraceClosedTier;
             restored.GraceClosedAtUtc = current.GraceClosedAtUtc;
+            restored.LastKnownEffectiveTier = current.LastKnownEffectiveTier;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
@@ -353,6 +358,35 @@ namespace ConditioningControlPanel.Services
             return same != null && id(same) == key ? same : null;
         }
 
+        // Stricter than WPF MainWindow.CloudBackup.cs:138-160, reused from the old port lane.
+        public static void HoldSafetyFloor(AppSettings? current, AppSettings? restored)
+        {
+            if (current == null || restored == null) return;
+            foreach (var p in typeof(AppSettings).GetProperties())
+            {
+                if (p.PropertyType != typeof(bool) || !p.CanRead || !p.CanWrite) continue;
+                if (p.Name.IndexOf("StrictLock", StringComparison.Ordinal) < 0) continue;
+                if (!(bool)p.GetValue(current)! && (bool)p.GetValue(restored)!) p.SetValue(restored, false);
+            }
+            if (current.PanicKeyEnabled) restored.PanicKeyEnabled = true;
+            if (!current.ScreenOcrEnabled)
+            {
+                restored.ScreenOcrEnabled = false;
+            }
+        }
+
+        // The old lane normalizes asset-relative paths for Linux. Absolute paths stay local above.
+        internal static void NormalizeRelativePaths(AppSettings restored)
+        {
+            static HashSet<string> Slash(HashSet<string> set) => new(set.Select(p => p.Replace('\\', '/')), set.Comparer);
+            restored.ActiveAssetPaths = Slash(restored.ActiveAssetPaths);
+            foreach (var preset in restored.AssetPresets)
+            {
+                preset.DisabledAssetPaths = Slash(preset.DisabledAssetPaths);
+                preset.DisabledAssetFolders = Slash(preset.DisabledAssetFolders);
+            }
+        }
+
         // ---- the server (WPF BackupSettingsAsync / GetSettingsBackupInfoAsync / RestoreSettingsFromCloudAsync) ----
 
         /// <summary>The "Backup now" upload (WPF BackupSettingsAsync with force: true). False when there is
@@ -429,11 +463,16 @@ namespace ConditioningControlPanel.Services
             {
                 var data = (string?)(await FetchAsync(current))?["settings_data"];
                 if (data == null) return null;
-                var json = Unpack(data);
-                var restored = JsonConvert.DeserializeObject<AppSettings>(json,
+                var obj = JObject.Parse(Unpack(data));
+                foreach (var key in obj.Properties().Select(p => p.Name).ToList())
+                    if (IsExcludedFromBackup(PropertyNameOfJsonKey(key))) obj.Remove(key);
+                var restored = JsonConvert.DeserializeObject<AppSettings>(obj.ToString(),
                     new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
                 if (restored == null) return null;
-                KeepLocal(current, restored, JObject.Parse(json));
+                // Normalize downloaded presets before KeepLocal can share this machine's preset objects.
+                NormalizeRelativePaths(restored);
+                KeepLocal(current, restored, obj);
+                HoldSafetyFloor(current, restored);
                 Log.Information("Settings restored from cloud");
                 return restored;
             }
