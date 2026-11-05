@@ -42,6 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
+            // Stricter than WPF MainWindow.Patreon.cs:1544: panic discards pending trigger edits.
+            new("workshop-trigger-editor", _ => Controls.Companion.WorkshopAccordion.CloseTriggerEditorForPanic()),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => { Platform.RaceEngineDownload.Cancel(); Games.GameWindow.CloseAllForPanic(); }, Games.GameWindow.IsAnyOpen),

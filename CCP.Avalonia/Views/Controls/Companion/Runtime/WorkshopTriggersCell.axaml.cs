@@ -15,8 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     ///
     /// WPF forwards the controls to MainWindow. This head restores trigger settings here
     /// and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// Manage Phrases forwards to the owning shell; Edit triggers is hoisted to the Workshop host.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
@@ -24,6 +23,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         private bool _attached;
         private TriggerSettings? _observed;
 
+        /// <summary>WPF BtnEditTriggers_Click (MainWindow.Patreon.cs:1539): the Workshop host opens the editor.</summary>
+        public event EventHandler? EditTriggersRequested;
         public event EventHandler? PhrasePresetSelectionChanged;
         public event EventHandler? SavePhrasePresetRequested;
         public event EventHandler? DeletePhrasePresetRequested;
@@ -38,6 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // WPF forwards the real Phrase Manager action to its owning shell.
             this.FindControl<Button>("BtnManagePhrases")!.Click += (sender, e) =>
                 this.FindAncestorOfType<MainShellWindow>()?.BtnManagePhrases_Click(sender, e);
+
+            this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += (_, _) => EditTriggersRequested?.Invoke(this, EventArgs.Empty);
 
             var toggle = this.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
             var panel = this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
@@ -112,6 +115,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             }
             finally { _loading = false; }
         }
+
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            if (CoreSettings.Service is { } service) service.CurrentReplaced += CurrentReplaced;
+            SyncFromSettings();
+        }
+
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            if (CoreSettings.Service is { } service) service.CurrentReplaced -= CurrentReplaced;
+            base.OnDetachedFromVisualTree(e);
+        }
+
+        private void CurrentReplaced() => Dispatcher.UIThread.Post(SyncFromSettings);
+
+        // WPF MainWindow/MainWindow.Patreon.cs:1336-1338 restores without writing.
+        private void SyncFromSettings()
+        {
+            _syncing = true;
+            try
+            {
+                var s = CoreSettings.Current;
+                this.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = s.TriggerModeEnabled;
+                this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible = s.TriggerModeEnabled;
+                this.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = s.TriggerIntervalSeconds;
+                this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text = $"{s.TriggerIntervalSeconds}s";
+            }
+            finally { _syncing = false; }
+        }
+
     }
 
     /// <summary>
