@@ -93,6 +93,10 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out PointI p);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RectI r);
 
+    /// <summary>WPF MainWindow.Chaster.CursorPx: desktop pointer in physical pixels.</summary>
+    internal static global::Avalonia.PixelPoint? CursorPosition() =>
+        OperatingSystem.IsWindows() && GetCursorPos(out var p) ? new(p.X, p.Y) : null;
+
     /// <summary>Is the window-relative px point inside any of the first <paramref name="count"/> rects?</summary>
     internal static bool Hits(global::Avalonia.PixelRect[] rects, int count, int x, int y)
     {
