@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia
         public static SettingsService? Settings { get; private set; }
 
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
-        public static Helpers.NotificationService Notifications { get; } = new();
+        public static Helpers.NotificationService Notifications { get; internal set; } = new();
 
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
         /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
+        private static void RebaselineDayLogAfterCloudMerge(global::ConditioningControlPanel.Models.AppSettings _) => FeatureDayLog?.Rebaseline("v2 cloud merge");
 
         /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
         /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.html).</summary>
@@ -69,6 +70,24 @@ namespace ConditioningControlPanel.Avalonia
         internal static SessionRunner? Sessions { get; set; }
         /// <summary>The app-lifetime media recap (WPF App.MediaHistory), or null on the headless render path.</summary>
         internal static MediaHistoryService? MediaHistory { get; set; }
+        /// <summary>The tube the countdown speaks through. Test seam: a headless app cannot swap its lifetime after init.</summary>
+        internal static Func<Views.AvatarTube.AvatarTubeWindow?> DescentTube = () => Views.AvatarTube.AvatarTubeWindow.Live;
+
+        /// <summary>WPF App.xaml.cs:3196-3206: arm before the shell; a missing tube leaves the line retryable.</summary>
+        internal static void StartDescentCountdown()
+        {
+            DescentCountdown = new Services.Descent.DescentCountdownService
+            {
+                Speaker = line =>
+                {
+                    if (DescentTube() is not { } avatar) return false;
+                    avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+                    return true;
+                },
+            };
+            DescentCountdown.Start();
+        }
+
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
         internal static Services.Descent.DescentService? Descent { get; set; }
@@ -133,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
-        /// Core settings; the perfect-week bonus stays unseeded (the WPF "service is null" answer).
+        /// Core settings; the perfect-week bonus uses Core rules from WPF SkillTreeService.cs:461-527.
         /// Programs (TrackVerifier) is seeded next to the ProgramService below.</summary>
         private static void StartQuests()
         {
@@ -149,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia
                 return true;
             };
             CoreQuests.PlayCompletionEffectsProvider = PlayQuestCompletionEffects;
+            WireQuestRewards(Sessions);
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).
@@ -170,7 +190,9 @@ namespace ConditioningControlPanel.Avalonia
         /// the Haptics tab's "Quest complete" routing row decides how it feels.</summary>
         internal static void PlayQuestCompletionEffects()
         {
-            PlayExclamationChime("quest-complete");  // the haptic still posts if the chime fails
+            // WPF App.xaml.cs (#4078): the perk opt-out drops the popup, so the ding goes with it.
+            if (CoreSettings.Current.SuppressPerkNotifications != true)
+                PlayExclamationChime("quest-complete");  // the haptic still posts if the chime fails
             _ = CoreHaptics.Service?.PostEvent(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.QuestComplete);
         }
 
@@ -396,7 +418,17 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void Initialize()
         {
+            // Core cannot read the running build's version - the entry assembly is whichever
+            // head started the process, and Core is not it. Reading the version is a head job,
+            // so this head reports its own; unseeded, CoreReleaseContent answers "0.0.0".
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            CoreReleaseContent.AppVersionProvider = () =>
+                version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
+            // WPF App.xaml.cs:4982-4985: notes for a returning account without a backup.
+            CoreReleaseContent.PatchNotesProvider = () => ReleaseNotes.Current;
+
             AvaloniaXamlLoader.Load(this);
+            Platform.FontGuard.Startup.Verify(Resources, OperatingSystem.IsWindows()); // before any window, including the splash
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
@@ -613,12 +645,6 @@ namespace ConditioningControlPanel.Avalonia
                 });
                 CoreBubbles.RefreshFrequencyAction = Views.Overlays.BubbleOverlay.RefreshFrequency;
 
-                // Core cannot read the running build's version - the entry assembly is whichever
-                // head started the process, and Core is not it. Reading the version is a head job,
-                // so this head reports its own; unseeded, CoreReleaseContent answers "0.0.0".
-                var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                CoreReleaseContent.AppVersionProvider = () =>
-                    version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
                 // WPF App.xaml.cs:2567-2576, after the version seed (the honest user-agent carries it): the Scrolller
                 // licence switch (launch + every 30 min), the device cache's books, and the hourly 24 h sweep.
                 Platform.ScrolllerHead.Start();
@@ -630,13 +656,16 @@ namespace ConditioningControlPanel.Avalonia
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
+                CoreEntitlement.DailyFreeKeyProvider = () => dailyFree.TodayKey;
                 // WPF App.xaml.cs:494: the weekly Graded Intake pass. Its TierChanged hooks are
                 // attached by AccountSeed.Seed() below, once the providers exist.
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // ponytail: no funscript playhead (FunScriptService.
-                // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
+                // WPF App.xaml.cs:3218: funscripts follow the primary video playhead.
+                Services.Haptics.FunScriptService.SubscribePlaybackTime =
+                    Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
+                // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
@@ -646,9 +675,7 @@ namespace ConditioningControlPanel.Avalonia
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
-                // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
-                DescentCountdown = new Services.Descent.DescentCountdownService();
-                DescentCountdown.Start();
+                StartDescentCountdown();
                 Descent = new Services.Descent.DescentService
                 {
                     // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
@@ -670,6 +697,9 @@ namespace ConditioningControlPanel.Avalonia
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
                         { Countdown = DescentCountdown, DescentReader = Descent };
+                    // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
+                    sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
+                        Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
@@ -855,6 +885,9 @@ namespace ConditioningControlPanel.Avalonia
                 // Its loss must not cost the launch.
                 try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
                 catch (Exception exDayLog) { Serilog.Log.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
+                // WPF ProfileSyncService.cs:2187: minutes another device banked belong to other days, not today.
+                ProfileAdopt.ConditioningMinutesLifted -= RebaselineDayLogAfterCloudMerge;
+                ProfileAdopt.ConditioningMinutesLifted += RebaselineDayLogAfterCloudMerge;
                 CoreProgram.UnlockAchievementProvider = id => Achievements?.TryUnlock(id);
                 // WPF App.xaml.cs: the invite ladder's badges and the invites wire (friends' proxy and
                 // door; a sandbox reaches only a loopback CCP_FRIENDS_API_URL, else nothing is sent).
@@ -893,6 +926,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
                 // WPF App.xaml.cs:290: a game.* palette row is listed only when this head can start it.
                 SettingsPaletteIndex.GameAvailableProvider = Views.Windows.LauncherWindow.CanStartGame;
+                SettingsPaletteIndex.WallpaperDoorAvailableProvider = () => false;   // owner 2026-11-01: no door on this head
                 // WPF App.xaml.cs:312: the race's door asks this head's prize store (P31).
                 ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 // WPF App.xaml.cs:313: the race charts a track through this head's decoder (LibVLC, not NAudio).
@@ -903,6 +937,7 @@ namespace ConditioningControlPanel.Avalonia
                 // (WPF leaves it unseeded = all available). Seeded before the service so it is never unset.
                 CoreProgram.TaskAvailableProvider = Platform.ProgramCapabilities.IsAvailable;
                 Programs = new Services.Program.ProgramService();
+                Platform.ChasterHead.AttachPrograms(Programs);   // WPF ChasterHooks.cs:65-69
                 CoreQuests.TrackProgramVerifierProvider = (category, amount) => Programs?.TrackVerifier(category, amount);   // WPF App.xaml.cs:413
 
                 // WPF App.xaml.cs:447: ritual photos file through the roadmap. Lazy - the shell creates its
@@ -986,6 +1021,7 @@ namespace ConditioningControlPanel.Avalonia
                     shell.RefreshExclusivesTab();
                     shell.RefreshNavPremiumTags();
                 });
+                Platform.AccountSeed.GraceClosed += RepaintVeils;   // WPF MainWindow.OnGraceClosed
                 if (Platform.AccountSeed.Patreon is { } patreonSub) patreonSub.TierChanged += (_, _) => RepaintVeils();
                 if (Platform.AccountSeed.SubscribeStar is { } substarSub) substarSub.TierChanged += (_, _) => RepaintVeils();
                 Views.Controls.Invites.InvitePanel.ArmExpiry(); // WPF MainWindow.Patreon.cs: a running invite week's end repaints
@@ -1031,20 +1067,7 @@ namespace ConditioningControlPanel.Avalonia
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);
                 if (panelHidden)
                 {
-                    bool activated = shell.ShowActivated, inTaskbar = shell.ShowInTaskbar;
-                    shell.ShowActivated = false;
-                    shell.ShowInTaskbar = false;
-                    shell.BuildingHiddenForBoot = true;
-                    void Route(object? s, EventArgs e)
-                    {
-                        shell.Opened -= Route;
-                        Views.Windows.LauncherWindow.RouteBoot(shell);
-                        // Restored only once the panel is tucked away, so it never reaches the taskbar.
-                        shell.BuildingHiddenForBoot = false;
-                        shell.ShowActivated = activated;
-                        shell.ShowInTaskbar = inTaskbar;
-                    }
-                    shell.Opened += Route;
+                    shell.PrepareLauncherBoot();
                 }
                 // Tray: restore, wake, Stop everything (the no-hotkey panic control) and the real Exit.
                 try
@@ -1089,6 +1112,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static void StopDesktopOverlays(bool final = true)
         {
             CoreFlash.Stop();
+            Services.Flash.FlashCelebrationVoice.Stop();
             CoreSubliminal.Stop();
             Views.Overlays.FlashOverlay.CloseAll(final);
             Views.Overlays.SubliminalWhisperShow.StopAll();
@@ -1236,6 +1260,9 @@ namespace ConditioningControlPanel.Avalonia
         internal static void SaveSettingsOnExit(Views.Windows.MainShellWindow? shell, Action save)
         {
             try { shell?.CancelAutonomyPulses(); } catch (Exception ex) { Serilog.Log.Debug("Exit pulse cancel failed: {E}", ex.Message); }
+            // WPF SettleTemporarySettingsForExit (WindowChrome.cs:406): a connected controller's strict lock goes back too.
+            try { if (Views.Tabs.RemoteControlTabView.Relay is { IsValueCreated: true } relay) relay.Value.ReleaseHoldingsForExit(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Exit: remote holdings release failed"); }
             try { save(); }
             catch { /* SettingsService logs save failures; exit must continue */ }
         }
@@ -1296,6 +1323,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
+            try { Platform.ScreenMirrorHead.Shutdown(); } catch { /* WPF App.OnExit:6505 */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
