@@ -42,7 +42,7 @@ public sealed class ShellAssetsCompletionTests
         Control subject = keywords
             ? new global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.KeywordTriggersPanel()
             : new global::ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.UpdatesSettingsSection();
-        var inner = subject.FindControl<ScrollViewer>("ParentWheelScroll")!;
+        var inner = subject.FindControl<ScrollViewer>(keywords ? "KeywordTriggerScroller" : "ParentWheelScroll")!;
         inner.Height = 100; inner.Content = new Border { Height = 600 };
         // Keep the real control and its attached handler, with deterministic scroll bounds.
         var outer = new ScrollViewer { Content = new StackPanel { Children = { subject, new Border { Height = 1000 } } } };
