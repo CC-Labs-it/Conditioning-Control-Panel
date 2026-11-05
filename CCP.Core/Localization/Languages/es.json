@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Novedades de v{0}",
+  "upgrade_notes_tour_button": "Mostrar recorrido (60 s)",
   "title_select_companion_personality": "Elegir personalidad de IA para {0}",
   "filter_personality_json_files": "Archivos JSON de personalidad",
   "audio_device_unnamed": "(sin nombre)",

@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
+            new("upgrade-intro", MainShellWindow.StopUpgradeIntroForPanic),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
             new("quest-stamps", sh => sh?.HideStampPopup()),

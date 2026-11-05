@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "v{0} の新機能",
+  "upgrade_notes_tour_button": "使い方を見る (60秒)",
   "title_select_companion_personality": "{0}のAIパーソナリティを選択",
   "filter_personality_json_files": "パーソナリティのJSONファイル",
   "audio_device_unnamed": "(名前なし)",

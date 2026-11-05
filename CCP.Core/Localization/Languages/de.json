@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Neu in v{0}",
+  "upgrade_notes_tour_button": "Rundgang starten (60 s)",
   "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
   "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
   "audio_device_unnamed": "(unbenannt)",

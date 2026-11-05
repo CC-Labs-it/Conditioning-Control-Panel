@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "What's New in v{0}",
+  "upgrade_notes_tour_button": "Show me around (60s)",
   "title_select_companion_personality": "Select AI Personality for {0}",
   "filter_personality_json_files": "Prompt JSON files",
   "audio_device_unnamed": "(unnamed)",

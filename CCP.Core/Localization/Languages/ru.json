@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Что нового в v{0}",
+  "upgrade_notes_tour_button": "Показать обзор (60 с)",
   "title_select_companion_personality": "Выбрать личность ИИ для {0}",
   "filter_personality_json_files": "Файлы личности JSON",
   "audio_device_unnamed": "(без имени)",

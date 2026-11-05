@@ -18,12 +18,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder or game-host park on this head, so
-    /// LadderBusy / GameHostUp stay false and Route never answers Defer; port the
-    /// pump when the startup modals move onto a shared ladder.
+    /// WPF Services/Startup/StartupPresenter.cs:247,350,554: defer until the modal queue drains.
+    /// Upgrade What's New holds passive offers until its modal host settles (ModalPending).
+    /// ponytail: game-host park still awaits its startup host.
     /// </summary>
     internal static class StartupLadder
     {
+        internal static bool ModalPending;
+        internal static int PresentationGeneration { get; private set; }
+
         // WPF StartupPresenter.cs:133,140; LauncherHost.cs:266 releases on panel open.
         internal static bool LauncherHolding { get; private set; }
         internal static void Hold() => LauncherHolding = true;
@@ -60,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
+            LadderBusy = ModalPending,
             LauncherHolding = LauncherHolding,
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
@@ -72,9 +76,25 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public static void PresentOrInbox(InboxItem item)
         {
             if (item == null) return;
-            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => PresentOrInbox(item)); return; }
+            var generation = PresentationGeneration;
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (generation == PresentationGeneration) PresentOrInbox(item);
+                    else Inbox.File(item);
+                });
+                return;
+            }
 
-            if (StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow)) == StartupRouting.Present)
+            var route = StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow));
+            if (route == StartupRouting.Defer)
+            {
+                if (!_held.Any(h => string.Equals(h.Key, item.Key, StringComparison.OrdinalIgnoreCase))) _held.Add(item);
+                // WPF StartupPresenter.cs:247: modal deferrals wait for the drain, without a timer.
+                return;
+            }
+            if (route == StartupRouting.Present)
             {
                 // One passive surface on screen at a time: the next one waits for it to close.
                 if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp()))
@@ -111,17 +131,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (_passiveTimer != null) return;
             // WPF cadence and priority (StartupPresenter.cs:541, Normal: Background work starves); a stepped clock fires
             // it on the stepping (UI) thread, the system clock on the pool, which posts back.
+            var generation = PresentationGeneration;
+            void Tick() { if (generation == PresentationGeneration) PumpHeld(); }
             _passiveTimer = Time.CreateTimer(_ =>
             {
-                if (Dispatcher.UIThread.CheckAccess()) PumpHeld();
-                else Dispatcher.UIThread.Post(PumpHeld, DispatcherPriority.Normal);
+                if (Dispatcher.UIThread.CheckAccess()) Tick();
+                else Dispatcher.UIThread.Post(Tick, DispatcherPriority.Normal);
             }, null, PassiveRecheck, PassiveRecheck);
         }
 
         /// <summary>One tick of the watch: re-routes the held surfaces once nothing passive is up.</summary>
         internal static void PumpHeld()
         {
-            if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
+            if (ModalPending || StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
             _passiveTimer?.Dispose();
             _passiveTimer = null;
             var held = _held.ToList();
@@ -129,16 +151,27 @@ namespace ConditioningControlPanel.Avalonia.Platform
             foreach (var h in held) PresentOrInbox(h);
         }
 
+        // WPF StartupPresenter.cs:247,552 retains deferred offers. Panic parks them in the Inbox,
+        // dispose the passive watch and invalidate callbacks already posted to the dispatcher.
+        internal static void CancelDeferred()
+        {
+            PresentationGeneration++;
+            _passiveTimer?.Dispose();
+            _passiveTimer = null;
+            var held = _held.ToArray();
+            _held.Clear();
+            foreach (var item in held) Inbox.File(item); // never run Open or Dismiss on panic
+        }
+
         /// <summary>Test seam: forget the quiet window, the passive pacing, the passive windows up and every row.</summary>
         internal static void ResetForTests()
         {
+            ModalPending = false;
             LauncherHolding = false;
             _firstLaunchUntilUtc = null;
             _lastPassiveUtc = null;
-            _held.Clear();
+            CancelDeferred();
             _passiveUp.Clear();   // a card another test left open must not hold this test's surface
-            _passiveTimer?.Dispose();
-            _passiveTimer = null;
             // A held clock, not the system one: a held card opens only when a test steps it (P76).
             Time = new TestClock();
             Inbox.Items.Clear();

@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "v{0} 版本更新",
+  "upgrade_notes_tour_button": "查看导览 (60秒)",
   "title_select_companion_personality": "为{0}选择 AI 人格",
   "filter_personality_json_files": "人格 JSON 文件",
   "audio_device_unnamed": "(未命名)",
