@@ -358,7 +358,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
             if (b.IsLiveThreat)
             {
-                if (b.Snap()) { AnchorPop(b); Field.ChaosDefused?.Invoke(b); RequestFrame(); }
+                if (!b.Snap()) return;
+                AnchorPop(b);
+                // WPF BubbleService.cs:4686-4688: a live snap is a bigger release, in SnapColor at 1.3,
+                // burst before the defuse callback can clear the field.
+                var snapScale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * snapScale, b.CenterY * snapScale),
+                    Color.FromRgb(0x7A, 0xE0, 0xFF), 1.3);
+                Field.ChaosDefused?.Invoke(b);
+                RequestFrame();
                 return;
             }
             b.Popping = true;
