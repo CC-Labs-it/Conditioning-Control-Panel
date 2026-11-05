@@ -66,7 +66,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly bool Stats = Environment.GetEnvironmentVariable("CCP_FRAME_STATS") == "1";
         private static readonly Stopwatch StatClock = new();
         private static double _statMax, _statSum;
-        private static int _statN, _statBubbles;
+        private static int _statN, _statBubbles, _statRectMax;
+        private static long _statRects;
 
         /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
         public static bool IsRunning => _running && !_chaosOpenedWindows;
@@ -166,7 +167,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable));
+            // WPF AmbientBubbleMotion.RollForSpawn: picker + grants + motion level -> one concrete style.
+            var level = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level; // WPF MotionFx.Level, capped by OS and Gentle Visuals
+            var motion = BubbleMotionRoll.Resolve(s.BubbleMotionStyle,
+                PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain),
+                PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn),
+                level, Field.Random.NextDouble());
+            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, level, motion));
             RequestFrame();
         }
 
@@ -353,11 +360,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void Sample(double ms)
         {
             _statSum += ms; _statN++; _statBubbles += Field.Bubbles.Count;
+            // Disc input regions send about one native rect per pixel row per bubble.
+            var rects = 0;
+            foreach (var w in Windows) rects += w.InputRectCount;
+            _statRects += rects;
+            if (rects > _statRectMax) _statRectMax = rects;
             if (ms > _statMax) _statMax = ms;
             if (StatClock.Elapsed.TotalSeconds < 10) return;
             Console.WriteLine(FormattableString.Invariant(
-                $"[Bubbles] {_statN} steps, avg {(double)_statBubbles / _statN:F1} bubbles, step+sync mean {_statSum / _statN:F3} ms, max {_statMax:F3} ms, gen0 GCs {GC.CollectionCount(0)}"));
-            _statSum = _statMax = 0; _statN = _statBubbles = 0;
+                $"[Bubbles] {_statN} steps, avg {(double)_statBubbles / _statN:F1} bubbles, step+sync mean {_statSum / _statN:F3} ms, max {_statMax:F3} ms, input rects mean {(double)_statRects / _statN:F0} max {_statRectMax}, gen0 GCs {GC.CollectionCount(0)}"));
+            _statSum = _statMax = 0; _statN = _statBubbles = _statRectMax = 0; _statRects = 0;
             StatClock.Restart();
         }
     }
@@ -468,7 +480,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var b = bubbles[i];
                 if (b.Screen != Index || !b.Clickable || b.Popping || b.Size <= 0) continue;
-                // WPF BubbleService.cs:661/:3027: the shared-host hook tests a disc.
+                // WPF BubbleService.cs:661/:3023-3027: the shared-host hook tests a physical-pixel disc;
+                // :581 and :3013 exclude non-clickable and popping bubbles.
                 // Both native backends already accept unions of rectangles: rasterise each
                 // physical pixel row, clipped to this screen. Keep the buffer across frames.
                 var cx = b.CenterX * Scaling - Bounds.X;
@@ -534,7 +547,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
                     using (dc.PushTransform(m))
-                    using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
+                    using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1)))
                     {
                         if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
                         {

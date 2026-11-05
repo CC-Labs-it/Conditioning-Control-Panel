@@ -416,7 +416,17 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void Initialize()
         {
+            // Core cannot read the running build's version - the entry assembly is whichever
+            // head started the process, and Core is not it. Reading the version is a head job,
+            // so this head reports its own; unseeded, CoreReleaseContent answers "0.0.0".
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            CoreReleaseContent.AppVersionProvider = () =>
+                version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
+            // WPF App.xaml.cs:4982-4985: notes for a returning account without a backup.
+            CoreReleaseContent.PatchNotesProvider = () => ReleaseNotes.Current;
+
             AvaloniaXamlLoader.Load(this);
+            Platform.FontGuard.Startup.Verify(Resources, OperatingSystem.IsWindows()); // before any window, including the splash
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
@@ -633,12 +643,6 @@ namespace ConditioningControlPanel.Avalonia
                 });
                 CoreBubbles.RefreshFrequencyAction = Views.Overlays.BubbleOverlay.RefreshFrequency;
 
-                // Core cannot read the running build's version - the entry assembly is whichever
-                // head started the process, and Core is not it. Reading the version is a head job,
-                // so this head reports its own; unseeded, CoreReleaseContent answers "0.0.0".
-                var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                CoreReleaseContent.AppVersionProvider = () =>
-                    version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
                 // WPF App.xaml.cs:2567-2576, after the version seed (the honest user-agent carries it): the Scrolller
                 // licence switch (launch + every 30 min), the device cache's books, and the hourly 24 h sweep.
                 Platform.ScrolllerHead.Start();
@@ -656,8 +660,10 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // ponytail: no funscript playhead (FunScriptService.
-                // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
+                // WPF App.xaml.cs:3218: funscripts follow the primary video playhead.
+                Services.Haptics.FunScriptService.SubscribePlaybackTime =
+                    Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
+                // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
@@ -923,6 +929,7 @@ namespace ConditioningControlPanel.Avalonia
                 // (WPF leaves it unseeded = all available). Seeded before the service so it is never unset.
                 CoreProgram.TaskAvailableProvider = Platform.ProgramCapabilities.IsAvailable;
                 Programs = new Services.Program.ProgramService();
+                Platform.ChasterHead.AttachPrograms(Programs);   // WPF ChasterHooks.cs:65-69
                 CoreQuests.TrackProgramVerifierProvider = (category, amount) => Programs?.TrackVerifier(category, amount);   // WPF App.xaml.cs:413
 
                 // WPF App.xaml.cs:447: ritual photos file through the roadmap. Lazy - the shell creates its
@@ -1053,20 +1060,7 @@ namespace ConditioningControlPanel.Avalonia
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);
                 if (panelHidden)
                 {
-                    bool activated = shell.ShowActivated, inTaskbar = shell.ShowInTaskbar;
-                    shell.ShowActivated = false;
-                    shell.ShowInTaskbar = false;
-                    shell.BuildingHiddenForBoot = true;
-                    void Route(object? s, EventArgs e)
-                    {
-                        shell.Opened -= Route;
-                        Views.Windows.LauncherWindow.RouteBoot(shell);
-                        // Restored only once the panel is tucked away, so it never reaches the taskbar.
-                        shell.BuildingHiddenForBoot = false;
-                        shell.ShowActivated = activated;
-                        shell.ShowInTaskbar = inTaskbar;
-                    }
-                    shell.Opened += Route;
+                    shell.PrepareLauncherBoot();
                 }
                 // Tray: restore, wake, Stop everything (the no-hotkey panic control) and the real Exit.
                 try
@@ -1275,6 +1269,9 @@ namespace ConditioningControlPanel.Avalonia
         internal static void SaveSettingsOnExit(Views.Windows.MainShellWindow? shell, Action save)
         {
             try { shell?.CancelAutonomyPulses(); } catch (Exception ex) { Serilog.Log.Debug("Exit pulse cancel failed: {E}", ex.Message); }
+            // WPF SettleTemporarySettingsForExit (WindowChrome.cs:406): a connected controller's strict lock goes back too.
+            try { if (Views.Tabs.RemoteControlTabView.Relay is { IsValueCreated: true } relay) relay.Value.ReleaseHoldingsForExit(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Exit: remote holdings release failed"); }
             try { save(); }
             catch { /* SettingsService logs save failures; exit must continue */ }
         }
