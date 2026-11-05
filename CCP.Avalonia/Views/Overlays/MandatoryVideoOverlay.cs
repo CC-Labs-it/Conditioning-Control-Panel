@@ -118,6 +118,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF VideoService.cs:2948 and BrowserMediaService.cs:248-257: even with protection off,
         // user playback holds the interaction slot while it is playing.
         public bool BrowserMediaActive => Views.Windows.MainShellWindow.Current?.BrowserMediaBlocksInterruptions == true;
+        public bool DeferForBrowser(Action replay) => Dispatcher.UIThread.Invoke(() =>
+            Views.Windows.MainShellWindow.Current?.DeferVideoForBrowser(replay) == true);
+        public void CancelDeferredForBrowser() => Dispatcher.UIThread.Invoke(() =>
+            Views.Windows.MainShellWindow.Current?.CancelBrowserDeferredVideo());
 
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {

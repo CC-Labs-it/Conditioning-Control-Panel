@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json;
 using Avalonia.Threading;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
@@ -18,6 +19,85 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private double _browserMediaDuration;
         private IDisposable? _browserMediaRecovery;
         private int _browserMediaRecoveryGeneration;
+        private Action? _browserDeferredVideo;
+        private bool _waitingForInteractionWindows;
+        private BubbleCountScheduler? _earlierBubbleGame;
+        private long _earlierBubbleGeneration;
+        private IDisposable? _browserVideoRetry;
+        private int _browserVideoRetryGeneration;
+        internal static readonly TimeSpan BrowserVideoRetryPeriod = TimeSpan.FromMilliseconds(250);
+        internal Func<Action, TimeSpan, IDisposable> ScheduleBrowserVideoRetry =
+            (action, delay) => DispatcherTimer.RunOnce(action, delay);
+
+        private bool EarlierBubbleIsQueued => _earlierBubbleGame is { } game
+            && ReferenceEquals(game, CoreEngine.BubbleCount) && game.IsQueuedOrReplaying
+            && game.QueuedGeneration == _earlierBubbleGeneration;
+
+        internal bool BrowserVideoBlocksBubbleCount => _browserDeferredVideo != null && !EarlierBubbleIsQueued;
+
+        internal bool DeferVideoForBrowser(Action replay)
+        {
+            if (!BrowserMediaOwnsSlot && _browserDeferredVideo == null) return false;
+            if (_browserDeferredVideo == null)
+            {
+                _browserDeferredVideo = replay;
+                if (CoreEngine.BubbleCount is { IsQueued: true } game)
+                {
+                    _earlierBubbleGame = game;
+                    _earlierBubbleGeneration = game.QueuedGeneration;
+                }
+            }
+            return true;
+        }
+
+        internal void CancelBrowserDeferredVideo()
+        {
+            _browserDeferredVideo = null;
+            _earlierBubbleGame = null;
+            _browserVideoRetryGeneration++;
+            _browserVideoRetry?.Dispose();
+            _browserVideoRetry = null;
+            if (!_waitingForInteractionWindows) return;
+            _waitingForInteractionWindows = false;
+            Windows.LockCardWindow.AllClosed -= OnInteractionWindowsClosed;
+            Windows.PopQuizWindow.AllClosed -= OnInteractionWindowsClosed;
+        }
+
+        // Post so other close handlers can open their held interaction before we recheck.
+        private void OnInteractionWindowsClosed() => Dispatcher.UIThread.Post(TryReplayBrowserVideo);
+
+        private void TryReplayBrowserVideo()
+        {
+            if (_browserDeferredVideo == null || BrowserMediaOwnsSlot) return;
+            if (Windows.LockCardWindow.IsAnyOpen() || Windows.PopQuizWindow.IsAnyOpen())
+            {
+                if (!_waitingForInteractionWindows)
+                {
+                    _waitingForInteractionWindows = true;
+                    Windows.LockCardWindow.AllClosed += OnInteractionWindowsClosed;
+                    Windows.PopQuizWindow.AllClosed += OnInteractionWindowsClosed;
+                }
+                return;
+            }
+            if (EarlierBubbleIsQueued || CoreEngine.BubbleCount?.IsBusy == true
+                || Windows.BubbleCountWindow.IsAnyOpen() || Windows.BubbleCountResultWindow.OpenWindows.Count > 0)
+            {
+                if (_browserVideoRetry == null)
+                {
+                    var generation = _browserVideoRetryGeneration;
+                    _browserVideoRetry = ScheduleBrowserVideoRetry(() =>
+                    {
+                        if (generation != _browserVideoRetryGeneration) return;
+                        _browserVideoRetry = null;
+                        TryReplayBrowserVideo();
+                    }, BrowserVideoRetryPeriod);
+                }
+                return;
+            }
+            var replay = _browserDeferredVideo;
+            CancelBrowserDeferredVideo();
+            replay();
+        }
         // Like the pulse timer seam, tests step this without waiting for a long clip.
         internal Func<Action, TimeSpan, IDisposable> ScheduleBrowserMediaRecovery =
             (action, delay) => DispatcherTimer.RunOnce(action, delay);
@@ -120,11 +200,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             BrowserMediaOwnsSlot = false;
             CancelBrowserMediaRecovery();
+            CancelBrowserDeferredVideo();
         }
 
         // WPF MainWindow.xaml.cs:2045,2113 and BrowserMediaService.cs:400-415.
         internal void StopBrowserMediaForPanic()
         {
+            CancelBrowserDeferredVideo();
             try { _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaRecoveryScript); }
             finally { StopBrowserMediaTracking(); }
         }
@@ -133,11 +215,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             BrowserMediaPlaying = false;
             _browserMediaDuration = 0;
-            ClearBrowserMediaClaim();
-            if (_browserMediaWatchdog == null) return;
-            _browserMediaWatchdog.Stop();
-            _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
-            _browserMediaWatchdog = null;
+            BrowserMediaOwnsSlot = false;
+            CancelBrowserMediaRecovery();
+            if (_browserMediaWatchdog != null)
+            {
+                _browserMediaWatchdog.Stop();
+                _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
+                _browserMediaWatchdog = null;
+            }
+            TryReplayBrowserVideo();
         }
 
         // Adapted from WPF BrowserService.cs:340-457. The carrier uses the native WebHost

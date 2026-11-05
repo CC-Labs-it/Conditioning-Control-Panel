@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Services
         private bool _toldNoVideos, _heldFlashes;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount;
+        private bool _replayingQueuedGame;
 
         public BubbleCountScheduler(IBubbleCountHost host, TimeProvider? time = null, Func<IReadOnlyList<string>>? library = null)
         {
@@ -78,6 +79,10 @@ namespace ConditioningControlPanel.Services
         public bool IsBusy { get; private set; }
         /// <summary>A game is waiting for another fullscreen interaction to end.</summary>
         public bool IsQueued => _queued != null;
+        /// <summary>Identifies a queued request across its polling retries.</summary>
+        public long QueuedGeneration { get; private set; }
+        /// <summary>A queued request still owns its turn while its callback is starting it.</summary>
+        public bool IsQueuedOrReplaying => _queued != null || _replayingQueuedGame;
         /// <summary>The effects choice is latched for the whole round, including retry/mercy cards.</summary>
         public bool HoldsEffects { get; private set; }
 
@@ -182,9 +187,11 @@ namespace ConditioningControlPanel.Services
             {
                 if (_queued != null) return;   // already waiting
                 Log.Information("BubbleCountService: game queued behind another interaction");
+                if (!_replayingQueuedGame) QueuedGeneration++;
                 QueueBehind(forceTest);
                 return;
             }
+            Dispose(ref _queued); // A direct start consumes the pending game too.
             IsBusy = true;
             HoldsEffects = CoreSettings.Current.BubbleCountPauseEffects;
             if (HoldsEffects)
@@ -241,9 +248,14 @@ namespace ConditioningControlPanel.Services
         private void QueueBehind(bool forceTest) => _queued = After(QueuePoll, mine =>
         {
             if (!ReferenceEquals(mine, _queued)) return;
-            Dispose(ref _queued);
-            if (_host.OtherInteractionActive) QueueBehind(forceTest);
-            else Trigger(forceTest);
+            _replayingQueuedGame = true;
+            try
+            {
+                Dispose(ref _queued);
+                if (_host.OtherInteractionActive) QueueBehind(forceTest);
+                else Trigger(forceTest);
+            }
+            finally { _replayingQueuedGame = false; }
         });
 
         private bool Play(bool strict)

@@ -76,6 +76,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Tabs.SettingsTabView? BrowserPage => Named<Tabs.SettingsTabView>("SettingsTab");
 
         internal bool BrowserMediaOwnsSlot => BrowserPage?.BrowserMediaOwnsSlot == true;
+        internal bool BrowserVideoBlocksBubbleCount => BrowserPage?.BrowserVideoBlocksBubbleCount == true;
+        internal bool DeferVideoForBrowser(Action replay) => BrowserPage?.DeferVideoForBrowser(replay) == true;
+        internal void CancelBrowserDeferredVideo() => BrowserPage?.CancelBrowserDeferredVideo();
         // WPF BrowserMediaService.cs:102, :143 and VideoService.cs:2948: protection
         // and a successful queue claim independently defer interruptions.
         internal bool BrowserMediaBlocksInterruptions => BrowserMediaOwnsSlot
