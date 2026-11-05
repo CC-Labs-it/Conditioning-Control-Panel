@@ -419,10 +419,7 @@
                             </RadialGradientBrush>
                         </Ellipse.Fill>
                     </Ellipse>
-                    <!-- Animated GIF avatar (for level 20+).
-                         ponytail: WPF drove this through XamlAnimatedGif (gif:AnimationBehavior),
-                         a WPF-only package. Avalonia needs its own GIF decoder; the layer is kept
-                         so the crossfade code has its slot, but nothing animates it. -->
+                    <!-- The animated avatar layer; V2 Rain playback uses this and the second layer. -->
                     <Image x:Name="ImgAvatarAnimated"
                            Stretch="Uniform"
                            MaxHeight="306"

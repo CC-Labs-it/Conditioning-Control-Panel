@@ -261,14 +261,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             WireQuickMenu();   // the right-click menu's handlers (AvatarTubeWindow.QuickMenu.cs)
             _currentAvatarSet = ResolveStartAvatarSet();
             ApplyAvatarSet();
+            WatchRainSettings();
             UpdateNavigationArrows();
             CoreMods.ModChanged += OnTubeModChanged;
             // The caption is Loc-driven and set from code (a persona name has no static key), so it
             // has to be re-run rather than bound - see the porting note about {loc:Str} and .Text.
             LocalizationManager.Instance.LanguageChanged += OnTubeLanguageChanged;
 
-            // ponytail: GIF/emote/portrait playback and non-awareness service reactions remain
-            // in the WPF reference. Look selection and ModChanged repaint use AvatarSets.cs.
+            // V1 emotes, portraits and non-awareness service reactions remain in the WPF reference.
+            // V2 idle playback is in AvatarTubeWindow.RainPlayback.cs.
 
             // ponytail: the WPF ctor also started three timers here: a 2s greeting,
             // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
@@ -327,6 +328,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
             _avatarSetsClosed = true;
+            if (_rainSettings != null) _rainSettings.PropertyChanged -= RainSettingsChanged;
+            StopRainPlayback();
             CoreMods.ModChanged -= OnTubeModChanged;
             CancelAvatarSwitch();
             StopFloatingAnimation(); // WPF Windowing.cs:1507
@@ -826,12 +829,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // same visual for a bottom-aligned avatar; only the parent's measured size differs, and
             // AvatarBorder's size is margin-driven anyway.
             var scale = EffAvatarScale();
-            var transform = Math.Abs(scale - 1.0) > 0.001 ? new ScaleTransform(scale, scale) : null;
             foreach (var name in new[] { "ImgAvatar", "ImgAvatarAnimated", "ImgAvatarAnimatedB" })
             {
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
+                // Rain clips carry a per-clip scale in the pack map; the still avatar keeps 1.
+                var clipScale = name == "ImgAvatar" ? 1 : (double?)_rainMap?["clipScale"]?[img.Tag as string ?? ""] ?? 1;
+                var effectiveScale = scale * clipScale;
+                var transform = Math.Abs(effectiveScale - 1.0) > 0.001 ? new ScaleTransform(effectiveScale, effectiveScale) : null;
                 // WPF Avatar.cs:765-771 sets LayoutTransform; xaml:512-517 bobs RenderTransform.
                 // .NET 10 WPF FrameworkElement.SetLayoutOffset appends layout first, render second
                 // (FrameworkElement.cs:5224,5256), so the bob displacement stays unscaled.
@@ -927,15 +933,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // The clamps are ModService.GetAvatar*'s, verbatim: a mod manifest is author-written JSON,
         // so an out-of-range number must be pinned here rather than thrown off the canvas.
         //
-        // ponytail: WPF's EffAvatar* (AvatarTubeWindow.CirceEmotes.cs) ADD a running Circe emote's
-        // per-clip nudge on top of these. Emote mode needs an Avalonia WebP/GIF decoder and did not
-        // port, so the emote term is the neutral one it has when no emote set is animating - which
-        // is the state every non-Circe mod is in permanently.
-        private static double EffAvatarScale() => Math.Clamp(EffectiveTubeLayout()?.AvatarScale ?? 1.0, 0.1, 3.0);
-        private static int EffAvatarOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetX ?? 0, -1000, 1000);
-        private static int EffAvatarOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetY ?? 0, -500, 500);
-        private static int EffAvatarDetachedOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetX ?? 0, -1000, 1000);
-        private static int EffAvatarDetachedOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetY ?? 0, -500, 500);
+        // WPF composes emote layout deltas over the mod's layout.
+        private double EffAvatarScale() => Math.Clamp(EffectiveTubeLayout()?.AvatarScale ?? 1.0, 0.1, 3.0) * RainLayout("scale", 1);
+        private double EffAvatarOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetX ?? 0, -1000, 1000) + RainLayout("offsetX");
+        private double EffAvatarOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetY ?? 0, -500, 500) - RainLayout("offsetY");
+        private double EffAvatarDetachedOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetX ?? 0, -1000, 1000) + RainLayout("detachedX");
+        private double EffAvatarDetachedOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetY ?? 0, -500, 500) - RainLayout("detachedY");
 
         /// <summary>
         /// True when the mod replaces tube.png but not tube2.png - then the detached state uses the
@@ -1071,6 +1074,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             int loaded = 0;
             foreach (var pose in _avatarPoses) if (pose != null) loaded++;
             if (loaded > 1) _poseTimer.Start();
+            _ = RefreshRainPlayback();
         }
 
         /// <summary>
@@ -1699,10 +1703,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // (AvatarTubeWindow.ChatInput.cs:75) that crosses. It feeds the rolling 60s click
             // count behind the click-escalation eggs.
             CoreBark.NotifyAvatarClicked();
+            RainClickEmote();
 
             // ponytail: the rest of that handler stays head-side and none of it is a Core move -
             // the 4-click animation refresh, the 50-clicks-in-60s collapse trigger,
-            // App.Achievements.TrackAvatarClick, CirceClickEmote and the 1-in-25 pop sound all
+            // App.Achievements.TrackAvatarClick, V1 click emotes and the 1-in-25 pop sound all
             // reach App.* or the animated-avatar pipeline. So does BounceAvatar (the click squash,
             // AvatarTubeWindow.Avatar.cs), which here would be a hand-stepped tween on
             // AvatarBounceHost's RenderTransform, not an Animation.
