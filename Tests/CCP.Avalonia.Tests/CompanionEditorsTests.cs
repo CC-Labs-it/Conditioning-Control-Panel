@@ -189,7 +189,10 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
+        // Freeze entrance motion so the pointer probes a stationary target.
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
         var shell = new MainShellWindow();
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();

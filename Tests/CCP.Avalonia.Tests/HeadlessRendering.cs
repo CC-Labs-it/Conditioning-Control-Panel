@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
@@ -18,6 +19,7 @@ internal static class HeadlessRendering
     internal static void RenderLiveTree(Visual w)
     {
         Dispatcher.UIThread.RunJobs();
+        if (w is Control control) control.UpdateLayout();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
         while (!batch.Rendered.IsCompleted)
@@ -26,5 +28,7 @@ internal static class HeadlessRendering
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
     }
 }
