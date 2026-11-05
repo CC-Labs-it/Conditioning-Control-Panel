@@ -22,7 +22,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>shell-inbox: the server announcement poster (WPF MainWindow.Marquee.cs:857) goes through the startup
+/// <summary>shell-inbox: the server announcement poster (WPF MainWindow.Marquee.cs:881) goes through the startup
 /// ladder - a "📣" row while quiet, the popup otherwise - and every dismissal records both halves.</summary>
 public sealed class ServerAnnouncementInboxTests
 {
@@ -110,7 +110,7 @@ public sealed class ServerAnnouncementInboxTests
     });
 
     [Fact]
-    public Task OpeningTheRowShowsTheAnnouncementPopup() => Run(async _ =>
+    public Task OpeningTheRowShowsTheAnnouncementPopup() => Run(async fake =>
     {
         StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
         var opened = new List<AnnouncementPopup>();
@@ -119,8 +119,10 @@ public sealed class ServerAnnouncementInboxTests
         try
         {
             shell.Show();
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7)); // queue the startup callback
             await shell.CheckServerAnnouncementAsync();
             Dispatcher.UIThread.RunJobs();
+            Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement", StringComparison.Ordinal)));
             Assert.Empty(opened);
 
             Click(shell.Named<Button>("BtnInbox")!);
@@ -132,9 +134,25 @@ public sealed class ServerAnnouncementInboxTests
 
             var popup = Assert.Single(opened);
             Assert.Equal("The Spiral is open", popup.FindControl<TextBlock>("TxtTitle")!.Text);
+            await shell.CheckServerAnnouncementAsync(); // a delayed launch check cannot repost an opened row
             Assert.Empty(StartupLadder.Inbox.Items);
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items); // the startup timer must not re-file the row just opened
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task AClosedShellCannotPostIntoTheNextShellsInbox() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        shell.Show();
+        shell.Close();
+        await shell.CheckServerAnnouncementAsync();
+        Assert.Empty(fake.Calls);
+        Assert.Empty(StartupLadder.Inbox.Items);
     });
 
     [Fact]
@@ -161,31 +179,29 @@ public sealed class ServerAnnouncementInboxTests
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
     });
     [Fact]
-    public Task ClosedShellAndCompletedCheckCannotRepostAnOpenedAnnouncement() => Run(async fake =>
+    public Task StartupCheckWaitsSevenSecondsAndClosingReleasesIt() => Run(async fake =>
     {
         StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
-        var opened = new List<AnnouncementPopup>();
-        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
-        var previous = new MainShellWindow();
+        var clock = (StartupLadder.TestClock)StartupLadder.Time;
+        var closed = new MainShellWindow();
+        closed.Show(); closed.Close();
         var shell = new MainShellWindow();
         try
         {
-            previous.Show();
-            previous.Close(); // its seven-second callback must not reach the new shell's inbox
             shell.Show();
-            await shell.CheckServerAnnouncementAsync();
-            StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items));
-            Assert.Single(opened);
-            Assert.Empty(StartupLadder.Inbox.Items);
-
-            // Exercise the real seven-second startup timer, including callbacks from a closed shell.
-            await Task.Delay(TimeSpan.FromSeconds(8));
             Dispatcher.UIThread.RunJobs();
-            Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement")));
-            Assert.Empty(StartupLadder.Inbox.Items);
-            Assert.Single(opened);
+            clock.Advance(TimeSpan.FromSeconds(6));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(fake.Calls.Where(c => c.StartsWith("GET /config/announcement", StringComparison.Ordinal)));
+            clock.Advance(TimeSpan.FromSeconds(1));
+            await Until(() => StartupLadder.Inbox.UnreadCount > 0);
+            Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement", StringComparison.Ordinal)));
+            Assert.Single(StartupLadder.Inbox.Items);
+            shell.Close();
+            await shell.CheckServerAnnouncementAsync();
+            Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement", StringComparison.Ordinal)));
         }
-        finally { previous.Close(); shell.Close(); foreach (var p in opened) p.Close(); }
+        finally { shell.Close(); }
     });
 
     [Fact]
