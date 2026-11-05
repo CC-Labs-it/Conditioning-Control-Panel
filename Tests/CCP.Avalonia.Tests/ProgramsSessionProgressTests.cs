@@ -26,6 +26,36 @@ public sealed class ProgramsSessionProgressTests
     private static void Elapsed(SessionRunner runner, TimeSpan elapsed) => runner._pausedElapsed = elapsed;
 
     [Fact]
+    public Task SheenStartsWhenLayoutProvidesWidthWithoutAnotherEngineTick() => Run(async (shell, tab, svc, runner) =>
+    {
+        var host = tab.FindControl<Border>("SessionBarHost")!;
+        host.Width = 40;
+        await shell.StartProgramSessionAsync();
+        Dispatcher.UIThread.RunJobs();
+        tab.UpdateLayout();
+        tab.RefreshLiveSessionProgress();
+        Assert.Equal(40, host.Bounds.Width);
+        Assert.False(tab.SessionSheenRunning);
+        var tasks = tab.FindControl<ItemsControl>("TodayTaskList")!.ItemsSource;
+        host.Width = 400;
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(400, host.Bounds.Width);
+        Assert.True(tab.SessionSheenRunning); // no tick or explicit refresh after layout
+        Assert.Same(tasks, tab.FindControl<ItemsControl>("TodayTaskList")!.ItemsSource);
+        runner.Pause();
+        host.Width = 420;
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(tab.SessionSheenRunning);
+        PanicSurfaces.StopAll("layout-retry", shell);
+        host.Width = 440;
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(tab.SessionSheenRunning);
+    });
+
+    [Fact]
     public Task LiveClockBarAndSheenFollowTheSessionWithoutRebuildingTasks() => Run(async (shell, tab, svc, runner) =>
     {
         T F<T>(string name) where T : Control => tab.FindControl<T>(name)!;
