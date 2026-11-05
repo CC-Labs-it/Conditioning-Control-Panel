@@ -143,6 +143,7 @@ public sealed class PanicSurfacesTests
         "attention-test",
         "audio-duck",
         "descent-fuse",
+        "media-drop",
         "deeper-player-fullscreen",
         "deeper-editor-audio",
         "friend-notices", "knock-cards",

@@ -5,10 +5,8 @@
 // already live in Core's PendingModChoice. The combo, the Mod Manager, the pending first-run
 // choice and the wizard all go through ActivateMod + ApplyActiveModChange; nothing else switches.
 //
-// ponytail: ApplyActiveModChange repaints what this head has - the selector, the palette. WPF also
-// reloads the takeover art, achievement grid, BambiCloud radio + browser URL, Hypnotube link
-// editor and per-mod defaults; each joins here when its surface is live. Home tile art now follows
-// CoreMods.ModChanged as well as startup; the manager footer is the WPF 7.1.5 action row.
+// The authoritative ModChanged event repaints shell chrome and labels. Manual activation also
+// restores the site, personality and explicitly chosen per-mod presets (WPF xaml.cs:3210-3272).
 
 using System;
 using System.Linq;
@@ -45,9 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (AvApp.Mods is not { } mods) return;   // headless render: keep the sample chip
             _modSwitchHost = this;
             Closed += (_, _) => { if (_modSwitchHost == this) _modSwitchHost = null; };
-            InitializeModSelector();
-            RefreshThemeAwareElements();
-            LoadFeatureImages();
+            RefreshModShell();
+            LocalizationManager.Instance.LanguageChanged += OnModShellLanguageChanged;
+            Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= OnModShellLanguageChanged;
             CoreMods.ModChanged += OnModChangedFeatureImages;
             Closed += (_, _) => CoreMods.ModChanged -= OnModChangedFeatureImages;
             if (_hookedMods != mods)
@@ -184,6 +182,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             LoadLogo();   // WPF MainWindow.xaml.cs:3127
             RefreshThemeAwareElements();
 
+            // WPF :3244-3261: the BambiCloud radio, the site selection, and a mod that does not use
+            // BambiCloud takes a loaded browser to its own default page.
+            var modWantsBambiCloud = mods.ShowBambiCloudOption();
+            if (BrowserPage?.FindControl<RadioButton>("RbBambiCloud") is { } rbBambi)
+                rbBambi.IsVisible = modWantsBambiCloud || CoreSettings.Current.ForceShowBambiCloud;
+            SyncSiteRadiosToActiveMod();
+            if (!modWantsBambiCloud && BrowserView?.Source != null && !BrowserBlockedOffline(userInitiated: false))
+                NavigateBrowser(mods.GetDefaultBrowserUrl());
+
             // WPF ApplyActiveModChange: restore only an explicit pick remembered in this mod.
             // A restore keeps custom prompts intact and does not record a new pick.
             try { PersonalityService.Shared.RestoreForActiveMod(); }
@@ -191,7 +198,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             foreach (var personality in this.GetLogicalDescendants().OfType<Controls.Companion.MakeHerYoursView>())
                 personality.ViewModel.Sync();
 
+            ApplyModDefaultPresets(mods.ActiveModId); // WPF MainWindow.xaml.cs:3272
+
             Log.Information("Mod changed to {ModId}", mods.ActiveModId);
+        }
+
+        /// <summary>WPF ApplyModDefaultPresets (MainWindow.Presets.cs:2282): only the user's stored per-mod
+        /// choice applies; assets through the Assets page, settings through the quiet, session-guarded LoadPreset.</summary>
+        internal void ApplyModDefaultPresets(string? modId)
+        {
+            var s = CoreSettings.Current;
+            var assetId = ModPresetDefaults.ForActivation(s.ModDefaultAssetPreset, modId);
+            if (assetId != null && AssetPresetService.Find(s.AssetPresets, assetId) != null)
+                ApplyAssetPresetFromLauncher(assetId);
+
+            var settingsId = ModPresetDefaults.ForActivation(s.ModDefaultSettingsPreset, modId);
+            var preset = settingsId == null ? null
+                : Preset.GetDefaultPresets().Concat(s.UserPresets).FirstOrDefault(p => p.Id == settingsId);
+            if (preset != null) Named<Tabs.PresetsTabView>("PresetsTab")?.LoadPreset(preset);
         }
 
         /// <summary>WPF InitializeModSelector: stock mods in canonical order, then user mods A-Z.</summary>
