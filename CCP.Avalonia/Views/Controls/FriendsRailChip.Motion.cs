@@ -15,7 +15,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls;
 public sealed partial class FriendsRailChip
 {
     private readonly Dictionary<Border, CancellationTokenSource> _bumps = new();
-    private Window? _faceHost;
     internal int ActiveBumps => _bumps.Count;
 
     internal void Hover(bool on)
@@ -82,25 +81,10 @@ public sealed partial class FriendsRailChip
         foreach (var run in _bumps.Values) run.Cancel();
         _bumps.Clear();
     }
-    // WPF FriendsRailChip.cs:197-228: refresh identity on attach and activation.
-    private void BindFaceHost()
-    {
-        UnbindFaceHost();
-        _faceHost = TopLevel.GetTopLevel(this) as Window;
-        if (_faceHost != null) _faceHost.Activated += OnFaceActivated;
-    }
-    private void UnbindFaceHost()
-    {
-        if (_faceHost != null) _faceHost.Activated -= OnFaceActivated;
-        _faceHost = null;
-    }
-    private void OnFaceActivated(object? sender, EventArgs e) { Rebind(); RefreshFace(); }
-
     // WPF FriendsRailChip.cs:279-296, FriendsLook.cs:260-275.
     internal void RefreshFace()
     {
-        _name.Text = Drawer.MeName();
-        if (_face.Child is Grid face) face.Children[0] = FriendsDrawer.Avatar(_name.Text!, 40, null);
+        // Name and avatar repaint in UpdatePill (the integration copy); this adds the tier plate.
         while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
         var tier = FriendsDrawerRules.DisplayTier(Drawer.MeTier());
         if (tier > 0 && Helpers.ModArt.TryLoad($"features/tier_badge_t{tier}.png", 96) is { } art)

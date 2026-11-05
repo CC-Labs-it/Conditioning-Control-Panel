@@ -22,6 +22,9 @@ namespace ConditioningControlPanel
 
         public static bool IsRunning => _running;
 
+        // Head-owned Brain Drain audio. WPF MainWindow.StartStop.cs:411-414,531.
+        public static volatile Action? StartBrainDrain, StopBrainDrain;
+
         /// <summary>When the running engine started (WPF MainWindow._emiEngineStartedUtc); null when stopped.</summary>
         public static DateTime? StartedUtc { get; private set; }
 
@@ -67,6 +70,7 @@ namespace ConditioningControlPanel
                 if (s.MindWipeLoop) CoreMindWipe.StartLoop(s.MindWipeVolume / 100.0);
             }
 
+            if (!audioOnly && s.BrainDrainEnabled) StartBrainDrain?.Invoke();
             _running = true;
             StartedUtc = DateTime.UtcNow;
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
@@ -90,6 +94,8 @@ namespace ConditioningControlPanel
                 CoreSubliminal.Stop();
                 LockCardScheduler.Instance.Stop();
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
+                try { StopBrainDrain?.Invoke(); }
+                catch (Exception ex) { Log.Warning(ex, "Brain Drain stop failed"); }
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
                 _running = false;
                 RemoteCommands.StopOverlays(); // remote-only overlays must not survive Stop or panic
@@ -113,6 +119,7 @@ namespace ConditioningControlPanel
             if (!s.BubblesEnabled) ApplyLive("bubbles", false);
             if (!s.MandatoryVideosEnabled) ApplyLive("video", false);
             if (!s.BubbleCountEnabled) ApplyLive("bubblecount", false);   // WPF Presets.cs:2261
+            if (!s.BrainDrainEnabled) StopBrainDrain?.Invoke();
             CoreMindWipe.ApplyRunRule();   // WPF Presets.cs:2265 (#1304)
         }
 
@@ -132,6 +139,7 @@ namespace ConditioningControlPanel
                 case "bubbles": if (on) CoreBubbles.Start(); else CoreBubbles.Stop(); break;
                 case "video": if (on) Video?.Start(); else Video?.Stop(); break;   // WPF VideoFeatureControl ChkEnable
                 case "bubblecount": if (on) BubbleCount?.Start(); else BubbleCount?.Stop(); break;   // WPF BubbleCountFeatureControl ChkEnable
+                case "braindrain": if (on) StartBrainDrain?.Invoke(); else StopBrainDrain?.Invoke(); break; // WPF Presets.cs:1364
             }
         }
     }

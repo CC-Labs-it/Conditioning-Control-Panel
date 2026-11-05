@@ -1,3 +1,7 @@
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Skia;
+using ConditioningControlPanel.Avalonia.Platform;
 using System;
 using Avalonia;
 using Avalonia.Headless;
