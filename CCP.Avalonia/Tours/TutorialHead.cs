@@ -105,7 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Tours
             overlay.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
-                if (browser != null) browser.IsVisible = true;
+                // Through the shell's one rule: never back over the remote overlay or a leash gate.
+                if (browser != null) shell.RestoreBrowser();
             };
             overlay.Show();
         }
