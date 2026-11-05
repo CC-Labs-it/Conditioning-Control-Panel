@@ -85,6 +85,8 @@ public sealed class PanicSurfacesTests
     {
         "emergency-exit",
         "emi-ring",
+        "launcher-notes",
+        "launcher-friends",
         "intake",
         "leash-task",
         "deeper-tutorial",
