@@ -130,11 +130,29 @@ internal sealed class RainPackSink
         int width = codec.Info.Width, total = codec.Info.Height;
         if (total % frames != 0) throw new InvalidDataException($"Strip height {total} does not split into {frames} frames.");
         int height = total / frames, frameBytes = width * height * 4;
+        var info = new SKImageInfo(width, total, colorType, alphaType);
+        // Row by row straight into each frame (a 384x618 x 90 strip is ~85 MB decoded): no second
+        // whole-strip buffer. A codec without scanline support takes the one-buffer path below.
+        if (codec.StartScanlineDecode(info) == SKCodecResult.Success)
+        {
+            var rows = new List<byte[]>(frames);
+            for (int i = 0; i < frames; i++)
+            {
+                var f = new byte[frameBytes];
+                var h = GCHandle.Alloc(f, GCHandleType.Pinned);
+                int got;
+                try { got = codec.GetScanlines(h.AddrOfPinnedObject(), height, width * 4); }
+                finally { h.Free(); }
+                if (got != height) throw new InvalidDataException($"Strip frame {i} did not decode ({got}/{height} rows).");
+                rows.Add(f);
+            }
+            return new RainStripFrames(width, height, colorType, alphaType, rows);
+        }
         var buffer = new byte[(long)frameBytes * frames];
         var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
         try
         {
-            var result = codec.GetPixels(new SKImageInfo(width, total, colorType, alphaType), handle.AddrOfPinnedObject());
+            var result = codec.GetPixels(info, handle.AddrOfPinnedObject());
             if (result != SKCodecResult.Success) throw new InvalidDataException($"Strip did not decode ({result}).");
         }
         finally { handle.Free(); }
