@@ -1,53 +1,7 @@
-// PORTED from ConditioningControlPanel/MainWindow/MainWindow.CompanionRoom.cs (410 lines) - the
-// Companion tab's write surface after the "Her Room" redesign, sorted member by member.
-//
-// Every method takes a VALUE rather than reading a control, exactly as on WPF: the redesign moved
-// where a thing is ASKED FOR, never what it does.
-//
-// WHAT IS REAL HERE: the operations whose whole body is settings, the ported avatar tube or the
-// ported consent dialog - the avatar's show/hide and mute, awareness on/off with its one-time
-// plain-language consent (Views/Dialogs/AwarenessConsentDialog.EnsureConsentAsync), the v2
-// upgrader prompt, the Workshop's intensity dial and the daily request limit
-// (Views/Dialogs/InputDialog). Three are async where WPF blocked - Avalonia's ShowDialog is awaited.
-//
-// _roomLoading, not _isLoading: the class-wide field is listed in MainShellWindow.axaml.cs's
-// dropped ledger and belongs to that file. A partial-class field is declared exactly once.
-//
-// EVERY `CompanionRoom?.Sync…()` LINE IS DROPPED, and that is the one thing to restore first:
-// CompanionRoomRuntimeVm is at ConditioningControlPanel/Views/Controls/Companion/Runtime/
-// CompanionRoomRuntimeVm.cs and its eight zone viewmodels are still WPF-side, so the room's
-// dials do not re-read after a write yet. Nothing below depends on that to be CORRECT - the
-// settings are written either way - only to be reflected.
-//
-// STILL HEAD-SIDE, each with the exact symbol and where it lives today:
-//   CompanionRoom / SyncCompanionRoom - CompanionRoomRuntimeVm (path above). CompanionTabView on
-//                            this head publishes no Vm, deliberately.
-// RESTORED since (rows-companion-room): SetSlutModeAsync / ActivatePersonalityPresetAsync with the
-//                            acknowledgement gate, called by Z4 (MakeHerYoursView's live viewmodel).
-//   SetCustomApiKey        - Services.Auth.SecureStringHelper.Protect
-//                            (ConditioningControlPanel/Services/Auth/SecureStringHelper.cs).
-//                            CompanionPromptSettings.OpenAiCompatibleApiKey holds a DPAPI blob,
-//                            so writing the typed key there on this head would put a BYO API key
-//                            in settings.json IN THE CLEAR. CoreSecrets is the seam that fixes
-//                            this (CoreSecrets.ApiKey), but nothing READS the key from it yet, so
-//                            half the pair is worse than neither. Blocked on purpose.
-//   the awareness observer - App.WindowAwareness.Start/Stop
-//                            (ConditioningControlPanel/Services/Awareness/). Dropped from
-//                            SetAwarenessEnabled and EnsureAwarenessV2Consent below: there is no
-//                            observer on this head to start, so the setting write and the consent
-//                            record are the whole of what can be honoured.
-// RESTORED since (local-providers): ClearCompanionConversation below - Brain.ForgetThread and
-// AiServiceStrategy.ClearLocalHistory are both Core now; the Engine Room drawer's EngineRoomVm calls it.
-// SetAiProviderMode / TestCloudConnection live in that VM (EngineRoomDrawer.axaml.cs) over Core EngineRoomProviders.
-// RESTORED since: the premium bar. TierGate is in Core (CCP.Core/Services/TierGate.cs) over the
-// CoreEntitlement seam, so SetAwarenessEnabled's ON-edge gate is the real one. This head seeds no
-// entitlement providers, so it denies - the same answer WPF gives with no Patreon service.
-//   AwarenessSettingsPanel - the legacy cooldown sliders' host, inside
-//                            CCP.Avalonia/Views/Controls/Companion/; CompanionTabView publishes
-//                            none of the room's cells (MainShellWindow.CompanionTab.cs).
-//
-// NO CALLER YET: the room's dials are in Views/Controls/Companion/Runtime/*Cell, whose Avalonia
-// twins carry inert handlers, and the tray/dashboard paths are in MainShellWindow.axaml.cs.
+// Ported write surface: WPF MainWindow/MainWindow.CompanionRoom.cs.
+// Awareness refreshes follow the controls after the v2 tab reparenting.
+// Part B: secure BYO key writer/reader and full v2 observer integration.
+// SetCustomApiKey blocked: no DPAPI twin; writing OpenAiCompatibleApiKey here stores the key in the clear.
 
 using System;
 using System.Linq;
@@ -196,11 +150,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // door that will not open. Unseeded on this head, so it currently denies - which is the
             // WPF behaviour with no Patreon service, not a new refusal.
             if (enabled && !Services.TierGate.DemandPremium(Loc.Get("tab_awareness"), "awareness"))
+            {
+                SyncAwareness();
                 return false;
+            }
 
             if (enabled && !await AwarenessConsentDialog.EnsureConsentAsync(this, s))
             {
-                // Declined (or the dialog could not open). Nothing is written and nothing starts.
+                // WPF MainWindow.CompanionRoom.cs:223-228: restore the unchanged dial.
+                SyncAwareness();
                 return false;
             }
 
@@ -216,6 +174,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (enabled) App.WindowAwareness.Start(); else App.WindowAwareness.Stop();
 
             Log.Information("Awareness Mode {State} via the awareness dial", enabled ? "enabled" : "disabled");
+            SyncHero();
+            SyncAwareness(); // WPF MainWindow.CompanionRoom.cs:254-255
             return enabled;
         }
 
@@ -229,7 +189,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// not asked again this session. Turning the dial off remains the way to say no
         /// permanently.</para>
         /// </summary>
-        internal async void EnsureAwarenessV2Consent()
+        internal async void EnsureAwarenessV2Consent() => await EnsureAwarenessV2ConsentAsync();
+
+        internal async System.Threading.Tasks.Task EnsureAwarenessV2ConsentAsync()
         {
             if (_awarenessV2ConsentAsked || _roomLoading) return;
 
@@ -241,7 +203,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _awarenessV2ConsentAsked = true;
 
             if (!await AwarenessConsentDialog.EnsureConsentAsync(this, s))
-                Log.Information("Awareness: v2 consent declined by an upgrader — staying on the legacy pipeline");
+            {
+                Log.Information("Awareness: v2 consent declined by an upgrader, staying on the legacy pipeline");
+                return;
+            }
+
+            // WPF MainWindow.CompanionRoom.cs:64-74: engage the accepted pipeline now.
+            try
+            {
+                App.WindowAwareness.Stop();
+                App.WindowAwareness.Start();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Awareness: restart after v2 consent failed"); }
+            SyncAwareness();
         }
 
         /// <summary>
@@ -261,6 +235,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreSettings.Save();
 
             Log.Information("Awareness intensity set to {Intensity}", intensity);
+            SyncAwareness(); // WPF MainWindow.CompanionRoom.cs:277
+        }
+
+        // WPF AwarenessVm.Sync plus its Workshop re-read. Logical descendants include zones
+        // adopted by the Awareness tab, unlike a lookup under the collapsed room.
+        internal void SyncAwareness()
+        {
+            foreach (var view in this.GetLogicalDescendants().OfType<Controls.Companion.AwarenessPrivacyView>())
+                view.ViewModel?.Sync();
+            foreach (var cell in this.GetLogicalDescendants().OfType<Controls.Companion.Runtime.WorkshopAwarenessCell>())
+                cell.SyncIntensity();
         }
 
         // =====================================================================================
