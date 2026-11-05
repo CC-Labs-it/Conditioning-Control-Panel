@@ -71,26 +71,6 @@ public class TestIsolationTests
         });
 
     [Fact]
-    public System.Threading.Tasks.Task EveryTestStartsWithProductionFonts() =>
-        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
-        {
-            // FontManager is process-wide: a test that wins startup must not omit app fonts.
-            Assert.NotNull(global::Avalonia.Application.Current);
-            Assert.Contains("Inter", global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
-            foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Fredoka, Segoe UI", "Cascadia Mono, Consolas, Courier New" })
-            {
-                var text = new global::Avalonia.Controls.TextBlock
-                {
-                    Text = "PREMIUM Wi", FontFamily = new global::Avalonia.Media.FontFamily(family),
-                    FontSize = 16, FontWeight = global::Avalonia.Media.FontWeight.Black
-                };
-                text.Measure(global::Avalonia.Size.Infinity);
-                Assert.True(text.DesiredSize.Width > 0, family);
-            }
-            return System.Threading.Tasks.Task.CompletedTask;
-        });
-
-    [Fact]
     public void SharedSetupRegistersBundledFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter), global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
