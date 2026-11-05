@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:1732: standalone Lab minigames first; the engine stop never reaches them.
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
+            new("level-up-sound", _ => MainShellWindow.StopLevelUpSound()), // WPF audio handle; stricter panic cleanup
             new("quiz", _ => QuizWindow.ForceCloseAll()), // WPF MainWindow.xaml.cs:2080
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),

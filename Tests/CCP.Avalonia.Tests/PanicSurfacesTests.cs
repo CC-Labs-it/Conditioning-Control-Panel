@@ -117,6 +117,7 @@ public sealed class PanicSurfacesTests
         "friend-notices", "knock-cards",
         "leash-task",
         "lock-cards",
+        "level-up-sound",
         "mantra",
         "quiz",
         "panic-quiet",

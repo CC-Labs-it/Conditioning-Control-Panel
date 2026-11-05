@@ -14,7 +14,7 @@
 // STILL MISSING vs WPF, so the row stays a stub:
 //   THE BANK hold (level-up particles live in MainShellWindow.EventFx.cs)
 //   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
-//   the Start button's charge/exhale/ignition/heartbeat set; level-up sound and toast.
+//   the Start button's charge/exhale/ignition/heartbeat set; level-up sound and notices live in MainShellWindow.LevelNotifications.cs.
 // Save tick/ripple is live through BtnSave_Click (MainShellWindow.Settings.cs).
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
@@ -45,11 +45,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); PopLevelChip(); CelebrateLevelUp(); UpdateLevelDisplay(); });
+            Action<int> levelUp = level =>
+            {
+                // WPF MainWindow.xaml.cs:762: repaint independently of notice/audio admission.
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_heroClosed) return;
+                    FlashLevelUp(); PopLevelChip(); CelebrateLevelUp(); UpdateLevelDisplay();
+                });
+                PostLevelNotice(() => NotifyPlayerLevelUp(level));
+            };
+            Action<Models.CompanionId, int> companionLevelUp = (id, level) => PostLevelNotice(() =>
+            {
+                NotifyCompanionLevelUp(id, level);
+            });
             HookHeroXpFx();
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
-            Closed += (_, _) => { ProgressionBank.Awarded -= awarded; ProgressionBank.LevelUp -= levelUp; };
+            ConditioningControlPanel.Services.Companion.CompanionCore.LevelUp += companionLevelUp;
+            Closed += (_, _) =>
+            {
+                ProgressionBank.Awarded -= awarded;
+                ProgressionBank.LevelUp -= levelUp;
+                ConditioningControlPanel.Services.Companion.CompanionCore.LevelUp -= companionLevelUp;
+                StopLevelUpSound();
+            };
             if (Named<Border>("XPBar")?.Parent is Control track)
                 track.SizeChanged += (_, _) => FillXpBar(animate: false);
             // WPF XPBarTrack_ToolTipOpening (MainWindow.UiUpdates.cs:2897): the ambient-bubble daily

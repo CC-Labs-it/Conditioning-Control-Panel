@@ -13,12 +13,8 @@
 // so InitializeAvatarTube is the else-branch alone.
 //
 // STILL HEAD-SIDE, each with the exact symbol and where it lives today:
-//   OnCompanionXPAwarded   - App.Companion's XPAwarded / LevelUp / XPDrained / CompanionSwitched
-//   OnCompanionLevelUp       events (ConditioningControlPanel/Services/Companion/CompanionService.cs)
-//   OnCompanionXPDrained     and UpdateCompanionCardsUI, which is itself blocked twice over -
-//   OnCompanionSwitched      see MainShellWindow.CompanionTab.cs. The level-up half also needs
-//                            _trayIcon.ShowNotification (here: Platform.OsNotifications.Show), PlayLevelUpSound (WPF MainWindow.xaml.cs, not ported) and
-//                            UpdateLevelDisplay (MainShellWindow.Progression.cs), both stubs.
+//   OnCompanionXPAwarded / XPDrained / CompanionSwitched still await the tab runtime.
+//   Milestone notices and audio are wired in MainShellWindow.HeroFx.cs and LevelNotifications.cs.
 //   FlashXpBarOnDrain      - restored for the HEADER bar only. Its second overlay,
 //                            CompanionTab.PrgCompanion0FlashOverlay, lives inside
 //                            CCP.Avalonia/Views/Controls/Companion/CompanionHeroCard.axaml and
