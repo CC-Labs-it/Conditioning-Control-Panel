@@ -227,8 +227,11 @@ internal static class AccountSeed
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id) return false;
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
+        // WPF EntitlementTierSync.OfferPatreon on the same read: the Patreon-active stamp and the answered flag.
+        if (!string.IsNullOrEmpty(s.AuthToken)) EntitlementRefresh.AdoptPatreon(s, id, user);
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
