@@ -1,5 +1,7 @@
 {
   "web_xp_claim_notice": "+{0} XP из веб-аккаунта. Теперь спуск общий для всего аккаунта.",
+  "title_select_companion_personality": "Выбрать личность ИИ для {0}",
+  "filter_personality_json_files": "Файлы личности JSON",
   "audio_device_unnamed": "(без имени)",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",

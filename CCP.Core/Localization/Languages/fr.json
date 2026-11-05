@@ -1,5 +1,7 @@
 {
   "web_xp_claim_notice": "+{0} XP de votre compte web. La descente est désormais commune à tout le compte.",
+  "title_select_companion_personality": "Choisir la personnalité IA de {0}",
+  "filter_personality_json_files": "Fichiers JSON de personnalité",
   "audio_device_unnamed": "(sans nom)",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",

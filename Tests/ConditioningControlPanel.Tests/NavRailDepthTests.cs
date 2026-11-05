@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Tests;
 /// every state (idle raised, hover lift, lit in its socket, pressed down), the hue-tinted shadows,
 /// the rail's shadow on the page, and the pixel budget (the coin adds no height to the rail).
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class NavRailDepthTests
 {
     private const double RailColumnHeight = 901 - 36;

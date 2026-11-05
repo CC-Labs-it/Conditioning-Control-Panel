@@ -1,5 +1,7 @@
 {
   "web_xp_claim_notice": "+{0} XP from your web account. Descending is account-wide now.",
+  "title_select_companion_personality": "Select AI Personality for {0}",
+  "filter_personality_json_files": "Prompt JSON files",
   "audio_device_unnamed": "(unnamed)",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
