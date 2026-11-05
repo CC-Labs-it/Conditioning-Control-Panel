@@ -143,6 +143,66 @@ public sealed class KeywordTriggersPanelTests
     });
 
     [Fact]
+    public Task MasterAndKeyboardDenialSaysWhyLikeWpf() => Run((view, panel, s) =>
+    {
+        // WPF MainWindow.Awareness.cs:397-407: no access -> box bounces, MessageBox explains.
+        var told = new List<string>();
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        var toasts = 0;
+        CoreEntitlement.ShowDeniedHandler = _ => toasts++;
+        KeywordTriggersPanel.Inform = (owner, title, text) =>
+        {
+            Assert.Same(TopLevel.GetTopLevel(view), owner);
+            told.Add(title + "|" + text);
+            return Task.CompletedTask;
+        };
+        var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
+        var keyboard = view.FindControl<CheckBox>("ChkAwarenessKeyboard")!;
+        var oldEnabled = s.KeywordTriggersEnabled;
+        try
+        {
+            s.KeywordTriggersEnabled = false;
+            view.SyncAwarenessTabUi();
+            var expected = Loc.Get("title_patreon_feature") + "|" + Loc.Get("msg_keyword_triggers_patreon_only");
+
+            master.IsChecked = true;
+            Assert.False(master.IsChecked == true);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.Equal(expected, Assert.Single(told));
+
+            keyboard.IsChecked = true;                                // routes through the master (WPF :489)
+            Assert.False(master.IsChecked == true);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.Equal(2, told.Count);
+            Assert.Equal(expected, told[1]);
+            Assert.Equal(0, toasts); // A toast cannot substitute for the WPF message box.
+
+            told.Clear();
+            CoreEntitlement.HasPremiumProvider = () => true;
+            master.IsChecked = true;
+            Assert.True(s.KeywordTriggersEnabled);
+            Assert.Empty(told);
+
+            // OFF must remain available after entitlement lapses.
+            CoreEntitlement.HasPremiumProvider = () => false;
+            master.IsChecked = false;
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.Empty(told);
+
+            CoreEntitlement.IsFreeTodayProvider = key => key == "awareness";
+            master.IsChecked = true;
+            Assert.True(master.IsChecked == true);
+            Assert.True(s.KeywordTriggersEnabled);
+            Assert.Empty(told);
+        }
+        finally
+        {
+            CoreEntitlement.ShowDeniedHandler = oldDenied;
+            s.KeywordTriggersEnabled = oldEnabled;
+        }
+    });
+
+    [Fact]
     public Task OcrCombosPersistAndOcrDetailNeedsAccess() => Run((view, panel, s) =>
     {
         var told = new List<string>();
