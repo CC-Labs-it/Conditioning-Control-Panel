@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
@@ -7,7 +8,7 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     /// <summary>
-    /// WPF MainWindow.Marquee.cs CheckServerAnnouncement (:857): 7 s after the shell opens, ask the server for
+    /// WPF MainWindow.Marquee.cs CheckServerAnnouncement (:881): 7 s after the shell opens, ask the server for
     /// its one live announcement and hand it to the startup Inbox - shown at once when nothing is quiet,
     /// otherwise a "📣" row. Dismissing the row does both halves of the popup's own bookkeeping (local slot and
     /// the per-account record), so news waved away unread never returns on this PC or the next.
@@ -18,17 +19,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Func<V2AuthService>? AnnouncementClient;
 
         private bool _announcementArmed, _announcementClosed;
-        private IDisposable? _announcementDelay;
+        private ITimer? _announcementTimer;
         private string? _presentedAnnouncementId;
 
         private void InitializeServerAnnouncement()
         {
-            Closed += (_, _) => { _announcementClosed = true; _announcementDelay?.Dispose(); _announcementDelay = null; };
             Opened += (_, _) =>
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                _announcementDelay = DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                // WPF MainWindow.Marquee.cs:712: one startup check after 7 s. Own its lifetime.
+                _announcementTimer = Platform.StartupLadder.Time.CreateTimer(state =>
+                    Dispatcher.UIThread.Post(() => { if (_announcementTimer != null) _ = CheckServerAnnouncementAsync(); }), null,
+                    TimeSpan.FromSeconds(7), Timeout.InfiniteTimeSpan);
+            };
+            Closed += (_, _) =>
+            {
+                _announcementClosed = true;
+                _announcementTimer?.Dispose();
+                _announcementTimer = null;
             };
         }
 
@@ -37,6 +46,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                // An explicit check consumes the scheduled check too, so it cannot re-file an opened row.
+                _announcementTimer?.Dispose();
+                _announcementTimer = null;
                 var make = AnnouncementClient;
                 if (_announcementClosed || make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
