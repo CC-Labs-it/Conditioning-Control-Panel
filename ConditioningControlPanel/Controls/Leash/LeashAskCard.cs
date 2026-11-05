@@ -75,7 +75,7 @@ public sealed class LeashAskCard : Border
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var av = FriendsLook.Avatar(_offer.From.Name, _offer.From.AvatarUrl, 60);
+        var av = FriendsLook.Avatar(_offer.From.Name, _offer.From.AvatarUrl, 60, null, _offer.From.Look);
         av.Margin = new Thickness(0, 0, 14, 0);
         head.Children.Add(av);
         var t = new TextBlock { FontFamily = FriendsLook.Display, FontSize = 21, FontWeight = FontWeights.SemiBold, Foreground = FriendsLook.TextBrush, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
