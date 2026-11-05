@@ -109,6 +109,24 @@ namespace ConditioningControlPanel
         // Uncached on purpose, exactly like the WPF probes it replaces (ResolveUri/HasModOverride);
         // the WPF head keeps its decoded-image caches, which are a decode concern, not a path one.
 
+        /// <summary>Logical embedded nav twin, used after disk overrides and before default art.
+        /// The head owns resource existence and decoding; Core only builds the relative name.</summary>
+        public static string? EmbeddedModTwin(string resourcePath, string? modId)
+        {
+            if (string.IsNullOrEmpty(modId) || string.IsNullOrEmpty(resourcePath)) return null;
+            if (!resourcePath.StartsWith("nav/", StringComparison.Ordinal)
+                || resourcePath.StartsWith("nav/mods/", StringComparison.Ordinal)) return null;
+            if (modId.Contains("..") || modId.Contains('/') || modId.Contains('\\') || Path.IsPathRooted(modId)) return null;
+            return "nav/mods/" + modId + "/" + resourcePath.Substring("nav/".Length);
+        }
+
+        /// <summary>Select the shipped twin when present, otherwise retain the default name.</summary>
+        public static string EmbeddedPathFor(string resourcePath, string? modId, Func<string, bool> exists)
+        {
+            var twin = EmbeddedModTwin(resourcePath, modId);
+            return twin != null && exists(twin) ? twin : resourcePath;
+        }
+
         /// <summary>Folder under <see cref="CorePaths.UserData"/> holding event skins, one dir per id.</summary>
         public const string EventSkinRoot = "event_skins";
 
