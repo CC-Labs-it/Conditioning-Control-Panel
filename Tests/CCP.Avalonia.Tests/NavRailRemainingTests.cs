@@ -23,10 +23,8 @@ public sealed class NavRailRemainingTests
     {
         // Use the desktop font setup so isolated Linux runs can construct the shell without Segoe UI.
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreMods.MakeModAwareProvider;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var motion = CoreSettings.Current.MotionLevel;
@@ -95,7 +93,9 @@ public sealed class NavRailRemainingTests
         Assert.Equal("THE NEST", home.Text);
         Assert.Equal("Seek", w.Named<TextBlock>("TxtNavSearchLabel")!.Text);
         Assert.Equal("Retreat", w.Named<TextBlock>("TxtNavBackLabel")!.Text);
-        Assert.Equal("Hive", w.Named<TextBlock>("TxtNavWebAppLabel")!.Text);
+        // WPF moved the Web App door to Play; it has no mod-aware rail caption.
+        Assert.Null(w.Named<TextBlock>("TxtNavWebAppLabel"));
+        Assert.Null(w.Named<Button>("DoorWebApp"));
 
         loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
         Assert.Equal("THE NEST", home.Text); // a changed English label overrides localization
