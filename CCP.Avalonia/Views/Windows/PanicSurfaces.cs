@@ -128,7 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("corner-gif", _ => Overlays.CornerGifOverlay.StopAll(), After: ["engine"]),
             // P06 (base): stop an intro that has not reached its wake chain; WPF EmiDeskService.cs:677-689 (PR #3319)
             // then arms panic quiet even while she is away.
-            new("emi-desk-feedback", _ => { EmiDesk.EmiDeskService.Instance.Window?.StopChainForPanic(); EmiDesk.EmiDeskService.Instance.PanicSilence(); }),
+            new("emi-desk-feedback", _ => { EmiDesk.EmiDeskService.Instance.Window?.StopDeskEquipment(); EmiDesk.EmiDeskService.Instance.Window?.StopChainForPanic(); EmiDesk.EmiDeskService.Instance.PanicSilence(); }),
             // WPF :1981-1982 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
             // WPF :1978-1981: after the corner GIFs.
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence(), After: ["corner-gif"]),

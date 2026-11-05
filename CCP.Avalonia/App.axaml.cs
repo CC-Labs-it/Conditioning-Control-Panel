@@ -15,6 +15,8 @@ namespace ConditioningControlPanel.Avalonia
 {
     public partial class App : Application
     {
+        internal static Action? PostCodeInputsChanged;
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -517,6 +519,8 @@ namespace ConditioningControlPanel.Avalonia
             AvaloniaXamlLoader.Load(this);
             ConditioningControlPanel.Services.Chaos.ChaosRunState.IconResolver = Views.Chaos.ChaosBoonBarArt.Resolve;
             Platform.FontGuard.Startup.Verify(Resources, OperatingSystem.IsWindows()); // before any window, including the splash
+            ConditioningControlPanel.Services.PlayerLook.KnownIdsProvider = () =>
+                (ConditioningControlPanel.Services.ShopCosmeticsRegistry.AllAvatarIds(), ConditioningControlPanel.Services.ShopCosmeticsRegistry.FrameIds());
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
@@ -605,6 +609,7 @@ namespace ConditioningControlPanel.Avalonia
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
                 desktop.Exit += OnDesktopExit;
+                Platform.EntitlementRefresh.Install();
 
                 // Real settings on this head: SettingsService now lives in Core and reads and
                 // writes settings.json under CorePaths.UserData (~/.local/share on Linux), with
@@ -756,6 +761,7 @@ namespace ConditioningControlPanel.Avalonia
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
                 var dailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+                PostCodeInputsChanged = dailyFree.NotifyInputsChanged;
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
                 CoreEntitlement.DailyFreeKeyProvider = () => dailyFree.TodayKey;
@@ -798,12 +804,8 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
                     // MainWindow OnLevelUp -> sync, ProfileSyncService.AttachXpNudge outside sessions).
-                    var sync = Platform.AccountSeed.Sync = new SyncPush(
-                        () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
-                        sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        // A minutes lift rebaselines the day log once, through ProfileAdopt.ConditioningMinutesLifted
-                        // (RebaselineDayLogAfterCloudMerge), for the profile read and the sync reply alike.
-                        { Countdown = DescentCountdown, DescentReader = Descent, Prizes = Platform.PrizeOwnership.Feed };
+                    var sync = Platform.AccountSeed.Sync = Platform.AccountSeed.NewSync(
+                        () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true);
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));

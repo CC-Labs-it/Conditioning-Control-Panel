@@ -109,6 +109,15 @@
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
 
+                            <Grid Height="34" ColumnDefinitions="*,Auto" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_video_cut_random_start}">
+                                <TextBlock Text="{loc:Str setting_video_cut_random_start}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkVideoCutRandomStart"
+                                          Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                            </Grid>
+                            <TextBlock Text="{loc:Str tooltip_video_cut_random_start}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
                             <!-- Power-user rows, folded (WPF MoreFold, house rule: progressive disclosure). -->
                             <sessionLock:MoreFold x:Name="FoldMore">
                                 <StackPanel>
@@ -167,6 +176,21 @@
                                 <ComboBox Grid.Column="1" x:Name="CmbAppearance"
                                           Width="180" VerticalAlignment="Center"
                                           Theme="{DynamicResource DarkComboBoxStyle}"/>
+                            </Grid>
+                            <Grid x:Name="FloatingSizeRow" IsVisible="False" Height="36" Background="Transparent"
+                                  ToolTip.Tip="{loc:Str tooltip_video_appearance_size}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_size}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                <Slider Grid.Column="1" x:Name="SliderFloatingSize" Minimum="15" Maximum="60"
+                                        VerticalAlignment="Center" Margin="14,0"/>
+                                <TextBlock Grid.Column="2" x:Name="TxtFloatingSize" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                           FontSize="13" FontWeight="Bold"/>
                             </Grid>
                             <TextBlock x:Name="TxtAppearanceNote" Text="{loc:Str video_appearance_strict_note}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
@@ -259,7 +283,8 @@
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_video_replay_failed_check}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkReplayFailedCheck" sessionLock:SessionLock.Owned="True"
-                                          Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                                          Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                          AutomationProperties.Name="{loc:StrBare setting_video_replay_failed_check}"/>
                             </Grid>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>

@@ -52,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ["gamepad"] = true, ["touch"] = false, ["forceRenderer"] = null, ["hostSfx"] = false,
                     ["toys"] = true, ["toysConnected"] = toysConnected, ["prizeCounter"] = false,
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
+                    ["friendInvite"] = true,
                     // B2: a host that offers no Scrolller pictures says so outright (boot.js: `init.caps.scrolller ? feed : null`,
                     // the Options card then has My files / Off). The Linux shell's request gate is a 7.2.x follow-up.
                     ["scrolller"] = RemotePicturesOffered

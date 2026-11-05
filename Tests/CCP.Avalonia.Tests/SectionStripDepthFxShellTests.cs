@@ -30,6 +30,7 @@ public sealed class SectionStripDepthFxShellTests
 
     private static (MainShellWindow W, SectionTabStrip Strip) Open(string tab)
     {
+        if (!System.OperatingSystem.IsWindows()) AmbientBeatLoopsTests.Setup();
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
@@ -116,6 +117,8 @@ public sealed class SectionStripDepthFxShellTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
+            var sheenTime = new ConditioningControlPanel.Avalonia.Platform.StartupLadder.TestClock();
+            SectionTabStrip.SheenTime = sheenTime;
             CoreSettings.Current.MotionLevel = MotionLevel.Full;   // restored by the isolation hook
             MainShellWindow? w = null;
             try
@@ -186,8 +189,12 @@ public sealed class SectionStripDepthFxShellTests
                 strip.AmbientTierOverride = true;
                 strip.UpdateSheenClock();
                 Assert.True(strip.SheenClockRunning);
+                sheenTime.Advance(System.TimeSpan.FromMilliseconds(NavStripMotion.SheenEveryMs));
+                Assert.Equal(2, strip.SheensRun);
                 strip.IsVisible = false;
                 Assert.False(strip.SheenClockRunning);
+                sheenTime.Advance(System.TimeSpan.FromMilliseconds(NavStripMotion.SheenEveryMs));
+                Assert.Equal(2, strip.SheensRun);
                 strip.IsVisible = true;
                 Assert.True(strip.SheenClockRunning);
                 strip.AmbientTierOverride = false;

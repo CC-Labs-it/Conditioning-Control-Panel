@@ -61,11 +61,14 @@ public sealed class LeashGateCardTests
         {
             shell.Show();
             Dispatcher.UIThread.RunJobs();
+            shell.CheckLeashGate(); // Evaluate the timer's shown-panel phase even on a fast machine.
+            Assert.Equal(punished, shell.LeashGate!.IsUp);
             Assert.True(LauncherWindow.BackToLauncher(shell));
             shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
             Dispatcher.UIThread.RunJobs();
             var launcher = LauncherWindow.Instance!;
             launcher.Hide();                             // off screen: no exit beat to wait out
+            shell.CheckLeashGate(); // Evaluate the away-panel phase without racing the next 2 s tick.
             body(shell, launcher, svc);
         }
         finally

@@ -12,9 +12,9 @@
 // The section edge (PaintSectionEdge, WPF MainWindow.SectionEdge.cs, 8f4bb7814) is here too: the
 // frame line, the 28 px glow band and the lift in the hue.
 //
-// The edge lift laps at Full and rests at Reduced. Still missing: fog and ember strips the band thins for
-// (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthHud/Home), the "Moved" redirects and their note, and the "Cloud sync
+// The edge lift laps at Full and rests at Reduced. Still missing: the edge fog the band thins for
+// (AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
+// (PaintDepthHome), the "Moved" redirects and their note, and the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
 
 using System;
@@ -130,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintSectionInk(section);
                 PaintDepthRail(hue); // WPF MainWindow.SectionChrome.cs:166
                 PaintBannerDepth(hue);
+                PaintDepthHud(hue);
                 Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView>("QuestsTab")?.PaintDepthQuests(hue);
                 var level = CoreSettings.Current.MotionLevel;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
@@ -157,7 +158,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (e.Property == IsActiveProperty || e.Property == WindowStateProperty || e.Property == IsVisibleProperty)
                     UpdateSectionEdgeMotion();
             };
-            Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome; AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome; };
+            Opened += (_, _) =>
+            {
+                Named<EdgeParticles>("SectionEdgeParticles")?.Mount(NavStripRules.Accent(_washSection ?? NavSections.Home));
+                AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
+                AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome;
+            };
             Closed += (_, _) =>
             {
                 AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
@@ -171,6 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // Before the first navigation the frame wears Home's hue (the XAML default; WPF _edgeHue).
                 PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), CoreSettings.Current.MotionLevel, 0);
+                Named<EdgeParticles>("SectionEdgeParticles")?.Refresh();
                 PageStrip?.UpdateSheenClock();
                 if (!AmbientFxCanvas.Env.AllowAmbientLoops) StopLockdownPulse();
                 if (Named<Tabs.SettingsTabView>("SettingsTab") is { } dash)
@@ -187,6 +194,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (SectionEdgeRules.GlowAlpha), the lift the hue toward white, hidden at Motion Off.</summary>
         private void PaintSectionEdge(global::Avalonia.Media.Color hue, Models.MotionLevel level, int ms)
         {
+            Named<EdgeParticles>("SectionEdgeParticles")?.Retint(hue);
             if (Named<Border>("GlassWindowEdge") is { } line)
             {
                 Fade(line, Border.BorderBrushProperty, ms);

@@ -4,6 +4,8 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Avalonia.Views.Games;
@@ -181,6 +183,23 @@ public sealed class LobbyCardView
     }
     public LobbyRow Row { get; }
     public bool DoorAvailable => Row.Game == LobbyGame.Chess;
+    private static IBrush? Theme(string key) =>
+        global::Avalonia.Application.Current?.TryFindResource(key, out var value) == true ? value as IBrush : null;
+    public IBrush? CardRim => Theme("DepthFloatRim");
+    public IBrush? ButtonBevel => Theme("DepthRaisedBevel");
+    public IBrush? ButtonSheen => Theme("DepthRaisedSheen");
+    public double CardShadowPx => DepthLaw.FloatPx;
+    public IBrush CardShadow => SharedCardShadow;
+    private static readonly IBrush SharedCardShadow = CreateCardShadow();
+    private static IBrush CreateCardShadow()
+    {
+        var c = Color.FromUInt32(DepthLaw.ShadowColor(NavStripTable.AccentRgb(NavSections.Social) | 0xFF000000, DepthLaw.FloatAlpha));
+        return new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops = { new(c, 0), new(Color.FromArgb(0, c.R, c.G, c.B), 1) },
+        };
+    }
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }

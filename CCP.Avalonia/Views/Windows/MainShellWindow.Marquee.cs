@@ -40,6 +40,7 @@
 //   Banner message sheens are ported in MainShellWindow.ChromeFx.cs.
 
 using System;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Linq;
 using System.Collections.Generic;
 using Avalonia.Animation;

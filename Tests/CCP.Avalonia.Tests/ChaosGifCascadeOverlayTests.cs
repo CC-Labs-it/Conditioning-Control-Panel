@@ -15,6 +15,7 @@ using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Models;
 using Xunit;
 using ConditioningControlPanel.Avalonia.Platform;
 
@@ -60,7 +61,7 @@ public sealed class ChaosGifCascadeOverlayTests
             {
                 ChaosGifCascadeOverlay.CloseActive();
                 ChaosGifCascadeOverlay.Clock = clock;
-                CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                CoreSettings.Current.MotionLevel = MotionLevel.Off;
                 Show(gif);                                   // headless: no X11 compositor -> refuse, no window
                 Assert.Null(ChaosGifCascadeOverlay.Active);
                 Assert.True(ChaosGifCascadeOverlay.Refused);
@@ -105,11 +106,11 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.True(w.Cascade.Fallers[0].Animated);   // a small gif inside the animated budget
 
                 var src = first.Source;
-                CoreSettings.Current.MotionLevel = MotionLevel.Off;
+                // WPF keeps local GIFs animating at Motion Off; only remote clips freeze.
                 clock.Advance(0.1);
                 w.Frame();
-                Assert.Same(src, first.Source);
-                CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                Assert.NotSame(src, first.Source);
+                src = first.Source;
                 clock.Advance(0.6);                          // past the 598.8 ms spawn interval
                 w.Frame();
                 Assert.Equal(2, w.Surface.Children.Count);
@@ -479,8 +480,115 @@ public sealed class ChaosGifCascadeOverlayTests
         });
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task EligibleLocalGifKeepsItsSlotUntilDespawn(bool failedDecode) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var skip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+        var manual = ChaosGifCascadeOverlay.ManualFramesForTests;
+        var previousClock = ChaosGifCascadeOverlay.Clock;
+        var clock = new SteppedClock();
+        var dir = Directory.CreateTempSubdirectory("ccp-gif-budget-").FullName;
+        var gif = Path.Combine(dir, "local.gif");
+        // A single-frame GIF still qualifies for a slot, like a local GIF that fails to decode.
+        const string oneFrameGif = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+        try
+        {
+            File.WriteAllBytes(gif, failedDecode ? System.Text.Encoding.ASCII.GetBytes("not a gif") : Convert.FromBase64String(oneFrameGif));
+            ChaosGifCascadeOverlay.CloseActive();
+            ChaosGifCascadeOverlay.Clock = clock;
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+            ChaosGifCascadeOverlay.ManualFramesForTests = true;
+            Show(gif);
+            var w = ChaosGifCascadeOverlay.Active!;
+            for (var i = 0; i < GifCascade.MaxAnimated; i++)
+            {
+                if (i > 0) { clock.Advance(0.6); w.Frame(); }
+                Assert.Equal(i + 1, w.Cascade.Fallers.Count);
+                await Decoded();
+                Assert.True(w.Cascade.Fallers[i].Animated);
+                Assert.Equal(i + 1, w.Cascade.AnimatedAlive);
+                var image = Assert.IsType<Image>(w.Surface.Children[i]);
+                if (failedDecode) Assert.Null(image.Source); else Assert.NotNull(image.Source);
+            }
+
+            // Three reservations make the next valid animated GIF fall as a still.
+            File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+            clock.Advance(0.6);
+            w.Frame();
+            var capped = w.Cascade.Fallers[3];
+            Assert.False(capped.Animated);
+            Assert.Equal(GifCascade.MaxAnimated, w.Cascade.AnimatedAlive);
+            await Decoded();
+            var still = Assert.IsType<Image>(w.Surface.Children[3]);
+            var stillSource = Assert.IsAssignableFrom<global::Avalonia.Media.IImage>(still.Source);
+            clock.Advance(0.1);
+            w.Frame();
+            Assert.Same(stillSource, still.Source);
+
+            // A slot comes back when the original faller leaves, so the next GIF animates.
+            var first = w.Cascade.Fallers[0];
+            first.Y = w.Height + w.Cascade.Size + 1;
+            clock.Advance(0.1);
+            w.Frame();
+            Assert.DoesNotContain(first, w.Cascade.Fallers);
+            Assert.Equal(GifCascade.MaxAnimated - 1, w.Cascade.AnimatedAlive);
+            clock.Advance(0.6);
+            w.Frame();
+            Assert.True(w.Cascade.Fallers[^1].Animated);
+            Assert.Equal(GifCascade.MaxAnimated, w.Cascade.AnimatedAlive);
+            await Decoded();
+            var animated = Assert.IsType<Image>(w.Surface.Children[^1]);
+            var animatedSource = Assert.IsAssignableFrom<global::Avalonia.Media.IImage>(animated.Source);
+            clock.Advance(0.1);
+            w.Frame();
+            Assert.NotSame(animatedSource, animated.Source);
+            Assert.Same(stillSource, still.Source);
+        }
+        finally
+        {
+            ChaosGifCascadeOverlay.CloseActive();
+            ChaosGifCascadeOverlay.Clock = previousClock;
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = skip;
+            ChaosGifCascadeOverlay.ManualFramesForTests = manual;
+            Directory.Delete(dir, true);
+        }
+    });
+
     [Fact]
-    public Task AFailedAnimatedDecodeGivesItsSlotBack() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public async Task CascadeTestsRestoreStateBeforeTheNextTest()
+    {
+        var skip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+        var manual = ChaosGifCascadeOverlay.ManualFramesForTests;
+        var motion = CoreSettings.Current.MotionLevel;
+        try
+        {
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+            ChaosGifCascadeOverlay.ManualFramesForTests = false;
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            // Direct calls keep both cases inside one isolation hook, exposing order-dependent leaks.
+            await EligibleLocalGifKeepsItsSlotUntilDespawn(failedDecode: true);
+            Assert.False(ChaosGifCascadeOverlay.SkipPlatformChecksForTests);
+            Assert.False(ChaosGifCascadeOverlay.ManualFramesForTests);
+            await RainsSpawnsAnimatesDrainsAndPanicClosesIt();
+            Assert.False(ChaosGifCascadeOverlay.SkipPlatformChecksForTests);
+            Assert.False(ChaosGifCascadeOverlay.ManualFramesForTests);
+            Assert.Equal(MotionLevel.Reduced, CoreSettings.Current.MotionLevel);
+        }
+        finally
+        {
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = skip;
+            ChaosGifCascadeOverlay.ManualFramesForTests = manual;
+            CoreSettings.Current.MotionLevel = motion;
+        }
+    }
+
+    [Fact]
+    public Task AFailedAnimatedDecodeKeepsItsSlotUntilDespawn() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
@@ -499,7 +607,8 @@ public sealed class ChaosGifCascadeOverlayTests
             var w = ChaosGifCascadeOverlay.Active!;
             Assert.Equal(1, w.Cascade.AnimatedAlive);
             await Decoded();
-            Assert.Equal(0, w.Cascade.AnimatedAlive);
+            // WPF: a local GIF keeps its slot until despawn; ReleaseSlotIfStill is for remote clips only.
+            Assert.Equal(1, w.Cascade.AnimatedAlive);
             Assert.True(w.Cascade.CanAnimate(true, 1));
         }
         finally
@@ -517,7 +626,7 @@ public sealed class ChaosGifCascadeOverlayTests
         var motion = CoreSettings.Current.MotionLevel;
         try
         {
-            await AFailedAnimatedDecodeGivesItsSlotBack();
+            await AFailedAnimatedDecodeKeepsItsSlotUntilDespawn();
             Assert.False(ChaosGifCascadeOverlay.SkipPlatformChecksForTests);
             Assert.False(ChaosGifCascadeOverlay.ManualFramesForTests);
             CoreSettings.Current.MotionLevel = MotionLevel.Reduced;

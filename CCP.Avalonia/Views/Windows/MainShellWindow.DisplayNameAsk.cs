@@ -72,22 +72,27 @@ public partial class MainShellWindow
 
     private async Task ShowDisplayNameAsk(Window owner, bool? serverSaysNeeded)
     {
-        if (!NeedsDisplayNameRule.ShouldAsk(!string.IsNullOrEmpty(CoreSettings.Current.UnifiedId),
+        // A save never lands on an account that changed while the dialog was up (#3828).
+        var uid = CoreSettings.Current.UnifiedId;
+        if (!NeedsDisplayNameRule.ShouldAsk(!string.IsNullOrEmpty(uid),
                 CoreSettings.Current.UserDisplayName, serverSaysNeeded)) return;
         try
         {
             var suggestion = NeedsDisplayNameRule.Suggest(AccountSeed.Discord?.Username, AccountSeed.Discord?.DisplayName);
-            var dialog = new DisplayNameDialog(suggestion, SaveRequiredDisplayNameAsync);
+            var dialog = new DisplayNameDialog(suggestion, n => SaveRequiredDisplayNameAsync(n, uid));
             await dialog.ShowDialogSafe<bool>(owner.IsVisible ? owner : this);
         }
         catch (System.Exception ex) { Serilog.Log.Warning(ex, "Display name: ask failed"); }
     }
 
     // WPF MainWindow.DisplayNameAsk.cs:78-108: change first, check only a refusal.
-    internal async Task<string?> SaveRequiredDisplayNameAsync(string name)
+    /// <param name="uid">The account the dialog opened for; null skips the check (tests).</param>
+    internal async Task<string?> SaveRequiredDisplayNameAsync(string name, string? uid = null)
     {
+        if (uid != null && CoreSettings.Current.UnifiedId != uid) return Loc.Get("msg_failed_to_change_display_name");
         var (error, saved) = await ChangeRequiredDisplayNameAsync(name);
         if (error != null) return error;
+        if (uid != null && CoreSettings.Current.UnifiedId != uid) return Loc.Get("msg_failed_to_change_display_name");
         CoreSettings.Current.UserDisplayName = saved;
         CoreSettings.Save();
         UpdateQuickLoginUI();

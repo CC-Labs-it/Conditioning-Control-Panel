@@ -24,6 +24,7 @@
     <Compile Include="..\ConditioningControlPanel.Tests\PatreonActivationTests.cs" Link="PatreonActivationTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\OnlineMeterRulesTests.cs" Link="OnlineMeterRulesTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\ConversionMomentRowsTests.cs" Link="ConversionMomentRowsTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\FloatingVideoFrameTests.cs" Link="FloatingVideoFrameTests.cs" />
     <!-- This exit helper has no WPF dependency: execute its existing safety tests on Linux too. -->
     <Compile Include="..\..\ConditioningControlPanel\Services\Diagnostics\UiThreadExit.cs" Link="UiThreadExit.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\UiThreadExitTests.cs" Link="UiThreadExitTests.cs" />

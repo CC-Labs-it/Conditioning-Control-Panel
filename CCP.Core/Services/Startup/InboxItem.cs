@@ -38,6 +38,10 @@ namespace ConditioningControlPanel.Services.Startup
         /// <summary>A semantic icon key supported by the head, or a legacy glyph for the row's left edge.</summary>
         public string Glyph { get; init; } = "";
 
+        /// <summary>Optional semantic symbol name for heads with icon rendering; no head-specific type.</summary>
+        public string? IconKey { get; init; }
+        public bool HasIconKey => !string.IsNullOrEmpty(IconKey);
+
         /// <summary>
         /// Shows the original surface. Runs on the UI thread, either immediately (nothing is
         /// quiet) or when the user opens the row.

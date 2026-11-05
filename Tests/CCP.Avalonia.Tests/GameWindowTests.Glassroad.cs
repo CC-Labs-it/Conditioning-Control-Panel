@@ -370,13 +370,15 @@ public sealed partial class GameWindowTests
     {
         var s = CoreSettings.Current;
         var oldSync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync;
+        var oldAccount = CoreAccount.UnifiedUserId;
         using var wire = new GrProfileHttp { ProfileGrants = profileGrants };
         var v2 = new V2AuthService(() => s, wire);
-        var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire) { Prizes = ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed };
+        // The production construction: NewSync seeds the sync push with PrizeOwnership.Feed.
+        var sync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.NewSync(() => Array.Empty<string>(), () => false, wire);
         try
         {
             ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = profileGrants ? null : sync;
-            s.UnifiedId = wire.Account;
+            s.UnifiedId = CoreAccount.UnifiedUserId = wire.Account;
             s.AuthToken = "tok";
             s.OfflineMode = false;
             ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
@@ -415,6 +417,7 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
             Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
+            Dispatcher.UIThread.RunJobs();
             ConditioningControlPanel.Avalonia.Platform.AccountSeed.Logout(accountDeleted: true).GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(sent.Last(o => (string?)o["type"] == "owned")["grants"]!);
@@ -428,6 +431,7 @@ public sealed partial class GameWindowTests
             GameWindow.CloseAllForPanic();
             ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
             ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = oldSync;
+            CoreAccount.UnifiedUserId = oldAccount;
         }
     });
 

@@ -180,7 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             CloseConfirm();
-            _sheenClock?.Stop();   // P65: a detached strip never ticks
+            StopSheenClock();   // P65: a detached strip never ticks
             _crumbFadeRun?.Cancel();
             _crumbFadeRun?.Dispose();
             _crumbFadeRun = null;

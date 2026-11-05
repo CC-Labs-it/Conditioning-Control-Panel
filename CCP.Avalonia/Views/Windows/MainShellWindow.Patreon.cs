@@ -220,7 +220,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// celebration half; the veils already repaint from App.axaml.cs. Unsubscribed when the shell closes (P41).</summary>
         private void InitializePremiumCelebration()
         {
-            Opened += (_, _) => MaybeShowPremiumCelebration();
+            Opened += (_, _) => { MaybeShowPremiumCelebration(); TierOnNoticePass(); };
+            // The one-time tier-on notice follows each entitlement reading and each return to the panel (#3820).
+            Platform.EntitlementRefresh.Changed += TierOnNoticePass;
+            Activated += (_, _) => TierOnNoticePass();
+            Closed += (_, _) => Platform.EntitlementRefresh.Changed -= TierOnNoticePass;
             System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 // WPF OnPatreonTierChanged: Programs rebuilds on a tier change only, not on every navigation.
@@ -228,6 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshTierDependentViews();
                 RefreshProfileBubble();
                 MaybeShowPremiumCelebration();
+                TierOnNoticePass();
             });
             // WPF MainWindow.Patreon.cs:1363-1377: a live rise's fanfare, and a focus refresh when the user clicks
             // back in. Both ride the head's one tier path (AccountSeed.ApplyTierReading: rise AND lower).
@@ -332,6 +337,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
             Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
             CoreSettings.Save();
+        }
+
+        internal void TierOnNoticePass()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                var current = Platform.EntitlementRefresh.EffectiveTier;
+                var verdict = Services.TierOnNotice.Decide(s.LastKnownEffectiveTier, current,
+                    Platform.EntitlementRefresh.ServerAnsweredThisRun);
+                if (verdict.Record != s.LastKnownEffectiveTier)
+                {
+                    // The first cached reading joins the next user save or desktop exit. Startup must not write migrations.
+                    var hadReading = s.LastKnownEffectiveTier.HasValue;
+                    s.LastKnownEffectiveTier = verdict.Record;
+                    if (hadReading) CoreSettings.Save();
+                }
+                if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
+                var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
+                var body = Loc.Get("tier_on_body");
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "tier-on:" + current, IconKey = "Heart", Title = title, Summary = body,
+                    Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, null, null),
+                });
+            }
+            catch (System.Exception ex) { Serilog.Log.Debug(ex, "Tier-on notice failed"); }
         }
 
         private static void MarkIntroSeen(string key)

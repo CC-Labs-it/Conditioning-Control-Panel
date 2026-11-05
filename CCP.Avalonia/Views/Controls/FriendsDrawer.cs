@@ -6,7 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section and no juice (.Juice.cs). A word WPF throws outside the drawer
+// ponytail: no leash section and no shared row juice. A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Linq;
@@ -105,7 +105,7 @@ public sealed partial class FriendsDrawer : Border
         Grid.SetRow(_addBox, 3);
         Grid.SetRow(_foot, 4);
         root.Children.AddRange(new Control[] { _head, _ask, scroll, _addBox, _foot });
-        Child = root;
+        Child = new Grid { Children = { root, _linkFx } };
         // WPF BuildAddBox: friend code, token or pasted first-party link.
         (_codeBox.FontFamily, _codeBox.Tag) = (Mono, "friends-code-box");
         ToolTip.SetTip(_codeBox, Loc.Get("friends_add_hint"));
@@ -358,7 +358,7 @@ public sealed partial class FriendsDrawer : Border
         bool open = _openId == f.Id;
         var table = TableFor(f);
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
-        var avatar = Avatar(f.Name, 38, f.Online || table != null);
+        var avatar = Avatar(f.Name, 38, f.Online || table != null, f.Look);
         if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
@@ -633,7 +633,7 @@ public sealed partial class FriendsDrawer : Border
             Background = Brushes.Transparent, // WPF FriendsDrawer.cs:752: padding participates in hit testing.
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
-            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
+            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null, r.Look), mid, buttons } },
         };
         AttachHover(row, false);
         return row;
@@ -904,7 +904,7 @@ public sealed partial class FriendsDrawer : Border
     }
 
     /// <summary>Initials on a lilac disc, with a presence dot (mint on, grey off, none for null).</summary>
-    internal static Control Avatar(string name, double size, bool? dot)
+    internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null)
     {
         var g = new Grid { Width = size, Height = size };
         g.Children.Add(new Border
@@ -916,6 +916,20 @@ public sealed partial class FriendsDrawer : Border
                 Foreground = new SolidColorBrush(Color.FromRgb(0x0B, 0x07, 0x16)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             },
         });
+        if (look is { IsEmpty: false })
+        {
+            if (Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
+            {
+                disc.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
+                disc.Child = null;
+            }
+            if (Helpers.ModArt.ShopFrame(look.FrameId) is { } frameArt)
+            {
+                var frame = size / ConditioningControlPanel.Services.ShopCosmeticsRegistry.FrameWindowRatio;
+                g.Children.Add(new Image { Source = frameArt, Width = frame, Height = frame, Stretch = Stretch.Fill,
+                    Margin = new Thickness(-(frame - size) / 2), IsHitTestVisible = false, Tag = "friends-frame" });
+            }
+        }
         if (dot is bool on)
             g.Children.Add(new Ellipse
             {

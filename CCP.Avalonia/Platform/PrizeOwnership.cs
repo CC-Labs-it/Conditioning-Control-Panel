@@ -24,7 +24,11 @@ internal static class PrizeOwnership
     internal static Func<string, bool> IsGranted = PrizeGrants.IsGranted;
     /// <summary>WPF PrizeGrants.GrantsChanged under this head's older name.</summary>
     internal static event Action? Changed { add => PrizeGrants.GrantsChanged += value; remove => PrizeGrants.GrantsChanged -= value; }
-    static PrizeOwnership() => PrizeGrants.Attach(Service);
+    static PrizeOwnership()
+    {
+        PrizeGrants.Attach(Service);
+        PrizeGrants.GrantsChanged += () => GrantsChanged?.Invoke();
+    }
     internal static void Seed()
     {
         ProviderSubscription.PrizesSink = (requested, answered, prizes, source) => Feed.Apply(requested, answered, prizes, source);
@@ -51,8 +55,25 @@ internal static class PrizeOwnership
     internal static bool Held(string id) => Service.Grants.Contains(id);
     /// <summary>The held grant ids, for the Racing Thoughts garage's kart rows (WPF GlassroadHostService init.grants).</summary>
     internal static string[] Grants => Service.Grants.ToArray();
-    internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants) => Service.ApplySnapshot(accountId, revision, grants);
+    internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
+    {
+        Service.ApplySnapshot(accountId, revision, grants);
+        GrantsChanged?.Invoke();
+    }
     internal static void ResetHeld() => Service.Clear();
     internal static bool Matches(string? spec, string id) =>
         !string.IsNullOrEmpty(id) && OwnershipService.MatchesOverride(OwnershipService.ParseOverride(spec), id);
+
+    /// <summary>A direct snapshot (counter, chess wardrobe) or any change of the held set: the chess page and
+    /// the desk re-read their grants. An unchanged direct snapshot still raises it, so a first empty answer
+    /// turns "unknown" into "known none".</summary>
+    internal static event Action? GrantsChanged;
+    /// <summary>The desk's name for <see cref="GrantsChanged"/>.</summary>
+    internal static event Action? DeskGrantsChanged { add => GrantsChanged += value; remove => GrantsChanged -= value; }
+    /// <summary>Null until the signed-in account has a revisioned snapshot: unknown grants keep stored picks.</summary>
+    internal static ISet<string>? KnownGrants() => Service.Revision > 0 && Service.HoldsCurrentAccount
+        ? new HashSet<string>(Service.Grants, StringComparer.Ordinal) : null;
+    /// <summary>Desk items the signed-in account holds, or null before any snapshot for it.</summary>
+    internal static IEnumerable<string>? KnownDeskGrants() => KnownGrants() is null ? null
+        : ConditioningControlPanel.Services.EmiDesk.DeskEquipment.Items.Where(i => IsGranted(i.Grant)).Select(i => i.Grant).ToArray();
 }

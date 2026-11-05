@@ -57,10 +57,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderPerHour.ValueChanged += SliderPerHour_Changed;
             ChkStrict.IsCheckedChanged += ChkStrict_Changed;
             CmbAppearance.SelectionChanged += CmbAppearance_Changed;
+            SliderFloatingSize.ValueChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoFloatingSizePercent = (int)Math.Round(SliderFloatingSize.Value);
+                TxtFloatingSize.Text = CoreSettings.Current.MandatoryVideoFloatingSizePercent + "%";
+                CoreSettings.Save();
+            };
             // WPF Lab.cs:640-647 / 726-732: greyed while a Lockdown forces Strict Lock, given back on exit.
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
             SliderVideoMaxDur.ValueChanged += SliderVideoMaxDur_Changed;
+            ChkVideoCutRandomStart.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.VideoCutRandomStart = ChkVideoCutRandomStart.IsChecked ?? true;
+                CoreSettings.Save();
+            };
             ChkMiniGame.IsCheckedChanged += ChkMiniGame_Changed;
             ChkReplayFailedCheck.IsCheckedChanged += (_, _) =>
             {
@@ -187,8 +200,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtVideoMinDur.Text = FormatDuration(s.VideoMinDurationSeconds);
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
-                ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
+                ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
+                ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
                 ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
+                ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
                 ChkRandomize.IsChecked = s.RandomizeAttentionTargets;
@@ -204,6 +219,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
                 CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 TxtAppearanceNote.IsVisible = s.MandatoryVideoFloating;
+                FloatingSizeRow.IsVisible = s.MandatoryVideoFloating;
+                SliderFloatingSize.Value = s.MandatoryVideoFloatingSizePercent;
+                TxtFloatingSize.Text = s.MandatoryVideoFloatingSizePercent + "%";
                 ChkMercy.IsChecked = s.MercySystemEnabled;
                 CmbMercyAfter.IsVisible = s.MercySystemEnabled;
                 foreach (var obj in CmbMercyAfter.Items)
@@ -232,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.StrictLockEnabled) ||
                 e.PropertyName == nameof(AppSettings.VideoMinDurationSeconds) ||
                 e.PropertyName == nameof(AppSettings.VideoMaxDurationSeconds) ||
+                e.PropertyName == nameof(AppSettings.VideoCutRandomStart) ||
                 e.PropertyName == nameof(AppSettings.AttentionChecksEnabled) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.AttentionDensity) ||
@@ -239,6 +258,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingSizePercent) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
                 e.PropertyName == nameof(AppSettings.MercySystemEnabled) ||
@@ -255,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var s = CoreSettings.Current;
             if (s.MandatoryVideoFloating == floating) return;
             s.MandatoryVideoFloating = floating;
+            FloatingSizeRow.IsVisible = TxtAppearanceNote.IsVisible = floating;
             CoreSettings.Save();
         }
 

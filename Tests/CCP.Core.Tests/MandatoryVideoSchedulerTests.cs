@@ -134,6 +134,42 @@ public sealed class MandatoryVideoSchedulerTests
         finally { v.ForceCleanup(); CoreFlash.Stop(); }
     });
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    public void Replay_switch_keeps_failure_credit_and_strict_replay(bool strict, bool lockdown, bool replay) => With(6, strict, () =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled);
+        var checks = new List<bool>();
+        var prior = CoreProgression.TrackAttentionCheckProvider;
+        CoreProgression.TrackAttentionCheckProvider = checks.Add;
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var priorLockdown = LockdownService.Current;
+        var activeLockdown = new LockdownService();
+        try
+        {
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled) = (true, false, false);
+            LockdownService.Current = lockdown ? activeLockdown : null;
+            if (lockdown) activeLockdown.Activate(TimeSpan.FromMinutes(10));
+            Assert.True(v.Trigger(strictOverride: strict)); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(strict, v.IsStrict);
+            v.NoteSpawn(); v.Ended();
+            Assert.Equal(new[] { false }, checks);
+            Assert.Equal(replay ? 1 : 0, host.Messages.Count);
+            if (replay) host.Then!();
+            Assert.Equal(replay, v.IsPlaying);
+        }
+        finally
+        {
+            v.Stop(); activeLockdown.Dispose(); LockdownService.Current = priorLockdown;
+            CoreProgression.TrackAttentionCheckProvider = prior;
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled) = old;
+        }
+    });
+
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
@@ -825,7 +861,7 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     [Fact]
-    public void Length_filter_picks_inside_the_range_and_counts_what_it_emptied()
+    public void Length_filter_keeps_long_slices_and_counts_what_it_emptied()
     {
         // WPF RefillVideoQueues' duration filter + #1352 funnel counts; a clip with no cached length is kept.
         var s = CoreSettings.Current;
@@ -838,9 +874,9 @@ public sealed class MandatoryVideoSchedulerTests
             var host = new Host();
             var v = new MandatoryVideoScheduler(host, new FakeClock(), () => files)
                 { DurationOf = p => lengths.TryGetValue(p, out var d) ? d : null };
-            var picks = new HashSet<string> { v.PickNext()!, v.PickNext()! };
-            Assert.Equal(new HashSet<string> { "/v/mid.mp4", "/v/unparsed.mp4" }, picks);
-            Assert.Equal((4, 2), (v.LastFunnelEnabled, v.LastFunnelDuration));
+            var picks = new HashSet<string> { v.PickNext()!, v.PickNext()!, v.PickNext()! };
+            Assert.Equal(new HashSet<string> { "/v/mid.mp4", "/v/long.mp4", "/v/unparsed.mp4" }, picks);
+            Assert.Equal((4, 3), (v.LastFunnelEnabled, v.LastFunnelDuration));
 
             // The filter keeps none of the enabled clips: no pick, and the dialog can blame the filter.
             lengths["/v/unparsed.mp4"] = 30;

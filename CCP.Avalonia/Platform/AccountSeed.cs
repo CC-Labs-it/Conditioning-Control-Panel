@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Net.Http;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -152,6 +154,17 @@ internal static class AccountSeed
         }
     }
 
+    /// <summary>The sync configuration used by desktop startup and account tests.</summary>
+    internal static SyncPush NewSync(Func<IEnumerable<string>?> unlocked, Func<bool> running, HttpMessageHandler? http = null)
+        => new(unlocked, running, http, Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
+        {
+            // A minutes lift rebaselines the day log once, through ProfileAdopt.ConditioningMinutesLifted
+            // (RebaselineDayLogAfterCloudMerge), for the profile read and the sync reply alike.
+            Prizes = PrizeOwnership.Feed,
+            Countdown = App.DescentCountdown,
+            DescentReader = App.Descent,
+        };
+
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
     internal static SyncPush? Sync;
 
@@ -256,6 +269,9 @@ internal static class AccountSeed
         try
         {
             var s = CoreSettings.Current;
+            // WPF ApplyOnUi: any reading with a tier, for a signed-in account, is the server's answer this run.
+            if (serverTier.HasValue && !string.IsNullOrEmpty(s.UnifiedId) && !string.IsNullOrEmpty(s.AuthToken))
+                EntitlementRefresh.NoteAnswered(s.UnifiedId);
             var before = EffectiveTierNow();
             var reading = Readings.Apply(s, serverTier, HoldGraceClose, UtcNow());
             if (reading.Dirty) CoreSettings.Save();

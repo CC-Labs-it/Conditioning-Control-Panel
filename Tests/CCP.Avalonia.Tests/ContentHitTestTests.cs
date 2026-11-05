@@ -32,6 +32,7 @@ public sealed class ContentHitTestTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
+            if (!System.OperatingSystem.IsWindows()) AmbientBeatLoopsTests.Setup();
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })

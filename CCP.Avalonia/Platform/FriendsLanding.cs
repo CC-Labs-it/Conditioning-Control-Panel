@@ -143,8 +143,8 @@ internal static partial class FriendsLanding
     {
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
-        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
         InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
@@ -258,14 +258,17 @@ internal static partial class FriendsLanding
         if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
+        if (item.Destination == InviteDestination.Race && !OpenRace(item.Room))
+        { FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Declined)); return; }
         FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
         Sfx("chaos/reveal_chime.mp3", 0.20f, "friends-join");   // WPF FriendsSfx.Join
         Join(item);
     }
 
     /// <summary>Destinations this head can open. Back Room and Goon still wait for their hosts; Breakout uses the
-    /// demo until a full host exists.</summary>
+    /// demo until a full host exists; Racing Thoughts opens the race window with the friend's room.</summary>
     internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp
+        || item.Destination == InviteDestination.Race
         || item.Destination == InviteDestination.Chess && InviteDestination.IsChallengeId(item.Code)
         || item.Destination == InviteDestination.Breakout && (!BreakoutFullAllowed || GameWindow.Games.ContainsKey("breakout"));
 
@@ -294,6 +297,12 @@ internal static partial class FriendsLanding
             catch (Exception ex) { Log.Warning(ex, "[Friends] breakout launch failed"); }
         }
     }
+
+    internal static Func<string?, bool> OpenRace { get; set; } = room =>
+    {
+        try { return GameWindow.LaunchFriendRace(room) != null; }
+        catch (Exception ex) { Log.Warning(ex, "[Friends] race launch failed"); return false; }
+    };
 
     internal static FriendsSfxGate SfxGate = new();
     // WPF FriendsSfx.cs:23-24, through the existing master-volume and gap gate.

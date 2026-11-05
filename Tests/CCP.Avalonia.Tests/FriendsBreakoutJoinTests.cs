@@ -81,8 +81,10 @@ public sealed class FriendsBreakoutJoinTests
         finally { CoreEntitlement.HasLabProvider = lab; FriendsLanding.LaunchGame = launch; }
     }
 
+    /// <summary>Breakout ships in this build (GameWindow "breakout", WPF 7.1.7+): an entitled account joins the full
+    /// host, never the demo. The older form of this test asserted the full host was missing.</summary>
     [Fact]
-    public void EntitledAccountDoesNotJoinADemoInPlaceOfTheMissingFullHost()
+    public void EntitledAccountJoinsTheFullHostNotTheDemo()
     {
         var lab = CoreEntitlement.HasLabProvider;
         var launch = FriendsLanding.LaunchGame;
@@ -91,10 +93,11 @@ public sealed class FriendsBreakoutJoinTests
         {
             CoreEntitlement.HasLabProvider = () => true;
             FriendsLanding.LaunchGame = opened.Add;
-            Assert.False(GameWindow.Games.ContainsKey("breakout"));
-            Assert.False(FriendsLanding.CanJoin(Invite));
+            Assert.True(GameWindow.Games.ContainsKey("breakout"));
+            Assert.True(FriendsLanding.CanJoin(Invite));
             FriendsLanding.Join(Invite);
-            Assert.Empty(opened);
+            Assert.Equal("breakout", Assert.Single(opened));
+            Assert.Equal("desktop=1", GameWindow.Games[opened[0]].Query);
         }
         finally { CoreEntitlement.HasLabProvider = lab; FriendsLanding.LaunchGame = launch; }
     }

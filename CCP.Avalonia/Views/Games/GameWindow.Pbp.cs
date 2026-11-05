@@ -90,10 +90,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpOpen = true;
             // WPF PieceByPieceHostService.cs:230-232: keys work before the first click.
             Dispatcher.UIThread.Post(() => { if (!_closing) Web.FocusPage(); }, DispatcherPriority.Loaded);
+            PrizeOwnership.GrantsChanged += OnPbpGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged += OnPbpIdentityChanged;
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => ClosePbp();
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-            _pbpWatch.Tick += (_, _) => CheckPbpWatch(DateTime.UtcNow);
+            _pbpWatch.Tick += (_, _) => { CheckPbpWatch(DateTime.UtcNow); RefreshPbpOwnership(); };
             _pbpWatch.Start();
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: launched");
@@ -105,6 +107,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_pbpOpen) return;
             _pbpOpen = false;
+            PrizeOwnership.GrantsChanged -= OnPbpGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged -= OnPbpIdentityChanged;
+            _pbpEquipLifetime.Cancel();
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
             _pbpFriendsReady = false;
@@ -148,6 +153,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         return true;
                     case "pbp:media-request":
                         OnPbpMediaRequest(o);
+                        return true;
+                    case PbpLookRules.LookType:
+                        PickPbpLook(o);
+                        return true;
+                    case PbpLookRules.CounterType:
+                        // B3: the Prize Counter is WPF desktop only in 7.2.
                         return true;
                     case "pbp:friend-challenge": OnPbpFriendChallenge(o); return true;
                     case "pbp:net":
@@ -201,6 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 : !osAnimations ? MotionLevel.Reduced : s.MotionLevel;
             var frame = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds,
                 withoutGentle != MotionLevel.Full || s.GentleVisuals, PbpWhispers());
+            frame["prizeCounter"] = false;
             frame["letPeopleWatch"] = PbpWatchRules.LetPeopleWatch(s);
             frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
             frame["watchAmount"] = PbpWatchRules.WatchAmount(s);
@@ -215,6 +227,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             PostPbpFriendIntent();
             _pbpIdentityPosted = true;
             PostLobbyIntent();
+            // WPF PieceByPieceHostService.cs:294-297: the friend intent, then the wardrobe and the synced copy.
+            PostPbpWardrobe();
+            PbpEquipPending = PullPbpEquip();
+            RefreshPbpOwnership();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
