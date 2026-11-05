@@ -28,6 +28,27 @@ namespace CCP.Avalonia.Tests;
 public sealed class ConversationPageTests
 {
     [Fact]
+    public System.Threading.Tasks.Task PortraitHasWpfDustLayer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var page = new ConversationPage();
+        var dust = page.FindControl<ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas>("StageDust");
+        Assert.NotNull(dust);
+        Assert.Equal(ConditioningControlPanel.Avalonia.Controls.AmbientFxLayers.DustField, dust.Layers);
+        Assert.False(dust.IsHitTestVisible);
+        Assert.False(dust.IsRunning); // unattached surfaces never tick
+        using var send = new System.Threading.CancellationTokenSource();
+        typeof(ConversationPageVm).GetField("_send", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(page.Vm, send);
+        page.StopForPanic();
+        Assert.True(send.IsCancellationRequested);
+        Assert.False(dust.IsRunning);
+        return System.Threading.Tasks.Task.CompletedTask;
+    });
+
+    [Fact]
     public System.Threading.Tasks.Task CompanionTabSendsShowsAndFollowsTheAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
@@ -38,6 +59,8 @@ public sealed class ConversationPageTests
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         (s.Welcomed, s.HasAcceptedAgeVerification, s.AwarenessModeEnabled) = (true, true, false);
+        s.MotionLevel = MotionLevel.Full;
+        s.PerformanceMode = false;
         s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);   // P52
         (s.AiChatEnabled, s.OfflineMode, s.UseCompanionBrain) = (true, false, true);
         (s.CompanionPrompt.AiProvider, s.CompanionPrompt.ChatMemoryEnabled) = (AiProviderType.Cloud, true);
@@ -88,6 +111,25 @@ public sealed class ConversationPageTests
             shell.ShowTab("companion");
             Dispatcher.UIThread.RunJobs();
             var page = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
+
+            var dust = page.FindControl<ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas>("StageDust")!;
+            Assert.True(dust.IsRunning);
+            page.Park();
+            Assert.False(dust.IsRunning);
+            page.Resume();
+            Assert.True(dust.IsRunning);
+            using (var pending = new System.Threading.CancellationTokenSource())
+            {
+                var sendField = typeof(ConversationPageVm).GetField("_send", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                sendField.SetValue(page.Vm, pending);
+                try
+                {
+                    PanicSurfaces.All.Single(s => s.Id == "companion-conversation").Stop(shell);
+                    Assert.True(pending.IsCancellationRequested);
+                    Assert.False(dust.IsRunning);
+                }
+                finally { sendField.SetValue(page.Vm, null); }
+            }
 
             // The page is a projection of the brain's one conversation: chat turns only, in order.
             Assert.Equal(new[] { "hello there", "hi, cutie" }, page.Vm.Turns.Select(t => t.Text));

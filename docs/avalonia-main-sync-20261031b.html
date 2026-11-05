@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Main sync #11 delta ledger (2026-10-31b)</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+<script type="application/json" id="ledger-meta">{"total": 22, "pin": "4c664a37e", "base": "706691037", "origin_main": "aa9918833 (0 new commits: already inside main sync #10)"}</script>
+</head>
+<body>
+<h1 id="main-sync-11-delta-ledger-2026-10-31b">Main sync #11 delta ledger (2026-10-31b)</h1>
+<p>Branch <code>avalonia-port/main-20261031b</code> (ledger + merge) + <code>avalonia-port/main-20261031b-compat</code> (build fixes), from
+<code>avalonia-port/main-20261031-compat</code> (<code>6121afbeb</code>: main sync #10 merge #3844 + compat #3845).
+Pin: <code>origin/release/7.2.0</code> = <code>4c664a37e</code> (Merge PR #3892 <code>feat/glassroad-a</code>, 2026-10-31).
+Last sync pin: <code>706691037</code> (main sync #10 follow-up, <a href="avalonia-main-sync-20261031.html"><code>avalonia-main-sync-20261031.html</code></a>).
+<code>origin/main</code> is <code>aa9918833</code>, already fully inside main sync #10 (0 new commits).
+Delta: 22 non-merge commits, 89 files (+3129/-581). Glassroad desktop and phone Scrolller pictures and the kart look on the logbook,
+Prize Counter fixes (shared shop notes, hide Rain, HUD scrim, desk line), the wallet <code>wallet_net</code> correction (C2), frame and
+avatar sync through <code>/v2/equip</code> (C5), Down the Rabbit Hole moving to Basic, the XP bar tip dot and 7.2.0 notes.</p>
+<p>Every non-merge commit has one row. Status legend as in <code>avalonia-main-sync-20261005.html</code>:</p>
+<ul>
+<li><strong>ported-by-merge</strong>: the change landed in a file both heads use (<code>Assets/web</code>, <code>Assets/</code>, <code>CCP.Core</code>, the language files, root notes).</li>
+<li><strong>needs-port (<code>lane</code>)</strong>: WPF-only behaviour the Avalonia head lacks; the lane owns it.</li>
+<li><strong>n/a</strong>: no Avalonia counterpart by design, reason given.</li>
+<li><strong>ported</strong>: done on this sync's -compat branch or by a lane PR.</li>
+</ul>
+<p><span class="counts"></span></p>
+<p>Scope calls from the head dev (<code>cb-answers-1031/MICH-72-ANSWERS-1031.md</code>), as in sync #10:</p>
+<ul>
+<li><strong>B3</strong>: the Prize Counter shop is WPF desktop only in 7.2, so every Prize Counter UI row is
+<code>lane owed (prize-counter-linux, owner 2026-11-01; was B3: ...)</code>. The shared web tree still merges into <code>Assets/web/prizecounter</code>.</li>
+<li><strong>B1</strong>: Sparkles on Avalonia is only the receipt slip and the wallet chip. The slip row merged; the wallet
+correction (row 2) is in scope because the chip shows that balance.</li>
+</ul>
+<p>Lanes go as PRs of 600 lines or less against <code>port/7.2</code>.</p>
+<h2 id="needs-port-lanes">needs-port lanes</h2>
+
+<table>
+<tr><th>lane</th><th>commits</th><th>rows</th><th>ledger #</th></tr>
+<tr><td><code>sync11-dtrh-basic</code></td><td>1</td><td><code>bc242aeb6</code></td><td>9</td></tr>
+<tr><td><code>sync11-profile-equip</code></td><td>1</td><td><code>570b562da</code></td><td>6</td></tr>
+<tr><td><code>sync11-race-pictures</code></td><td>1</td><td><code>009c34bee</code></td><td>21</td></tr>
+<tr><td><code>sync11-wallet-net</code></td><td>1</td><td><code>b70eba772</code></td><td>2</td></tr>
+<tr><td><code>sync11-xp-tip</code></td><td>1</td><td><code>96a9f7522</code></td><td>10</td></tr>
+</table>
+<p>What each lane is:</p>
+<ul>
+<li><code>sync11-race-pictures</code>: the Avalonia Racing Thoughts host feeds Scrolller stills as WPF
+<code>GlassroadHostService.Pictures.cs</code> does (about 260 WPF lines with tests). <code>GlassroadRules.PicturesOn</code>/<code>PicturesFeed</code>
+are pure and can go to Core with it.</li>
+<li><code>sync11-dtrh-basic</code>: DTRH asks the keyed premium gate on every Avalonia door (game window gate and lock, Play card tier
+and lock band, EMI desk target, launcher tile); about 180 WPF lines with tests.</li>
+<li><code>sync11-profile-equip</code>: frame and avatar through <code>/v2/equip</code> (about 590 WPF lines with tests); after <code>sync10-cosmetics</code>.</li>
+<li><code>sync11-wallet-net</code>: the sync reply's <code>wallet_net</code> correction on the Avalonia account sync (about 280 WPF lines, 216 of them tests).</li>
+<li><code>sync11-xp-tip</code>: drop the XP bar meniscus and its pulse from the Avalonia header (about 150 WPF lines, mostly removals).</li>
+</ul>
+<h2 id="rows">Rows</h2>
+
+<table>
+<tr><th>#</th><th>sha</th><th>subject</th><th>WPF files</th><th>Avalonia/Core counterpart</th><th>status</th><th>notes</th></tr>
+<tr><td>1</td><td><code>471a549fd</code></td><td>feat(glassroad): land the Sparkles result fields and slip on the game branch</td><td><code>web/glassroad</code> (8, new <code>sparkles-slip.js</code> hold test)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>B1: the receipt slip is in Avalonia scope; the glassroad copy was already on release/7.2.0 (sync 10), this lands it on <code>feat/glassroad-a</code>; web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
+<tr><td>2</td><td><code>b70eba772</code></td><td>feat(wallet): a spend elsewhere corrects this PC&#x27;s wallet (contract C2)</td><td><code>ProfileSyncService.cs</code> (<code>ApplySyncWallet</code>, <code>wallet_net</code>, local-only <code>WalletNetSeen</code>) + test; Core <code>AppSettings</code>, <code>SparklePoints</code>, <code>V2WalletAdoption</code> merged; new <code>V2WalletNet.cs</code> moved to Core in the merge</td><td>Core <code>Services/Account/ProfileAdopt.cs</code> (<code>ApplySyncResponse</code>), <code>SyncPush.cs</code>; wallet chip</td><td>needs-port (<code>sync11-wallet-net</code>)</td><td><code>V2WalletNet</code> is pure and lives in <code>CCP.Core/Services/Prizes</code>; the Avalonia sync reply path ignores <code>skill_points</code> today, so the lane applies <code>V2WalletNet.Decide</code> there; <code>WalletNetSeen</code> local-only in Core <code>CloudSettingsBackup</code> in -compat</td></tr>
+<tr><td>3</td><td><code>0deef479d</code></td><td>feat(glassroad): the kart look travels on the logbook</td><td><code>web/glassroad</code> (9: garage block on the logbook record)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>rides <code>/v2/race/profile</code> through the host relay the Avalonia head already has (<code>GlassroadHostRules.AllowedPathPrefix</code>); web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
+<tr><td>4</td><td><code>fbf4ba0c9</code></td><td>feat(prize-counter): say where an owned desk item shows (contract C4)</td><td>languages (1 key) + <code>web/prizecounter</code> (5)</td><td>Core languages, <code>Assets/web/prizecounter</code></td><td>lane owed (prize-counter-linux, owner 2026-11-01; was B3: shop is WPF desktop only in 7.2 (handoff-1029/B3-SHOP-DECISIONS.md))</td><td>contract C4 desk line; shop strings merged into Core languages; no Avalonia counter</td></tr>
+<tr><td>5</td><td><code>e6a304a57</code></td><td>fix(prize-counter): the desk line shows before the buy, since a buy has no refund</td><td><code>web/prizecounter</code> (3)</td><td>-</td><td>lane owed (prize-counter-linux, owner 2026-11-01; was B3: shop is WPF desktop only in 7.2 (handoff-1029/B3-SHOP-DECISIONS.md))</td><td>web only; the tree stays in <code>Assets/web/prizecounter</code> so the layout matches WPF, the Avalonia head never hosts it</td></tr>
+<tr><td>6</td><td><code>570b562da</code></td><td>feat(profile): frame and avatar sync through /v2/equip (contract C5, desktop)</td><td>new <code>Services/Profile/ProfileEquipSync.cs</code>, <code>MainWindow.ProfileCosmetics.cs</code>, <code>MainWindow.xaml.cs</code>, <code>ProfileSyncService.cs</code> + test; Core <code>AppSettings</code> merged</td><td><code>CCP.Avalonia/Views/Dialogs/ProfileCustomizeDialog.axaml.cs</code>, Avalonia profile card; Core account sync</td><td>needs-port (<code>sync11-profile-equip</code>)</td><td>contract C5 frame/avatar via <code>/v2/equip</code>; lands after <code>sync10-cosmetics</code> (the Frame row); the three <code>ProfileEquip*</code> fields local-only in Core <code>CloudSettingsBackup</code> in -compat</td></tr>
+<tr><td>7</td><td><code>ab51629f2</code></td><td>fix(glassroad): a compat phone whose WebGL2 dies rebuilds on WebGPU and stays there</td><td><code>web/glassroad</code> (6)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
+<tr><td>8</td><td><code>7333b7210</code></td><td>fix(prize-counter): a host that does not send rainV2 shows no Rain</td><td><code>web/prizecounter</code> (3)</td><td>-</td><td>lane owed (prize-counter-linux, owner 2026-11-01; was B3: shop is WPF desktop only in 7.2 (handoff-1029/B3-SHOP-DECISIONS.md))</td><td>web only; the tree stays in <code>Assets/web/prizecounter</code> so the layout matches WPF, the Avalonia head never hosts it</td></tr>
+<tr><td>9</td><td><code>bc242aeb6</code></td><td>feat(dtrh): Down the Rabbit Hole moves to Basic</td><td><code>App.xaml.cs</code>, <code>VaultGateDialog.cs</code>, <code>MainWindow.PlayTab.cs</code>, <code>MainWindow.Presets.cs</code>, <code>PlayTabView.xaml</code>, <code>DtrhHostService.cs</code>, <code>EmiTargets.cs</code>, <code>LauncherCatalogue.cs</code>, <code>PatreonService.cs</code> + 3 tests; Core <code>ExclusiveFeature</code>, <code>TierGate</code>, <code>DailyFreeService</code>, languages, <code>web/dtrh</code> merged</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Dtrh.cs</code> (<code>DtrhGate</code>/<code>DtrhLocked</code>), Play tab DTRH card, <code>Views/Windows/EmiDesk/EmiTargets.cs</code>, launcher tile</td><td>ported (<code>sync11-dtrh-basic</code>)</td><td>DTRH uses the keyed Basic gate in the game, launcher, Play wall and EMI desk; payout-result sends the Basic Daily Gift fields. Core, languages, web and vault perks were already merged; the older mystery tile and CLI shortcut do not exist on this head. Review fix: DTRH funnel events are counted and checkout opens through ExternalOpener with WPF run/exit guards and throttling; the WPF checkout-watch entitlement recheck remains unported.</td></tr>
+<tr><td>10</td><td><code>96a9f7522</code></td><td>fix(hud): remove the white dot at the tip of the XP bar</td><td><code>MainWindow.xaml</code>, <code>MainWindow.HeroFx.cs</code>, <code>MainWindow.HudDepth.cs</code>, <code>MainWindow.ChromeFx.cs</code>, <code>Theme/Depth.xaml</code> + tests</td><td><code>CCP.Avalonia/Views/Windows/MainShellWindow.HeroFx.cs</code> (meniscus pulse) + <code>MainShellWindow.axaml</code> (XP bar)</td><td>needs-port (<code>sync11-xp-tip</code>)</td><td>the Avalonia header still draws the meniscus and pulses it</td></tr>
+<tr><td>11</td><td><code>b127d4d96</code></td><td>feat(vault): the Prime list names Racing Thoughts 3D</td><td><code>Dialogs/VaultGateDialog.cs</code>; languages (<code>vaultgate_prime_8</code>)</td><td><code>CCP.Avalonia/Views/Dialogs/VaultGateDialog.cs</code></td><td>ported (-compat, <code>avalonia-port/main-20261031b-compat</code>)</td><td>perk arrays as WPF (with row 9's <code>vaultgate_basic_10</code>, without the removed <code>vaultgate_prime_2</code>)</td></tr>
+<tr><td>12</td><td><code>5518b09c8</code></td><td>fix(prize-counter): the click after an opening tap leaves the card open</td><td><code>web/prizecounter</code> (2)</td><td>-</td><td>lane owed (prize-counter-linux, owner 2026-11-01; was B3: shop is WPF desktop only in 7.2 (handoff-1029/B3-SHOP-DECISIONS.md))</td><td>web only; the tree stays in <code>Assets/web/prizecounter</code> so the layout matches WPF, the Avalonia head never hosts it</td></tr>
+<tr><td>13</td><td><code>b8394d39d</code></td><td>fix(glassroad): course tables fit the GPU, so the road is not white on a 4096 limit</td><td><code>web/glassroad</code> (3)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
+<tr><td>14</td><td><code>f3575e851</code></td><td>feat(glassroad): phone Scrolller pictures on the real world screens</td><td><code>web/glassroad</code> (7, new <code>host/devicePictures.js</code>)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>phone (device origin) pictures, web only; the desktop host side is row 21; the new files move to <code>Assets/web/glassroad</code> in the merge</td></tr>
+<tr><td>15</td><td><code>fe4733a06</code></td><td>fix(glassroad): review fixes for the phone pictures</td><td><code>web/glassroad</code> (10)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
+<tr><td>16</td><td><code>511fcbc16</code></td><td>test(glassroad): the loading pin follows the card media option</td><td><code>web/glassroad</code> test</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
+<tr><td>17</td><td><code>0f7ed74c9</code></td><td>test(glassroad): a fall on the cooldown lap is not a fall in the race</td><td><code>web/glassroad</code> test</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
+<tr><td>18</td><td><code>a4aaadc34</code></td><td>docs(7.2.0): shared shop, phone pictures and fixes in the notes; loosen the board frame guard</td><td><code>notes-section-7.2.0.txt</code>, <code>BoardTilesTests.cs</code></td><td><code>notes-section-7.2.0.txt</code> (shared root), Core <code>Tests/CCP.Core.Tests/Board/BoardTilesTests.cs</code></td><td>ported-by-merge</td><td>notes and the moved Core test auto-merged</td></tr>
+<tr><td>19</td><td><code>ad1dcfcba</code></td><td>test(glassroad): the course source stub knows the device origin</td><td><code>web/glassroad</code> test</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
+<tr><td>20</td><td><code>a315d0da2</code></td><td>feat(glassroad): the desktop host feeds device pictures from its media host</td><td><code>web/glassroad</code> (<code>boot.js</code>, <code>CONTRACT.md</code>)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>web half: the page takes <code>caps.scrolller.mediaOrigin</code>; the Avalonia host sends no <code>caps.scrolller</code> until row 21 lands, so the race shows no pictures there</td></tr>
+<tr><td>21</td><td><code>009c34bee</code></td><td>feat(race): Scrolller pictures in the desktop race</td><td>new <code>Services/Glassroad/GlassroadHostService.Pictures.cs</code>, <code>GlassroadHostService.cs</code>, <code>GlassroadRules.cs</code> + tests; Core <code>AppSettings.GlassroadPictures</code>, <code>GoonOnlineMedia.ForGameStills</code> merged</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>needs-port (<code>sync11-race-pictures</code>)</td><td>init <code>caps.scrolller</code>, <code>set-setting</code> / <code>scrolller-niches</code> / <code>scrolller-feed</code>, <code>PicturesOn</code> gate (app consent, never offline), stills-only shared pool, dispose on close</td></tr>
+<tr><td>22</td><td><code>d8fb4d725</code></td><td>docs(7.2.0): race pictures on desktop too</td><td><code>notes-section-7.2.0.txt</code></td><td><code>notes-section-7.2.0.txt</code> (shared root)</td><td>ported-by-merge</td><td>notes only</td></tr>
+</table>
+<h2 id="watch-list-on-the-way-to-main-not-merged-here-yet">Watch list: on the way to main, not merged here yet</h2>
+<p>These are not in this sync. The next sync must pick them up and add a ledger row for each commit:</p>
+
+<table>
+<tr><th>ref</th><th>sha</th><th>what</th><th>trap for the next sync</th></tr>
+<tr><td><code>preview/7.2.0</code></td><td><code>3c05cc1f5</code></td><td>1 non-merge commit not in <code>release/7.2.0</code>: <code>d45fcc8a1</code> test(preview): the counter Escape pin follows the merged Glassroad entry</td><td>a WPF test pin only; if it reads source by path it must go through <code>SourceRoots</code></td></tr>
+<tr><td><code>feat/song-words-page</code></td><td><code>abe331657</code></td><td>4 commits: race your own song (whisper model pins, <code>SongWordsService</code>, page side)</td><td>new <code>Services/Glassroad/SongWords/*</code> (head; pure parts to Core), new <code>web/glassroad/tests/song-words.test.mjs</code> lands under <code>Resources/web</code> (git mv to <code>Assets/web/glassroad</code>), WPF csproj and <code>build.yml</code> edits</td></tr>
+<tr><td><code>fix/glassroad-sweeper-spiral</code></td><td><code>23a1c865c</code></td><td>Boudoir mascara sweeper heads carry a Loom spiral</td><td>web only; check the course hash tests still pass</td></tr>
+<tr><td><code>fix/backroom-warm-pool-reservations-3462</code></td><td><code>1aa677a38</code></td><td>BackRoomRemotePool reservations transfer atomically</td><td>check whether <code>BackRoomRemotePool.cs</code> moved to Core</td></tr>
+</table>
+<p>Older open port debt that still applies (not repeated here): the needs-port rows of syncs 8, 9 and 10
+(<a href="avalonia-main-sync-20261024.html"><code>20261024</code></a>, <a href="avalonia-main-sync-20261030.html"><code>20261030</code></a>,
+<a href="avalonia-main-sync-20261031.html"><code>20261031</code></a>).</p>
+<h2 id="merge-notes-avalonia-portmain-20261031b">Merge notes (<code>avalonia-port/main-20261031b</code>, merge <code>1abe0e8c6</code>)</h2>
+<p>Conflict resolutions only. Checked: the merge tree differs from <code>git merge-tree --write-tree</code>'s automatic result only in
+the 3 content-conflicted files below.</p>
+<ul>
+<li>File location: <code>web/glassroad/host/devicePictures.js</code>, <code>web/glassroad/tests/device-pictures.test.mjs</code>,
+<code>web/glassroad/tests/garage-sync.test.mjs</code>, <code>web/prizecounter/tests/hide-rain.test.mjs</code>,
+<code>web/prizecounter/tests/hud-scrim.test.mjs</code> kept where directory-rename detection put them (<code>Assets/web/...</code>);
+<code>Services/Prizes/V2WalletNet.cs</code> kept at <code>CCP.Core/Services/Prizes/V2WalletNet.cs</code> (pure: Newtonsoft and
+<code>SparklePoints</code> only, no <code>App.*</code>, no WPF types).</li>
+<li><code>PatreonService.cs</code>: the stack's <code>ProviderSubscription.HasLabAccess</code> delegation and <code>EntitlementResolved</code>
+kept; main only changed the doc comment of the body the stack moved to Core.</li>
+<li><code>EmiTargets.cs</code> and <code>LauncherCatalogue.cs</code>: the stack's door tables (<code>D(...)</code> switch, host dictionary over
+Core <code>LauncherCards</code>) kept; main's DTRH Basic gate (<code>PremiumOk</code> / <code>RequiresPremium</code> / <code>DemandPremium</code>)
+applied to their <code>dtrh</code> entries. Main's new <code>LauncherCatalogue.PremiumOk</code> helper auto-merged.</li>
+<li>Auto-merged into Core: <code>AppSettings</code> (<code>WalletNetSeen</code>, <code>ProfileEquip*</code>, <code>GlassroadPictures</code>),
+<code>ExclusiveFeature</code>, <code>TierGate</code>, <code>DailyFreeService</code>, <code>GoonOnlineMedia</code>, <code>SparklePoints</code>,
+<code>V2WalletAdoption</code>, the language files and <code>Tests/CCP.Core.Tests/Board/BoardTilesTests.cs</code>.</li>
+<li>No csproj or <code>build.yml</code> change: the new web files are tests (already excluded by <code>tests\**</code>) or under existing
+trees.</li>
+</ul>
+<h2 id="-compat-avalonia-portmain-20261031b-compat">-compat (<code>avalonia-port/main-20261031b-compat</code>)</h2>
+<ul>
+<li>Core <code>CloudSettingsBackup</code>: <code>ProfileEquipAccount</code>/<code>ProfileEquipUpdatedMs</code>/<code>ProfileEquipPushOwed</code> and
+<code>WalletNetSeen</code> stay out of the backup and survive a restore, as in WPF <code>ProfileSyncService</code>
+(<code>CloudSettingsBackupTests</code> reads the WPF list and fails without it).</li>
+<li>Avalonia <code>VaultGateDialog</code>: the perk lists as WPF (row 11): <code>vaultgate_basic_10</code> added, the deleted
+<code>vaultgate_prime_2</code> gone, <code>vaultgate_prime_8</code> first under Prime.</li>
+</ul>
+<p>Checks: glassroad <code>node --test</code> 3145/3145 (incl. <code>course-hash</code> and &quot;looks never reach the online course
+hash&quot;; the sync #10 known red <code>moving-grid</code> is fixed upstream by row 17), prizecounter 133/133, dtrh 113/113;
+<code>CCP.Core.Tests</code> 4641/4641; Avalonia tests (Glassroad, PrizeCounter, Haptic, Rain, Cosmetic, EmiBook, Sparkles, VaultGate,
+Dtrh, Loc, TestIsolation) 326/326; WPF test project compiles on Linux; <code>core-guards.sh</code> and <code>ledger-check</code> clean.</p>
+
+<h2 id="how-a-row-gets-closed">How a row gets closed</h2>
+<p>A needs-port row is closed when its lane's PR lands on <code>port/7.2</code>. Change the status cell to
+<code>ported (#PR, sha)</code> in that PR, never in a separate docs PR, so the ledger and the code land together. A row
+that turns out to need nothing is changed to <code>n/a</code> with the reason. <code>~/ccp-port/bin/ledger-check</code> keeps the row count
+and numbering honest.</p>
+
+<script>
+(()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
+const m=document.getElementById('ledger-meta');for(const s of document.querySelectorAll('.counts'))if(m){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+</script>
+</body>
+</html>
