@@ -103,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
+            new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
             new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
             new("pink-rush", _ => PinkRushHost.Stop(), After: ["engine"]),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
