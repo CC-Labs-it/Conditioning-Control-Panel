@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
         /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
+        private static void RebaselineDayLogAfterCloudMerge(global::ConditioningControlPanel.Models.AppSettings _) => FeatureDayLog?.Rebaseline("v2 cloud merge");
 
         /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
         /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.html).</summary>
@@ -151,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
-        /// Core settings; the perfect-week bonus stays unseeded (the WPF "service is null" answer).
+        /// Core settings; the perfect-week bonus uses Core rules from WPF SkillTreeService.cs:461-527.
         /// Programs (TrackVerifier) is seeded next to the ProgramService below.</summary>
         private static void StartQuests()
         {
@@ -167,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia
                 return true;
             };
             CoreQuests.PlayCompletionEffectsProvider = PlayQuestCompletionEffects;
+            WireQuestRewards(Sessions);
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).
@@ -880,6 +882,9 @@ namespace ConditioningControlPanel.Avalonia
                 // Its loss must not cost the launch.
                 try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
                 catch (Exception exDayLog) { Serilog.Log.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
+                // WPF ProfileSyncService.cs:2187: minutes another device banked belong to other days, not today.
+                ProfileAdopt.ConditioningMinutesLifted -= RebaselineDayLogAfterCloudMerge;
+                ProfileAdopt.ConditioningMinutesLifted += RebaselineDayLogAfterCloudMerge;
                 CoreProgram.UnlockAchievementProvider = id => Achievements?.TryUnlock(id);
                 // WPF App.xaml.cs: the invite ladder's badges and the invites wire (friends' proxy and
                 // door; a sandbox reaches only a loopback CCP_FRIENDS_API_URL, else nothing is sent).

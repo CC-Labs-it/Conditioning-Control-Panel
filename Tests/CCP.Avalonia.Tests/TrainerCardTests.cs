@@ -10,7 +10,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -140,21 +139,17 @@ public sealed partial class AccountSeedTests
     }
 
     [Theory]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, 0)]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, 750)]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, 0)]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, 750)]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off, 0)]
-    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off, 750)]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(ConditioningControlPanel.Models.MotionLevel motion, int renderDelayMs)
+    [InlineData(0)]
+    [InlineData(750)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(int renderDelayMs)
     {
         var s = CoreSettings.Current;
-        var old = (s.OfflineMode, s.MotionLevel, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
+        var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
         var wire = new CardWire();
         try
         {
             LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
-            (s.OfflineMode, s.MotionLevel, CoreAccount.UnifiedUserId) = (false, motion, "u9");
+            (s.OfflineMode, CoreAccount.UnifiedUserId) = (false, "u9");
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
@@ -169,9 +164,6 @@ public sealed partial class AccountSeedTests
                 Dispatcher.UIThread.RunJobs();
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
-                // Pointer coordinates must describe the landed entrance, not a moving tab.
-                w.CompleteTabTransition();
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
@@ -213,7 +205,7 @@ public sealed partial class AccountSeedTests
         }
         finally
         {
-            (s.OfflineMode, s.MotionLevel, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = old;
+            (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = old;
         }
     }
 

@@ -18,15 +18,6 @@ public class TestIsolationTests
                 weight: global::Avalonia.Media.FontWeight.Black).GlyphTypeface);
     });
 
-    [Fact]
-    public void TheHookRegistersTheHeadsFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
-    {
-        Assert.NotNull(global::Avalonia.Application.Current);
-        var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(
-            global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter));
-        Assert.NotNull(face.GlyphTypeface);
-    });
-
     /// <summary>The first test in a testhost decides the Avalonia platform for every later one. A setup
     /// with headless drawing (no Skia) made later text measure differently and bitmaps read garbage, so
     /// ChasterRaffleCardLayout, BlinkTrainerSession and EmiBookDemo failed only after it (flake-layout).</summary>
@@ -48,7 +39,37 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Fact]
+    public void SharedPlatformUsesTheProductionFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+            var face = new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                weight: global::Avalonia.Media.FontWeight.Bold);
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyph), "bundled bold Inter must resolve without system fonts");
+            Assert.Equal("Inter", glyph!.FamilyName);
+        });
+
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
+
+    // Run this alone in a fresh testhost: no fixture may decide the process-wide font setup.
+    [Fact]
+    public System.Threading.Tasks.Task TheHookInitializesTheShippedFontsBeforeAnyFixture() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            foreach (var name in new[] { "fonts:Inter#Inter", "Fredoka, Segoe UI" })
+            {
+                var face = new global::Avalonia.Media.Typeface(name);
+                Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyphs), name);
+                Assert.True(glyphs!.CharacterToGlyphMap.TryGetGlyph('A', out var glyph));
+                Assert.NotEqual((ushort)0, glyph);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        });
 
     [Fact]
     public void TheFirstTestGetsTheApplicationsFontConfiguration() =>

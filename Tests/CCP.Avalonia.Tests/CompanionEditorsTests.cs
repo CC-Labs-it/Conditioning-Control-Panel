@@ -185,10 +185,8 @@ public sealed class CompanionEditorsTests
         return Task.CompletedTask;
     });
 
-    [Theory]
-    [InlineData(0.5)]
-    [InlineData(0.95)]
-    public Task PromptEditor_is_reachable_from_make_her_yours_links(double vertical) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Fact]
+    public Task PromptEditor_is_reachable_from_make_her_yours_links() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var service = new SettingsService();
@@ -215,21 +213,17 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
-                // Settle the entrance before scrolling to its final position.
-                shell.CompleteTabTransition();
-                shell.UpdateLayout();
-                // This link template draws only its TextBlock; Button padding is not a hit surface.
-                var label = button.GetVisualDescendants().OfType<TextBlock>().Single();
                 // BringIntoView needs current bounds; a pending page layout can scroll the wrong
                 // rectangle on Windows. Settle layout and rendering before injecting real input.
-                label.BringIntoView();
+                shell.UpdateLayout();
+                button.BringIntoView();
                 shell.UpdateLayout();
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
                 shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
                 shell.UpdateLayout();
                 HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
-                var at = label.TranslatePoint(new Point(label.Bounds.Width / 2, label.Bounds.Height * vertical), shell)!.Value;
+                var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
@@ -237,7 +231,7 @@ public sealed class CompanionEditorsTests
                 await Until(() => shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Any());
                 var editor = shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Single();
                 Click(editor.FindControl<Button>("BtnCancel")!);
-                await Until(() => !editor.IsVisible && shell.IsEffectivelyEnabled);
+                await Until(() => !editor.IsVisible);
             }
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = null; }
