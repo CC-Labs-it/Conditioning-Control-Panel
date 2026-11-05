@@ -488,6 +488,8 @@
   "chaster_each": "{0} ciascuno",
   "chaster_price_edit_tip": "Clicca per impostare un tempo tuo. Lascia vuoto per {0}.",
   "chaster_price_edit_locked": "Puoi cambiare i tempi solo quando non c'è un lucchetto attivo.",
+  "chaster_price_warn_big": "È tanto. Più di un'ora ogni volta.",
+  "chaster_price_warn_day": "Il tuo limite al giorno è {0}, quindi questo segna al massimo quello.",
   "chaster_bill_header": "Questo giro",
   "chaster_bill_empty": "Ancora niente.",
   "chaster_bill_pushed": "Inviato al lucchetto: {0}",

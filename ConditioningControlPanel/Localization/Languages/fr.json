@@ -351,6 +351,8 @@
   "chaster_each": "{0} chacun",
   "chaster_price_edit_tip": "Clique pour choisir ton propre temps. Laisse vide pour {0}.",
   "chaster_price_edit_locked": "Les temps se changent tant qu'aucun cadenas n'est actif.",
+  "chaster_price_warn_big": "C'est beaucoup. Plus d'une heure à chaque fois.",
+  "chaster_price_warn_day": "Ta limite par jour est {0}, donc ceci compte au plus ça.",
   "chaster_bill_header": "Cette partie",
   "chaster_bill_empty": "Rien pour l'instant.",
   "chaster_bill_pushed": "Envoyé au cadenas : {0}",

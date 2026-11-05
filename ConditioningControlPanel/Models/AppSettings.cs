@@ -5795,7 +5795,7 @@ namespace ConditioningControlPanel.Models
         private int _chasterBacklogLimitMinutes = 720;
 
         /// <summary>The most a day can add to the lock, in minutes (owner default 3 hours).
-        /// Clamped by TabLimits when read, so a hand edit cannot go past 12 hours.</summary>
+        /// Clamped by TabLimits when read, so a hand edit cannot go past 24 hours.</summary>
         [JsonProperty]
         public int ChasterDailyLimitMinutes
         {
