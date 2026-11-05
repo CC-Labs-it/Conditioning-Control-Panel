@@ -388,6 +388,16 @@ public sealed class HomeMarqueeTests
 
     // ---------------------------------------------------------------- Home actions
 
+    [Fact]
+    public Task DeeperEditorCardOpensDeeperPage() => WithShell((w, dash) =>
+    {
+        var card = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardDeeperEditor")!;
+        card.RaiseEvent(new RoutedEventArgs(ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, card));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("deeper", w.CurrentTab);
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF CardMystery_Click (Presets.cs:1084): the ? box goes to today's free feature's page.</summary>
     [Fact]
     public Task MysteryBoxOpensTodaysFreeFeature() => WithShell((w, dash) =>
