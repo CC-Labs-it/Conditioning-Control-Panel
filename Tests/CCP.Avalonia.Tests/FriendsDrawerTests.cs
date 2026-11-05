@@ -217,6 +217,10 @@ public sealed partial class FriendsDrawerTests
 
     internal static (FriendsService Svc, Wire Wire) Service(string? account = "u_me")
     {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var wire = new Wire();
         var shared = false;
         var api = new FriendsApi(new HttpClient(wire), () => account == null ? null : (account, "tok"), "http://127.0.0.1:9");
