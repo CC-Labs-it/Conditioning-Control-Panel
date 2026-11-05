@@ -79,6 +79,9 @@
     </UserControl.Resources>
 
     <UserControl.Styles>
+        <Style Selector="HyperlinkButton#BtnOnlineMeterPlans:pointerover /template/ ContentPresenter#PART_ContentPresenter, HyperlinkButton#BtnOnlineMeterPlans:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
         <!-- WPF: Border.Style DataTrigger IsExternal=True -> orange border on the pack card -->
         <Style Selector="Border.packCard.external">
             <Setter Property="BorderBrush" Value="#FFA500"/>
@@ -315,7 +318,14 @@
                                 </Grid>
                             </Border>
                         </DockPanel>
-                        <TextBlock x:Name="TxtOnlineMeterLine" Margin="0,5,0,0" FontSize="11.5" TextWrapping="Wrap" Foreground="#A7A7C1"/>
+                        <TextBlock x:Name="TxtOnlineMeterLine" Margin="0,5,0,0" FontSize="11.5" TextWrapping="Wrap" Foreground="#A7A7C1">
+                            <Run x:Name="TxtOnlineMeterExplanation"/>
+                            <InlineUIContainer BaselineAlignment="Center">
+                                <fx:SafeHyperlinkButton x:Name="BtnOnlineMeterPlans" IsVisible="False" MinHeight="0" FontSize="11.5" Padding="0" Cursor="Hand" BorderThickness="0" Background="Transparent" RenderTransform="none">
+                                    <TextBlock Text="{loc:Str online_see_plans}" Foreground="{StaticResource PinkBrush}" FontWeight="SemiBold" TextDecorations="{x:Null}"/>
+                                </fx:SafeHyperlinkButton>
+                            </InlineUIContainer>
+                        </TextBlock>
                         <StackPanel x:Name="OnlineMeterStamped" Orientation="Horizontal" Margin="0,6,0,0" IsVisible="False">
                             <Border BorderBrush="{DynamicResource PinkBrush}" BorderThickness="2" CornerRadius="4"
                                     Padding="5,1,5,0" VerticalAlignment="Center" Margin="0,0,10,0">

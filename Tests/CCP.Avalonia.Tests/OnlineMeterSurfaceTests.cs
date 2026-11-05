@@ -35,7 +35,7 @@ public sealed class OnlineMeterSurfaceTests
         tab.PaintOnlineMeter(State(42), noon, midnight);
         Assert.True(tab.OnlineMeterCard.IsVisible);
         Assert.Equal("42%", tab.TxtOnlineMeterPct.Text);
-        Assert.DoesNotContain("MB", tab.TxtOnlineMeterLine.Text);
+        Assert.DoesNotContain("MB", tab.TxtOnlineMeterExplanation.Text);
         Assert.Equal(42, tab.OnlineMeterBar.ColumnDefinitions[0].Width.Value);
         Assert.False(tab.OnlineOfficialNote.IsVisible);
         Assert.False(tab.OnlineMeterStamped.IsVisible);
@@ -49,7 +49,7 @@ public sealed class OnlineMeterSurfaceTests
 
         tab.PaintOnlineMeter(State(100, spent: true), noon, midnight);
         Assert.Equal("100%", tab.TxtOnlineMeterPct.Text);
-        Assert.Contains(string.Format(Loc.Get("online_meter_hours"), 12), tab.TxtOnlineMeterLine.Text);
+        Assert.Contains(string.Format(Loc.Get("online_meter_hours"), 12), tab.TxtOnlineMeterExplanation.Text);
 
         foreach (var hidden in new[] { State(5, source: "local"), State(5, consent: false), State(5, on: false) })
         {
@@ -110,7 +110,7 @@ public sealed class OnlineMeterSurfaceTests
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         await body();
