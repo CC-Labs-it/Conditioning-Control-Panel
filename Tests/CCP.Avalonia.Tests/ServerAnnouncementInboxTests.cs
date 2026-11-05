@@ -26,6 +26,13 @@ namespace CCP.Avalonia.Tests;
 /// ladder - a "📣" row while quiet, the popup otherwise - and every dismissal records both halves.</summary>
 public sealed class ServerAnnouncementInboxTests
 {
+    private sealed class ScheduledCheck(Action fire) : IDisposable
+    {
+        public bool Cancelled;
+        public void Dispose() => Cancelled = true;
+        public void Fire() { if (!Cancelled) fire(); }
+    }
+
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
@@ -113,12 +120,15 @@ public sealed class ServerAnnouncementInboxTests
         StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
         var opened = new List<AnnouncementPopup>();
         using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
-        var shell = new MainShellWindow();
+        ScheduledCheck? check = null;
+        var shell = new MainShellWindow { ScheduleOnce = (fire, delay) =>
+            delay == TimeSpan.FromSeconds(7) ? check = new ScheduledCheck(fire) : new ScheduledCheck(fire) };
         try
         {
             shell.Show();
             ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7)); // queue the startup callback
             await shell.CheckServerAnnouncementAsync();
+            Assert.True(check.Cancelled);
             Dispatcher.UIThread.RunJobs();
             Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement", StringComparison.Ordinal)));
             Assert.Empty(opened);
@@ -132,6 +142,7 @@ public sealed class ServerAnnouncementInboxTests
 
             var popup = Assert.Single(opened);
             Assert.Equal("The Spiral is open", popup.FindControl<TextBlock>("TxtTitle")!.Text);
+            check.Fire(); // A late startup tick must not file the same announcement again.
             Assert.Empty(StartupLadder.Inbox.Items);
             ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7));
             Dispatcher.UIThread.RunJobs();

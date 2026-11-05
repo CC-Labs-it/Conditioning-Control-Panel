@@ -208,6 +208,7 @@ public sealed class CompanionEditorsTests
             shell.CompleteTabTransition();
             Assert.Null(shell.EnteringTab);
             Dispatcher.UIThread.RunJobs();
+            shell.CompleteTabTransition();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
