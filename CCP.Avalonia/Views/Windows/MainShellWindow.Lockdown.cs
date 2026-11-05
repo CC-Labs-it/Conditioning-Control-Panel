@@ -167,12 +167,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF PlayLockdownActivationAnimation (Lab.cs:1254): a crimson (180,220,20,60) veil over the
         // whole window fading 1 -> 0 over 600 ms (QuadraticEase out), then removed. Stepped by a
         // short-lived ~30 fps DispatcherTimer like the Emergency Exit breath, so tests drive frames.
-        internal static System.TimeProvider LockdownFlashTime = System.TimeProvider.System;
-        private System.TimeProvider? _lockdownFlashClock;
-        private long _lockdownFlashStarted;
         private global::Avalonia.Controls.Border? _lockdownFlash;
         private global::Avalonia.Threading.DispatcherTimer? _lockdownFlashTimer;
         internal global::Avalonia.Controls.Border? LockdownFlash => _lockdownFlash;
+        internal System.TimeProvider LockdownFlashTime { get; set; } = System.TimeProvider.System;
+        private long _lockdownFlashStarted;
 
         private void PlayLockdownActivationAnimation()
         {
@@ -190,10 +189,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (root.RowDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetRowSpan(_lockdownFlash, root.RowDefinitions.Count);
                 if (root.ColumnDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetColumnSpan(_lockdownFlash, root.ColumnDefinitions.Count);
                 root.Children.Add(_lockdownFlash);
-                _lockdownFlashClock = LockdownFlashTime;
-                _lockdownFlashStarted = _lockdownFlashClock.GetTimestamp();
+                _lockdownFlashStarted = LockdownFlashTime.GetTimestamp();
                 _lockdownFlashTimer = new global::Avalonia.Threading.DispatcherTimer(System.TimeSpan.FromMilliseconds(33),
-                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => TickLockdownFlash());
+                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => StepLockdownFlash());
                 _lockdownFlashTimer.Start();
             }
             catch (System.Exception ex)
@@ -202,12 +200,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>The timer and stepped-clock tests drive the same flash frame.</summary>
-        internal void TickLockdownFlash()
-        {
-            if (_lockdownFlashClock is { } clock)
-                PaintLockdownFlash(clock.GetElapsedTime(_lockdownFlashStarted).TotalMilliseconds);
-        }
+        internal void StepLockdownFlash() =>
+            PaintLockdownFlash(LockdownFlashTime.GetElapsedTime(_lockdownFlashStarted).TotalMilliseconds);
 
         /// <summary>One frame of the flash at <paramref name="ms"/> in; at 600 ms it is removed.</summary>
         internal void PaintLockdownFlash(double ms)
@@ -218,7 +212,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (t < 1) return;
             _lockdownFlashTimer?.Stop();
             _lockdownFlashTimer = null;
-            _lockdownFlashClock = null;
             (flash.Parent as global::Avalonia.Controls.Panel)?.Children.Remove(flash);
             _lockdownFlash = null;
         }

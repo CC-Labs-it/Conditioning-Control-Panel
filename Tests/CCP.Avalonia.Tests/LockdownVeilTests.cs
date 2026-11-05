@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -21,7 +22,6 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
 using Xunit;
-using ConditioningControlPanel.Avalonia.Platform;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -31,20 +31,14 @@ namespace CCP.Avalonia.Tests;
 /// the panel half is a table of every control WPF greys or refuses under Lockdown.</summary>
 public sealed class LockdownVeilTests
 {
-    private sealed class FlashClock : TimeProvider
-    {
-        public long Now;
-        public override long GetTimestamp() => Now;
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-    }
-
     private static void Run(Action<MainShellWindow, LockdownService> body)
     {
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
-                    .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
@@ -65,8 +59,6 @@ public sealed class LockdownVeilTests
             s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);   // P76: no intro card stealing the badge's Enter
             s.WhatMovedCardShown = 1;
             var ld = LockdownService.Current = new LockdownService();
-            var oldFlashClock = MainShellWindow.LockdownFlashTime;
-            MainShellWindow.LockdownFlashTime = new FlashClock();
             var shell = new MainShellWindow();
             try
             {
@@ -85,7 +77,6 @@ public sealed class LockdownVeilTests
                 shell.RequestExit();
                 shell.Close();
                 CoreSettings.ServiceProvider = null;
-                MainShellWindow.LockdownFlashTime = oldFlashClock;
             }
         });
     }
@@ -384,6 +375,29 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    /// <summary>WPF 605c451ae (Lab.cs:764): the padlock stands down when a run starts after a sign-out and is back the
+    /// moment it ends, through the shell's own lockdown events (MainShellWindow.Lockdown.cs:82), no manual refresh.</summary>
+    [Fact]
+    public void LockdownPadlock_StandsDownForTheRun_AndReturnsOnDeactivate() => Run((shell, ld) =>
+    {
+        var (oldPremium, oldFree) = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
+        (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (() => false, _ => false);
+        try
+        {
+            var gate = shell.Named<Control>("LockdownTab")!.FindControl<Control>("LockdownGate")!;
+            shell.ShowTab("lockdown");
+            Frame();
+            Assert.True(gate.IsVisible);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Frame();
+            Assert.False(gate.IsVisible);
+            ld.Deactivate();
+            Frame();
+            Assert.True(gate.IsVisible);
+        }
+        finally { (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (oldPremium, oldFree); }
+    });
+
     /// <summary>WPF StartEmergencyExitPulse (LockdownTabView.xaml.cs:267): the slab's glow breathes
     /// 0.26-0.62 / 24-42 on a 1.5 s sine while a lockdown runs, only while the tab shows (P01),
     /// never under LockdownPhotosafe or MotionLevel Off, never while minimised, and rests at 0.32 / 28 when stopped.</summary>
@@ -494,6 +508,13 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Milliseconds;
+        public override long GetTimestamp() => Milliseconds;
+        public override long TimestampFrequency => 1000;
+    }
+
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
@@ -502,6 +523,10 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Render work can exceed the entire 600 ms flash on a loaded CI runner. Keep its
+        // clock still until we explicitly step it, including callbacks drained by Frame().
+        var clock = new FlashClock { Milliseconds = 5_000 };
+        shell.LockdownFlashTime = clock;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -521,15 +546,15 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        var clock = (FlashClock)MainShellWindow.LockdownFlashTime;
-        clock.Now += TimeSpan.FromMilliseconds(300).Ticks;
-        shell.TickLockdownFlash();
+        Assert.Equal(1.0, flash.Opacity);
+        clock.Milliseconds += 300;
+        shell.StepLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        clock.Now += TimeSpan.FromMilliseconds(300).Ticks;
-        shell.TickLockdownFlash();
+        clock.Milliseconds += 300;
+        shell.StepLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
