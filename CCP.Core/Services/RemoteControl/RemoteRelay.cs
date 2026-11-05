@@ -367,6 +367,27 @@ namespace ConditioningControlPanel.Services
             CommandReceived?.Invoke(this, action);
         }
 
+        /// <summary>Send the wearer's More or Stop signal (WPF RemoteControlService.V2.cs:45).
+        /// Stop tears down locally before the network request and bypasses emote debounce.</summary>
+        public async Task<bool> SendSignalAsync(string kind)
+        {
+            kind = (kind ?? "").Trim().ToLowerInvariant();
+            if (!IsActive || kind is not ("more" or "stop")) return false;
+            if (kind == "stop")
+            {
+                var (done, _) = CoreDispatch.Invoke(() => { _stopEffects(true); return 0; }, TimeSpan.FromSeconds(10));
+                if (!done) CoreDispatch.Post(() => _stopEffects(true));
+            }
+            var uid = _unifiedId();
+            if (string.IsNullOrEmpty(uid)) return false;
+            try
+            {
+                using var response = await PostAsync("/v2/remote/emote", new { unified_id = uid, text = kind, icon = "", kind = "signal" }).ConfigureAwait(false);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex) { Log.Warning(ex, "[RemoteControl] Signal failed"); return false; }
+        }
+
         public const int EmoteDebounceMs = 300;   // WPF RemoteControlService.cs:434
         private DateTime _lastEmoteSent = DateTime.MinValue;
 
