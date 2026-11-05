@@ -6,40 +6,14 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
-using ConditioningControlPanel.Avalonia.Views.Overlays;
-using ConditioningControlPanel.Services.Haptics;
 using Xunit;
 using App = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
+// The FunScript playhead seed (#3288's other half) lands with #3566 in the effects lane.
 public sealed class StartupServiceWiringTests
 {
-    [Fact]
-    public void HapticClockForwardsSeeksAndDetachesTheExactSubscriber() => AvaloniaTestDispatcher.Run(() =>
-    {
-        var prior = FunScriptService.SubscribePlaybackTime;
-        Action? detach = null, detachOther = null;
-        try
-        {
-            FunScriptService.SubscribePlaybackTime = null;
-            App.SeedHapticPlaybackTime();
-            long time = -1, otherTime = -1;
-            detach = FunScriptService.SubscribePlaybackTime!(ms => time = ms);
-            detachOther = FunScriptService.SubscribePlaybackTime!(ms => otherTime = ms);
-            var video = MandatoryVideoOverlay.Instance;
-            video.ReportPlaybackTime(4200);
-            Assert.Equal(4200, time);
-            video.ReportPlaybackTime(600); // a backwards seek is still an authoritative clock
-            Assert.Equal(600, time);
-            detach!();
-            video.ReportPlaybackTime(9000);
-            Assert.Equal(600, time);
-            Assert.Equal(9000, otherTime); // detaching one subscriber leaves the other live
-        }
-        finally { detach?.Invoke(); detachOther?.Invoke(); FunScriptService.SubscribePlaybackTime = prior; }
-    });
-
     [Fact]
     public Task CountdownRetriesWithoutAnAvatarThenDeliversScriptedPriorityCopy() => AvaloniaTestDispatcher.RunAsync(() =>
     {

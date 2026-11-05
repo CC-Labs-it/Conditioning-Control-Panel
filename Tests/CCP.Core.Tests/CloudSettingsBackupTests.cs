@@ -433,13 +433,14 @@ public sealed class CloudSettingsBackupTests : IDisposable
     [InlineData("presetPaths")]
     [InlineData("presetFolders")]
     [InlineData("triggers")]
+    [InlineData("triggersCleared")]
     [InlineData("tier")]
     public async Task RestoreNormalizesRelativeAssetsAndKeepsLocalTriggerPresetsAndTierReading(string check)
     {
         var here = Signed();
         here.LastKnownEffectiveTier = 2;
-        var presets = here.KeywordTriggerPresets;
-        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(new JObject
+        var presets = here.KeywordTriggerPresets.ToList();
+        var data = new JObject
         {
             ["ActiveAssetPaths"] = new JArray(@"images\a.png"),
             ["DisabledAssetPaths"] = new JArray(@"images\b.png"),
@@ -450,7 +451,11 @@ public sealed class CloudSettingsBackupTests : IDisposable
             ["KeywordTriggerPresets"] = new JArray(),
             ["LastKnownEffectiveTier"] = 99,
             ["AuthToken"] = "cloud-token"
-        }.ToString()) } }.ToString();
+        };
+        // Trigger presets are a portable list (base #3612, as WPF restores them): a backup without the
+        // list keeps this machine's presets, an explicit empty list clears them.
+        if (check == "triggers") data.Remove("KeywordTriggerPresets");
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(data.ToString()) } }.ToString();
         var restored = await new CloudSettingsBackup(_fake).DownloadAsync(here);
         Assert.NotNull(restored);
         if (check == "active") Assert.Contains("images/a.png", restored.ActiveAssetPaths);
@@ -458,7 +463,12 @@ public sealed class CloudSettingsBackupTests : IDisposable
         if (check == "folders") Assert.Contains("images/folder", restored.DisabledAssetFolders);
         if (check == "presetPaths") Assert.Contains("videos/a.mp4", Assert.Single(restored.AssetPresets).DisabledAssetPaths);
         if (check == "presetFolders") Assert.Contains("videos/folder", Assert.Single(restored.AssetPresets).DisabledAssetFolders);
-        if (check == "triggers") Assert.Same(presets, restored.KeywordTriggerPresets);
+        if (check == "triggers")
+        {
+            Assert.NotEmpty(presets);
+            Assert.Equal(presets, restored.KeywordTriggerPresets);
+        }
+        if (check == "triggersCleared") Assert.Empty(restored.KeywordTriggerPresets);
         if (check == "tier") Assert.Equal(2, restored.LastKnownEffectiveTier);
         Assert.Equal("TOK", here.AuthToken); // deserialization must not write the backup's token to the secret store
     }

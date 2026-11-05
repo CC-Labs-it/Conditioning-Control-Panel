@@ -201,17 +201,6 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
         }
 
-        // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
-        internal static void SeedHapticPlaybackTime()
-        {
-            Services.Haptics.FunScriptService.SubscribePlaybackTime = handler =>
-            {
-                var video = Views.Overlays.MandatoryVideoOverlay.Instance;
-                video.PrimaryPlaybackTimeMsChanged += handler;
-                return () => video.PrimaryPlaybackTimeMsChanged -= handler;
-            };
-        }
-
         // WPF App.xaml.cs:3199: false before the avatar exists leaves the phase retryable.
         // findAvatar is a test seam only: Application.ApplicationLifetime cannot be set after init,
         // so a headless test cannot make AvatarTubeWindow.Live non-null.
@@ -728,8 +717,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // WPF App.xaml.cs:3218: seed the clock before constructing the haptic service.
-                SeedHapticPlaybackTime();
+                // ponytail: no funscript playhead (FunScriptService.
+                // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();

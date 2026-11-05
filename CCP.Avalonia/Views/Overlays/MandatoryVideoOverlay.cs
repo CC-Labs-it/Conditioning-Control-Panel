@@ -65,15 +65,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private WriteableBitmap? _fill;
         private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
         private long _watchedMs;
-
-        // WPF Services/Video/VideoService.cs:2783: the primary player's raw millisecond clock.
-        internal event Action<long>? PrimaryPlaybackTimeMsChanged;
-        internal void ReportPlaybackTime(long milliseconds)
-        {
-            Interlocked.Exchange(ref _watchedMs, milliseconds);
-            try { PrimaryPlaybackTimeMsChanged?.Invoke(milliseconds); }
-            catch (Exception ex) { Log.Debug(ex, "Primary playback time handler failed"); }
-        }
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
         private bool _healUsed, _strict;
@@ -221,11 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 live.SetRate(ConditioningControlPanel.Services.Video.MandatoryVideoPlaybackRules.PlaybackRate(
                     s.GentleVisuals, s.GentleSpeed));
             } });
-            // The watched-time count and the haptic playhead (WPF VideoService.cs:2783) share one clock.
-            _player.TimeChanged += (_, e) =>
-            {
-                if (_player == live) ReportPlaybackTime(e.Time);
-            };
+            _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {
                 var len = _player?.Length ?? 0;
