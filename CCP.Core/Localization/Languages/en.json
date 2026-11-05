@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "Always-on microphone",
+  "devices_always_on_body": "Wake word keeps the microphone open continuously while Takeover is running so she can hear you call her.\n\nEverything stays offline. Audio is processed on your device and never recorded or sent anywhere.\n\nTurn on always-on listening?",
   "chaos_toy_buzz": "it buzzes. hold and sweep",
   "chaos_toy_snap_all": "snapped. all of it.",
   "chaos_toy_snap_live": "snapped. every live one let go",

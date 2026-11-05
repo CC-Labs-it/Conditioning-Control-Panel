@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "Microfono sempre attivo",
+  "devices_always_on_body": "La parola di attivazione mantiene il microfono aperto mentre Takeover è in esecuzione, così lei può sentirti chiamarla.\n\nTutto resta offline. L’audio viene elaborato sul dispositivo e non viene mai registrato o inviato.\n\nAttivare l’ascolto continuo?",
   "chaos_toy_buzz": "vibra. tieni premuto e scorri",
   "chaos_toy_snap_all": "liberato. tutto.",
   "chaos_toy_snap_live": "liberato. tutte le bolle attive hanno ceduto",
