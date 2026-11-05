@@ -116,36 +116,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             finally { _loading = false; }
         }
 
-        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
-        {
-            base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } service) service.CurrentReplaced += CurrentReplaced;
-            SyncFromSettings();
-        }
-
-        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
-        {
-            if (CoreSettings.Service is { } service) service.CurrentReplaced -= CurrentReplaced;
-            base.OnDetachedFromVisualTree(e);
-        }
-
-        private void CurrentReplaced() => Dispatcher.UIThread.Post(SyncFromSettings);
-
-        // WPF MainWindow/MainWindow.Patreon.cs:1336-1338 restores without writing.
-        private void SyncFromSettings()
-        {
-            _syncing = true;
-            try
-            {
-                var s = CoreSettings.Current;
-                this.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = s.TriggerModeEnabled;
-                this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible = s.TriggerModeEnabled;
-                this.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = s.TriggerIntervalSeconds;
-                this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text = $"{s.TriggerIntervalSeconds}s";
-            }
-            finally { _syncing = false; }
-        }
-
     }
 
     /// <summary>

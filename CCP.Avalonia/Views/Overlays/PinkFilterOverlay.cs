@@ -56,21 +56,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
         internal static void Stop() { VoiceOpacity = null; CloseAll(); }
 
-        internal static double PaintedOpacity => VoiceOpacity
-            ?? (App.Sessions?.PinkOpacity ?? CoreSettings.Current.PinkFilterOpacity) / 100.0;
-
         private static bool _refused;
         internal static bool SkipPlatformChecksForTests;
         internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
 
-        private static double PaintedOpacity
+        // The voice hold (WPF "go pink" 40% floor) is the steady level while it lasts; a Takeover pulse
+        // still interpolates from its captured endpoints.
+        internal static double PaintedOpacity
         {
             get
             {
                 var s = CoreSettings.Current;
-                var steady = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
+                var steady = VoiceOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
                 return Math.Clamp(_pulseWeight is { } k ? _pulseBase + (_pulsePeak - _pulseBase) * k : steady, 0, 1);
             }
         }
