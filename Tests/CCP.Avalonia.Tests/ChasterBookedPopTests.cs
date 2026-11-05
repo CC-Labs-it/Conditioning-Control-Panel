@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -47,6 +48,12 @@ public sealed class ChasterBookedPopTests
 
     private static int RailFlashes(MainShellWindow shell) =>
         AdornerLayer.GetAdornerLayer(shell.Named<ChasterRailChip>("ChasterRail")!)!.Children.OfType<ChasterBookedFlash>().Count();
+
+    [Fact]
+    public void Win32CursorIsUnavailableOnOtherPlatforms()
+    {
+        if (!OperatingSystem.IsWindows()) Assert.Null(Win32Overlay.CursorPosition());
+    }
 
     [Fact]
     public Task ABookingPopsAtItsCauseCoalescesAndEndsOnItsClock() => WithSeams(true, async (chaster, shell, frames, time) =>
@@ -111,6 +118,52 @@ public sealed class ChasterBookedPopTests
         Assert.Equal(Loc.Get(CapNotice.TextKey(TabRefusal.DailyCap)), tag.Stage.Text);
         Assert.Null(tag.Stage.Source);
         Assert.Equal(CapNotice.Pop(AmbientFxCanvas.Env.Level), tag.Plan);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task InvalidCauseUsesTheCursorAndPanicClosesEveryPop() => WithSeams(true, async (chaster, shell, frames, _) =>
+    {
+        ChasterBookedPop.Cursor = () => Bubble;
+        chaster.NoteAt("attention", new ScreenPoint(double.NaN, 400));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Bubble, ChasterBookedPop.Live.Single().Origin);
+        var stop = Assert.Single(PanicSurfaces.All, s => s.Id == "chaster-booked-pop");
+        stop.Stop(shell);
+        Assert.Empty(ChasterBookedPop.Live);
+        Assert.Equal(0, frames.Count);
+        stop.Stop(shell); // idle cleanup is safe
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ClosingTheShellClosesPopsAndUnsubscribes() => WithSeams(true, async (chaster, shell, frames, _) =>
+    {
+        chaster.NoteAt("attention", Bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(ChasterBookedPop.Live);
+        shell.Close();
+        Assert.Empty(ChasterBookedPop.Live);
+        Assert.Equal(0, frames.Count);
+        chaster.NoteAt("typo", Bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(ChasterBookedPop.Live);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ShowingReassertsTopmostAfterPlacement() => WithSeams(true, async (_, shell, _, _) =>
+    {
+        var previous = ChasterBookedPop.Raise;
+        var raised = 0;
+        ChasterBookedPop.Raise = w => { Assert.True(w.IsVisible); raised++; return true; };
+        try
+        {
+            var look = new BookedFlashPlan.Plan("+5:00", BookedFlashPlan.AddColour, 0, 1500, true);
+            Assert.NotNull(ChasterBookedPop.Show(shell, Bubble, look, BookedPopLayout.For(MotionLevel.Full)));
+            Assert.Equal(1, raised);
+        }
+        finally { ChasterBookedPop.Raise = previous; }
         await Task.CompletedTask;
     });
 
