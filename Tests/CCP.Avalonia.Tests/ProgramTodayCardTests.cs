@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
@@ -30,10 +31,10 @@ namespace CCP.Avalonia.Tests;
 public sealed class ProgramTodayCardTests
 {
     [Fact]
-    public void DashboardCardShowsTodayForAnActiveRunAndItsLoopsStopWhenHidden() => AvaloniaTestDispatcher.Run(() =>
+    public Task DashboardCardShowsTodayForAnActiveRunAndItsLoopsStopWhenHidden() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -90,7 +91,7 @@ public sealed class ProgramTodayCardTests
             Assert.True(F<Rectangle>("ProgramTodayArt").IsVisible);
             Assert.Equal(5, F<Canvas>("ProgramTodaySparkles").Children.Count);
             Assert.True(dash.ProgramBannerFxRunning);
-            BannerLoopsFollowWpfAndTheWidth(shell, dash, time);
+            await BannerLoopsFollowWpfAndTheWidth(shell, dash, time);
 
             // P01: the shell hides the tab, not the card -> the loops stop; showing it restarts them.
             dash.IsVisible = false;
@@ -144,7 +145,7 @@ public sealed class ProgramTodayCardTests
     /// <summary>The banner loops on the 30 fps beat, stepped (P08), on WPF MainWindow.ProgramBanner.cs's
     /// curves, read against the card's CURRENT width (a resize mid-run used to keep the first width), and
     /// the hover nudge really slides the art (it was an Animation on a Transform: inert, P82).</summary>
-    private static void BannerLoopsFollowWpfAndTheWidth(MainShellWindow shell, SettingsTabView dash, SteppedTime time)
+    private static async Task BannerLoopsFollowWpfAndTheWidth(MainShellWindow shell, SettingsTabView dash, SteppedTime time)
     {
         T F<T>(string n) where T : Control => dash.FindControl<T>(n)!;
         void Step(double s) { time.Advance(TimeSpan.FromSeconds(s)); BeatLoop.StepAll(); }
@@ -185,20 +186,24 @@ public sealed class ProgramTodayCardTests
         typeof(SettingsTabView).GetMethod("NudgeProgramBannerArt", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
             .Invoke(dash, new object[] { -10.0 });                               // what PointerEntered calls
         Assert.True(art.IsVisible, "no banner art - the nudge test proves nothing");
-        double Nudged(double seconds)
+        async Task<double> Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
+            var delivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            shell.RequestAnimationFrame(_ => delivered.TrySetResult());
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             // A real 60 fps headless tick between pumps renders a frame at the same stepped time, which
             // commits nothing; MediaContext then hands the next frame to its 16 ms wall-clock timer, which
             // no forced tick drives (CI: stuck at -7.5). A commit request makes this pump render a frame.
             ElementComposition.GetElementVisual(shell)!.Compositor.RequestCommitAsync();
             Dispatcher.UIThread.RunJobs();
+            // ForceRenderTimerTick queues work; wait until this window actually receives the frame.
+            await delivered.Task.WaitAsync(TimeSpan.FromSeconds(10));
             return ((TranslateTransform)art.RenderTransform!).X;
         }
         var p = 0.13 / 0.26;
-        Assert.Equal(-10 * (1 - (1 - p) * (1 - p)), Nudged(0.13), 3);       // halfway in time, 75% of the way
-        Nudged(0.2);
+        Assert.Equal(-10 * (1 - (1 - p) * (1 - p)), await Nudged(0.13), 3);       // halfway in time, 75% of the way
+        await Nudged(0.2);
         Assert.Equal(-10, ((TranslateTransform)art.RenderTransform!).X, 3);
     }
 
@@ -210,7 +215,7 @@ public sealed class ProgramTodayCardTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var dash = new SettingsTabView();

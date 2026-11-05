@@ -17,6 +17,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.Moderation;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -29,11 +30,26 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class TubeContentGatesTests
 {
+    [Fact]
+    public Task QuickMenuPaletteIsSafeAcrossDispatchers() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var palette = new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" }
+            .Select(name => typeof(AvatarTubeWindow).GetField(name,
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null))
+            .ToArray();
+        await Task.Run(() =>
+        {
+            foreach (var brush in palette)
+                Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableBrush>(brush);
+        });
+    });
+
     private static void Setup()
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 

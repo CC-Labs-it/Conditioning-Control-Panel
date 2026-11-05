@@ -10,6 +10,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
 
 namespace CCP.Avalonia.Tests;
 
@@ -21,7 +22,7 @@ public sealed class SplashStartupTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 
@@ -35,6 +36,8 @@ public sealed class SplashStartupTests
     {
         Setup();
         var splash = SplashScreen.ShowOnOwnThread()!;
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        splash.Closed += (_, _) => closed.TrySetResult();
         var shell = new Window();
         var ran = new List<string>();
         try
@@ -70,6 +73,8 @@ public sealed class SplashStartupTests
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick(16);
                 Dispatcher.UIThread.RunJobs();
             }
+            // Rendering the last frame schedules the async fade continuation; let it close.
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.False(splash.IsVisible);
         }
         finally { splash.CloseImmediate(); shell.Close(); Dispatcher.UIThread.RunJobs(); }

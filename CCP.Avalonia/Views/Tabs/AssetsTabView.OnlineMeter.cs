@@ -4,6 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Serilog;
 
@@ -19,6 +21,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class AssetsTabView
     {
         private bool _meterWired;
+        internal Button? OnlineHelp { get; private set; }
+
+        internal void PinOnlineHelp()
+        {
+            OnlineMeterHelp.BringIntoView();
+            if (OnlineHelp is { IsVisible: true } help) LeashHelpButton.Pin(help);
+        }
 
         /// <summary>WPF ScrolllerCredit.HomeLink.</summary>
         internal const string ScrolllerHome = "https://scrolller.com";
@@ -37,13 +46,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 BtnOnlineOfficialNice.Click += (_, _) => OnlineOfficialNice();
                 // The credit is the shared ScrolllerCreditLine: its own link opens scrolller.com and refuses under
                 // Strict Lock, Lockdown or a Chaos run (a second click handler here would open it twice).
-                ToolTip.SetTip(OnlineMeterHelp, HelpText());
+                OnlineHelp = LeashHelpButton.Create(() => new OnlineMediaHelpSlip(), "online-media-help");
+                OnlineMeterHelp.Child = OnlineHelp;
             }
             catch (Exception ex) { Log.Warning(ex, "Online meter wiring failed"); }
             RefreshOnlineMeter();
         }
 
-        /// <summary>The "?" slip as one tooltip: the title, then every paragraph (OnlineMeterRules.HelpParagraphKeys).</summary>
+        /// <summary>The "?" slip: the title, then every paragraph (OnlineMeterRules.HelpParagraphKeys).</summary>
         internal static string HelpText() =>
             string.Join("\n\n", new[] { Loc.Get(OnlineMeterRules.HelpTitleKey) }.Concat(OnlineMeterRules.HelpParagraphs(Loc.Get)));
 
