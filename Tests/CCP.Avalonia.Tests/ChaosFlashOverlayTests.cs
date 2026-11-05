@@ -286,8 +286,9 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
-    public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation()
+    public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation() => AvaloniaTestDispatcher.Run(() =>
     {
+        Setup(); // Bitmap creation needs Skia even when this is the first test in the process.
         var gif = WriteGif(out var dir);
         try
         {
@@ -297,7 +298,7 @@ public sealed class ChaosFlashOverlayTests
             foreach (var f in frames) f.Dispose();
         }
         finally { Directory.Delete(dir, true); }
-    }
+    });
 
     [Fact]
     public async Task APlatformWithoutClickThroughShowsNothing()
