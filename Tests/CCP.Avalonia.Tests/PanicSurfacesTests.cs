@@ -271,6 +271,7 @@ public sealed class PanicSurfacesTests
         ["BlinkTrainerTabView"] = "camera: the 'camera' and 'blink-trainer' surfaces",
         ["VideoThumbnail"] = "WPF MainWindow.Assets.cs:799-807,910-948: off-screen poster extraction, no sound or window; 5 s deadline, joined Stop and disposal (VideoThumbnailTests pins silence, no opened windows and cleanup)",
         ["LibVlcAudio"] = "the CoreAudio sink: Core services stop their clips on the 'engine' surface",
+        ["SharedOverlayHost"] = "subliminal leases: engine StopDesktopOverlays calls SubliminalOverlay.CloseAll; tested by SubliminalSolidHostTests",
         ["MandatoryVideoOverlay"] = "Core video sink: the 'engine' surface (CoreEngine.Stop) closes it",
         ["BubbleCountWindow"] = "Core bubble-count sink: the 'engine' surface closes it",
         ["BubbleCountHost"] = "Core bubble-count sink: the 'engine' surface closes it",

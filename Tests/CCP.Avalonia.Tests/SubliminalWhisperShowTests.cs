@@ -53,6 +53,68 @@ public sealed class SubliminalWhisperShowTests
     }
 
     [Fact]
+    public void Audible_playback_reserves_the_bark_voice_floor() => With(audible: true, roll: 0.5, run =>
+    {
+        var activity = SubliminalWhisperShow.Activity;
+        SubliminalWhisperShow.Activity = new ConditioningControlPanel.Services.WhisperActivity();
+        try
+        {
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, _) =>
+            {
+                started?.Invoke(TimeSpan.FromSeconds(2));
+                return () => { };
+            };
+            SubliminalWhisperShow.Phrase("reset");
+            Assert.True(SubliminalWhisperShow.Activity.IsPlaying);
+        }
+        finally { SubliminalWhisperShow.Activity = activity; }
+    });
+
+    [Fact]
+    public void Video_reset_waits_for_teardown_is_consumed_once_and_stop_cancels_it()
+    {
+        With(audible: true, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.Freeze(true);
+            Assert.DoesNotContain(run.Timers, t => t.Ms >= 1000);
+            SubliminalWhisperShow.DeferredReset();
+            Assert.Single(run.Timers, t => t.Ms >= 1000 && t.Ms < 2000);
+            SubliminalWhisperShow.DeferredReset();
+            Assert.Single(run.Timers, t => t.Ms >= 1000);
+            var reset = run.Timers.Find(t => t.Ms >= 1000);
+            reset.Then();
+            Assert.Equal("play reset.mp3 whisper", run.Log[^1]);
+            SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.DeferredReset(false);
+            run.Timers.Clear();
+            SubliminalWhisperShow.DeferredReset();
+            Assert.Empty(run.Timers);
+            SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.DeferredReset();
+            var cancelled = run.Timers.FindLast(t => t.Ms >= 1000);
+            SubliminalWhisperShow.DeferredReset(false);
+            var count = run.Log.Count; cancelled.Then(); Assert.Equal(count, run.Log.Count);
+            SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.StopAll();
+            run.Timers.Clear();
+            SubliminalWhisperShow.DeferredReset();
+            Assert.Empty(run.Timers);
+        });
+        With(audible: false, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.DeferredReset();
+            Assert.Empty(run.Timers);
+        });
+        With(audible: true, roll: 0.95, run =>
+        {
+            SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.DeferredReset();
+            Assert.DoesNotContain(run.Timers, t => t.Ms >= 1000);
+        });
+    }
+
+    [Fact]
     public void Freeze_whispers_then_card_then_reset() => With(audible: true, roll: 0.9, run =>
     {
         CoreSubliminal.TriggerBambiFreeze();

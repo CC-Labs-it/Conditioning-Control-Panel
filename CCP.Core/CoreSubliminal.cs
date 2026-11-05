@@ -61,6 +61,11 @@ namespace ConditioningControlPanel
         /// </summary>
         public static volatile Action? BambiFreezeProvider;
 
+        /// <summary>Mandatory video's Freeze defers Reset until teardown (WPF VideoService).</summary>
+        public static volatile Action? VideoFreezeProvider;
+        /// <summary>True completes video Reset; false cancels it on forced cleanup.</summary>
+        public static volatile Action<bool>? DeferredResetProvider;
+
         /// <summary>Fire <see cref="BambiFreezeProvider"/>; a throwing head never takes the caller down.</summary>
         public static void TriggerBambiFreeze()
         {
