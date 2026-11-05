@@ -214,6 +214,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return voice.Play() ? voice : null;
         }
 
+        // Preparation never starts playback. Brain Drain arbitrates Play with Stop under its gate,
+        // as WPF Services/LockCard/BrainDrainService.cs:377-388 does after decoder creation.
+        internal interface IPreparedVoice : MindWipePlayer.IVoice { bool Play(); }
+        internal IPreparedVoice? PrepareVoice(string path, Action onEnded) =>
+            string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : NewVoice(path, onEnded);
+
         // WPF QuizWindow.xaml.cs:1191-1227, using its sequential decoded loop (:41-54).
         internal static Action<MediaPlayer>? ConfigureQuizDrone;
         internal MindWipePlayer.IVoice? PlayQuizDrone(string path, double volume, Action onEnded)
@@ -243,7 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static Action<MediaPlayer> RouteVoice = ApplyPreferredDevice;
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : IPreparedVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>

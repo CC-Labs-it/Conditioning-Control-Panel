@@ -111,6 +111,8 @@ namespace ConditioningControlPanel.Services
             if (!CoreEngine.IsRunning) CoreEngine.Start();
             // SessionEngine.cs:207-230: the session owns Mind Wipe, including its delayed start.
             CoreMindWipe.Stop();
+            // WPF SessionEngine.cs:1492-1496. ponytail: the session's Brain Drain timeline is not ported.
+            CoreEngine.StopBrainDrain?.Invoke();
 
             var s = CoreSettings.Current;
             CurrentSession = session;
@@ -264,6 +266,7 @@ namespace ConditioningControlPanel.Services
             CoreBouncingText.Stop();
             CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
+            CoreEngine.StopBrainDrain?.Invoke();   // WPF SessionEngine.cs:529
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
 
