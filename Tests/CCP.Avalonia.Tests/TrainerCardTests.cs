@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -10,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -161,6 +163,9 @@ public sealed partial class AccountSeedTests
                 w.ShowTab("leaderboard");
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
+                // Pointer input uses the compositor's last scene, not the newly arranged row bounds.
+                // Land the entrance and await that scene before sampling the double-click target.
+                w.CompleteTabTransition();
                 Dispatcher.UIThread.RunJobs();
                 using var frame = w.CaptureRenderedFrame(); // settle layout and the hit-test tree before taking row coordinates
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
