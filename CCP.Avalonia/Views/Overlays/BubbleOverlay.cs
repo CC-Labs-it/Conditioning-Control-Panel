@@ -36,8 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
     /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
-    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
-    /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
+    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, mod pop-sound overrides,
+    /// and the achievement
     /// (no AchievementService on this head; quests are credited).</para>
     /// </summary>
     internal static class BubbleOverlay
@@ -304,6 +304,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b.Spec != null) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s, out var luckyProc);
+            // WPF SetLucky samples the performance tier once at the pop (BubbleService.cs:4405-4418).
+            var tier = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier;
+            if (b.Lucky && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowGlow(tier))
+                b.LuckyGlowBlur = Math.Min(50, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MaxGlowBlurRadius(tier));
             if (luckyProc) global::ConditioningControlPanel.Avalonia.Views.Windows.LuckyToast.Proc(App.Mods?.GetLuckyBubbleLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_bubble"), 20);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
             XpBudgetChanged?.Invoke();
@@ -361,6 +365,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        private static readonly IBrush GoldSparkle = new SolidColorBrush(Color.FromRgb(255, 215, 0));
+        private static readonly IBrush PinkSparkle = new SolidColorBrush(Color.FromRgb(255, 105, 180));
+        private static readonly Dictionary<double, DropShadowEffect> LuckyShadows = new();
+
+        // WPF Bubble.SetLucky applies one shadow to the target containing both sprite and sparkles.
+        private static DropShadowEffect LuckyShadow(double blur)
+        {
+            if (LuckyShadows.TryGetValue(blur, out var effect)) return effect;
+            return LuckyShadows[blur] = new DropShadowEffect
+            {
+                Color = Color.FromRgb(255, 215, 0), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.8,
+            };
+        }
+
+        // PushEffect inflates these content bounds itself. Include the rotated sprite and every
+        // visible sparkle so the small offscreen surface does not clip a particle's shadow.
+        private static Rect LuckyShadowBounds(AmbientBubble b, double cx, double cy, double size, double scale, double k)
+        {
+            var angle = b.Angle * Math.PI / 180;
+            var half = size * Math.Abs(scale) / 2 * (Math.Abs(Math.Cos(angle)) + Math.Abs(Math.Sin(angle))) + 2 * k;
+            double left = cx - half, top = cy - half, right = cx + half, bottom = cy + half;
+            if (b.Sparkles != null)
+                foreach (var sp in b.Sparkles)
+                {
+                    if (sp.Alpha <= 0) continue;
+                    var x = cx + sp.X * k; var y = cy + sp.Y * k; var radius = sp.Size * k / 2;
+                    left = Math.Min(left, x - radius); top = Math.Min(top, y - radius);
+                    right = Math.Max(right, x + radius); bottom = Math.Max(bottom, y + radius);
+                }
+            return new Rect(left, top, right - left, bottom - top);
+        }
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -490,21 +525,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
-                    using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
-                        if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
+                        bool glowing = b.LuckyGlowBlur > 0;
+                        var shadow = glowing ? dc.PushEffect(LuckyShadow(b.LuckyGlowBlur * k),
+                            LuckyShadowBounds(b, cx, cy, size, s, k)) : default;
+                        try
                         {
-                            var (fill, pen) = TintPaint(b.Spec.Tint);
-                            dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                            using (dc.PushTransform(m))
+                            {
+                                if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
+                                {
+                                    var (fill, pen) = TintPaint(b.Spec.Tint);
+                                    dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                                }
+                                if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                                else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                                if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
+                                {
+                                    double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
+                                    dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
+                                }
+                            }
+                            if (b.Sparkles != null)
+                                foreach (var sp in b.Sparkles)
+                                {
+                                    if (sp.Alpha <= 0) continue;
+                                    using (dc.PushOpacity(Math.Clamp(sp.Alpha, 0, 1)))
+                                        dc.DrawEllipse(b.Lucky ? GoldSparkle : PinkSparkle, null,
+                                            new Point(cx + sp.X * k, cy + sp.Y * k), sp.Size * k / 2, sp.Size * k / 2);
+                                }
                         }
-                        if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
-                        else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                        if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
-                        {
-                            double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
-                            dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
-                        }
+                        finally { if (glowing) shadow.Dispose(); }
                     }
                 }
             }
