@@ -481,6 +481,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 _drone = DroneOpener(Platform.ToneWav.Drone());
+                var watch = Services.Audio.MasterVolumeWatch.Shared;
+                watch.EnsureHooked();
+                watch.Changed -= OnMasterVolumeChanged;
+                watch.Changed += OnMasterVolumeChanged;
                 ApplyDroneVolume();
             }
             catch (Exception ex)
@@ -513,17 +517,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.Mantra.Dispose();
         }
 
+        // Settings can change on a remote/preset thread; player changes belong on the UI thread.
+        private void OnMasterVolumeChanged(int _) => Dispatcher.UIThread.Post(ApplyDroneVolume);
+
         private static MantraWindow? _open;   // the opener refuses a second window, so one is enough
 
         private void StopDrone()
         {
+            Services.Audio.MasterVolumeWatch.Shared.Changed -= OnMasterVolumeChanged;
             try { _drone?.Dispose(); } catch { }
             _drone = null;
         }
 
         private static void PlayTone(double frequency, int durationMs)
         {
-            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f, "mantra"); }
+            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f * Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f), "mantra"); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to play mantra tone"); }
         }
 

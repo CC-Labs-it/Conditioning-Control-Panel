@@ -118,7 +118,7 @@ internal sealed class MediaTempFileLedger
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Temp file delete refused, will retry: {Error}", ex.Message);
+            Serilog.Log.Debug("Temp file delete refused, will retry: {Error}", ex.Message);
             return false;
         }
     }

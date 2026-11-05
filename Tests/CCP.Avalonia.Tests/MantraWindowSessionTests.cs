@@ -47,7 +47,7 @@ public sealed class MantraWindowSessionTests
     public Task TypedMantraCompletesTheSessionWithTonesDroneAndMemorySignal() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -130,7 +130,7 @@ public sealed class MantraWindowSessionTests
     public Task StoryboardsStepOnTheClock() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -206,7 +206,7 @@ public sealed class MantraWindowSessionTests
     public Task ProgramTaskDoorOpensTheMantraLabAtTheTaskReps() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -246,7 +246,7 @@ public sealed class MantraWindowSessionTests
     public Task FailedOpenShowsWpfsWarning() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -288,7 +288,7 @@ public sealed class MantraWindowSessionTests
     public Task ClosingCompletedLabDoesNotEndTheNextProgramTaskSession() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -353,7 +353,7 @@ public sealed class MantraWindowSessionTests
     public Task PanicStopsTheDroneAndEndsTheSession() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -388,7 +388,7 @@ public sealed class MantraWindowSessionTests
     public Task ExitClosesTheWindowStopsTheDroneAndDeletesTheWavs() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -415,4 +415,56 @@ public sealed class MantraWindowSessionTests
         finally { MantraWindow.DroneOpener = opener; }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task MasterVolume_MutesTheDroneLiveAndScalesNewTones() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
+        var settings = CoreSettings.Current;
+        var savedMaster = settings.MasterVolume;
+        var opener = MantraWindow.DroneOpener;
+        var play = CoreAudio.PlayOneShotProvider;
+        var drone = new FakeDrone();
+        var gains = new List<float>();
+        MantraWindow.DroneOpener = _ => drone;
+        CoreAudio.PlayOneShotProvider = (_, gain, _, _, _) => gains.Add(gain);
+        MantraWindow? win = null;
+        try
+        {
+            settings.MasterVolume = 25;
+            AvApp.Mantra.StartSession(3);
+            win = new MantraWindow();
+            win.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(ToneWav.VlcVolume(MantraWindow.DroneGain(0.05f, settings.MantraDroneVolume, 25) * ToneWav.DronePeak), drone.Volumes[0]);
+            var tone = typeof(MantraWindow).GetMethod("PlayTone", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            tone.Invoke(null, new object[] { 400.0, 150 });
+            Assert.Equal(0.0375f, Assert.Single(gains), 5);
+            settings.MasterVolume = 0;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, drone.Volumes[^1]);
+            tone.Invoke(null, new object[] { 400.0, 150 });
+            Assert.Equal(0f, gains[^1]);
+            var count = drone.Volumes.Count;
+            win.Close();
+            settings.MasterVolume = 100;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(count, drone.Volumes.Count);
+            Assert.True(drone.Disposed);
+            var handlers = (Delegate?)typeof(ConditioningControlPanel.Services.Audio.MasterVolumeWatch)
+                .GetField("Changed", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .GetValue(ConditioningControlPanel.Services.Audio.MasterVolumeWatch.Shared);
+            Assert.DoesNotContain(handlers?.GetInvocationList() ?? Array.Empty<Delegate>(), h => ReferenceEquals(h.Target, win));
+        }
+        finally
+        {
+            win?.Close();
+            settings.MasterVolume = savedMaster;
+            MantraWindow.DroneOpener = opener;
+            CoreAudio.PlayOneShotProvider = play;
+            AvApp.StopMantra(Array.Empty<Window>());
+        }
+        return Task.CompletedTask;
+    });
+
 }
