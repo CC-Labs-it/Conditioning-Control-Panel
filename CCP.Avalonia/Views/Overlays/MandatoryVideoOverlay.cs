@@ -860,11 +860,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         });
 
         /// <summary>WPF's guidance dialog when the library is empty (once per launch).</summary>
-        private void ShowNoVideos() => Dispatcher.UIThread.Post(() =>
+        private void ShowNoVideos() => Dispatcher.UIThread.Post(async () =>
         {
             var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             if (owner == null) return;
-            _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(Scheduler));
+            var filterEmptied = NoVideosReason.LengthFilterEmptied(Scheduler.LastFunnelEnabled, Scheduler.LastFunnelDuration);
+            try { await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(Scheduler)); }
+            catch (Exception ex) { Log.Debug("Video: no-videos dialog failed: {Error}", ex.Message); }
+            // After the box closes, never over it; the filter case has files, so another source is the wrong fix (WPF VideoService.cs:2469).
+            if (!filterEmptied) Platform.RemoteMediaOfferHead.Offer("videos", owner);
         });
 
         /// <summary>WPF TriggerVideo's guidance text: #1352 names the length filter when it emptied a

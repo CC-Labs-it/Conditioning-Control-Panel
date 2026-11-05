@@ -171,6 +171,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
             Opened += (_, _) => ArmPendingRegistration();
             Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
+            // WPF MainWindow.xaml.cs:3852: an offer parked at startup surfaces once a window exists.
+            Opened += (_, _) => Platform.RemoteMediaOfferHead.Flush(this);
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open
