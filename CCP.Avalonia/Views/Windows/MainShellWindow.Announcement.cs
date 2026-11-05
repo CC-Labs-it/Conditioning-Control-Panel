@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _presentedAnnouncementId = a.Id;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
+                _serverAnnouncementShownThisLaunch = true; // WPF MainWindow.Marquee.cs:918, even when inboxed.
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
