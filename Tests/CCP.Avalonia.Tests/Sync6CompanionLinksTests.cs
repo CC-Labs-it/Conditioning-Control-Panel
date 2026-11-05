@@ -106,22 +106,22 @@ public sealed class Sync6CompanionLinksTests
         var owner = new Window { Content = page }; owner.Show();
         try {
             var more = picker.FindControl<Button>("BtnMorePersonality")!; Assert.True(more.IsVisible); Click(more);
-            await Until(() => owner.OwnedWindows.OfType<PersonalityStudio>().Any());
-            var studio = owner.OwnedWindows.OfType<PersonalityStudio>().Single();
+            await Until(() => owner.OwnedWindows.Where(w => w.Name == "PersonalityStudio").Any());
+            var studio = owner.OwnedWindows.Where(w => w.Name == "PersonalityStudio").Single();
             var source = CoreSettings.Current.ActivePersonalityPresetId; var count = CoreSettings.Current.UserPersonalityPresets.Count;
             ((Panel)((ScrollViewer)((Grid)studio.Content!).Children[1]).Content!).Children.OfType<TextBox>().First(b => b.Name == "Name").Text = "Review preset";
             var save = studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Save"); Click(save);
             await Until(() => !studio.IsVisible);
             Assert.Equal(count + 1, CoreSettings.Current.UserPersonalityPresets.Count); Assert.NotEqual(source, CoreSettings.Current.ActivePersonalityPresetId);
             var combo = picker.FindControl<ComboBox>("CmbPersonality")!; await Until(() => Equals(CoreSettings.Current.ActivePersonalityPresetId, (combo.SelectedItem as ComboBoxItem)?.Tag)); Assert.Equal(CoreSettings.Current.ActivePersonalityPresetId, ((ComboBoxItem)combo.SelectedItem!).Tag);
-            Click(more); await Until(() => owner.OwnedWindows.OfType<PersonalityStudio>().Any());
-            studio = owner.OwnedWindows.OfType<PersonalityStudio>().Single();
+            Click(more); await Until(() => owner.OwnedWindows.Where(w => w.Name == "PersonalityStudio").Any());
+            studio = owner.OwnedWindows.Where(w => w.Name == "PersonalityStudio").Single();
             Click(studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Cancel")); await Until(() => !studio.IsVisible);
             Assert.Equal(count + 1, CoreSettings.Current.UserPersonalityPresets.Count);
-            Click(more); await Until(() => owner.OwnedWindows.OfType<PersonalityStudio>().Any()); studio = owner.OwnedWindows.OfType<PersonalityStudio>().Single();
+            Click(more); await Until(() => owner.OwnedWindows.Where(w => w.Name == "PersonalityStudio").Any()); studio = owner.OwnedWindows.Where(w => w.Name == "PersonalityStudio").Single();
             Click(studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Save")); await Until(() => !studio.IsVisible);
             Assert.Equal(count + 1, CoreSettings.Current.UserPersonalityPresets.Count);
-            Click(more); await Until(() => owner.OwnedWindows.OfType<PersonalityStudio>().Any()); studio = owner.OwnedWindows.OfType<PersonalityStudio>().Single();
+            Click(more); await Until(() => owner.OwnedWindows.Where(w => w.Name == "PersonalityStudio").Any()); studio = owner.OwnedWindows.Where(w => w.Name == "PersonalityStudio").Single();
             Click(studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Delete")); await Until(() => studio.OwnedWindows.OfType<MessageDialog>().Any());
             Click(studio.OwnedWindows.OfType<MessageDialog>().Single().FindControl<Button>("BtnOk")!); await Until(() => !studio.IsVisible);
             Assert.Equal(count, CoreSettings.Current.UserPersonalityPresets.Count);
