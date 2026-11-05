@@ -31,6 +31,7 @@ namespace CCP.Avalonia.Tests;
 /// the panel half is a table of every control WPF greys or refuses under Lockdown.</summary>
 public sealed class LockdownVeilTests
 {
+    private sealed class FrozenTime : TimeProvider { public override long GetTimestamp() => 0; }
     private static void Run(Action<MainShellWindow, LockdownService> body)
     {
         AvaloniaTestDispatcher.Run(() =>
