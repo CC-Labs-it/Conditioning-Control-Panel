@@ -267,8 +267,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // has to be re-run rather than bound - see the porting note about {loc:Str} and .Text.
             LocalizationManager.Instance.LanguageChanged += OnTubeLanguageChanged;
 
-            // ponytail: GIF/emote/portrait playback and non-awareness service reactions remain
-            // in the WPF reference. Look selection and ModChanged repaint use AvatarSets.cs.
+            // ponytail: GIF/portrait playback and non-awareness service reactions remain
+            // in the WPF reference. Look selection and ModChanged repaint use AvatarSets.cs;
+            // emote clips and the generation pill use AvatarTubeWindow.Generation.cs.
 
             // ponytail: the WPF ctor also started three timers here: a 2s greeting,
             // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
@@ -326,6 +327,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // target and method, which is what makes "is the sink still MINE?" answerable at all;
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
+            StopEmoteGeneration();
             _avatarSetsClosed = true;
             CoreMods.ModChanged -= OnTubeModChanged;
             CancelAvatarSwitch();
@@ -677,6 +679,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 }
 
                 layer.IsVisible = true;
+                UpdateGenerationPill();
 
                 _possessionGlitchTimer = new DispatcherTimer
                 {
@@ -706,6 +709,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (layer == null) return;
                 layer.Children.Clear();
                 layer.IsVisible = false;
+                UpdateGenerationPill();
             }
             catch (Exception ex) { Log.Debug("AvatarTube ClearGlitchPortrait failed: {Error}", ex.Message); }
         });
@@ -825,13 +829,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // same visual for a bottom-aligned avatar; only the parent's measured size differs, and
             // AvatarBorder's size is margin-driven anyway.
             var scale = EffAvatarScale();
-            var transform = Math.Abs(scale - 1.0) > 0.001 ? new ScaleTransform(scale, scale) : null;
             foreach (var name in new[] { "ImgAvatar", "ImgAvatarAnimated", "ImgAvatarAnimatedB" })
             {
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
-                img.RenderTransform = transform;
+                var m = name == "ImgAvatar" ? 1 : (double?)_emoteMap?["clipScale"]?[img.Tag as string ?? ""] ?? 1;
+                img.RenderTransform = new ScaleTransform(scale * m, scale * m);
             }
 
             // When the mod only overrides the ATTACHED tube image, force the attached layout in the
@@ -921,15 +925,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // The clamps are ModService.GetAvatar*'s, verbatim: a mod manifest is author-written JSON,
         // so an out-of-range number must be pinned here rather than thrown off the canvas.
         //
-        // ponytail: WPF's EffAvatar* (AvatarTubeWindow.CirceEmotes.cs) ADD a running Circe emote's
-        // per-clip nudge on top of these. Emote mode needs an Avalonia WebP/GIF decoder and did not
-        // port, so the emote term is the neutral one it has when no emote set is animating - which
-        // is the state every non-Circe mod is in permanently.
-        private static double EffAvatarScale() => Math.Clamp(EffectiveTubeLayout()?.AvatarScale ?? 1.0, 0.1, 3.0);
-        private static int EffAvatarOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetX ?? 0, -1000, 1000);
-        private static int EffAvatarOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetY ?? 0, -500, 500);
-        private static int EffAvatarDetachedOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetX ?? 0, -1000, 1000);
-        private static int EffAvatarDetachedOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetY ?? 0, -500, 500);
+        private double EffAvatarScale() => Math.Clamp(EffectiveTubeLayout()?.AvatarScale ?? 1.0, 0.1, 3.0) * EmoteLayout("scale", 1);
+        private double EffAvatarOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetX ?? 0, -1000, 1000) + EmoteLayout("offsetX");
+        private double EffAvatarOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetY ?? 0, -500, 500) - EmoteLayout("offsetY");
+        private double EffAvatarDetachedOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetX ?? 0, -1000, 1000) + EmoteLayout("detachedX");
+        private double EffAvatarDetachedOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetY ?? 0, -500, 500) - EmoteLayout("detachedY");
 
         /// <summary>
         /// True when the mod replaces tube.png but not tube2.png - then the detached state uses the
@@ -1065,6 +1065,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             int loaded = 0;
             foreach (var pose in _avatarPoses) if (pose != null) loaded++;
             if (loaded > 1) _poseTimer.Start();
+            RefreshEmoteGeneration();
         }
 
         /// <summary>
@@ -1137,7 +1138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _txtAvatarLevel.IsVisible = false;
         }
 
-        private void OnTubeLanguageChanged(object? sender, EventArgs e) => RunOnAvatar(UpdateTitleDisplay);
+        private void OnTubeLanguageChanged(object? sender, EventArgs e) => RunOnAvatar(() => { UpdateTitleDisplay(); UpdateGenerationPill(); });
 
         /// <summary>Avatar-set titles, in set order. Loc keys, from AvatarTubeWindow.Avatar.cs.</summary>
         private static readonly string[] AvatarTitleKeys =
@@ -1155,7 +1156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// SwitchToAvatarSet (:395): a roster switch puts the companion's set on the tube and saves it,
         /// globally and per mod. The companion itself is already switched by the caller, so the
         /// set->companion coupling is not re-fired. All sets are unlocked (WPF IsAvatarSetUnlocked).
-        /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
+        /// </summary>
         public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
         {
             // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
@@ -1208,9 +1209,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///   <item>The typewriter. Cosmetic, and WPF adds its runtime to the display duration - so
         ///         dropping it shortens the window rather than truncating the line. The reading
         ///         floor below is kept, which is the half that protects a long reply.</item>
-        ///   <item>The lead-in timer and <paramref name="mood"/>. Both exist to time the avatar's
-        ///         emotive-portrait pose swap against the voice; that system did not port, so a
-        ///         lead-in would be a pause with nothing happening in it.</item>
         ///   <item>EMI Desk's <c>NoteAvatarSpeaking</c>: its only consumer is her line engine,
         ///         whose voice-hold tail is still missing here. Her <c>AvatarMuted</c> IS honoured below, as WPF
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
@@ -1230,7 +1228,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
                 _isGiggling = false;
-                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken);
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, mood);
             });
         }
 
@@ -1295,7 +1293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, string? mood = null)
         {
             RestartIdleTimer();
                 var spokenHandled = false;
@@ -1320,6 +1318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
                     // Publish this line BEFORE cutting the last: the cut fires the old clip's onSpoken on the
                     // thread pool, and a voice waiter woken by it must already see this line in the air.
+                    _ = PlayEmoteSpeech(text, phraseAudioPath, mood); // WPF Speech.cs:490, after suppression
                     SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
