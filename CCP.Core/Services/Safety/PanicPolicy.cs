@@ -92,8 +92,17 @@ namespace ConditioningControlPanel.Services.Safety
             return true;
         }
 
+        /// <summary>
+        /// The legacy ladder (PanicOverridesAll off): a Prize Counter opened over a game whose own rung
+        /// takes the press (Back Room, Arcademy, DtRH, the feed, a descent) closes BEFORE that rung, which
+        /// returns and so never reaches the registry rung that closes the counter. A counter on its own
+        /// is left to the registry rung (it closes there and the exit ladder stays unarmed).
+        /// </summary>
+        internal static bool CounterClosesBeforeHandOff(bool counterActive, bool handOffGameActive)
+            => counterActive && handOffGameActive;
+
         /// <summary>Which game page an Escape the panel kept as its pause is handed to.</summary>
-        internal enum KeptEscapePage { None, Race, Board, Breakout, Dtrh, Arcademy, Goon, Room, Intake, Glassroad }
+        internal enum KeptEscapePage { None, Race, Board, Breakout, Dtrh, Arcademy, Goon, Room, Intake, Counter, Glassroad }
 
         /// <summary>
         /// Where an Escape a game kept as its pause is handed as well. Each of these games pauses on
@@ -114,6 +123,7 @@ namespace ConditioningControlPanel.Services.Safety
             bool goonInFront = false, bool goonReady = false,
             bool roomInFront = false, bool roomReady = false,
             bool intakeInFront = false, bool intakeReady = false,
+            bool counterInFront = false, bool counterReady = false,
             bool glassroadInFront = false, bool glassroadReady = false)
         {
             if (!claimed) return KeptEscapePage.None;
@@ -125,6 +135,8 @@ namespace ConditioningControlPanel.Services.Safety
             if (goonInFront) return goonReady ? KeptEscapePage.Goon : KeptEscapePage.None;
             if (roomInFront) return roomReady ? KeptEscapePage.Room : KeptEscapePage.None;
             if (intakeInFront) return intakeReady ? KeptEscapePage.Intake : KeptEscapePage.None;
+            // The Prize Counter keeps Escape as its back (confirm card, preview, leave), never a close.
+            if (counterInFront) return counterReady ? KeptEscapePage.Counter : KeptEscapePage.None;
             if (glassroadInFront) return glassroadReady ? KeptEscapePage.Glassroad : KeptEscapePage.None;
             return KeptEscapePage.None;
         }

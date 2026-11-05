@@ -13,7 +13,7 @@ export const OPTIONS_KEY = 'glassroad.options.v1';
 export const OPTION_DEFAULTS = Object.freeze({
   gentlePreview: false, assist: false, volMaster: 0.8, volMusic: 1, volSfx: 0.55, mixV: 2,
   frameCap: 'display', renderScale: 'auto', quality: 'auto', showFps: false, steerSens: 1, shadows: true,
-  steerAssist: 'light', howtoOff: false, motion: 'full', laps: 1, speedo: false,
+  steerAssist: 'light', howtoOff: false, motion: 'full', laps: 1, speedo: false, toys: 'full',
 });
 const VOLS = ['volMaster', 'volMusic', 'volSfx'];
 // mixV 2 (owner, 2026-10-22: effects too loud, the song and its voice too quiet): a record saved before it keeps
@@ -27,6 +27,7 @@ export const OPTION_CHOICES = Object.freeze({
   renderScale: Object.freeze(['auto', 1, 0.75, 0.5]),
   quality: Object.freeze(['auto', 'high', 'mid', 'phone']),
   steerAssist: Object.freeze(['light', 'strong', 'off']),   // sim/assist.js ASSIST_MODES, the same order
+  toys: Object.freeze(['full', 'moments', 'off']),          // host/raceToys.js; the row shows only with a toy connected
   motion: Object.freeze(['full', 'less', 'off']),           // fx.setMotion; Gentle forces 'less' at read time, never here
   laps: Object.freeze([1, 2, 3]),                           // solo races only (playtest 2026-10-28: 3 laps ran ~10 min); online keeps the room's
 });
@@ -78,6 +79,7 @@ export function choiceLabel(key, v) {
   if (key === 'quality') return { auto: 'Auto', high: 'High', mid: 'Mid', phone: 'Low' }[c];
   if (key === 'steerAssist') return { off: 'Off', light: 'Help', strong: 'Trance' }[c];   // stored ids stay light / strong / off
   if (key === 'motion') return { full: 'Full', less: 'Less', off: 'Off' }[c];
+  if (key === 'toys') return { full: 'Full', moments: 'Moments', off: 'Off' }[c];
   return String(c);
 }
 
