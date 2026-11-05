@@ -913,6 +913,18 @@ namespace ConditioningControlPanel
                 var avatar = AvatarTubeLayout.Box.FromEdges(Math.Min(a0.X, a1.X), Math.Min(a0.Y, a1.Y),
                     Math.Max(a0.X, a1.X), Math.Max(a0.Y, a1.Y));
 
+                // ccp-bugs #1535: the chat box sits above her head, right where the bubble goes, and
+                // the bubble's window is owned by the tube so it always paints over it. While the
+                // box is open the bubble clears it instead of covering it.
+                if (_isInputVisible && InputPanel.IsVisible && InputPanel.ActualWidth > 0)
+                {
+                    var i0 = InputPanel.PointToScreen(new Point(0, 0));
+                    var i1 = InputPanel.PointToScreen(new Point(InputPanel.ActualWidth, InputPanel.ActualHeight));
+                    avatar = AvatarTubeLayout.SpeechBubblePlacement.ClearOfInput(avatar,
+                        AvatarTubeLayout.Box.FromEdges(Math.Min(i0.X, i1.X), Math.Min(i0.Y, i1.Y),
+                            Math.Max(i0.X, i1.X), Math.Max(i0.Y, i1.Y)));
+                }
+
                 var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(
                     (int)Math.Round(avatar.X + avatar.W / 2), (int)Math.Round(avatar.Y + avatar.H / 2)));
                 if (screen == null) return;
@@ -1187,6 +1199,11 @@ namespace ConditioningControlPanel
             Closed += (_, __) => ChaosWebViewHost.GameActiveChanged -= onGameChanged;
 
             SpeechBubble.SizeChanged += (_, __) =>
+            {
+                if (SpeechBubble.Visibility == Visibility.Visible) ApplySpeechBubblePlacement();
+            };
+            // The chat box opening or closing moves the bubble's clear spot (#1535).
+            InputPanel.IsVisibleChanged += (_, __) =>
             {
                 if (SpeechBubble.Visibility == Visibility.Visible) ApplySpeechBubblePlacement();
             };

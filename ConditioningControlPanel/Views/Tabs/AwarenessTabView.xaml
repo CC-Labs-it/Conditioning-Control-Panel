@@ -101,7 +101,7 @@
                             <Border CornerRadius="99" Background="#8C131320" VerticalAlignment="Center"
                                     BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
                                     Padding="12,5,12,5">
-                                <CheckBox x:Name="ChkAwarenessMaster" x:FieldModifier="internal" feat:SessionLock.Owned="True"
+                                <CheckBox x:Name="ChkAwarenessMaster" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkAwarenessMaster_Changed" Unchecked="ChkAwarenessMaster_Changed">
                                     <CheckBox.ToolTip>

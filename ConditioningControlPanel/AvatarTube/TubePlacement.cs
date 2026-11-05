@@ -51,6 +51,18 @@ namespace ConditioningControlPanel.AvatarTubeLayout
         /// <param name="chrome">Horizontal padding + border of the bubble (outer width minus content width).</param>
         /// <param name="edgeGap">Daylight kept from the work area's edges (defaults to <see cref="Gap"/>).</param>
         /// <param name="measure">Outer size of the bubble when laid out at a given outer max width.</param>
+        /// <summary>
+        /// ccp-bugs #1535: the avatar box the bubble is placed against while the chat box is open.
+        /// Its top rises to the chat box's top when the box overlaps her column, so "above her head"
+        /// lands above the box and "below her" stays below her. An empty input changes nothing.
+        /// </summary>
+        public static Box ClearOfInput(Box avatar, Box input)
+        {
+            if (input.IsEmpty || input.Right < avatar.X || input.X > avatar.Right) return avatar;
+            if (input.Y >= avatar.Y) return avatar;
+            return Box.FromEdges(avatar.X, input.Y, avatar.Right, avatar.Bottom);
+        }
+
         public static BubblePlan Place(Box canvas, Box workArea, Box? obstacle, Box avatar,
             double configuredMaxWidth, double chrome, Func<double, (double W, double H)> measure,
             double edgeGap = Gap)
