@@ -135,6 +135,7 @@ public sealed class PanicSurfacesTests
         "attention-test",
         "audio-duck",
         "descent-fuse",
+        "deeper-player-fullscreen",
         "deeper-editor-audio",
         "knock-cards",
         "quick-recal",
