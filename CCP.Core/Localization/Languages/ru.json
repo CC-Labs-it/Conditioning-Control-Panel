@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "Для экспорта данных необходимо войти в аккаунт",
+  "msg_export_connection_required": "Для экспорта данных требуется подключение к интернету",
+  "msg_export_server_error_0": "Ошибка сервера: {0}",
   "chaos_toy_buzz": "вибрирует. удерживай и проводи",
   "chaos_toy_snap_all": "снято. всё.",
   "chaos_toy_snap_live": "снято. все активные пузыри отпущены",

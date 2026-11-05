@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "データをエクスポートするにはログインが必要です",
+  "msg_export_connection_required": "データのエクスポートにはインターネット接続が必要です",
+  "msg_export_server_error_0": "サーバーエラー: {0}",
   "chaos_toy_buzz": "振動中。押したままなぞる",
   "chaos_toy_snap_all": "解除。すべて。",
   "chaos_toy_snap_live": "解除。すべての活性バブルが解けた",

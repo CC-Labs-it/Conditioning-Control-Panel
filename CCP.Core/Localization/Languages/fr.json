@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "Vous devez vous connecter pour exporter vos données",
+  "msg_export_connection_required": "L’exportation des données nécessite une connexion Internet",
+  "msg_export_server_error_0": "Erreur du serveur : {0}",
   "chaos_toy_buzz": "ça vibre. maintiens et balaie",
   "chaos_toy_snap_all": "libéré. tout.",
   "chaos_toy_snap_live": "libéré. toutes les bulles actives ont cédé",

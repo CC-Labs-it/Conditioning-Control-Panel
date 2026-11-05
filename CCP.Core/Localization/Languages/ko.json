@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "데이터를 내보내려면 로그인해야 합니다",
+  "msg_export_connection_required": "데이터를 내보내려면 인터넷 연결이 필요합니다",
+  "msg_export_server_error_0": "서버 오류: {0}",
   "chaos_toy_buzz": "진동 중. 누른 채로 쓸기",
   "chaos_toy_snap_all": "해제. 모두.",
   "chaos_toy_snap_live": "해제. 모든 활성 방울이 풀렸다",
