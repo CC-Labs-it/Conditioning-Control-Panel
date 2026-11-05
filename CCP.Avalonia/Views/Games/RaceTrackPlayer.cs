@@ -234,6 +234,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 TranscodeToWav(path, wav, progress, ct);
+                // A synchronous IProgress could cancel from Report(1), after the native wait. Real callers pass
+                // Progress<double> (posted, so asynchronous); this guards the seam, and the test hits it directly.
+                ct.ThrowIfCancellationRequested();
                 return ReadMono16(File.ReadAllBytes(wav));
             }
             finally { try { File.Delete(wav); } catch { } }
@@ -265,9 +268,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 // A sout chain has no clock, so it runs faster than real time; ten minutes means a wedged decoder.
                 var limit = DateTime.UtcNow.AddMinutes(10);
-                while (!done.Wait(100))
+                while (!done.Wait(100, ct))
                 {
-                    ct.ThrowIfCancellationRequested();
                     if (DateTime.UtcNow > limit) throw new TimeoutException("the track took too long to decode");
                 }
             }
@@ -276,6 +278,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 // The muxer patches the WAV header and closes the file on stop.
                 try { player.Stop(); } catch (Exception ex) { Log.Debug("RaceTrackPlayer.Transcode stop: {E}", ex.Message); }
             }
+            // EndReached can win the wait while cancellation arrives; Stop still runs before throwing.
+            ct.ThrowIfCancellationRequested();
             if (failed) throw new InvalidDataException("the track would not decode");
             progress?.Report(1);
         }
