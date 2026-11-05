@@ -195,9 +195,9 @@ public sealed class CompanionEditorsTests
         service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
         service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         CoreSettings.ServiceProvider = () => service;
-        // Freeze entrance motion so the pointer probes a stationary target.
-        CoreSettings.Current.MotionLevel = MotionLevel.Off;
-        var shell = new MainShellWindow();
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
         ToolTip.SetServiceEnabled(shell, false);
         try
         {

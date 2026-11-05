@@ -79,6 +79,8 @@
   "msg_export_login_required": "データをエクスポートするにはログインが必要です",
   "msg_export_connection_required": "データのエクスポートにはインターネット接続が必要です",
   "msg_export_server_error_0": "サーバーエラー: {0}",
+  "title_select_companion_personality": "{0}のAIパーソナリティを選択",
+  "filter_personality_json_files": "パーソナリティのJSONファイル",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

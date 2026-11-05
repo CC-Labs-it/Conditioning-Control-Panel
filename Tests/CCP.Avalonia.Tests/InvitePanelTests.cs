@@ -52,10 +52,7 @@ public sealed class InvitePanelTests
     /// <summary>The tiles carry a hand cursor, which needs a platform (as ChasterTab2Tests sets up).</summary>
     private static void EnsurePlatform()
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
     }
 
     private static IEnumerable<T> All<T>(Control root) => root.GetLogicalDescendants().OfType<T>();

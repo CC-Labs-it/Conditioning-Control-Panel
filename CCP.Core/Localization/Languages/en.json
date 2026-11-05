@@ -79,6 +79,8 @@
   "msg_export_login_required": "You must be logged in to export your data",
   "msg_export_connection_required": "Data export requires an internet connection",
   "msg_export_server_error_0": "Server error: {0}",
+  "title_select_companion_personality": "Select AI Personality for {0}",
+  "filter_personality_json_files": "Prompt JSON files",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

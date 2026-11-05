@@ -57,6 +57,7 @@ public sealed class ContentHitTestTests
                 // probe mid-entrance. Suspected, not reproduced: CI misses only ever hit the first awareness probes,
                 // inside the 620 ms entrance (hero hit ScrollContentPresenter, Windows CI 2026-10-30).
                 w.CompleteTabTransition();
+                Assert.Equal(1.0, w.Named<Control>(panelName)!.Opacity);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).

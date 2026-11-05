@@ -128,6 +128,7 @@ public sealed class PanicSurfacesTests
         "chaos-intro",
         "scrolller-web",
         "settings-palette",
+        "perfect-week-bonus",
         "keyword-triggers",
         "haptics",
         "help-video",

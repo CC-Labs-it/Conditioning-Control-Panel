@@ -181,6 +181,9 @@ public sealed partial class AccountSeedTests
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
                 w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                Assert.DoesNotContain(wire.Seen, r => r.Contains("/user/lookup"));
+                await Task.Delay(renderDelayMs); // emulate a slow render between clicks
                 // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
                 // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
                 var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;

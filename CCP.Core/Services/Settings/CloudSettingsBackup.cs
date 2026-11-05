@@ -190,9 +190,9 @@ namespace ConditioningControlPanel.Services
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
             restored.ServerTierSeen = current.ServerTierSeen;
+            restored.LastKnownEffectiveTier = current.LastKnownEffectiveTier;
             restored.GraceClosedTier = current.GraceClosedTier;
             restored.GraceClosedAtUtc = current.GraceClosedAtUtc;
-            restored.LastKnownEffectiveTier = current.LastKnownEffectiveTier;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;

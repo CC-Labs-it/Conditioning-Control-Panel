@@ -257,6 +257,23 @@ public sealed class ProgramIgnitionTests
         Assert.DoesNotContain(tab.FindControl<ItemsControl>("ProgramDayStrip")!.Items.Cast<ProgramDayPip>(), pip => pip.Ignite);
     });
 
+    [Fact]
+    public void HiddenDayCompletionCelebratesOnceOnReturn() => WithRun(lastDay: false, (_, tab, svc, _) =>
+    {
+        tab.IsVisible = false;
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.Equal(0, tab.CompletionBursts);
+        tab.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, tab.CompletionBursts);
+        tab.RefreshPrograms();
+        tab.IsVisible = false;
+        tab.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, tab.CompletionBursts);
+    });
+
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]

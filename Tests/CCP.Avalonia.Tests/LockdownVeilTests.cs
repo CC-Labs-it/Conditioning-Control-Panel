@@ -590,6 +590,7 @@ public sealed class LockdownVeilTests
         var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
+        Assert.Equal(1.0, flash.Opacity);
         clock.Milliseconds += 300;
         shell.StepLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
