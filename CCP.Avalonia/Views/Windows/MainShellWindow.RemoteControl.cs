@@ -6,7 +6,7 @@
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
 // RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise/restore
-// for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and remote
+// for remote, the RemoteHud pill and remote
 // browser video playback and reveal.
 
 using System;
@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void BtnAvailableSubjects_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
             => ShowTab("availablesubjects");
 
+        internal static Action<Window> RemoteJoinAttention = Platform.RemoteJoinAttention.Flash;
         /// <summary>Clock for the toast hold and the fade-out collapse; tests step it.</summary>
         internal static TimeProvider RemoteOverlayTime = TimeProvider.System;
         internal static readonly TimeSpan RemoteToastHold = TimeSpan.FromSeconds(2), RemoteOverlayFadeOut = TimeSpan.FromMilliseconds(200);
@@ -42,6 +43,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the shell listens from startup and lets go on close.</summary>
         private void InitializeRemoteControlOverlay()
         {
+            Action refreshOverlays = () =>
+            {
+                Overlays.PinkFilterOverlay.Refresh(this);
+                Overlays.SpiralOverlay.Refresh(this);
+            };
+            RemoteCommands.RefreshOverlays = refreshOverlays;
             var r = RemoteControlTabView.Relay.Value;
             r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
                 .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
@@ -63,6 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
                 _remoteOverlayTimer?.Stop();
+                if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
             if (Named<Border>("RemoteControlOverlay") is { } o)
@@ -108,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ShowRemoteControlOverlay()
         {
             var r = RemoteControlTabView.Relay.Value;
+            if (LeashBrowser is { } browser) browser.IsVisible = false; // native web view airspace, WPF :904
             var text = string.IsNullOrEmpty(r.SessionCode) ? "" : $"Session: {string.Join(" ", r.SessionCode.ToCharArray())}";
             if (!string.IsNullOrEmpty(r.ConnectPin)) text += $"  PIN: {r.ConnectPin}";
             if (Named<TextBlock>("TxtOverlaySessionCode") is { } code) code.Text = text;
@@ -115,7 +124,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var presets = CoreSettings.Current.RemoteEmotePresets;
             if (Named<ItemsControl>("LstEmotePresetsBigTop") is { } top) top.ItemsSource = presets.Take(3).ToList();
             if (Named<ItemsControl>("LstEmotePresetsBigBottom") is { } bottom) bottom.ItemsSource = presets.Skip(3).ToList();
-            if (Named<SettingsTabView>("SettingsTab") is { } settings) settings.BrowserContainer.IsVisible = false;
             if (Named<Border>("RemoteControlOverlay") is { } o) { o.IsVisible = true; o.Opacity = 1; }
             _remoteOverlayHidingAt = null;
             _remoteOverlayTimer ??= new DispatcherTimer(RemoteOverlaySlowTick, DispatcherPriority.Background, (_, _) => RemoteOverlayTick());
@@ -153,7 +161,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _remoteOverlayHidingAt = null;
                 _remoteOverlayTimer?.Stop();
                 if (Named<Border>("RemoteControlOverlay") is { } o) o.IsVisible = false;
-                if (Named<SettingsTabView>("SettingsTab") is { } settings) settings.BrowserContainer.IsVisible = true;
+                // WPF MainWindow.Leash.cs:185-201: the gate owns the browser until it goes.
+                if (_leashGate?.IsUp == true) _leashHidBrowser = true;
+                else if (LeashBrowser is { } browser) browser.IsVisible = true;
                 if (Named<Border>("RemoteCommandNotification") is { } n0) n0.Opacity = 0;
                 return;
             }
@@ -194,10 +204,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF NotifyRemoteControllerJoined (:1481): the tray balloon (here the OS notification).</summary>
-        private static void NotifyRemoteControllerJoined()
+        private void NotifyRemoteControllerJoined()
         {
             try { Platform.OsNotifications.Show(Loc.Get("title_remote_controller_joined"), Loc.Get("msg_remote_controller_joined")); }
             catch (Exception ex) { Serilog.Log.Debug("Remote controller notice failed: {Error}", ex.Message); }
+            if (WindowState == WindowState.Minimized || !IsVisible)
+                try { RemoteJoinAttention(this); }
+                catch (Exception ex) { Serilog.Log.Debug("Remote controller attention failed: {Error}", ex.Message); }
         }
 
         /// <summary>WPF UpdateStartButtonForRemoteControl (StartStop.cs:992): disabled, green, 🎮 REMOTE CONNECTED.</summary>
