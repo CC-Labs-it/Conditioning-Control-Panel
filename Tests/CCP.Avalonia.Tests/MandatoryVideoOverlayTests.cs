@@ -378,12 +378,14 @@ public sealed class MandatoryVideoOverlayTests
         var clip = Path.Combine(dir, "clip.y4m");
         try
         {
-            // A raw YUV4MPEG2 clip written here (CI has libvlc but no ffmpeg): 160x90, 25 fps, 10 s.
+            // A raw YUV4MPEG2 clip written here (CI has libvlc but no ffmpeg): 160x90, 25 fps, 60 s.
+            // The test closes each run itself. A short clip can reach EOF while a loaded CI UI
+            // is still presenting its first frames, before the mute/close assertions can run.
             using (var f = File.Create(clip))
             {
                 f.Write(System.Text.Encoding.ASCII.GetBytes("YUV4MPEG2 W160 H90 F25:1 Ip A1:1 C420jpeg\n"));
                 var frame = new byte[160 * 90 * 3 / 2];
-                for (var n = 0; n < 250; n++)
+                for (var n = 0; n < 25 * 60; n++)
                 {
                     Array.Fill(frame, (byte)(n % 200 + 30), 0, 160 * 90);
                     Array.Fill(frame, (byte)128, 160 * 90, frame.Length - 160 * 90);
