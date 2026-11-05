@@ -254,7 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             string path = _files[f.FileIndex];
             bool animatedFormat = path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
-                                  || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase);
+                                  || IsAnimatedWebp(path);
             long len = 0;
             if (animatedFormat) { try { len = new FileInfo(path).Length; } catch { } }
             f.Animated = _cascade.CanAnimate(animatedFormat, len);
@@ -283,6 +283,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             LastDecode = Task.Run(() => Decode(path, px, animate)).ContinueWith(t =>
                 Dispatcher.UIThread.Post(() => Attach(f, clip, t.IsCompletedSuccessfully ? t.Result : (new List<Bitmap>(), default))),
                 TaskScheduler.Default);
+        }
+
+        // WPF AnimatedWebp.IsAnimated: a static WebP must not consume an animation slot.
+        internal static bool IsAnimatedWebp(string path)
+        {
+            if (!path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)) return false;
+            try
+            {
+                using var stream = File.OpenRead(path);
+                var head = new byte[21];
+                int count = stream.Read(head, 0, head.Length);
+                return ConditioningControlPanel.Services.Fyp.Online.ScrolllerDiskCache.IsAnimatedWebp(head, count);
+            }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
         }
 
         private static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate)
