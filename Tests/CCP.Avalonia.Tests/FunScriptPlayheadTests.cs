@@ -90,6 +90,23 @@ public sealed class FunScriptPlayheadTests
         Assert.True(player.IndexOf("FunScript.OnVideoStopped()", StringComparison.Ordinal) < player.IndexOf("_player.Stop()", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void The_welcome_back_sheet_flushes_a_parked_media_offer_when_it_closes()
+    {
+        // WPF parks the offer behind every startup modal (App.xaml.cs:909-914); each one flushes on close.
+        Assert.Matches(@"finally\s*\{\s*MainShellWindow\.IsStartupDialogShowing = false;\s*RemoteMediaOffer\.FlushPending\(\);",
+            Src("Platform/WelcomeBackOffer.cs"));
+    }
+
+    [Fact]
+    public void The_update_and_first_run_modals_flush_the_parked_offer()
+    {
+        Assert.Matches(@"_busy = _offering = false;\s*RemoteMediaOffer\.FlushPending\(\);",
+            Src("Platform/AppUpdater.cs"));
+        Assert.Matches(@"BeginFirstLaunchQuiet\(TimeSpan\.FromMinutes\(10\)\);\s*Platform\.RemoteMediaOffer\.FlushPending\(\);",
+            Src("Views/Windows/FirstRunWizard.axaml.cs"));
+    }
+
     private static string Src(string path, [CallerFilePath] string here = "") =>
         Regex.Replace(File.ReadAllText(Path.Combine(Path.GetDirectoryName(here)!, "../../CCP.Avalonia", path)),
             @"//[^\n]*|/\*.*?\*/", " ", RegexOptions.Singleline);
