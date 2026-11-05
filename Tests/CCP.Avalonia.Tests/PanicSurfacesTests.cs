@@ -85,6 +85,7 @@ public sealed class PanicSurfacesTests
     {
         "emergency-exit",
         "event-fx",
+        "companion-audio",
         "intake",
         "leash-task",
         "deeper-tutorial",

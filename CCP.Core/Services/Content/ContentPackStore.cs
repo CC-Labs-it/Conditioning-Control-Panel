@@ -389,8 +389,8 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var full = Path.GetFullPath(tempPath);
-                _tempIdentity.TryRemove(full, out _);
                 if (File.Exists(full)) File.Delete(full);
+                _tempIdentity.TryRemove(full, out _);
             }
             catch (Exception ex) { Log.Debug("ContentPacks: temp delete failed {Path}: {E}", tempPath, ex.Message); }
         }
