@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Func<Task<string?>>? PersonalityFileForTests { get; set; }
 
         // WPF MainWindow.CompanionTab.cs:368-446: import JSON, assign, apply if active, refresh labels.
-        internal async Task AssignCompanionPersonalityAsync(int index, CompanionRoomView room)
+        internal async Task AssignCompanionPersonalityAsync(int index, CompanionRoomView room, Func<Task<string?>>? pick = null)
         {
             if (index is < 0 or > 4) return;
             var epoch = WorkshopCommunityCell.PanicEpoch;
@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 string? path;
                 if (PersonalityFileForTests != null) path = await PersonalityFileForTests();
+                else if (pick != null) path = await pick();   // the drawer's picker (WPF title "Select AI Personality for {0}")
                 else
                 {
                     var own = Path.Combine(CorePaths.EffectiveAssets, "prompts");

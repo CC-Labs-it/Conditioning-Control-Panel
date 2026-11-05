@@ -118,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // P06: also dismiss the knowledge-link modal added to the Links page.
             new("companion-knowledge-editor", _ => Dialogs.KnowledgeLinkEditorDialog.CloseForPanic()),
             new("companion-community", _ => Controls.Companion.Runtime.WorkshopCommunityCell.StopForPanic()), // P06: old lane also closed these modals.
+            new("roster-personality", _ => Controls.Companion.WorkshopAccordion.CloseRosterMessagesForPanic()),
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("screen-shake", _ => Deeper.ScreenShake.Stop()),
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
