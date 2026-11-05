@@ -232,6 +232,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 catch { voice.Dispose(); throw; }
             }
             catch { if (!owned) { media?.Dispose(); input.Dispose(); } throw; }
+        }
+
         // WPF AudioService.PlaySound: unlike a one-shot cue, a muted sound remains live for unmute.
         internal MindWipePlayer.IVoice? PlaySound(string path, float volume,
             Action<TimeSpan> started, Action finished)
