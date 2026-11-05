@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("games", _ => { Platform.RaceEngineDownload.Cancel(); Games.GameWindow.CloseAllForPanic(); }, Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
-            new("quest-stamps", sh => sh?.HideStampPopup()),
+            new("quest-stamps", sh => sh?.StopQuestStampsForPanic()),   // #3235 HideStampPopup, then the stamped pop (flash, scale) resets
             new("quest-voice", _ => ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop()),
             new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
             // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
@@ -109,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.
             new("brain-drain-audio", _ => Platform.BrainDrainPlayer.Instance?.Stop()),
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
+            new("enhancement-purchase", _ => Tabs.EnhancementsTabView.ClosePurchaseDialogsForPanic()),
             new("pink-rush", _ => PinkRushHost.Stop(), After: ["engine"]),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
             // WPF :1978 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel;
             // :1974-1978 the engine-owned session GIF goes first, these standalone slots after it.
@@ -130,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             // WPF Features/VideoFeatureControl.xaml.cs:533 error box; also close it on panic.
             new("video-test-error", _ => Features.VideoFeatureControl.CloseTestErrorsForPanic()),
+            new("chaster-booked-pop", _ => Overlays.ChasterBookedPop.CloseAll()),
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             // WPF MainWindow.xaml.cs:2101 "audio unduck": other apps come back up. That pass runs before WPF's StopEngine;
             // After: engine mirrors StopEngineCore's unduck (StartStop.cs:547). Panic only: the plain Stop does not unduck here yet.

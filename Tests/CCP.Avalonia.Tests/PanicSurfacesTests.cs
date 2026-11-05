@@ -147,6 +147,7 @@ public sealed class PanicSurfacesTests
         "companion-transcript",
         "possession",
         "video-test-error",
+        "chaster-booked-pop",
         "attention-test",
         "audio-duck",
         "descent-fuse",

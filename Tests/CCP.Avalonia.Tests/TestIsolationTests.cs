@@ -56,6 +56,11 @@ public class TestIsolationTests
     }
 
     [Fact]
+    public void SharedSetupRegistersBundledFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter), global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+        Assert.Equal(new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka)).GlyphTypeface.FamilyName, new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily("Fredoka")).GlyphTypeface.FamilyName);
+    });
     public async System.Threading.Tasks.Task BundledFontsAreReadyBeforeAnyFixtureChoosesThePlatform()
     {
         await CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
@@ -121,6 +126,8 @@ public class TestIsolationTests
     [InlineData(typeof(AvApp), nameof(AvApp.Brain))]
     [InlineData(typeof(ConditioningControlPanel.Services.LockdownService), nameof(ConditioningControlPanel.Services.LockdownService.Current))]
     [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay), "PanicListenerLive")]
+    [InlineData(typeof(ConditioningControlPanel.Services.RemoteCommands), "OverlayRunning")]
+    [InlineData(typeof(ConditioningControlPanel.Services.RemoteCommands), "OverlaysStopped")]
     public void TheHookCoversEverySeamThatLeakedBefore(System.Type type, string member) =>
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 

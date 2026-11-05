@@ -781,6 +781,17 @@ namespace ConditioningControlPanel.Avalonia
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
+                    SkillPurchase.Current = new SkillPurchase
+                    {
+                        SyncBeforeRetry = sync.SyncBeforeRetryAsync,
+                        PointsSpent = cost => Achievements?.TrackSkillPointsSpent(cost),
+                        LifetimeSpentReconciled = total => Achievements?.ReconcileLifetimePointsSpent(total),
+                    };
+                    SkillPurchase.Current.SkillUnlocked += (_, id) =>
+                    {
+                        Platform.BarkHead.Engine?.Raise("SkillUnlocked", c => c.Set("skill", id));
+                        if (id == Models.PinkRushRules.SkillId) Dispatcher.UIThread.Post(Views.Windows.PinkRushHost.Start);
+                    };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
@@ -926,6 +937,8 @@ namespace ConditioningControlPanel.Avalonia
                     // Main 8fe2a80a0: a Takeover pulse hands its boosted tint back before the snapshot.
                     SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),
                 };
+                // WPF Services/Session/SessionEngine.cs:396: clear session presence on every stop.
+                Platform.FriendsHead.WatchSessionStop(Sessions);
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)
@@ -1024,6 +1037,7 @@ namespace ConditioningControlPanel.Avalonia
                 // (WPF leaves it unseeded = all available). Seeded before the service so it is never unset.
                 CoreProgram.TaskAvailableProvider = Platform.ProgramCapabilities.IsAvailable;
                 Programs = new Services.Program.ProgramService();
+                Platform.ChasterHead.AttachPrograms(Programs);   // WPF ChasterHooks.cs:65-69
                 CoreQuests.TrackProgramVerifierProvider = (category, amount) => Programs?.TrackVerifier(category, amount);   // WPF App.xaml.cs:413
 
                 // WPF App.xaml.cs:447: ritual photos file through the roadmap. Lazy - the shell creates its

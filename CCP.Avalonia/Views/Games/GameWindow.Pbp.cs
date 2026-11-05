@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
+// media-flavour / media-more / online-media), Lobby intents (.Friends.cs),
 // MergedAccountRecovery.
 
 using System;
@@ -69,6 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private static readonly Random PbpRng = new();
 
         private bool _pbpOpen;
+        private bool _pbpSettingsPosted, _pbpIdentityPosted;
         private Task? _pbpBootFrames;   // single-flight: settings always precedes identity, even during an OS query
         private bool _pbpPinged;
         private DateTime _pbpLastBeatUtc = DateTime.UtcNow;
@@ -106,6 +107,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpOpen = false;
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
+            _pbpFriendsReady = false;
+            _pbpFriendIntent = null;
+            _pbpChallenge?.TrySetResult(null);
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: closed");
         }
@@ -145,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "pbp:media-request":
                         OnPbpMediaRequest(o);
                         return true;
+                    case "pbp:friend-challenge": OnPbpFriendChallenge(o); return true;
                     case "pbp:net":
                         OnPbpNetRequest(o);
                         return true;
@@ -200,9 +205,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
             frame["watchAmount"] = PbpWatchRules.WatchAmount(s);
             frame["gentleIntroSpeed"] = PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, withoutGentle, s.GentleSpeed);
+            if (_spectateInit != null) frame["spectateMatchId"] = _spectateInit;
+            _spectateInit = null;
+            _pbpSettingsPosted = true;
             Post(frame);
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
+            _pbpFriendsReady = true;
+            PostPbpFriendIntent();
+            _pbpIdentityPosted = true;
+            PostLobbyIntent();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
