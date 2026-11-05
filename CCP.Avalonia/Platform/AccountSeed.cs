@@ -229,7 +229,7 @@ internal static class AccountSeed
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
-        ProfileAdopt.AdoptReadBeforeWrite(s, user);
+        ProfileAdopt.AdoptReadBeforeWrite(s, user, adoptConditioningMinutes: true);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
