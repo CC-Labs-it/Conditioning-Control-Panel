@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
@@ -18,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
     /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
+    /// backSoon/weekend/bedtime beats; their Core engine is not routed here), the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off wiring (the <c>TubeDeskVisibility</c> rule itself is in
     /// CCP.Core; only the head call that hides/restores the desk is missing). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
@@ -51,6 +52,59 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try { if (!AvatarMuted) Platform.BarkHead.Engine?.NotifyExternalLineSpoken(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] bark min-gap stamp failed"); }
+        }
+
+        private DispatcherTimer? _avatarHoldTimer;
+        private AvatarTubeWindow? _speakingTube;
+        private bool _avatarHoldArmed;
+
+        // WPF EmiDeskService.cs:123,157-195: even a muted avatar arms the hold.
+        internal void NoteAvatarSpeaking(AvatarTubeWindow tube)
+        {
+            try
+            {
+                if (!Dispatcher.UIThread.CheckAccess())
+                {
+                    Dispatcher.UIThread.Post(() => NoteAvatarSpeaking(tube));
+                    return;
+                }
+                _speakingTube = tube;
+                if (!_avatarHoldArmed)
+                {
+                    _avatarHoldArmed = true;
+                    if (!IsOut || (_window?.IsVisible == true && !_window.PresentationActive))
+                    {
+                        var line = EmiLineEngine.Instance.Draw("avatarSpeaking");
+                        try { if (IsOut && line?.Hold == true) _window?.HoldFace(line); }
+                        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] hold face failed"); }
+                    }
+                }
+                if (_avatarHoldTimer != null) return;
+                _avatarHoldTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                _avatarHoldTimer.Tick += OnAvatarHoldTick;
+                _avatarHoldTimer.Start();
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] avatar hold arm failed"); }
+        }
+
+        private void OnAvatarHoldTick(object? sender, EventArgs e) => CheckAvatarVoiceHold();
+
+        internal void CheckAvatarVoiceHold()
+        {
+            try
+            {
+                if (_speakingTube?.VoiceHoldLive == true) return;
+                if (_avatarHoldTimer != null)
+                {
+                    _avatarHoldTimer.Stop();
+                    _avatarHoldTimer.Tick -= OnAvatarHoldTick;
+                    _avatarHoldTimer = null;
+                }
+                if (_avatarHoldArmed) EmiLineEngine.Instance.ReleaseHold("avatarSpeaking");
+                _avatarHoldArmed = false;
+                _speakingTube = null;
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] avatar hold tick failed"); }
         }
 
         /// <summary>Summon her if she is away, send her away if she is out. A widget ON SCREEN wins over the flag.</summary>
