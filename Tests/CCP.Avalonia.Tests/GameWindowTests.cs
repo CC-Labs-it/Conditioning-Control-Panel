@@ -1562,6 +1562,9 @@ public sealed partial class GameWindowTests
         Assert.Equal("recovering", w.CheckDtrhHeartbeat(now.AddSeconds(21)));
         GameWindow.CloseAllForPanic(); // recovery is queued, not permitted to resurrect this surface
         Dispatcher.UIThread.RunJobs();
+        // WPF DtrhHostService.cs:250-266: panic asks the ready page to settle; its exit-done closes the window.
+        w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+        Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
         Assert.False(w.DtrhWatchRunning);
         Assert.False(GameWindow.DtrhRelaunchedOnce);

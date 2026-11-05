@@ -75,8 +75,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleDtrh(JObject o)
         {
-            if (_closing) return true; // a dead carrier cannot start another run
-            switch ((string?)o["type"])
+            var type = (string?)o["type"];
+            // A dead carrier cannot start another run; a funnel event is still counted (Handle refuses checkout).
+            if (_closing && type != "funnel") return true;
+            switch (type)
             {
                 case "ready":
                     IsReady = true;

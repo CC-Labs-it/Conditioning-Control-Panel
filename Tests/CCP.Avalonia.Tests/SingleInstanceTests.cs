@@ -246,6 +246,7 @@ namespace CCP.Avalonia.Tests
             var suffix = "_test_" + Guid.NewGuid().ToString("N");
             string? got = null;
             using var primary = SingleInstance.Claim(suffix, p => { got = p; return Task.CompletedTask; });
+            primary!.EndStartupPhase();   // the ack then waits for the show, so got is set before Join returns
             var t = new Thread(() => SingleInstance.Claim(suffix, _ => Task.CompletedTask, payload));
             t.Start();
             Assert.True(t.Join(TimeSpan.FromSeconds(20)));

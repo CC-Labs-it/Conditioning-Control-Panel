@@ -39,9 +39,10 @@ public sealed class PlayWallTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var previous = PlayTabView.LaunchGame;
-            var (oldLogin, oldLab) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider);
+            var (oldLogin, oldLab, oldPremium) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider);
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => true;
+            CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is Basic in WPF 7.2.2 (keyed premium gate)
             var shell = new MainShellWindow();
             var launches = new System.Collections.Generic.List<string>();
             PlayTabView.LaunchGame = id => launches.Add(id);
@@ -58,7 +59,7 @@ public sealed class PlayWallTests
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(gameId, Assert.Single(launches));
             }
-            finally { shell.Close(); PlayTabView.LaunchGame = previous; CoreAccount.IsLoggedInProvider = oldLogin; CoreEntitlement.HasLabProvider = oldLab; }
+            finally { shell.Close(); PlayTabView.LaunchGame = previous; CoreAccount.IsLoggedInProvider = oldLogin; CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.HasPremiumProvider = oldPremium; }
         });
     }
 
@@ -484,9 +485,9 @@ public sealed class PlayWallTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.Single(shell.OwnedWindows.OfType<LoginDialog>()).Close();
                 Dispatcher.UIThread.RunJobs();
-                Assert.Null(GameWindow.OpenForTests("race"));
+                Assert.Null(GameWindow.OpenForTests("glassroad"));
 
-                // Signed in with Lab access: the base's DtRH host, then the owned race track.
+                // Signed in with Lab access: the base's DtRH host, then Glassroad (WPF LauncherCatalogue.cs:235-238).
                 isLoggedIn = true;
                 C<Button>("BtnPlayDtrh").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
@@ -495,7 +496,7 @@ public sealed class PlayWallTests
                 Dispatcher.UIThread.RunJobs();
                 race.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal("/dtrh/race.html", GameWindow.OpenForTests("race")!.PageUrl!.AbsolutePath);
+                Assert.Equal("/glassroad/index.html", GameWindow.OpenForTests("glassroad")!.PageUrl!.AbsolutePath);
                 GameWindow.CloseAllForPanic();
                 Dispatcher.UIThread.RunJobs();
 
