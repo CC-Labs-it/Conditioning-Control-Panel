@@ -3,14 +3,13 @@
 // manifest), run-started / run-ended with the one-payout latch (:336, :431), the ping-then-close heartbeat
 // watchdog (:595) and the teardown funnel (:686). Shell frames the race shares (boot-error, exit's 1200 ms
 // watchdog, exit-done) stay in GameWindow.HandleMessage, and panic closes it with every other game.
-// ponytail: WPF MainWindow.TryRacePauseOnEscape (:1505) keeps a lone Escape as the race's pause; here the
-// first Escape still panics the race closed (only Piece by Piece is ported, MainShellWindow.PanicKey.cs).
-// ponytail: still missing on this head, each its own unit (parity row game-race): BambiCloud levels
-// (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), the track player and
-// its decoder seed (own tracks + charting are GameWindow.RaceTracks.cs), sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
-// loom-list, report-bug, fullscreen-set, the mandatory-video pause, the grants watcher (PrizeOwnership has
-// no change event: nothing grants mid-run here), the meta frame, bubble credit and SeasonRecap TrackFeature.
+// Remaining gaps are tracked in docs/avalonia-parity.html (game-race).
 using System;
+using System.Linq;
+using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
@@ -39,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private DispatcherTimer? _raceHeartbeatWatch;
         private DateTime _raceLastHeartbeatUtc;
         private bool _racePinged, _raceExiting, _raceStarted, _raceDisposed;
+
+        private WindowState _raceWindowedState = WindowState.Normal;
 
         internal bool RaceRunActive => _raceRun.IsActive;
         /// <summary>The watchdog clock (P08); tests step it.</summary>
@@ -77,6 +78,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     _raceLastHeartbeatUtc = RaceUtcNow();
                     _racePinged = false;
                     return true;
+                case "fullscreen-set":
+                    RaceQueue(() =>
+                    {
+                        bool on = (bool?)o["on"] == true;
+                        if (on && WindowState != WindowState.FullScreen)
+                        {
+                            _raceWindowedState = WindowState;
+                            WindowState = WindowState.FullScreen;
+                        }
+                        else if (!on && WindowState == WindowState.FullScreen)
+                            WindowState = _raceWindowedState;
+                        Post(new { type = "fullscreen", on = WindowState == global::Avalonia.Controls.WindowState.FullScreen });
+                        Web.Focus();
+                    });
+                    return true;
                 case "run-started":
                     if (_raceRun.TryStart()) Log.Information("RaceHost: run started (seed={Seed})", (string?)o["seed"]);
                     return true;
@@ -102,6 +118,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var server = _server;
                 var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl))).Value;
                 Post(GameMediaManifest.Frame(m));
+                var favorites = DtrhAssetStatsStore.TopAssets(12);
+                if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
+                PostRaceLoomList();
+                DtrhLoomStore.Changed -= OnRaceLoomChanged;
+                DtrhLoomStore.Changed += OnRaceLoomChanged;
             }
             catch (Exception ex) { Log.Warning("CaucusHostService.OnPageReady: {E}", ex.Message); }
         }
@@ -154,7 +175,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     RunDurationSec: durationSec, DifficultyMult: 1.0, SparkGainMult: 1.0, Score: score / 5.0,
                     TrickleDrops: 0, DripFeedMaxed: false, BestCombo: (int?)o["bestCombo"] ?? 0,
                     Defused: (int?)o["effects"] ?? 0, ElapsedSec: durationSec));
-                CoreProgression.AddXP(pay.BaseXp, "Chaos");   // WPF :469 AddXP(baseXp, XPSource.Chaos)
+                try { CoreProgression.AddXP(pay.BaseXp, "Chaos"); }
+                catch (Exception ex) { Log.Debug("RaceHost payout AddXP: {E}", ex.Message); }
+                try { CreditRaceBubbles((int?)o["popped"] ?? 0); }
+                catch (Exception ex) { Log.Debug("RaceHost bubble credit: {E}", ex.Message); }
                 Post(new
                 {
                     type = "payout-result", baseXp = pay.BaseXp, skillMult, finalXp = pay.FinalXp,
@@ -164,6 +188,65 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     score, durationSec, pay.BaseXp, sparksEarned);
             }
             catch (Exception ex) { Log.Warning("RaceHost.OnRunEnded: {E}", ex.Message); }
+        }
+
+        internal Windows.AchievementPopup? RaceMilestonePopup { get; private set; }
+
+        // Instance seams exercise constructor and display failures without leaking process state.
+        internal Func<int, Windows.AchievementPopup> RaceCreateMilestonePopup = boundary =>
+            new Windows.AchievementPopup(Loc.GetF("achievement_bubble_milestone_name", boundary),
+                    Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
+                    headerText: Loc.Get("achievement_bubble_milestone_header"));
+        internal Action<Windows.AchievementPopup> RaceShowMilestonePopup = popup => popup.Show();
+
+        private void CreditRaceBubbles(int count)
+        {
+            if (count <= 0 || App.Achievements is not { } achievements) return;
+            int milestones = achievements.TrackBubblesPopped(count);
+            if (milestones > 0)
+            {
+                var settings = CoreSettings.Current;
+                int previous = settings.SkillPoints;
+                settings.SkillPoints += milestones;
+                CoreSettings.Save();
+                SparklePointRewards.PublishCredit(previous, settings.SkillPoints, SparklePointSource.BubbleMilestone);
+                // WPF AchievementService.cs:468 isolates notification failures from quest credit.
+                try
+                {
+                    RaceMilestonePopup?.Close();
+                    int boundary = achievements.Progress.TotalBubblesPopped / 100 * 100;
+                    RaceMilestonePopup = RaceCreateMilestonePopup(boundary);
+                    RaceMilestonePopup.FindControl<IconGlyph>("TxtHeaderIcon")!.Kind = IconKind.Sparkle;
+                    RaceShowMilestonePopup(RaceMilestonePopup);
+                }
+                catch (Exception ex) { Log.Warning("RaceHost bubble milestone popup: {E}", ex.Message); }
+            }
+            App.Quests?.TrackBubblesPopped(count);
+        }
+
+        private void RaceQueue(Action action) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_raceDisposed || _closing || _raceExiting) return;
+            try { action(); }
+            catch (Exception ex) { Log.Debug("RaceHost: queued action: {E}", ex.Message); }
+        });
+
+        private void OnRaceLoomChanged() => RaceQueue(PostRaceLoomList);
+
+        private void PostRaceLoomList() => Post(new
+        {
+            type = "loom-list",
+            spirals = DtrhLoomStore.List().Select(s => new
+            {
+                slug = s.Slug, url = "/__spirals__/loom_" + s.Slug + ".gif",
+                @params = ParseRaceLoomParams(s.ParamsJson),
+            }),
+        });
+
+        private static JObject? ParseRaceLoomParams(string? json)
+        {
+            try { return string.IsNullOrWhiteSpace(json) ? null : JObject.Parse(json); }
+            catch { return null; }
         }
 
         /// <summary>One WPF StartHeartbeatWatch tick (:600). Guarded on IsReady: a loading page cannot
@@ -187,6 +270,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF DisposeAll (:686): the one funnel every exit reaches (Closed). Idempotent.</summary>
         private void DisposeRace()
         {
+            DtrhLoomStore.Changed -= OnRaceLoomChanged;
+            RaceMilestonePopup?.Close();
             if (!_raceStarted || _raceDisposed) return;
             _raceDisposed = true;
             try { _raceHeartbeatWatch?.Stop(); } catch { }
