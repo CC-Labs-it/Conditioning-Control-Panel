@@ -138,7 +138,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = running ? "■" : "▶";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new StrExtension(running ? "label_stop" : "label_start").ProvideValue(null!));
-            ApplyStartHeroState();
+            // Cosmetic, and also reached from OnEngineStopped (panic, stop): a throw here must not skip the
+            // pause-button / session-label / RefreshSessionFeatureLock steps that follow it there.
+            try { ApplyStartHeroState(); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "[Shell] start hero state"); }
         }
     }
 }
