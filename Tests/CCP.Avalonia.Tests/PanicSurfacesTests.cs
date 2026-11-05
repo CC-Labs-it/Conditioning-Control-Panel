@@ -123,6 +123,7 @@ public sealed class PanicSurfacesTests
         "mantra",
         "quiz",
         "panic-quiet",
+        "personality-studio",
         "pink-rush",
         "possession",
         "programs-fx",

@@ -160,4 +160,41 @@ public sealed class PersonalityStudioTests
             owner.RequestExit(); Dispatcher.UIThread.RunJobs();
         }
     });
+
+    // Stricter than WPF: panic closes the studio and its delete confirmation, and the pending delete is dropped.
+    [Fact]
+    public Task PanicDismissesTheStudioAndItsDeleteConfirmation() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var settingsService = new SettingsService();
+        CoreSettings.ServiceProvider = () => settingsService;
+        var s = CoreSettings.Current;
+        s.CompanionPrompt.UseCustomPrompt = false;
+        var own = new PersonalityPreset { Id = "panic-own", Name = "Own", PromptSettings = new() { Personality = "Original" } };
+        s.UserPersonalityPresets.Clear();
+        s.UserPersonalityPresets.Add(own);
+        s.ActivePersonalityPresetId = own.Id;
+        var owner = new Window();
+        try
+        {
+            owner.Show();
+            var task = PersonalityStudio.ShowAsync(owner);
+            await Until(() => owner.OwnedWindows.Any());
+            var studio = Assert.Single(owner.OwnedWindows);
+            Click(Named<Button>(studio, "Delete"));
+            await Until(() => studio.OwnedWindows.Any());
+            Assert.IsType<MessageDialog>(Assert.Single(studio.OwnedWindows));
+            PanicSurfaces.StopAll("test");
+            await task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Empty(owner.OwnedWindows);
+            Assert.Contains(own, s.UserPersonalityPresets);
+            Assert.Equal("Original", own.PromptSettings!.Personality);
+        }
+        finally
+        {
+            PersonalityStudio.CloseForPanic();
+            owner.Close();
+            CoreSettings.ServiceProvider = null;
+        }
+    });
 }

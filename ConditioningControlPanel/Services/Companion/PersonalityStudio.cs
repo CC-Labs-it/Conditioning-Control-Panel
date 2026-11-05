@@ -13,22 +13,7 @@ namespace ConditioningControlPanel.Services.Companion;
 internal static class PersonalityStudio
 {
     internal static PersonalityPreset Draft(PersonalityPreset source, CompanionPromptSettings? activeOverride = null)
-    {
-        var p = activeOverride ?? source.PromptSettings ?? new CompanionPromptSettings();
-        return new PersonalityPreset
-        {
-            Id = Guid.NewGuid().ToString("N"), Name = source.Name, Description = source.Description,
-            IsBuiltIn = false, RequiresExplicitAcknowledgement = source.RequiresExplicitAcknowledgement,
-            SampleLines = source.SampleLines?.ToList(),
-            // Only character text belongs in a preset. Never copy API keys, hosts or effect permissions.
-            PromptSettings = new CompanionPromptSettings
-            {
-                UseCustomPrompt = true, Personality = p.Personality, ExplicitReaction = p.ExplicitReaction,
-                SlutModePersonality = p.SlutModePersonality, KnowledgeBase = p.KnowledgeBase,
-                ContextReactions = p.ContextReactions, OutputRules = p.OutputRules
-            }
-        };
-    }
+        => PersonalityStudioRules.Draft(source, activeOverride);
 
     public static void Show(Window owner)
     {
@@ -161,9 +146,9 @@ internal static class PersonalityStudio
     /// longer than the cap opened as a box that refused every keystroke (#1417).
     /// </summary>
     internal static int FieldCap(int max, string? text)
-        => Math.Max(max, (text?.Length ?? 0) + FieldHeadroom);
+        => PersonalityStudioRules.FieldCap(max, text);
 
-    internal const int FieldHeadroom = 400;
+    internal const int FieldHeadroom = PersonalityStudioRules.FieldHeadroom;
 
     private const double SingleLine = 0;
 
@@ -172,7 +157,7 @@ internal static class PersonalityStudio
     /// Matched by id against the user's list, so a built-in that happens to share a name never counts.
     /// </summary>
     internal static PersonalityPreset? OwnPreset(PersonalityPreset? source, IEnumerable<PersonalityPreset>? userPresets)
-        => source == null || source.IsBuiltIn ? null : userPresets?.FirstOrDefault(p => p.Id == source.Id);
+        => PersonalityStudioRules.OwnPreset(source, userPresets);
 
     private static string L(string key) => Loc.Get("companion_studio_" + key);
 }

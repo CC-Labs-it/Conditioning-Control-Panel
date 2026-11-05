@@ -21,20 +21,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 internal static class PersonalityStudio
 {
     internal static PersonalityPreset Draft(PersonalityPreset source, CompanionPromptSettings? activeOverride = null)
+        => PersonalityStudioRules.Draft(source, activeOverride);
+
+    private static readonly HashSet<Window> Live = new();
+
+    /// <summary>Panic: close every open studio and its delete confirmation, discarding the draft.</summary>
+    internal static void CloseForPanic()
     {
-        var p = activeOverride ?? source.PromptSettings ?? new CompanionPromptSettings();
-        return new PersonalityPreset
+        foreach (var window in Live.Reverse().ToArray())
         {
-            Id = Guid.NewGuid().ToString("N"), Name = source.Name, Description = source.Description,
-            IsBuiltIn = false, RequiresExplicitAcknowledgement = source.RequiresExplicitAcknowledgement,
-            SampleLines = source.SampleLines?.ToList(),
-            PromptSettings = new CompanionPromptSettings
-            {
-                UseCustomPrompt = true, Personality = p.Personality, ExplicitReaction = p.ExplicitReaction,
-                SlutModePersonality = p.SlutModePersonality, KnowledgeBase = p.KnowledgeBase,
-                ContextReactions = p.ContextReactions, OutputRules = p.OutputRules
-            }
-        };
+            foreach (var child in window.OwnedWindows.ToArray()) child.Close();
+            window.Close();
+        }
     }
 
     public static async Task ShowAsync(Window owner)
@@ -52,6 +50,8 @@ internal static class PersonalityStudio
             WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
             Background = new SolidColorBrush(Color.FromRgb(22, 17, 32)), Foreground = Brushes.WhiteSmoke
         };
+        Live.Add(dialog);
+        dialog.Closed += (_, _) => Live.Remove(dialog);
         var grid = new Grid { Margin = new Thickness(24) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition());
@@ -89,14 +89,19 @@ internal static class PersonalityStudio
             {
                 var asked = await MessageDialog.ConfirmAsync(dialog, L("title"), string.Format(L("delete_confirm"), own.Name),
                     okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
-                if (!asked || !service.DeletePreset(own.Id)) return;
+                // A panic that closed the studio while the confirmation was up deletes nothing.
+                if (!asked || !dialog.IsVisible || !service.DeletePreset(own.Id)) return;
                 BambiSprite.InvalidateStablePrompt();
                 dialog.Close();
             };
             footer.Children.Add(delete);
         }
         void Validate() => save.IsEnabled = !string.IsNullOrWhiteSpace(name.Text) && !string.IsNullOrWhiteSpace(voice.Text);
-        name.TextChanged += (_, _) => Validate(); voice.TextChanged += (_, _) => Validate(); Validate();
+        // Avalonia TextChanged is queued; validate on the property change so Save never
+        // stays enabled for an empty name/voice while that routed event is pending.
+        name.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) Validate(); };
+        voice.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) Validate(); };
+        Validate();
         save.Click += (_, _) =>
         {
             draft.Name = (name.Text ?? string.Empty).Trim();
@@ -165,9 +170,9 @@ internal static class PersonalityStudio
     /// longer than the cap opened as a box that refused every keystroke (#1417).
     /// </summary>
     internal static int FieldCap(int max, string? text)
-        => Math.Max(max, (text?.Length ?? 0) + FieldHeadroom);
+        => PersonalityStudioRules.FieldCap(max, text);
 
-    internal const int FieldHeadroom = 400;
+    internal const int FieldHeadroom = PersonalityStudioRules.FieldHeadroom;
 
     private const double SingleLine = 0;
 
@@ -176,7 +181,7 @@ internal static class PersonalityStudio
     /// Matched by id against the user's list, so a built-in that happens to share a name never counts.
     /// </summary>
     internal static PersonalityPreset? OwnPreset(PersonalityPreset? source, IEnumerable<PersonalityPreset>? userPresets)
-        => source == null || source.IsBuiltIn ? null : userPresets?.FirstOrDefault(p => p.Id == source.Id);
+        => PersonalityStudioRules.OwnPreset(source, userPresets);
 
     private static string L(string key) => Loc.Get("companion_studio_" + key);
 }
