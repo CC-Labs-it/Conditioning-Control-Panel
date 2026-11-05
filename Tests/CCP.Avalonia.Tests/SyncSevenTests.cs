@@ -134,6 +134,7 @@ public class SyncSevenTests
             Assert.Empty(StartupLadder.Inbox.Items);
             var buttons = card.GetVisualDescendants().OfType<Button>().ToArray();
             var close = buttons.Single(b => b.Name == "NoticeClose");
+            var tabBefore = shell.CurrentTab;
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("vaultgate_close"), Assert.IsType<TextBlock>(close.Content).Text);
             if (action == "escape") card.RaiseEvent(new global::Avalonia.Input.KeyEventArgs {
                 RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent, Key = global::Avalonia.Input.Key.Escape });
@@ -142,7 +143,9 @@ public class SyncSevenTests
             Assert.False(card.IsVisible);
             Assert.Null(InboxNoticeCard.Open);
             Assert.True(shell.IsEnabled);
-            Assert.Equal(action == "invites", shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("ExclusivesTab")!.IsVisible);
+            // port/7.2: the invites card lives on Settings > Account (WPF MainWindow.InviteTicket.cs:200).
+            if (action == "invites") { Assert.Equal("appsettings", shell.CurrentTab); Assert.Equal("account", shell.AppSettingsPage!.CheckedSectionKey); }
+            else Assert.Equal(tabBefore, shell.CurrentTab);
         }
         finally
         {
