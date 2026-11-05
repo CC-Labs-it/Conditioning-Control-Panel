@@ -37,6 +37,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        // WPF 325af5076: the 8 px bead is centered on the fill tip, hidden below 5 px.
+        private void XPBar_SizeChanged(object? sender, SizeChangedEventArgs e)
+        {
+            if (Named<Control>("XPTubeBead") is { } bead)
+                bead.IsVisible = !double.IsNaN(e.NewSize.Width) && e.NewSize.Width >= 5;
+        }
+
         private double _xpFraction;
         private Transitions? _xpFillTransition;
 
