@@ -2,7 +2,7 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
-// MergedAccountRecovery and SeasonRecapService.TrackFeature.
+// MergedAccountRecovery.
 
 using System;
 using System.Collections.Generic;
