@@ -144,6 +144,7 @@ public sealed class PanicSurfacesTests
         "audio-duck",
         "descent-fuse",
         "deeper-player-fullscreen",
+        "deeper-player",
         "deeper-editor-audio",
         "friend-notices", "knock-cards",
         "quick-recal",
