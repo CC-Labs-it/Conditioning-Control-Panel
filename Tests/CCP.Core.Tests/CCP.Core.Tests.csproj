@@ -24,6 +24,7 @@
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\ChasterLinkTests.cs" Link="ChasterLinkTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\InviteClaimNoticeTests.cs" Link="InviteClaimNoticeTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
