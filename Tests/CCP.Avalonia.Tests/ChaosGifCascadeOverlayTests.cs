@@ -49,6 +49,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     .SetupWithoutStarting();
             var clock = new SteppedClock();
             ChaosGifCascadeOverlay? rain = null;
+            ChaosGifCascadeOverlay? rain2 = null;   // the window opened after the run shutdown decodes too
             try
             {
                 ChaosGifCascadeOverlay.CloseActive();
@@ -67,6 +68,13 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.Equal(w.DesktopScaling, w.Scale);       // the factor SetOverrideRedirect sizes with
                 Assert.True(w.IsVisible);
                 Assert.True(ChaosGifCascadeOverlay.IsRaining);
+                var video = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler;
+                try
+                {
+                    Assert.True(video.Trigger(path: gif));   // WPF VideoService :1916: held behind the rain
+                    Assert.False(video.IsPlaying);           // the head wires CascadeIsRaining (review P2)
+                }
+                finally { video.ForceCleanup(); }
                 clock.Advance(7);
                 w.Frame();
                 Assert.False(w.Cascade.Spawning);
@@ -81,7 +89,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.Equal(1, ChaosLessons.Progress("blindfold"));
                 ChaosRunHost.ForceShutdown();
                 Show(gif);
-                w = ChaosGifCascadeOverlay.Active!;
+                w = rain2 = ChaosGifCascadeOverlay.Active!;
                 var first = Assert.IsType<Image>(Assert.Single(w.Surface.Children));
                 Assert.Equal(0.9, first.Opacity, 3);
                 Assert.Equal(400, first.Width);
@@ -115,6 +123,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 ChaosRunHost.ForceShutdown();
                 ChaosGifCascadeOverlay.CloseActive();
                 if (rain != null) await rain.PendingDecodes;
+                if (rain2 != null) await rain2.PendingDecodes;   // Windows keeps tiny.gif locked while one decodes
                 Dispatcher.UIThread.RunJobs();
                 ChaosGifCascadeOverlay.Clock = TimeProvider.System;
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
@@ -455,6 +464,45 @@ public sealed class ChaosGifCascadeOverlayTests
                     CoreAudio.PlayOneShotProvider, CoreSettings.Current.MasterVolume) = previous;
             }
         });
+    }
+
+    [Fact]
+    public void ClosingCancelsPendingImagePick()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-rain-close-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        try
+        {
+            AvaloniaTestDispatcher.Run(() =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                ChaosGifCascadeOverlay.CloseActive();
+                ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                ChaosGifCascadeOverlay.PickForTests = (_, _) => new() { gif };
+                try
+                {
+                    ChaosGifCascadeOverlay.Show(1, 3, 400, 3.6, 0.9, 0.45);
+                    ChaosGifCascadeOverlay.LastPick!.GetAwaiter().GetResult();
+                    // The pick has posted the show, but it has not run on the UI thread.
+                    ChaosGifCascadeOverlay.CloseActive();
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Null(ChaosGifCascadeOverlay.Active);
+                }
+                finally
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.PickForTests = ChaosGifCascadeOverlay.PickFiles;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },

@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -15,11 +16,37 @@ namespace CCP.Avalonia.Tests;
 public sealed class EmiCodexReaderTests
 {
     [Fact]
+    public Task ChapterRowsReplaceTheImplicitInputTheme() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        // WPF Windows/EmiCodexWindow.xaml:91-96 replaces Inputs.xaml's row style.
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var win = new EmiCodexWindow("bundle");
+        try
+        {
+            win.Show();
+            var list = win.FindControl<ListBox>("ChapterList")!;
+            list.ScrollIntoView(list.SelectedIndex);
+            Dispatcher.UIThread.RunJobs();
+            var row = Assert.IsType<ListBoxItem>(list.ContainerFromIndex(list.SelectedIndex));
+            Assert.NotSame(Application.Current!.FindResource("InputListBoxItemTheme"), row.Theme);
+            Assert.Same(win.FindResource("CodexChapterRow"), row.Theme);
+            Assert.Same(Application.Current.FindResource(typeof(ListBoxItem)), row.Theme!.BasedOn);
+            Assert.Equal(new Thickness(12, 7), row.Padding);
+            Assert.Equal(HorizontalAlignment.Stretch, row.HorizontalContentAlignment);
+        }
+        finally { win.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ReadsShippedChaptersAndKeepsTheBookmark() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = EmiState.Current.CodexChapter;
         try

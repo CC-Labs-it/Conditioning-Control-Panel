@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private string? _runKeySeen, _dayCompletePopped, _chapterSealed, _chapterBaselineRun, _graduationCelebrated;
         private bool _dayJustCompleted;
+        private bool _programFxSuppressed;
         private Window? _fxWindow;
         private CancellationTokenSource? _railPipCts;
         private readonly HashSet<ProgramDayPip> _ignitedPips = new();
@@ -70,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private static string RunKey(ProgramEnrollment e) => $"{e.ProgramId}:{e.AttemptNumber}";   // WPF ProgramsTab.cs:236
 
-        private bool AmbientOn => Env.AllowAmbientLoops && IsVisible && VisualRoot is not null
+        private bool AmbientOn => !_programFxSuppressed && Env.AllowAmbientLoops && IsVisible && VisualRoot is not null
                                   && Shell is not { WindowState: WindowState.Minimized };
 
         // ---- lifecycle: attach / detach / motion gate / window gate ----
@@ -131,6 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var key = enrollment == null ? null : RunKey(enrollment);
             if (string.Equals(key, _runKeySeen, StringComparison.Ordinal)) return;
+            _programFxSuppressed = false;
             _runKeySeen = key;
             _dayCompletePopped = _chapterSealed = _chapterBaselineRun = _graduationCelebrated = null;
             _tasksSeenIncomplete.Clear();
@@ -163,7 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             StopAccentFade();
             var brush = _runAccent!;
-            if (!Env.AllowTransitions) { brush.Color = target; return; }
+            if (_programFxSuppressed || !Env.AllowTransitions) { brush.Color = target; return; }
             var from = brush.Color;
             _accentFadeCts = new CancellationTokenSource();
             Drive(AccentFadeSeconds, new QuadraticEaseInOut(), p => brush.Color = Mix(from, target, p),
@@ -194,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             try
             {
+                if (_programFxSuppressed) return;
                 _ignitionEnrollment = enrollment;
                 var ambient = AmbientOn;
                 var accent = AccentNow;
@@ -404,7 +407,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void ApplyRailPipFx()
         {
             StopRailPipFx();
-            if (!IsVisible || VisualRoot == null || Shell is { WindowState: WindowState.Minimized }) return;
+            if (_programFxSuppressed || !IsVisible || VisualRoot == null || Shell is { WindowState: WindowState.Minimized }) return;
             _railPipCts = new CancellationTokenSource();
             var token = _railPipCts.Token;
             Dispatcher.UIThread.Post(() =>
@@ -430,7 +433,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 {
                     if (flare.DataContext is not ProgramDayPip { Ignite: true } pip || !_ignitedPips.Add(pip)) continue;
                     // The moment survives Reduced, while Off consumes the carrier without replaying later.
-                    if (!Env.AllowTransitions) continue;
+                    if (_programFxSuppressed || !Env.AllowTransitions) continue;
                     var scale = (ScaleTransform)flare.RenderTransform!;
                     var keys = new[] { (0d, 0d), (.18, .95), (.9, 0d) };
                     var easing = new CubicEaseOut();
@@ -473,7 +476,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var wave = Find<Rectangle>("TodayWave");
             var xp = Find<TextBlock>("TxtTodayXpFloat");
-            if (!Env.AllowTransitions || _waveBrush == null) { wave.Opacity = 0; xp.Opacity = 0; return; }
+            if (_programFxSuppressed || !Env.AllowTransitions || _waveBrush == null) { wave.Opacity = 0; xp.Opacity = 0; return; }
             var token = (_momentCts ??= new CancellationTokenSource()).Token;
 
             wave.Fill = _waveBrush;
@@ -524,7 +527,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Find<TextBlock>("TxtProgramsSealSub").Text = days is { Count: > 0 }
                 ? Loc.GetF("program_enroll_chapter_days", days[0].DayIndex, days[^1].DayIndex)
                 : chapter.Subtitle;
-            if (!Env.AllowTransitions) { host.IsVisible = false; host.Opacity = 0; return; }
+            if (_programFxSuppressed || !Env.AllowTransitions) { host.IsVisible = false; host.Opacity = 0; return; }
 
             host.IsVisible = true;
             var scale = (ScaleTransform)Find<StackPanel>("ProgramsSealStamp").RenderTransform!;
@@ -554,6 +557,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (Env.AllowTransitions)
                 QueueProgramBurst(Find<Border>("ProgramsGraduatedCard"), ProgramHeat.BurstCount(1), GraduationGold);
             Serilog.Log.Information("[FX] program graduation celebrated");
+        }
+
+        // WPF ProgramsFx.cs:842-882 parks the rig. The old lane additionally makes panic
+        // stop finite moments and suppress service repaints until re-entry or a new run.
+        internal void StopProgramMomentsForPanic()
+        {
+            _programFxSuppressed = true;
+            StopIgnitionLoops();
+            StopAccentFade();
+            StopMoments();
         }
 
         // ---- helpers ----

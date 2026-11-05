@@ -75,6 +75,45 @@ public sealed partial class GameWindowTests
         });
     }
 
+    /// <summary>WPF ChaosWebViewHost.cs:222-225,1704: query/fragment changes are the same document;
+    /// a different path, origin or scheme cannot drive the game bridge.</summary>
+    [Fact]
+    public void PageFrames_OnlyTheLoadedDocumentCanDriveTheBridge() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var root = Directory.CreateTempSubdirectory("game-document-").FullName;
+        using var server = new WebAssetServer(root);
+        var w = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        try
+        {
+            w.Load(server);
+            w.Show();
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            var page = w.PageUrl!;
+            foreach (var other in new[]
+            {
+                new Uri(page, "/intake/index.html"),
+                new UriBuilder(page) { Port = page.Port + 1 }.Uri,
+                new UriBuilder(page) { Scheme = "https" }.Uri,
+            })
+            {
+                w.Web.OnNavigationCompleted(other);
+                w.Web.OnWebMessage("{\"type\":\"ready\"}");
+                w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+                Assert.Empty(sent);
+                Assert.False(w.IsReady);
+                Assert.Contains(w, GameWindow.OpenWindowsForTests());
+            }
+            w.Web.OnNavigationCompleted(new UriBuilder(page) { Query = "changed=1", Fragment = "dock" }.Uri);
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            Assert.True(w.IsReady);
+            Assert.Equal("init", (string?)JObject.Parse(Assert.Single(sent))["type"]);
+            w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+            Assert.DoesNotContain(w, GameWindow.OpenWindowsForTests());
+        }
+        finally { w.Close(); Directory.Delete(root, true); }
+    });
+
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>
     {
@@ -788,6 +827,56 @@ public sealed partial class GameWindowTests
         Assert.Equal((40, 40), GameWindow.RacePayout(200, 60, 1.0));
     });
 
+    [Fact]
+    public void Race_and_launcher_follow_grant_additions_and_close_on_any_revocation() => RunRace("rt.original.03", (launcher, _, _) =>
+    {
+        var tracks = new HashSet<string> { "rt.original.03" };
+        RacingAccess.IsGrantedProvider = tracks.Contains;
+        launcher.BuildTiles();
+        var w = GameWindow.Launch("race")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        tracks.Add("rt.original.04");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        var update = Assert.Single(sent);
+        Assert.Equal("race-ownership", (string?)update["type"]);
+        Assert.Equal(new[] { 3, 4 }, update["tracks"]!.Values<int>());
+        sent.Clear();
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(sent); // An unrelated grant cannot restage the race menu.
+        tracks.Remove("rt.original.03");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);
+        tracks.Clear();
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
+        tracks.Add("rt.original.00");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
+    });
+
+    [Fact]
+    public void Race_revocation_then_regrant_without_dispatching_closes_the_host() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var granted = true;
+        RacingAccess.IsGrantedProvider = id => granted && id == "rt.original.03";
+        var w = GameWindow.Launch("race")!;
+        granted = false;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        granted = true;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);
+    });
     /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)
     /// gets one ping, a pong resets it, still silent on the next tick closes the window.</summary>
     [Fact]
@@ -1017,6 +1106,53 @@ public sealed partial class GameWindowTests
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
             Directory.Delete(lib, true);
+        }
+    });
+
+    /// <summary>WPF DtrhHostService.cs:925-954: an actual page boot failure opens the
+    /// classic first run or the Warren. The Warren's FALL IN then opens the bound HUD.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Dtrh_BootError_reaches_the_classic_Hud(int completed) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var oldIntro = ChaosMeta.State.SeenIntroGuide;
+        ChaosMeta.State.RunsCompleted = completed;
+        ChaosMeta.State.SeenIntroGuide = true;
+        ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow? hub = null;
+        void Opened(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            if (sender is ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow h) hub = h;
+        }
+        using var subscription = Window.WindowOpenedEvent.AddClassHandler<Window>(Opened);
+        try
+        {
+            var web = GameWindow.Launch("dtrh")!;
+            Assert.True(web.IsVisible);
+            web.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"renderer failed\"}");
+            Assert.False(web.IsVisible);
+            if (completed == 1)
+            {
+                Assert.NotNull(hub);
+                Assert.False(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+                hub.FallIn();
+                Dispatcher.UIThread.RunJobs();
+            }
+            var host = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.Hud;
+            Assert.NotNull(host);
+            Assert.True(host.IsVisible);
+            Assert.Same(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State, host.DataContext);
+            Assert.Equal(completed == 0,
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State!.Config.ScriptedFirstRun);
+            var state = host.DataContext;
+            web.HandleMessage("{\"type\":\"boot-error\"}");
+            Assert.Same(state, ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State);
+        }
+        finally
+        {
+            ChaosMeta.State.SeenIntroGuide = oldIntro;
+            hub?.Close();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
         }
     });
 
