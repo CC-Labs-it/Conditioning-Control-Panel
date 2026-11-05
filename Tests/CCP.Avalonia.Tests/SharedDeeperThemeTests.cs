@@ -382,7 +382,10 @@ public sealed class SharedDeeperThemeTests
                     Assert.Equal(kind == HudPlankKind.Chunky ? 7 : 5, drop.Height);
                     if (name == "BtnStart")
                     {
-                        Assert.Same(Application.Current!.FindResource("AccentGradientBrush"), b.Background);
+                        // WPF HeroFx.cs ApplyStartCharge: the idle START wears the three-stop charge gradient
+                        // (MainShellWindow.HeroMoments.cs), not the plain accent brush.
+                        var charge = Assert.IsType<LinearGradientBrush>(b.Background);
+                        Assert.Equal(3, charge.GradientStops.Count);
                         Assert.NotNull(b.RenderTransform); // ignition dip belongs to the button, not DepthFace
                     }
                 }
