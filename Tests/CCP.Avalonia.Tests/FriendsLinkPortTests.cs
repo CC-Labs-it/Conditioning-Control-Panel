@@ -222,7 +222,9 @@ public sealed class FriendsLinkPortTests
         var marks = Tag<StackPanel>(drawer, "friends-platforms")!;
         Assert.NotNull(marks);
         Assert.Equal(new[] { "desktop", "phone", "web" }, marks.Children.Select(c => ((string)c.Tag!).Replace("friends-platform:", "")));
-        Assert.All(marks.Children, c => Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.IconGlyph>(c));
+        // Each mark is a transparent Border carrying the tooltip (WPF puts the tooltip on the glyph TextBlock
+        // itself; an IconGlyph has no hit-testable surface for it), with the glyph as its child.
+        Assert.All(marks.Children, c => Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.IconGlyph>(Assert.IsType<global::Avalonia.Controls.Border>(c).Child));
         Assert.All(marks.Children, c => Assert.NotNull(ToolTip.GetTip(c)));
         Assert.Single(drawer.GetLogicalDescendants().OfType<StackPanel>(), c => c.Tag as string == "friends-platforms");
         await svc.RefreshAsync();

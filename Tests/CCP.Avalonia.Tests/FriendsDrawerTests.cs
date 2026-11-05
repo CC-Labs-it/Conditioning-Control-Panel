@@ -43,7 +43,8 @@ public sealed partial class FriendsDrawerTests
         await svc.RefreshAsync();
         d.Toggle("u_on");
         var cues = new List<string>();
-        var (oldAudio, oldGate, oldVolume) = (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, FriendsLanding.SfxGate, ConditioningControlPanel.CoreSettings.Current.MasterVolume);
+        var saved = new CueState();
+        saved.Quiet();
         ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => cues.Add(tag);
         ConditioningControlPanel.CoreSettings.Current.MasterVolume = 50;
         try
@@ -62,12 +63,7 @@ public sealed partial class FriendsDrawerTests
             }
             Assert.Equal(new[] { "friends-" + cue }, cues);
         }
-        finally
-        {
-            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = oldAudio;
-            FriendsLanding.SfxGate = oldGate;
-            ConditioningControlPanel.CoreSettings.Current.MasterVolume = oldVolume;
-        }
+        finally { saved.Restore(); }
     });
 
     /// <summary>WPF FriendsDrawer.Platforms + :558: an online row wears one mark per platform, desktop / phone / web
@@ -1114,6 +1110,7 @@ public sealed partial class FriendsDrawerTests
         await svc.RefreshAsync();
         var tags = new List<string>();
         var saved = new CueState();
+        saved.Quiet();
         try
         {
             CoreAudio.IsOutputSuppressedProvider = () => false;
@@ -1145,8 +1142,28 @@ public sealed partial class FriendsDrawerTests
         private readonly Func<DateTime> _now = FriendsLanding.SfxNow;
         private readonly int _volume = CoreSettings.Current.MasterVolume;
         private readonly DateTime _clock = _sfxClock;
+        private static readonly System.Reflection.FieldInfo HeldBy = typeof(ConditioningControlPanel.Services.EmiDesk.EmiLineEngine).GetField("_heldBy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        private static readonly System.Reflection.FieldInfo HoldUntil = typeof(ConditioningControlPanel.Services.EmiDesk.EmiLineEngine).GetField("_holdUntilUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        private static ConditioningControlPanel.Services.EmiDesk.EmiLineEngine Engine => ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        private readonly object? _heldBy = HeldBy.GetValue(Engine);
+        private readonly object? _holdUntil = HoldUntil.GetValue(Engine);
+        private readonly ConditioningControlPanel.Services.MandatoryVideoScheduler? _video = CoreEngine.Video;
+        /// <summary>FriendsLanding.Sfx is silent under an EMI hold or panic silence, a playing video or a
+        /// suppressed output (WPF FriendsSfx.cs:47-51). A test earlier in the shard that failed before its
+        /// finally can leave any of them behind (an open Intake page holds "intakeRunning"); a cue test
+        /// judges only its own cues, so it starts quiet and Restore puts the leftovers back.</summary>
+        public void Quiet()
+        {
+            HeldBy.SetValue(Engine, null);
+            HoldUntil.SetValue(Engine, DateTime.MinValue);
+            CoreEngine.Video = null;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+        }
         public void AssertRestored()
         {
+            Assert.Equal(_heldBy, HeldBy.GetValue(Engine));
+            Assert.Equal(_holdUntil, HoldUntil.GetValue(Engine));
+            Assert.Same(_video, CoreEngine.Video);
             Assert.Same(_audio, CoreAudio.PlayOneShotProvider);
             Assert.Same(_suppressed, CoreAudio.IsOutputSuppressedProvider);
             Assert.Same(_art, CoreModArt.AudioOverridePathProvider);
@@ -1157,6 +1174,9 @@ public sealed partial class FriendsDrawerTests
         }
         public void Restore()
         {
+            HeldBy.SetValue(Engine, _heldBy);
+            HoldUntil.SetValue(Engine, _holdUntil);
+            CoreEngine.Video = _video;
             CoreAudio.PlayOneShotProvider = _audio;
             CoreAudio.IsOutputSuppressedProvider = _suppressed;
             CoreModArt.AudioOverridePathProvider = _art;
@@ -1192,6 +1212,7 @@ public sealed partial class FriendsDrawerTests
         var d = new FriendsDrawer(svc);
         await svc.RefreshAsync();
         var saved = new CueState();
+        saved.Quiet();
         var tags = new List<string>();
         try
         {
@@ -1227,6 +1248,7 @@ public sealed partial class FriendsDrawerTests
         var r = svc.Snapshot.Incoming[0];
         var tags = new List<string>();
         var saved = new CueState();
+        saved.Quiet();
         try
         {
             CoreAudio.IsOutputSuppressedProvider = () => false;
@@ -1324,6 +1346,7 @@ public sealed partial class FriendsDrawerTests
         await svc.RefreshAsync();
         var tags = new List<string>();
         var saved = new CueState();
+        saved.Quiet();
         try
         {
             CoreAudio.IsOutputSuppressedProvider = () => false;
