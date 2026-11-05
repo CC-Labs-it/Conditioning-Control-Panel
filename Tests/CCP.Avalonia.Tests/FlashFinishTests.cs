@@ -134,14 +134,13 @@ public sealed class FlashFinishTests
             (s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel) =
                 (style, rounded, true, FlashExitStyle.None, false, MotionLevel.Full);
             var w = ShowOne();
-            var image = ((Panel)((Panel)w.Content!).Children[0]).Children.OfType<Image>().Single();
-            if (!rounded) { w.ApplyGlow(new FlashGlowLook(0xFF69B4, 24, 0.5, false, false), 1); w.ApplyCorners(false, true, true, 400, 300); }
-            Assert.Equal(FlashCorners.Resolve(rounded, true, !rounded, 300, 1), ((RectangleGeometry)image.Clip!).RadiusX);
-            var radius = ((RectangleGeometry)image.Clip!).RadiusX;
+            // port/7.2 owns the corner clip (FlashOverlayWindow.ApplyCorners/ClipCorners over the letterboxed picture).
+            if (!rounded) { w.ApplyGlow(new FlashGlowLook(0xFF69B4, 24, 0.5, false, false), 1); w.ApplyCorners(FlashCorners.Resolve(false, true, true, 300, 1)); }
+            Assert.Equal(FlashCorners.Resolve(rounded, true, !rounded, 300, 1), w.CornerRadiusDip);
+            var radius = w.CornerRadiusDip;
             w.MouseDown(new Point(50, 50), MouseButton.Left);
             Assert.Contains(FlashOverlay.Active, x => x.Window == w); // a draggable press grabs rather than pops
-            Assert.Equal(radius, ((RectangleGeometry)image.Clip!).RadiusX);
-            Assert.Equal(new Rect(0, 0, ((Panel)image.Parent!).Width, ((Panel)image.Parent!).Height), ((RectangleGeometry)image.Clip!).Rect);
+            Assert.Equal(radius, w.CornerRadiusDip);
             clock.Now += TimeSpan.TicksPerSecond / 10;
             w.MouseMove(new Point(100, 80));
             FlashOverlay.DriftTick();

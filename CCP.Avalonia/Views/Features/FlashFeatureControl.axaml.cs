@@ -161,15 +161,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        // WPF rebuilds the picker and rows on load, rebind and PrizeGrants.GrantsChanged.
-        // A Get it buy lands its grants via PrizeOwnership.ApplySnapshot, which raises no GrantsChanged,
-        // and that is exactly when the row turns Hidden: rebuild then, so the bought motion shows at once.
+        // WPF FlashFeatureControl.xaml.cs:81-85 rebuilds on every grant change, including revokes.
         private void OnGetRowChanged()
         {
-            if (!RowGetFlashesV2.IsRowHidden || RowMotion.IsVisible
-                || !(Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)
-                    || Platform.PrizeOwnership.IsGranted(ConditioningControlPanel.Services.Prizes.PrizeGrants.FlashPendulum)))
-            { RefreshV2Box(); return; }
+            // WPF FlashFeatureControl.xaml.cs:75,81-85 also refreshes the exit state on grants.
+            RefreshExitRow();
+            var drift = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce);
+            var pendulum = Platform.PrizeOwnership.IsGranted(ConditioningControlPanel.Services.Prizes.PrizeGrants.FlashPendulum);
+            bool Offers(FlashMotionStyle style) => CmbMotion.Items.OfType<ComboBoxItem>().Any(i => i.Tag is FlashMotionStyle t && t == style);
+            if (RowMotion.IsVisible == (drift || pendulum)
+                && Offers(FlashMotionStyle.DriftBounce) == drift && Offers(FlashMotionStyle.Pendulum) == pendulum
+                && RowShatter.IsVisible == Platform.PrizeOwnership.OwnsFlashV2())
+            {
+                RefreshV2Box();
+                return;
+            }
             var wasLoading = _isLoading;
             _isLoading = true;
             try { BuildMotionPicker(); }
