@@ -239,13 +239,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             finally { try { File.Delete(wav); } catch { } }
         }
 
-        /// <summary>The sout chain that writes 16 kHz mono signed 16-bit WAV to <paramref name="dest"/>.
+        /// <summary>Signed 16-bit WAV: race defaults to mono 16 kHz; waveforms preserve source channels/rate.
         /// Forward slashes and an escaped quote, so a Windows path survives libvlc's option parser.</summary>
-        internal static string SoutFor(string dest) =>
-            ":sout=#transcode{vcodec=none,acodec=s16l,channels=1,samplerate=16000}:std{access=file,mux=wav,dst='"
+        internal static string SoutFor(string dest, bool preserveFormat = false) =>
+            ":sout=#transcode{vcodec=none,acodec=s16l" + (preserveFormat ? "" : ",channels=1,samplerate=16000") + "}:std{access=file,mux=wav,dst='"
             + dest.Replace('\\', '/').Replace("'", "\\'") + "'}";
 
-        private static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct)
+        internal static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct, bool preserveFormat = false)
         {
             // A short file transcodes inside the first 100 ms wait, so an already-cancelled pick must stop here.
             ct.ThrowIfCancellationRequested();
@@ -253,7 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             using var done = new ManualResetEventSlim(false);
             bool failed = false;
             using var media = new Media(vlc, source, FromType.FromPath);
-            media.AddOption(SoutFor(dest));
+            media.AddOption(SoutFor(dest, preserveFormat));
             media.AddOption(":no-sout-video");
             media.AddOption(":sout-keep");
             using var player = new MediaPlayer(media);

@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "No hay ningún dispositivo háptico conectado. Conecta uno en Ajustes para probarlo.",
+  "deeper_editor_haptic_test_row_off": "La fila Deeper está desactivada en la pestaña Háptica. Actívala para probar los patrones.",
+  "deeper_editor_haptic_test_premium": "La prueba del dispositivo requiere acceso Premium.",
   "title_select_companion_personality": "Elegir personalidad de IA para {0}",
   "filter_personality_json_files": "Archivos JSON de personalidad",
   "audio_device_unnamed": "(sin nombre)",

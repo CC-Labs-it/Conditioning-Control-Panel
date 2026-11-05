@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "Kein Haptikgerät verbunden. Verbinde zum Testen ein Gerät in den Einstellungen.",
+  "deeper_editor_haptic_test_row_off": "Die Deeper-Zeile ist im Haptik-Tab ausgeschaltet. Schalte sie für den Test ein.",
+  "deeper_editor_haptic_test_premium": "Für den Gerätetest ist Premium-Zugang erforderlich.",
   "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
   "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
   "audio_device_unnamed": "(unbenannt)",

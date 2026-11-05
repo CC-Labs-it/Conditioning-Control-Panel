@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "Тактильное устройство не подключено. Подключите его в настройках для проверки.",
+  "deeper_editor_haptic_test_row_off": "Строка Deeper отключена на вкладке тактильной отдачи. Включите её для проверки шаблонов.",
+  "deeper_editor_haptic_test_premium": "Для проверки устройства нужен доступ Premium.",
   "title_select_companion_personality": "Выбрать личность ИИ для {0}",
   "filter_personality_json_files": "Файлы личности JSON",
   "audio_device_unnamed": "(без имени)",

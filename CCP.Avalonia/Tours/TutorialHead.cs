@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             _seeded = true;
 
             Service.StepChanged += (s, step) => CoreTutorial.RaiseStepChanged(s, Project(step));
-            Service.TutorialFinished += (s, e) => CoreTutorial.RaiseFinished(s, e.Completed);
+            Service.TutorialFinished += (s, e) => { _shellOverlay = null; CoreTutorial.RaiseFinished(s, e.Completed); };
         }
 
         /// <summary>The seam's Start: a WPF TutorialType name. An unknown name starts nothing.</summary>
@@ -105,15 +105,18 @@ namespace ConditioningControlPanel.Avalonia.Tours
             overlay.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
-                if (browser != null) browser.IsVisible = true;
+                if (browser != null && _shellOverlay?.StageWindow != shell) browser.IsVisible = true;
             };
             overlay.Show();
         }
 
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
+        internal static bool EndingInstantly { get; private set; }
         internal static void OnPanic()
         {
+            EndingInstantly = true;
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
+            finally { TutorialOverlay.CloseForPanic(); EndingInstantly = false; }
         }
 
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>
