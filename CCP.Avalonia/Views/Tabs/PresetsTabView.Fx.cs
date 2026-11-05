@@ -109,6 +109,7 @@ public partial class PresetsTabView
 
     internal void RefreshCardSheen()
     {
+        if (!Env.AllowTransitions) CancelEntrances(); // WPF MainWindow.TabFxPresetsQuestsAchievements.cs:439 clears the animation before snapping.
         Control? target = null;
         if (IsEffectivelyVisible && _fxWindow is { IsActive: true } window
             && window.WindowState != WindowState.Minimized && Env.AllowAmbientLoops)

@@ -66,8 +66,10 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
+        var entrances = Assert.IsType<System.Threading.CancellationTokenSource>(typeof(PresetsTabView).GetField("_entranceCancellation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(view));
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(entrances.IsCancellationRequested);   // #3301: motion off clears the arrival in flight, as WPF does
         // Show ran the Full-motion arrival, which owns TranslateTransform.Y at animation priority for ~260 ms of
         // real time and masks the hover's -2. Re-arriving at Off cancels it and snaps, as a tab switch would.
         view.IsVisible = false; view.IsVisible = true; Settle();
