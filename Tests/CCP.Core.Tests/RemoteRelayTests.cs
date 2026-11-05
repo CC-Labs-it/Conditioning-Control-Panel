@@ -48,6 +48,18 @@ public sealed class RemoteRelayTests
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
 
     [Fact]
+    public async Task Status_advertises_only_features_available_on_this_head()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        await r.StartAsync("full");
+        Poll(f, "{\"controller_connected\":true}");
+        await r.PollOnceAsync();
+        var caps = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["caps"];
+        Assert.Equal(new[] { "haptic_pattern", "haptic_level" }, caps!.Values<string>().ToArray());
+    }
+
+    [Fact]
     public void A_sandbox_never_reaches_the_real_relay()
     {
         Assert.Null(RemoteRelay.ResolveBaseUrl(null, sandboxed: true));
