@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
     /// <summary>
     /// PORTED from ConditioningControlPanel/Views/Controls/Companion/Pages/PersonalityPage.xaml.cs
     /// (5681c132a). Companion > Personality adopts the room's MakeHerYoursView ("PersonalityZone")
-    /// and the Workshop Community cell, with the picker-mounted studio entry.
+    /// and the Workshop Community cell, with the shared picker card above the presets.
     /// </summary>
     public partial class PersonalityPage : UserControl
     {
@@ -25,17 +25,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
         /// <summary>WPF PersonalityPage.OnShown, through ShowTab("personality") -> OnTabShown.</summary>
         internal void OnShown(CompanionRoomView? room)
         {
-            // WPF PersonalityPage.xaml.cs:27-36: keep one picker and refresh on return.
+            // WPF PersonalityPage.xaml.cs:28-37: retain one picker and refresh on re-entry.
             _picker ??= new CompanionPickerCard
             {
-                MorePersonalityOptions = async window =>
+                MorePersonalityOptions = async owner =>
                 {
-                    await PersonalityStudio.Show(window);
+                    await Dialogs.PersonalityStudio.ShowAsync(owner);
                     _presets?.ViewModel.Sync();
                 }
             };
-            if (!ReferenceEquals(PickerHost.Content, _picker)) PickerHost.Content = _picker;
-            else _picker.Refresh();
+            PickerHost.Content = _picker;
+            _picker.Refresh();
             if (room is null) return;
             if (room.FindControl<MakeHerYoursView>("PersonalityZone") is { } presets)
             {
