@@ -512,10 +512,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>Gold ring: up in 120ms, held to 450ms, out by 1200ms.</summary>
-        private void FlashProfileBubbleGlow()
+        private void FlashProfileBubbleGlow(Color? colour = null)
         {
             if (!AmbientFxCanvas.Env.AllowTransitions || Named<Ellipse>("ProfileBubbleGlowRing") is not { } ring) return;
-            ring.Stroke = new ImmutableSolidColorBrush(ProfileBubbleGold);
+            ring.Stroke = new ImmutableSolidColorBrush(colour ?? ProfileBubbleGold);
             _ = CreateProfileBubbleGlowAnimation().RunAsync(ring);
         }
 

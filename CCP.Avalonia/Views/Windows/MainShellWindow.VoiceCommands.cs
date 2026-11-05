@@ -5,8 +5,8 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, deeper,
-// volume/mute) are left out of the grammar.
+// seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, deeper) are left out
+// of the grammar.
 
 using System;
 using System.Linq;
@@ -142,6 +142,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
             "takeover_on" => () => Autonomy.Start(),
             "takeover_off" => () => Autonomy.Stop(),
+            "mute" => () => ApplyVoiceMute(true),
+            "unmute" => () => ApplyVoiceMute(false),
+            "louder" => () => AdjustMasterVolume(15),
+            "quieter" => () => AdjustMasterVolume(-15),
             "stop_listening" => StopVoiceInput,
             _ => null,
         };
