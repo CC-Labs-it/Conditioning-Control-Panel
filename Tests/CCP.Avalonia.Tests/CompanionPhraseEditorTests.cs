@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -117,6 +118,49 @@ public sealed class CompanionPhraseEditorTests
             foreach (var owned in shell.OwnedWindows.ToArray()) owned.Close();
             shell.RequestExit();
             CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    // WPF MainWindow.Patreon.cs:1396-1406 refreshes the badge after ShowDialog returns.
+    [Fact]
+    public Task ClosingManagePhrasesRefreshesTheBadgeAfterAToggle() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        s.CustomCompanionPhrases.Clear(); s.DisabledPhraseIds.Clear(); s.RemovedPhraseIds.Clear();
+        CoreMods.ActiveModIdProvider = () => "phrase-close-test";
+        CoreMods.ActiveModPackageProvider = () => null;
+        CoreMods.PhrasesProvider = category => category == "Greeting" ? new[] { "hello" } : Array.Empty<string>();
+        CoreBark.AllLinesProvider = () => Array.Empty<BarkLineInfo>();
+        s.Welcomed = true; s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys); s.AwarenessModeEnabled = false;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); shell.ShowTab("companion"); shell.ShowTab("companionai");
+            Dispatcher.UIThread.RunJobs(); shell.UpdateLayout();
+            var page = shell.Named<AiPage>("CompanionAiTab")!;
+            var cell = (WorkshopTriggersCell)page.FindControl<ContentControl>("TriggersHost")!.Content!;
+            var badge = cell.FindControl<TextBlock>("TxtPhraseCount")!;
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_0_active_2", 1), badge.Text);
+            cell.FindControl<Button>("BtnManagePhrases")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<CompanionPhraseEditorDialog>());
+            dialog.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "EnableChk").IsChecked = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("Greeting:0", s.DisabledPhraseIds);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_0_active_2", 1), badge.Text);
+            Click(dialog, "BtnClose");
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(shell.OwnedWindows.OfType<CompanionPhraseEditorDialog>());
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_0_active_2", 0), badge.Text);
+        }
+        finally
+        {
+            foreach (var owned in shell.OwnedWindows.ToArray()) owned.Close();
+            shell.RequestExit(); service.SealForReset();
         }
     });
 
