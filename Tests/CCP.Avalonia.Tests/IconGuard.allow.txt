@@ -56,6 +56,7 @@ Views/Chaos/ChaosRunHost.cs :: ⏱ last breath! x :: run event-feed sentence, WP
 Views/Chaos/ChaosRunHost.cs :: 🐌 slow burn! x3 :: run event-feed sentence, WPF ChaosModeService.cs:2048 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ✔ snapped {spec :: run event-feed sentence, WPF ChaosModeService.cs:2049 verbatim (content (c).3)
 
+Controls/HoverBubbleBar.cs :: new global::Avalonia.Controls.Shapes.Path :: path: Discord brand mark, no Fluent glyph (WPF SettingsTabView.xaml:1966)
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
 Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations
 Controls/SpiralGlyph.cs :: * :: path: D6 art - spiral glyph drawing
