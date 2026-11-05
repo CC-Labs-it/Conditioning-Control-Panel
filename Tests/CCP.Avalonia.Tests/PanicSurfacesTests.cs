@@ -135,6 +135,7 @@ public sealed class PanicSurfacesTests
         "speak-cue",
         "companion-transcript",
         "possession",
+        "chaster-booked-pop",
         "video-test-error",
         "attention-test",
         "audio-duck",

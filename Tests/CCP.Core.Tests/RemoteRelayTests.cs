@@ -178,11 +178,14 @@ public sealed class RemoteRelayTests
     {
         var f = new FakeRelay();
         using var r = Relay(f);
+        var now = new DateTime(2026, 10, 30, 12, 0, 0, DateTimeKind.Utc);
+        r.Now = () => now;
         await r.StartAsync("light");
         f.Answer = _ => Json((HttpStatusCode)429, "{}");
         await r.PollOnceAsync();
         await r.PollOnceAsync();
         Assert.Equal(20, r.PollInterval);
+        Assert.Null(r.LastEndedUtc);
 
         var ended = 0;
         r.SessionEnded += (_, _) => ended++;
@@ -191,6 +194,10 @@ public sealed class RemoteRelayTests
         Assert.False(r.IsActive);
         Assert.Null(r.SessionCode);
         Assert.Equal(1, ended);
+        Assert.Equal(now, r.LastEndedUtc);   // WPF LastEndedUtc: Circe's remote grace starts here
+        now = now.AddMinutes(1);
+        await r.StopAsync();
+        Assert.Equal(now.AddMinutes(-1), r.LastEndedUtc); // idle cleanup does not restart grace
         Assert.Equal(new[] { false }, _stops);   // the subject's own run survives (#878)
     }
 
