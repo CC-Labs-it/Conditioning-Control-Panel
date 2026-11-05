@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -25,6 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 preset.ApplyToSettings();
                 CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
                 CoreSettings.Save();
+                UpdatePhraseCountDisplay(parts);
                 Log.Information("Loaded phrase preset: {Name} ({Count} phrases)", preset.Name, preset.ActivePhraseCount);
             };
             parts.Triggers.SavePhrasePresetRequested += async (_, _) => await SavePhrasePresetAsync();
@@ -36,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         internal void RefreshPhrasePresets()
         {
             if (DataContext is not WorkshopRuntimeVm vm) return;
+            UpdatePhraseCountDisplay(vm.Parts);
             var combo = vm.Parts.Triggers.FindControl<ComboBox>("CmbPhrasePresets")!;
             _loadingPhrasePresets = true;
             try
@@ -47,9 +50,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             finally { _loadingPhrasePresets = false; }
         }
 
+        // WPF MainWindow.Patreon.cs:1403-1406: enabled mod, voice, custom and bark rows.
+        private static void UpdatePhraseCountDisplay(WorkshopShelfParts parts) =>
+            parts.Triggers.FindControl<TextBlock>("TxtPhraseCount")!.Text = Loc.GetF("label_0_active_2",
+                CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled));
+
         private async Task SavePhrasePresetAsync()
         {
             if (TopLevel.GetTopLevel(this) is not Window { IsVisible: true } owner) return;
+            var activePhraseCount = CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled);
             var input = new TextBox
             {
                 Text = $"Preset {CoreSettings.Current.PhrasePresets.Count + 1}",
@@ -78,9 +87,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             dialog.Content = grid;
             dialog.Opened += (_, _) => { input.Focus(); input.SelectAll(); };
             if (!await dialog.ShowDialogSafe<bool>(owner) || string.IsNullOrWhiteSpace(input.Text)) return;
-            // ponytail: the live CompanionPhraseService has not crossed. WPF's null-service count is 0;
-            // preserve that truthful fallback until the active phrase pool crosses in the -b lane.
-            var preset = PhrasePreset.FromCurrentSettings(input.Text.Trim(), activePhraseCount: 0);
+            // WPF MainWindow.Assets.cs:1790 and :1865: snapshot the enabled phrase rows.
+            var preset = PhrasePreset.FromCurrentSettings(input.Text.Trim(),
+                activePhraseCount);
             CoreSettings.Current.PhrasePresets.Add(preset);
             CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
             CoreSettings.Save();
