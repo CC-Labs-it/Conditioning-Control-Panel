@@ -9,3 +9,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("CCP.Avalonia.Tests")]
 
 [assembly: InternalsVisibleTo("CCP.Avalonia.Migration.Tests")]
+[assembly: InternalsVisibleTo("CCP.Avalonia.Language.Tests")]

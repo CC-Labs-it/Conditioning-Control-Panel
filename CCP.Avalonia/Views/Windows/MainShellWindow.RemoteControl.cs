@@ -154,7 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF HideRemoteControlOverlay (:915): fade 200 ms, then collapse; the toast stops too.</summary>
-        private void HideRemoteControlOverlay()
+        internal void HideRemoteControlOverlay()
         {
             if (Named<Border>("RemoteControlOverlay") is not { IsVisible: true } o) return;
             o.Opacity = 0;
@@ -172,9 +172,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _remoteOverlayHidingAt = null;
                 _remoteOverlayTimer?.Stop();
                 if (Named<Border>("RemoteControlOverlay") is { } o) o.IsVisible = false;
-                // WPF MainWindow.Leash.cs:185-201: the gate owns the browser until it goes.
-                if (_leashGate?.IsUp == true) _leashHidBrowser = true;
-                else if (LeashBrowser is { } browser) browser.IsVisible = true;
+                // WPF MainWindow.Leash.cs:185-201: the gate owns the browser until it goes; a tour that is
+                // still up keeps it hidden too (#4384). One rule: RestoreBrowser (MainShellWindow.BrowserCover.cs).
+                RestoreBrowser();
                 if (Named<Border>("RemoteCommandNotification") is { } n0) n0.Opacity = 0;
                 return;
             }

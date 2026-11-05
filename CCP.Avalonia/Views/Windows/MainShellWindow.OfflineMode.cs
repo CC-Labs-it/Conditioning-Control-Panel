@@ -82,28 +82,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     else status.Bind(TextBlock.ForegroundProperty, status.GetResourceObservable("PinkBrush"));
                 }
 
-                var loading = page?.FindControl<TextBlock>("BrowserLoadingText");
                 var container = page?.FindControl<Grid>("BrowserContainer");
                 var host = BrowserView;
                 if (isOffline)
                 {
                     // Stop whatever was loading, as WPF navigates to about:blank.
                     if (host?.Source != null) host.Navigate(new Uri("about:blank"));
-                    if (loading != null)
-                    {
-                        loading.IsVisible = true;
-                        loading.Text = Loc.Get("label_browser_disabled_in_offline_mode");
-                    }
                     if (container != null) container.Opacity = 0.3;
                 }
                 else
                 {
-                    if (loading != null) loading.IsVisible = false;
                     if (container != null) container.Opacity = 1.0;
                     // WPF reloads the selected site only when the browser was already up.
                     if (host?.Source != null) NavigateBrowser(SiteHomeUrl());
                 }
 
+                // WPF UiUpdates.cs:2582-2622 switches the offline placeholder. Reuse the card's
+                // bare live binding and restore its lazy-load prompt when no page has loaded yet.
+                page?.SyncBrowserPrompt();
                 UpdateBannerWelcomeMessage();
                 Log.Debug("Offline mode UI updated: {State}", isOffline ? "disabled" : "enabled");
             }

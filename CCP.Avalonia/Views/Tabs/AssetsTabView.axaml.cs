@@ -336,6 +336,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                                 if (item.PackFile != null) item.PackStore?.DeleteTempFile(path);
                             }
                         }
+                        // WPF Assets.cs:921-937: the shell first for local images too (HEIC/AVIF), direct decode as fallback.
+                        if (item.PackFile == null && OperatingSystem.IsWindows()
+                            && Platform.ShellVideoThumbnail.Load(item.FullPath, _ => null) is { } shell) return shell;
                         using Stream? fs = item.PackFile != null
                             ? item.PackStore?.GetPackFileStream(item.PackId!, item.PackFile)
                             : File.OpenRead(item.FullPath);

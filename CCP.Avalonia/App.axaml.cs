@@ -103,15 +103,7 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>WPF App.xaml.cs:3196-3206: arm before the shell; a missing tube leaves the line retryable.</summary>
         internal static void StartDescentCountdown()
         {
-            DescentCountdown = new Services.Descent.DescentCountdownService
-            {
-                Speaker = line =>
-                {
-                    if (DescentTube() is not { } avatar) return false;
-                    avatar.GigglePriority(line, playSound: false, aiGenerated: false);
-                    return true;
-                },
-            };
+            DescentCountdown = CreateDescentCountdown();
             DescentCountdown.Start();
         }
 
@@ -234,6 +226,22 @@ namespace ConditioningControlPanel.Avalonia
                     Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f), tag);
             }
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
+        }
+
+        // WPF App.xaml.cs:3199: false before the avatar exists leaves the phase retryable.
+        // findAvatar is a test seam only: Application.ApplicationLifetime cannot be set after init,
+        // so a headless test cannot make AvatarTubeWindow.Live non-null.
+        internal static Services.Descent.DescentCountdownService CreateDescentCountdown(
+            Func<Views.AvatarTube.AvatarTubeWindow?>? findAvatar = null) => new()
+        {
+            Speaker = line => SpeakCountdownLine(line, (findAvatar ?? DescentTube)()),
+        };
+
+        internal static bool SpeakCountdownLine(string line, Views.AvatarTube.AvatarTubeWindow? avatar)
+        {
+            if (avatar is null) return false;
+            avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+            return true;
         }
 
         /// <summary>The mod service (WPF App.Mods), or null on the headless render path.</summary>
@@ -1108,6 +1116,7 @@ namespace ConditioningControlPanel.Avalonia
                 TierGate.ReconnectIsTheAnswerProvider = Views.Windows.MainShellWindow.ReconnectIsTheAnswerNow;
                 // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
+                CoreEngine.StartedHook = shell.OnEngineStarted;
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 Sessions.Ticked += shell.OnSessionTick;
                 Sessions.SessionLog.LogReady += shell.OnSessionLogReady;
@@ -1148,6 +1157,7 @@ namespace ConditioningControlPanel.Avalonia
                 desktop.MainWindow.Closed += (_, _) =>
                 {
                     Serilog.Log.Information("Shell closed: stopping the session and the engine");
+                    CoreEngine.StartedHook = null;
                     CoreEngine.StoppedHook = null;   // the shell is gone; do not repaint it
                     Sessions.Ticked -= shell.OnSessionTick;
                     Sessions.SessionLog.LogReady -= shell.OnSessionLogReady;
@@ -1200,6 +1210,7 @@ namespace ConditioningControlPanel.Avalonia
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Tray icon unavailable; X closes the app"); }
                 // The panic key (WPF MainWindow.xaml.cs:363 installs its hook at startup the same way).
                 shell.StartPanicKey();
+                shell.StartSchedulerClock();
                 shell.Opened += (_, _) => shell.StartQuickRecalHotkey();
                 // EMI Desk summon chord (WPF MainWindow.xaml.cs:246 arms it from the shell's Loaded).
                 Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();

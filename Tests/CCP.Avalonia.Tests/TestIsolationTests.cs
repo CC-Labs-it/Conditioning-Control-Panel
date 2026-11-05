@@ -56,6 +56,20 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Theory]
+    [InlineData("fonts:Inter#Inter")]
+    [InlineData("Consolas, Courier New")]
+    [InlineData("Segoe UI")]
+    [InlineData("Segoe UI Black")]
+    public void SharedSetupResolvesUiFontsBeforeAnyTest(string family) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.NotNull(global::Avalonia.Application.Current);
+            foreach (var weight in new[] { global::Avalonia.Media.FontWeight.Normal, global::Avalonia.Media.FontWeight.Bold })
+                Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(
+                    new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family), weight: weight), out _), family);
+        });
+
     [Fact]
     public void SharedSetupRegistersBundledFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {

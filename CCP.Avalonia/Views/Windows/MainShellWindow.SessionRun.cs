@@ -59,6 +59,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try
                 {
                     Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
+                    // WPF Presets.cs:1616-1622 -> StartStop.cs:345-350: before session overrides.
+                    if (!CoreEngine.IsRunning && !RemoteControllerConnected && !CoreSettings.Current.AudioOnlySession)
+                        WarnIfFlashLibraryEmpty();
+                    App.Achievements?.CheckRelapse();
+                    StartEngineRamp(); // WPF Presets.cs:1618: capture user values before session overrides.
                     runner.Start(session);
                     AnnounceProgramSessionStarted(); // WPF Presets.cs:2013
                     Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session); // WPF SessionEngine.cs:247
@@ -105,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");
             runner.Stop(completed: false);
+            App.Achievements?.TrackPanicPressed(); // WPF SessionEngine.cs:477-478, every confirmed early stop
             Platform.AccountSeed.Sync?.Nudge("session end");   // explicit end: the runner no longer counts as running
         }
 
@@ -126,6 +132,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StartEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;
+                    // WPF Presets.cs:2125-2126 -> StartStop.cs:345-350: a panic stopped the engine.
+                    if (!CoreEngine.IsRunning && !RemoteControllerConnected && !CoreSettings.Current.AudioOnlySession)
+                        WarnIfFlashLibraryEmpty();
                     r.Resume();
                     PinkFilterOverlay.Refresh(this);
                     SpiralOverlay.Refresh(this);
