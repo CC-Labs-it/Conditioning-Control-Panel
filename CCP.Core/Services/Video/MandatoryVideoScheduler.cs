@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Services
     /// silently dies until the engine restarts; here a video added mid-session still plays
     /// (docs/avalonia-decisions.html).</para>
     /// </summary>
-    public sealed class MandatoryVideoScheduler
+    public sealed class MandatoryVideoScheduler : IDisposable
     {
         /// <summary>WPF <c>SkipRetrySeconds</c>: a skipped tick retries this soon.</summary>
         public const double SkipRetrySeconds = 30;
@@ -277,6 +277,8 @@ namespace ConditioningControlPanel.Services
             Log.Debug("VideoService stopped");
         }
 
+        public void Dispose() => Stop();
+
         private void ScheduleNext(double? retrySeconds = null)
         {
             var s = CoreSettings.Current;
@@ -424,12 +426,13 @@ namespace ConditioningControlPanel.Services
         private bool Finish()
         {
             Dispose(ref _preroll);
-            if (!_playing) return false;
+            if (!_playing) { PackVideos?.CleanupTemps(); return false; }
             _playing = false;
             IsStrict = false;
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
+            PackVideos?.CleanupTemps(); // The host has stopped and disposed its players.
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
@@ -440,7 +443,11 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF VideoService.ReloadAssets: drop the dealt queue so the next pick re-reads the
         /// enabled library (an untick or preset switch takes effect on the very next video, #130).</summary>
-        public void ReloadAssets() => _queue = new Queue<string>();
+        public void ReloadAssets()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.CleanupTemps();
+        }
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>
         internal string? PickNext()

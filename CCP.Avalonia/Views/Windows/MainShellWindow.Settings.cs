@@ -128,6 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreSettings.Save();
             ContentPackStore.Current?.Rescan();
             // Flash reads the folder on every burst; the dealt video queues need an explicit reset.
+            Overlays.FlashOverlay.ReloadAssets();
             Overlays.MandatoryVideoOverlay.Instance.Scheduler.ReloadAssets();
             BubbleCountHost.Instance.Scheduler.ReloadAssets();
             if (owner is MainShellWindow shell)
