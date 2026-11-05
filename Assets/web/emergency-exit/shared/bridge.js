@@ -38,7 +38,8 @@
   var EE = win.EE = win.EE || {};
 
   var webview = win.chrome && win.chrome.webview;
-  var isHosted = !!webview;
+  var avalonia = /[?&]avalonia=1(?:&|$)/.test(win.location.search);
+  var isHosted = !!webview || avalonia;
 
   /* ---- query ------------------------------------------------------------ */
   var query = {};
@@ -53,7 +54,7 @@
     });
   } catch (_e) {}
 
-  var isMock = !isHosted || query.mock === '1' || query.mock === 'true';
+  var isMock = !avalonia && (!isHosted || query.mock === '1' || query.mock === 'true');
 
   /* ---- console / host log ---------------------------------------------- */
   function clog(level, msg) {
@@ -105,10 +106,18 @@
     } catch (_e) {}
   }
 
+  if (avalonia) win.__ccpRnPush = function (json) {
+    try { dispatch(JSON.parse(json)); } catch (_e) {}
+  };
+
   /* ---- PAGE -> HOST ------------------------------------------------------ */
   function send(msg) {
     if (!msg || typeof msg.type !== 'string') return;
     if (isMock) { mockHandle(msg); }
+    if (avalonia && !webview) {
+      if (typeof win.invokeCSharpAction === 'function') win.invokeCSharpAction(JSON.stringify(msg));
+      else if (msg.type === 'ready') setTimeout(function () { send(msg); }, 50);
+    }
     if (webview) {
       try { webview.postMessage(msg); } catch (_e) { /* host gone */ }
     }
