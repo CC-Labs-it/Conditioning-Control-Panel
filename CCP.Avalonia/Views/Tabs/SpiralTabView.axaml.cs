@@ -323,11 +323,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void OnTabShown() => Refresh();
 
-        /// <summary>WPF Wire: the fuse's phase and tick drive the fog. BlockChanged has no twin
-        /// (DescentService is WPF-only).</summary>
+        private DescentService? _wiredDescent;
+
+        /// <summary>WPF SpiralTabView.xaml.cs:249,307-333: visible-only block updates.</summary>
         private void Wire()
         {
             WireMigrationGate();
+            if (!ReferenceEquals(_wiredDescent, App.Descent))
+            {
+                if (_wiredDescent != null) _wiredDescent.BlockChanged -= OnBlockChanged;
+                _wiredDescent = App.Descent;
+                if (_wiredDescent != null) _wiredDescent.BlockChanged += OnBlockChanged;
+            }
             if (_wiredFuse != null || App.DescentCountdown is not { } fuse) return;
             _wiredFuse = fuse;
             fuse.PhaseChanged += OnPhaseChanged;
@@ -338,10 +345,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void Unwire()
         {
             UnwireMigrationGate();
+            if (_wiredDescent != null) _wiredDescent.BlockChanged -= OnBlockChanged;
+            _wiredDescent = null;
             if (_wiredFuse is not { } fuse) return;
             _wiredFuse = null;
             fuse.PhaseChanged -= OnPhaseChanged;
             fuse.Tick -= OnFuseTick;
+        }
+
+        private void OnBlockChanged(object? sender, EventArgs e)
+        {
+            if (!IsVisible) return;
+            if (_embed != null && _wiredDescent?.Current is { } block) _embed.PostState(block);
+            Refresh();
         }
 
         /// <summary>WPF OnPhaseChanged: repaint, then flare only if the room is still the fog.</summary>
@@ -394,10 +410,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     CoreSettings.Current,
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
-                    // ponytail: the persisted unanswered-offer gate is shared with WPF. Live offers,
-                    // ceremony ownership and server blocks still need the Descent service lane.
+                    // SyncPush does not request live migration offers. Keep the persisted hold;
+                    // WPF's ceremony-open input is always false (DescentMigrationService.cs:67).
                     spiralWithheld: SpiralRoom.SpiralWithheldFor(CoreSettings.Current, false, false),
-                    hasBlock: false));
+                    hasBlock: App.Descent?.Current != null));
             }
             catch (Exception ex)
             {
@@ -777,8 +793,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     TeardownEmbed();
                     ShowWaitingUnderSpiral();
                 };
-                // No server block exists on this head yet: never fabricate one from local XP.
-                embed.PostState(null);
+                // WPF SpiralTabView.xaml.cs:892: queue the accepted server block before boot.
+                embed.PostState(App.Descent?.Current);
                 StartEmbed(embed);
             }
             catch (Exception ex)
