@@ -1496,7 +1496,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         // WPF CompanionIdleVoice.ShouldVoiceNow. CoreSession mirrors CoreEngine/App.Sessions at runtime
         // (App.axaml.cs, SessionRunner); either seam is read so headless tests can drive both.
-        internal static bool MayVoice(bool unprompted) =>
+        // A prompted line never reads the live state (WPF ShouldVoiceNow short-circuits the same way).
+        internal static bool MayVoice(bool unprompted) => !unprompted ||
             ConditioningControlPanel.Services.Companion.CompanionVoicePolicy.ShouldVoice(
                 unprompted, CoreEngine.IsRunning || CoreSession.IsEngineRunning, CoreSession.IsSessionRunning,
                 App.Sessions?.IsPaused == true || CoreSession.IsSessionPaused, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
