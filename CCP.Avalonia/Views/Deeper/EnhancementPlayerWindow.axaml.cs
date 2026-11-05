@@ -117,10 +117,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         first pass assumed: NavigationStarted carries a settable Cancel (so the allowlist
     ///         and the one-shot file:// pin are real) and InvokeScript is ExecuteScriptAsync. What
     ///         genuinely has no counterpart is ZoomFactor, AddScriptToExecuteOnDocumentCreatedAsync
-    ///         and ContainsFullScreenElementChanged — zoom and HTML5 fullscreen stay stubs.</item>
-    ///   <item><b>Win32.</b> <c>WindowChromeHelper.ApplyDarkTitleBar</c> (DwmSetWindowAttribute) and
-    ///         the borderless-fullscreen reparent (WindowInteropHelper + Forms.Screen.FromHandle +
-    ///         WS_EX_TOOLWINDOW/Topmost). Neither is P/Invoked here — see the notes on each member.</item>
+    ///         and ContainsFullScreenElementChanged. Zoom stays stubbed; fullscreen uses page messages.</item>
+    ///   <item>Dark title bars remain unported. Fullscreen uses Avalonia windows.</item>
     /// </list>
     /// </summary>
     public partial class EnhancementPlayerWindow : Window
@@ -301,6 +299,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _btnCreateNewEnhancement.Click += (_, _) => BtnCreateNewEnhancement_Click();
             _btnUnloadEnhancement.Click += (_, _) => Unload();
             this.FindControl<Button>("BtnEyeTracking")!.Click += (_, _) => BtnEyeTracking_Click();
+            AddHandler(KeyDownEvent, OnVideoHostKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel); Deactivated += (_, _) => _pressed.Clear();
+            AddHandler(KeyUpEvent, OnPlayerKeyUp, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            _videoBrowser.NavigationCompleted += OnVideoNavigationCompleted;
+            _videoBrowser.WebMessage += OnVideoWebMessage;
             _btnPictureInPicture.Click += (_, _) => BtnPictureInPicture_Click();
             _sliderVolume.PropertyChanged += SliderVolume_PropertyChanged;
 
@@ -885,6 +887,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void SliderVolume_PropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
             if (e.Property != RangeBase.ValueProperty) return;
+            _volumeBeforeMute = null;
             // ponytail: needs EnhancementAudioPlayer.Volume, wired when it moves to Core — both
             // directions: the write on drag, and UpdateVolumeFromPlayer's read-back on open, which
             // is why the WPF handler carried a _suppressVolumeSync re-entrancy flag. Not routed to
@@ -898,6 +901,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void UiTimer_Tick(object? sender, EventArgs e)
         {
+            TickPlayerInput();
             if (_miniScrubbing) return;
 
             if (_isVideoMode) _ = PollVideoTimeAsync();
@@ -1155,6 +1159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _isVideoMode = isVideo;
             _audioFileRow.IsVisible = !isVideo;
             _audioPane.IsVisible = !isVideo;
+            if (!isVideo) ExitVideoFullscreen();
             _videoPane.IsVisible = isVideo;
             // The WPF cluster bound its Visibility to VideoPane's. Pinned HIDDEN here, and not
             // because of the mode: AdjustVideoZoom only logs, since NativeWebView has no zoom
@@ -1165,33 +1170,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _browserZoomCluster.IsVisible = false;
             _volumePanel.IsVisible = !isVideo;
             _btnPictureInPicture.IsVisible = isVideo;
-        }
-
-        // ====================================================================================
-        // Fullscreen — Win32 in the original, absent here
-        // ====================================================================================
-
-        /// <summary>
-        /// The WPF player reparented its WebView2 into a borderless topmost window covering the
-        /// player's monitor whenever the page raised
-        /// <c>CoreWebView2.ContainsFullScreenElementChanged</c> — a signal that only exists on
-        /// WebView2, and which drove <c>EnterVideoFullscreen</c> / <c>ExitVideoFullscreen</c> /
-        /// <c>ExitFullscreenViaScript</c> / <c>OnVideoWebMessageReceived</c> and the two injected
-        /// scripts (dblclick-to-toggle-fullscreen, Ctrl+MouseWheel zoom).
-        ///
-        /// ponytail: needs a fullscreen signal. NativeWebView has no ContainsFullScreenElementChanged
-        /// and no document-created script injection, so the page cannot be instrumented before its
-        /// own scripts run — this stays a stub and HTML5 fullscreen inside the page cannot escape
-        /// the pane. (WebMessageReceived DOES exist, so the dblclick-to-toggle half is buildable;
-        /// the fullscreen-element signal it would have to replace is what is missing.) The
-        /// window half maps cleanly when the signal arrives: Screens.ScreenFromVisual(this) for the
-        /// monitor, WindowState.FullScreen (or the screen's Bounds), Topmost = true and
-        /// ShowInTaskbar = false — no Win32, no WindowInteropHelper, no Forms.Screen.FromHandle,
-        /// and no OverlayService z-order re-assert (that service is the WPF head's).
-        /// </summary>
-        private void OnVideoFullscreenChanged()
-        {
-            Log.Debug("EnhancementPlayer(Avalonia): browser fullscreen is a stub");
         }
 
         // ====================================================================================
@@ -1686,6 +1664,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void Window_Closing()
         {
+            _videoClosing = true; CancelEscHold();
+            ExitVideoFullscreen();
+            _videoBrowser.NavigationCompleted -= OnVideoNavigationCompleted;
+            _videoBrowser.WebMessage -= OnVideoWebMessage;
             // Stop the tick timer first so no UI work is queued onto a dying window — and because
             // --render-all opens and closes every view in one process, a timer left running would
             // accumulate one live 100ms tick per view.
@@ -1698,8 +1680,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             try { _fetcher?.Dispose(); } catch { }
             _fetcher = null;
             // ponytail: the WPF teardown also unsubscribed the player/webcam singletons, stopped a
-            // webcam this session had started, disposed the video time source and force-closed the
-            // borderless fullscreen host. Those are the head services' and WebView2's; none of them
+            // webcam this session had started, disposed the video time source. Those head services do not
             // exist here. The web view itself is disposed with the visual tree.
         }
 

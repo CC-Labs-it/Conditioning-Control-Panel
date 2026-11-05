@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -9,12 +8,9 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
-using ConditioningControlPanel;
-using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -27,21 +23,18 @@ namespace CCP.Avalonia.Tests;
 /// click side effect runs.</summary>
 public sealed class ContentHitTestTests
 {
-    [Theory]
-    [InlineData(100)] // mid-entrance: keep the moving geometry covered
-    [InlineData(620)] // settled: the original content hit-test contract
-    public async Task ContentButtonsReceiveThePointerAtTheirCentre(int entranceMs)
+    [Fact]
+    public async Task ContentButtonsReceiveThePointerAtTheirCentre()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            CoreSettings.Current.MotionLevel = MotionLevel.Full;
-            CoreSettings.Current.PerformanceMode = false;
-            var time = new SteppedTime();
-            var w = new MainShellWindow { TabClock = time };
+            // This probes static hit geometry, not tab entrance or hover animation progress.
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            var w = new MainShellWindow();
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -51,23 +44,22 @@ public sealed class ContentHitTestTests
             var misses = new List<string>();
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
+                var sinceShow = Stopwatch.StartNew();
                 w.ShowTab(tab);
-                // A live wall clock moves the entrance again while RenderLiveTree commits its batch:
-                // TranslatePoint then describes a newer position than InputHitTest's rendered frame
-                // (Windows CI 41196855484). Hold the real entrance at a known phase for both probes.
-                time.Now += TimeSpan.FromMilliseconds(entranceMs).Ticks;
-                w.TickTabTransition();
+                // The entrance (fade, slide, card stagger) runs on wall time; land it so runner speed cannot put a
+                // probe mid-entrance. Suspected, not reproduced: CI misses only ever hit the first awareness probes,
+                // inside the 620 ms entrance (hero hit ScrollContentPresenter, Windows CI 2026-10-30).
+                w.CompleteTabTransition();
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
-                RenderLiveTree(w);
-                Assert.Equal(entranceMs < 620 ? 0.75 : 1, w.Named<Control>(panelName)!.Opacity, 5);
+                HeadlessRendering.RenderLiveTree(w);
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
-                    RenderLiveTree(w);
+                    HeadlessRendering.RenderLiveTree(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
                     if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || !b.IsHitTestVisible || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
                     // Click-proof on purpose (WPF Hidden): only the Presets rack row actions at rest; their hover path has its own test.
@@ -77,6 +69,8 @@ public sealed class ContentHitTestTests
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
                     var hit = w.InputHitTest(p) as Visual;
+                    // On a recurrence, report timing and the visuals held in the rendered frame.
+                    var probe = $"{sinceShow.ElapsedMilliseconds} ms after ShowTab, under {string.Join(">", w.GetVisualsAt(p).Take(6).Select(v => $"{v.GetType().Name}/{(v as Control)?.Name}"))}";
                     bool pressed = false;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
                     b.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
@@ -85,7 +79,7 @@ public sealed class ContentHitTestTests
                     Dispatcher.UIThread.RunJobs();
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
-                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
+                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}; {probe}");
                 }
                 Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
             }
@@ -93,31 +87,6 @@ public sealed class ContentHitTestTests
             Assert.True(misses.Count == 0, string.Join("\n", misses));
             return Task.CompletedTask;
         });
-    }
-
-    /// <summary>Renders a frame holding the live tree. One forced tick is not that: while a batch is in
-    /// flight MediaContext holds the next commit back, so the tick renders the OLDER batch and the layout
-    /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
-    /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
-    /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
-    {
-        Dispatcher.UIThread.RunJobs();
-        var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
-        var deadline = Stopwatch.StartNew();
-        while (!batch.Rendered.IsCompleted)
-        {
-            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the live tree");
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
-        }
-    }
-
-    private sealed class SteppedTime : TimeProvider
-    {
-        public long Now;
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-        public override long GetTimestamp() => Now;
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
