@@ -132,6 +132,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             ChaosOverlayWindow.ChaosTips.Attach(_disc, $"{toy.Glyph} {toy.Name} · {toy.KeyLabel}", toy.Desc,
                 string.IsNullOrEmpty(toy.CapstoneDesc) ? null : "max: " + toy.CapstoneDesc, flavor: toy.Flavor);
+            // The tooltip is hosted outside the run overlay, so give it WPF's own chrome.
+            if (ToolTip.GetTip(_disc) is Control tip)
+                ToolTip.SetTip(_disc, new ToolTip
+                {
+                    Content = tip,
+                    Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x15, 0x12, 0x26)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0x69, 0xB4)),
+                    Foreground = Brushes.White, Padding = new Thickness(10, 8),
+                });
+            ToolTip.SetShowDelay(_disc, 250);
             UpdateVisual();
         }
 

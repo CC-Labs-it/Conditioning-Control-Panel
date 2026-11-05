@@ -21,7 +21,7 @@ public sealed class NavRailRemainingTests
     private static void Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreMods.MakeModAwareProvider;
         var language = LocalizationManager.Instance.CurrentLanguage;
@@ -62,7 +62,9 @@ public sealed class NavRailRemainingTests
         Assert.Equal("THE NEST", home.Text);
         Assert.Equal("Seek", w.Named<TextBlock>("TxtNavSearchLabel")!.Text);
         Assert.Equal("Retreat", w.Named<TextBlock>("TxtNavBackLabel")!.Text);
-        Assert.Equal("Hive", w.Named<TextBlock>("TxtNavWebAppLabel")!.Text);
+        // WPF moved the Web App door to Play; it has no mod-aware rail caption.
+        Assert.Null(w.Named<TextBlock>("TxtNavWebAppLabel"));
+        Assert.Null(w.Named<Button>("DoorWebApp"));
 
         loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
         Assert.Equal("THE NEST", home.Text); // a changed English label overrides localization
