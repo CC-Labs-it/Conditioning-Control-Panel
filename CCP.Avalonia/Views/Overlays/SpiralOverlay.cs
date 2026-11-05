@@ -84,6 +84,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static double PaintedOpacity => SpiralFrames.Paint(
             Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
+        private static double? _pulseWeight;
+        private static double _pulseBase, _pulsePeak;
+        private static double PulseOpacity => _pulseWeight is { } k
+            ? Math.Clamp(_pulseBase + (_pulsePeak - _pulseBase) * k, 0, 1) : PaintedOpacity;
+
+        internal static void SetPulse(double? weight)
+        {
+            // WPF OverlayService.cs:659-660: ramp base, settings peak, both fixed for this pulse.
+            if (_pulseWeight == null && weight != null)
+            {
+                _pulseBase = PaintedOpacity;
+                _pulsePeak = Math.Min(SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0) * 2, 1);
+            }
+            _pulseWeight = weight;
+            foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
+        }
+
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
@@ -116,7 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-            var opacity = PaintedOpacity;
+            var opacity = PulseOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
@@ -181,6 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _pulseWeight = null;
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;

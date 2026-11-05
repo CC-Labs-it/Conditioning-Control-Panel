@@ -1144,6 +1144,7 @@ namespace ConditioningControlPanel.Avalonia
         /// closing; the tray's Stop everything passes false so the overlays can be started again.</summary>
         internal static void StopDesktopOverlays(bool final = true)
         {
+            Views.Overlays.OverlayPulse.Cancel();
             CoreFlash.Stop();
             Services.Flash.FlashCelebrationVoice.Stop();
             CoreSubliminal.Stop();

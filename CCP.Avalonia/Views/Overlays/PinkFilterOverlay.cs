@@ -38,6 +38,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool PulseHold;
 
         private static bool _refused;
+        internal static bool SkipPlatformChecksForTests;
+        internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
+        private static double? _pulseWeight;
+        private static double _pulseBase, _pulsePeak;
+
+        private static double PaintedOpacity
+        {
+            get
+            {
+                var s = CoreSettings.Current;
+                var steady = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
+                return Math.Clamp(_pulseWeight is { } k ? _pulseBase + (_pulsePeak - _pulseBase) * k : steady, 0, 1);
+            }
+        }
+
+        internal static void SetPulse(double? weight)
+        {
+            // WPF OverlayService.cs:657-660 captures endpoints before the gentle timer starts.
+            if (_pulseWeight == null && weight != null)
+            {
+                _pulseBase = (App.Sessions?.PinkOpacity ?? CoreSettings.Current.PinkFilterOpacity) / 100.0;
+                _pulsePeak = Math.Min(CoreSettings.Current.PinkFilterOpacity * 2, 100) / 100.0;
+            }
+            _pulseWeight = weight;
+            var (r, g, b) = EffectiveColor();
+            foreach (var w in Windows) w.SetTint(r, g, b, PaintedOpacity);
+        }
 
         /// <summary>Whether a tint can actually reach the screen: X11 with click-through, a
         /// compositing manager, and no earlier refusal by <see cref="Accept"/>. Takeover picks its
@@ -83,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
-            var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
+            var opacity = PaintedOpacity;   // a session ramps it without writing it (#471)
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -100,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // once per tick and logs a warning each time. Accept still runs - IsAvailable being
             // true does not promise THIS window is an X11 one, nor that the compositor granted
             // transparency.
-            if (!X11Overlay.IsAvailable)
+            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable)
             {
                 Log.Debug("Pink filter: no X11 display, so no tint on this platform");
                 return;
@@ -117,7 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                                 // BubbleCountWindow uses; there is no XID before Show
                 // A refusal is about the platform, not about this monitor, so drop the whole set
                 // rather than tinting some screens and not others.
-                if (!Accept(w)) { CloseAll(); return; }
+                if (!SkipPlatformChecksForTests && !Accept(w)) { CloseAll(); return; }
                 Windows.Add(w);
             }
             _shownOn = want;
@@ -127,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public static void CloseAll()
         {
+            _pulseWeight = null;
             foreach (var w in Windows)
             {
                 try { w.Close(); }
