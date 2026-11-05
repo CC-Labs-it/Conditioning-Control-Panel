@@ -353,7 +353,10 @@
     {"node":88,"x":-3,"kind":"bubble"},
     {"node":89,"x":-3,"kind":"bubble"},
     {"node":90,"x":-3,"kind":"bubble"},
-    {"node":91,"x":-3,"kind":"bubble"}
+    {"node":91,"x":-3,"kind":"bubble"},
+    {"node":302,"ds":12,"x":0,"kind":"box","liftM":3.6},
+    {"node":302,"ds":24,"x":0,"kind":"box","liftM":4.2},
+    {"node":302,"ds":36,"x":0,"kind":"box","liftM":3.8}
   ],
   "boosts": [
     {"node":6,"x":0,"w":6,"len":7.5},
@@ -514,5 +517,10 @@
     {"fromS":7018.03107839425,"toS":7058.03107839425,"side":1,"dropM":28},
     {"fromS":7251.26516509558,"toS":7306.26516509558,"side":-1,"dropM":36},
     {"fromS":7643.193804870924,"toS":7678.193804870924,"side":1,"dropM":40}
+  ],
+  "ramps": [
+    {"id":"mf-ramp-canal","node":106,"x":0,"widthM":6,"lenM":7,"heightM":1.2,"upMps":13,"purpose":"air","note":"kicks out of the coolant tube mouth, crown 40 m up, and lands on the core approach before the press bank"},
+    {"id":"mf-ramp-memory","node":302,"x":0,"widthM":8,"lenM":8,"heightM":1.2,"upMps":13,"purpose":"item","note":"off the far memory deck past the tiles: three floating boxes on the arc before the exit funnel"},
+    {"id":"mf-ramp-underpass","node":534,"x":0,"widthM":6,"lenM":7,"heightM":1,"upMps":12,"purpose":"air","note":"a hop down the lower bus straight under the descent, clear of the tar and the rams"}
   ]
 }

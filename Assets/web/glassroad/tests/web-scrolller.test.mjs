@@ -127,26 +127,45 @@ test('clips: metadata-only <video> per clip row, world faces get them, flashes n
   bridge.emit('scrolller-feed', { v: 1, rows: [
     { url: 'https://iris.scrolller.com/a.mp4', kind: 'video', poster: 'https://images.scrolller.com/a.jpg' },
     { url: 'https://images.scrolller.com/b.jpg', kind: 'image' }] });
-  assert.equal(feed.count, 2); assert.equal(vids.length, 1); assert.equal(imgs.length, 1);
+  assert.equal(feed.count, 2); assert.equal(vids.length, 1); assert.equal(imgs.length, 2, 'the clip poster is a flash still');
+  assert.equal(imgs[0].src, 'https://images.scrolller.com/a.jpg');
   assert.equal(vids[0].preload, 'metadata'); assert.equal(vids[0].poster, 'https://images.scrolller.com/a.jpg');
   assert.equal(vids[0].crossOrigin, undefined, 'display only: no CORS ask');
   assert.equal(feed.sourceFor(0), null, 'no metadata yet');
   vids[0].readyState = 1;
   assert.equal(feed.sourceFor(0), vids[0]);
   assert.equal(feed.stillFor(0), null, 'a clip never reaches the flash canvas');
-  imgs[0].complete = true; imgs[0].naturalWidth = 640;
-  for (let s = 0; s < 6; s++) assert.equal(feed.stillFor(s), imgs[0]);
+  imgs[1].complete = true; imgs[1].naturalWidth = 640;
+  for (let s = 0; s < 6; s++) assert.equal(feed.stillFor(s), imgs[1]);
+  imgs[0].complete = true; imgs[0].naturalWidth = 480;
+  assert.equal(feed.stillCount, 2, 'a loaded poster counts as a still');
+  assert.ok(!vids.includes(feed.stillFor(0)) && !vids.includes(feed.stillFor(1)), 'only stills, never the clip');
   vids[0].error = { code: 4 };
   assert.equal(feed.ready, 1, 'a broken clip is not handed out');
   vids[0].error = null;
   bridge.emit('setting', { key: 'media.remoteConsent', value: false });
   assert.equal(feed.sourceFor(0), null);
   assert.deepEqual([vids[0].src, vids[0].poster, vids[0].loads], ['', '', 1], 'src gone and load() frees the decoder');
+  assert.equal(imgs[0].src, '', 'the poster still is released too'); assert.equal(feed.stillFor(0), null);
   bridge.emit('setting', { key: 'media.remoteConsent', value: true });
   bridge.emit('scrolller-feed', { v: 1, rows: [{ url: 'https://iris.scrolller.com/c.mp4', kind: 'video' }] });
   vids[1].readyState = 4;
   assert.equal(feed.sourceFor(0), vids[1]);
   clock += 24 * 60 * 60 * 1000;
   assert.equal(feed.sourceFor(0), null); assert.equal(vids[1].src, ''); assert.equal(vids[1].loads, 1, '24 h expiry frees clips too');
+  feed.dispose();
+});
+
+test('a GIF niche (every row a clip with its poster) still fills the hit flashes', () => {
+  const bridge = fakeBridge(), imgs = [];
+  const feed = createScrolllerFeed({ bridge, makeVideo: fakeVideo, makeImage: () => {
+    const i = fakeImage(); i.complete = true; i.naturalWidth = 480; imgs.push(i); return i;
+  } });
+  bridge.emit('scrolller-feed', { v: 1, rows: Array.from({ length: 4 }, (_, i) => (
+    { url: `https://iris.scrolller.com/g${i}.mp4`, kind: 'video', poster: `https://images.scrolller.com/g${i}.jpg` })) });
+  assert.equal(feed.stillCount, 4);
+  assert.deepEqual([0, 1, 2, 3].map((s) => feed.stillFor(s)), imgs, 'consecutive seeds walk distinct posters');
+  bridge.emit('scrolller-feed', { v: 1, rows: [] });
+  assert.equal(feed.stillCount, 0); assert.ok(imgs.every((i) => i.src === ''), 'a new feed releases the old posters');
   feed.dispose();
 });
