@@ -42,6 +42,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private const int StaggerMs = 300;
 
         internal static readonly List<(FlashOverlayWindow Window, PixelRect Rect)> Active = new();
+
+        internal static void RaiseAll(Action<Window> raise)
+        {
+            foreach (var (window, _) in Active) if (window.IsVisible && !window.IsFadingOut) raise(window);
+        }
         private static readonly Random Rng = new();
         // #627: one shuffled walk of the folder (WPF FlashService DiskBag), so every image comes up
         // before any repeats. Not thread-safe: LoadPictures draws under the bag's own lock.

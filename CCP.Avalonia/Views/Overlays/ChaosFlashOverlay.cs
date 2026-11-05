@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using SkiaSharp;
 using Avalonia.Threading;
@@ -42,6 +43,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsAnimating => Wash.IsAnimating;
         internal static bool IsHeroAnimating => Hero.IsAnimating;
         internal static double Alpha => Wash.Alpha;
+
+        // WPF ChaosFlashOverlay RaiseActive (ChaosModeService.cs:755): re-stack both surfaces above a video.
+        internal static void RaiseActive(Action<Window> raise)
+        {
+            foreach (var w in Wash.Windows.Concat(Hero.Windows).ToArray()) if (w.IsVisible) raise(w);
+        }
         internal static Task? LastShow { get; private set; }
         internal static Task? LastHeroShow { get; private set; }
 

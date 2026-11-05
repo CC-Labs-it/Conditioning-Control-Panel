@@ -7,6 +7,7 @@ using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -117,6 +118,57 @@ public sealed class JustDropWindowTests
         Assert.Equal(40, paid);                           // untimed first play: a taste (Core settlement)
         Assert.Equal(0, posted);                          // the site never gets the local games' init
         Assert.True(w.IsVisible);                         // and no game frame closes it
+    });
+
+    /// <summary>WPF JustDropHostService.cs:105-108,249-253 keeps the site bridge after auth redirects;
+    /// ChaosWebViewHost.cs:238,1704 applies its document fence only to NavigatePage transfers.</summary>
+    [Theory]
+    [InlineData(JustDropHandoff.ShopPath)]
+    [InlineData(JustDropHandoff.PlayerPath)]
+    public void SignedInHandoffRedirect_StillDeliversSiteMessages(string destination) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.UnifiedUserId = "handoff-test-user";
+        CoreSecrets.RetrieveProvider = name => name == CoreSecrets.AuthToken ? "test-token" : null;
+        (settings.Current.PlayerLevel, settings.Current.JustDropXpDayKey, settings.Current.JustDropCreditedToday) = (1, "", 0);
+        var root = Directory.CreateTempSubdirectory("jd-redirect-").FullName;
+        CreditedOrders.FilePathOverride = Path.Combine(root, "credited.json");
+        using var server = new WebAssetServer(root);
+        var w = new GameWindow(GameWindow.Games[GameWindow.JustDropId] with { Query = destination });
+        try
+        {
+            w.Load(server);
+            Assert.Equal(JustDropHandoff.HandoffPath, w.PageUrl!.AbsolutePath);
+            Assert.Contains(Uri.EscapeDataString(destination), w.PageUrl.Query);
+            double paid = 0;
+            CoreProgression.AddXPProvider = (xp, _) => paid += xp;
+            var complete = "{\"source\":\"justdrop\",\"v\":1,\"type\":\"session-complete\",\"payload\":{\"orderCode\":\"JD-"
+                + Guid.NewGuid().ToString("N") + "\",\"sizeId\":\"S\"}}";
+            w.Web.OnWebMessage(complete);   // no completed navigation yet
+            Assert.Equal(0, paid);
+            foreach (var foreign in new[]
+            {
+                "https://evil.example" + destination,
+                "https://app.cclabs.app.evil.example" + destination,
+                "http://app.cclabs.app" + destination,
+                "https://app.cclabs.app:444" + destination,
+            })
+            {
+                var url = new Uri(foreign);
+                Assert.False(w.Web.AllowNavigation!(url));
+                w.Web.OnNavigationCompleted(url);
+                w.Web.OnWebMessage(complete);
+                Assert.Equal(0, paid);
+            }
+            var redirected = new Uri(JustDropHandoff.SiteOrigin + destination);
+            Assert.True(w.Web.AllowNavigation!(redirected));
+            w.Web.OnNavigationCompleted(redirected);
+            w.Web.OnWebMessage(complete);
+            Assert.Equal(40, paid);   // Core's untimed first-play settlement proves completion reached it
+            Assert.Equal(JustDropHandoff.HandoffPath, w.PageUrl.AbsolutePath);   // the requested URL stays the handoff
+        }
+        finally { w.Close(); Directory.Delete(root, true); }
     });
 
     [Fact]
