@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia
         public static SettingsService? Settings { get; private set; }
 
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
-        public static Helpers.NotificationService Notifications { get; } = new();
+        public static Helpers.NotificationService Notifications { get; internal set; } = new();
 
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
@@ -69,6 +69,24 @@ namespace ConditioningControlPanel.Avalonia
         internal static SessionRunner? Sessions { get; set; }
         /// <summary>The app-lifetime media recap (WPF App.MediaHistory), or null on the headless render path.</summary>
         internal static MediaHistoryService? MediaHistory { get; set; }
+        /// <summary>The tube the countdown speaks through. Test seam: a headless app cannot swap its lifetime after init.</summary>
+        internal static Func<Views.AvatarTube.AvatarTubeWindow?> DescentTube = () => Views.AvatarTube.AvatarTubeWindow.Live;
+
+        /// <summary>WPF App.xaml.cs:3196-3206: arm before the shell; a missing tube leaves the line retryable.</summary>
+        internal static void StartDescentCountdown()
+        {
+            DescentCountdown = new Services.Descent.DescentCountdownService
+            {
+                Speaker = line =>
+                {
+                    if (DescentTube() is not { } avatar) return false;
+                    avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+                    return true;
+                },
+            };
+            DescentCountdown.Start();
+        }
+
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
         internal static Services.Descent.DescentService? Descent { get; set; }
@@ -170,7 +188,9 @@ namespace ConditioningControlPanel.Avalonia
         /// the Haptics tab's "Quest complete" routing row decides how it feels.</summary>
         internal static void PlayQuestCompletionEffects()
         {
-            PlayExclamationChime("quest-complete");  // the haptic still posts if the chime fails
+            // WPF App.xaml.cs (#4078): the perk opt-out drops the popup, so the ding goes with it.
+            if (CoreSettings.Current.SuppressPerkNotifications != true)
+                PlayExclamationChime("quest-complete");  // the haptic still posts if the chime fails
             _ = CoreHaptics.Service?.PostEvent(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.QuestComplete);
         }
 
@@ -630,6 +650,7 @@ namespace ConditioningControlPanel.Avalonia
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
+                CoreEntitlement.DailyFreeKeyProvider = () => dailyFree.TodayKey;
                 // WPF App.xaml.cs:494: the weekly Graded Intake pass. Its TierChanged hooks are
                 // attached by AccountSeed.Seed() below, once the providers exist.
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
@@ -646,9 +667,7 @@ namespace ConditioningControlPanel.Avalonia
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
-                // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
-                DescentCountdown = new Services.Descent.DescentCountdownService();
-                DescentCountdown.Start();
+                StartDescentCountdown();
                 Descent = new Services.Descent.DescentService
                 {
                     // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
@@ -670,6 +689,9 @@ namespace ConditioningControlPanel.Avalonia
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
                         { Countdown = DescentCountdown, DescentReader = Descent };
+                    // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
+                    sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
+                        Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
@@ -890,6 +912,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
                 // WPF App.xaml.cs:290: a game.* palette row is listed only when this head can start it.
                 SettingsPaletteIndex.GameAvailableProvider = Views.Windows.LauncherWindow.CanStartGame;
+                SettingsPaletteIndex.WallpaperDoorAvailableProvider = () => false;   // owner 2026-11-01: no door on this head
                 // WPF App.xaml.cs:312: the race's door asks this head's prize store (P31).
                 ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 // WPF App.xaml.cs:313: the race charts a track through this head's decoder (LibVLC, not NAudio).
@@ -983,6 +1006,7 @@ namespace ConditioningControlPanel.Avalonia
                     shell.RefreshExclusivesTab();
                     shell.RefreshNavPremiumTags();
                 });
+                Platform.AccountSeed.GraceClosed += RepaintVeils;   // WPF MainWindow.OnGraceClosed
                 if (Platform.AccountSeed.Patreon is { } patreonSub) patreonSub.TierChanged += (_, _) => RepaintVeils();
                 if (Platform.AccountSeed.SubscribeStar is { } substarSub) substarSub.TierChanged += (_, _) => RepaintVeils();
                 Views.Controls.Invites.InvitePanel.ArmExpiry(); // WPF MainWindow.Patreon.cs: a running invite week's end repaints
@@ -1086,6 +1110,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static void StopDesktopOverlays(bool final = true)
         {
             CoreFlash.Stop();
+            Services.Flash.FlashCelebrationVoice.Stop();
             CoreSubliminal.Stop();
             Views.Overlays.FlashOverlay.CloseAll(final);
             Views.Overlays.SubliminalWhisperShow.StopAll();
@@ -1293,6 +1318,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
+            try { Platform.ScreenMirrorHead.Shutdown(); } catch { /* WPF App.OnExit:6505 */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }

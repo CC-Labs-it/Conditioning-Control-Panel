@@ -84,6 +84,7 @@ namespace ConditioningControlPanel.Services.Descent
                 App.Audio?.ApplyPreferredDevice(_out);
                 _out.Init(new LoopStream(_reader));
                 _out.Play();
+                Audio.EngineOffAudioLog.Note("descent-heartbeat", AssetPath);
 
                 Log.Information("[Fuse] Heartbeat started for the terminal phase.");
             }
