@@ -290,7 +290,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             "dtrh" => "play",
             _ => null,
         };
-        private void CardVault_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPatreonExclusives_Click(sender, e);
+        /// <summary>WPF MainWindow.Presets.cs:1126: the Vault tile opens Settings, Account and Plans.</summary>
+        private void CardVault_Click(object? sender, RoutedEventArgs e) => Shell?.OpenAppSettingsSection("account");
         /// <summary>WPF CardDeeperEditor_Click (MainWindow.Presets.cs:1121): opens the Deeper page, never the editor.</summary>
         private void CardDeeperEditor_Click(object? sender, RoutedEventArgs e) => Shell?.ShowTab("deeper");
         /// <summary>
