@@ -84,6 +84,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "emergency-exit",
+        "perfect-week-bonus",
         "intake",
         "leash-task",
         "deeper-tutorial",

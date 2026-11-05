@@ -77,6 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:2042-2055 stops media; retained previews are also cleared here.
             new("scrolller-web", _ => Controls.WebHost.StopScrolllerForPanic()),
             new("settings-palette", _ => SettingsPaletteWindow.CloseIfOpen()),
+            new("perfect-week-bonus", _ => App.StopPerfectWeekBonus()), // WPF SkillTreeService.cs:535-563; close every new popup on panic.
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("keyword-comments", _ => Platform.KeywordAvatarComment.CancelPending()),
             new("keyword-triggers", _ => Platform.KeywordTriggerHead.StopAudio()),   // the clip only; the switch stays armed
