@@ -59,6 +59,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try
                 {
                     Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
+                    // WPF Presets.cs:1616-1622 -> StartStop.cs:345-350: before session overrides.
+                    if (!CoreEngine.IsRunning && !RemoteControllerConnected && !CoreSettings.Current.AudioOnlySession)
+                        WarnIfFlashLibraryEmpty();
                     runner.Start(session);
                     AnnounceProgramSessionStarted(); // WPF Presets.cs:2013
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
@@ -125,6 +128,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StartEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;
+                    // WPF Presets.cs:2125-2126 -> StartStop.cs:345-350: a panic stopped the engine.
+                    if (!CoreEngine.IsRunning && !RemoteControllerConnected && !CoreSettings.Current.AudioOnlySession)
+                        WarnIfFlashLibraryEmpty();
                     r.Resume();
                     PinkFilterOverlay.Refresh(this);
                     SpiralOverlay.Refresh(this);
