@@ -132,8 +132,8 @@ public class LobbyMergeTests
         Assert.Equal("5+3 · 12 moves", LobbySummary.For(new LobbyRow { Game = LobbyGame.Chess, State = LobbyRowState.Playing, InitialMs = 300000, IncrementMs = 3000, Moves = 12 }, loc));
         Assert.Equal("lobby_goon_song · cards 45s · lobby_goon_pictures",
             LobbySummary.For(new LobbyRow { Game = LobbyGame.Goon, Song = true, CardSec = 45, Pictures = true }, loc));
-        Assert.Equal("lobby_remote_tier_full · a, b, c",
-            LobbySummary.For(new LobbyRow { Game = LobbyGame.Remote, RemoteTier = "full", Tags = new[] { "a", "b", "c", "d" } }, loc));
+        Assert.Equal("lobby_remote_tier_full · a, b, c, d, e",
+            LobbySummary.For(new LobbyRow { Game = LobbyGame.Remote, RemoteTier = "full", Tags = new[] { "a", "b", "c", "d", "e" } }, loc));
         Assert.Equal("", LobbySummary.For(new LobbyRow { Game = LobbyGame.Goon }, loc));
     }
 
