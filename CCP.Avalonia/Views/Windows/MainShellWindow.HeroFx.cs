@@ -11,10 +11,10 @@
 // The profile menu's Level/XP rail is painted from the same numbers.
 // XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
 //
-// STILL MISSING vs WPF, so the row stays a stub:
-//   the level-up burst (FireBurstAt) and THE BANK hold
-//   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
-//   the Start button's charge/exhale/ignition/heartbeat set; level-up sound and toast.
+// Start charge/exhale/ignition/heartbeat, Save absorb, level-up toast and sound live in
+// MainShellWindow.HeroMoments.cs; the level-up particles ride the shell event layer (EventFx).
+// STILL MISSING vs WPF, so the row stays a stub: THE BANK counter hold (MainWindow.BankFx.cs),
+// which depends on the unported pot/flight host (MainShellWindow.BankFx.cs).
 // Save tick/ripple is live through BtnSave_Click (MainShellWindow.Settings.cs).
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
@@ -52,8 +52,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay(); });
+            Action<int> levelUp = level => Dispatcher.UIThread.Post(() => CelebrateHeroLevelUp(level));
             HookHeroXpFx();
+            HookHeroMoments();
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
             Closed += (_, _) => { ProgressionBank.Awarded -= awarded; ProgressionBank.LevelUp -= levelUp; };
@@ -73,9 +74,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                UpdateXPBarLoginState();
                 var s = CoreSettings.Current;
                 var level = s.PlayerLevel;
                 var xp = s.PlayerXP;
+                // WPF MainWindow.UiUpdates.cs:72-79: mod-aware rank thresholds.
+                if (Named<TextBlock>("TxtPlayerTitle") is { } title)
+                    title.Text = CoreMods.MakeModAware(level switch
+                    {
+                        < 20 => "BASIC BIMBO", < 50 => "DUMB AIRHEAD",
+                        < 100 => "SYNTHETIC BLOWDOLL", _ => "PERFECT FUCKPUPPET"
+                    });
                 var needed = XpCurve.GetXPForLevel(level, XpCurve.EpochOf(s));
                 if (Named<TextBlock>("TxtLevelLabel") is { } label) label.Text = $"LVL {level}";
                 if (Named<TextBlock>("TxtXP") is { } txt) AnimateXpReadout(txt, xp, needed, level);
@@ -149,6 +158,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void RefreshHeroXpFx()
         {
             ApplyXpMeniscusPulse();
+            ApplyStartHeroState();
+            if (!AmbientFxCanvas.Env.AllowTransitions || !IsVisible || WindowState == WindowState.Minimized) StopHeroOneShots();
             if (AmbientFxCanvas.Env.AllowTransitions && IsVisible && WindowState != WindowState.Minimized) return;
             _xpOdometer?.Stop();
             if (_xpReadoutTarget != null && Named<TextBlock>("TxtXP") is { } txt) txt.Text = _xpReadoutTarget;
@@ -257,76 +268,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             rotate.Angle = -4 * amount;
         }
 
-        // WPF MainWindow.HeroFx.cs:104-109.
-        private const int SaveTickDrawMs = 400;
-        private const int SaveRippleMs = 520;
-        private const double SaveRippleGrowPx = 14.0;
-        private const double SaveAbsorbHoldMs = 1600;
-        private const double SaveAbsorbFadeMs = 260;
-        private const double SaveButtonHeight = 50;
-
-        /// <summary>
-        /// WPF FlashSaveAbsorb (MainWindow.HeroFx.cs:702): the Save button's tick draws itself
-        /// (StrokeDashOffset 9 -> 0, 400ms ease-out), holds 1.6s and fades 260ms; one ripple ring
-        /// grows 14px past the button and fades over 520ms. Decoration only, off at MotionLevel Off;
-        /// every value ends at its XAML rest, so nothing needs reverting.
-        /// </summary>
-        internal void FlashSaveAbsorb()
-        {
-            try
-            {
-                if (!AmbientFxCanvas.Env.AllowTransitions) return;
-
-                if (Named<global::Avalonia.Controls.Shapes.Path>("SaveTick") is { } tick)
-                {
-                    // The draw ends on 0 as a local value, so the tick stays drawn after the
-                    // animation lets go, as WPF's held end value does; the next press restarts at 9.
-                    tick.StrokeDashOffset = 0;
-                    _ = new Animation
-                    {
-                        Duration = TimeSpan.FromMilliseconds(SaveTickDrawMs),
-                        Easing = new QuadraticEaseOut(),
-                        Children =
-                        {
-                            new KeyFrame { Cue = new Cue(0), Setters = { new Setter(global::Avalonia.Controls.Shapes.Shape.StrokeDashOffsetProperty, 9.0) } },
-                            new KeyFrame { Cue = new Cue(1), Setters = { new Setter(global::Avalonia.Controls.Shapes.Shape.StrokeDashOffsetProperty, 0.0) } },
-                        },
-                    }.RunAsync(tick);
-
-                    // One clock for show + hold + fade.
-                    double life = SaveAbsorbHoldMs + SaveAbsorbFadeMs;
-                    _ = new Animation
-                    {
-                        Duration = TimeSpan.FromMilliseconds(life),
-                        Children =
-                        {
-                            new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 1.0) } },
-                            new KeyFrame { Cue = new Cue(SaveAbsorbHoldMs / life), Setters = { new Setter(OpacityProperty, 1.0) } },
-                            new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 0.0) } },
-                        },
-                    }.RunAsync(tick);
-                }
-
-                if (Named<Border>("SaveRipple") is { } ripple)
-                {
-                    double width = Named<Control>("SaveAbsorbHost")?.Bounds.Width ?? 0;
-                    double gx = width <= 1 ? 1.0 : (width + SaveRippleGrowPx) / width;
-                    double gy = (SaveButtonHeight + SaveRippleGrowPx) / SaveButtonHeight;
-                    // P82: transforms animate through the Visual, never RunAsync on the transform.
-                    _ = new Animation
-                    {
-                        Duration = TimeSpan.FromMilliseconds(SaveRippleMs),
-                        Easing = new QuadraticEaseOut(),
-                        Children =
-                        {
-                            new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 0.75), new Setter(global::Avalonia.Media.ScaleTransform.ScaleXProperty, 1.0), new Setter(global::Avalonia.Media.ScaleTransform.ScaleYProperty, 1.0) } },
-                            new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 0.0), new Setter(global::Avalonia.Media.ScaleTransform.ScaleXProperty, gx), new Setter(global::Avalonia.Media.ScaleTransform.ScaleYProperty, gy) } },
-                        },
-                    }.RunAsync(ripple);
-                }
-            }
-            catch (Exception ex) { Log.Debug("FlashSaveAbsorb: {E}", ex.Message); }
-        }
+        // WPF FlashSaveAbsorb (MainWindow.HeroFx.cs:104-109,702-754) lives in MainShellWindow.HeroMoments.cs
+        // on the shared beat, stopped by panic (shell-hero) and on close.
 
         /// <summary>CelebrateLevelUp's FlashOverlay(XPBarFlashOverlay): 0 -> 1 over 250ms, auto-reversed.</summary>
         private void FlashLevelUp()

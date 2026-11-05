@@ -1,8 +1,11 @@
 using System;
+using System.IO;
+using Avalonia.Platform.Storage;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -23,8 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// <summary>
     /// SETTINGS · ACCOUNT, ported from the WPF head.
     ///
-    /// <para>Every card is live except cloud backup/restore and GDPR export (hidden until
-    /// ProfileSync's calls reach Core). Providers come from <c>AccountSeed</c>; the tier card asks
+    /// <para>Every card is live, including cloud backup/restore and GDPR export. Providers come from <c>AccountSeed</c>; the tier card asks
     /// <c>CoreAccount</c> exactly what WPF asks (<c>HasLabAccess</c> then <c>HasPremiumAccess</c>).</para>
     /// </summary>
     public partial class AccountSettingsSection : UserControl, IAppSettingsSection
@@ -52,6 +54,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             InitializeComponent();
 
             _tierCard = this.FindControl<Border>("AccountTierCard")!;
+            _tierCard.PointerReleased += async (_, e) =>
+            {
+                if (e.InitialPressMouseButton != MouseButton.Left || CoreAccount.IsLoggedIn || AccountSeed.SandboxWhitelisted) return;
+                e.Handled = true;
+                if (Shell is { } shell) await shell.OpenUnifiedLoginDialog();
+            };
             _tierBadge = this.FindControl<Border>("AccountTierBadge")!;
             _txtBadge = this.FindControl<IconGlyph>("TxtAccountTierBadge")!;
             _txtName = this.FindControl<TextBlock>("TxtAccountSectionName")!;
@@ -105,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             try
             {
+                _tierCard.Cursor = CoreAccount.IsLoggedIn || AccountSeed.SandboxWhitelisted ? null : new Cursor(StandardCursorType.Hand);
                 if (!CoreAccount.IsLoggedIn && !AccountSeed.SandboxWhitelisted)
                 {
                     _txtName.Text = Loc.Get("account_chip_sign_in");
@@ -256,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             linkDiscord.IsVisible = hasUnifiedId && !hasLinkedDiscord;
             // WPF BtnLinkDiscord_Click finally: the label comes back after a failed/cancelled link.
             if (linkDiscord.IsEnabled) Find<IconLabel>("TxtBtnLinkDiscord").Key = "btn_link_discord";
-            // WPF MainWindow.Patreon.cs:682-688. ponytail: BtnExportData stays collapsed (wire-views-settings-account-b-next).
+            // WPF MainWindow.Patreon.cs:682-688: cloud identity sections.
             Find<Border>("CloudSettingsBackupSection").IsVisible = hasUnifiedId;
             Find<Border>("DataPrivacySection").IsVisible = hasUnifiedId;
             if (hasUnifiedId) _ = UpdateBackupStatusAsync();
@@ -505,6 +514,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             label.Key = "btn_backing_up";
             try
             {
+                App.CloudAutoBackup?.NoteForced();   // WPF BackupSettingsAsync(force: true) stamps the debounce
                 if (await NewBackup().BackupAsync(CoreSettings.Current))
                 {
                     await Tell(Owner, Loc.Get("title_backup_complete"), Loc.Get("msg_settings_backed_up_to_cloud_successfully"));
@@ -587,9 +597,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
         }
 
-        // ponytail: GDPR export - ProfileSyncService.ExportDataAsync plus a save-file picker; the
-        // button stays collapsed until that transport reaches Core.
-        private void BtnExportData_Click(object? sender, RoutedEventArgs e) { }
+        // WPF MainWindow.CloudBackup.cs:191-243: download, ask where to save, then report.
+        internal static Func<Window?, Task<IStorageFile?>> PickExportFile = async owner => owner == null ? null :
+            await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = Loc.Get("title_save_data_export"),
+                SuggestedFileName = $"my-data-export-{DateTime.Now:yyyy-MM-dd}.json",
+                DefaultExtension = "json",
+                FileTypeChoices = new[] { new FilePickerFileType("JSON") { Patterns = new[] { "*.json" } } }
+            });
+
+        private async void BtnExportData_Click(object? sender, RoutedEventArgs e) => await Guard(ExportDataAsync());
+
+        internal async Task ExportDataAsync()
+        {
+            var button = Find<Button>("BtnExportData");
+            if (!button.IsEnabled) return;
+            var label = Find<TextBlock>("TxtBtnExportData");
+            button.IsEnabled = false;
+            label.Text = Loc.Get("btn_exporting");
+            try
+            {
+                var (success, error, json) = await NewBackup().ExportDataAsync(CoreSettings.Current);
+                if (!success || json == null)
+                {
+                    await Tell(Owner, Loc.Get("title_export_failed"), error ?? Loc.Get("msg_failed_to_export_data"));
+                    return;
+                }
+                using var file = await PickExportFile(Owner);
+                if (file == null) return;
+                await using (var stream = await file.OpenWriteAsync())
+                {
+                    stream.SetLength(0);
+                    await using var writer = new StreamWriter(stream);
+                    await writer.WriteAsync(json);
+                }
+                await Tell(Owner, Loc.Get("title_export_complete"), Loc.GetF("msg_data_exported_to_0", file.TryGetLocalPath() ?? file.Name));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Data export failed");
+                await Tell(Owner, Loc.Get("title_export_error"), Loc.GetF("msg_export_failed_0", ex.Message));
+            }
+            finally
+            {
+                button.IsEnabled = true;
+                label.Text = Loc.Get("btn_export_my_data");
+            }
+        }
 
         // Live: WPF used Process.Start with UseShellExecute, Avalonia's Launcher is the
         // cross-platform equivalent. Same two URLs MainWindow.CloudBackup.cs and

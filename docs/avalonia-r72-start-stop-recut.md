@@ -87,3 +87,9 @@ P2-1: ConfirmStopSession now stamps confirmed early stops, including the Session
 Validation: all three builds had 0 errors; Core passed 4640 with 6 existing skips; all 4 focused head tests passed before and after mutation. Removing the session stamp and inactive guard failed 2 tests (missing timestamp, extra player write); reverting teardown order separately failed with the tint still visible after a volume exception. Core guards and avalonia_docs passed. Sources restored in finally.
 
 CI 41207097915, Windows job 124554307217: ContentHitTestTests reported Awareness tutorial hit ScrollContentPresenter while the press reached the button. The pointer test sampled geometry during a finite tab entrance. It now calls CompleteTabTransition before rendering/probing; a held entrance clock and completed-entrance assertion prevent timing-dependent coverage. All hit/press and minimum-button assertions remain. Fail-proof without the settle call failed on active StudioTabView; fixed Release hit/transition/ramp tests passed 16, Core passed 4641 with 5 existing skips, guards/docs passed. Windows execution is left to CI; no live verification.
+
+## Linux beta 1 update (2026-11-05)
+
+Two Part B rows have landed since: Scheduler startup, poll and manual-stop memory with #3561
+(lane shell, SchedulerRun), and the Start hero charge/exhale/ignition/heartbeat with #3296
+(already on linux-beta/7.2.2). The other Part B rows stand.

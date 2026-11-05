@@ -352,9 +352,19 @@ public sealed class LanguageSelectorTests
                 Assert.Equal(diskBeforeExit, File.ReadAllText(settingsPath));
                 Thread.Sleep(650); // Beyond the production 500ms due time, without pumping the UI queue.
                 Assert.Equal(diskBeforeExit, File.ReadAllText(settingsPath));
+                var achievementsPath = Path.Combine(TestProfile.DirectoryPath, "achievements.json");
+                var achievements = Assert.IsType<AchievementEngine>(typeof(App)
+                    .GetProperty("Achievements", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null));
+                Assert.False(achievements.IsDirty);
+                Assert.Empty(achievements.Progress.UnlockedAchievements);
+                Assert.False(File.Exists(achievementsPath)); // idle startup must not create the file
+                var expectedProgress = System.Text.Json.JsonSerializer.Serialize(achievements.Progress);
                 lifetime.Shutdown();
-                // Nothing earned this run: the exit handler must not rewrite achievements.json.
-                Assert.False(File.Exists(Path.Combine(TestProfile.DirectoryPath, "achievements.json")));
+                // WPF AchievementService.cs:947-954 always flushes on exit, even a clean idle profile.
+                Assert.True(File.Exists(achievementsPath));
+                var savedProgress = Assert.IsType<AchievementProgress>(
+                    System.Text.Json.JsonSerializer.Deserialize<AchievementProgress>(File.ReadAllText(achievementsPath)));
+                Assert.Equal(expectedProgress, System.Text.Json.JsonSerializer.Serialize(savedProgress));
                 var reloaded = new SettingsService();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(0, Volatile.Read(ref queuedBeforeExit));
