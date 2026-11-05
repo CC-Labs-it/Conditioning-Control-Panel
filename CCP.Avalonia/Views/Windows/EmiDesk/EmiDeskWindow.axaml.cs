@@ -2296,6 +2296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopIdleBeats();
                 DisarmPet();
                 CancelChain();
+                CancelHold();
                 TearDownReactions();
 
                 try { OnTearDownCore(); }
@@ -2683,8 +2684,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>ponytail: needs App.EmiDesk.ResetOnboarding() - the QA gesture replay.</summary>
         private void ResetOnboarding() { }
 
-        /// <summary>ponytail: needs App.EmiDesk.Fire(...) - her own event bus.</summary>
-        private void FireDeskEvent(string name) { }
+        /// <summary>WPF EmiDeskService.cs:661: widget moments feed the shared line engine.</summary>
+        private void FireDeskEvent(string name) => EmiDeskService.Instance.Fire(name);
 
         // ---------------------------------------------------------------- teardown
 
@@ -2710,6 +2711,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownReactions();
                 TearDownVox();
                 CancelChain();
+                CancelHold();
                 SweepFx(all: true);
                 Close();
             }
@@ -2733,6 +2735,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelChain(); CancelHold();
             }
             catch (Exception ex)
             {
