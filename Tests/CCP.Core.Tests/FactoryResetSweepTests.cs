@@ -97,6 +97,11 @@ public sealed class FactoryResetSweepTests
         var move = body.IndexOf("File.Move(settingsPath, backupPath", StringComparison.Ordinal);
         var lastSweep = body.LastIndexOf("FactoryResetSweep.Delete(dir", StringComparison.Ordinal);
         Assert.True(seal >= 0 && move > seal && lastSweep > move, "seal, move aside, then sweep");
+        // baf86f0ac: disable the window, then leave off the UI thread; never Environment.Exit on it.
+        var disable = body.IndexOf("host.IsEnabled = false", StringComparison.Ordinal);
+        var exit = body.IndexOf("UiThreadExit.Begin(0)", StringComparison.Ordinal);
+        Assert.True(disable > lastSweep && exit > disable, "sweep, disable the window, then exit off the UI thread");
+        Assert.DoesNotContain("Environment.Exit(", body);
         Assert.DoesNotContain("SafeGlob(", src);
         Assert.Contains("FactoryResetSweep.RelaunchDelaySeconds", src);
     }
