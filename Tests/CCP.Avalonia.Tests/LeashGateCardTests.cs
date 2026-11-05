@@ -209,9 +209,9 @@ public sealed class LeashGateCardTests
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
     }
 
-    /// <summary>Nov 4 review, #4384: the remote overlay hid the browser before the gate came up, so the gate
-    /// saw nothing to hide. A controller leaving must not bring the browser back over Panic and Cut; the gate
-    /// hands it back when it goes. A tour still up keeps it hidden the same way.</summary>
+    /// <summary>Nov 4 review, #4384: a controller joining and leaving while the gate is up must not bring the
+    /// browser back over Panic and Cut; the gate hands it back when it goes. A tour still up keeps it hidden
+    /// the same way.</summary>
     [Fact]
     public void ControllerLeavingUnderTheGate_KeepsTheBrowserHidden_UntilTheGateGoes() => Run(punished: true, (shell, launcher, _) =>
     {
@@ -222,12 +222,13 @@ public sealed class LeashGateCardTests
         {
             var browser = shell.LeashBrowser!;
             var overlay = shell.Named<Border>("RemoteControlOverlay")!;
-            overlay.IsVisible = true;          // what ShowRemoteControlOverlay leaves behind
-            browser.IsVisible = false;
+            browser.IsVisible = true;
             PressTile(launcher);
             Assert.True(shell.LeashGate!.IsUp);
+            Assert.False(browser.IsVisible);
 
-            shell.HideRemoteControlOverlay();  // the controller leaves; the fade runs out
+            overlay.IsVisible = true;          // a controller joins over the gate (ShowRemoteControlOverlay)
+            shell.HideRemoteControlOverlay();  // and leaves; the fade runs out
             clock.Now += MainShellWindow.RemoteOverlayFadeOut.Ticks;
             shell.RemoteOverlayTick();
             Assert.False(overlay.IsVisible);
