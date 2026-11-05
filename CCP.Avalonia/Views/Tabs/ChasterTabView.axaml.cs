@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public ChasterTabView()
         {
             InitializeComponent();
+            HookLinkComet();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
             SlowTick.Tick += (_, _) => RefreshHero();
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
@@ -61,8 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LadderInit();
             NumbersInit();
             MenuInit();
-            TrailerInit();
             KeysInit();
+            TrailerInit();
             Refresh();
             LadderRenderSample();
         }
@@ -129,7 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             NumbersPanel.IsVisible = linked;
             MenuPanel.IsVisible = linked; // WPF: the menu and limits sit inside LinkedPanel (ChasterTabView.xaml:642)
             if (linked) { RefreshNumbers(); RefreshPresets(); }
-            if (linked) RefreshAdded(); else HideLadder();
+            if (linked) RefreshAdded(); else { HideLadder(); HideTrailer(); }
             SwitchPill.IsVisible = linked;
             PausePill.IsVisible = linked;
             PaintPause(CoreSettings.Current.ChasterPaused);
@@ -409,8 +410,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void ShowLinking(bool linking)
         {
+            _linking = linking;
             BtnLink.IsVisible = !linking;
             LinkingRow.IsVisible = linking;
+            RefreshLinkComet();
         }
 
         private async void BtnLink_Click(object? sender, RoutedEventArgs e)

@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreSettings.Save();
             Log.Information("[Chaster] prices reset to the table by the player");
             PaintStamps();
-            if (_trailerShown) OpenTrailer();
+            if (_trailerShown && _trailerRow != null) OpenTrailer(_trailerRow);
         }
     }
 }

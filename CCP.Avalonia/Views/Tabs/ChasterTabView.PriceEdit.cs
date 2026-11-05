@@ -152,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             PaintStamp(id);
             PaintMenuHelp();
-            if (_trailerShown && TrailerId == id) OpenTrailer();
+            if (_trailerShown && _trailerRow?.Tag as string == id) OpenTrailer(_trailerRow);
         }
     }
 }
