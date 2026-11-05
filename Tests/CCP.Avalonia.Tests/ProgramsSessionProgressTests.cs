@@ -109,6 +109,22 @@ public sealed class ProgramsSessionProgressTests
         Assert.Equal(Loc.Get("programs_session_other_running"), F<TextBlock>("TxtStartTodaySession").Text);
     });
 
+    /// <summary>WPF ProgramsTab.cs:2210-2214: "Start today's session" with the engine off is the user's own
+    /// START, so it ends the post-panic quiet (WPF StartEngineFromUser).</summary>
+    [Fact]
+    public Task StartTodaysSessionEndsThePostPanicQuiet() => Run(async (shell, _, _, _) =>
+    {
+        try
+        {
+            Assert.False(CoreEngine.IsRunning);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            await shell.StartProgramSessionAsync();
+            Assert.False(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
     private static Task Run(Func<MainShellWindow, ProgramsTabView, ProgramService, SessionRunner, Task> body) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
