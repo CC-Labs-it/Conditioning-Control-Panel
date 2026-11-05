@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void PaintOnlineMeter(OnlineMeterState st, DateTime now, DateTime reset)
         {
+            ToolTip.SetTip(OnlineMeterHelp, HelpText());
             OnlineMeterCard.IsVisible = st.Show;
             OnlineMeterStamped.IsVisible = st.ShowStampedLine;
             OnlineOfficialNote.IsVisible = st.ShowOfficialNote;
