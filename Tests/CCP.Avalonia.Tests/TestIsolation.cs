@@ -258,6 +258,8 @@ internal sealed class ProcessStateSnapshot
 
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
+                     || t == typeof(ConditioningControlPanel.Services.MergedAccountRecovery)
+                     || t == typeof(ConditioningControlPanel.Services.V2AuthService)
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 

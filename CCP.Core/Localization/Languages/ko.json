@@ -8212,5 +8212,8 @@
   "shop_item_bubbles_v2_name": "버블 v2",
   "shop_item_rt_bundle_1_name": "Racing Thoughts 번들 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts 번들 2",
-  "shop_item_rt_bundle_3_name": "Racing Thoughts 번들 3"
+  "shop_item_rt_bundle_3_name": "Racing Thoughts 번들 3",
+  "account_merged_signin_title": "계정이 통합되었습니다",
+  "account_merged_signin_summary": "계속하려면 다시 로그인하세요.",
+  "account_merged_signin_body": "두 계정이 하나로 통합되었습니다. 계속하려면 다시 로그인하세요.\n\n로컬 진행 상황은 유지됩니다."
 }

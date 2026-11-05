@@ -8212,5 +8212,8 @@
   "shop_item_bubbles_v2_name": "Bulles v2",
   "shop_item_rt_bundle_1_name": "Pack Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pack Racing Thoughts 2",
-  "shop_item_rt_bundle_3_name": "Pack Racing Thoughts 3"
+  "shop_item_rt_bundle_3_name": "Pack Racing Thoughts 3",
+  "account_merged_signin_title": "Vos comptes ont été fusionnés",
+  "account_merged_signin_summary": "Reconnectez-vous pour reprendre.",
+  "account_merged_signin_body": "Vos deux comptes ont été fusionnés. Reconnectez-vous pour reprendre.\n\nVotre progression locale est conservée."
 }

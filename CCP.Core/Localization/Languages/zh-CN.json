@@ -8721,5 +8721,8 @@
   "shop_item_bubbles_v2_name": "泡泡 v2",
   "shop_item_rt_bundle_1_name": "Racing Thoughts 合集 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts 合集 2",
-  "shop_item_rt_bundle_3_name": "Racing Thoughts 合集 3"
+  "shop_item_rt_bundle_3_name": "Racing Thoughts 合集 3",
+  "account_merged_signin_title": "你的账户已合并",
+  "account_merged_signin_summary": "请重新登录以继续。",
+  "account_merged_signin_body": "你的两个账户已合并为一个。请重新登录以继续。\n\n本地进度会保留。"
 }
