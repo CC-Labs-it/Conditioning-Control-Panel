@@ -1,20 +1,23 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
-using ConditioningControlPanel.Avalonia.Views.Dialogs;
-using ConditioningControlPanel.Services.Companion;
-using ConditioningControlPanel.Services;
-using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Input;
+using Avalonia.Automation;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 
-/// <summary>Expert editing happens on a detached copy. Closing the window changes nothing.</summary>
+/// <summary>WPF Services/Companion/PersonalityStudio.cs:15-205. Editing is detached until Save.</summary>
 internal static class PersonalityStudio
 {
     internal static PersonalityPreset Draft(PersonalityPreset source, CompanionPromptSettings? activeOverride = null)
@@ -25,7 +28,6 @@ internal static class PersonalityStudio
             Id = Guid.NewGuid().ToString("N"), Name = source.Name, Description = source.Description,
             IsBuiltIn = false, RequiresExplicitAcknowledgement = source.RequiresExplicitAcknowledgement,
             SampleLines = source.SampleLines?.ToList(),
-            // Only character text belongs in a preset. Never copy API keys, hosts or effect permissions.
             PromptSettings = new CompanionPromptSettings
             {
                 UseCustomPrompt = true, Personality = p.Personality, ExplicitReaction = p.ExplicitReaction,
@@ -35,26 +37,18 @@ internal static class PersonalityStudio
         };
     }
 
-    public static async System.Threading.Tasks.Task Show(Window owner)
-    {
-        await Create().ShowDialog<bool>(owner);
-    }
-
-    internal static Window Create(Func<Window, string, string, System.Threading.Tasks.Task<bool>>? confirmDelete = null)
+    public static async Task ShowAsync(Window owner)
     {
         var service = PersonalityService.Shared;
-        var settings = CoreSettings.Current;
+        var settings = CoreSettings.Service?.Current;
+        if (service == null || settings == null) return;
         var source = service.GetActivePreset();
         var overridden = settings.CompanionPrompt?.UseCustomPrompt == true;
         var draft = Draft(source, overridden ? settings.CompanionPrompt : null);
-        // One of the user's own: Save updates it in place and Delete is offered. Saving always
-        // added a copy before, so editing piled up same-named duplicates nothing could remove (#1481).
-        // Not while a community or hand-edited prompt holds the wire: the boxes then show THAT text,
-        // and saving it in place would overwrite the preset's own voice for good. That stays a copy.
-        var own = EditablePreset(source, settings.UserPersonalityPresets, overridden);
+        var own = overridden ? null : OwnPreset(source, settings.UserPersonalityPresets);
         var dialog = new Window
         {
-            Title = L("title"), Width = 660, Height = 650, MinWidth = 460, MinHeight = 400,
+            Name = "PersonalityStudio", Title = L("title"), Width = 660, Height = 650, MinWidth = 460, MinHeight = 400,
             WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
             Background = new SolidColorBrush(Color.FromRgb(22, 17, 32)), Foreground = Brushes.WhiteSmoke
         };
@@ -73,30 +67,29 @@ internal static class PersonalityStudio
         var extra = new StackPanel();
         var background = Field(extra, L("background"), draft.PromptSettings.KnowledgeBase, 1200, 90);
         var bounds = Field(extra, L("boundaries"), draft.PromptSettings.ExplicitReaction, 800, 70);
-        // What the companion says about the window in front. The studio copied it unseen, so a
-        // copy could never change it (#1404). Same label as the full editor's section.
         var awareness = Field(extra, Loc.Get("setting_screen_awareness_reactions"), draft.PromptSettings.ContextReactions, 1400, 110);
         advanced.Content = extra;
         form.Children.Add(advanced);
         var scroller = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(scroller, 1); grid.Children.Add(scroller);
-        // WPF placement at normal widths; use a second row when translations need it.
+        // WPF placement at normal widths; Delete moves to its own row when translations need it.
         var footer = new StudioFooter { Margin = new Thickness(0, 18, 0, 0) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
-        var cancel = new Button { Content = L("cancel"), IsCancel = true, Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 10, 0) };
-        var save = new Button { Content = L(own != null ? "update" : "save"), Padding = new Thickness(16, 8, 16, 8) };
-        cancel.Click += (_, _) => dialog.Close(false);
+        var cancel = new Button { Content = new TextBlock { Text = L("cancel") }, Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 10, 0) };
+        var save = new Button { Content = new TextBlock { Text = L(own != null ? "update" : "save") }, Padding = new Thickness(16, 8, 16, 8) };
         actions.Children.Add(cancel); actions.Children.Add(save);
         footer.Children.Add(actions);
         Grid.SetRow(footer, 2); grid.Children.Add(footer);
         if (own != null)
         {
-            var delete = new Button { Content = L("delete"), Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 10, 0) };
+            var delete = new Button { Content = new TextBlock { Text = L("delete") }, Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 10, 0) };
+            delete.Name = "Delete";
             delete.Click += async (_, _) =>
             {
-                var asked = await (confirmDelete ?? ((w, title, text) => MessageDialog.ConfirmAsync(w, title, text)))(dialog, L("title"), string.Format(L("delete_confirm"), own.Name));
+                var asked = await MessageDialog.ConfirmAsync(dialog, L("title"), string.Format(L("delete_confirm"), own.Name),
+                    okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
                 if (!asked || !service.DeletePreset(own.Id)) return;
-                CoreModsHooks.InvalidateStablePrompt?.Invoke();
+                BambiSprite.InvalidateStablePrompt();
                 dialog.Close();
             };
             footer.Children.Add(delete);
@@ -105,23 +98,22 @@ internal static class PersonalityStudio
         name.TextChanged += (_, _) => Validate(); voice.TextChanged += (_, _) => Validate(); Validate();
         save.Click += (_, _) =>
         {
-            draft.Name = (name.Text ?? "").Trim();
-            draft.PromptSettings.Personality = (voice.Text ?? "").Trim();
-            draft.PromptSettings.OutputRules = (style.Text ?? "").Trim();
-            draft.PromptSettings.KnowledgeBase = (background.Text ?? "").Trim();
-            draft.PromptSettings.ExplicitReaction = (bounds.Text ?? "").Trim();
-            draft.PromptSettings.ContextReactions = (awareness.Text ?? "").Trim();
-            draft.SampleLines = PersonalitySamples.Clean((samples.Text ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+            draft.Name = (name.Text ?? string.Empty).Trim();
+            draft.PromptSettings.Personality = (voice.Text ?? string.Empty).Trim();
+            draft.PromptSettings.OutputRules = (style.Text ?? string.Empty).Trim();
+            draft.PromptSettings.KnowledgeBase = (background.Text ?? string.Empty).Trim();
+            draft.PromptSettings.ExplicitReaction = (bounds.Text ?? string.Empty).Trim();
+            draft.PromptSettings.ContextReactions = (awareness.Text ?? string.Empty).Trim();
+            draft.SampleLines = PersonalitySamples.Clean((samples.Text ?? string.Empty).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
             if (own != null)
             {
                 own.Name = draft.Name;
                 own.PromptSettings = draft.PromptSettings;
                 own.SampleLines = draft.SampleLines;
                 own.ModifiedAt = DateTime.Now;
-                // Re-picking it saves settings and fences the old voice off the wire, as a new copy does.
                 if (service.SetActivePreset(own.Id))
                 {
-                    CoreModsHooks.InvalidateStablePrompt?.Invoke();
+                    BambiSprite.InvalidateStablePrompt();
                     dialog.Close(true);
                 }
                 return;
@@ -132,19 +124,22 @@ internal static class PersonalityStudio
                 settings.UserPersonalityPresets.Remove(draft);
                 return;
             }
-            CoreModsHooks.InvalidateStablePrompt?.Invoke();
+            BambiSprite.InvalidateStablePrompt();
             dialog.Close(true);
         };
+        cancel.Name = "Cancel"; save.Name = "Save";
+        name.Name = "Name"; voice.Name = "Voice"; style.Name = "Style"; samples.Name = "Samples";
+        background.Name = "Background"; bounds.Name = "Boundaries"; awareness.Name = "Awareness";
+        cancel.Click += (_, _) => dialog.Close(false);
+        dialog.KeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; dialog.Close(false); } };
         dialog.Content = grid;
-        return dialog;
+        await dialog.ShowDialog<bool>(owner);
     }
 
-    internal static TextBox Field(Panel panel, string label, string text, int max, double height)
+    private static TextBox Field(Panel panel, string label, string text, int max, double height)
     {
         panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 10, 0, 5) });
         var single = height <= SingleLine;
-        // A single line sizes to its text. A fixed 34 px with 8 px padding and a wrap left one
-        // clipped line behind a tiny scroll bar, so a typed name could not be read (#1481).
         var box = single
             ? new TextBox
             {
@@ -158,8 +153,8 @@ internal static class PersonalityStudio
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Brushes.Black, Background = Brushes.WhiteSmoke, Padding = new Thickness(8)
             };
-        ScrollViewer.SetVerticalScrollBarVisibility(box, ScrollBarVisibility.Auto);
-        global::Avalonia.Automation.AutomationProperties.SetName(box, label);
+        ScrollViewer.SetVerticalScrollBarVisibility(box, single ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
+        AutomationProperties.SetName(box, label);
         panel.Children.Add(box);
         return box;
     }
@@ -182,9 +177,7 @@ internal static class PersonalityStudio
     internal static PersonalityPreset? OwnPreset(PersonalityPreset? source, IEnumerable<PersonalityPreset>? userPresets)
         => source == null || source.IsBuiltIn ? null : userPresets?.FirstOrDefault(p => p.Id == source.Id);
 
-    internal static PersonalityPreset? EditablePreset(PersonalityPreset source, IEnumerable<PersonalityPreset> users, bool overridden)
-        => overridden ? null : OwnPreset(source, users);
-
+    /// <summary>Actions on the right, Delete on the left; Delete takes a row above when both do not fit.</summary>
     internal sealed class StudioFooter : Panel
     {
         protected override Size MeasureOverride(Size availableSize)
