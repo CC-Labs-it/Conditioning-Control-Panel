@@ -197,6 +197,36 @@ namespace ConditioningControlPanel.Avalonia
                         Check((ex & (Win32Overlay.WsExTransparent | Win32Overlay.WsExNoActivate)) == 0 && (ex & Win32Overlay.OverlayBits) == Win32Overlay.OverlayBits,
                             "SetClickThrough(false) clears TRANSPARENT|NOACTIVATE, keeps LAYERED|TOOLWINDOW");
                     }
+                    // Native read-back for the field's actual Place path, not Window.Topmost.
+                    // WPF ChaosFieldFxOverlay.cs:162; ChaosWindowZ.cs:35,47-53.
+                    bool savedPin = CoreSettings.Current.ChaosPinOnTop;
+                    try
+                    {
+                        foreach (bool pinned in new[] { false, true })
+                        {
+                            CoreSettings.Current.ChaosPinOnTop = pinned;
+                            Views.Overlays.ChaosFieldFxOverlay.EnsureCreated();
+                            var field = Views.Overlays.ChaosFieldFxOverlay.Active;
+                            var hwnd = field?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                            Check(hwnd != IntPtr.Zero, "field HWND created");
+                            if (hwnd == IntPtr.Zero) continue;
+                            void CheckBand(string phase) => Check(
+                                ((Win32Overlay.GetWindowLong(hwnd, -20) & Win32Overlay.WsExTopmost) != 0) == pinned,
+                                $"field native TOPMOST={pinned} {phase}");
+                            CheckBand("after hidden placement");
+                            Views.Overlays.ChaosFieldFxOverlay.Ripple(new Point(10, 10), 20, 500);
+                            CheckBand("after show");
+                            field!.Step(double.MaxValue);
+                            Views.Overlays.ChaosFieldFxOverlay.Ripple(new Point(10, 10), 20, 500);
+                            CheckBand("after re-show");
+                            Views.Overlays.ChaosFieldFxOverlay.CloseActive();
+                        }
+                    }
+                    finally
+                    {
+                        Views.Overlays.ChaosFieldFxOverlay.CloseActive();
+                        CoreSettings.Current.ChaosPinOnTop = savedPin;
+                    }
                 }
                 catch (Exception e) { Console.Error.WriteLine("overlay-check threw: " + e); fails++; }
                 finally { lifetime.Shutdown(); }

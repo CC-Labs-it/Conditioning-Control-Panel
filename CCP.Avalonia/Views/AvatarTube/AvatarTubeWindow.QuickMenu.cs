@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     public partial class AvatarTubeWindow
     {
         // Static initialization can precede the UI thread; fixed menu colors must be thread-independent.
+        // WPF AvatarTubeWindow.ChatInput.cs:1453-1492 creates these brushes on its UI thread.
         private static readonly IBrush MenuRed = new ImmutableSolidColorBrush(Color.FromRgb(255, 99, 71));
         private static readonly IBrush MenuGreen = new ImmutableSolidColorBrush(Color.FromRgb(144, 238, 144));
         private static readonly IBrush MenuPatreon = new ImmutableSolidColorBrush(Color.FromRgb(155, 89, 182));
