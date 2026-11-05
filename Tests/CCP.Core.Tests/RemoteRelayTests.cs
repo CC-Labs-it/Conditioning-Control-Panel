@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -46,6 +47,44 @@ public sealed class RemoteRelayTests
 
     private static void Poll(FakeRelay f, string json) =>
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
+
+    [Fact]
+    public async Task Status_publishes_available_sessions_and_live_progress()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        var custom = new Session { Id = "custom-test", Name = "Custom test", Icon = "C", DurationMinutes = 3, Difficulty = SessionDifficulty.Hard, IsAvailable = true, Source = SessionSource.Custom, Phases = { new SessionPhase { Name = "First" } } };
+        var unavailable = new Session { Id = "unavailable-test", IsAvailable = false };
+        var runner = new SessionRunner(new SessionLogService());
+        r.SessionsProvider = () => Session.GetAllSessions().Concat(new[] { custom, unavailable });
+        r.SessionRunnerProvider = () => runner;
+        await r.StartAsync("light");
+        try
+        {
+            await r.PushStatusNowAsync();
+            var idle = f.Seen.Last(x => x.Path == "/v2/remote/status").Body;
+            var list = (JArray)idle["available_sessions"]!;
+            Assert.Contains(list, x => (string?)x["id"] == custom.Id && (string?)x["name"] == custom.GetModeAwareName() && (string?)x["icon"] == "C" && (int?)x["duration_minutes"] == 3 && (string?)x["difficulty"] == "Hard");
+            Assert.Contains(list, x => Session.GetAllSessions().Any(s => s.IsAvailable && s.Id == (string?)x["id"]));
+            Assert.DoesNotContain(list, x => (string?)x["id"] == unavailable.Id || Session.GetAllSessions().Any(s => !s.IsAvailable && s.Id == (string?)x["id"]));
+            Assert.Equal(JTokenType.Null, idle["session_info"]!.Type);
+            runner.Start(custom);
+            await r.PushStatusNowAsync();
+            var running = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["session_info"]!;
+            Assert.Equal(custom.GetModeAwareName(), (string?)running["name"]);
+            Assert.Equal("C", (string?)running["icon"]);
+            Assert.Equal(180, (int?)running["total_seconds"]);
+            Assert.False((bool)running["is_paused"]!);
+            Assert.Equal(custom.GetModeAwarePhaseName(custom.Phases[0]), (string?)running["current_phase"]);
+            runner.Pause();
+            runner._pausedElapsed = TimeSpan.FromSeconds(17);
+            await r.PushStatusNowAsync();
+            var paused = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["session_info"]!;
+            Assert.True((bool)paused["is_paused"]!);
+            Assert.Equal(17, (int?)paused["elapsed_seconds"]);
+        }
+        finally { runner.Stop(); CoreEngine.Stop(); CoreSession.IsSessionRunningProvider = null; }
+    }
 
     [Fact]
     public void A_sandbox_never_reaches_the_real_relay()

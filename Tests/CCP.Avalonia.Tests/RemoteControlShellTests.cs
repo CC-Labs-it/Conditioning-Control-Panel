@@ -72,6 +72,9 @@ public sealed class RemoteControlShellTests
         try
         {
             shell = new MainShellWindow();
+            Assert.NotNull(relay.SessionsProvider);
+            Assert.Contains(relay.SessionsProvider!(), s => s.IsAvailable);
+            Assert.NotNull(relay.SessionRunnerProvider);
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             var overlay = shell.Named<Border>("RemoteControlOverlay")!;

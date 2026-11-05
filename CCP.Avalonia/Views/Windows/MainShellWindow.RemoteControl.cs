@@ -43,6 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeRemoteControlOverlay()
         {
             var r = RemoteControlTabView.Relay.Value;
+            r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
+                .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
+            r.SessionRunnerProvider = () => App.Sessions;
             EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
             EventHandler ended = (_, _) => Dispatcher.UIThread.Post(OnRemoteSessionEnded);
@@ -53,6 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.CommandReceived += command;
             Closed += (_, _) =>
             {
+                r.SessionsProvider = null;
+                r.SessionRunnerProvider = null;
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
