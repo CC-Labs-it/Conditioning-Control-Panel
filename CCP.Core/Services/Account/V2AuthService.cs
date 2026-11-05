@@ -196,6 +196,9 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("curve_epoch")]
             public int? CurveEpoch { get; set; }
 
+            [JsonProperty("total_conditioning_minutes")]
+            public double? TotalConditioningMinutes { get; set; }
+
             [JsonProperty("current_season")]
             public string? CurrentSeason { get; set; }
 
@@ -739,7 +742,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Send heartbeat to update online status
         /// </summary>
-        public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false)
+        public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false, Action<string>? onBody = null)
         {
             try
             {
@@ -749,6 +752,7 @@ namespace ConditioningControlPanel.Services
                 var response = await _http.SendAsync(request);
 
                 if (await TryHandleMergedAsync(response)) return false;
+                if (response.IsSuccessStatusCode && onBody != null) onBody(await response.Content.ReadAsStringAsync());
                 return response.IsSuccessStatusCode;
             }
             catch

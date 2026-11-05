@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -95,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             StopDemoLoop();
             if (_liveSubscribed) { Platform.WebcamTracker.Instance.OnBlink -= OnStagePreviewBlink; _liveSubscribed = false; }
+            _liveImageSeq++;   // a still decoding now must not land on a parked page
             StopStageVideo();
             SyncTick();
         }
@@ -186,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!live)
             {
                 if (_liveSubscribed) { Platform.WebcamTracker.Instance.OnBlink -= OnStagePreviewBlink; _liveSubscribed = false; }
+                _liveImageSeq++;   // WPF :414: a live still decoding now must not land on the demo
                 StopStageVideo();
                 StartDemoLoop();
                 return;
@@ -213,8 +216,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return _livePool;
         }
 
+        /// <summary>Bumped by every live swap, so a decode that lands after a newer blink (or a video
+        /// pick, or leaving live) is dropped instead of covering it (WPF MainWindow.BlinkTrainer.cs:529).</summary>
+        private int _liveImageSeq;
+
+        /// <summary>The still decode in flight, or null; tests pump the dispatcher until it lands.</summary>
+        internal Task? LiveDecode { get; private set; }
+
         /// <summary>WPF OnBlinkTrainerStagePreviewBlink + ApplyBlinkTrainerLiveImage / ApplyBlinkTrainerLiveVideo:
-        /// a hard-cut swap, or a muted looping video over both images.</summary>
+        /// a hard-cut swap, or a muted looping video over both images. The still decodes OFF the UI
+        /// thread (WPF cdda883ac, ccp-bugs #1512: an inline decode held the UI 0.6-1 s per blink).</summary>
         internal void OnStagePreviewBlink()
         {
             try
@@ -223,9 +234,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var path = LivePool(s).PickRandom(_liveLast);
                 if (path == null) return;
                 _liveLast = path;
+                var seq = ++_liveImageSeq;
                 if (BlinkTrainerAssetPool.IsVideo(path)) { ShowStageVideo(path); return; }
+                LiveDecode = ApplyLiveImageAsync(path, seq);
+            }
+            catch (Exception ex) { Log.Warning(ex, "OnBlinkTrainerStagePreviewBlink failed"); }
+        }
+
+        private async Task ApplyLiveImageAsync(string path, int seq)
+        {
+            Bitmap bmp;
+            try { bmp = await Task.Run(() => new Bitmap(path)); }
+            catch (Exception ex) { Log.Warning(ex, "BlinkTrainer live image load failed for {Path}", path); return; }
+            if (seq != _liveImageSeq || !_liveSubscribed) { bmp.Dispose(); return; }
+            try
+            {
                 StopStageVideo();
-                var bmp = new Bitmap(path);
                 var incoming = _demoUsingA ? BlinkTrainerStageImageB : BlinkTrainerStageImageA;
                 var outgoing = _demoUsingA ? BlinkTrainerStageImageA : BlinkTrainerStageImageB;
                 // Two live frames at most: the one fading out and the new one.
@@ -236,7 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 SetOpacityNow(outgoing, 0);
                 _demoUsingA = !_demoUsingA;
             }
-            catch (Exception ex) { Log.Warning(ex, "OnBlinkTrainerStagePreviewBlink failed"); }
+            catch (Exception ex) { Log.Warning(ex, "BlinkTrainer live image swap failed"); }
         }
 
         private VlcPlayer? _stagePlayer;

@@ -10,6 +10,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Descent;
@@ -23,7 +24,6 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private static readonly IBrush GoldBrush = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(FuseGold);
         private static readonly IBrush NeutralDigits = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(0xC9, 0xC4, 0xD6));
         private static readonly IBrush FaintDigits = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromArgb(0x8A, 0xC9, 0xC4, 0xD6));
-        private static readonly FontFamily Mono = new("Cascadia Mono, Consolas, Courier New, monospace");
 
         private const double BurstPeakDegrees = 8.0, RareBurstPeriodSeconds = 20.0, FrequentBurstPeriodSeconds = 9.0;
         private const double TrembleDegrees = 3.0, TrembleHalfCycleSeconds = 0.45, ViolentHalfCycleSeconds = 0.11;
@@ -96,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             // The open-rail readout: a plain TextBlock, so CacheNavRailParts fades it with the rail.
             _label = new TextBlock
             {
-                FontFamily = Mono, FontSize = 12, Foreground = GoldBrush, Opacity = 0, IsHitTestVisible = false,
+                [!TextBlock.FontFamilyProperty] = new DynamicResourceExtension("Font.Mono"), FontSize = 12, Foreground = GoldBrush, Opacity = 0, IsHitTestVisible = false,
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 8, 0), Text = string.Empty,
             };
             SetColumn(_label, 1);
@@ -207,7 +207,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private Border BuildTooltip()
         {
             if (_tip != null) return _tip;
-            _tipDigits = new TextBlock { FontFamily = Mono, FontSize = 15, Foreground = NeutralDigits, HorizontalAlignment = HorizontalAlignment.Center };
+            _tipDigits = new TextBlock { [!TextBlock.FontFamilyProperty] = new DynamicResourceExtension("Font.Mono"), FontSize = 15, Foreground = NeutralDigits, HorizontalAlignment = HorizontalAlignment.Center };
             _tipPresence = new TextBlock { FontSize = 10, Margin = new Thickness(0, 4, 0, 0), Foreground = FaintDigits, HorizontalAlignment = HorizontalAlignment.Center, IsVisible = false };
             var stack = new StackPanel();
             stack.Children.Add(_tipDigits);
