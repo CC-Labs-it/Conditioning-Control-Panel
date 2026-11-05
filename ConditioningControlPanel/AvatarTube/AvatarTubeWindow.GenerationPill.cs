@@ -33,9 +33,11 @@ namespace ConditioningControlPanel
                 var pill = BtnAvatarGeneration;
                 if (pill == null) return;
 
-                bool hasRow = EmoteGenerationFolder(App.Mods?.ActiveModId, AvatarGenerationRule.V2) != null;
+                // RainV2Gate off (7.2.0): no pill at all, not even its glitch slot.
+                bool hasRow = RainV2Gate.On
+                    && EmoteGenerationFolder(App.Mods?.ActiveModId, AvatarGenerationRule.V2) != null;
                 bool glitchUp = PossessionGlitchLayer?.Visibility == Visibility.Visible;
-                bool show = AvatarGenerationRule.PillVisible(hasRow, _portraitMode, glitchUp);
+                bool show = AvatarGenerationRule.PillVisible(RainV2Gate.On, hasRow, _portraitMode, glitchUp);
                 // The glitch is a blink: keep the pill's slot (Hidden) so the plate does not jump.
                 var target = show ? Visibility.Visible
                            : (hasRow && !_portraitMode && glitchUp) ? Visibility.Hidden
@@ -104,7 +106,7 @@ namespace ConditioningControlPanel
             // A click, never a drag start (Window_MouseLeftButtonDown) or a poke.
             e.Handled = true;
             var s = App.Settings?.Current;
-            if (s == null || _genPillTarget != Visibility.Visible) return;
+            if (s == null || _genPillTarget != Visibility.Visible || !RainV2Gate.On) return;
 
             s.AvatarGeneration = AvatarGenerationRule.Toggle(s.AvatarGeneration);
             try { App.Settings?.Save(); }
