@@ -259,6 +259,17 @@
     </UserControl.Resources>
 
     <UserControl.Styles>
+        <Style Selector="Border.lbdepth">
+            <Setter Property="BorderBrush" Value="{DynamicResource DepthFloatRim}"/>
+        </Style>
+        <Style Selector="Border.lbdepth.me">
+            <Setter Property="Background" Value="{DynamicResource DepthPressedShade}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DepthPressedBevel}"/>
+            <Setter Property="RenderTransform"><TranslateTransform Y="1"/></Setter>
+        </Style>
+        <Style Selector="Rectangle#LbRowFloat.me">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
         <!-- == the WPF ItemContainerStyle DataTriggers, moved onto the row == -->
         <Style Selector="Border.lbrow">
             <Setter Property="Background" Value="Transparent"/>
@@ -710,6 +721,8 @@
             </Border>
 
             <Grid Grid.Row="1">
+                <Border x:Name="LbWellFloor" CornerRadius="10" IsHitTestVisible="False"
+                        MaxWidth="{StaticResource LbBlockWidth}" Background="{DynamicResource DepthWellFloorBrush}"/>
                 <ListBox x:Name="LstLeaderboard" Background="Transparent" DoubleTapped="LstLeaderboard_DoubleTapped"
                          BorderThickness="0" Margin="0,1,0,2" Padding="0"
                          MaxWidth="{StaticResource LbBlockWidth}" HorizontalAlignment="Stretch"
@@ -723,8 +736,14 @@
                              Padding/Margin here are density-critical: they set the row pitch, and
                              the pitch is what decides how many rows survive above the you-bar. -->
                         <DataTemplate DataType="tabs:LeaderboardRow" x:DataType="tabs:LeaderboardRow">
+                            <Grid Margin="4,0,21,0">
+                            <Rectangle x:Name="LbRowFloat" Classes.me="{Binding IsCurrentUser}" Height="4"
+                                       VerticalAlignment="Bottom" Margin="10,0,10,-3" IsHitTestVisible="False"
+                                       Fill="{DynamicResource DepthFloatBand}"/>
+                            <Border x:Name="LbRowCard" Classes="lbdepth" Classes.me="{Binding IsCurrentUser}"
+                                    CornerRadius="9" BorderThickness="1">
                             <Border Classes="lbrow" Classes.og="{Binding IsSeason0Og}" Classes.me="{Binding IsCurrentUser}"
-                                    CornerRadius="9" Padding="10,3" Margin="4,0,21,0">
+                                    CornerRadius="9" Padding="9,2">
                                 <ToolTip.Tip>
                                     <StackPanel MaxWidth="300">
                                         <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="13"
@@ -893,6 +912,8 @@
                                     </StackPanel>
                                 </Grid>
                             </Border>
+                            </Border>
+                            </Grid>
                         </DataTemplate>
 
                         <!-- ============================= tier band ============================= -->
@@ -929,6 +950,11 @@
                         </DataTemplate>
                     </ListBox.DataTemplates>
                 </ListBox>
+                <Grid x:Name="LbWellBands" IsHitTestVisible="False" MaxWidth="{StaticResource LbBlockWidth}">
+                    <Rectangle x:Name="LbWellTop" Height="9" VerticalAlignment="Top" RadiusX="10" RadiusY="10" Fill="{DynamicResource DepthWellTop}"/>
+                    <Rectangle x:Name="LbWellLeft" Width="6" HorizontalAlignment="Left" Fill="{DynamicResource DepthWellLeft}"/>
+                    <Rectangle x:Name="LbWellFoot" Height="1" VerticalAlignment="Bottom" Margin="10,0" Fill="{DynamicResource DepthWellFoot}"/>
+                </Grid>
 
                 <!-- Sits just under the legend, NOT vertically centred: centred, it floated in
                      ~500px of void and read as a rendering accident rather than as the answer
