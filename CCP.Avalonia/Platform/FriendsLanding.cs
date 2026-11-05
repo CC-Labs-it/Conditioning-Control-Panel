@@ -144,6 +144,8 @@ internal static partial class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
@@ -256,6 +258,8 @@ internal static partial class FriendsLanding
         if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
+        if (item.Destination == InviteDestination.Race && !OpenRace(item.Room))
+        { FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Declined)); return; }
         FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
         Sfx("chaos/reveal_chime.mp3", 0.20f, "friends-join");   // WPF FriendsSfx.Join
         Join(item);
@@ -263,7 +267,7 @@ internal static partial class FriendsLanding
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
     /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    internal static bool CanJoin(InboxItem item) => item.Destination is InviteDestination.Ramp or InviteDestination.Race;
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -275,11 +279,17 @@ internal static partial class FriendsLanding
     };
 
     /// <summary>WPF Join :522. Ramp: link to Ramp lives on the Ramp card in the Studio tab.</summary>
-    private static void Join(InboxItem item)
+    internal static void Join(InboxItem item)
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
     }
+
+    internal static Func<string?, bool> OpenRace { get; set; } = room =>
+    {
+        try { return GameWindow.LaunchFriendRace(room) != null; }
+        catch (Exception ex) { Log.Warning(ex, "[Friends] race launch failed"); return false; }
+    };
 
     internal static FriendsSfxGate SfxGate = new();
     // WPF FriendsSfx.cs:23-24, through the existing master-volume and gap gate.
@@ -287,7 +297,7 @@ internal static partial class FriendsLanding
     internal static void DrawerClose() => Sfx("chaos/ui_unequip.mp3", 0.10f, "friends-close");
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
-    private static void Sfx(string rel, float scale, string tag, bool incoming = false)
+    internal static void Sfx(string rel, float scale, string tag, bool incoming = false)
     {
         try
         {

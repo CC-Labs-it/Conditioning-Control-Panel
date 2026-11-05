@@ -6,7 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section, no lock-day chip, no juice (.Juice.cs), no bell
+// ponytail: no leash section, no lock-day chip, no shared row juice, no bell
 // (the corner notices are not on this head). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
@@ -105,7 +105,7 @@ public sealed partial class FriendsDrawer : Border
         Grid.SetRow(_addBox, 3);
         Grid.SetRow(_foot, 4);
         root.Children.AddRange(new Control[] { _head, _ask, scroll, _addBox, _foot });
-        Child = root;
+        Child = new Grid { Children = { root, _linkFx } };
         // WPF BuildAddBox: friend code, token or pasted first-party link.
         (_codeBox.FontFamily, _codeBox.Tag) = (Mono, "friends-code-box");
         ToolTip.SetTip(_codeBox, Loc.Get("friends_add_hint"));
