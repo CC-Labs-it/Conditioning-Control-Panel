@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             RaceBrowser.Click += (_, _) =>
             {
                 CancelRaceFetch();
-                RaceDownload.IsEnabled = _raceFetch == null;
+                RaceDownload.IsEnabled = _raceFetch == null && RaceEngineFetch != null;
                 bool opened;
                 try { opened = OpenRaceBrowser(RaceBrowserUrl); } catch { opened = false; }
                 if (opened) Close();
@@ -53,6 +53,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             } };
             Content = new Border { Padding = new Thickness(28), Child = card, HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center };
+            if (RaceEngineFetch == null)
+            {
+                // No engine fetch in this build (the owned Electron host is not in it yet): say so before
+                // anyone presses Download, and leave the two labelled fallbacks.
+                RaceDownload.IsEnabled = false;
+                RaceStatus.Text = Loc.Get("rt_engine_unavailable");
+                return;
+            }
             try { if (RaceEngineFetch?.IsInstalled == true) RaceStatus.Text = Loc.Get("rt_engine_start_failed"); }
             catch { RaceStatus.Text = Loc.Get("rt_engine_unavailable"); }
         }

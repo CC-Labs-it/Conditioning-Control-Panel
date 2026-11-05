@@ -314,6 +314,17 @@ public sealed class PanicSurfacesTests
         Assert.True(stale.Count == 0, "Stale allowlist entries: " + string.Join(", ", stale));
     }
 
+    /// <summary>Owner rule (Linux beta 1) and WPF agree: panic never cancels an in-flight Sparkles place claim.
+    /// The claim settles on its own (same claimId, the server replays one receipt), so a panic on a finish screen
+    /// never drops a payout. Guards the "sparkles-claims" stop #3853 proposed (Nov 4 review).</summary>
+    [Fact]
+    public void PanicNeverCancelsSparklesPlaceClaims()
+    {
+        Assert.DoesNotContain(PanicSurfaces.All, s => s.Id.Contains("sparkles", StringComparison.OrdinalIgnoreCase));
+        var registry = Code(File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia/Views/Windows/PanicSurfaces.cs")));
+        Assert.DoesNotContain("Sparkles", registry);
+    }
+
     private static string RepoRoot([CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }

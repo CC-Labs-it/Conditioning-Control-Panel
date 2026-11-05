@@ -143,6 +143,35 @@ public sealed partial class GameWindowTests
         Assert.False(GameWindow.IsAnyOpen());
     });
 
+    /// <summary>Linux beta 1 ships no engine fetch (the owned Electron host waits on the bench reply): the card says
+    /// so before anyone presses Download and leaves only the two labelled fallbacks, which still work.</summary>
+    [Fact]
+    public void FirstRace_NoEngineInThisBuild_CardSaysSoAndKeepsTheFallbacks() => RunGlassroad("1", (_, _, _) =>
+    {
+        var (oldFetch, oldOpen, oldLanguage) = (GameWindow.RaceEngineFetch, GameWindow.OpenRaceBrowser, LocalizationManager.Instance.CurrentLanguage);
+        try
+        {
+            LocalizationManager.Instance.Initialize("en");
+            GameWindow.UseLinuxRaceCard = () => true;
+            GameWindow.RaceEngineFetch = null;
+            var w = GameWindow.Launch("race")!;
+            Assert.Null(w.PageUrl);
+            Assert.False(w.RaceDownload.IsEnabled);
+            Assert.Equal("Race engine download is unavailable in this build.", w.RaceStatus.Text);
+            Assert.True(w.RaceSlower.IsEnabled && w.RaceBrowser.IsEnabled);
+            var card = Assert.IsType<StackPanel>(Assert.IsType<Border>(w.Content).Child);
+            Assert.Equal("Panic cannot close a browser tab.", ((TextBlock)card.Children[5]).Text);
+            GameWindow.OpenRaceBrowser = _ => false;
+            Click(w.RaceBrowser);
+            Assert.False(w.RaceDownload.IsEnabled);   // a failed browser open never re-offers a download
+            Click(w.RaceSlower);
+            Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
+            GameWindow.CloseAllForPanic();
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally { GameWindow.RaceEngineFetch = oldFetch; GameWindow.OpenRaceBrowser = oldOpen; LocalizationManager.Instance.Initialize(oldLanguage); }
+    });
+
     [Fact]
     public void FirstRace_BrowserUsesFixedUrlAndReportsFailure() => FirstRace((w, fake) =>
     {
