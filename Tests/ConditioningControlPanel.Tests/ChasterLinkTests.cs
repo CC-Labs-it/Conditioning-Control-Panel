@@ -135,6 +135,28 @@ public class ChasterLinkTests : IDisposable
     }
 
     [Fact]
+    public async Task Completed_callbacks_remain_readable_after_listener_teardown()
+    {
+        // A headers-only browser can read the body after LinkAsync has disposed the listener.
+        // Repeat with one pooled client so a connection from a completed flow cannot be reused.
+        for (var i = 0; i < 32; i++)
+        {
+            var (flow, state) = Start();
+            using var request = new HttpRequestMessage(HttpMethod.Get, Callback + "?error=denied&state=" + state);
+            using var response = await _browser.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            Assert.Equal(LinkOutcome.Denied, await flow);
+            Assert.False(_service.IsLinking);
+            response.EnsureSuccessStatusCode();
+            Assert.True(response.Headers.ConnectionClose, "a completed callback must close its connection before listener teardown");
+            var page = await response.Content.ReadAsStringAsync();
+            Assert.Contains("Not linked", page);
+            Assert.EndsWith("</body></html>", page);
+            Assert.False(_service.IsLinked);
+            Assert.Empty(_broker.Bodies);
+        }
+    }
+
+    [Fact]
     public async Task One_flow_at_a_time_and_a_cancel_reads_as_a_cancel()
     {
         var (flow, _) = Start();

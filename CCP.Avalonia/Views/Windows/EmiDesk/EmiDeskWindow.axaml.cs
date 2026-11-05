@@ -258,6 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private PixelPoint _dragStartScreen;
         private PixelPoint _dragStartPosition;
         private bool _dragging, _dragMoved;
+        private IPointer? _dragPointer;
         private bool _resizing;
         private PixelPoint _resizeStartScreen;
         private double _resizeStartWidth;
@@ -1176,6 +1177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _dragStartScreen = this.PointToScreen(e.GetPosition(this));
                 _dragStartPosition = Position;
                 BeginWobble();
+                _dragPointer = e.Pointer;
                 e.Pointer.Capture(_bodyRoot);
                 e.Handled = true;
             }
@@ -1189,6 +1191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void OnBodyPointerMoved(object? sender, PointerEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; }
             try
             {
                 if (!_dragging)
@@ -1296,6 +1299,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         private void OnBodyRightClick(PointerReleasedEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; }
             try
             {
                 e.Handled = true;
@@ -1318,6 +1322,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void EndDragHold()
         {
+            _dragPointer = null;
             if (!_dragging) return;
             _dragging = false;
             ChromeHold(EmiChromeHold.Drag, false);
@@ -1334,6 +1339,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         private void OnGearClick(object? sender, RoutedEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; }
             try
             {
                 if (InputLocked || _transiting) return;
@@ -1361,6 +1367,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         private void OnHelpClick(object? sender, RoutedEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; }
             try
             {
                 if (InputLocked || _transiting) return;
@@ -2156,7 +2163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// Bring her in: smoke bomb, CRT power-on, then the <c>wake</c> chain. Input is locked for
         /// the whole transition so a click cannot land mid-CRT and open a ring onto a 2 % tall EMI.
         /// </summary>
-        public void RunSummon(Action? done = null)
+        public void RunSummon(Action? done = null, bool presentation = false)
         {
             try
             {
@@ -2202,8 +2209,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                         _summonDone = done;
                         _summonChainLive = true;
                         PlayChain("wake", FinishSummon);
-                    });
-                });
+                    }, presentation);
+                }, presentation);
             }
             catch (Exception ex)
             {
@@ -2512,27 +2519,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <c>Application.Current.Dispatcher.HasShutdownStarted</c>, and <c>_closingForGood</c> is
         /// this head's twin of it - ShutDown and the Closed handler both set it.
         /// </summary>
-        private void After(int ms, Action act)
+        internal static TimeProvider FxClock = TimeProvider.System;   // tests step it
+        private readonly HashSet<ITimer> _fxTimers = new();           // roots each pending step
+
+        private void After(int ms, Action act, bool presentation = false)
         {
+            int epoch = _presentationEpoch;
             try
             {
-                DispatcherTimer.RunOnce(() =>
+                ITimer? timer = null;
+                timer = FxClock.CreateTimer(_ => Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
+                        if (timer == null || !_fxTimers.Remove(timer)) return;   // already delivered
+                        timer.Dispose();
                         if (_closingForGood) return;
+                        // WPF Fx.cs:447: old FX cannot take the body back from the stage or its return.
+                        if (epoch != _presentationEpoch || (PresentationActive && !presentation)) return;
                         act();
                     }
                     catch (Exception ex)
                     {
                         Log.Debug(ex, "[EmiDesk] deferred FX step failed");
                     }
-                }, TimeSpan.FromMilliseconds(Math.Max(1, ms)), DispatcherPriority.Background);
+                }, DispatcherPriority.Background), null,
+                    TimeSpan.FromMilliseconds(Math.Max(1, ms)), Timeout.InfiniteTimeSpan);
+                _fxTimers.Add(timer);
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "[EmiDesk] After({Ms}) failed", ms);
             }
+        }
+
+        /// <summary>Drop every pending FX step so a closed window roots no timers.</summary>
+        private void CancelFxTimers()
+        {
+            foreach (var t in _fxTimers) t.Dispose();
+            _fxTimers.Clear();
         }
 
         // ---------------------------------------------------------------- sibling-partial stubs
@@ -2647,6 +2672,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownVox();
                 CancelChain();
                 SweepFx(all: true);
+                CancelFxTimers();
                 Close();
             }
             catch (Exception ex)
@@ -2668,6 +2694,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelFxTimers();
             }
             catch (Exception ex)
             {
