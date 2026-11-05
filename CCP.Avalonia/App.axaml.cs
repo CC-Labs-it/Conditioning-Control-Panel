@@ -76,15 +76,7 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>WPF App.xaml.cs:3196-3206: arm before the shell; a missing tube leaves the line retryable.</summary>
         internal static void StartDescentCountdown()
         {
-            DescentCountdown = new Services.Descent.DescentCountdownService
-            {
-                Speaker = line =>
-                {
-                    if (DescentTube() is not { } avatar) return false;
-                    avatar.GigglePriority(line, playSound: false, aiGenerated: false);
-                    return true;
-                },
-            };
+            DescentCountdown = CreateDescentCountdown();
             DescentCountdown.Start();
         }
 
@@ -206,6 +198,29 @@ namespace ConditioningControlPanel.Avalonia
                     Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f), tag);
             }
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
+        }
+
+        // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
+        internal static void SeedHapticPlaybackTime()
+        {
+            Services.Haptics.FunScriptService.SubscribePlaybackTime =
+                Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
+        }
+
+        // WPF App.xaml.cs:3199: false before the avatar exists leaves the phase retryable.
+        // findAvatar is a test seam only: Application.ApplicationLifetime cannot be set after init,
+        // so a headless test cannot make AvatarTubeWindow.Live non-null.
+        internal static Services.Descent.DescentCountdownService CreateDescentCountdown(
+            Func<Views.AvatarTube.AvatarTubeWindow?>? findAvatar = null) => new()
+        {
+            Speaker = line => SpeakCountdownLine(line, (findAvatar ?? DescentTube)()),
+        };
+
+        internal static bool SpeakCountdownLine(string line, Views.AvatarTube.AvatarTubeWindow? avatar)
+        {
+            if (avatar is null) return false;
+            avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+            return true;
         }
 
         /// <summary>The mod service (WPF App.Mods), or null on the headless render path.</summary>
@@ -687,9 +702,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // WPF App.xaml.cs:3218: funscripts follow the primary video playhead.
-                Services.Haptics.FunScriptService.SubscribePlaybackTime =
-                    Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
+                // WPF App.xaml.cs:3218: seed the clock before constructing the haptic service.
+                SeedHapticPlaybackTime();
                 // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
