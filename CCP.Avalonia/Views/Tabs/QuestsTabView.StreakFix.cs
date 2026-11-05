@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _isStreakFixMode, _streakFixInFlight;
         private IDisposable? _fixStatusTimer;
         private AppSettings? _watchedSettings;
+        private QuestDefinitionService? _watchedDefinitions;
 
         /// <summary>Test seams: the server spend and the Yes/No question.</summary>
         internal Func<DateTime, Task<(bool success, string? error, int? credits)>> SpendStreakFix = day => new StreakFix().UseAsync(day);
@@ -52,15 +53,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void WatchStreakFixCharges(bool attached)
         {
             if (_watchedSettings != null) _watchedSettings.PropertyChanged -= OnSettingsChangedForQuests;
+            if (_watchedDefinitions != null) _watchedDefinitions.QuestDefinitionsUpdated -= OnQuestDefinitionsUpdated;
+            _watchedDefinitions = attached ? App.QuestDefinitions : null;
+            if (_watchedDefinitions != null) _watchedDefinitions.QuestDefinitionsUpdated += OnQuestDefinitionsUpdated;
             _watchedSettings = attached ? CoreSettings.Current : null;
             if (_watchedSettings != null) _watchedSettings.PropertyChanged += OnSettingsChangedForQuests;
         }
 
         private void OnSettingsChangedForQuests(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName != nameof(AppSettings.StreakFixCharges)) return;
-            Dispatcher.UIThread.Post(() => { if (App.Quests != null) RefreshQuestUI(); });   // sync adoption runs off-thread
+            if (e.PropertyName is not (nameof(AppSettings.StreakFixCharges) or nameof(AppSettings.IsSissyMode))) return;
+            // WPF MainWindow.xaml.cs:3482 resolves mode art; MainWindow.QuestsTab.cs:135 clears cached art.
+            var modeChanged = e.PropertyName == nameof(AppSettings.IsSissyMode);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_watchedSettings == null) return;
+                if (modeChanged) ClearQuestArtCache();
+                if (App.Quests != null) RefreshQuestUI();
+            });   // sync adoption runs off-thread
         }
+
+        // WPF App.xaml.cs:2787 updates the catalog; MainWindow.UiUpdates.cs:308 repaints the visible board.
+        private void OnQuestDefinitionsUpdated() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_watchedDefinitions != null && IsVisible && App.Quests != null) RefreshQuestUI();
+        });
 
         /// <summary>RefreshStreakCalendar's tail. The button shows for EVERYONE: fixes are a charge balance every
         /// account earns, owning oopsie_insurance only buys the automatic spend.</summary>

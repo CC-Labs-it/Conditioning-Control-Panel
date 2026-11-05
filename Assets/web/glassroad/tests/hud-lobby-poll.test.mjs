@@ -54,7 +54,7 @@ test('the lobby card: no poll while hidden, backs off on a quiet list, any press
   await at(0);
   assert.equal(calls, 1, 'the first list goes at once');
   assert.ok(d.parts.extra.innerHTML.includes('Ana'));
-  assert.ok(!d.parts.extra.innerHTML.includes('OtherCourse'), 'foreign-course rooms stay out of the selected-course list');
+  assert.ok(d.parts.extra.innerHTML.includes('OtherCourse') && d.parts.extra.innerHTML.includes('<b>Mainframe</b>'), 'a table on another course is listed, under its course');
   await at(15000); assert.equal(calls, 2);
   await at(15000); assert.equal(calls, 3, 'two answers alike: still 15 s');
   await at(15000); assert.equal(calls, 3, 'now 30 s');
@@ -117,4 +117,24 @@ test('a late cancelled seat uses its original course transport after the next co
   lobby.dispose();configureLobby({api:{leave:async id=>newLeaves.push(id)}});
   grant({roomId:'abcdefabcdef',ticket:'late'});await flush();
   assert.deepEqual(oldLeaves,['abcdefabcdef']);assert.deepEqual(newLeaves,[]);
+});
+
+test('a table opens on the course the host picked, from any course page', async () => {
+  const d = fakeDom();
+  const bodies = [], parts = d.parts;
+  const api = { list: async () => ({ rows: [], serverMs: 1 }), open: async (b) => { bodies.push(b); return null; } };
+  const lobby = createLobby(parts);
+  lobby.use({ api, track: 'threshold', identity: { displayName: 'Me', tier: 2 }, looks: async () => ({}) });
+  lobby.show({ view: 'home' });
+  lobby.act({ dataset: { act: 'lb-host', id: 'open' } });
+  assert.ok(parts.extra.innerHTML.includes('Course'), 'the host form has the row');
+  assert.ok(parts.extra.innerHTML.includes('Threshold'), 'it starts on the page course');
+  const button = (act, key) => ({ dataset: { act, key } });
+  lobby.act(button('lb-hstep', 'track')); lobby.act(button('lb-hstep', 'track'));
+  assert.ok(parts.extra.innerHTML.includes('The Keep'));
+  lobby.act(button('lb-open'));
+  await flush();
+  assert.equal(bodies[0].track, 'keep');
+  assert.equal(bodies[0].laps, 2, 'The Keep brings its own lap count');
+  lobby.dispose?.();
 });
