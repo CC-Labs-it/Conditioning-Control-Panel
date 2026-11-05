@@ -111,10 +111,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
-        private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
+        internal static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
             int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
+            // WPF FlashService.cs:1674: FlashDisplayed once per batch, right after its spawns are queued.
+            if (flashes.Count > 0) Platform.BarkHead.Engine?.Raise("FlashDisplayed");
             var refused = false;
             for (var i = 0; i < flashes.Count; i++)
             {

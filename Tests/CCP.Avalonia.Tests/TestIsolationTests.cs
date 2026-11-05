@@ -10,6 +10,14 @@ namespace CCP.Avalonia.Tests;
 /// seams that leaked before (PLAYBOOK P02) and really puts each one back.</summary>
 public class TestIsolationTests
 {
+    [Fact]
+    public void HeadlessBootstrapIncludesShippedFontFallbacks() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Comic Sans MS, Segoe UI", "Consolas, Courier New" })
+            Assert.NotNull(new global::Avalonia.Media.Typeface(family,
+                weight: global::Avalonia.Media.FontWeight.Black).GlyphTypeface);
+    });
+
     /// <summary>The first test in a testhost decides the Avalonia platform for every later one. A setup
     /// with headless drawing (no Skia) made later text measure differently and bitmaps read garbage, so
     /// ChasterRaffleCardLayout, BlinkTrainerSession and EmiBookDemo failed only after it (flake-layout).</summary>
@@ -50,6 +58,17 @@ public class TestIsolationTests
         });
 
     [Fact]
+    public void TheFirstTestGetsTheApplicationsFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.NotNull(global::Avalonia.Application.Current);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+            // Shell construction measures this label before any test can repair a missing font setup.
+            Assert.NotNull(new ConditioningControlPanel.Avalonia.Controls.PremiumSpark());
+        });
+
+    [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
@@ -57,6 +76,7 @@ public class TestIsolationTests
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
     [InlineData(typeof(CoreMods), nameof(CoreMods.MakeModAwareProvider))]
+    [InlineData(typeof(AvApp), nameof(AvApp.Notifications))]
     [InlineData(typeof(AvApp), nameof(AvApp.Ai))]
     [InlineData(typeof(AvApp), nameof(AvApp.Brain))]
     [InlineData(typeof(ConditioningControlPanel.Services.LockdownService), nameof(ConditioningControlPanel.Services.LockdownService.Current))]
@@ -73,10 +93,12 @@ public class TestIsolationTests
         var before = hadFile ? File.ReadAllText(settingsFile) : null;
         var user = CoreAccount.UnifiedUserId;
         var provider = CoreSettings.ServiceProvider;
+        var notifications = AvApp.Notifications;
         var chat = CoreSettings.Current.AiChatEnabled;
 
         var snapshot = ProcessStateSnapshot.Take();
         CoreAccount.UnifiedUserId = "leaked-user";
+        AvApp.Notifications = new();
         CoreSettings.Current.AiChatEnabled = !chat;
         CoreSettings.ServiceProvider = () => null;
         File.WriteAllText(settingsFile, "{\"leaked\":true}");
@@ -87,6 +109,7 @@ public class TestIsolationTests
 
         Assert.Equal(user, CoreAccount.UnifiedUserId);
         Assert.Same(provider, CoreSettings.ServiceProvider);
+        Assert.Same(notifications, AvApp.Notifications);
         Assert.Equal(chat, CoreSettings.Current.AiChatEnabled);
         Assert.Equal(hadFile, File.Exists(settingsFile));
         if (hadFile) Assert.Equal(before, File.ReadAllText(settingsFile));
