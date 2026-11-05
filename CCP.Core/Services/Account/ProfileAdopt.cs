@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Descent;
 using Newtonsoft.Json.Linq;
@@ -158,7 +160,7 @@ namespace ConditioningControlPanel.Services
         /// The <c>/v2/user/sync</c> response rules a head that only knows level/xp/season acts on, in WPF's order
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
         /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
-        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), no skills union, recap or
+        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), recap or
         /// SeasonResetPending on level_reset - add each with its feature. Does not save.
         /// </summary>
         public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
@@ -184,6 +186,8 @@ namespace ConditioningControlPanel.Services
                     settings.PlayerLevel = user.Level;
                     settings.PlayerXP = XpCurve.GetCurrentLevelXP(user.Level, user.Xp, Epoch(settings));
                     settings.HighestLevelEver = user.HighestLevelEver;
+                    settings.UnlockedSkills = ((response["unlocked_skills"] as JArray)?.Values<string>().OfType<string>() ?? Enumerable.Empty<string>())
+                        .Union(settings.UnlockedSkills ?? new List<string>()).ToList();
                 }
             }
             else if (user.Level > 0)
