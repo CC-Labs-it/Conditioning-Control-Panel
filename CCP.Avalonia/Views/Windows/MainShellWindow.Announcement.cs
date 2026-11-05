@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
+                _serverAnnouncementShownThisLaunch = true; // WPF Marquee.cs:913: claim even when parked.
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
