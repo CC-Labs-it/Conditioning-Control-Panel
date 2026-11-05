@@ -116,9 +116,7 @@ namespace ConditioningControlPanel.Services
         {
             if (IsRunning) throw new InvalidOperationException("A session is already running. Stop it first.");
             if (!CoreEngine.IsRunning) CoreEngine.Start();
-            // SessionEngine.cs:223 (#1304): the session owns Mind Wipe, so the global one the engine
-            // just started does not play through it. ponytail: the session's own escalating Mind Wipe
-            // (StartSession) is not ported; a session plays none.
+            // SessionEngine.cs:207-230: the session owns Mind Wipe, including its delayed start.
             CoreMindWipe.Stop();
 
             var s = CoreSettings.Current;
@@ -159,6 +157,12 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Log.Warning(ex, "[Session] Settings journal not written"); }
             }
             Apply(session.Settings, s);
+
+            // WPF SessionEngine.cs:213-228: escalating Mind Wipe now or at its minute.
+            var mw = session.Settings;
+            if (mw.MindWipeEnabled)
+                StartAt("mind wipe", mw.MindWipeStartMinute,
+                    () => CoreMindWipe.StartSession(mw.MindWipeBaseMultiplier, mw.MindWipeVolume / 100.0), () => { });
 
             // SessionEngine.cs:198: raised at start whenever admitted (WPF does not read the start
             // minute here either; the Tick re-raise below is the delayed-start path).
@@ -266,6 +270,7 @@ namespace ConditioningControlPanel.Services
             LockCardScheduler.Instance.Stop();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
+            CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Step("pause:clocks", () => Ticked?.Invoke());
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
@@ -285,6 +290,9 @@ namespace ConditioningControlPanel.Services
             if (ss.SubliminalEnabled && !_deferred.IsPending("subliminal")) CoreSubliminal.Start();
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
+            // WPF SessionEngine.cs:575 resumes with plain Start, not StartSession.
+            if (ss.MindWipeEnabled && !_deferred.IsPending("mind wipe"))
+                CoreMindWipe.Start(ss.MindWipeBaseMultiplier, ss.MindWipeVolume / 100.0);
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
             var minutes = Elapsed.TotalMinutes;
@@ -296,10 +304,12 @@ namespace ConditioningControlPanel.Services
         }
 
         // A user START brought global features back. Restore the session's pending starts and
-        // lock-card window. This runner has no session Mind Wipe, so the global one stays off.
+        // lock-card window. The session owns Mind Wipe (SessionEngine.cs:207-230): the global one the
+        // engine start brought back goes off first, then Resume restarts the session's own when it is due.
         public void ResumeAfterEngineStart()
         {
             if (!SessionClockSafety.StartResumesParkedSession(CoreEngine.IsRunning, IsRunning, IsPaused)) return;
+            Step("resume:mind-wipe", CoreMindWipe.Stop);
             Step("resume:features", Resume);
             foreach (var name in _deferred.PendingNames.Distinct().ToList())
                 Step("resume:" + name, () =>
@@ -318,7 +328,6 @@ namespace ConditioningControlPanel.Services
                     LockCardScheduler.Instance.Stop();
                     LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
                 });
-            Step("resume:mind-wipe", CoreMindWipe.Stop);
         }
 
         private void StartAt(string name, int minute, Action start, Action stop)
@@ -522,6 +531,7 @@ namespace ConditioningControlPanel.Services
             _timer?.Dispose();
             _timer = null;
             _deferred.Clear();
+            Step("stop:mind-wipe", CoreMindWipe.Stop);   // WPF SessionEngine.cs:368
             Step("stop:pop-quiz", () => CoreEngine.PopQuiz?.Stop());   // SessionEngine.cs:372
             Step("stop:corner-gif", () => CloseCornerGif(handBack: true));   // SessionEngine.cs:356
 

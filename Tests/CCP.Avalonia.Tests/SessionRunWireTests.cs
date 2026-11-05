@@ -1,4 +1,7 @@
+using System;
 using System.Linq;
+using Avalonia.Input;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -22,13 +25,89 @@ namespace CCP.Avalonia.Tests;
 /// and opens the Ended Early recap by itself.</summary>
 public sealed class SessionRunWireTests
 {
+    [Theory]
+    [InlineData(true, "Yes, stop session")] // WPF MainWindow.Presets.cs:2098
+    [InlineData(false, "Stop the session")] // WPF MainWindow.StartStop.cs:85
+    public async Task StopConfirmUsesWpfCopyAndNoKeepsTheSessionRunning(bool presets, string yesText)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            try
+            {
+                shell.Show();
+                var session = new Session { Id = "stop_copy", Name = "Stop copy", DurationMinutes = 60 };
+                runner.Start(session);
+                foreach (var answer in new[] { "no", "enter-no", "close", "yes" })
+                {
+                    // Drive both entry points so swapped or shared keys cannot hide in the helper.
+                    if (presets) shell.BtnStartSession_Click(null);
+                    else shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                    var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                    var no = dialog.FindControl<Button>("BtnCancel")!;
+                    var yes = dialog.FindControl<Button>("BtnOk")!;
+                    Assert.Equal("Keep going", Assert.IsType<TextBlock>(no.Content).Text);
+                    Assert.Equal(yesText, Assert.IsType<TextBlock>(yes.Content).Text);
+                    Assert.False(no.IsDefault || yes.IsDefault || no.IsCancel || yes.IsCancel);
+                    // WPF ShowStyledDialog does not focus Yes: stray keys cannot end a session.
+                    dialog.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                    Assert.True(dialog.IsVisible, "Enter on opening must leave the stop dialog open");
+                    dialog.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                    Assert.True(dialog.IsVisible, "Releasing Enter must leave the stop dialog open");
+                    Assert.True(runner.IsRunning);
+                    dialog.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+                    Assert.True(dialog.IsVisible, "Space on opening must leave the stop dialog open");
+                    dialog.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+                    Assert.True(dialog.IsVisible, "Releasing Space must leave the stop dialog open");
+                    Assert.True(runner.IsRunning);
+                    dialog.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+                    Assert.True(dialog.IsVisible);
+                    Assert.True(runner.IsRunning);
+                    if (answer == "enter-no")
+                    {
+                        no.Focus();
+                        dialog.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                    }
+                    else if (answer == "close") dialog.Close();
+                    else (answer == "no" ? no : yes).RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                    // The async-void entry point must settle before judging its result.
+                    var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    Dispatcher.UIThread.Post(() => settled.SetResult(), DispatcherPriority.Background);
+                    await settled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                    Assert.False(dialog.IsVisible);
+                    Assert.Equal(answer != "yes", runner.IsRunning);
+                    if (answer != "yes")
+                    {
+                        Assert.Same(session, runner.CurrentSession);
+                        Assert.False(runner.IsPaused);
+                    }
+                }
+            }
+            finally
+            {
+                foreach (var dialog in shell.OwnedWindows.ToArray()) dialog.Close();
+                await Task.Yield(); // drain confirmation continuations even when an assertion fails
+                runner.Stop();
+                CoreEngine.Stop();
+                AvApp.Sessions = null;
+                CoreSession.IsSessionRunningProvider = null;
+                shell.Close();
+            }
+        });
+    }
+
     [Fact]
     public async Task StartLocksAndLabelsTrayStopPausesResumeRestartsStopOpensTheRecap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
