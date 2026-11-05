@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
                 ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
-                // WPF LauncherCatalogue :241: Lab tier (or the daily-free drop); GameWindow.Launch runs DemandLab.
+                // WPF LauncherCatalogue :241: Basic (or the daily-free drop); GameWindow.Launch runs DemandPremium.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
 
@@ -326,6 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 bool running = CoreEngine.IsRunning;
+                RefreshPanelComet();
                 StatusText.Text = running
                     ? Loc.GetF("launcher_panel_running", (CoreEngine.StartedUtc ?? DateTime.UtcNow).ToLocalTime().ToString("HH:mm"))
                     : Loc.Get("launcher_panel_idle");
@@ -558,6 +559,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BuildTiles()
         {
+            ClearHoverComet();
             StopWanderingSheen();
             GamesGrid.Children.Clear();
             _revealedAtBuild.Clear();
@@ -600,11 +602,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             double old = Bounds.Height > 0 ? Bounds.Height : Height;
             double grown = LauncherGridLayout.FitWindowHeight(old, available, gridHeight, wa.Height / scale);
             if (grown <= old + 0.5) return;
-            int top = Position.Y - (int)Math.Round((grown - old) * scale / 2);
-            int maxTop = wa.Bottom - (int)Math.Ceiling(grown * scale);
-            Height = grown;
-            Position = new PixelPoint(Position.X, Math.Max(wa.Y, Math.Min(top, maxTop)));
-            Log.Debug("[Launcher] grew {Old:0} -> {New:0} px to seat every tile row", old, grown);
+            // WPF 7.2.2 #1548 (LauncherPlacement.GrowWithin): one placement in pixels, kept wholly inside this
+            // monitor's work area on both axes, so the grown window never straddles a monitor seam.
+            double w = Bounds.Width > 0 ? Bounds.Width : Width;
+            var placed = LauncherPlacement.GrowWithin(
+                new PxRect(Position.X, Position.Y, LauncherPlacement.ToPx(w, scale), LauncherPlacement.ToPx(old, scale)),
+                new PxRect(wa.X, wa.Y, wa.Width, wa.Height), LauncherPlacement.ToPx(grown, scale));
+            Height = placed.Height / scale;
+            if (placed.Width < LauncherPlacement.ToPx(w, scale)) Width = placed.Width / scale;
+            Position = new PixelPoint(placed.Left, placed.Top);
+            Log.Debug("[Launcher] grew {Old:0} -> {New:0} px to seat every tile row (placed {X},{Y} {W}x{H}px)",
+                old, grown, placed.Left, placed.Top, placed.Width, placed.Height);
         }
 
         private Border CreateTile(LauncherCard card)
