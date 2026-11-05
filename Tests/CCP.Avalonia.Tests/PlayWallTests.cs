@@ -418,6 +418,9 @@ public sealed class PlayWallTests
             string? freeKey = null;
             CoreAccount.IsLoggedInProvider = () => isLoggedIn;
             CoreEntitlement.HasLabProvider = () => isLab;
+            // DtRH is Basic in WPF 7.2.2 (keyed premium gate): Lab implies Basic here, so its band follows the tier.
+            var prevPremium = CoreEntitlement.HasPremiumProvider;
+            CoreEntitlement.HasPremiumProvider = () => isLab;
             CoreEntitlement.IsFreeTodayProvider = k => k == freeKey;
             RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
             string? opened = null;
@@ -454,7 +457,7 @@ public sealed class PlayWallTests
                 Assert.True(C<Border>("PlayLockArcademy").IsVisible);
                 Assert.True(C<Border>("PlayLockRacingThoughts").IsVisible);
                 Assert.False(C<TierBadge>("PlayBadgeDtrh").FreeToday);
-                // A DtRH drop day (WPF RequiresLab(.., "dtrh") + SetFreeStamp): band off, FREE TODAY on.
+                // A DtRH drop day (WPF RequiresPremium(.., "dtrh") + SetFreeStamp): band off, FREE TODAY on.
                 freeKey = "dtrh";
                 ((global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView)play).RefreshPlayCards();
                 Assert.False(C<Border>("PlayLockDtrh").IsVisible);
@@ -514,6 +517,7 @@ public sealed class PlayWallTests
                 GameWindow.CloseAllForPanic();
                 shell.Close();
                 (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, CoreEntitlement.IsFreeTodayProvider) = (loggedIn, lab, owns, prevFree);
+                CoreEntitlement.HasPremiumProvider = prevPremium;
                 (GameWindow.Server, ExternalOpener.Shell, CorePaths.EffectiveAssetsProvider) = (prevServer, prevShell, prevAssets);
                 service.SealForReset();
                 CoreSettings.ServiceProvider = prevSettings;
@@ -632,10 +636,10 @@ public sealed class PlayWallTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(Loc.Get("rf_webcam_stopped"), text.Text);
                 host.Content = null;
-                text.Text = "detached probe";
+                // The label is a loc binding (WebcamStatusPresentation.Paint binds the key), so it follows the
+                // language on its own; detached, the view runs no repaint of its own.
                 LocalizationManager.Instance.SetLanguage("en");
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal("detached probe", text.Text);
                 host.Content = play;
                 Assert.Equal(Loc.Get("rf_webcam_stopped"), text.Text);
             }

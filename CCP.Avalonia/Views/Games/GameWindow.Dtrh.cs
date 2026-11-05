@@ -70,21 +70,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) return Open.FirstOrDefault(w => w.IsDtrh && w.IsActive);
         }
 
-        internal static Action<TimeSpan, Action> DtrhScheduleClose = (delay, close) => DispatcherTimer.RunOnce(close, delay);
-
-        // WPF CloseActive (:250): let a ready page settle its run before the watchdog closes it.
-        private void CloseDtrhForPanic()
-        {
-            if (!DtrhReady) { Close(); return; }
-            _dtrhExiting = true;
-            try
-            {
-                Post(new { type = "end-run", reason = "host" });
-                DtrhScheduleClose(TimeSpan.FromMilliseconds(1200), () => { if (!_closing) Close(); });
-            }
-            catch { Close(); throw; }
-        }
-
         // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
 
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>

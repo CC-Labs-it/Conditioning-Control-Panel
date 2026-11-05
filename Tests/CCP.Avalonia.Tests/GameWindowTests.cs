@@ -1116,31 +1116,6 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
-    public void Dtrh_PanicForcesCloseAfterWatchdog() => RunDtrh(lab: true, (shell, xp, runs, _) =>
-    {
-        var old = GameWindow.DtrhScheduleClose;
-        Action? close = null;
-        TimeSpan delay = default;
-        try
-        {
-            GameWindow.DtrhScheduleClose = (d, callback) => { delay = d; close = callback; };
-            var w = GameWindow.Launch("dtrh")!;
-            w.HandleMessage("{\"type\":\"ready\"}");
-            w.HandleMessage("{\"type\":\"run-started\"}");
-            w.HandleMessage("{\"type\":\"run-progress\",\"score\":100,\"durationSec\":180}");
-            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
-            Assert.True(w.IsVisible);
-            Assert.Equal(TimeSpan.FromMilliseconds(1200), delay);
-            Assert.NotNull(close);
-            close();
-            Assert.False(w.IsVisible);
-            Assert.Single(xp);
-            Assert.Single(runs);
-        }
-        finally { GameWindow.DtrhScheduleClose = old; }
-    });
-
-    [Fact]
     public void Dtrh_BasicAndDailyGiftAgreeAcrossDoorsAndPayout() => RunDtrh(lab: false, (shell, _, _, denied) =>
     {
         bool premium = false;
