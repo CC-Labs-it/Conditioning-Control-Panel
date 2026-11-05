@@ -302,6 +302,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 Children = { _crtScale, _squashScale, _landShift, _wobbleRotate, _moveShift }
             };
+            ((TransformGroup)_bodyRoot.RenderTransform).Changed += (_, _) => ApplyInputRegion();
+            _bodyRoot.LayoutUpdated += (_, _) => ApplyInputRegion();
             _faceView.RenderTransform = _gazeShift;
 
             _bodyRoot.PointerPressed += OnBodyPointerPressed;
@@ -351,6 +353,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // layered-window compositor bug and has no X11 twin.
             ScalingChanged += OnScalingSettled;
             Closed += OnClosedCleanup;
+            Opened += (_, _) => ApplyInputRegion();
+            // WPF Bubble.cs:666/757 opens the bubble layer to clicks only while the ask chips show.
+            _bubbleCanvas.PropertyChanged += (_, e) => { if (e.Property == IsHitTestVisibleProperty) ApplyInputRegion(); };
 
             ApplyBodyWidth(_bodyWidth);
             SetPose("idle");
@@ -387,6 +392,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
+                ApplyInputRegion();
                 ClampIntoWorkArea();
                 SavePlacement();
             }
@@ -499,6 +505,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // A plate in her hand mid-resize moves with her. No-ops when she is holding nothing,
                 // which is always on this head.
                 LayoutProp();
+                ApplyInputRegion();
 
                 Resized?.Invoke(this, _bodyWidth);
             }
