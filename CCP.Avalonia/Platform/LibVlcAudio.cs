@@ -214,6 +214,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return voice.Play() ? voice : null;
         }
 
+        // WPF AudioService.PlaySound: unlike a one-shot cue, a muted sound remains live for unmute.
+        internal MindWipePlayer.IVoice? PlaySound(string path, float volume,
+            Action<TimeSpan> started, Action finished)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+            var voice = NewVoice(path, finished);
+            voice.Started = ms => started(TimeSpan.FromMilliseconds(ms));
+            voice.Volume = volume;
+            return voice.Play() ? voice : null;
+        }
+
         // WPF QuizWindow.xaml.cs:1191-1227, using its sequential decoded loop (:41-54).
         internal static Action<MediaPlayer>? ConfigureQuizDrone;
         internal MindWipePlayer.IVoice? PlayQuizDrone(string path, double volume, Action onEnded)

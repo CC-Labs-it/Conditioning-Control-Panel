@@ -117,6 +117,7 @@ public sealed class PanicSurfacesTests
         "friend-notices", "knock-cards",
         "leash-task",
         "lock-cards",
+        "companion-audio",
         "mantra",
         "quiz",
         "panic-quiet",
@@ -156,6 +157,7 @@ public sealed class PanicSurfacesTests
     /// carry an ordering constraint belong here; register anything else with one line in PanicSurfaces.</summary>
     private static readonly (string First, string Then, string Why)[] Before =
     {
+        ("companion-audio", "engine", "App.xaml.cs:1839 stops the Audio action before engine teardown"),
         // Avalonia decision (PanicSurfaces.cs "intake" comment): say-it loops end before the capture abort reads as silence.
         ("intake", "voice-capture", "intake loops end before the mic abort"),
         // decisions "Panic <-> mic": capture and the command chain end before anything can react to them.
