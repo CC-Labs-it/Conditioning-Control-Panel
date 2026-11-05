@@ -351,6 +351,8 @@
   "chaster_each": "{0} cada",
   "chaster_price_edit_tip": "Clique para definir seu próprio tempo. Deixe vazio para {0}.",
   "chaster_price_edit_locked": "Os tempos podem ser mudados enquanto nenhum cadeado estiver ativo.",
+  "chaster_price_warn_big": "É muito. Mais de uma hora cada vez.",
+  "chaster_price_warn_day": "Seu limite do dia é {0}, então isto lança no máximo isso.",
   "chaster_bill_header": "Esta rodada",
   "chaster_bill_empty": "Nada ainda.",
   "chaster_bill_pushed": "Enviado ao cadeado: {0}",

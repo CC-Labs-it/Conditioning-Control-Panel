@@ -356,6 +356,8 @@
   "chaster_each": "每次 {0}",
   "chaster_price_edit_tip": "点击设置你自己的时间。留空则为{0}。",
   "chaster_price_edit_locked": "没有生效的锁时可以修改时间。",
+  "chaster_price_warn_big": "这很多。每次超过一小时。",
+  "chaster_price_warn_day": "你的每日上限是 {0}，所以最多只记这么多。",
   "chaster_bill_header": "本轮",
   "chaster_bill_empty": "还没有。",
   "chaster_bill_pushed": "已发到锁上：{0}",

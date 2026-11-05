@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Views.Tabs
     public partial class ChasterTabView
     {
         private readonly Dictionary<string, TextBlock> _stamps = new();
+        private readonly Dictionary<string, (FrameworkElement Where, TextBlock Warn)> _warnings = new();
         private TextBox? _stampEditor;
         private string? _editingId;
 
@@ -61,12 +62,38 @@ namespace ConditioningControlPanel.Views.Tabs
             var edited = TabPriceEdit.IsEdited(id, overrides);
             stamp.FontStyle = edited ? FontStyles.Italic : FontStyles.Normal;
             if (!TabPriceEdit.Editable(id)) return;
+            if (_editingId != id) PaintWarning(id, TabPriceEdit.Effective(price, overrides));
             var open = FiguresEditable();
             stamp.Cursor = open ? Cursors.IBeam : null;
             stamp.TextDecorations = open ? TextDecorations.Underline : null;
             stamp.ToolTip = open
                 ? Loc.Get("chaster_price_edit_tip").Replace("{0}", CircesTab.Format(price.Seconds, signed: false))
                 : Loc.Get("chaster_price_edit_locked");
+        }
+
+        /// <summary>The line under a row whose figure is past an hour or past the day limit in
+        /// force. Off, the row shows its "where" line again.</summary>
+        private void PaintWarning(string id, int seconds)
+        {
+            if (!_warnings.TryGetValue(id, out var w)) return;
+            var day = (App.Chaster?.Caps ?? TabLimits.Default).DailySeconds;
+            var text = TabPriceEdit.WarningText(TabPriceEdit.WarningFor(seconds, day), day, Loc.Get);
+            w.Warn.Text = text;
+            w.Warn.ToolTip = text.Length > 0 ? text : null;
+            w.Warn.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            w.Where.Visibility = text.Length > 0 ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        /// <summary>The warning line for a row, for the tests. Empty when the row shows none.</summary>
+        internal string? WarningFor(string id) =>
+            _warnings.TryGetValue(id, out var w) && w.Warn.Visibility == Visibility.Visible ? w.Warn.Text : null;
+
+        /// <summary>The figures against a new day limit.</summary>
+        internal void PaintWarnings()
+        {
+            var overrides = Overrides;
+            foreach (var id in _warnings.Keys)
+                if (id != _editingId && TabPrices.Find(id) is { } price) PaintWarning(id, TabPriceEdit.Effective(price, overrides));
         }
 
         /// <summary>Open the box on a row's figure. False when this row or this moment does not allow it.</summary>
@@ -99,6 +126,8 @@ namespace ConditioningControlPanel.Views.Tabs
             // Esc here drops the edit, it is not the panic key's press (bug hunt 2026-09-29, TAB-8).
             Services.Safety.EscapeClaim.Mark(box);
             box.PreviewKeyDown += PriceBox_PreviewKeyDown;
+            // The warning follows what is typed, before it is kept.
+            box.TextChanged += (_, _) => { if (ReferenceEquals(_stampEditor, box)) PaintWarning(id, TabPriceEdit.Preview(id, box.Text, Overrides)); };
             box.LostKeyboardFocus += (_, _) => { if (ReferenceEquals(_stampEditor, box)) CommitPriceEdit(); };
             stamp.Visibility = Visibility.Collapsed;
             grid.Children.Add(box);

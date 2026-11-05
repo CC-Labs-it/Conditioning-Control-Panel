@@ -351,6 +351,8 @@
   "chaster_each": "{0} за раз",
   "chaster_price_edit_tip": "Нажми, чтобы задать своё время. Оставь пустым для {0}.",
   "chaster_price_edit_locked": "Время можно менять, пока нет активного замка.",
+  "chaster_price_warn_big": "Это много. Больше часа за раз.",
+  "chaster_price_warn_day": "Твой дневной лимит {0}, так что запишется не больше.",
   "chaster_bill_header": "Этот заход",
   "chaster_bill_empty": "Пока ничего.",
   "chaster_bill_pushed": "Отправлено на замок: {0}",
