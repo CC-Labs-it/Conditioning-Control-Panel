@@ -9,7 +9,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
-using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -64,7 +63,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -139,8 +138,10 @@ public sealed partial class AccountSeedTests
         }
     }
 
-    [Fact]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(750)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(int renderDelayMs)
     {
         var s = CoreSettings.Current;
         var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
@@ -166,24 +167,17 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                // Headless MouseDown/Up render the whole shell between events, so wall-clock
-                // click counting can time out on a loaded runner. Hit-test the row and deliver
-                // the platform's click counts, retaining Avalonia's routed double-tap recognizer.
-                var target = Assert.IsAssignableFrom<Control>(w.InputHitTest(at));
-                var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
-                void Click(int count)
-                {
-                    target.RaiseEvent(new PointerPressedEventArgs(target, pointer, w, at, 0,
-                        new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
-                        KeyModifiers.None, count));
-                    target.RaiseEvent(new PointerReleasedEventArgs(target, pointer, w, at, 0,
-                        new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased),
-                        KeyModifiers.None, MouseButton.Left));
-                }
-                Click(1);
-                Assert.False(w.ProfilePage!.IsEffectivelyVisible); // one click only selects the row
-                Dispatcher.UIThread.RunJobs();
-                Click(2);
+                w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                Assert.DoesNotContain(wire.Seen, r => r.Contains("/user/lookup"));
+                await Task.Delay(renderDelayMs); // emulate a slow render between clicks
+                // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
+                // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
+                var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;
+                hit.RaiseEvent(new PointerPressedEventArgs(hit, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), w, at, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 2));
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
