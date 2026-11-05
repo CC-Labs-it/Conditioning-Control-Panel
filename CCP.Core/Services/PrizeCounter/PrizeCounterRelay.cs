@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.PrizeCounter;
 
@@ -122,14 +123,14 @@ public sealed class PrizeCounterRelay
                 var text = await res.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
                 // The account changed under the request: its answer belongs to nobody signed in now.
                 if (SafeIdentity()?.UnifiedId != id.Value.UnifiedId) return Refusal("signed_out");
-                MergedAccountRecovery.TryHandle((int)res.StatusCode, text);
+                NoteMerged((int)res.StatusCode, text);
                 return Read(op!, id.Value.UnifiedId, res.IsSuccessStatusCode, text);
             }
             catch (OperationCanceledException) { return Refusal("offline"); }
             catch (HttpRequestException ex)
             {
                 // Never reached the server: once more with the same idem, which the receipt table replays.
-                App.Logger?.Debug("PrizeCounter relay {Op} network failure (attempt {N}): {E}", op, attempt + 1, ex.Message);
+                Log.Debug("PrizeCounter relay {Op} network failure (attempt {N}): {E}", op, attempt + 1, ex.Message);
             }
         }
         return Refusal("offline");
@@ -172,7 +173,7 @@ public sealed class PrizeCounterRelay
     private void Adopt(string account, bool fromBuy, int sp)
     {
         try { _adoptSp?.Invoke(account, fromBuy, sp); }
-        catch (Exception ex) { App.Logger?.Debug("PrizeCounter adopt sp failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("PrizeCounter adopt sp failed: {E}", ex.Message); }
     }
 
     private void ApplyPrizes(string sentFor, JToken? prizes)
@@ -181,7 +182,7 @@ public sealed class PrizeCounterRelay
             || p["grants"] is not JArray list) return;
         var grants = list.Where(g => g.Type == JTokenType.String).Select(g => (string)g!).ToArray();
         try { _applyPrizes(sentFor, rev.Value<long>(), grants); }
-        catch (Exception ex) { App.Logger?.Debug("PrizeCounter apply prizes failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("PrizeCounter apply prizes failed: {E}", ex.Message); }
     }
 
     /// <summary>A buy receipt landed (ok:true). The app sets this to the feature day log's <c>e_shop</c>;
@@ -191,7 +192,17 @@ public sealed class PrizeCounterRelay
     private void NoteBuyLanded()
     {
         try { BuyLanded?.Invoke(); }
-        catch (Exception ex) { App.Logger?.Debug("PrizeCounter buy-landed sink failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("PrizeCounter buy-landed sink failed: {E}", ex.Message); }
+    }
+
+    /// <summary>Contract D: every reply goes to the merged-account recovery, which switches the app to the
+    /// canonical id on a <c>409 merged</c>. Tests replace it; a throwing hook never breaks the reply.</summary>
+    public Func<int, string, bool>? MergedReply { get; set; } = MergedAccountRecovery.TryHandle;
+
+    private void NoteMerged(int status, string text)
+    {
+        try { MergedReply?.Invoke(status, text); }
+        catch (Exception ex) { Log.Debug("PrizeCounter merged hook failed: {E}", ex.Message); }
     }
 
     private (string UnifiedId, string Token)? SafeIdentity()

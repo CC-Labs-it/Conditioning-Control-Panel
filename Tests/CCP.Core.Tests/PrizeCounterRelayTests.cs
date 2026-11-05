@@ -202,6 +202,48 @@ public class PrizeCounterRelayTests
     }
 
     [Fact]
+    public async Task AReplyForAnOldAccountIsDiscarded()
+    {
+        string account = "old";
+        var h = new FakeHandler();
+        var adopted = new List<int>();
+        h.Answer = _ => { account = "new"; return Json(200, "{\"ok\":true,\"sp\":3}"); };
+        var relay = new PrizeCounterRelay(new HttpClient(h), () => (account, "token"), () => false,
+            (_, _, sp) => adopted.Add(sp), null);
+        var reply = await relay.RelayAsync("shop-buy", BuyBody(), "idem");
+        Assert.Equal("signed_out", reply.Value<string>("reason"));
+        Assert.Empty(adopted);
+    }
+
+    [Fact]
+    public async Task CancellationReturnsOfflineWithoutRetry()
+    {
+        var h = new FakeHandler { Answer = _ => throw new OperationCanceledException() };
+        var relay = new PrizeCounterRelay(new HttpClient(h), () => ("uid", "token"), () => false, null, null);
+        var reply = await relay.RelayAsync("shop-state", null, null);
+        Assert.Equal("offline", reply.Value<string>("reason"));
+        Assert.Single(h.Seen);
+    }
+
+    [Fact]
+    public async Task AMergedReplyGoesToTheRecoveryHook_AndThePageGetsARefusal()
+    {
+        const string merged = "{\"ok\":false,\"error\":\"merged\",\"canonical_unified_id\":\"uid-2\"}";
+        var (relay, h, sp, _) = Make();
+        var seen = new List<(int, string)>();
+        relay.MergedReply = (status, body) => { seen.Add((status, body)); return true; };
+        h.Answer = _ => Json(409, merged);
+        var reply = await relay.RelayAsync("shop-state", null, null);
+        Assert.Equal((409, merged), Assert.Single(seen));
+        Assert.False(reply.Value<bool>("ok"));
+        Assert.Empty(sp);
+
+        relay.MergedReply = (_, _) => throw new InvalidOperationException("hook broke");
+        h.Answer = _ => Json(200, "{\"ok\":true,\"sp\":4}");
+        Assert.True((await relay.RelayAsync("shop-state", null, null)).Value<bool>("ok"));
+    }
+
+    [Fact]
     public void WalletRule_ABuyLowers_ASnapshotNever()
     {
         Assert.True(ConditioningControlPanel.Services.Prizes.V2WalletAdoption.Decide(true, PrizeCounterRelay.IsSettlement("shop-buy", false, "insufficient"), 12, 50, out var n1));
