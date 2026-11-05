@@ -21,6 +21,9 @@
 
 import * as THREE from 'three';
 import { squareToWorld } from './scene.js';
+import { wornMesh } from './attachments.js';
+import { sameLook } from '../skins/look.js';
+import { backMountShift, unionBox } from '../skins/mount.js';
 
 export const TYPES = ['p', 'n', 'b', 'r', 'q', 'k'];
 export const GLB_NAMES = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
@@ -217,14 +220,37 @@ function trim(type, mat) {
   return parts;
 }
 
-export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {}, jiggle = null }) {
+export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {}, jiggle = null, attachments = null }) {
   const geoCache = new Map();
+  // What each side wears (skins/look.js). Attachments hang off the man; they
+  // never replace him (board/attachments.js).
+  const looks = { w: null, b: null };
   const glb = new Map();          // "type:side" -> art from a supplied glb
   const bySquare = new Map();     // square -> piece object
   let wobble = 0;
 
   const artKey = (type, side) => type + ':' + side;
   const artFor = (type, side) => glb.get(artKey(type, side)) || null;
+
+  // An insignia comes from attachments.js turned to the man's back; here it is
+  // slid along Z to rest just off this body (skins/mount.js). One slide per
+  // badge and body, cached: the body is only read, never moved.
+  const seats = new WeakMap();    // body geometry -> Map(badge geometry -> seated geometry)
+  function seated(art, parts) {
+    const badge = parts.filter((p) => p.slot === 'insignia' && p.geometry);
+    if (!badge.length) return parts;
+    let mine = seats.get(art.geometry);
+    if (!mine) { mine = new Map(); seats.set(art.geometry, mine); }
+    if (!badge.every((p) => mine.has(p.geometry))) {
+      let dz = 0;
+      try {
+        for (const p of badge) if (!p.geometry.boundingBox) p.geometry.computeBoundingBox();
+        dz = backMountShift(art.geometry.attributes.position, unionBox(badge.map((p) => p.geometry.boundingBox)));
+      } catch { dz = 0; }
+      for (const p of badge) mine.set(p.geometry, dz ? p.geometry.clone().translate(0, 0, dz) : p.geometry);
+    }
+    return parts.map((p) => (p.slot === 'insignia' && mine.has(p.geometry) ? { ...p, geometry: mine.get(p.geometry) } : p));
+  }
 
   function geometryFor(type, side) {
     const art = artFor(type, side);
@@ -252,6 +278,15 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
       jewel.receiveShadow = RECEIVES_SHADOW;
       root.add(jewel);
       mats.push(jewel.material);
+    }
+    // Worn things (clothes, banner, insignia) are the same kind of child as a
+    // jewel: authored in the piece's own space, own material, bent by the flex.
+    // Only on the sculpted art: a lathe placeholder is scaled to its type height,
+    // so a worn mesh authored for the sculpted man would sit at the wrong size.
+    if (art && attachments && looks[side]) for (const part of seated(art, attachments.partsFor(type, looks[side]))) {
+      const worn = wornMesh(part, RECEIVES_SHADOW);
+      root.add(worn);
+      mats.push(worn.material);
     }
     // Trim is baked into the body's own space before it joins the piece: the
     // flex shader reads position.y as a height up the piece, so a part that
@@ -443,6 +478,31 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
     }
   }
 
+  /**
+   * Dress each side in a look ({ w, b }, either may be null). The art loads
+   * first, then every man of a changed side is rebuilt where he stands, so a
+   * pick lands on the board without a reload. A later call wins a race.
+   */
+  let lookTurn = 0;
+  async function setLooks(next = {}) {
+    const turn = ++lookTurn;
+    const want = { w: next.w || null, b: next.b || null };
+    if (attachments) {
+      try { await Promise.all([attachments.prepare(want.w), attachments.prepare(want.b)]); }
+      catch { /* a missing file wears nothing */ }
+    }
+    if (turn !== lookTurn) return false;
+    let changed = false;
+    for (const side of ['w', 'b']) {
+      const was = looks[side], now = want[side];
+      if ((was === null) === (now === null) && (was === null || sameLook(was, now))) continue;
+      looks[side] = now;
+      changed = true;
+      for (const type of TYPES) redress(type, side);
+    }
+    return changed;
+  }
+
   async function tryLoadGlb() {
     for (const type of TYPES) {
       const name = GLB_NAMES[type];
@@ -473,7 +533,8 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
   } : null;
 
   return {
-    setPosition, pieceAt, move, remove, update, tryLoadGlb,
+    setPosition, pieceAt, move, remove, update, tryLoadGlb, setLooks,
+    looks: () => ({ w: looks.w, b: looks.b }),
     pieces: bySquare,
     jiggle: jiggleApi,
     setWobble(v) {
