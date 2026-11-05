@@ -15,6 +15,8 @@ namespace ConditioningControlPanel.Avalonia
 {
     public partial class App : Application
     {
+        internal static Action? PostCodeInputsChanged;
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -701,6 +703,7 @@ namespace ConditioningControlPanel.Avalonia
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
                 var dailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+                PostCodeInputsChanged = dailyFree.NotifyInputsChanged;
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
                 CoreEntitlement.DailyFreeKeyProvider = () => dailyFree.TodayKey;
