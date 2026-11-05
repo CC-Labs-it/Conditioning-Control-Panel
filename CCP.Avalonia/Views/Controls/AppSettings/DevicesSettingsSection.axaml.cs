@@ -53,6 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             TxtSpeechWakeWords.LostFocus += TxtSpeechWakeWords_LostFocus;
             CmbMicDevice.SelectionChanged += CmbMicDevice_SelectionChanged;
             BtnMicRefresh.Click += BtnMicRefresh_Click;
+            ChkWebcamDebugCursor.IsCheckedChanged += ChkWebcamDebugCursor_Changed;
             BtnChatShortcutDevices.Click += BtnChatShortcut_Click;
             BtnPanicKey.Click += BtnPanicKey_Click;
             BtnPauseKey.Click += BtnPauseKey_Click;
@@ -79,6 +80,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             RefreshWebcamStatus();
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             OnSectionShown();
+            _loading = true;
+            ChkWebcamDebugCursor.IsChecked = Overlays.GazeDebugCursor.Active != null;
+            _loading = false;
+            if (Overlays.GazeDebugCursor.Active is { } cursor) cursor.Closed += CursorClosed;
             _lockdown = LockdownService.Current;
             if (_lockdown != null) { _lockdown.LockdownActivated += OnLockdownChanged; _lockdown.LockdownDeactivated += OnLockdownChanged; }
             ApplyLockdownHold();
@@ -106,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             SubscribeWebcamDiagnostics(false);
+            if (Overlays.GazeDebugCursor.Active is { } cursor) cursor.Closed -= CursorClosed;
             if (_lockdown != null) { _lockdown.LockdownActivated -= OnLockdownChanged; _lockdown.LockdownDeactivated -= OnLockdownChanged; _lockdown = null; }
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             base.OnDetachedFromVisualTree(e);
@@ -260,8 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         ///
         /// Quick Recal and Tracker Test are live over the tracker's gaze feed.
         /// The camera picker is live over <see cref="Platform.V4l2Cameras"/>.
-        /// <para>ponytail: the debug cursor stays disabled until its overlay is ported.
-        /// The status pill follows the real tracker's state transitions.</para>
+        /// <para>The status pill follows the real tracker's state transitions.</para>
         /// </summary>
         private void RefreshWebcamAvailability()
         {
@@ -275,13 +280,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CmbWebcamDevice.IsEnabled = has;
             BtnWebcamDeviceRefresh.IsEnabled = has;
             CmbWebcamMonitor.IsEnabled = has;
-            ChkWebcamDebugCursor.IsEnabled = false;
-            ToolTip.SetShowOnDisabled(ChkWebcamDebugCursor, true);
-            ToolTip.SetTip(ChkWebcamDebugCursor, "Not available on this build yet (needs the gaze cursor overlay).");
+            ChkWebcamDebugCursor.IsEnabled = has;
             if (!has)
                 AppendWebcamDebugLog("No webcam tracking engine on this build — camera controls are unavailable.");
             RefreshWebcamStartLabel();
             RefreshWebcamStatus();
+        }
+
+        // WPF MainWindow.LabTab.cs:1298-1312.
+        private void ChkWebcamDebugCursor_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_loading) return;
+            if (ChkWebcamDebugCursor.IsChecked == true)
+            {
+                Overlays.GazeDebugCursor.ShowCursor();
+                if (Overlays.GazeDebugCursor.Active is { } cursor)
+                    cursor.Closed += CursorClosed;
+                else
+                {
+                    _loading = true;
+                    ChkWebcamDebugCursor.IsChecked = false;
+                    _loading = false;
+                    AppendWebcamDebugLog(Loc.Get("set2_cursor_unavailable"));
+                    return;
+                }
+                AppendWebcamDebugLog(Loc.Get("set2_cursor_enabled"));
+            }
+            else
+            {
+                Overlays.GazeDebugCursor.CloseActive();
+                AppendWebcamDebugLog(Loc.Get("set2_cursor_hidden"));
+            }
+        }
+
+        private void CursorClosed(object? sender, EventArgs e)
+        {
+            if (sender is Window cursor) cursor.Closed -= CursorClosed;
+            ChkWebcamDebugCursor.IsChecked = false;
         }
 
         internal void RefreshWebcamStatus()
@@ -551,7 +586,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// refused — it would keep three of the dialog's four promises and claim all four.</para>
         ///
         /// <para>WPF also refreshes three blink-trainer rows; here the Blink Trainer page re-reads
-        /// consent whenever it is shown, and the debug cursor does not exist on this head.</para>
+        /// consent whenever it is shown.</para>
         /// </summary>
         private async void BtnWebcamRevokeConsent_Click(object? sender, RoutedEventArgs e)
         {
@@ -572,6 +607,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 if (!ok) return;
 
                 CoreWebcam.RevokeConsent();
+                Overlays.GazeDebugCursor.CloseActive();
+                ChkWebcamDebugCursor.IsChecked = false;
                 RefreshWebcamStartLabel();
                 AppendWebcamDebugLog("Consent revoked. Calibration deleted; webcam features disabled.");
             }

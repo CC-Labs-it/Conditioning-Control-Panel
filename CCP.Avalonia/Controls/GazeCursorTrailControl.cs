@@ -7,7 +7,7 @@ using ConditioningControlPanel.Services;
 namespace ConditioningControlPanel.Avalonia.Controls;
 
 /// <summary>The calibration cursor's bounded pink comet; geometry only, no effects or render resources.</summary>
-public sealed class GazeCursorTrailControl : Control
+public class GazeCursorTrailControl : Control
 {
     public GazeCursorTrail History { get; } = new();
 

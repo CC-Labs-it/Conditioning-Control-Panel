@@ -146,6 +146,7 @@ public sealed class PanicSurfacesTests
         "deeper-player-fullscreen",
         "deeper-editor-audio",
         "friend-notices", "knock-cards",
+        "gaze-debug-cursor",
         "quick-recal",
         "asset-preview",
         "camera",
