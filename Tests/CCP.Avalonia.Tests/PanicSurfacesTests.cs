@@ -122,6 +122,7 @@ public sealed class PanicSurfacesTests
         "pink-rush",
         "possession",
         "programs-fx",
+        "program-moments",
         "program-session",
         "remote-haptics",
         "takeover",
