@@ -1,5 +1,5 @@
 // Down the Rabbit Hole on the shared GameWindow: WPF Services/Chaos/DtrhHostService.cs, slice A - the
-// host half the first descent needs. Launch's Lab door (LauncherCatalogue.cs:241), boot (:271 init with
+// host half the first descent needs. Launch's Basic door (LauncherCatalogue.cs:241), boot (:271 init with
 // motionLevel + runSetup, then the manifest :83), request-run -> run-config (:523, rules in Core
 // DtrhRunWire), run-started / run-progress / run-ended with the one-payout latch (:360, :583) and the
 // close-mid-run booking (:1002 DtrhRunCloseRule). The kept Escape (:119) is posted by the panic key's pause
@@ -33,12 +33,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string DtrhId = "dtrh";
 
-        /// <summary>WPF LauncherCatalogue.cs:241: Lab tier, or the server's daily-free DtRH drop; refused with
-        /// the tier toast (TierGate.DemandLab).</summary>
-        internal static bool DtrhGate() => TierGate.DemandLab(Loc.Get("launcher_game_dtrh_title"), DtrhId);
+        /// <summary>WPF LauncherCatalogue: Basic, or the server's daily-free DtRH drop.</summary>
+        internal static bool DtrhGate() => TierGate.DemandPremium(Loc.Get("launcher_game_dtrh_title"), DtrhId);
 
         /// <summary>The launcher's padlock probe for the same door, without the toast.</summary>
-        internal static bool DtrhLocked() => !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), DtrhId).Allowed;
+        internal static bool DtrhLocked() => !TierGate.RequiresPremium(Loc.Get("launcher_game_dtrh_title"), DtrhId).Allowed;
 
         /// <summary>Spark banking (WPF DtrhMetaBridge.AwardRun -> ChaosMeta.AwardRunRewards); tests swap it.</summary>
         internal static Func<ChaosMeta.ChaosRunRewardInput, bool, int> DtrhBankSparks =
@@ -76,13 +75,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleDtrh(JObject o)
         {
-            if (_closing) return true; // a dead carrier cannot start another run
+            // A dead carrier cannot start another run; its funnel events still count (the case below refuses the open).
+            if (_closing && (string?)o["type"] != "funnel") return true;
             switch ((string?)o["type"])
             {
                 case "ready":
                     IsReady = true;
                     _dtrhLastHeartbeatUtc = DtrhUtcNow(); // WPF OnPageReady :275: loading does not spend the deadline
                     OnDtrhPageReady();
+                    return true;
+                case "funnel":
+                    FunnelPageMessage.Handle(o, !_dtrhRunActive && !_dtrhExiting && !_closing);
                     return true;
                 case "heartbeat":
                 case "pong":
@@ -118,6 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { Web.Focus(); }   // Escape (pause / hold-to-exit) works from the first frame
             catch (Exception ex) { Log.Debug("DtrhHost: focus: {E}", ex.Message); }
             Post(DtrhInitMessage());
+            _ = ConditioningControlPanel.Services.Vault.PlanCatalog.GetAsync();
             try { PostDtrhManifest(); }
             catch (Exception ex) { Log.Warning("DtrhHostService.OnPageReady: {E}", ex.Message); }
             // WPF :303: online media copied to this machine after this frame reaches the page as a fresh manifest
@@ -161,6 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             modContent = (object?)null,   // WPF DtrhModContent.BuildInitPayload: null = shipped assets
             runSetup = DtrhRunWire.RunSetup(CoreSettings.Current),
             m2Test = false,
+            plans = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current),
         };
 
         /// <summary>WPF OnRequestRun (:523): persist the hub's choices, deal the run, answer run-config.</summary>
@@ -201,10 +206,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
                 if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;
+                bool dailyGift = !CoreEntitlement.HasPremium && CoreEntitlement.IsFreeToday(DtrhId);
                 Post(new
                 {
                     type = "payout-result", baseXp = booking.BaseXp, skillMult, finalXp, sparksEarned, previousBest,
                     rankUp = rankUp?.ToString(), dryRun = false,
+                    plan = dailyGift ? "basic" : null, daily_gift = dailyGift,
                 });
                 Log.Information("DtrhHost: web run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks{T}",
                     booking.BaseXp, skillMult, finalXp, sparksEarned, fromTeardown ? " (banked on close)" : "");
