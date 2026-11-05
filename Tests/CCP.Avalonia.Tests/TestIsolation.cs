@@ -84,6 +84,9 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // window a test left open holds the next test's startup surfaces, so close it first.
             OpenWindows.CloseLeftovers();
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+            // Panic now arms EMI's panic silence on the shared line engine (WPF EmiDeskService.cs:677-689);
+            // left running it holds HoldActive for the next tests and mutes e.g. the Friends drawer cues.
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
             // A Ctrl+K a test pressed and never released would swallow the next test's press (P02).
             ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow.ChordReleased();
             // The shell paints the section ink into the app resources (PaintSectionInk); drop the

@@ -23,7 +23,7 @@ public sealed class PremiumGatesTests
     };
 
     private static readonly string[] Bands =
-        { "PlayLockGaze", "PlayLockFocusGaze", "PlayLockRemote", "PlayLockLockdown", "PlayLockBlink", "PlayLockFyp", "PlayLockBreakout" };
+        { "PlayLockGaze", "PlayLockFocusGaze", "PlayLockRemote", "PlayLockLockdown", "PlayLockBlink", "PlayLockFyp", "PlayLockBreakout", "PlayLockDtrh", "PlayLockArcademy" };
 
     /// <summary>Decision "Entitlement lapse: startup write deferred": navigation/startup clears a lapsed
     /// flag in memory and leaves settings.json alone; the next entitlement event writes it.</summary>
@@ -125,6 +125,17 @@ public sealed class PremiumGatesTests
                 bool Stamped(string badge) => shell.Named<Control>("PlayTab")!.FindControl<TierBadge>(badge)!.FreeToday;
                 Assert.True(Stamped("PlayBadgeRemote"));
                 Assert.False(Stamped("PlayBadgeFyp"));
+
+                // DtRH is a Basic gift (port/7.2 DtrhLocked/DtrhGate), independent of the Remote/For You gifts.
+                CoreEntitlement.IsFreeTodayProvider = k => k == "dtrh";
+                Show("play");
+                Assert.False(Banded("PlayLockDtrh"));
+                Assert.True(Banded("PlayLockArcademy"));
+                Assert.True(Stamped("PlayBadgeDtrh"));
+                CoreEntitlement.HasPremiumProvider = () => true;
+                Show("play");
+                Assert.False(Stamped("PlayBadgeDtrh"));
+                CoreEntitlement.HasPremiumProvider = null;
 
                 // The other three pool keys lift their own veils (WPF RefreshEntitlementVeils).
                 CoreEntitlement.IsFreeTodayProvider = k => k is "takeover" or "voice" or "haptics";
