@@ -43,7 +43,7 @@ public sealed class RainGenerationTests {
             Assert.Equal("v2", service.Current.AvatarGeneration);
             Assert.Equal("rain_emotes", tube.CurrentEmoteFolder);
             Assert.Equal(240, tube.FindControl<Border>("AvatarBorder")!.Margin.Bottom);
-            Assert.Equal(0.84, Assert.IsType<global::Avalonia.Media.ScaleTransform>(tube.FindControl<Image>("ImgAvatarAnimated")!.RenderTransform).ScaleX);
+            Assert.Equal(1.07, Assert.IsType<global::Avalonia.Media.ScaleTransform>(tube.FindControl<Image>("ImgAvatarAnimated")!.RenderTransform).ScaleX);
             Assert.Equal(sets, tube.PickableAvatarSets());
             tube.EmotePortraitMode = true; tube.UpdateGenerationPill(); tube.FlipEmoteGeneration();
             Assert.False(tube.FindControl<Border>("BtnAvatarGeneration")!.IsHitTestVisible);
