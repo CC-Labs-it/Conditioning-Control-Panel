@@ -225,7 +225,7 @@ public sealed class LoginRetryTests
             shell = new MainShellWindow();
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            Assert.True(CoreAccount.IsLoggedIn);
+            Assert.True(CoreAccount.IsLoggedIn); // WPF MainWindow.UiUpdates.cs:508-525: signed-in navigation.
             Click(shell.Named<Button>("BtnAccountChip")!);
             Assert.Empty(shell.OwnedWindows.OfType<LoginDialog>());
             var page = shell.AppSettingsPage!;
