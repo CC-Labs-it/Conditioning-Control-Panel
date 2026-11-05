@@ -17,6 +17,63 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    [Fact]
+    public async Task Ambient_pop_credits_achievements_once_after_the_xp_cap()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var dir = System.IO.Directory.CreateTempSubdirectory("ccp-bubble-head-credit-");
+            var property = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var previous = property.GetValue(null);
+            var s = CoreSettings.Current;
+            var (day, paid) = (s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday);
+            try
+            {
+                var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(dir.FullName, "achievements.json")));
+                property.SetValue(null, engine);
+                s.AmbientBubbleXpDayKey = "";
+                AmbientBubbleXp.Take(s, AmbientBubbleXp.DailyXpCap);
+                var bubble = new AmbientBubble();
+                BubbleOverlay.Pop(bubble);
+                BubbleOverlay.Pop(bubble);
+                Assert.Equal(1, engine.Progress.TotalBubblesPopped);
+                Assert.Equal(AmbientBubbleXp.DailyXpCap, AmbientBubbleXp.PaidToday(s));
+            }
+            finally
+            {
+                property.SetValue(null, previous);
+                s.AmbientBubbleXpDayKey = day; s.AmbientBubbleXpPaidToday = paid;
+                dir.Delete(true);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public void Pop_sound_resolves_mod_override_and_suppressed_lucky_falls_back()
+    {
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-bubble-sound-");
+        var path = System.IO.Path.Combine(dir.FullName, "cue.wav");
+        System.IO.File.WriteAllBytes(path, new byte[0]);
+        var previous = CoreModArt.AudioOverridePathProvider;
+        var requests = new System.Collections.Generic.List<string>();
+        try
+        {
+            CoreModArt.AudioOverridePathProvider = cue => { requests.Add(cue); return path; };
+            Assert.Equal((path, true), BubbleOverlay.ResolvePopSound(true, false, new System.Random(1)));
+            Assert.StartsWith("chime", requests[0]);
+            requests.Clear();
+            Assert.Equal((path, false), BubbleOverlay.ResolvePopSound(true, true, new System.Random(1)));
+            Assert.StartsWith("bubbles/Pop", requests[0]);
+            requests.Clear();
+            CoreModArt.AudioOverridePathProvider = cue => { requests.Add(cue); return cue.StartsWith("chime") ? path + ".missing" : path; };
+            Assert.Equal((path, false), BubbleOverlay.ResolvePopSound(true, false, new System.Random(1)));
+            Assert.Equal(2, requests.Count);
+        }
+        finally { CoreModArt.AudioOverridePathProvider = previous; dir.Delete(true); }
+    }
+
     /// <summary>WPF BubbleService.cs:221 LoadBubbleImage: each Start re-resolves bubble.png through the
     /// active mod, so after a mod switch the next start draws the new mod's sprite, not the cached one.</summary>
     [Fact]
@@ -78,7 +135,21 @@ public sealed class BubbleOverlayTests
                 w.MouseDown(new Point(500, 400), MouseButton.Right);  // its centre; right pops too
                 Assert.True(b.Popping);
                 Assert.Equal(5, AmbientBubbleXp.PaidToday(s));
-                Assert.Contains("5/300", line.Text);   // the card's N/300 line follows the pop
+                Assert.Contains("5/300", line.Text);   // preserve the original live budget assertion
+                var pops = 0;
+                void Count() => pops++;
+                BubbleOverlay.Popped += Count;
+                try
+                {
+                    s.AmbientBubbleXpPaidToday = AmbientBubbleXp.DailyXpCap;
+                    var dry = new AmbientBubble();
+                    BubbleOverlay.Pop(dry);
+                    BubbleOverlay.Pop(dry);
+                    Assert.Equal(1, pops);
+                    Assert.Equal(AmbientBubbleXp.DailyXpCap, AmbientBubbleXp.PaidToday(s));
+                }
+                finally { BubbleOverlay.Popped -= Count; }
+                Assert.Contains("300/300", line.Text);   // the card's N/300 line follows the pop
             }
             finally
             {
