@@ -5,9 +5,10 @@
 //
 // sync6-nav-rail-c added the edge spur, the art tint (navtint), the label glow, the 160 ms halo
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
-// ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
-// possession reroute seam (WPF PossessionReroute, written only by
-// Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
+// Coin depth is in MainShellWindow.NavRail.Coins.cs.
+// ponytail: not yet here: the possession reroute seam (WPF PossessionReroute, written only by
+// Services/Possession/Effects/MisrouteEffect.cs, which has no writer on this head) - lane wire-shell-nav-rail-b.
+// Mod door art landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 
 using System;
@@ -42,7 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             internal Border? Tile, Ring, Shade, Art, Tint, Badge, Spur;
             internal TextBlock? Label, BadgeText;
             internal Color Hue;
-            internal bool Active, Painted;
+            internal bool Active, Painted, Hovered, Pressed;
+            internal NavCoinParts? Coin;
+            internal Panel? Face;
         }
 
         // WPF NavRailRules: row tint 0x33, tile tint 0x40, ring idle/hover/active alpha, lit halo.
@@ -184,9 +187,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     {
                         Color = AmbientFxCanvas.Env.GlowColor, BlurRadius = 6, OffsetX = 0, OffsetY = 0, Opacity = 0.45,
                     };
+                if (btn.Content is Panel coinFace && row.Tile != null) BuildNavCoin(row, coinFace);
                 var captured = row;
-                btn.PointerEntered += (_, _) => { PaintNavRing(captured, hover: true); NudgeNavIcon(captured, true); };
-                btn.PointerExited += (_, _) => { PaintNavRing(captured, hover: false); NudgeNavIcon(captured, false); };
+                btn.PointerEntered += (_, _) => { captured.Hovered = true; PaintNavRing(captured, hover: true); NudgeNavIcon(captured, true); PaintNavCoin(captured); };
+                btn.PointerExited += (_, _) => { captured.Hovered = false; captured.Pressed = false; PaintNavRing(captured, hover: false); NudgeNavIcon(captured, false); PaintNavCoin(captured); };
                 ToolTip.AddToolTipOpeningHandler(btn, (_, _) => ToolTip.SetTip(btn, BuildNavRowToolTip(captured)));
                 PaintNavRowActive(row);
                 _navSectionRows.Add(row);
@@ -294,6 +298,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (row.Tint != null)
                 row.Tint.Background = new SolidColorBrush(WithAlpha(row.Hue, row.Active ? NavArtTintActiveAlpha : (byte)0));
+            PaintNavCoin(row);
             PaintNavSpur(row);
             PaintNavRing(row, hover: row.Button.IsPointerOver);
         }
