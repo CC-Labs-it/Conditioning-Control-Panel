@@ -53,8 +53,21 @@ internal static partial class ChaosRunHost
                 if (s.Config.ColorFlashesEnabled) _fx?.Pulse(Color.FromRgb(150, 220, 255), 0.35);
                 s.PushEvent(Loc.Get(maxed ? "chaos_toy_snap_all" : "chaos_toy_snap_live"));
                 return true;
+            case "porn_dvd":
+                // WPF ChaosModeService :2722-2734. Existing Core rules own gates and cooldown.
+                if (_overlay == null) return false;
+                int level = ChaosMeta.BoonLevel(toy.Id);
+                double speed = level switch { 1 => 0.7, 2 => 0.85, _ => 1.0 };
+                double scale = level switch { 1 => 0.8, 2 => 0.9, _ => 1.0 };
+                ChaosDvdOverlay.Launch(_overlay, Math.Max(5, power), speed, scale,
+                    count: maxed ? 2 : 1, splitBounces: s.DvdSplitBounces);
+                ChaosOverlayWindow.ChaosSfx.Play("dvd_launch", 0.55f);
+                ChaosEffectBannerOverlay.Show("dvd", Loc.Get("Chaos_Dvd_Banner"), Color.FromRgb(0xFF, 0x69, 0xB4));
+                _dvdBannerOn = true;
+                s.PushEvent(ConditioningControlPanel.Avalonia.Controls.IconLabel.ForKey("Chaos_Dvd_Loading").Source);
+                return true;
             default:
-                // ponytail: freeze, DVD contact, rabbit motion/aim and charged arcs need their
+                // ponytail: freeze, rabbit motion/aim and charged arcs need their
                 // BubbleService mechanics ported; do not award first_play for an inert toy.
                 return false;
         }
@@ -108,11 +121,18 @@ internal static partial class ChaosRunHost
             }
         }
         _snapRemaining = Math.Max(0, _snapRemaining - ChaosRunEngine.TICK_SEC);
+        // WPF TickActiveToys :3020-3027: DVD glow and banner follow the live logos.
+        if (_dvdBannerOn && !ChaosDvdOverlay.AnyToyActive)
+        {
+            ChaosEffectBannerOverlay.End("dvd");
+            _dvdBannerOn = false;
+        }
         foreach (var toy in _state.ActiveToys)
             toy.IsEffectActive = toy.Id switch
             {
                 "vibe_popping" => _vibeRemaining > 0,
                 "snap_field" => _snapRemaining > 0,
+                "porn_dvd" => ChaosDvdOverlay.AnyToyActive,
                 _ => false,
             };
     }

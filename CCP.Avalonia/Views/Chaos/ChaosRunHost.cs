@@ -76,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Action<double, int>? ShakeFx;
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
+        private static bool _dvdBannerOn;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused;
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
@@ -568,6 +569,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3230
+            _dvdBannerOn = false;
             ChaosDvdOverlay.CloseActive();   // WPF EndRun (:3232)
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
             ChaosWaveTimerWindow.CloseActive();   // WPF EndRun :3234
@@ -689,6 +691,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _lessonCardPaused = false;
             StopToys();
             Overlays.ChaosFlashOverlay.CloseActive();   // WPF ForceShutdown :3175
+            _dvdBannerOn = false;
             ChaosDvdOverlay.CloseActive();   // WPF CleanupAfterRun (:3319), ForceShutdown (:3179)
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320

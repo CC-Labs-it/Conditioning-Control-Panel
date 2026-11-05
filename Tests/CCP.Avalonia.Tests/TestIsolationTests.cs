@@ -1,5 +1,7 @@
 using System.IO;
 using System.Linq;
+using Avalonia;
+using Avalonia.Headless;
 using ConditioningControlPanel;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
