@@ -1,4 +1,8 @@
 {
+  "chaos_toy_buzz": "вибрирует. удерживай и проводи",
+  "chaos_toy_snap_all": "снято. всё.",
+  "chaos_toy_snap_live": "снято. все активные пузыри отпущены",
+  "chaos_toy_afterglow": "послесвечение. оно остаётся",
   "title_select_companion_personality": "Выбрать личность ИИ для {0}",
   "filter_personality_json_files": "Файлы личности JSON",
   "audio_device_unnamed": "(без имени)",
@@ -3340,6 +3344,7 @@
   "login_checking_availability": "Проверка доступности...",
   "login_could_not_check": "Не удалось проверить: {0}",
   "title_error": "Ошибка",
+  "title_trigger_phrases": "Триггерные фразы",
   "title_invalid_name": "Недопустимое имя",
   "title_success": "Успех",
   "title_confirm": "Подтверждение",

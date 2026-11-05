@@ -210,6 +210,8 @@
       Folders where the views use everything are globbed, so a new file is picked up without a
       csproj edit. Folders where they use a fraction are explicit, so growth stays a decision.
     -->
+    <!-- WPF ConditioningControlPanel.csproj:665: line engine reads this from disk. -->
+    <Content Include="..\Assets\emi\desk-lines.json" Link="Resources\emi\desk-lines.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <AvaloniaResource Include="..\Assets\quests\**\*"
                       Link="Resources\quests\%(RecursiveDir)%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\nav\**\*"
@@ -241,6 +243,11 @@
          (AppFonts.Mono) is the app-wide monospace. Licenses ship
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
+    <!-- WPF unlock-card art convention, without staging artwork. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png"
+             Link="assets\Chaos\boons\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\upgrades\*.png"
+             Link="assets\Chaos\upgrades\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
     <!-- WPF ChaosAnnouncerOverlay.cs:177-195: shared announce word-art. -->
     <Content Include="..\ConditioningControlPanel\assets\Chaos\announce\*.png" Link="assets\Chaos\announce\%(Filename)%(Extension)"
@@ -322,4 +329,11 @@
     </ItemGroup>
     <Copy SourceFiles="@(LibVLCFiles)" DestinationFolder="$(PublishDir)libvlc\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
+  <ItemGroup>
+    <Content Include="../Assets/DeeperDemos/**/*" Link="Resources/DeeperDemos/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
 </Project>
