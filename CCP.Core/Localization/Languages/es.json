@@ -1,4 +1,8 @@
 {
+  "chaos_toy_buzz": "vibra. mantén y desliza",
+  "chaos_toy_snap_all": "liberado. todo.",
+  "chaos_toy_snap_live": "liberado. todas las burbujas activas cedieron",
+  "chaos_toy_afterglow": "resplandor. perdura",
   "title_select_companion_personality": "Elegir personalidad de IA para {0}",
   "filter_personality_json_files": "Archivos JSON de personalidad",
   "audio_device_unnamed": "(sin nombre)",

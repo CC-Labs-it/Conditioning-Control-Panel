@@ -1,4 +1,8 @@
 {
+  "chaos_toy_buzz": "it buzzes. hold and sweep",
+  "chaos_toy_snap_all": "snapped. all of it.",
+  "chaos_toy_snap_live": "snapped. every live one let go",
+  "chaos_toy_afterglow": "afterglow. it lingers",
   "title_select_companion_personality": "Select AI Personality for {0}",
   "filter_personality_json_files": "Prompt JSON files",
   "audio_device_unnamed": "(unnamed)",
