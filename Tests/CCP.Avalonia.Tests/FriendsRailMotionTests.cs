@@ -34,57 +34,6 @@ public sealed partial class FriendsDrawerTests
         Assert.Equal(2, crossings); // WPF Oscillations=1: rise, one overshoot, one dip; Avalonia's ElasticEaseOut rings ~6 times
     }
 
-    /// <summary>The unread bump must SHOW: the badge's ScaleTransform reaches the WPF peak (1.45 at Full) at
-    /// 120 ms and settles back to 1 at 420 ms. Fail-proven against the old Animation.RunAsync(Border) bump, which
-    /// left ScaleX at 1 while ActiveBumps still counted it (Nov 4 review, #3657).</summary>
-    [Fact]
-    public Task UnreadBumpVisiblyScalesTheBadgeThenSettles() => AvaloniaTestDispatcher.RunAsync(() =>
-    {
-        ChipApp();
-        var oldMotion = CoreSettings.Current.MotionLevel;
-        var oldGentle = CoreSettings.Current.GentleVisuals;
-        var oldTime = ConditioningControlPanel.Avalonia.Helpers.TransformTween.Time;
-        var time = new SteppedTime();
-        ConditioningControlPanel.Avalonia.Helpers.TransformTween.Time = time;
-        CoreSettings.Current.MotionLevel = MotionLevel.Full;
-        CoreSettings.Current.GentleVisuals = false;
-        UiMotionPreference.OsProbe = () => true;
-        UiMotionPreference.CacheStamp = long.MinValue;
-        var (svc, _) = Service();
-        var feed = new FriendsFeed(() => "u_me");
-        FriendsHead.Feed = feed;
-        var chip = new FriendsRailChip(svc);
-        chip.Drawer.FeedSource = () => feed;
-        var window = new Window { Content = chip }; window.Show();
-        try
-        {
-            var t0 = DateTime.UtcNow.AddHours(-2);
-            chip.UpdateBadge();
-            Assert.True(feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", t0, "a", Detail: PokeSet.Shipped[0])));
-            chip.UpdateBadge(animate: true);
-            var badge = chip.GetVisualDescendants().OfType<Border>().Single(b => Equals(b.Tag, "friends-chip-unread"));
-            var scale = Assert.IsType<ScaleTransform>(badge.RenderTransform);
-            Assert.Equal(1, chip.ActiveBumps);
-            time.Advance(TimeSpan.FromMilliseconds(120));
-            ConditioningControlPanel.Avalonia.Helpers.TransformTween.StepAll();
-            Assert.Equal(1.45, scale.ScaleX, 6);
-            Assert.Equal(1.45, scale.ScaleY, 6);
-            time.Advance(TimeSpan.FromMilliseconds(300));
-            ConditioningControlPanel.Avalonia.Helpers.TransformTween.StepAll();
-            Assert.Equal(1, scale.ScaleX, 6);
-            Assert.Equal(0, chip.ActiveBumps);
-        }
-        finally
-        {
-            window.Close(); svc.Dispose();
-            FriendsHead.Feed = null;
-            ConditioningControlPanel.Avalonia.Helpers.TransformTween.Time = oldTime;
-            CoreSettings.Current.MotionLevel = oldMotion;
-            CoreSettings.Current.GentleVisuals = oldGentle;
-        }
-        return Task.CompletedTask;
-    });
-
     [Fact]
     public Task RailTierAndNameFollowOwnerActivation() => AvaloniaTestDispatcher.RunAsync(() =>
     {

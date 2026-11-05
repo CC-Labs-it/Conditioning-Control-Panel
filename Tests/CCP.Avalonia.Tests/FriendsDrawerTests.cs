@@ -112,7 +112,6 @@ public sealed partial class FriendsDrawerTests
             lock (Ops) Ops.Add(op);
             if (op == "report") Reports.Add(await r.Content!.ReadAsStringAsync(ct));
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
-            if (op == "report") Reports.Add(await r.Content!.ReadAsStringAsync(ct));
             var body = op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
                 : op == "send" ? """{"ok":true,"status":"sent"}""" : ActSucceeds ? """{"ok":true}""" : """{"ok":false,"error":"try_later"}""";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
@@ -861,7 +860,7 @@ public sealed partial class FriendsDrawerTests
         FriendEvent Ev(string key) => new(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, key, Detail: PokeSet.Shipped[0]);
         try
         {
-            Assert.Null(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform);
+            Assert.Equal(1, Assert.IsType<global::Avalonia.Media.ScaleTransform>(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform).ScaleX); // #3657: resting ScaleTransform from construction
             feed.Add(Ev("first"));
             Assert.IsType<global::Avalonia.Media.ScaleTransform>(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform);
             d.OnOpened();

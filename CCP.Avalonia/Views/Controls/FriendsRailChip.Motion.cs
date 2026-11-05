@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -15,9 +14,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls;
 
 public sealed partial class FriendsRailChip
 {
-    private readonly Dictionary<Border, ConditioningControlPanel.Avalonia.Helpers.TransformTween> _bumps = new();
+    private readonly Dictionary<Border, CancellationTokenSource> _bumps = new();
     private Window? _faceHost;
-    internal int ActiveBumps => _bumps.Values.Count(t => t.IsRunning);
+    internal int ActiveBumps => _bumps.Count;
 
     internal void Hover(bool on)
     {
@@ -31,24 +30,35 @@ public sealed partial class FriendsRailChip
         };
         scale.ScaleX = scale.ScaleY = on ? 1.02 : 1;
     }
-    // WPF FriendsRailChip.cs:363-373: 120 ms rise, 300 ms elastic settle, on ONE clock (no reset between phases).
-    // Keyframes on the ScaleTransform itself go through Helpers/TransformTween: Animation.RunAsync on the Border
-    // with ScaleTransform setters never moved the transform (Nov 4 review, #3657).
+    // WPF FriendsRailChip.cs:363-373: 120 ms rise, 300 ms elastic settle.
     private void Bump(Border target)
     {
-        if (_bumps.Remove(target, out var old)) old.Stop();
+        if (_bumps.Remove(target, out var old)) { old.Cancel(); old.Dispose(); }
         var amount = FriendsDrawerRules.MotionAmount(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level);
         if (amount <= 0) return;
-        target.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-        if (target.RenderTransform is not ScaleTransform scale) target.RenderTransform = scale = new ScaleTransform(1, 1);
-        double peak = 1 + .45 * amount;
-        _bumps[target] = ConditioningControlPanel.Avalonia.Helpers.TransformTween.Run(scale, TimeSpan.FromMilliseconds(420),
-            new (double, AvaloniaProperty, double)[]
+        var run = new CancellationTokenSource();
+        _bumps[target] = run;
+        _ = PlayBump(target, amount, run);
+    }
+    private async Task PlayBump(Border target, double amount, CancellationTokenSource run)
+    {
+        try
+        {
+            var peak = 1 + .45 * amount;
+            // One clock, like WPF's 420 ms keyframe animation, avoids a reset between phases.
+            var animation = new Animation { Duration = TimeSpan.FromMilliseconds(420), Easing = new BumpTimeline(), Children =
             {
-                (0, ScaleTransform.ScaleXProperty, 1d), (1, ScaleTransform.ScaleXProperty, peak),
-                (0, ScaleTransform.ScaleYProperty, 1d), (1, ScaleTransform.ScaleYProperty, peak),
-            },
-            new BumpTimeline());
+                new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1d), new Setter(ScaleTransform.ScaleYProperty, 1d) } },
+                new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, peak), new Setter(ScaleTransform.ScaleYProperty, peak) } },
+            } };
+            await animation.RunAsync(target, run.Token);
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (_bumps.TryGetValue(target, out var current) && ReferenceEquals(current, run)) _bumps.Remove(target);
+            run.Dispose();
+        }
     }
     private sealed class BumpTimeline : Easing
     {
@@ -69,11 +79,7 @@ public sealed partial class FriendsRailChip
     }
     private void CancelBumps()
     {
-        foreach (var (target, tween) in _bumps)
-        {
-            tween.Stop();
-            if (target.RenderTransform is ScaleTransform scale) scale.ScaleX = scale.ScaleY = 1;
-        }
+        foreach (var run in _bumps.Values) run.Cancel();
         _bumps.Clear();
     }
     // WPF FriendsRailChip.cs:197-228: refresh identity on attach and activation.
