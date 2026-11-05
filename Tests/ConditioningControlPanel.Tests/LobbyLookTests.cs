@@ -68,8 +68,16 @@ public class LobbyLookTests
         Assert.Same(PlayerLook.None, junk.Open.Single().Look);
         if (ShopCosmetics.FrameIds()?.Contains("profile.frame.lace") == true)
         {
-            var worn = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":{\"frame_id\":\"profile.frame.lace\"}}]}");
-            Assert.Equal("profile.frame.lace", worn.Open.Single().Look.FrameId);
+            // Seed the known ids the way App.xaml.cs:411 does: unseeded, Core rejects every frame, so this
+            // branch passed only when an earlier test in the run happened to seed the provider.
+            var seeded = PlayerLook.KnownIdsProvider;
+            PlayerLook.KnownIdsProvider = () => (CosmeticsCatalog.AllAvatarIds(), ShopCosmetics.FrameIds());
+            try
+            {
+                var worn = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":{\"frame_id\":\"profile.frame.lace\"}}]}");
+                Assert.Equal("profile.frame.lace", worn.Open.Single().Look.FrameId);
+            }
+            finally { PlayerLook.KnownIdsProvider = seeded; }
         }
     }
 
