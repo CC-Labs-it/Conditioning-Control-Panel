@@ -357,6 +357,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // WPF Bubble.cs:666/757 opens the bubble layer to clicks only while the ask chips show.
             _bubbleCanvas.PropertyChanged += (_, e) => { if (e.Property == IsHitTestVisibleProperty) ApplyInputRegion(); };
 
+            HookDeskItems();
             ApplyBodyWidth(_bodyWidth);
             SetPose("idle");
             DrawFace(EmiChains.RestFace);
@@ -838,6 +839,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // The stand-in stands down the moment real art lands, whichever road brings it.
                 _bodyPlaceholder.IsVisible = _bodyImage.Source is null;
                 PaintOutfitOver();
+                PaintDeskItems();
             }
             catch (Exception ex)
             {
@@ -862,6 +864,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (string.Equals(want, _outfit, StringComparison.Ordinal)) return;
                 _outfit = want;
                 PaintOutfitOver();
+                PaintDeskItems();
             }
             catch (Exception ex)
             {
@@ -2725,6 +2728,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 _closingForGood = true;
                 _player.Dispose();
+                UnhookDeskItems();
                 KillOptionsPanel();
                 CloseBook();
                 StopIdleBeats();

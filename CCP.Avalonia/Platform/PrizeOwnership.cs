@@ -27,6 +27,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Any accepted snapshot for the signed-in account, changed or not: the chess page re-sends its grants.</summary>
         internal static event Action? GrantsChanged;
 
+        /// <summary>The desk's refresh: an accepted snapshot or a change of the held set (a logout clear).</summary>
+        internal static event Action? DeskGrantsChanged
+        {
+            add { GrantsChanged += value; Changed += value; }
+            remove { GrantsChanged -= value; Changed -= value; }
+        }
+
+        /// <summary>Desk items the current account holds, or null before any snapshot for it.</summary>
+        internal static IEnumerable<string>? KnownDeskGrants() => KnownGrants() is null ? null
+            : ConditioningControlPanel.Services.EmiDesk.DeskEquipment.Items.Where(i => IsGranted(i.Grant)).Select(i => i.Grant).ToArray();
+
         // Reuse Core's account/revision rules and change detection for every snapshot source.
         private static readonly OwnershipService HeldOwnership = new(
             () => FriendsHead.Identity()?.UnifiedId, overrideSpec: null, raise: action => action());

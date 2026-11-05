@@ -291,6 +291,7 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         s.UnifiedId = null;
         s.AuthToken = null;
+        PrizeOwnership.ResetHeld();
         s.UserDisplayName = null;
         PrizeOwnership.ResetHeld();
         s.HasLinkedDiscord = false;
