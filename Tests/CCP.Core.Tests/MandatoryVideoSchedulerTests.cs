@@ -37,6 +37,122 @@ public sealed class MandatoryVideoSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void Cascade_coalesces_and_replays_once_after_clear() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { IsCascadeRaining = () => rain };
+        Assert.True(v.Trigger(true, Clips[0]));
+        Assert.True(v.Trigger(false, Clips[1]));
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.Empty(host.Shown);
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Single(host.Shown);
+        Assert.Equal((Clips[0], true), host.Shown[0]);
+        v.Stop();
+    });
+
+    [Fact]
+    public void Cascade_expires_and_stop_or_panic_cancels() => With(6, false, () =>
+    {
+        foreach (var mode in new[] { 0, 1, 2 })
+        {
+            var clock = new FakeClock(); var host = new Host(); var rain = true;
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips) { IsCascadeRaining = () => rain };
+            v.Trigger();
+            if (mode == 0) clock.Advance(TimeSpan.FromSeconds(90));
+            if (mode == 1) v.Stop();
+            if (mode == 2) v.ForceCleanup();
+            rain = false;
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.Empty(host.Shown);
+        }
+    });
+
+    [Fact]
+    public void Cascade_starting_in_preroll_blocks_show_and_keeps_original_deadline() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { IsCascadeRaining = () => rain };
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(88));
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(.5));
+        rain = true;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Shown);
+    });
+
+    [Theory]
+    [InlineData(0)] // expiry
+    [InlineData(1)] // stop
+    [InlineData(2)] // panic cleanup
+    public void Cascade_in_preroll_restores_running_flashes_when_abandoned(int mode) => With(6, false, () =>
+    {
+        var wasRunning = CoreFlash.IsRunning;
+        try
+        {
+            CoreSettings.Current.FlashEnabled = true;
+            CoreFlash.Start();
+            var clock = new FakeClock(); var host = new Host(); var rain = false;
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips) { IsCascadeRaining = () => rain };
+            v.Trigger();
+            Assert.False(CoreFlash.IsRunning);
+            rain = true;
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.True(CoreFlash.IsRunning);
+            if (mode == 0) clock.Advance(TimeSpan.FromSeconds(90));
+            else if (mode == 1) v.Stop();
+            else v.ForceCleanup();
+            Assert.True(CoreFlash.IsRunning);
+            rain = false;
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.Empty(host.Shown);
+        }
+        finally { if (wasRunning) CoreFlash.Start(); else CoreFlash.Stop(); }
+    });
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void Cascade_in_preroll_does_not_start_idle_or_disabled_flashes(bool running, bool enabledAtDefer) => With(6, false, () =>
+    {
+        var wasRunning = CoreFlash.IsRunning;
+        try
+        {
+            CoreSettings.Current.FlashEnabled = true;
+            if (running) CoreFlash.Start(); else CoreFlash.Stop();
+            var clock = new FakeClock(); var rain = false;
+            var v = new MandatoryVideoScheduler(new Host(), clock, () => Clips) { IsCascadeRaining = () => rain };
+            v.Trigger();
+            CoreSettings.Current.FlashEnabled = enabledAtDefer;
+            rain = true;
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.False(CoreFlash.IsRunning);
+            v.ForceCleanup();
+        }
+        finally { if (wasRunning) CoreFlash.Start(); else CoreFlash.Stop(); }
+    });
+
+    [Fact]
+    public void Cascade_clearing_at_deadline_replays() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { IsCascadeRaining = () => rain };
+        v.Trigger(true, Clips[0]);
+        clock.Advance(TimeSpan.FromMilliseconds(89999));
+        Assert.Empty(host.Shown);
+        rain = false;
+        clock.Advance(TimeSpan.FromMilliseconds(1) + MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        Assert.Equal((Clips[0], true), host.Shown[0]);
+        v.Stop();
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();

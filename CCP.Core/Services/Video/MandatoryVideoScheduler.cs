@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Services
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
     /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
+    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), feed/DND/browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
@@ -63,7 +63,13 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _preroll;
+        private ITimer? _scheduler, _preroll, _cascadeTimer;
+        private DateTimeOffset? _cascadeDeadline;
+        private bool? _cascadeStrict;
+        private string? _cascadePath;
+
+        /// <summary>Head-provided live rain state, read on the UI thread.</summary>
+        public Func<bool> IsCascadeRaining { get; set; } = () => false;
         private volatile bool _running, _playing;
         private int _retryGeneration, _noVideosShown;
 
@@ -319,6 +325,8 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
             if (_playing) return false;
+            if (_cascadeTimer != null) return true;
+            if (IsCascadeRaining()) { DeferCascade(strictOverride, path); return true; }
             path ??= PickNext();
             if (path == null)
             {
@@ -331,6 +339,7 @@ namespace ConditioningControlPanel.Services
             _playing = true;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
+            var flashWasRunning = CoreFlash.IsRunning;
             CoreFlash.Stop();   // WPF PlayVideo: App.Flash?.Stop()
             var strict = IsStrict;
             Dispose(ref _preroll);
@@ -340,6 +349,15 @@ namespace ConditioningControlPanel.Services
                 // WPF ShouldStartAfterPreroll: only the run that armed it, and only while still live.
                 if (!ReferenceEquals(mine, _preroll) || !_playing) return;
                 Dispose(ref _preroll);
+                if (IsCascadeRaining())
+                {
+                    _playing = false;
+                    // Pre-roll never reached playback. Return the flash schedule we interrupted.
+                    if (flashWasRunning && CoreSettings.Current.FlashEnabled) CoreFlash.Start();
+                    DeferCascade(strict, path);
+                    return;
+                }
+                _cascadeDeadline = null;
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 try { _host.Show(path, strict); }
@@ -356,6 +374,38 @@ namespace ConditioningControlPanel.Services
             created.Change(PreRoll, Timeout.InfiniteTimeSpan);
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
+        }
+
+        // WPF VideoService.cs:1901: one replay, bounded from the first defer even across cascades.
+        private void DeferCascade(bool? strict, string? path)
+        {
+            if (_cascadeTimer != null) return;
+            _cascadeDeadline ??= _time.GetUtcNow() + TimeSpan.FromSeconds(90);
+            _cascadeStrict = strict;
+            _cascadePath = path;
+            ITimer? timer = null;
+            timer = _time.CreateTimer(_ => CoreDispatch.Post(() =>
+            {
+                if (!ReferenceEquals(timer, _cascadeTimer)) return;
+                if (!IsCascadeRaining())
+                {
+                    Dispose(ref _cascadeTimer);
+                    if (!Trigger(_cascadeStrict, _cascadePath))
+                    {
+                        _cascadeDeadline = null;
+                        if (_running) ScheduleNext();
+                    }
+                }
+                else if (_time.GetUtcNow() >= _cascadeDeadline)
+                {
+                    Dispose(ref _cascadeTimer);
+                    _cascadeDeadline = null;
+                    if (_running) ScheduleNext();
+                }
+                else timer!.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+            }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _cascadeTimer = timer;
+            timer.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
         }
 
         /// <summary>WPF Cleanup: the natural end or an Esc dismiss. The flash resumes and, while the
@@ -412,6 +462,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            Dispose(ref _cascadeTimer);
+            _cascadeDeadline = null;
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
