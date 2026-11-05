@@ -580,7 +580,12 @@ namespace ConditioningControlPanel.Services
         /// resolved; a block for any other record is ignored.
         /// </summary>
         public static void ApplyValidatePrizes(string? requestedFor, string? answeredFor, PrizesBlock? prizes, string source)
-            => PrizeFeed.Apply(requestedFor, answeredFor, prizes, source);
+        {
+            PrizeFeed.Apply(requestedFor, answeredFor, prizes, source);
+            // Rain look sync (/v2/equip family rain): queued behind the snapshot, so the clamp sees the grants.
+            if (!string.IsNullOrEmpty(requestedFor) && string.Equals(requestedFor, answeredFor, StringComparison.Ordinal))
+                PostPrizeWork(() => Companion.RainLookSync.OnAccountReady(requestedFor));
+        }
 
         /// <summary>
         /// Queue one ownership change on the UI thread, always behind what is already queued.
@@ -740,7 +745,7 @@ namespace ConditioningControlPanel.Services
                             var body = await v2Response.Content.ReadAsStringAsync();
                             TryAdoptFromHeartbeatBody(body);
                             // Same body, second reading: a tier bought on the site (PayPal / Stripe)
-                            // unlocks here without a sign-in. Rises only; see EntitlementTierRule.
+                            // unlocks here without a sign-in; a confirmed drop ends the grace. See EntitlementTierRule.
                             EntitlementTierSync.Offer(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat");
                             // Third reading: an invite week redeemed on another device opens here too.
                             Invites.InviteGrantSync.Offer(Invites.InviteRules.ParseHeartbeatGrant(body), "heartbeat");
@@ -1098,7 +1103,7 @@ namespace ConditioningControlPanel.Services
                 }
 
                 ApplyServerCurveEpoch(user.CurveEpoch, "read-before-write");
-                // Tier is still not adopted wholesale here; only a RISE of the folded tier is offered.
+                // Tier is still not adopted wholesale here: a rise unlocks, a confirmed drop ends the grace.
                 EntitlementTierSync.Offer(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "read-before-write");
                 // A fresh server Patreon confirmation keeps the grace alive for a Discord sign-in.
                 EntitlementTierSync.OfferPatreon(new PatreonActiveReading(user.PatreonIsActive,
@@ -1180,7 +1185,7 @@ namespace ConditioningControlPanel.Services
                 {
                     if (settings != null)
                     {
-                        settings.PatreonPremiumValidUntil = DateTime.UtcNow.AddHours(25);
+                        EntitlementTierRule.ExtendPremiumTo(settings, DateTime.UtcNow.AddHours(25));
                     }
                     App.Patreon?.SetWhitelistStatus(true);
                     App.Logger?.Information("Boot heal (#293): whitelisted user — premium access applied via read-only fetch");
@@ -1907,20 +1912,14 @@ namespace ConditioningControlPanel.Services
                         }
                         else if (v2Result?.SkillPoints.HasValue == true)
                         {
-                            // Take max of server/local — skill points only increase (level-ups, bubble
-                            // pops) and are NEVER reset by seasons (policy: the balance is permanent,
-                            // and since the Descent so is the tree it buys), so the higher value is
-                            // always correct.
-                            // This also shields the balance from an older server that still zeroes
-                            // skill_points at rollover.
-                            var maxPoints = SparklePoints.MergeMax(v2Result.SkillPoints.Value, settings.SkillPoints);
-                            if (maxPoints != settings.SkillPoints)
-                            {
-                                App.Logger?.Information("V2 Sync: Skill points server={Server}, local={Local} — taking max ({Max})",
-                                    v2Result.SkillPoints.Value, settings.SkillPoints, maxPoints);
-                                settings.SkillPoints = maxPoints;
+                            // Raise-only, unless wallet_net says something was spent elsewhere: then the
+                            // reply's balance is adopted, down included (V2WalletNet). Seasons NEVER reset
+                            // the balance (policy: it is permanent, and since the Descent so is the tree it
+                            // buys); the raise-only side also shields it from an older server that still
+                            // zeroes skill_points at rollover.
+                            if (ApplySyncWallet(App.Settings?.Current, unifiedId!, v2Result.SkillPoints.Value,
+                                    V2WalletNet.ParseNet(v2Result.WalletNet)))
                                 App.Settings?.Save();
-                            }
                         }
 
                         // Merge unlocked skills from server (union — never lose skills).
@@ -2073,7 +2072,7 @@ namespace ConditioningControlPanel.Services
                         if (v2Result?.PatreonIsWhitelisted == true)
                         {
                             // Refresh the cached premium access window (25h > sync interval)
-                            settings.PatreonPremiumValidUntil = DateTime.UtcNow.AddHours(25);
+                            EntitlementTierRule.ExtendPremiumTo(settings, DateTime.UtcNow.AddHours(25));
                             App.Settings?.Save();
 
                             // Set whitelist + tier on PatreonService so Lab access works
@@ -2709,6 +2708,9 @@ namespace ConditioningControlPanel.Services
                 var settings = App.Settings?.Current;
                 if (settings == null) return false;
                 if (!settings.ProfileCosmetics.IsEmpty) return false;
+                // An unequip-everything still on its way to /v2/equip: the server's frame and avatar in
+                // this echo are what the player just took off.
+                if (settings.ProfileEquipPushOwed) return false;
 
                 var clean = CosmeticsCatalog.SanitizeOwn(cloud);
                 if (clean.IsEmpty) return false;
@@ -3245,7 +3247,8 @@ namespace ConditioningControlPanel.Services
                 }
             }
 
-            // Merge skill tree data - take max of server/local (skill points only increase)
+            // Merge skill tree data - raise-only: this V1 profile shape carries no wallet_net, so it
+            // cannot tell a spend from a stale read (the V2 sync reply can: ApplySyncWallet).
             if (cloudProfile.SkillPoints.HasValue)
             {
                 var maxPoints = SparklePoints.MergeMax(cloudProfile.SkillPoints.Value, settings.SkillPoints);
@@ -3858,6 +3861,34 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// A <c>/v2/user/sync</c> reply's balance and net, applied to the LIVE settings: the object
+        /// the header wallet listens to, which a restore or account swap may have replaced since the
+        /// request left. The setter's PropertyChanged is what repaints the wallet. Returns true when
+        /// anything changed and needs saving.
+        /// </summary>
+        internal static bool ApplySyncWallet(AppSettings? live, string syncAccount, int serverSp, int? replyNet)
+        {
+            if (live == null) return false;
+            var same = string.Equals(live.UnifiedId, syncAccount, StringComparison.Ordinal);
+            int? seen = live.WalletNetSeen.TryGetValue(syncAccount, out var stored) ? stored : null;
+            var step = V2WalletNet.Decide(same, replyNet, seen, serverSp, live.SkillPoints);
+            var changed = false;
+            if (step.NextSp != live.SkillPoints)
+            {
+                App.Logger?.Information("V2 Sync: Skill points server={Server}, local={Local}, net={Net}, stored net={Seen} -> {Next}",
+                    serverSp, live.SkillPoints, replyNet, seen, step.NextSp);
+                live.SkillPoints = step.NextSp;
+                changed = true;
+            }
+            if (same && step.StoreNet is { } net && seen != net)
+            {
+                live.WalletNetSeen = new Dictionary<string, int>(live.WalletNetSeen) { [syncAccount] = net };
+                changed = true;
+            }
+            return changed;
+        }
+
+        /// <summary>
         /// Force-reset all skills and refund points. Used when admin resets skills via /admin/reset-skills.
         /// </summary>
         private void ApplyForceSkillsReset(int? serverSkillPoints)
@@ -4404,10 +4435,16 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.LastSeenUtc), // Local-only greeting timestamp — must never leave the device.
             // Documented local only: a restore on another PC must not switch presence sharing on.
             nameof(AppSettings.FriendsPresenceShared),
+            // Same reason: a restore must not switch the always-on wallpaper on without its warning.
+            nameof(AppSettings.CollageRunWithCcp),
+            // A path on this PC: means nothing elsewhere, and names the user's folders.
+            nameof(AppSettings.CollageOwnImagePath),
             nameof(AppSettings.ModPersonalityPreset),
             // Conversion rows (C9): machine-local stamps and the last server tier reading.
             // A restore must not bring back a stale reading or re-open a once-ever row.
             nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.GraceClosedTier),
+            nameof(AppSettings.GraceClosedAtUtc),
             nameof(AppSettings.InboxStamps),
             nameof(AppSettings.LastKnownEffectiveTier),
             // Free member fields mirror the server profile; the next profile read refills them.
@@ -4416,6 +4453,15 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ServerPaidUntil),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
+            // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
+            nameof(AppSettings.ProfileEquipAccount),
+            nameof(AppSettings.ProfileEquipUpdatedMs),
+            nameof(AppSettings.ProfileEquipPushOwed),
+            // Rain look sync state: what THIS PC owes the server and last agreed with it.
+            nameof(AppSettings.RainLookPushOwed),
+            nameof(AppSettings.RainLookAgreedUtc),
+            // What THIS PC last saw of each account's wallet net: on another PC it would invent or hide a spend.
+            nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
         };
@@ -4465,16 +4511,26 @@ namespace ConditioningControlPanel.Services
             restored.DiscordWebhookUrl = current.DiscordWebhookUrl;
             restored.LastSeenUtc = current.LastSeenUtc;
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
+            restored.CollageRunWithCcp = current.CollageRunWithCcp;
+            restored.CollageOwnImagePath = current.CollageOwnImagePath;
             // Conversion state lives on this PC only (it is left out of the backup): a restore must
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
             restored.ServerTierSeen = current.ServerTierSeen;
+            restored.GraceClosedTier = current.GraceClosedTier;
+            restored.GraceClosedAtUtc = current.GraceClosedAtUtc;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
+            restored.ProfileEquipAccount = current.ProfileEquipAccount;
+            restored.ProfileEquipUpdatedMs = current.ProfileEquipUpdatedMs;
+            restored.ProfileEquipPushOwed = current.ProfileEquipPushOwed;
+            restored.RainLookPushOwed = current.RainLookPushOwed;
+            restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
+            restored.WalletNetSeen = current.WalletNetSeen;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)
@@ -5174,6 +5230,11 @@ namespace ConditioningControlPanel.Services
 
             [JsonProperty("skill_points")]
             public int? SkillPoints { get; set; }
+
+            /// <summary>Raw on purpose: read through V2WalletNet.ParseNet, so an odd value cannot
+            /// throw away the rest of this reply.</summary>
+            [JsonProperty("wallet_net")]
+            public JToken? WalletNet { get; set; }
 
             [JsonProperty("unlocked_skills")]
             public List<string>? UnlockedSkills { get; set; }
