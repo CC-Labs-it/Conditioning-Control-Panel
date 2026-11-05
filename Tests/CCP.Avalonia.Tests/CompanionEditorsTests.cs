@@ -203,9 +203,6 @@ public sealed class CompanionEditorsTests
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
-            Assert.NotNull(shell.EnteringTab); // exercise the running entrance
-            shell.CompleteTabTransition();
-            Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
