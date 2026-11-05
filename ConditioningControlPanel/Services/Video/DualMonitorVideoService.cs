@@ -129,6 +129,7 @@ namespace ConditioningControlPanel.Services
                 using var media = new Media(_libVLC, videoUrl, FromType.FromLocation);
                 _mediaPlayer.Play(media);
                 _isPlaying = true;
+                global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("dual-monitor-video", global::ConditioningControlPanel.Services.Logging.UrlLog.Host(videoUrl));
 
                 App.Logger?.Information("DualMonitorVideo: Started playback from {Host} on {Count} monitors",
                     Logging.UrlLog.Host(videoUrl), _windowData.Count);
