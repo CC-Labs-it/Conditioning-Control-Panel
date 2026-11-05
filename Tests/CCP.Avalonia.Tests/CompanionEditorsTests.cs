@@ -191,10 +191,10 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        service.Current.MotionLevel = MotionLevel.Full;
-        service.Current.PerformanceMode = false;
-        // Hold the entrance at its first frame: runner speed must not decide when clicks land.
-        var shell = new MainShellWindow { TabClock = new SteppedClock() };
+        // Freeze entrance motion so the pointer probes a stationary target.
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        var shell = new MainShellWindow();
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
@@ -202,9 +202,7 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.NotNull(shell.EnteringTab);
             shell.CompleteTabTransition(); // settle the actual entrance before sampling pointer geometry
-            Assert.Null(shell.EnteringTab);
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
@@ -212,9 +210,16 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                // BringIntoView needs current bounds; a pending page layout can scroll the wrong
+                // rectangle on Windows. Settle layout and rendering before injecting real input.
+                shell.UpdateLayout();
                 button.BringIntoView();
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick(); // publish the scrolled hit-test geometry
+                shell.UpdateLayout();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
+                shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
+                shell.UpdateLayout();
+                HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);

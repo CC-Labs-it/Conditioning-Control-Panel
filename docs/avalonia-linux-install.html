@@ -24,7 +24,7 @@ never has to find packages by hand. This belongs to the installer / Linux packag
 &quot;retire WPF from shipping&quot; counts as finished.</p>
 <h2 id="why-this-came-up">Why this came up</h2>
 <p>On a fresh box, web features show &quot;WebKitGtk library is not installed. Install webkit2gtk 4.0+ package.&quot; The user had to
-install <code>webkit2gtk-4.1</code> by hand. Avalonia.Controls.WebView 12.1.0 loads the GTK3 builds only (libwebkit2gtk-4.0.so.37 or
+install <code>webkit2gtk-4.1</code> by hand. Avalonia.Controls.WebView 12.1.1 loads the GTK3 builds only (libwebkit2gtk-4.0.so.37 or
 libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-6.0 (GTK4) does NOT work.</p>
 <h2 id="runtime-dependencies-to-declare-verify-the-list-again-at-packaging-time">Runtime dependencies to declare (verify the list again at packaging time)</h2>
 
@@ -37,6 +37,7 @@ libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-
 <tr><td>Ducking, microphone list, quest mic probe (<code>pactl</code>; works on PipeWire too)</td><td>libpulse</td><td>pulseaudio-utils</td><td>pulseaudio-utils (openSUSE: pulseaudio-utils)</td></tr>
 <tr><td>Fonts</td><td>none: Inter, Fredoka, Noto Sans Mono and Noto Emoji are bundled (a system emoji font is used first when present)</td><td>none</td><td>none</td></tr>
 <tr><td>Sign-in token store</td><td>libsecret</td><td>libsecret-1-0</td><td>libsecret</td></tr>
+<tr><td>TLS for every HTTPS call (.NET 10 loads OpenSSL 3 or older; Fedora 45 ships OpenSSL 4, <code>libssl.so.4</code>, and the app aborts at start with &quot;No usable version of libssl was found&quot;, distro-check 2026-11-04)</td><td>openssl (3.x, base system)</td><td>libssl3 (base system)</td><td>Fedora 45: openssl3-libs (compat <code>libssl.so.3</code>); Fedora 44: openssl-libs (base system)</td></tr>
 <tr><td>Overlays, panic key (X11/XInput2)</td><td>libx11 libxi</td><td>libx11-6 libxi6</td><td>libX11 libXi</td></tr>
 </table>
 <p>.NET: publish self-contained, so no runtime dependency.
@@ -73,6 +74,8 @@ launching app; call <code>org.freedesktop.host.portal.Registry.Register</code>),
 web views, audio/video, tray, overlays, panic shortcut and sign-in token storage all work with no manual package installs.</li>
 <li>Record a decision row in docs/avalonia-decisions.html and a ledger row for the installer.</li>
 </ul>
+<h2 id="not-in-the-linux-preview">Not in the Linux preview</h2>
+<p>The Wallpaper from the Windows 7.2.1 notes is not on Linux, and its door is hidden: Dynamic draws through DirectComposition, and Static and Own image write through a Windows API. The Prize Counter is not here yet either; it has a lane of its own.</p>
 <h2 id="carry-into-the-repo">Carry into the repo</h2>
 <p>The first branch after this note that touches docs must commit this file as <code>docs/avalonia-linux-install.html</code> (it lives in
 ~/ccp-port/briefs only because every worktree had a worker writing to it when the note was made).</p>
