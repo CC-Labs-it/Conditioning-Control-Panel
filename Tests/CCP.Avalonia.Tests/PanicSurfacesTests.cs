@@ -24,6 +24,11 @@ public sealed class PanicSurfacesTests
             // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
             // decides process-wide fonts, including the subliminal card closed by panic.
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -94,6 +99,7 @@ public sealed class PanicSurfacesTests
         "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
         "companion-conversation",
+        "mantra-chant",
         "ai-followups",
         "blink-trainer",
         "companion-level-sound",

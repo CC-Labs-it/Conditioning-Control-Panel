@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
             new("quiz", _ => QuizWindow.ForceCloseAll()), // WPF MainWindow.xaml.cs:2080
             new("companion-level-sound", sh => sh?.StopCompanionLevelSound()), // WPF App.xaml.cs:1830 kill-audio intent; also stop the shell-owned milestone handle.
+            new("mantra-chant", _ => Platform.MantraChantHost.StopForPanic()), // WPF App.xaml.cs:1880: stop and clear opt-in
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
