@@ -15,6 +15,23 @@ namespace ConditioningControlPanel.Avalonia
 {
     public partial class App : Application
     {
+        internal static void FireChaosPayload(Services.Chaos.EffectPayload payload) =>
+            FireChaosPayload(payload, Views.Chaos.ChaosGifCascadeOverlay.Show);
+
+        internal static void FireChaosPayload(Services.Chaos.EffectPayload payload,
+            System.Action<double, double, double, double, double, double> showCascade)
+        {
+            if (payload is Services.Chaos.GifCascadePayload)
+            {
+                showCascade(Services.Chaos.GifCascadePayload.SPAWN_RATE_PER_SEC,
+                    Services.Chaos.GifCascadePayload.DURATION_SEC * Services.Chaos.EffectPayload.GlobalDurationMult,
+                    Services.Chaos.GifCascadePayload.GIF_SIZE, Services.Chaos.GifCascadePayload.FALL_SPEED,
+                    Services.Chaos.GifCascadePayload.OPACITY, Services.Chaos.GifCascadePayload.START_SCALE);
+                return;
+            }
+            Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", payload.DisplayName);
+        }
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -537,10 +554,8 @@ namespace ConditioningControlPanel.Avalonia
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
-                // P31: WPF seeds EffectPayloadFiring. ponytail: no chaos payload effects on this head yet
-                // (next lane chaos-bubble-field-b); log so a fired payload is never silently dropped.
-                Services.Chaos.EffectPayload.Firer = p =>
-                    Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
+                // WPF EffectPayloadFiring.cs:13,225: dispatch the cascade through the head overlay.
+                Services.Chaos.EffectPayload.Firer = FireChaosPayload;
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
