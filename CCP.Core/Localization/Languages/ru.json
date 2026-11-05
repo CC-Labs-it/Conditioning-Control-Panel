@@ -8213,5 +8213,11 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts: набор 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts: набор 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts: набор 3",
-  "session_settings_recovery_failed": "Не удалось восстановить настройки сеанса. Перезапустите приложение, чтобы восстановить их."
+  "session_settings_recovery_failed": "Не удалось восстановить настройки сеанса. Перезапустите приложение, чтобы восстановить их.",
+  "remote_directory_private": "Remote: приватно",
+  "remote_directory_private_tip": "Ваша сессия Remote приватна: вас нет в каталоге доступных участников. Видимость столов Goon настраивается отдельно.",
+  "remote_directory_listed": "Remote: в каталоге",
+  "remote_directory_listed_tip": "Ваша сессия Remote находится в каталоге доступных участников и ждёт, пока её выберут.",
+  "remote_directory_claimed": "Remote: выбрано",
+  "remote_directory_claimed_tip": "Управляющий выбрал вашу запись Remote."
 }

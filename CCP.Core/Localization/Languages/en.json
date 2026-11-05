@@ -8966,5 +8966,11 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts Vol. 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts Vol. 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts Vol. 3",
-  "session_settings_recovery_failed": "Session settings recovery failed. Restart the app to recover them."
+  "session_settings_recovery_failed": "Session settings recovery failed. Restart the app to recover them.",
+  "remote_directory_private": "Remote: private",
+  "remote_directory_private_tip": "Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.",
+  "remote_directory_listed": "Remote: listed",
+  "remote_directory_listed_tip": "Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.",
+  "remote_directory_claimed": "Remote: claimed",
+  "remote_directory_claimed_tip": "A controller has claimed your Remote listing."
 }

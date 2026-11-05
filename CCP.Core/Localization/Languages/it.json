@@ -8963,5 +8963,11 @@
   "shop_item_rt_bundle_1_name": "Pacchetto Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pacchetto Racing Thoughts 2",
   "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3",
-  "session_settings_recovery_failed": "Impossibile ripristinare le impostazioni della sessione. Riavvia l'app per recuperarle."
+  "session_settings_recovery_failed": "Impossibile ripristinare le impostazioni della sessione. Riavvia l'app per recuperarle.",
+  "remote_directory_private": "Remote: privato",
+  "remote_directory_private_tip": "La tua sessione Remote è privata: non compari nell’elenco dei soggetti disponibili. I tavoli Goon hanno un’impostazione separata per la visibilità.",
+  "remote_directory_listed": "Remote: in elenco",
+  "remote_directory_listed_tip": "La tua sessione Remote è nell’elenco dei soggetti disponibili e attende che qualcuno la richieda.",
+  "remote_directory_claimed": "Remote: richiesto",
+  "remote_directory_claimed_tip": "Una persona ha richiesto la tua voce Remote."
 }

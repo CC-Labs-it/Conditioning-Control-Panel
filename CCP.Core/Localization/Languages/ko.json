@@ -8213,5 +8213,11 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts 번들 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts 번들 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts 번들 3",
-  "session_settings_recovery_failed": "세션 설정을 복원하지 못했습니다. 앱을 다시 시작하여 복원하세요."
+  "session_settings_recovery_failed": "세션 설정을 복원하지 못했습니다. 앱을 다시 시작하여 복원하세요.",
+  "remote_directory_private": "Remote: 비공개",
+  "remote_directory_private_tip": "Remote 세션이 비공개 상태라 사용 가능한 대상 목록에 표시되지 않습니다. Goon 테이블의 공개 범위는 별도로 설정합니다.",
+  "remote_directory_listed": "Remote: 목록에 표시됨",
+  "remote_directory_listed_tip": "Remote 세션이 사용 가능한 대상 목록에 표시되어 상대가 맡기를 기다리고 있습니다.",
+  "remote_directory_claimed": "Remote: 담당자 확정",
+  "remote_directory_claimed_tip": "컨트롤러가 Remote 목록의 내 항목을 맡았습니다."
 }

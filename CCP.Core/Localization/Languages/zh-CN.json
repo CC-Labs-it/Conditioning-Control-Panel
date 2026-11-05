@@ -8722,5 +8722,11 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts 合集 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts 合集 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts 合集 3",
-  "session_settings_recovery_failed": "无法恢复会话设置。请重启应用以恢复设置。"
+  "session_settings_recovery_failed": "无法恢复会话设置。请重启应用以恢复设置。",
+  "remote_directory_private": "Remote：私密",
+  "remote_directory_private_tip": "你的 Remote 会话是私密的，不会显示在可用对象目录中。Goon 桌有单独的可见范围设置。",
+  "remote_directory_listed": "Remote：已列出",
+  "remote_directory_listed_tip": "你的 Remote 会话已列入可用对象目录，正在等待对方认领。",
+  "remote_directory_claimed": "Remote：已认领",
+  "remote_directory_claimed_tip": "一位控制者认领了你的 Remote 条目。"
 }

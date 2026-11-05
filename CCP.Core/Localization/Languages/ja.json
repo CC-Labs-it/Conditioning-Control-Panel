@@ -8213,5 +8213,11 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts バンドル1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts バンドル2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts バンドル3",
-  "session_settings_recovery_failed": "セッション設定を復元できませんでした。アプリを再起動して復元してください。"
+  "session_settings_recovery_failed": "セッション設定を復元できませんでした。アプリを再起動して復元してください。",
+  "remote_directory_private": "Remote: 非公開",
+  "remote_directory_private_tip": "Remoteセッションは非公開です。利用可能な被験者の一覧には表示されません。Goonテーブルの公開範囲は別の設定で選べます。",
+  "remote_directory_listed": "Remote: 公開中",
+  "remote_directory_listed_tip": "Remoteセッションは利用可能な被験者の一覧に表示され、相手が引き受けるのを待っています。",
+  "remote_directory_claimed": "Remote: 引受済み",
+  "remote_directory_claimed_tip": "コントローラーがあなたのRemoteの掲載を引き受けました。"
 }

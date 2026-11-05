@@ -396,7 +396,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF UpdateDirectoryListingStatus: the "you're listed" banner under the code and the
-        /// shell's title-bar pill (Private only / Listed / Claimed).</summary>
+        /// shell's title-bar pill (Remote: private / listed / claimed).</summary>
         private void UpdateDirectoryListingStatus()
         {
             var r = Relay.Value;
