@@ -108,8 +108,8 @@ public sealed class SharedDeeperThemeTests
             {
                 var border = button.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "border");
                 Assert.Same(release, border.Transitions);
-                var clock = new StepClock();
-                border.SetValue(StepClock.Property, clock.Instance);
+                var clock = new TestAnimationClock();
+                border.SetValue(TestAnimationClock.Property, clock.Instance);
                 double Scale() => border.RenderTransform?.Value.M11 ?? 1.0;   // settled release = no transform
                 // Press: 80 ms linear 1 -> 0.97 (the 150 ms BackEase would sit at 0.9811 at 30 ms, not done at 80).
                 window.MouseDown(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
@@ -132,20 +132,6 @@ public sealed class SharedDeeperThemeTests
         }
         await Task.CompletedTask;
     });
-
-    /// <summary>Hand-stepped animation clock, so transitions advance only when the test says so. Avalonia 12 made
-    /// IClock internal, and the headless render clock is real time, so this reaches Avalonia's own ClockBase by
-    /// reflection; a rename there fails loudly here instead of silently passing.</summary>
-    private sealed class StepClock
-    {
-        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
-        private static readonly Type Base = typeof(Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
-        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
-        public static readonly AvaloniaProperty Property =
-            (AvaloniaProperty)typeof(Animatable).GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
-        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
-        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
-    }
 
     [Fact]
     public Task EditorPlayerAndHubUseTheSharedThemes() => AvaloniaTestDispatcher.RunAsync(async () =>
