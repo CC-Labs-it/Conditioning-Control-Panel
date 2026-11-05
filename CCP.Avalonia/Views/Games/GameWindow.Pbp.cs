@@ -2,7 +2,7 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), Lobby intents (.Friends.cs),
-// MergedAccountRecovery.
+// MergedAccountRecovery. The launch day-log is wired.
 
 using System;
 using System.Collections.Generic;
@@ -90,6 +90,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpOpen = true;
             // WPF PieceByPieceHostService.cs:230-232: keys work before the first click.
             Dispatcher.UIThread.Post(() => { if (!_closing) Web.FocusPage(); }, DispatcherPriority.Loaded);
+            // WPF PieceByPieceHostService.cs:168 and SeasonRecapService.cs:187-188: one day-log note per new board.
+            App.FeatureDayLog?.Note(SeasonFeatureKeys.ToDayLogEvent(SeasonFeatureKeys.PieceByPiece)!);
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => ClosePbp();
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
