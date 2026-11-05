@@ -47,6 +47,42 @@ public sealed class AchievementEngineTests : IDisposable
     }
 
     [Fact]
+    public void Pop_credit_unlocks_at_1000_awards_points_and_flushes_every_50()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-bubble-credit-");
+        var s = CoreSettings.Current; var points = s.SkillPoints;
+        try
+        {
+            var path = Path.Combine(dir.FullName, "achievements.json");
+            var engine = new AchievementEngine(new AchievementStore(path));
+            engine.Progress.TotalBubblesPopped = 949;
+            engine.TrackBubblePopped();
+            Assert.Equal(950, new AchievementStore(path).Load().TotalBubblesPopped);
+            Assert.Equal(points, s.SkillPoints);
+            for (var i = 0; i < 50; i++) engine.TrackBubblePopped();
+            Assert.True(engine.Progress.IsUnlocked("pop_the_thought"));
+            Assert.Equal(points + 1, s.SkillPoints);
+        }
+        finally { s.SkillPoints = points; dir.Delete(true); }
+    }
+
+    [Fact]
+    public void BubbleBatchCrossesEveryMilestoneAndPersists()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.Progress.TotalBubblesPopped = 95;
+        Assert.Equal(3, engine.TrackBubblesPopped(255));
+        Assert.Equal(350, new AchievementStore(MainPath).Load().TotalBubblesPopped);
+        Assert.Equal(0, engine.TrackBubblesPopped(0));
+        Assert.Equal(0, engine.TrackBubblesPopped(-5));
+        Assert.Equal(350, engine.Progress.TotalBubblesPopped);
+        Assert.Equal(1, engine.TrackBubblesPopped(50));
+        Assert.Equal(6, engine.TrackBubblesPopped(600));
+        Assert.True(engine.Progress.IsUnlocked("pop_the_thought"));
+        Assert.True(new AchievementStore(MainPath).Load().IsUnlocked("pop_the_thought"));
+    }
+
+    [Fact]
     public void AttentionTrackersCountAndUnlockAtWpfThresholds()
     {
         var engine = new AchievementEngine(new AchievementStore(MainPath));

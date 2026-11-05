@@ -44,13 +44,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
             new("help-video", _ => HelpVideoWindow.CloseCurrent(forPanic: true)), // Stricter than WPF MainWindow.xaml.cs:2017: include tutorial media in stop-all.
             new("emi-ring", _ => EmiDesk.EmiDeskService.Instance.Window?.CloseRing()), // stricter safety: fold on every panic route
+            // Stricter than WPF MainWindow.Patreon.cs:1544: panic discards pending trigger edits.
+            new("workshop-trigger-editor", _ => Controls.Companion.WorkshopAccordion.CloseTriggerEditorForPanic()),
+            new("awareness-companion", sh => sh?.Named<Tabs.AwarenessTabView>("AwarenessTab")?.StopCompanionPrivacyForPanic()), // hosted card clocks and armed wipe
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             new("nav-window-confirm", sh => sh?.PageStrip?.CloseConfirm()),
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => { Platform.RaceEngineDownload.Cancel(); Games.GameWindow.CloseAllForPanic(); }, Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
-            new("quest-stamps", sh => sh?.HideStampPopup()),
+            new("quest-stamps", sh => sh?.StopQuestStampsForPanic()),   // #3235 HideStampPopup, then the stamped pop (flash, scale) resets
             new("quest-voice", _ => ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop()),
             new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
             // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
@@ -62,9 +65,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
             new("quiz", _ => QuizWindow.ForceCloseAll()), // WPF MainWindow.xaml.cs:2080
-            new("companion-audio", _ => CompanionEffects.StopAudio()),   // WPF KillAllAudio -> Audio.StopSound (#1428)
             // WPF MainWindow/MainWindow.xaml.cs:2104 KillAllAudio: stop level-up audio, plus interaction flashes.
-            new("shell-hero", sh => sh?.StopHeroForPanic()),
+            new("shell-hero", sh => sh?.StopHeroForPanic()),   // also the companion milestone sound: one WPF PlayLevelUpSound handle
+            new("mantra-chant", _ => Platform.MantraChantHost.StopForPanic()), // WPF App.xaml.cs:1880: stop and clear opt-in
+            new("companion-audio", _ => CompanionEffects.StopAudio()),     // WPF b1a39bc77 KillAllAudio -> Audio.StopSound
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
@@ -98,6 +102,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("program-moments", sh => sh?.Named<Tabs.ProgramsTabView>("ProgramsTab")?.StopProgramMomentsForPanic()),
             new("program-session", sh => { if (sh != null) sh.EndProgramSessionQuietly("panic"); else App.Programs?.StopProgramSessionIfRunning("panic"); }),
             new("programs-fx", sh => sh?.Named<Tabs.ProgramsTabView>("ProgramsTab")?.StopProgramFxForPanic()),
+            // WPF b9368d963 (MainWindow.xaml.cs PanicStopEverySurface "web video" / "Deeper player"): page video and the
+            // Deeper player kept playing after a panic. WPF :2045-2046 media block, before the tail's StopEngine.
+            new("browser-media", sh => (sh ?? MainShellWindow.Current)?.PanicPauseBrowserMedia()),
+            new("deeper-player", _ => Deeper.EnhancementPlayerWindow.PanicPauseAll()), // WPF MainWindow.xaml.cs:2046
             // WPF :1554 CancelPendingAi (right after FirstShowService.Stop :1553) runs long before StopEngine (:1838); :1721-1732 game
             // surfaces and Lab minigames (GameSurfaces.cs:50 'chaos') close before RunPanicStopTail (:1733); :1819 KillAllAudio
             // (App.xaml.cs:1780 Mantra.Dispose), :1797 remote haptics, :2003 haptics PanicStop and :1822 Autonomy.CancelActivePulses
@@ -105,11 +113,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // so the leash task parks before StopEngine and before its lock card closes.
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
-                After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task"]),
+                After: ["companion-audio", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
-            new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.
+            new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
+            new("flash", _ => { Overlays.FlashOverlay.CloseAll(final: false); ConditioningControlPanel.Services.Flash.RemoteFlashSource.CleanupCache(); }), // Includes standalone pops and mid-Shatter exits.
             new("brain-drain-audio", _ => Platform.BrainDrainPlayer.Instance?.Stop()),
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
+            new("enhancement-purchase", _ => Tabs.EnhancementsTabView.ClosePurchaseDialogsForPanic()),
             new("pink-rush", _ => PinkRushHost.Stop(), After: ["engine"]),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
             // WPF :1978 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel;
             // :1974-1978 the engine-owned session GIF goes first, these standalone slots after it.
@@ -126,18 +136,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // P06: also dismiss the knowledge-link modal added to the Links page.
             new("companion-knowledge-editor", _ => Dialogs.KnowledgeLinkEditorDialog.CloseForPanic()),
             new("discord-share-prompt", sh => sh?.CloseAchievementSharingForPanic()),
+            new("companion-community", _ => Controls.Companion.Runtime.WorkshopCommunityCell.StopForPanic()), // P06: old lane also closed these modals.
+            new("roster-personality", _ => Controls.Companion.WorkshopAccordion.CloseRosterMessagesForPanic()),
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("screen-shake", _ => Deeper.ScreenShake.Stop()),
-            new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
+            new("possession", _ => { App.Possession?.UndoAll(); Possession.PossessionRuntime.UndoAllLive(); }),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             // WPF Features/VideoFeatureControl.xaml.cs:533 error box; also close it on panic.
             new("video-test-error", _ => Features.VideoFeatureControl.CloseTestErrorsForPanic()),
+            new("chaster-booked-pop", _ => Overlays.ChasterBookedPop.CloseAll()),
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             // WPF MainWindow.xaml.cs:2101 "audio unduck": other apps come back up. That pass runs before WPF's StopEngine;
             // After: engine mirrors StopEngineCore's unduck (StartStop.cs:547). Panic only: the plain Stop does not unduck here yet.
             new("audio-duck", _ => Platform.LibVlcAudio.Instance?.ForceUnduck(), After: ["engine"]),
             new("descent-fuse", _ => DescentFuseWindow.ForceCloseAll()), // WPF StartStop.cs:525
             new("deeper-player-fullscreen", _ => Deeper.EnhancementPlayerWindow.ForceExitFullscreenAll()), // WPF player:2500-2511
-            new("deeper-player", _ => Deeper.EnhancementPlayerWindow.PanicPauseAll()), // WPF MainWindow.xaml.cs:2046
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("friend-notices", _ => Overlays.FriendNotices.CloseAll(fold: true)), // P06, same fold as knock cards; WPF FriendsLanding.cs:66
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox

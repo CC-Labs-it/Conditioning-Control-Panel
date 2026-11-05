@@ -28,7 +28,7 @@ public sealed partial class GameWindowTests
     }
 
     [Fact]
-    public void GlassroadPictures_ConsentNichesFeedOfflineAndPanic() => RunGlassroad((shell, _, _) =>
+    public void GlassroadPictures_ConsentNichesFeedOfflineAndPanic() => RunGlassroad("1", (shell, _, _) =>
     {
         var s = CoreSettings.Current;
         var old = (s.GlassroadPictures, s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.OfflineMode);
@@ -106,7 +106,7 @@ public sealed partial class GameWindowTests
         }
     });
     [Fact]
-    public void GlassroadPictures_PanicInvalidatesPendingConsent() => RunGlassroad((shell, _, _) =>
+    public void GlassroadPictures_PanicInvalidatesPendingConsent() => RunGlassroad("1", (shell, _, _) =>
     {
         var s = CoreSettings.Current;
         var old = (s.GlassroadPictures, s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.OfflineMode);
@@ -144,7 +144,7 @@ public sealed partial class GameWindowTests
     /// pool and ask no consent, a settings flip starts nothing, no feed row ever leaves. The same settings on a
     /// Windows host start the pool (the WPF rule).</summary>
     [Fact]
-    public void GlassroadPictures_LinuxHostNeverOffersOrStartsScrolller() => RunGlassroad((_, _, _) =>
+    public void GlassroadPictures_LinuxHostNeverOffersOrStartsScrolller() => RunGlassroad("1", (_, _, _) =>
     {
         var s = CoreSettings.Current;
         var old = (s.GlassroadPictures, s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.OfflineMode);

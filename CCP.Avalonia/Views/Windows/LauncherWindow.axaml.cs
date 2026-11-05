@@ -38,22 +38,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
                 // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
-                // WPF 7.2: Racing Thoughts 3D, always revealed; locked below Prime.
+                // WPF 7.2 LauncherCatalogue: always revealed, Prime padlock; Launch paints the refusal.
                 ["race"] = (Games.GameWindow.GlassroadLocked, _ => Games.GameWindow.Launch("race")),
                 // WPF LauncherCatalogue :241: Basic (or the daily-free drop); GameWindow.Launch runs DemandPremium.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
-
-        /// <summary>WPF LauncherEntry.Revealed (LauncherCatalogue.cs:99): no 7.2 catalogue entry sets an IsRevealed
-        /// probe, so every tile shows its face (Racing Thoughts 3D included, locked below Prime). The tile refresh
-        /// still compares reveals, so a tile that becomes available redraws the grid.</summary>
-        private static bool Revealed(string id) => true;
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>
         internal static bool CanStartGame(string id) => Destinations.ContainsKey(id);
 
         internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id));
+
+        /// <summary>WPF LauncherEntry.IsRevealed: no card on this head has a reveal probe (null = always revealed).
+        /// Since 7.2 the race tile wears the Prime padlock instead of a mystery face (LauncherCatalogue.cs:238).</summary>
+        private static bool Revealed(string id) => true;
 
         private static LauncherWindow? _window;
 

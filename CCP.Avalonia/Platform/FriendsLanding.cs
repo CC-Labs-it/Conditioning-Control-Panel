@@ -143,14 +143,16 @@ internal static partial class FriendsLanding
     {
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
     internal static string KnockLine(InboxItem item)
     {
         if (item.Kind == SendKind.Invite)
-            return string.Format(Str("friends_land_invite_line", "invites you to {0}"), DestinationName(item.Destination));
+            return string.Format(Str("friends_land_invite_line", "invites you to {0}"), LandingRules.WithCourse(DestinationName(item.Destination), item.Track));
         return item.Watch?.Kind == WatchKind.Flavour ? Str("friends_land_flavour_line", "sends you a flavour") : Str("friends_land_watch_line", "sends you a watch");
     }
 
@@ -261,9 +263,14 @@ internal static partial class FriendsLanding
         Join(item);
     }
 
-    /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
-    /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    /// <summary>Destinations this head can open. Back Room and Goon still wait for their hosts; Breakout uses the
+    /// demo until a full host exists.</summary>
+    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp
+        || item.Destination == InviteDestination.Chess && InviteDestination.IsChallengeId(item.Code)
+        || item.Destination == InviteDestination.Breakout && (!BreakoutFullAllowed || GameWindow.Games.ContainsKey("breakout"));
+
+    private static bool BreakoutFullAllowed => TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+    internal static Action<string> LaunchGame { get; set; } = id => GameWindow.Launch(id);
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -274,11 +281,18 @@ internal static partial class FriendsLanding
         mw.ShowTab(tab);
     };
 
-    /// <summary>WPF Join :522. Ramp: link to Ramp lives on the Ramp card in the Studio tab.</summary>
-    private static void Join(InboxItem item)
+    /// <summary>WPF Services/Friends/FriendsLanding.cs:522-581. Ramp: link to Ramp lives on the Ramp card in the Studio tab;
+    /// Chess accepts a validated challenge; Breakout uses the station's full/demo door.</summary>
+    internal static void Join(InboxItem item)
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        if (item.Destination == InviteDestination.Chess) GameWindow.JoinPbpChallenge(item.Code!);
+        if (item.Destination == InviteDestination.Breakout && CanJoin(item))
+        {
+            try { LaunchGame(BreakoutFullAllowed ? "breakout" : "breakoutdemo"); }
+            catch (Exception ex) { Log.Warning(ex, "[Friends] breakout launch failed"); }
+        }
     }
 
     internal static FriendsSfxGate SfxGate = new();
@@ -286,17 +300,19 @@ internal static partial class FriendsLanding
     internal static void DrawerOpen() => Sfx("chaos/cards_in.mp3", 0.14f, "friends-open");
     internal static void DrawerClose() => Sfx("chaos/ui_unequip.mp3", 0.10f, "friends-close");
 
+    /// <summary>The gap rules' clock; tests step it.</summary>
+    internal static Func<DateTime> SfxNow = () => DateTime.UtcNow;
+
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
-    private static void Sfx(string rel, float scale, string tag, bool incoming = false)
+    internal static void Sfx(string rel, float scale, string tag, bool incoming = false)
     {
         try
         {
             var s = CoreSettings.Current;
-            // WPF FriendsSfx.cs:47-51,66-69: suppression must not consume the cue gap.
-            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed
-                || CoreEngine.Video?.IsPlaying == true
+            // WPF Services/Friends/FriendsSfx.cs:47-51: silence under output suppression, video or Emi hold.
+            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed || CoreEngine.Video?.IsPlaying == true
                 || ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
-            lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
+            lock (SfxGate) if (!SfxGate.TryPass(SfxNow(), incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;

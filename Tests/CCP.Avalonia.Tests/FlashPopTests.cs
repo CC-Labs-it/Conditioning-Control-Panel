@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using ConditioningControlPanel.Services.Haptics.Core;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -96,6 +97,24 @@ public sealed class FlashPopTests
     });
 
     [Fact]
+    public Task A_right_click_pops_the_flash_even_when_draggable() => OnUi((s, _) =>
+    {
+        // WPF FlashService.cs:4798-4807: right-click always pops; only the left press may start a drag.
+        var (drag, granted) = (s.FlashDraggable, PrizeOwnership.IsGranted);
+        s.FlashDraggable = true;
+        try
+        {
+            PrizeOwnership.IsGranted = _ => true;   // owned motion: the only case where a press can drag
+            Assert.True(FlashOverlay.OwnsMotion);
+            var w = Shown(clickable: true);
+            w.MouseDown(new Point(200, 150), MouseButton.Right);
+            Assert.DoesNotContain(FlashOverlay.Active, e => e.Window == w);
+            Assert.Contains(w, FlashOverlay.Exiting);
+        }
+        finally { (s.FlashDraggable, PrizeOwnership.IsGranted) = (drag, granted); }
+    });
+
+    [Fact]
     public Task A_pop_buzzes_the_flash_click_haptic() => OnUi((s, _) =>
     {
         var hs = new HapticSettings { Enabled = true, FlashClickEnabled = true };
@@ -146,7 +165,7 @@ public sealed class FlashPopTests
     [Fact]
     public Task Startup_seeding_keeps_remote_and_voice_flashes_point_fired_and_skips_a_full_ambient_tick() => OnUi((s, _) =>
     {
-        var (show, ambient, busy, fire) = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire);
+        var (show, ambient, busy, fire, stop) = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire, CoreFlash.StopProvider);
         var (click, stay) = (s.FlashClickable, s.FlashStayUntilPopped);
         var fired = new System.Collections.Generic.List<bool>();
         var host = new Window();
@@ -165,7 +184,7 @@ public sealed class FlashPopTests
         }
         finally
         {
-            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire) = (show, ambient, busy, fire);
+            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire, CoreFlash.StopProvider) = (show, ambient, busy, fire, stop);
             (s.FlashClickable, s.FlashStayUntilPopped) = (click, stay);
         }
     });

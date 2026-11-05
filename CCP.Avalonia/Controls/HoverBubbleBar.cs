@@ -19,7 +19,6 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.UI;
-using Path = Avalonia.Controls.Shapes.Path;
 
 namespace ConditioningControlPanel.Avalonia.Controls
 {
@@ -55,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         public static IconKind? GetIcon(Control o) => o.GetValue(IconProperty);
         public static void SetIcon(Control o, IconKind? v) => o.SetValue(IconProperty, v);
 
-        /// <summary>A vector brand mark, drawn in place of the Fluent icon.</summary>
+        /// <summary>A brand mark that has no Fluent glyph (WPF ca6c3bc4a). Existing Icon/Glyph callers keep their API.</summary>
         public static readonly AttachedProperty<Geometry?> MarkProperty =
             AvaloniaProperty.RegisterAttached<HoverBubbleBar, Control, Geometry?>("Mark");
         public static Geometry? GetMark(Control o) => o.GetValue(MarkProperty);
@@ -112,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             DetachedFromVisualTree += (_, _) => _pulseTimer.Stop();
         }
 
-        /// <summary>The bubbles in XAML order (left to right): every child with a Glyph.</summary>
+        /// <summary>The bubbles in XAML order (left to right): every child with a Glyph, Icon or brand Mark.</summary>
         public IReadOnlyList<Button> Bubbles => _order;
 
         /// <summary>The idle pulse runs only while the host says Home is attached, shown and not
@@ -166,28 +165,28 @@ namespace ConditioningControlPanel.Avalonia.Controls
             }
 
             var labelHost = new Border { Width = 0, ClipToBounds = true, Child = label, VerticalAlignment = VerticalAlignment.Stretch };
-            var fluent = new IconGlyph
-            {
-                Size = 16,
-                Foreground = Brushes.White,
-                Width = BubbleSize - 3,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            if (GetIcon(b) is { } icon) fluent.Kind = icon;
-            else fluent.Emoji = GetGlyph(b);
-            Control glyph = GetMark(b) is { } mark
-                ? new Border
+            Control glyph;
+            if (GetMark(b) is { } mark)
+                glyph = new Border
                 {
-                    Width = BubbleSize - 3,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new Path
+                    Width = BubbleSize - 3, VerticalAlignment = VerticalAlignment.Center,
+                    Child = new global::Avalonia.Controls.Shapes.Path
                     {
-                        Data = mark, Fill = Brushes.White, Stretch = Stretch.Uniform,
-                        Height = 15, HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
+                        Data = mark, Fill = Brushes.White, Stretch = Stretch.Uniform, Height = 15,
+                        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                     },
-                }
-                : fluent;
+                };
+            else
+            {
+                var fluent = new IconGlyph
+                {
+                    Size = 16, Foreground = Brushes.White, Width = BubbleSize - 3,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                if (GetIcon(b) is { } icon) fluent.Kind = icon;
+                else fluent.Emoji = GetGlyph(b);
+                glyph = fluent;
+            }
             var scale = new ScaleTransform(1, 1);
             var plate = new Border
             {

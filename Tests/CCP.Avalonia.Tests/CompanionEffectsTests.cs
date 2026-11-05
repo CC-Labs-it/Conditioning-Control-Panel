@@ -33,33 +33,30 @@ public sealed class CompanionEffectsTests
     [Fact]
     public void ActivitiesOfferOnlyWhatOpensHere()
     {
-        var (provider, signedIn, lab) = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider);
+        var (provider, signedIn, lab, premium) = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider);
         try
         {
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             CoreEntitlement.HasLabProvider = () => true;
+            CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is Basic (owner 2026-10-31); the race stays Prime
             CoreAccount.IsLoggedInProvider = () => true;
             var all = CompanionEffects.Activities();
             Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.race", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
                 all.Select(a => a.Id));
-            var demo = all.Single(a => a.Id == "game.breakoutdemo");
-            var board = all.Single(a => a.Id == "game.piecebypiece");
             var race = all.Single(a => a.Id == "game.race");
-            var dtrh = all.Single(a => a.Id == "game.dtrh");
             var intake = all.Single(a => a.Id == "game.intake");
-            Assert.True(intake.Allowed);
-            Assert.True(race.Allowed);
+            var dtrh = all.Single(a => a.Id == "game.dtrh");
+            Assert.True(race.Allowed && intake.Allowed && dtrh.Allowed);
             CoreEntitlement.HasLabProvider = () => false;
-            Assert.False(race.Allowed);                            // revealed, but Prime is required
-            Assert.False(race.TryOpen());
+            Assert.False(race.Allowed);                             // the Companion respects the same Prime door
             CoreEntitlement.HasLabProvider = () => true;
-            Assert.True(race.Allowed);                             // access is checked on each offer
+            Assert.True(race.Allowed);                              // the cached activity rechecks entitlement
             CoreAccount.IsLoggedInProvider = () => false;          // the tile would ask to sign in
             Assert.False(intake.Allowed);
             Assert.False(race.Allowed);
-            Assert.True(demo.Allowed && board.Allowed);            // the free demo and board need no account
-            Assert.False(dtrh.Allowed);                            // Down the Rabbit Hole asks to sign in too
+            Assert.True(all[0].Allowed && all[1].Allowed);          // the free demo and the free board need no account
+            Assert.False(dtrh.Allowed);
             CoreAccount.IsLoggedInProvider = () => true;
             service.Current.AudioOnlySession = true;
             Assert.False(intake.Allowed);
@@ -67,7 +64,7 @@ public sealed class CompanionEffectsTests
         }
         finally
         {
-            (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (provider, signedIn, lab);
+            (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider) = (provider, signedIn, lab, premium);
         }
     }
 

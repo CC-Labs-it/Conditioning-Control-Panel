@@ -1,6 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using BindingFlags = System.Reflection.BindingFlags;
 using System.Threading.Tasks;
 using Avalonia;
@@ -94,6 +98,63 @@ public sealed class TubeQuickMenuTests
             Dispatcher.UIThread.RunJobs();
             (s.AvatarEnabled, s.AvatarMuted, s.SubAudioMuted, s.TriggerModeEnabled, s.AutonomyModeEnabled,
                 s.AutonomyConsentGiven, s.AvatarTubeDetached, s.AvatarTubeScale, s.FlashEnabled, s.PanicKeyEnabled, s.PanicKey, s.AutonomyResumeOnStartup) = saved;
+        }
+        return Task.CompletedTask;
+    });
+
+    private sealed class EmoteHandler : HttpMessageHandler
+    {
+        public string? Body;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            Body = await request.Content!.ReadAsStringAsync(token);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+        }
+    }
+
+    [Fact]
+    public Task RemotePresetsReplaceControlsAndSendThroughRelay() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var tube = new AvatarTubeWindow(null);
+        var old = RemoteControlTabView.Relay;
+        var handler = new EmoteHandler();
+        using var relay = new RemoteRelay(() => null, () => "test-user", "test", (_, _) => null, _ => { }, handler);
+        var preset = CoreSettings.Current.RemoteEmotePresets[0];
+        var (text, icon) = (preset.Text, preset.Icon);
+        try
+        {
+            RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+            _ = RemoteControlTabView.Relay.Value;
+            typeof(RemoteRelay).GetProperty(nameof(RemoteRelay.IsActive))!.SetValue(relay, true);
+            typeof(RemoteRelay).GetProperty(nameof(RemoteRelay.ControllerConnected))!.SetValue(relay, true);
+            preset.Text = "Hello controller"; preset.Icon = "★";
+            tube.UpdateQuickMenuState();
+            foreach (var name in new[] { "MenuItemEngine", "MenuItemTriggerMode", "MenuItemBambiTakeover", "MenuItemPersonality", "MenuItemMute" })
+                Assert.False(tube.FindControl<MenuItem>(name)!.IsVisible);
+            for (var i = 1; i <= 5; i++) Assert.True(tube.FindControl<MenuItem>($"MenuItemEmote{i}")!.IsVisible);
+            Assert.Equal("★  Hello controller", tube.FindControl<MenuItem>("MenuItemEmote1")!.Header);
+            preset.Text = "  ";
+            Click(tube, "MenuItemEmote1");
+            Assert.Null(handler.Body);
+            Assert.False(relay.IsWithinDebounceWindow);
+            preset.Text = "Hello controller";
+            Click(tube, "MenuItemEmote1");
+            Assert.NotNull(handler.Body);
+            var body = Newtonsoft.Json.Linq.JObject.Parse(handler.Body!);
+            Assert.Equal("Hello controller", (string?)body["text"]);
+            Assert.Equal("★", (string?)body["icon"]);
+            Assert.Equal("preset", (string?)body["kind"]);
+            typeof(RemoteRelay).GetProperty(nameof(RemoteRelay.ControllerConnected))!.SetValue(relay, false);
+            tube.UpdateQuickMenuState();
+            Assert.True(tube.FindControl<MenuItem>("MenuItemEngine")!.IsVisible);
+            for (var i = 1; i <= 5; i++) Assert.False(tube.FindControl<MenuItem>($"MenuItemEmote{i}")!.IsVisible);
+        }
+        finally
+        {
+            (preset.Text, preset.Icon) = (text, icon);
+            RemoteControlTabView.Relay = old;
+            tube.Close();
         }
         return Task.CompletedTask;
     });

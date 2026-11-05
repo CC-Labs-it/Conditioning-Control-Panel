@@ -621,6 +621,35 @@ public sealed partial class GameWindowTests
     });
 
     // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
+    [Fact]
+    public void PieceByPiece_LobbyIntentsFollowIdentityAndFreshSpectateUsesSettings() => RunBoard(() =>
+    {
+        Assert.Null(GameWindow.OpenChessLobby("join", "invalid"));
+        Assert.Null(GameWindow.OpenChessLobby("spectate", "invalid"));
+        var window = GameWindow.OpenChessLobby("host")!;
+        window.PbpOsAnimations = () => Task.FromResult(true);
+        var sent = new List<JObject>();
+        window.Posted += json => sent.Add(JObject.Parse(json));
+        Assert.Empty(sent);
+        window.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal("host", (string?)sent.Last()["mode"]);
+        Assert.Same(window, GameWindow.OpenChessLobby("join", "p_table"));
+        Assert.Equal("p_table", (string?)sent.Last()["target"]);
+        GameWindow.OpenChessLobby("spectate", "m_0123456789abcdef");
+        Assert.Equal("spectate", (string?)sent.Last()["mode"]);
+        Assert.Equal("m_0123456789abcdef", (string?)sent.Last()["matchId"]);
+        window.Close();
+        window = GameWindow.OpenChessLobby("spectate", "m_fedcba9876543210")!;
+        window.PbpOsAnimations = () => Task.FromResult(true);
+        sent.Clear(); window.Posted += json => sent.Add(JObject.Parse(json));
+        window.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal("m_fedcba9876543210", (string?)sent.First()["spectateMatchId"]);
+        Assert.Equal(2, sent.Count);
+        window.HandleMessage("{\"type\":\"ready\"}"); Assert.Equal(2, sent.Count);
+        GameWindow.CloseAllForPanic();
+        Assert.Empty(GameWindow.OpenWindowsForTests());
+    });
     private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
@@ -766,38 +795,13 @@ public sealed partial class GameWindowTests
         }
     });
 
+    // Retained 2D bridge regressions run directly, never through a production door.
     private static GameWindow OpenRetiredRace()
     {
-        var w = new GameWindow(GameWindow.Games["race"]);
+        var w = new GameWindow(new GameWindow.Game("race", "launcher_game_race_title", "dtrh/race.html"));
         w.Load(GameWindow.Server());
         w.Show();
         return w;
-    }
-
-    /// <summary>The public 3D race keeps the leash gate and panic path, even without an owned track.</summary>
-    [Fact]
-    public void Race_DoorAndLauncher_LeashGate_AndPanic()
-    {
-        RunRace(null, (launcher, _, _) =>
-        {
-            CoreEntitlement.HasLabProvider = () => true;
-            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
-            launcher.Hide();
-            int gates = 0;
-            MainShellWindow.LeashGateDueProvider = () => true;
-            MainShellWindow.PresentLeashGateProvider = _ => gates++;
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, gates);
-            Assert.False(GameWindow.IsAnyOpen());
-            MainShellWindow.LeashGateDueProvider = () => false;
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(GameWindow.IsAnyOpen());
-            PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(GameWindow.IsAnyOpen());
-        });
     }
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
@@ -810,7 +814,7 @@ public sealed partial class GameWindowTests
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
@@ -835,7 +839,7 @@ public sealed partial class GameWindowTests
         var tracks = new HashSet<string> { "rt.original.03" };
         RacingAccess.IsGrantedProvider = tracks.Contains;
         launcher.BuildTiles();
-        // The public race door opens Racing Thoughts 3D since #3494 (WPF 7.2); ownership rides the retired host.
+        // WPF #3126: no production door opens the 2D bridge; its grant regressions run on it directly.
         var w = OpenRetiredRace();
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
@@ -854,10 +858,15 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
         Assert.False(w.RaceWatchRunning);
+        // WPF 7.2 LauncherCatalogue.cs:238: the Racing Thoughts tile is always revealed (Prime padlock), owned tracks or not.
         tracks.Clear();
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
         Dispatcher.UIThread.RunJobs();
-        // WPF 7.2: the Racing Thoughts 3D tile is always revealed (locked below Prime); tracks no longer hide it.
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
+        tracks.Add("rt.original.00");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
         Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
             c => Equals(c.Tag, "race"));
     });
@@ -867,7 +876,7 @@ public sealed partial class GameWindowTests
     {
         var granted = true;
         RacingAccess.IsGrantedProvider = id => granted && id == "rt.original.03";
-        var w = OpenRetiredRace();   // the public door opens the 3D race since #3494
+        var w = OpenRetiredRace();
         granted = false;
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
         granted = true;
@@ -1554,7 +1563,7 @@ public sealed partial class GameWindowTests
     /// <summary>Each hosted game's kept-Escape page and frame (WPF KeptEscapeType per host: the board reads
     /// pbp:escape, the race / Breakout / DtRH pages kept-escape). FYP and Just Drop do not pause on Escape.</summary>
     [Theory]
-    [InlineData("race", "Race", "kept-escape")]
+    [InlineData("race", "Glassroad", "kept-escape")]
     [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]

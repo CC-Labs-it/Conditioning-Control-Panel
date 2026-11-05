@@ -397,7 +397,7 @@ public sealed class LauncherWindowTests
         Assert.True(launcher.IsVisible);
         Assert.False(shell.IsVisible);
 
-        // The Breakout demo, Piece by Piece, Racing Thoughts 3D and Down the Rabbit Hole game hosts,
+        // Only the destinations this head has: the Breakout demo, Piece by Piece, Racing Thoughts and Down the Rabbit Hole game hosts,
         // then the intake tab.
         Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "race", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
@@ -670,7 +670,7 @@ public sealed class LauncherWindowTests
         Assert.Equal("gradedintake", shell.CurrentTab);
         Assert.False(LauncherWindow.Instance!.IsVisible);
 
-        LauncherWindow.Boot = BootDecision.GameFirst("unknown-game");   // no host on this head
+        LauncherWindow.Boot = BootDecision.GameFirst("arcademy");   // a WPF game with no host on this head
         LauncherWindow.RouteBoot(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(shell.IsVisible);

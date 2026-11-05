@@ -142,8 +142,8 @@ public sealed class SharedDeeperThemeTests
             {
                 var border = button.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "border");
                 Assert.Same(release, border.Transitions);
-                var clock = new StepClock();
-                border.SetValue(StepClock.Property, clock.Instance);
+                var clock = new TestAnimationClock();
+                border.SetValue(TestAnimationClock.Property, clock.Instance);
                 double Scale() => border.RenderTransform?.Value.M11 ?? 1.0;   // settled release = no transform
                 // Press: 80 ms linear 1 -> 0.97 (the 150 ms BackEase would sit at 0.9811 at 30 ms, not done at 80).
                 window.MouseMove(new Point(100, 50));
@@ -309,8 +309,8 @@ public sealed class SharedDeeperThemeTests
                     Assert.Equal(h, drop.Height);
                     Assert.Equal(-h, drop.Margin.Bottom);
                     var slide = (TranslateTransform)Part("DepthFace").RenderTransform!;
-                    var clock = new StepClock();
-                    slide.SetValue(StepClock.Property, clock.Instance);
+                    var clock = new TestAnimationClock();
+                    slide.SetValue(TestAnimationClock.Property, clock.Instance);
                     double Travel() => Base(slide, TranslateTransform.YProperty);
                     double Drop() => Base((ScaleTransform)drop.RenderTransform!, ScaleTransform.ScaleYProperty) * h;
                     // Rest: on the sheet, RaisedPx drop (StartPx for START).
@@ -382,7 +382,10 @@ public sealed class SharedDeeperThemeTests
                     Assert.Equal(kind == HudPlankKind.Chunky ? 7 : 5, drop.Height);
                     if (name == "BtnStart")
                     {
-                        Assert.Same(Application.Current!.FindResource("AccentGradientBrush"), b.Background);
+                        // WPF HeroFx.cs ApplyStartCharge: the idle START wears the three-stop charge gradient
+                        // (MainShellWindow.HeroMoments.cs), not the plain accent brush.
+                        var charge = Assert.IsType<LinearGradientBrush>(b.Background);
+                        Assert.Equal(3, charge.GradientStops.Count);
                         Assert.NotNull(b.RenderTransform); // ignition dip belongs to the button, not DepthFace
                     }
                 }

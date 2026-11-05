@@ -168,6 +168,9 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public class V2User
         {
+            [JsonProperty("prizes")]
+            public PrizesBlock? Prizes { get; set; }
+
             [JsonProperty("unified_id")]
             public string? UnifiedId { get; set; }
 

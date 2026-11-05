@@ -17,6 +17,8 @@ using Avalonia.Headless;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
+using Avalonia;
+using Avalonia.Headless;
 using Xunit;
 using Xunit.Sdk;
 using Xunit.v3;
@@ -265,9 +267,12 @@ internal sealed class ProcessStateSnapshot
             .Where(t => !t.ContainsGenericParameters).ToList();
         var byName = types.ToLookup(t => t.Name);
         var found = new HashSet<MemberInfo>();
+        foreach (var field in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic).Where(f => !f.IsInitOnly && !f.IsLiteral))
+            found.Add(field);
 
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
+                     || t == typeof(ConditioningControlPanel.Services.RemoteCommands)
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 

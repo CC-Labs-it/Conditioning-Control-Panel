@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using ConditioningControlPanel.Models;
 using System.Linq;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -83,8 +87,7 @@ namespace ConditioningControlPanel.Avalonia
                 : OnUi(() => { BubbleOverlay.Stop(); return true; });
             SubliminalCommand.Surface = (text, opacity) => Overlay(host =>
             {
-                SubliminalOverlay.Show(host, text, opacity);
-                CoreProgression.AddXP(10, "Subliminal");   // WPF FlashSubliminalCustom
+                SubliminalWhisperShow.Custom(text, opacity);
             });
             BounceCommand.Surface = (on, words) => on
                 ? Overlay(host => BouncingTextOverlay.Start(host, words))
@@ -119,38 +122,86 @@ namespace ConditioningControlPanel.Avalonia
             MediaCommand.VideoSurface = path => Start(() =>
                 CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
             MediaCommand.AudioSurface = PlayAudio;
+            CoreAudio.StopSoundProvider = StopAudio;
+            MediaCommand.ModVoiceLinesProvider = () => Dispatcher.UIThread.CheckAccess()
+                ? EnabledModVoiceLines() : Dispatcher.UIThread.Invoke(EnabledModVoiceLines);
+            MediaCommand.NeutralWordClipsProvider = () => SubliminalWhisper.Manifest().Values
+                .Distinct(StringComparer.OrdinalIgnoreCase).Select(name => Path.Combine(SubliminalWhisper.WordsRoot(), name)).Where(File.Exists).ToArray();
             GetBackToMeCommand.AiProvider = () => App.Ai;
             GetBackToMeCommand.SaySurface = (text, aiGenerated) =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() =>
                     Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: true, aiGenerated: aiGenerated));
         }
 
-        private static readonly object AudioGate = new();
-        private static readonly Dictionary<object, Action> AudioStops = new();
+        private static Action? _stopAudio;
 
-        internal static void StopAudio()
+        /// <summary>The single Audio-action clip, including when no engine is running (WPF KillAllAudio).</summary>
+        internal static void StopAudio() => Interlocked.Exchange(ref _stopAudio, null)?.Invoke();
+
+        private static IReadOnlyList<string> EnabledModVoiceLines()
         {
-            Action[] stops;
-            lock (AudioGate) { stops = AudioStops.Values.ToArray(); AudioStops.Clear(); }
-            foreach (var stop in stops)
-                try { stop(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Companion audio stop failed"); }
+            return CompanionVoiceLines.GetEnabledFiles(CoreSettings.Current);
         }
 
-        /// <summary>True once the clip is really playing, false when refused or it never starts.</summary>
+        internal static Func<string, float, Action<TimeSpan>, Action, MindWipePlayer.IVoice?> PlayAudioClip =
+            (path, gain, started, finished) => LibVlcAudio.Instance?.PlaySound(path, gain, started, finished);
+
+        /// <summary>WPF AudioService.cs:855-901: track the master dial for this clip's lifetime.</summary>
         internal static async Task<bool> PlayAudio(string path)
         {
             var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var key = new object();
-            bool finished = false;
-            lock (AudioGate)
+            OnUi(() =>
             {
-                var stop = CoreAudio.PlayStoppable(path, 1f, "ai", _ => started.TrySetResult(true), () =>
+                StopAudio();
+                var gate = new object();
+                var service = CoreSettings.Service;
+                AppSettings? settings = null;
+                MindWipePlayer.IVoice? clip = null;
+                var done = false;
+                void ApplyGain() { if (clip != null) clip.Volume = CoreAudio.SoundGain(100, settings?.MasterVolume ?? 100); }
+                void Changed(object? sender, PropertyChangedEventArgs e)
                 {
-                    lock (AudioGate) { finished = true; AudioStops.Remove(key); }
-                    started.TrySetResult(false);
-                });
-                if (!finished) AudioStops[key] = stop;
-            }
+                    if (e.PropertyName == nameof(AppSettings.MasterVolume)) lock (gate) ApplyGain();
+                }
+                void Replaced()
+                {
+                    lock (gate)
+                    {
+                        if (done) return;
+                        if (settings != null) settings.PropertyChanged -= Changed;
+                        settings = service?.Current ?? CoreSettings.Current;
+                        if (settings != null) settings.PropertyChanged += Changed;
+                        ApplyGain();
+                    }
+                }
+                void Finished()
+                {
+                    lock (gate)
+                    {
+                        done = true;
+                        if (settings != null) settings.PropertyChanged -= Changed;
+                        if (service != null) service.CurrentReplaced -= Replaced;
+                        clip = null;
+                        started.TrySetResult(false);
+                    }
+                }
+                _stopAudio = () => { lock (gate) { var playing = clip; Finished(); playing?.Dispose(); } };
+                lock (gate)
+                {
+                    if (done) return true;
+                    if (service != null) service.CurrentReplaced += Replaced;
+                    Replaced();
+                    try
+                    {
+                        var playing = PlayAudioClip(path, CoreAudio.SoundGain(100, settings?.MasterVolume ?? 100),
+                            _ => started.TrySetResult(true), Finished);
+                        if (done) playing?.Dispose(); else clip = playing;
+                        if (clip == null) Finished(); else ApplyGain();
+                    }
+                    catch { Finished(); }
+                }
+                return true;
+            });
             return await Task.WhenAny(started.Task, Task.Delay(10_000)) == started.Task && started.Task.Result;
         }
 

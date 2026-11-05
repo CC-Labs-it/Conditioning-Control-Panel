@@ -284,21 +284,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>Refresh the grey hint under the voice toggle to reflect mic availability.</summary>
         private void UpdateVoiceHint() => TxtVoiceHint.Text = VoiceHint(ChkVoiceMode.IsChecked ?? false);
 
-        /// <summary>WPF's four hints (LockCardFeatureControl.xaml.cs:269-285) from CoreSpeech. The two
+        /// <summary>WPF's four hints (LockCardFeatureControl.xaml.cs:281-296) from CoreSpeech. The two
         /// model hints name the Linux folder: no model ships on this head, and Resources/Models/vosk
         /// sits inside a read-only install.</summary>
         internal static string VoiceHint(bool on)
         {
             if (!on)
-                return Loc.Get("lock_voice_hint_off");
+                return Loc.Get("lockcard_voice_hint_off");
             var folder = System.IO.Path.Combine(CorePaths.UserData, "Models", "vosk");
             if (CoreSpeech.IsAvailable)
-                return Loc.Get("lock_voice_hint_on");
+                return Loc.Get("lockcard_voice_hint_on");
             if (!CoreSpeech.HasCaptureDevice)
-                return Loc.Get("lock_voice_hint_no_mic");
+                return Loc.Get("lockcard_voice_hint_no_mic");
             if (CoreSpeech.ModelStatus == CoreSpeechModelStatus.LoadFailed)
-                return Loc.GetF("lock_voice_hint_load_failed", folder);
-            return Loc.GetF("lock_voice_hint_no_model", folder);
+                return Loc.GetF("lockcard_voice_hint_model_failed", folder);
+            return Loc.GetF("lockcard_voice_hint_model_missing", folder);
         }
 
         private async void BtnManagePhrases_Click(object? sender, RoutedEventArgs e)

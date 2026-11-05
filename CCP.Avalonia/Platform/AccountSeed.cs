@@ -47,6 +47,8 @@ internal static class AccountSeed
             return false;
         }
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
+        // New providers, new reading state: no lower reading waiting for its second look, no focus read throttled.
+        (Readings, FocusRefresh, _lastLowerLogged) = (new EntitlementReadings(), new EntitlementTierMonitor(), null);
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
         // WPF App.IsLoggedIn / UserDisplayName / the PatreonService gates.
@@ -164,10 +166,68 @@ internal static class AccountSeed
     /// celebration, which is why it is not TierChanged (WPF EntitlementTierSync.GraceClosed).</summary>
     internal static event Action? GraceClosed;
 
-    // WPF EntitlementTierSync.TierRaised: a server rise, before provider repaint.
+    /// <summary>WPF EntitlementTierSync.TierRaised: a live rise, with the new tier (1 or 2), raised BEFORE the
+    /// provider's TierChanged so the shell can arm the immediate card and the profile-bubble fanfare.</summary>
     internal static event Action<int>? TierRaised;
 
-    private static readonly EntitlementReadings Readings = new();
+    /// <summary>Tests only: the clock every reading and the focus throttle read.</summary>
+    internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
+
+    private static EntitlementReadings Readings = new();
+    private static int? _lastLowerLogged;
+
+    /// <summary>WPF EntitlementTierSync.OnAppFocused's throttle (20 s, one read at a time). Core keeps only the
+    /// throttle: the reading it fetches lands through <see cref="ApplyTierReading"/> like every other.</summary>
+    private static EntitlementTierMonitor FocusRefresh = new();
+
+    /// <summary>
+    /// WPF EntitlementTierSync.OnAppFocused + RefreshAsync: the shell came to the front, so the profile is read
+    /// again (at most once per <see cref="EntitlementTierMonitor.FocusCheckGap"/>, one read in flight) and its
+    /// effective_tier goes through <see cref="ApplyTierReading"/>: a rise unlocks now, a lower reading starts or
+    /// confirms the grace close, exactly as the profile load and the heartbeat do; then its Patreon fields go
+    /// through <see cref="ApplyPatreonReading"/>. Buy on the site, click back into the app, unlocked about a
+    /// second later. Call on the UI thread; never throws.
+    /// </summary>
+    /// <param name="v2">Tests only.</param>
+    internal static async Task OnAppFocusedAsync(V2AuthService? v2 = null)
+    {
+        try
+        {
+            await FocusRefresh.OnAppFocusedAsync(CoreSettings.Current, UtcNow(), async id =>
+            {
+                var node = await (v2 ?? NewV2()).GetUserProfileNodeAsync(id);
+                // A late answer for an account that signed out or switched while it ran lands nowhere.
+                if (node == null || CoreSettings.Current.UnifiedId != id) return;
+                ApplyTierReading(EntitlementTierRule.ParseTier(node["effective_tier"]), "focus");
+                ApplyPatreonReading(PatreonActiveRule.Parse(node), "focus");
+            });
+        }
+        catch (Exception ex) { Log.Debug("[Entitlement] focus refresh failed: {Error}", ex.Message); }
+    }
+
+    /// <summary>WPF EntitlementTierSync.OfferPatreon: a fresh server Patreon confirmation (patreon_is_active +
+    /// patreon_confirmed_at) re-stamps the 14-day grace from that moment, whatever the tier verdict said, so a
+    /// Discord sign-in patron keeps access. It only ever lengthens a window, so it can never end access; the
+    /// tier path above owns every lowering. Never throws.</summary>
+    internal static void ApplyPatreonReading(PatreonActiveReading? reading, string source)
+    {
+        try
+        {
+            var s = CoreSettings.Current;
+            if (reading == null || string.IsNullOrEmpty(s.UnifiedId) || string.IsNullOrEmpty(s.AuthToken)) return;
+            var before = EffectiveTierNow();
+            if (!PatreonActiveRule.Restamp(s, reading, UtcNow())) return;
+            Log.Information("[Entitlement] {Source}: Patreon confirmed active at {At:u}, grace now {Until:u}",
+                source, reading.ConfirmedAtUtc, s.PatreonPremiumValidUntil);
+            CoreSettings.Save();
+            // Access came back (a lapsed grace): the same repaint a rise gets.
+            var after = EffectiveTierNow();
+            if (after <= before) return;
+            CheckoutWatch.Disarm();   // WPF EntitlementTierSync.OfferPatreon
+            Patreon?.NotifyEntitlementRaised(after >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
+        }
+        catch (Exception ex) { Log.Debug("[Entitlement] patreon reading failed ({Source}): {Error}", source, ex.Message); }
+    }
 
     /// <summary>WPF EntitlementTierSync.HoldGraceClose: the window closes after a session or a game,
     /// never during, because a close switches premium features off. Anything unreadable holds.</summary>
@@ -188,17 +248,25 @@ internal static class AccountSeed
         return CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, CoreSettings.Current) ? 1 : 0;
     }
 
-    /// <summary>WPF EntitlementTierSync.ApplyOnUi: one server tier reading, from the profile load or a
-    /// heartbeat. A rise unlocks, a tier renews its grace, and the same lower reading 90 s later closes
-    /// it. Never throws.</summary>
+    /// <summary>WPF EntitlementTierSync.ApplyOnUi: THE one server tier reading path of this head, from the
+    /// profile load, a heartbeat or the focus refresh. A rise unlocks, a tier renews its grace, and the same
+    /// lower reading 90 s later closes it. Never throws.</summary>
     internal static void ApplyTierReading(int? serverTier, string source)
     {
         try
         {
             var s = CoreSettings.Current;
             var before = EffectiveTierNow();
-            var reading = Readings.Apply(s, serverTier, HoldGraceClose, DateTime.UtcNow);
+            var reading = Readings.Apply(s, serverTier, HoldGraceClose, UtcNow());
             if (reading.Dirty) CoreSettings.Save();
+            // WPF: a lower reading keeps the stored tier for its second look (and while a session or a game
+            // holds the close); logged once per value.
+            if (reading.Verdict == EntitlementVerdict.Lower && !reading.Closed && _lastLowerLogged != serverTier)
+            {
+                _lastLowerLogged = serverTier;
+                Log.Information("[Entitlement] {Source}: server tier {Server} below stored {Local}", source, serverTier, s.PatreonTier);
+            }
+            if (reading.Rose || reading.Closed) _lastLowerLogged = null;
             if (reading.Closed)
             {
                 Log.Information("[Entitlement] {Source}: server tier {Server} closed the grace window", source, serverTier);
@@ -212,32 +280,13 @@ internal static class AccountSeed
             Log.Information("[Entitlement] {Source}: access now tier {Tier}", source, tier);
             if (reading.Rose)
             {
+                // A new purchase: the rise's own fanfare, before TierChanged lands (WPF EntitlementTierSync).
                 try { TierRaised?.Invoke(tier); }
-                catch (Exception ex) { Log.Warning(ex, "[Entitlement] tier rise handler failed"); }
+                catch (Exception ex) { Log.Warning(ex, "[Entitlement] TierRaised handler failed"); }
             }
             Patreon?.NotifyEntitlementRaised(tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
         }
         catch (Exception ex) { Log.Warning(ex, "[Entitlement] apply failed ({Source})", source); }
-    }
-
-    /// <summary>WPF EntitlementTierSync.OfferPatreon (ProfileSyncService.cs:1109): a fresh server Patreon
-    /// confirmation re-stamps the grace for a V2 sign-in; access that came back repaints like a rise.
-    /// Never throws.</summary>
-    internal static void OfferPatreonReading(ConditioningControlPanel.Models.AppSettings s, V2AuthService.V2User user, string source)
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(s.UnifiedId) || string.IsNullOrEmpty(s.AuthToken)) return;   // WPF SignedInWithV2
-            var before = EffectiveTierNow();
-            if (!PatreonActiveRule.RestampProfile(s, user, DateTime.UtcNow)) return;
-            Log.Information("[Entitlement] {Source}: Patreon confirmed active, grace now {Until:u}", source, s.PatreonPremiumValidUntil);
-            CoreSettings.Save();
-            var after = EffectiveTierNow();
-            if (after <= before) return;
-            CheckoutWatch.Disarm();
-            Patreon?.NotifyEntitlementRaised(after >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
-        }
-        catch (Exception ex) { Log.Warning(ex, "[Entitlement] Patreon reading failed ({Source})", source); }
     }
 
     // A pending migration owns its ledger until the sync ack, also across login/reload.
@@ -266,10 +315,14 @@ internal static class AccountSeed
             return false;
         }
         // The request may finish after logout or an account/settings switch.
-        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id) return false;
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.OfflineMode) return false;
+        // WPF ProfileSyncService: the profile read seeds ownership before the garage opens (#3854).
+        PrizeOwnership.Feed.Apply(id, user.UnifiedId, user.Prizes, "V2 profile");
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
-        OfferPatreonReading(s, user, "profile");
+        // WPF ProfileSyncService read-before-write: the Patreon confirmation keeps a Discord sign-in's grace alive.
+        ApplyPatreonReading(new PatreonActiveReading(user.PatreonIsActive,
+            ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(user.PatreonConfirmedAtRaw), user.PatreonTier), "profile");
         if (!ConditioningControlPanel.Services.Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))
             ProfileAdopt.AdoptReadBeforeWrite(s, user, adoptConditioningMinutes: true);
         CoreSettings.Save();
