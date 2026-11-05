@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
-    /// the lucky glow pulse, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
@@ -116,6 +116,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             int generation, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
+            // WPF FlashService.cs:1674: FlashDisplayed once per batch, right after its spawns are queued.
+            if (flashes.Count > 0) Platform.BarkHead.Engine?.Raise("FlashDisplayed");
             var refused = false;
             for (var i = 0; i < flashes.Count; i++)
             {
@@ -231,6 +233,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable)
         {
             var pad = w.ApplyGlow(glow, scaling);
+            w.ApplyCorners(FlashCorners.Resolve(CoreSettings.Current.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2(), glow.HasGlow,
+                Math.Min(rect.Width, rect.Height) / (scaling > 0 ? scaling : 1), dpiScale: 1.0));
             var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
             // (passive); off: exactly the click-through recipe above.
@@ -247,6 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Active.Add(entry);
             w.Show();
             w.Run(alpha, fade, lifetime);
+            w.StartLuckyPulse();
             var motion = BuildMotion(rect, screen, CoreSettings.Current, Rng, w.InheritMotion);
             w.MotionStyle = motion?.Style ?? FlashMotionStyle.Still;
             if (motion != null) StartDrift(w, motion);

@@ -40,7 +40,7 @@ public sealed class LeashGateCardTests
     internal static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var settings = new SettingsService();
@@ -93,6 +93,37 @@ public sealed class LeashGateCardTests
         b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
     }
+
+    [Theory]
+    [InlineData("tutorial")]
+    [InlineData("startup")]
+    [InlineData("update")]
+    public void GateStandsBackForTutorialAndStartupModal(string modal) => Run(true, (shell, launcher, _) =>
+    {
+        var oldTutorial = CoreTutorial.IsActiveProvider;
+        var oldModal = MainShellWindow.IsStartupDialogShowing;
+        var offering = typeof(AppUpdater).GetField("_offering", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldOffering = offering.GetValue(null);
+        try
+        {
+            CoreTutorial.IsActiveProvider = () => modal == "tutorial";
+            MainShellWindow.IsStartupDialogShowing = modal == "startup";
+            offering.SetValue(null, modal == "update");
+            PressTile(launcher);
+            Assert.False(shell.LeashGate!.IsUp);
+            CoreTutorial.IsActiveProvider = () => false;
+            MainShellWindow.IsStartupDialogShowing = false;
+            offering.SetValue(null, false);
+            shell.CheckLeashGate();
+            Assert.True(shell.LeashGate.IsUp);
+        }
+        finally
+        {
+            CoreTutorial.IsActiveProvider = oldTutorial;
+            MainShellWindow.IsStartupDialogShowing = oldModal;
+            offering.SetValue(null, oldOffering);
+        }
+    });
 
     [Fact]
     public void PendingPunishment_TileShowsTheGateCard_WithPanicAndCut() => Run(punished: true, (shell, launcher, _) =>
