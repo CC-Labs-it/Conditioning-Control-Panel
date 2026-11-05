@@ -240,6 +240,8 @@ internal static class AccountSeed
         if (Sync is { } sync)
         {
             sync.MarkLoaded(user.Achievements);
+            // The read above lifted conditioning minutes take-higher (WPF ProfileSyncService:3205-3217).
+            if (user.TotalConditioningMinutes.HasValue) sync.NoteProgressRead(SyncBody.Field.TotalConditioningMinutes);
             sync.StartHeartbeat();
             await sync.PushAsync("after load");
         }

@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Services
     public sealed class SyncPush
     {
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
-            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements | SyncBody.Field.TotalConditioningMinutes;
+            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
         public const SyncBody.Field Privacy = SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus
             | SyncBody.Field.ShareProfilePicture | SyncBody.Field.PublicShareAvatar
             | SyncBody.Field.GoonShareAvatar | SyncBody.Field.GoonShareDm;
@@ -159,6 +159,12 @@ namespace ConditioningControlPanel.Services
             Loaded = true;
         }
 
+        /// <summary>A profile read that carried these fields already took the higher value (WPF reads the
+        /// profile before its first sync), so the next pushes may send them. Only companion progress and
+        /// conditioning minutes are gated this way; a logout (<see cref="Reset"/>) disarms them again.</summary>
+        public void NoteProgressRead(SyncBody.Field fields)
+            => _knownProgress |= fields & (SyncBody.Field.CompanionProgress | SyncBody.Field.TotalConditioningMinutes);
+
         /// <summary>Logout: nothing is pushed until the next load.</summary>
         public void Reset()
         {
@@ -197,7 +203,6 @@ namespace ConditioningControlPanel.Services
             UnifiedId = s.UnifiedId,
             Xp = (int)ProfileAdopt.TotalXp(s),
             Level = s.PlayerLevel,
-            TotalConditioningMinutes = s.TotalConditioningMinutes,
             DescentEpoch = Descent.DescentEpochs.ClientEpoch,
             Achievements = achievements?.Distinct().OrderBy(a => a, StringComparer.Ordinal).ToList(),
             Cosmetics = cosmetics,
