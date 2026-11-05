@@ -190,6 +190,8 @@ public sealed class CompanionEditorsTests
     {
         Setup();
         var service = new SettingsService();
+        service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
+        service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         CoreSettings.ServiceProvider = () => service;
         // Freeze entrance motion so the pointer probes a stationary target.
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
@@ -202,6 +204,7 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();

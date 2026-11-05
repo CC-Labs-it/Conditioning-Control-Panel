@@ -1,15 +1,16 @@
-// PORTED-AS-A-STUB from ConditioningControlPanel/MainWindow/MainWindow.AccountShell.cs (506 lines).
-//
-// Most account/update members still need services that are not on this head. Language is different:
-// CoreSettings and LocalizationManager are already cross-platform, so the two selectors share the
-// WPF head's single writer and persistence path here.
+// PORTED from ConditioningControlPanel/MainWindow/MainWindow.AccountShell.cs.
+// Account navigation lives in Settings/TabNavigation, Rich Presence in SettingsTabView and
+// ProfilePrivacyPanel, and notifications in App startup. The legacy quick-provider buttons and
+// shell check-updates handler have no live WPF caller (ledger row shell-account-shell, docs/avalonia-parity.html).
 
 using System;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -52,14 +53,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ? "tooltip_update_to_version_install" : "tooltip_update_to_version_download", version));
         }
 
-        /// <summary>WPF MainWindow.AccountShell.cs:510.</summary>
-        internal void ShowUpdateAvailableButton(bool updateAvailable)
+        /// <summary>WPF MainWindow.AccountShell.cs:509: status notifications may arrive off-thread;
+        /// paint the tag, caption and tooltip together before returning, as Dispatcher.Invoke does there.</summary>
+        internal void ShowUpdateAvailableButton(bool updateAvailable) => Dispatcher.UIThread.Invoke(() =>
         {
             if (Named<Button>("BtnUpdateAvailable") is not { } b) return;
             b.Tag = updateAvailable ? "UpdateAvailable" : "NoUpdate";
             b.Bind(ContentControl.ContentProperty, LocF(updateAvailable ? "btn_update_now" : "btn_update_up_to_date", null));
             b.Bind(ToolTip.TipProperty, LocF(updateAvailable ? "tooltip_update_now" : "tooltip_update_up_to_date", null));
-        }
+        });
 
         private static Binding LocF(string key, string? arg) => new($"[{key}]")
         {
@@ -93,9 +95,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var (code, displayName, shortName) = LocalizationManager.AvailableLanguages[i];
                     var item = new ComboBoxItem
                     {
-                        Content = shortLabels ? $"🌐 {shortName}" : displayName,
                         Tag = code,
                     };
+                    LanguageFlag.Dress(combo, item, code, shortLabels ? shortName : displayName);
                     ToolTip.SetTip(item, displayName);
                     combo.Items.Add(item);
                     if (code == current) selectedIndex = i;
