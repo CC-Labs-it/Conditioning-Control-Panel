@@ -18,6 +18,12 @@ public static class CompositorLayers
     public const int Spiral = 60;
     public const int PinkTint = 70;
 
+    // The pink filter's second slot (ccp-bugs #1546, WPF only for now): with
+    // AppSettings.PinkFilterUnderEffects on, PinkTintLayer sits here instead, still over video, lock
+    // cards and flashes but under subliminals, bubbles, bouncing text and the spiral. A new slot, not
+    // a renumber: every other value still matches the Avalonia table.
+    public const int PinkTintUnder = 35;
+
     // ---------------- Chaos band (100-199, mirrors the Avalonia table) ----------------
     // Chaos visuals sit ABOVE the session effects (PinkTint 70): WPF re-raises chaos windows
     // topmost on every show/arm (ChaosWindowZ), so a sparkle burst renders over the pink tint.
