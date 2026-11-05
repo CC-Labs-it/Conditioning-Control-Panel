@@ -31,6 +31,7 @@ test('query: round trips frameAt points to s, lateral and height', () => {
     const { f, P } = place(s, lat, h);
     for (const hint of [f.seg, (f.seg + 3) % tr.nodeCount, -1]) {
       const q = tr.query(P[0], P[1], P[2], hint);
+      if (q.ramp) continue;   // over a jump wedge the ground is the wedge top (tests/ramps-system.test.mjs)
       assert.ok(sDiff(q.s, s) < 1e-3, 's ' + q.s + ' vs ' + s + ' hint ' + hint);
       assert.ok(Math.abs(q.lateral - lat) < 1e-3, 'lateral ' + q.lateral + ' vs ' + lat);
       assert.ok(Math.abs(q.height - h) < 1e-3, 'height ' + q.height + ' vs ' + h);
