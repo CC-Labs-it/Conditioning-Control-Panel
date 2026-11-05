@@ -262,10 +262,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
 
-        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e)
-        {
-            if (Owner is { } owner) LauncherWindow.LaunchGame(owner, Games.GameWindow.DtrhId);
-        }
+        // WPF PlayTabView.Cards.cs:59-66 -> LaunchExclusiveGame: sign-in first, then DtRH's Basic gate, before any focus.
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame(Games.GameWindow.DtrhId);
 
         private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("race");
 

@@ -215,12 +215,15 @@ public sealed class PlayWallTests
             foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
                 Assert.NotNull(C<Border>("Play" + name + "HeroPlate").Background);
             // WPF PlayCardT2 (PlayTabView.xaml:131-132): tier-2 living-metal rim, 3 px.
-            foreach (var slot in new[] { "SlotBreakout", "SlotDtrh", "SlotArcademy" })
+            foreach (var slot in new[] { "SlotBreakout", "SlotArcademy" })
             {
                 var card = (Border)C<Grid>(slot).Children[0];
                 Assert.Equal(2, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(card));
                 Assert.Equal(3, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetRimThickness(card));
             }
+            // WPF PlayTabView.xaml:492 PlayCardT1: DtRH is Basic since 2026-10-31 (tier-1 rim).
+            var dtrhCard = (Border)C<Grid>("SlotDtrh").Children[0];
+            Assert.Equal(1, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(dtrhCard));
 
         });
     }
