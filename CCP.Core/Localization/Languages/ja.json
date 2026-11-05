@@ -1,4 +1,5 @@
 {
+  "web_xp_claim_notice": "ウェブアカウントから +{0} XP。降下はアカウント全体で共通になりました。",
   "title_select_companion_personality": "{0}のAIパーソナリティを選択",
   "filter_personality_json_files": "パーソナリティのJSONファイル",
   "audio_device_unnamed": "(名前なし)",

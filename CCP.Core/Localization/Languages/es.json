@@ -1,4 +1,5 @@
 {
+  "web_xp_claim_notice": "+{0} XP de tu cuenta web. El descenso ahora se aplica a toda la cuenta.",
   "title_select_companion_personality": "Elegir personalidad de IA para {0}",
   "filter_personality_json_files": "Archivos JSON de personalidad",
   "audio_device_unnamed": "(sin nombre)",
