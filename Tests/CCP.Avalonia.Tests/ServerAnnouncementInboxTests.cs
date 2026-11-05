@@ -29,14 +29,22 @@ public sealed class ServerAnnouncementInboxTests
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        public string[] AnnouncementCalls
+        {
+            get { lock (Calls) return Calls.Where(c => c.StartsWith("GET /config/announcement", StringComparison.Ordinal)).ToArray(); }
+        }
+        public TaskCompletionSource<bool>? ResponseGate;
+        public string AnnouncementId = "a1";
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             lock (Calls) Calls.Add(r.Method + " " + path + r.RequestUri.Query + " " + r.Content?.ReadAsStringAsync().Result);
+            if (path == "/config/announcement" && ResponseGate != null) await ResponseGate.Task.WaitAsync(ct);
             var body = path == "/config/announcement"
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+            body = body.Replace("\"id\":\"a1\"", "\"id\":\"" + AnnouncementId + "\"");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 
@@ -137,6 +145,9 @@ public sealed class ServerAnnouncementInboxTests
             Dispatcher.UIThread.RunJobs();
             var popup = Assert.Single(opened);
             Assert.Equal("The Spiral is open", popup.FindControl<TextBlock>("TxtTitle")!.Text);
+            // The delayed startup check may finish after the user has opened the row.
+            await shell.CheckServerAnnouncementAsync();
+            Assert.Single(opened);
             Assert.Empty(StartupLadder.Inbox.Items);
             ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7));
             Dispatcher.UIThread.RunJobs();
@@ -156,6 +167,90 @@ public sealed class ServerAnnouncementInboxTests
         Assert.DoesNotContain(fake.Calls, c => c.Contains("/config/announcement", StringComparison.Ordinal));
         Assert.Empty(StartupLadder.Inbox.Items);
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ScheduledCheckRunsOnceOnTheStartupClock() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var clock = Assert.IsType<StartupLadder.TestClock>(StartupLadder.Time);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            clock.Advance(TimeSpan.FromSeconds(6));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(fake.AnnouncementCalls);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            await Until(() => StartupLadder.Inbox.Items.Count == 1);
+            Assert.Single(fake.AnnouncementCalls);
+            Assert.Equal("announcement:a1", Assert.Single(StartupLadder.Inbox.Items).Key);
+            clock.Advance(TimeSpan.FromSeconds(20));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(fake.AnnouncementCalls);
+        }
+        finally { shell.Close(); }
+    });
+
+    [Fact]
+    public Task ClosingShellCancelsItsScheduledCheck() => Run(async fake =>
+    {
+        var clock = Assert.IsType<StartupLadder.TestClock>(StartupLadder.Time);
+        var shell = new MainShellWindow();
+        shell.Show();
+        Assert.Single(clock.Timers);
+        shell.Close();
+        Assert.Empty(clock.Timers);
+        clock.Advance(TimeSpan.FromSeconds(7));
+        Dispatcher.UIThread.RunJobs();
+        await shell.CheckServerAnnouncementAsync();
+        Assert.Empty(fake.AnnouncementCalls);
+        Assert.Empty(StartupLadder.Inbox.Items);
+    });
+
+    [Fact]
+    public Task ResponseArrivingAfterShellClosesCannotPublish() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        fake.ResponseGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shell = new MainShellWindow();
+        Task? check = null;
+        try
+        {
+            shell.Show();
+            check = shell.CheckServerAnnouncementAsync();
+            await Until(() => fake.AnnouncementCalls.Length == 1);
+            Assert.Single(fake.AnnouncementCalls);
+            shell.Close();
+            fake.ResponseGate.SetResult(true);
+            await check;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally
+        {
+            fake.ResponseGate.TrySetResult(true);
+            if (check != null) await check;
+            shell.Close();
+        }
+    });
+
+    [Fact]
+    public Task DifferentAnnouncementIdStillRoutes() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            await shell.CheckServerAnnouncementAsync();
+            Assert.Equal("announcement:a1", Assert.Single(StartupLadder.Inbox.Items).Key);
+            StartupLadder.Inbox.Items.Clear();
+            fake.AnnouncementId = "a2";
+            await shell.CheckServerAnnouncementAsync();
+            Assert.Equal("announcement:a2", Assert.Single(StartupLadder.Inbox.Items).Key);
+        }
+        finally { shell.Close(); }
     });
 
     [Fact]
