@@ -13,7 +13,7 @@ install() {
             tools="xvfb openbox imagemagick xdotool x11-utils fontconfig procps"
             export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null
             add() { apt-get install -y -qq --no-install-recommends "$1" >/dev/null 2>&1; } ;;
-    fedora) deps="webkit2gtk4.1 wpewebkit wpebackend-fdo libwpe vlc-libs libsecret libX11 libXi"
+    fedora) deps="webkit2gtk4.1 wpewebkit wpebackend-fdo libwpe vlc-libs libsecret libX11 libXi openssl3-libs"   # openssl3-libs: F45+ ships OpenSSL 4; .NET 10 needs libssl.so.3 (absent on F44, recorded as unavailable)
             tools="xorg-x11-server-Xvfb openbox ImageMagick xdotool xwininfo fontconfig procps-ng"
             add() { dnf install -y -q --setopt=install_weak_deps=False "$1" >/dev/null 2>&1; } ;;
     arch)   deps="webkit2gtk-4.1 wpewebkit wpebackend-fdo libwpe vlc libsecret libx11 libxi"

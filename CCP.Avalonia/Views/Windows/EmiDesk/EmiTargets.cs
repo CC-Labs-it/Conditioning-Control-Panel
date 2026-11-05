@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// openers this head has. WPF twin: ConditioningControlPanel/Services/EmiDesk/EmiTargets.cs, whose
     /// availability, lock probe and opener this mirrors door for door.
     ///
-    /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, dtrh,
+    /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy,
     /// intake, spiral (overlay), goon and backroom. Each is a host window or overlay no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
     /// same way an unavailable door does. Also missing: the moments WPF's Pick fires
@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // WPF EmiTargets.cs:204: live server flag, no premium lock, same shop route.
             "justdrop" => (() => Services.JustDrop.JustDropService.DoorAvailable, Never,
                 () => Nav("justdrop")),
+            "dtrh" => Premium(id, "dtrh", () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.DtrhId)),
             "vault" => Free(() => Nav("premium")),
             "companion" => Free(() => Nav("companion")),
             "progression" => Free(() => Nav("progression")),
@@ -124,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (locked)
                 {
                     var name = Loc.Get("emi_desk_target_" + id);
-                    string? daily = id is "awareness" or "remote" or "takeover" ? id : null;
+                    string? daily = id is "awareness" or "remote" or "takeover" or "dtrh" ? id : null;
                     if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
                     return;
                 }

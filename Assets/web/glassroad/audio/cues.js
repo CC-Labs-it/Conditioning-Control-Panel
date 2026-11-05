@@ -133,6 +133,12 @@ export const AUDIO_CUES = {
     } else syn.noise({ dur: 0.45, vol: 0.1, freq: 600, sweep: 2800 });
   },
   hop(syn) { syn.tone(syn.semis(7), { dur: 0.08, vol: 0.06, glide: syn.semis(12) }); },
+  // a ramp lip (sim/ramps.js): a soft rising whoosh with a low thump, quieter than a boost (no voice, ever)
+  ramp(syn) {
+    syn.noise({ dur: 0.35, vol: 0.05, freq: 700, q: 0.7, sweep: 2600 });
+    syn.tone(syn.semis(-5), { type: 'sine', dur: 0.14, vol: 0.06, attack: 0.004, glide: syn.semis(-12) });
+    syn.tone(syn.semis(7), { dur: 0.22, vol: 0.04, glide: syn.semis(14), at: 0.03 });
+  },
   stone(syn, { id, field = null } = {}) {
     if (id == null) return;
     const time = syn.ctx.currentTime, previous = syn.stoneRun;
