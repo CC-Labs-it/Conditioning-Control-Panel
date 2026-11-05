@@ -103,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The global panic listener can stop the game right now (as MandatoryVideoOverlay). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
         internal static VlcFrameSink? Sink => _sink;
+        internal static MediaPlayer? Player => _player;
 
         // Multi-monitor support - static shared state
         private static readonly object _cleanupLock = new();
@@ -393,8 +394,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             StartSafetyTimer(_videoDurationSeconds);
         }
 
-        internal static Action? FramePresented; // UI-thread observation of a copied video frame.
-
         /// <summary>WPF's primary LibVLC start: the 30 s fallback clock (the metadata cache is not
         /// ported; LengthChanged corrects it), bubbles, then Play at master volume. False when no
         /// LibVLC is available, which ends the game as a start failure does in WPF.</summary>
@@ -414,17 +413,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _player = player;
             _sink = new VlcFrameSink(player, () => _media,
                 bmp => { foreach (var w in _allWindows) w._videoImage.Source = bmp; },
-                () =>
-                {
-                    foreach (var w in _allWindows) w._videoImage.InvalidateVisual();
-                    FramePresented?.Invoke();
-                });
+                () => { foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
             // LibVLC raises these on its own thread; the game is torn down only on the UI thread.
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             _media = new Media(vlc, _videoPath, FromType.FromPath);
-            player.Play(_media);
+            // WPF 7.2.2 a0b6d5779 (#1549): the primary video names itself in the recent-sounds ring;
+            // running = engine or session (WPF EngineOffAudioLog.cs:29), a paused session is not engine-off.
+            if (player.Play(_media)) Services.Audio.RecentSounds.Shared.Note("bubblecount-video", _videoPath, CoreEngine.IsRunning || CoreSession.IsSessionRunning, false, DateTime.Now);
             return true;
         }
 

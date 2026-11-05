@@ -11,6 +11,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Audio;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -49,6 +50,7 @@ public sealed class BubbleCountGameTests
             var real = host.Scheduler;
             var prevEngine = CoreEngine.BubbleCount;
             var listener = BubbleCountWindow.PanicListenerLive;
+            var prevSession = CoreSession.IsSessionRunningProvider;
             host.Scheduler = b;
             CoreEngine.BubbleCount = b;
             try
@@ -56,46 +58,57 @@ public sealed class BubbleCountGameTests
                 await AvaloniaTestDispatcher.RunAsync(async () =>
                 {
                     if (Application.Current is null)
-                        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                             .UseSkia()
                             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                             .SetupWithoutStarting();
 
-                    async Task Open(bool strict, Action<BubbleCountWindow>? whilePlaying = null)
+                    async Task<BubbleCountWindow> Open(bool strict)
                     {
                         s.BubbleCountStrictLock = strict;
-                        var playing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                        var previous = BubbleCountWindow.FramePresented;
-                        bool observed = false;
-                        BubbleCountWindow.FramePresented = () =>
+                        var ready = new TaskCompletionSource<BubbleCountWindow>();
+                        using var opened = Window.WindowOpenedEvent.AddClassHandler<BubbleCountWindow>((w, _) =>
                         {
-                            if (observed || (BubbleCountWindow.Sink?.FrameCount ?? 0) < 3) return;
-                            observed = true;
-                            // Check the live window on the third copied frame. A loaded dispatcher
-                            // can resume a polling Task.Delay after this two-second clip has ended.
-                            try
+                            // WindowOpened precedes Show/Opened. Subscribe after the game's own
+                            // Opened handler has installed its decoder, then observe presented frames.
+                            w.Opened += (_, _) =>
                             {
-                                var w = Assert.Single(BubbleCountWindow.OpenWindows);
-                                Assert.True(BubbleCountWindow.Sink!.FrameCount >= 3, "frames decoded");
-                                Assert.Same(BubbleCountWindow.Sink.Bitmap, w.VideoImage.Source);
-                                Assert.True(w.Topmost && w.IsVisible);
-                                whilePlaying?.Invoke(w);
-                                playing.SetResult();
-                            }
-                            catch (Exception e) { playing.SetException(e); }
-                        };
-                        try
-                        {
-                            b.Trigger(forceTest: true);
-                            Assert.True(b.IsBusy);
-                            Assert.Empty(BubbleCountWindow.OpenWindows); // the 800 ms lead-in
-                            await playing.Task.WaitAsync(TimeSpan.FromSeconds(20));
-                        }
-                        finally { BubbleCountWindow.FramePresented = previous; }
+                                var sink = BubbleCountWindow.Sink!;
+                                void Presented()
+                                {
+                                    if (sink.FrameCount < 3) return;
+                                    sink.FramePresented -= Presented;
+                                    try
+                                    {
+                                        // Hold real playback while checking strict/panic input. Polling a
+                                        // two-second clip could observe the hidden result-screen window.
+                                        BubbleCountWindow.Player!.SetPause(true);
+                                        Assert.Same(w, Assert.Single(BubbleCountWindow.OpenWindows));
+                                        Assert.True(sink.FrameCount >= 3, "frames decoded");
+                                        Assert.Same(sink.Bitmap, w.VideoImage.Source);
+                                        Assert.True(w.Topmost && w.IsVisible);
+                                        ready.TrySetResult(w);
+                                    }
+                                    catch (Exception error) { ready.TrySetException(error); }
+                                }
+                                sink.FramePresented += Presented;
+                            };
+                        });
+                        b.Trigger(forceTest: true);
+                        Assert.True(b.IsBusy);
+                        Assert.Empty(BubbleCountWindow.OpenWindows); // the 800 ms lead-in
+                        return await ready.Task.WaitAsync(TimeSpan.FromSeconds(20));
                     }
 
                     // Non-strict: the 2 s clip ends, the answer window asks, the right count wins.
+                    // A session with the engine stopped (paused) is running, not engine-off (WPF EngineOffAudioLog.cs:29).
+                    Assert.False(CoreEngine.IsRunning);
+                    CoreSession.IsSessionRunningProvider = () => true;
                     await Open(strict: false);
+                    var noted = RecentSounds.Shared.Snapshot().Last(e => e.Player == "bubblecount-video");
+                    Assert.Equal(("clip.mp4", true), (noted.File, noted.EngineRunning));
+                    CoreSession.IsSessionRunningProvider = prevSession;
+                    BubbleCountWindow.Player!.SetPause(false); // the real EndReached opens the answer window
                     for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
                     Assert.Equal(2, BubbleCountWindow.LastVideoDurationSeconds, 0);   // LengthChanged replaced the 30 s fallback
@@ -110,25 +123,23 @@ public sealed class BubbleCountGameTests
 
                     // Strict with a live listener: the panic key and Esc are swallowed; engine stop closes it.
                     BubbleCountWindow.PanicListenerLive = () => true;
-                    await Open(strict: true, w =>
-                    {
-                        w.KeyPress(Key.F12, RawInputModifiers.None, PhysicalKey.F12, "");
-                        w.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
-                        Assert.True(b.IsBusy && w.IsVisible, "strict game survives the panic key and Esc");
-                        CoreEngine.Stop();
-                        Assert.False(b.IsBusy);
-                        Assert.Empty(BubbleCountWindow.OpenWindows);
-                        Assert.Null(BubbleCountWindow.Sink);
-                    });
+                    var w = await Open(strict: true);
+                    noted = RecentSounds.Shared.Snapshot().Last(e => e.Player == "bubblecount-video");
+                    Assert.Equal(("clip.mp4", false), (noted.File, noted.EngineRunning));   // no engine, no session
+                    w.KeyPress(Key.F12, RawInputModifiers.None, PhysicalKey.F12, "");
+                    w.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
+                    Assert.True(b.IsBusy && w.IsVisible, "strict game survives the panic key and Esc");
+                    CoreEngine.Stop();
+                    Assert.False(b.IsBusy);
+                    Assert.Empty(BubbleCountWindow.OpenWindows);
+                    Assert.Null(BubbleCountWindow.Sink);
 
                     // Strict with NO live listener (#875): the panic key must escape, not trap.
                     BubbleCountWindow.PanicListenerLive = () => false;
-                    await Open(strict: true, w =>
-                    {
-                        w.KeyPress(Key.F12, RawInputModifiers.None, PhysicalKey.F12, "");
-                        Assert.False(b.IsBusy, "no listener: the panic key force-stops a strict game");
-                        Assert.Empty(BubbleCountWindow.OpenWindows);
-                    });
+                    w = await Open(strict: true);
+                    w.KeyPress(Key.F12, RawInputModifiers.None, PhysicalKey.F12, "");
+                    Assert.False(b.IsBusy, "no listener: the panic key force-stops a strict game");
+                    Assert.Empty(BubbleCountWindow.OpenWindows);
                     Assert.Empty(host.Messages);                          // a stop, not a WRONG! retry
                 });
             }
@@ -138,6 +149,7 @@ public sealed class BubbleCountGameTests
                 host.Scheduler = real;
                 CoreEngine.BubbleCount = prevEngine;
                 BubbleCountWindow.PanicListenerLive = listener;
+                CoreSession.IsSessionRunningProvider = prevSession;
                 CoreProgression.AddXPProvider = prevXp;
                 (s.PanicKeyEnabled, s.PanicKey, s.BubbleCountStrictLock, s.DualMonitorEnabled) = saved;
             }

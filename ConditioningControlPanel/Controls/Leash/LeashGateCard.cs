@@ -150,7 +150,7 @@ public sealed class LeashGateCard : Grid
         _stamp.VerticalAlignment = VerticalAlignment.Top;
         top.Children.Add(_stamp);
         var from = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
-        var av = FriendsLook.Avatar(p.From.Name, p.From.AvatarUrl, 26);
+        var av = FriendsLook.Avatar(p.From.Name, p.From.AvatarUrl, 26, null, p.From.Look);
         av.Margin = new Thickness(0, 0, 8, 0);
         from.Children.Add(av);
         from.Children.Add(FriendsLook.Label(Loc.GetF("leash_gate_says", p.From.Name), 13.5, FriendsLook.GoldBrush, null, FontWeights.SemiBold));
