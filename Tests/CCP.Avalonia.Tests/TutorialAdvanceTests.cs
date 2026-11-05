@@ -74,7 +74,7 @@ public sealed class TutorialAdvanceTests
     private static Point PointerCentre(Control target, Window host)
     {
         // Pointer input reads the rendered scene, not just the laid-out controls.
-        HeadlessRender.LiveTree(host);
+        HeadlessRendering.RenderLiveTree(host);
         var point = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), host);
         Assert.NotNull(point);
         var hit = host.InputHitTest(point.Value) as Visual;
@@ -213,13 +213,13 @@ public sealed class TutorialAdvanceTests
             slider.Value = 0.5;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(index, CoreTutorial.CurrentStepIndex);
-            HeadlessRender.LiveTree(host);
+            HeadlessRendering.RenderLiveTree(host);
             host.MouseDown(point, MouseButton.Left);
             slider.Value = 0.9;
             host.MouseUp(point, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(index, CoreTutorial.CurrentStepIndex);
-            HeadlessRender.LiveTree(host);
+            HeadlessRendering.RenderLiveTree(host);
             host.MouseDown(point, MouseButton.Left);
             slider.Value = 0.5;
             host.MouseUp(point, MouseButton.Left);
