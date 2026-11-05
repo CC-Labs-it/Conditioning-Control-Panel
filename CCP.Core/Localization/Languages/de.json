@@ -1,4 +1,6 @@
 {
+  "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
+  "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
   "audio_device_unnamed": "(unbenannt)",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",

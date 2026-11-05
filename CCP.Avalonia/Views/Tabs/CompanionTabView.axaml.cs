@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // ponytail: WPF's aggregate runtime viewmodel/compat surface remains in
             // wire-views-tab-companion-b; the room already owns live per-zone viewmodels.
 
-            // WorkshopAccordion owns roster switching for shell and standalone hosts.
+            // WorkshopAccordion owns the single roster switch subscription.
 
             // WPF CompanionTabView.xaml.cs:36-40: the room is collapsed (XAML) and the page reads its zones.
             Conversation.Room = Room;

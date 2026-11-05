@@ -23,6 +23,31 @@ namespace CCP.Avalonia.Tests;
 public sealed class WorkshopRosterSwitchTests
 {
     [Fact]
+    public Task StandaloneDrawerSwitchesThroughCore() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        CoreSettings.Current.ActiveCompanionId = 0;
+        var drawer = new WorkshopAccordion();
+        var owner = new Window { Content = drawer, Width = 700, Height = 800 };
+        try
+        {
+            drawer.ViewModel!.IsExpanded = true;
+            owner.Show(); Dispatcher.UIThread.RunJobs();
+            var roster = ((WorkshopRuntimeVm)drawer.DataContext!).Parts.Roster;
+            var card = roster.FindControl<Border>("CompanionCard1")!;
+            card.BringIntoView(); Dispatcher.UIThread.RunJobs();
+            var at = card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), owner)!.Value;
+            owner.MouseDown(at, MouseButton.Left); owner.MouseUp(at, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, CoreSettings.Current.ActiveCompanionId);
+        }
+        finally { owner.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task RosterClickSwitchesAndCoreEventsRefreshWhileOpen() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
@@ -49,6 +74,10 @@ public sealed class WorkshopRosterSwitchTests
             Dispatcher.UIThread.RunJobs();
             shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal("roster");
             Dispatcher.UIThread.RunJobs();
+            // The personality path now opens an OS picker. Exercise cancellation through its seam,
+            // keeping this real-pointer regression entirely off the desktop.
+            shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().RosterPromptPicker =
+                (_, _) => Task.FromResult<string?>(null);
             var cell = shell.GetLogicalDescendants().OfType<WorkshopRosterCell>().Single();
             var hero = shell.GetLogicalDescendants().OfType<CompanionHeroCard>().First().ViewModel!;
             void Press(Control target, MouseButton button)
