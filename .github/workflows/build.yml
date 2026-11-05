@@ -481,6 +481,8 @@ jobs:
       - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
         shell: bash
         run: bash .github/scripts/avalonia-tests-sharded.sh --shard ${{ matrix.shard }}
+        env:
+          CCP_NATIVE_DESKTOP_TEST: "1"
       - name: Record the suite's test count for the coverage check
         if: ${{ !cancelled() }}
         shell: bash
