@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Impossibile aprire il lettore",
+  "media_drop_editor_error_title": "Impossibile aprire l’editor",
+  "media_drop_player_error_fmt": "Impossibile aprire Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "Impossibile aprire Deeper Editor: {0}: {1}",
   "title_select_companion_personality": "Scegli la personalità IA per {0}",
   "filter_personality_json_files": "File JSON di personalità",
   "audio_device_unnamed": "(senza nome)",

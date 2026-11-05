@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Open Player failed",
+  "media_drop_editor_error_title": "Open Editor failed",
+  "media_drop_player_error_fmt": "Could not open Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "Could not open Deeper Editor: {0}: {1}",
   "title_select_companion_personality": "Select AI Personality for {0}",
   "filter_personality_json_files": "Prompt JSON files",
   "audio_device_unnamed": "(unnamed)",

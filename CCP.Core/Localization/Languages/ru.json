@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Не удалось открыть проигрыватель",
+  "media_drop_editor_error_title": "Не удалось открыть редактор",
+  "media_drop_player_error_fmt": "Не удалось открыть Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "Не удалось открыть Deeper Editor: {0}: {1}",
   "title_select_companion_personality": "Выбрать личность ИИ для {0}",
   "filter_personality_json_files": "Файлы личности JSON",
   "audio_device_unnamed": "(без имени)",

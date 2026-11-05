@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "无法打开播放器",
+  "media_drop_editor_error_title": "无法打开编辑器",
+  "media_drop_player_error_fmt": "无法打开 Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "无法打开 Deeper Editor: {0}: {1}",
   "title_select_companion_personality": "为{0}选择 AI 人格",
   "filter_personality_json_files": "人格 JSON 文件",
   "audio_device_unnamed": "(未命名)",

@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "プレーヤーを開けませんでした",
+  "media_drop_editor_error_title": "エディターを開けませんでした",
+  "media_drop_player_error_fmt": "Deeper Player を開けませんでした: {0}: {1}",
+  "media_drop_editor_error_fmt": "Deeper Editor を開けませんでした: {0}: {1}",
   "title_select_companion_personality": "{0}のAIパーソナリティを選択",
   "filter_personality_json_files": "パーソナリティのJSONファイル",
   "audio_device_unnamed": "(名前なし)",

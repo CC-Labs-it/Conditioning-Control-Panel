@@ -98,6 +98,7 @@ public partial class EnhancementPlayerWindow {
     private DateTimeOffset _lastEscape;
     private bool _escapeConsumed;
     private double? _volumeBeforeMute;
+    private bool _muteChanging;   // WPF :2863: a muted 0 is never persisted
     private readonly HashSet<Key> _pressed = new();
     private bool StrictInput => CoreSettings.Current.StrictLockEnabled || LockdownService.Current?.IsActive == true;
     private void OnVideoHostKeyDown(object? sender, KeyEventArgs e) {
@@ -128,7 +129,7 @@ public partial class EnhancementPlayerWindow {
                 if (!_isVideoMode) { _volumeBeforeMute = null; _sliderVolume.Value = Math.Clamp(_sliderVolume.Value + (key == Key.Up ? 5 : -5), 0, 100); return true; }
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("delete l._ccpMuteVolume;l.volume=Math.max(0,Math.min(1,l.volume+" + (key == Key.Up ? "0.05" : "-0.05") + "));")); return true;
             case Key.M:
-                if (!_isVideoMode) { if (!repeat) { var old = _sliderVolume.Value; var restore = _volumeBeforeMute; _sliderVolume.Value = restore ?? 0; _volumeBeforeMute = restore == null ? old : null; } return true; }
+                if (!_isVideoMode) { if (!repeat) { var old = _sliderVolume.Value; var restore = _volumeBeforeMute; _muteChanging = true; try { _volumeBeforeMute = restore == null ? old : null; _sliderVolume.Value = restore ?? 0; } finally { _muteChanging = false; } } return true; }
                 if (!repeat) _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("if(l._ccpMuteVolume!=null){l.volume=l._ccpMuteVolume;delete l._ccpMuteVolume;}else{l._ccpMuteVolume=l.volume;l.volume=0;}")); return true;
             default: return false;
         }
