@@ -141,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Cosmetic, and also reached from OnEngineStopped (panic, stop): a throw here must not skip the
             // pause-button / session-label / RefreshSessionFeatureLock steps that follow it there.
             try { ApplyStartHeroState(); }
-            catch (Exception ex) { Serilog.Log.Debug(ex, "[Shell] start hero state"); }
+            catch (System.Exception ex) { Serilog.Log.Debug(ex, "[Shell] start hero state"); }
         }
     }
 }
