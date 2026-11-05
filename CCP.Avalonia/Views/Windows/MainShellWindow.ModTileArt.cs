@@ -37,6 +37,7 @@ public partial class MainShellWindow
             Set(dash.CardBubblePop, ModArt.TryLoad("features/Bubble_pop.png", TileDecodeWidth));
             Set(dash.CardLockCard, ModArt.TryLoad("features/Phrase_Lock.png", TileDecodeWidth));
             Set(dash.CardMystery, ModTileVariant("mysterybox", TileDecodeWidth));
+            RefreshMysteryTile(); // WPF Presets.cs:1187: mod changes repaint the reveal art too.
             Set(dash.CardVault, ModTileVariant("vault", WideTileDecodeWidth));
             Split(dash.ComboVideoBubble, "features/mandatory_videos.png", "features/Bubble_count.png");
             Split(dash.ComboSpiralPink, "features/spiral_overlay.png", "features/Pink_filter.png");

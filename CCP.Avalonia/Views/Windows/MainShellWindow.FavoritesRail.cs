@@ -64,6 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshFavoritesRail()
         {
             RefreshDashboardToggleHint();
+            RefreshMysteryTile();
+            _ = Tabs.SettingsTabView.RefreshDailyGift(); // WPF MainWindow.Presets.cs:1152; service owns success/retry throttles.
             var dash = SettingsPage;
             var s = CoreSettings.Current;
             if (dash?.FavoritesList == null || dash.RecentList == null || s == null) return;
