@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -133,6 +134,7 @@ namespace ConditioningControlPanel.Services
                 wait.TotalSeconds, _backoffFailures, status?.ToString() ?? "none");
         }
 
+        public PrizesFeed? Prizes { get; set; }
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
@@ -161,6 +163,7 @@ namespace ConditioningControlPanel.Services
         public void Reset()
         {
             StopHeartbeat();
+            Prizes?.Clear();
             DescentReader?.Reset();
             Interlocked.Increment(ref _sessionVersion);
             Loaded = false;
@@ -252,6 +255,7 @@ namespace ConditioningControlPanel.Services
                 }
                 var id = s.UnifiedId!;
                 if (!Loaded || !SignedIn(s)) return false;   // a logout between the check above and the gate
+                Prizes?.NoteAccount(id);
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
@@ -311,6 +315,8 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
+                    Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
                     if (AdoptFromResponse(s, reply)) _adopted = true;
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     ClaimWebXp(s, reply);

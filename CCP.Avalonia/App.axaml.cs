@@ -573,6 +573,7 @@ namespace ConditioningControlPanel.Avalonia
                 // back; the Windows ducker queues behind it. Linux recovers on the pactl queue after vlc.Seed below.
                 if (OperatingSystem.IsWindows()) Platform.DuckRecovery.RecoverWpfJournalAtLaunch(CorePaths.UserData);
                 // Secrets first: SettingsService's auth-token migration asks CoreSecrets.HasStore on load.
+                Platform.PrizeOwnership.WatchShutdown();
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
@@ -744,7 +745,8 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown, DescentReader = Descent, LifetimeLifted = () => FeatureDayLog?.Rebaseline("v2 cloud merge") };
+                        { Countdown = DescentCountdown, DescentReader = Descent, LifetimeLifted = () => FeatureDayLog?.Rebaseline("v2 cloud merge"),
+                          Prizes = Platform.PrizeOwnership.Feed };
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
