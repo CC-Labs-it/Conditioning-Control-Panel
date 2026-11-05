@@ -127,6 +127,10 @@ public sealed class PossessionShellTests
         Assert.True(page.PossessionPips.IsVisible);
         Assert.Equal("Possession  ·  Settle", page.TxtPossessionRung.Text);
         Assert.Equal(new[] { Ember, Dim, Dim, Dim, Dim }, Pips(page));
+        // A panel swap landing after the paint leaves the row up (the stub's hide used to blank it).
+        page.ShowLockdownState();
+        Assert.True(page.TxtPossessionRung.IsVisible);
+        Assert.True(page.PossessionPips.IsVisible);
 
         // 40% of the timer served: Eerie is at Melt (PossessionDeck.RungFor), raised from the real tick.
         rig.Clock += TimeSpan.FromMinutes(12);

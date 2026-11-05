@@ -595,7 +595,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
                     Key = "intro:possession",
-                    Glyph = "🕶",
+                    Glyph = global::ConditioningControlPanel.Avalonia.Controls.IconMap.PossessionRules,
                     Title = "The warden's rules",
                     Summary = "What possession does before the room starts moving.",
                     Open = () =>

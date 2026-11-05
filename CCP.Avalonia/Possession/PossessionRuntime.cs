@@ -55,7 +55,6 @@ namespace ConditioningControlPanel.Avalonia.Possession
             public double HoldMs;
             public double ReturnMs = PossessionRuntime.ReturnMs;
             public bool ReturnAsked;
-            public double LastMs;
             public readonly TaskCompletionSource Done = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
@@ -147,7 +146,6 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 g.Start ??= now;
                 double ms = (now - g.Start.Value).TotalMilliseconds;
                 if (g.ReturnAsked && !g.Returning) g.HoldMs = Math.Min(g.HoldMs, ms);   // home starts now
-                g.LastMs = ms;
                 double hold = g.HoldMs;
                 if (ms < hold) { g.Effect.Frame(ms); continue; }
                 var l = g.Lease;
