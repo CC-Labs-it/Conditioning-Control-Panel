@@ -35,8 +35,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 // Not WPF's `s.UnifiedId ||`: a stored id with nothing to prove it is not restored (AccountSeed.RestoreSession).
                 var isLoggedIn = CoreAccount.IsLoggedIn;
-                var displayName = s.UserDisplayName ?? AccountSeed.Patreon?.DisplayName ?? AccountSeed.Discord?.DisplayName
-                                  ?? AccountSeed.SubscribeStar?.DisplayName ?? "User";
+                var displayName = NeedsDisplayNameRule.FirstName(s.UserDisplayName, AccountSeed.Patreon?.DisplayName,
+                    AccountSeed.Discord?.DisplayName, AccountSeed.SubscribeStar?.DisplayName)
+                    ?? Loc.Get("account_name_not_set");   // WPF Login.cs:379
 
                 var settings = SettingsPage;
                 SetVisible(settings?.FindControl<Button>("BtnUnifiedLogin"), !isLoggedIn);
@@ -80,11 +81,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 // WPF MainWindow.Login.cs:209 (#749): a first sign-in through Discord attaches it too, so
                 // offer sharing here as the link flow does. The offer self-guards on consent.
-                // WPF Login.cs:214: the sharing question does not wait for the background profile load,
-                // and the profile load does not wait for the answer.
+                // The name ask finishes before the sharing question.
                 var offer = AccountSeed.Discord?.IsAuthenticated == true
                     ? OfferAchievementSharingAfterDiscordLink() : Task.CompletedTask;
-                // The cloud profile may adopt a different level (WPF OnProfileLoaded -> UpdateLevelDisplay).
+                // Profile loading runs beside the question, as in WPF; repaint when it lands.
                 try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
                 UpdateLevelDisplay();
                 await offer;

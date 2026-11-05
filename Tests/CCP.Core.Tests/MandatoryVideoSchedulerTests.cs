@@ -35,6 +35,42 @@ public sealed class MandatoryVideoSchedulerTests
         finally { (s.MandatoryVideosEnabled, s.VideosPerHour, s.StrictLockEnabled, s.FlashEnabled) = (e, p, st, f); }
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    public void Replay_switch_keeps_failure_credit_and_strict_replay(bool strict, bool lockdown, bool replay) => With(6, strict, () =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled);
+        var checks = new List<bool>();
+        var prior = CoreProgression.TrackAttentionCheckProvider;
+        CoreProgression.TrackAttentionCheckProvider = checks.Add;
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var priorLockdown = LockdownService.Current;
+        var activeLockdown = new LockdownService();
+        try
+        {
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled) = (true, false, false);
+            LockdownService.Current = lockdown ? activeLockdown : null;
+            if (lockdown) activeLockdown.Activate(TimeSpan.FromMinutes(10));
+            Assert.True(v.Trigger(strictOverride: strict)); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(strict, v.IsStrict);
+            v.NoteSpawn(); v.Ended();
+            Assert.Equal(new[] { false }, checks);
+            Assert.Equal(replay ? 1 : 0, host.Messages.Count);
+            if (replay) host.Then!();
+            Assert.Equal(replay, v.IsPlaying);
+        }
+        finally
+        {
+            v.Stop(); activeLockdown.Dispose(); LockdownService.Current = priorLockdown;
+            CoreProgression.TrackAttentionCheckProvider = prior;
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled) = old;
+        }
+    });
+
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]

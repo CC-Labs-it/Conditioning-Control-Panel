@@ -202,8 +202,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
                 ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
                 ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
-                ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
+                ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
                 ChkRandomize.IsChecked = s.RandomizeAttentionTargets;
@@ -259,6 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingSizePercent) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
                 e.PropertyName == nameof(AppSettings.MercySystemEnabled) ||

@@ -10,22 +10,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
 public partial class MainShellWindow
 {
-    // WPF MainWindow.DisplayNameAsk.cs: server answers take precedence over a blank local name.
+    // WPF MainWindow.DisplayNameAsk.cs: server answers take precedence over a blank local name, and a save
+    // never lands on an account that changed while the dialog was up.
     internal async Task AskDisplayNameAfterSignIn(Window owner, string? name, bool? serverSaysNeeded)
     {
-        if (!NeedsDisplayNameRule.ShouldAsk(!string.IsNullOrEmpty(CoreSettings.Current.UnifiedId), name, serverSaysNeeded)) return;
+        var uid = CoreSettings.Current.UnifiedId;
+        if (!NeedsDisplayNameRule.ShouldAsk(!string.IsNullOrEmpty(uid), name, serverSaysNeeded)) return;
         try
         {
             var suggestion = NeedsDisplayNameRule.Suggest(AccountSeed.Discord?.Username, AccountSeed.Discord?.DisplayName);
-            await new DisplayNameDialog(suggestion, SaveRequiredDisplayNameAsync).ShowDialogSafe<bool>(owner.IsVisible ? owner : this);
+            await new DisplayNameDialog(suggestion, n => SaveRequiredDisplayNameAsync(n, uid)).ShowDialogSafe<bool>(owner.IsVisible ? owner : this);
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Display name ask failed"); }
     }
 
-    private async Task<string?> SaveRequiredDisplayNameAsync(string name)
+    private async Task<string?> SaveRequiredDisplayNameAsync(string name, string uid)
     {
-        var (ok, error, saved) = await CoreAccount.ChangeDisplayNameAsync(name);
+        if (CoreSettings.Current.UnifiedId != uid) return Loc.Get("msg_failed_to_change_display_name");
+        // WPF DisplayNameAsk.cs:82-86: the change first (check-name says "taken" for the asker's own name), then availability.
+        var (ok, error, saved) = await NeedsDisplayNameRule.SaveRequiredAsync(name,
+            CoreAccount.ChangeDisplayNameAsync, value => AccountSeed.NewV2().IsDisplayNameAvailableAsync(value));
         if (!ok) return error ?? Loc.Get("msg_failed_to_change_display_name");
+        if (CoreSettings.Current.UnifiedId != uid) return Loc.Get("msg_failed_to_change_display_name");
         CoreSettings.Current.UserDisplayName = saved ?? name;
         CoreSettings.Save();
         UpdateQuickLoginUI();
