@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
         /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
+        private static void RebaselineDayLogAfterCloudMerge(global::ConditioningControlPanel.Models.AppSettings _) => FeatureDayLog?.Rebaseline("v2 cloud merge");
 
         /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
         /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.html).</summary>
@@ -76,15 +77,7 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>WPF App.xaml.cs:3196-3206: arm before the shell; a missing tube leaves the line retryable.</summary>
         internal static void StartDescentCountdown()
         {
-            DescentCountdown = new Services.Descent.DescentCountdownService
-            {
-                Speaker = line =>
-                {
-                    if (DescentTube() is not { } avatar) return false;
-                    avatar.GigglePriority(line, playSound: false, aiGenerated: false);
-                    return true;
-                },
-            };
+            DescentCountdown = CreateDescentCountdown();
             DescentCountdown.Start();
         }
 
@@ -152,7 +145,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
-        /// Core settings; the perfect-week bonus stays unseeded (the WPF "service is null" answer).
+        /// Core settings; the perfect-week bonus uses Core rules from WPF SkillTreeService.cs:461-527.
         /// Programs (TrackVerifier) is seeded next to the ProgramService below.</summary>
         private static void StartQuests()
         {
@@ -168,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia
                 return true;
             };
             CoreQuests.PlayCompletionEffectsProvider = PlayQuestCompletionEffects;
+            WireQuestRewards(Sessions);
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).
@@ -205,6 +199,29 @@ namespace ConditioningControlPanel.Avalonia
                     Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f), tag);
             }
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
+        }
+
+        // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
+        internal static void SeedHapticPlaybackTime()
+        {
+            Services.Haptics.FunScriptService.SubscribePlaybackTime =
+                Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
+        }
+
+        // WPF App.xaml.cs:3199: false before the avatar exists leaves the phase retryable.
+        // findAvatar is a test seam only: Application.ApplicationLifetime cannot be set after init,
+        // so a headless test cannot make AvatarTubeWindow.Live non-null.
+        internal static Services.Descent.DescentCountdownService CreateDescentCountdown(
+            Func<Views.AvatarTube.AvatarTubeWindow?>? findAvatar = null) => new()
+        {
+            Speaker = line => SpeakCountdownLine(line, (findAvatar ?? DescentTube)()),
+        };
+
+        internal static bool SpeakCountdownLine(string line, Views.AvatarTube.AvatarTubeWindow? avatar)
+        {
+            if (avatar is null) return false;
+            avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+            return true;
         }
 
         /// <summary>The mod service (WPF App.Mods), or null on the headless render path.</summary>
@@ -255,10 +272,8 @@ namespace ConditioningControlPanel.Avalonia
         internal static ConditioningControlPanel.Services.Companion.Brain.CompanionBrain? Brain { get; set; }
 
         /// <summary>
-        /// WPF App.xaml.cs SeedAskSeams + NoticeSurface: the asks service and the oversize-prompt toast.
-        /// ponytail: SessionOptions/StartSession stay unseeded (no session launcher on this head, so no
-        /// Session cards), Busy knows a session, video, lockdown, lock card, bubble count and pop quiz (not grace pause, Mantra, a connected remote controller or the startup ladder, which WPF also counts), and a Watch link opens in the external
-        /// browser - WPF's own fallback when its embedded browser cannot take it.
+        /// WPF App.xaml.cs:765-789 SeedAskSeams + NoticeSurface: the asks service and the oversize-prompt toast.
+        /// Session offers use the Sessions page's confirmation path; busy gates are re-read at offer time.
         /// </summary>
         internal static void SeedCompanionTubeSeams()
         {
@@ -268,7 +283,12 @@ namespace ConditioningControlPanel.Avalonia
                     try { Notifications.Show(message, Helpers.NotificationType.Warning, TimeSpan.FromSeconds(12)); }
                     catch (Exception ex) { Serilog.Log.Debug("PromptAssembler: oversize notice failed to show: {Error}", ex.Message); }
                 });
-            // Only when a card can really follow here (no session launcher: Session cards never build).
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SessionOptions = () =>
+                Views.Windows.MainShellWindow.Current?.CompanionSessionOptions()
+                ?? Array.Empty<ConditioningControlPanel.Services.Companion.Asks.AskOption>();
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.StartSession = id =>
+                Views.Windows.MainShellWindow.Current?.StartSessionFromBillboard(id) == true;
+            // Only suppress the model's invitation when a card can really follow here.
             ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown =
                 ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.CanOfferFor;
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BrainProvider = () => Brain;
@@ -277,9 +297,12 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SaySurface = text =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, aiGenerated: false));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () => CoreSession.IsSessionRunning
+                || Sessions?.IsRunning == true || Platform.StartupLadder.IsQuiet || Mantra.IsActive
+                || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
+                || Views.Overlays.MandatoryVideoOverlay.Instance.GracePaused
                 || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
-                || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:696
+                || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:779-788
             // WPF App.xaml.cs:715 routes this through CompanionLinkLauncher.Open (remote guard, embedded browser, https fallback).
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.OpenLink = url =>
                 _ = Views.Controls.Companion.CompanionLinkLauncher.OpenAsync(url);
@@ -302,7 +325,26 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF CompanionService.UserMessageSent (the "user just talked to her" signal).</summary>
         internal static event Action? UserMessageSent;
-        internal static void NotifyUserMessageSent() => UserMessageSent?.Invoke();
+        internal static void NotifyUserMessageSent()
+        {
+            UserMessageSent?.Invoke();
+            // WPF Services/GamificationBridge.cs:361-380: marshal only the achievement leg.
+            void Credit() => Achievements?.TrackCompanionMessage();
+            if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Credit();
+            else global::Avalonia.Threading.Dispatcher.UIThread.Post(Credit);
+        }
+
+        // WPF App.xaml.cs:2963 and Services/GamificationBridge.cs:629-636.
+        internal static void SeedCompanionRecall()
+        {
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled =
+                ConditioningControlPanel.Services.AIService.LocalAiService.SignalPersistentMemoryRecalled;
+            ConditioningControlPanel.Services.AIService.LocalAiService.PersistentMemoryRecalled -= OnCompanionMemoryRecalled;
+            ConditioningControlPanel.Services.AIService.LocalAiService.PersistentMemoryRecalled += OnCompanionMemoryRecalled;
+        }
+
+        private static void OnCompanionMemoryRecalled(object? sender, EventArgs e) =>
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Achievements?.TryUnlockExclusive("she_remembers"));
 
         /// <summary>WPF FlashDisplayed / SubliminalDisplayed / OnBubblePopped, as a MemorySignalWriter feature id.</summary>
         internal static event Action<string>? FeatureUsed;
@@ -312,7 +354,7 @@ namespace ConditioningControlPanel.Avalonia
         /// WPF App.xaml.cs SignalMirrorFactory + WireMemorySignalSources: the brain's memory profile gets
         /// level, streak, sessions, archetype (CoreSettings), level-ups, favourite features and per-mod
         /// chat turns and mantra reps (WPF's DeferredSourcesHook; App.Mantra exists from the start here).
-        /// ponytail: no brain drain / mind wipe on this head, so those two favourites never count.
+        /// ponytail: brain-drain playback is absent; mind-wipe one-shots emit through FeatureUsed.
         /// </summary>
         internal static void SeedMemorySignals()
         {
@@ -661,9 +703,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // WPF App.xaml.cs:3218: funscripts follow the primary video playhead.
-                Services.Haptics.FunScriptService.SubscribePlaybackTime =
-                    Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
+                // WPF App.xaml.cs:3218: seed the clock before constructing the haptic service.
+                SeedHapticPlaybackTime();
                 // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
@@ -851,7 +892,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
                 // echo is attached by Platform.BarkHead.Start below; command executor and
                 // activities are CompanionEffects (seeded below). SeedMemorySignals seeds UserMessageSent for the memory
-                // chat counter only; no companion-chat achievement listens to it on this head yet.
+                // chat counter; NotifyUserMessageSent also credits the companion-chat achievements.
                 SeedMemorySignals();
                 try { if (Ai != null) Brain = new ConditioningControlPanel.Services.Companion.Brain.CompanionBrain(Ai); }
                 catch (Exception ex) { Brain = null; Serilog.Log.Error(ex, "CompanionBrain: initialization failed, falling back to the stateless AI path"); }
@@ -878,11 +919,15 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 WireAchievementUnlocks(Achievements);
+                SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
                 // Its loss must not cost the launch.
                 try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
                 catch (Exception exDayLog) { Serilog.Log.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
+                // WPF ProfileSyncService.cs:2187: minutes another device banked belong to other days, not today.
+                ProfileAdopt.ConditioningMinutesLifted -= RebaselineDayLogAfterCloudMerge;
+                ProfileAdopt.ConditioningMinutesLifted += RebaselineDayLogAfterCloudMerge;
                 CoreProgram.UnlockAchievementProvider = id => Achievements?.TryUnlock(id);
                 // WPF App.xaml.cs: the invite ladder's badges and the invites wire (friends' proxy and
                 // door; a sandbox reaches only a loopback CCP_FRIENDS_API_URL, else nothing is sent).
