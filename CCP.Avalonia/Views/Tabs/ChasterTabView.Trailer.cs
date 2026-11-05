@@ -21,6 +21,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
         private bool _trailerShown;
         private bool _overTrailer;
         private IDisposable? _trailerPark;
+        private IDisposable? _trailerVisibility;
+        // WPF xaml.cs:103: a page that leaves the screen (its own flag, an ancestor or its window) takes its
+        // trailer with it, and a hidden page never opens one.
+        private bool TrailerCanOpen => _attached && IsEffectivelyVisible && TopLevel.GetTopLevel(this) is { IsVisible: true };
         private static readonly List<WeakReference<ChasterTabView>> TrailerOwners = new();
         private BeatLoop? _trailerDrift;
         private readonly Stopwatch _trailerTime = new();
@@ -42,9 +46,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
             _trailerOpen.Tick += (_, _) => TrailerOpenTick();
             _trailerClose.Tick += (_, _) => TrailerCloseTick();
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) HideTrailer(); };
-            AttachedToVisualTree += (_, _) => AmbientFxCanvas.Env.MotionGateChanged += RefreshTrailerMotion;
+            AttachedToVisualTree += (_, _) => {
+                AmbientFxCanvas.Env.MotionGateChanged += RefreshTrailerMotion;
+                _trailerVisibility?.Dispose();
+                _trailerVisibility = EffectiveVisibility.Watch(this, () => { if (!TrailerCanOpen) HideTrailer(); });
+                if (!TrailerCanOpen) HideTrailer();
+            };
             DetachedFromVisualTree += (_, _) => {
                 AmbientFxCanvas.Env.MotionGateChanged -= RefreshTrailerMotion;
+                _trailerVisibility?.Dispose(); _trailerVisibility = null;
                 HideTrailer();
                 TrailerWeb.Shutdown(); _trailerPark?.Dispose(); _trailerPark = null;
             };
@@ -77,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
         internal string? TrailerId => _trailerShown ? _trailerRow?.Tag as string : null;
         internal void OpenTrailer(ToggleButton? row = null) {
             row ??= _trailerRow;
+            if (!TrailerCanOpen) return;
             if (row?.Tag is not string id || TabPrices.Find(id) is not { } price) return;
             _trailerRow = row;
             using var reparent = _trailerPark;

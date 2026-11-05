@@ -129,8 +129,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            _visibilityWatch = EffectiveVisibility.Watch(this, UpdateRunning);
+            _visibilityWatch = EffectiveVisibility.Watch(this, () => { UpdateRunning(); ApplyDirty(); });
             UpdateRunning();
+            ApplyDirty();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -159,7 +160,31 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             Show(_deck.Next(), animate: true);
         }
 
-        public void MarkDirty() => _deck.MarkDirty();
+        /// <summary>WPF 58e0c8532: on screen, refresh dots now; an early Live arrival cuts in.
+        /// Off screen, keep the pending rebuild until this board returns.</summary>
+        public void MarkDirty()
+        {
+            _deck.MarkDirty();
+            ApplyDirty();
+        }
+
+        private void ApplyDirty()
+        {
+            if (!_begun || _folding || !IsEffectivelyVisible || TopLevel.GetTopLevel(this) is not { IsVisible: true }
+                || _card == null || !_deck.IsDirty) return;
+            double progress = HoldProgress;
+            string ids = DeckIds();
+            bool arrived = _deck.Refresh();
+            if (_deck.IsDirty) return; // WPF: a departing current card waits until the next change.
+            if (arrived && DashboardBillboard.JumpToArrival(progress, HoldMayRun)) { Advance(); return; }
+            if (ids == DeckIds()) return;
+            RebuildChips();
+            _holdBase = progress;
+            SetFill(progress);
+            UpdateRunning();
+        }
+
+        private string DeckIds() => string.Join("\n", _deck.Cards.Select(c => c.Spec.Id));
 
         /// <summary>The shell closed: every art view frees its player and bitmaps (P68).</summary>
         public void ReleaseArt()

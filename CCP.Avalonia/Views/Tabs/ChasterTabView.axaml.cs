@@ -137,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnLink.IsEnabled = chaster != null;
             ShowLinking(chaster?.IsLinking == true);
             TxtFactCap1.Text = TxtFactCap2.Text = CircesTab.Format((chaster?.Caps ?? TabLimits.Default).DailySeconds, signed: false);
-            if (!linked) LockRow.IsVisible = false;
+            if (!linked) { LockRow.IsVisible = false; HideTrailer(); }
             RepaintForLock();
             ConsentCard.IsVisible = false;
             if (!linked) return;
