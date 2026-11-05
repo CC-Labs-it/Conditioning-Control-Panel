@@ -1,8 +1,10 @@
 // PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.Browser.cs.
 // Navigation, offline gating, profile clearing, tray restoration and the HTTPS-only missing-engine
 // escape hatch are live. WebHost also has a script channel and the card reapplies its mute script.
+// BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
+// First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Missing: native engine mute (cross-origin frames), crash/init retry, document-created scripts,
-// media/audio-sync reporting, remote video takeover, autoplay, pop-out and fullscreen/mirroring.
+// media/audio-sync reporting, remote video takeover, autoplay and page fullscreen/mirroring.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
 
 using System;
@@ -88,8 +90,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             TriggerCatalogueLookupForNavigation(url.AbsoluteUri);   // escaped, like CoreWebView2.Source
         }
 
-        /// <summary>Back to the selected site's homepage. Shared by the reload button and the
-        /// remote video-stop path, exactly as on WPF.</summary>
+        /// <summary>WPF MainWindow.Browser.cs:225: first load uses the mod's exact URL,
+        /// not a site root.</summary>
+        // Explicit Reload continues to use the selected site.
+        internal void LoadInitialBrowserHome()
+        {
+            if (BrowserBlockedOffline()) return;
+            RevealDashboardBrowser("browser-init");
+            NavigateBrowser(App.Mods?.GetDefaultBrowserUrl() ?? BambiCloudHome);
+        }
+
         private void NavigateBrowserToCurrentSiteHome()
         {
             RevealDashboardBrowser("reload");   // WPF Browser.cs:3153 / :603 (site-toggle)
@@ -124,14 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (string.IsNullOrWhiteSpace(url)) return false;
             if (BrowserBlockedOffline(userInitiated)) return false;
 
-            // WPF MainWindow/MainWindow.Browser.cs:331-385, FocusBrowserSurface, minus the pop-out branch: there is no browser pop-out
-            // window on this head, so the embedded surface is always the one to bring forward.
-            if (!IsVisible) ShowFromTray();
-            else if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
-            ShowTab("settings");
-            RevealDashboardBrowser("focus-surface");   // WPF Browser.cs:349
-            Activate();
-            Focus();
+            FocusBrowserSurface(); // WPF MainWindow.Browser.cs:331-385
 
             // Move the radios to match the URL, deselecting both for an external link so that
             // clicking either one afterwards navigates back to it. Safe to write: the handlers
