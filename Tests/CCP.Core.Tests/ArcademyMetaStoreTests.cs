@@ -105,4 +105,30 @@ public sealed class ArcademyMetaStoreTests : System.IDisposable
 
         Assert.Equal("drone", (string?)Store(path).Get("theme"));
     }
+
+    /// <summary>WPF ArcademyHostService.ReadOwnedSkus: a positive count is held; zero, absent,
+    /// unreadable or a missing file all answer "not owned".</summary>
+    [Fact]
+    public void WalletOwnsOnDiskReadsThePersistedInventory()
+    {
+        var path = TempPath();
+        Assert.False(ArcademyMetaStore.WalletOwnsOnDisk(ArcademyEconomy.SkuTubeMidnight, path));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, new JObject
+        {
+            [ArcademyMetaStore.WalletKey] = new JObject
+            {
+                ["inv"] = new JObject
+                {
+                    [ArcademyEconomy.SkuTubeMidnight] = new JObject { ["n"] = 1 },
+                    [ArcademyEconomy.SkuLateSlip] = new JObject { ["n"] = 0 },
+                },
+            },
+        }.ToString());
+
+        Assert.True(ArcademyMetaStore.WalletOwnsOnDisk(ArcademyEconomy.SkuTubeMidnight, path));
+        Assert.False(ArcademyMetaStore.WalletOwnsOnDisk(ArcademyEconomy.SkuLateSlip, path));
+        File.WriteAllText(path, "{ truncated");
+        Assert.False(ArcademyMetaStore.WalletOwnsOnDisk(ArcademyEconomy.SkuTubeMidnight, path));
+    }
 }
