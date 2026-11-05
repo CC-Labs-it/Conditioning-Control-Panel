@@ -118,6 +118,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
+            // WPF FlashService.cs:1674: FlashDisplayed once per batch, right after its spawns are queued.
+            if (flashes.Count > 0) Platform.BarkHead.Engine?.Raise("FlashDisplayed");
             var refused = false;
             var notified = false; // WPF FlashService.cs:1674: one display event per burst.
             for (var i = 0; i < flashes.Count; i++)
