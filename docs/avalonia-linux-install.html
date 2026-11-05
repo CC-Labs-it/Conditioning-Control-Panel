@@ -37,6 +37,7 @@ libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-
 <tr><td>Ducking, microphone list, quest mic probe (<code>pactl</code>; works on PipeWire too)</td><td>libpulse</td><td>pulseaudio-utils</td><td>pulseaudio-utils (openSUSE: pulseaudio-utils)</td></tr>
 <tr><td>Fonts</td><td>none: Inter, Fredoka, Noto Sans Mono and Noto Emoji are bundled (a system emoji font is used first when present)</td><td>none</td><td>none</td></tr>
 <tr><td>Sign-in token store</td><td>libsecret</td><td>libsecret-1-0</td><td>libsecret</td></tr>
+<tr><td>TLS for every HTTPS call (.NET 10 loads OpenSSL 3 or older; Fedora 45 ships OpenSSL 4, <code>libssl.so.4</code>, and the app aborts at start with &quot;No usable version of libssl was found&quot;, distro-check 2026-11-04)</td><td>openssl (3.x, base system)</td><td>libssl3 (base system)</td><td>Fedora 45: openssl3-libs (compat <code>libssl.so.3</code>); Fedora 44: openssl-libs (base system)</td></tr>
 <tr><td>Overlays, panic key (X11/XInput2)</td><td>libx11 libxi</td><td>libx11-6 libxi6</td><td>libX11 libXi</td></tr>
 </table>
 <p>.NET: publish self-contained, so no runtime dependency.
