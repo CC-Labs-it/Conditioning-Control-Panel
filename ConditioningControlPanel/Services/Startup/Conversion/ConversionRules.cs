@@ -44,7 +44,7 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
         public const string KeyLapseGreeting = "lapse_greeting";
 
         /// <summary>How long after the close the closed row may still be posted (proposal 4d).</summary>
-        public static readonly TimeSpan ClosedRowWindow = TimeSpan.FromDays(30);
+        public static readonly TimeSpan ClosedRowWindow = EntitlementTierRule.ClosedRowWindow;
 
         // Compiled fallback of GET /config/plans (brief C1). TODO(D1): read Services/Vault/PlanCatalog
         // once it lands on main; these stay as its fallback values.
@@ -83,6 +83,16 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
             var row = days <= 1 ? LapseRow.Warn1 : days <= 3 ? LapseRow.Warn3 : days <= 7 ? LapseRow.Warn7 : LapseRow.None;
             return row == LapseRow.None ? LapseReading.Nothing : new LapseReading(row, tier, end, days);
         }
+
+        /// <summary>
+        /// <see cref="DecideLapse"/> for this install. A window a confirmed reading closed is the
+        /// closed row on its own day, whatever the stamps say by now: a kept Basic renews, and a Prime
+        /// window can have no Lab stamp at all. The caller checks live coverage, it needs the tier first.
+        /// </summary>
+        public static LapseReading DecideLapseFor(Models.AppSettings s, DateTime nowUtc)
+            => EntitlementTierRule.ClosedTierNow(s, nowUtc) is int closed
+                ? new LapseReading(LapseRow.Closed, closed >= 2 ? 2 : 1, s.GraceClosedAtUtc!.Value, 0)
+                : DecideLapse(s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, nowUtc, liveCoversIt: false);
 
         // ------------------------------------------------------------------ outside the moment (proposal 7)
 
