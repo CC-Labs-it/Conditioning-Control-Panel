@@ -459,6 +459,7 @@ namespace ConditioningControlPanel
 
                 // Play celebration sound
                 System.Media.SystemSounds.Exclamation.Play();
+                Services.Audio.EngineOffAudioLog.Note("system:roadmap", "Exclamation");
 
                 // Refresh UI
                 RefreshRoadmapUI();
