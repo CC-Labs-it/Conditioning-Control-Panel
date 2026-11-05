@@ -40,11 +40,15 @@ public class UiThreadStackCaptureTests
         // caught in native code with no transition frame (MRES.Wait's spin phase), the DAC walk
         // starts at the next explicit frame and every frame above RuntimeMethodHandle.InvokeMethod
         // vanished. That failed twice on loaded Windows runners (flakes.md, 2026-10-13).
+        using var entered = new ManualResetEvent(false);
         using var release = new ManualResetEvent(false);
-        var parked = new Thread(() => ParkedInAKnownFrame(release)) { IsBackground = true, Name = "ParkedTarget" };
+        using var exited = new ManualResetEvent(false);
+        var parked = new Thread(() => ParkedInAKnownFrame(entered, release, exited)) { IsBackground = true, Name = "ParkedTarget" };
         parked.Start();
         try
         {
+            // WaitSleepJoin alone can observe a runtime wait before the named helper is entered.
+            Assert.True(entered.WaitOne(10_000), "target thread never entered the known frame");
             var deadline = Stopwatch.StartNew();
             while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
             {
@@ -52,9 +56,11 @@ public class UiThreadStackCaptureTests
                 Thread.Yield();
             }
 
+            Assert.False(exited.WaitOne(0), "target left the known frame before capture");
             var sw = Stopwatch.StartNew();
             var text = UiThreadStacks.CaptureWithBudget(parked.ManagedThreadId, 90_000);
             sw.Stop();
+            Assert.False(exited.WaitOne(0), "target left the known frame during capture");
 
             // The parked method's own frame must appear: that is a managed stack walk having
             // worked, not a placeholder string. Every report in the freeze family is missing this.
@@ -71,12 +77,21 @@ public class UiThreadStackCaptureTests
         {
             release.Set();
             parked.Join();
+            Assert.True(exited.WaitOne(0), "target did not complete the known frame after release");
         }
     }
 
     // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    private static void ParkedInAKnownFrame(ManualResetEvent entered, ManualResetEvent release,
+        ManualResetEvent exited)
+    {
+        entered.Set();
+        release.WaitOne();
+        // Observable work after the wait prevents a tail call from removing the frame we assert.
+        // NoInlining alone only prevents folding this method into its caller.
+        exited.Set();
+    }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()

@@ -45,7 +45,7 @@ public partial class PresetsTabView
             _fxWindow.PropertyChanged += OnFxWindowProperty;
         }
         CoreMods.ModChanged += OnFxModChanged;
-        Env.MotionGateChanged += RefreshCardSheen;
+        Env.MotionGateChanged += OnFxMotionGateChanged;
         RefreshCardSheen();
     }
 
@@ -60,10 +60,18 @@ public partial class PresetsTabView
         }
         _fxWindow = null;
         CoreMods.ModChanged -= OnFxModChanged;
-        Env.MotionGateChanged -= RefreshCardSheen;
+        Env.MotionGateChanged -= OnFxMotionGateChanged;
         CancelEntrances();
         DetachCardSheen();
         DetachRowSweep();
+    }
+
+    private void OnFxMotionGateChanged()
+    {
+        // WPF MainWindow.TabFxPresetsQuestsAchievements.cs:437-440 clears animation before an Off lift.
+        // Entrance values otherwise keep overriding the row even after its hover snaps to -2.
+        if (!Env.AllowTransitions) CancelEntrances();
+        RefreshCardSheen();
     }
 
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();
