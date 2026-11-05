@@ -7,10 +7,11 @@ import { movingStations as goonworks } from './moving/goonworks.js';
 import { hazardBeatAt, beatCycle, machineryRearming } from './machineryBeat.js';
 import { trapStroke } from './trapArrangement.js';
 import { pistonPocket, pistonPocketPose, pistonPocketContains } from './pistonPocket.js';
+import { sideHeadContact } from './chessContact.js';
 const authors = { threshold, keep, mainframe, boudoir, goonworks };
 const clamp = v => Math.max(0, Math.min(1, v));
 const ease = v => { v = clamp(v); return v * v * (3 - 2 * v); };
-export const MOVING_REVISION = 4;
+export const MOVING_REVISION = 5;
 const geometryNumber = value => Number.isFinite(value) && !Number.isInteger(value) ? Math.round(value * 1e9) / 1e9 : value;
 function canonicalGeometry(value) {
   if (typeof value === 'number') return geometryNumber(value);
@@ -30,7 +31,11 @@ export function movingPlan(track) {
       x: row.x ?? side * (f.w / 2 - w / 2 - .8),
       len: (row.len || 4) * 1.4, roadWidth: f.w, p: [...f.p], b: [...f.b], n: [...f.n], t: [...f.t] };
     return { ...result, pocket: pistonPocket(result) };
-  }).filter(row => row.w >= 2) });
+  }).filter(row => row.w >= 2).map((row, index) => {
+    // Contact is the piece render/movingHazards.js draws for this index, never wider than the old box.
+    const art = sideHeadContact(index, row.w, row.len), scale = row.hitboxScale ?? 1;
+    return { ...row, contactW: Math.min(row.w * scale, art.x * 2), contactLen: Math.min(row.len * scale, art.z * 2) };
+  }) });
 }
 
 export function movingPose(row, timeS, beat) {

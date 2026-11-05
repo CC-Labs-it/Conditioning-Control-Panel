@@ -7,7 +7,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -33,7 +32,7 @@ public sealed class TubeContentGatesTests
     private static void Setup()
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            AppBuilder.Configure<AvApp>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -44,16 +43,26 @@ public sealed class TubeContentGatesTests
         return owner.OwnedWindows.OfType<T>().Single();
     }
 
+    // A type initializer may run on a worker before the UI constructs the tube (Windows CI).
+    // Fixed menu colors must be usable across threads, including by the icon compositor.
+    [Theory]
+    [InlineData("MenuRed", "#FFFF6347")]
+    [InlineData("MenuGreen", "#FF90EE90")]
+    [InlineData("MenuPatreon", "#FF9B59B6")]
+    [InlineData("MenuLocked", "#FF606070")]
+    public Task SharedMenuColorsAreSafeAcrossThreads(string name, string expected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var brush = (global::Avalonia.Media.ISolidColorBrush)typeof(AvatarTubeWindow)
+            .GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        var color = await Task.Run(() => brush.Color);
+        Assert.Equal(global::Avalonia.Media.Color.Parse(expected), color);
+        Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableBrush>(brush);
+    });
+
     [Fact]
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
-        // Pure tube helpers may initialize the cached palette on a worker before the first window.
-        var brushes = new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" }.Select(name =>
-            (ISolidColorBrush)typeof(AvatarTubeWindow).GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!).ToArray();
-        var colors = await Task.Factory.StartNew(() => brushes.Select(b => b.Color).ToArray(),
-            System.Threading.CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        Assert.Equal(new[] { "#FF6347", "#90EE90", "#9B59B6", "#606070" }.Select(Color.Parse), colors);
         var previous = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
