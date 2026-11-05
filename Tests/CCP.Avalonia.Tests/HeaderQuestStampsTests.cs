@@ -67,6 +67,15 @@ public sealed class HeaderQuestStampsTests
     });
 
     [Fact]
+    public Task PanicDismissesTheHoveredStampCard() => Shell((shell, _) =>
+    {
+        var popup = Hover(shell, "d0");
+        Assert.True(popup.IsOpen);
+        PanicSurfaces.All.Single(s => s.Id == "quest-stamps").Stop(shell);
+        Assert.False(popup.IsOpen);
+    });
+
+    [Fact]
     public Task HeaderShowsThreeDailyStampsAndTheLargerWeeklyStamp() => Shell((shell, _) =>
     {
         var host = shell.Named<Grid>("QuestStampHost")!;
