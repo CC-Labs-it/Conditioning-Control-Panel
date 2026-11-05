@@ -31,6 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
+            BrowserWebHost.NavigationFinished += (url, success) =>
+                _ = Browser.BrowserAdCss.ApplyAsync(url, success, BrowserWebHost.InvokeScriptAsync);
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
             {
