@@ -36,6 +36,7 @@ public class ShellLoginSyncTests
             CoreDispatch.PostProvider = queue.Enqueue;
             var s = service.Current;
             s.UnifiedId = "first";
+            s.OfflineMode = false;   // a sibling test in this collection may have saved OfflineMode on into the shared sandbox profile
             s.LastWebXpClaimId = null;
             var sync = new SyncPush(() => null, () => false);
             sync.MarkLoaded(null);
