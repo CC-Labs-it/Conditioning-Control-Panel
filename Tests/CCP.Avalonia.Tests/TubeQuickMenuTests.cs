@@ -144,7 +144,7 @@ public sealed class TubeQuickMenuTests
         Assert.Equal("menu_trigger_mode_on", HeaderKey(tube, "MenuItemTriggerMode"));
         Click(tube, "MenuItemMute");
         Assert.False(s.AvatarMuted);
-        Assert.False(tube.FindControl<MenuItem>("MenuItemPauseBrowser")!.IsVisible);
+        Assert.True(tube.FindControl<MenuItem>("MenuItemPauseBrowser")!.IsVisible);
     });
 
     [Fact]

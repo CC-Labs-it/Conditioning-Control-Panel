@@ -34,7 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static readonly OwnershipService HeldOwnership = new(
             () => FriendsHead.Identity()?.UnifiedId, overrideSpec: null, raise: action => action());
 
-        static PrizeOwnership() => HeldOwnership.OwnershipChanged += (_, _) => Changed?.Invoke();
+        static PrizeOwnership() => HeldOwnership.OwnershipChanged += (_, _) =>
+        {
+            Changed?.Invoke();
+            PrizeGrants.RaiseGrantsChanged();   // WPF OwnershipService -> PrizeGrants.GrantsChanged
+        };
 
         /// <summary>WPF GrantsChanged: snapshot grants changed, possibly off the UI thread.</summary>
         internal static event Action? Changed;

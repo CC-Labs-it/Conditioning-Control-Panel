@@ -84,6 +84,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "emergency-exit",
+        "event-fx",
         "intake",
         "leash-task",
         "deeper-tutorial",
@@ -91,6 +92,7 @@ public sealed class PanicSurfacesTests
         "games",
         "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
+        "companion-conversation",
         "ai-followups",
         "blink-trainer",
         "companion-level-sound",
@@ -133,8 +135,10 @@ public sealed class PanicSurfacesTests
         "tube-speech",
         "lock-cards",
         "speak-cue",
+        "roster-personality",
         "companion-transcript",
         "possession",
+        "chaster-booked-pop",
         "video-test-error",
         "attention-test",
         "audio-duck",
