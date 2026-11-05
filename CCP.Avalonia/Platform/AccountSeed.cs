@@ -216,6 +216,26 @@ internal static class AccountSeed
         catch (Exception ex) { Log.Warning(ex, "[Entitlement] apply failed ({Source})", source); }
     }
 
+    /// <summary>WPF EntitlementTierSync.OfferPatreon (ProfileSyncService.cs:1109): a fresh server Patreon
+    /// confirmation re-stamps the grace for a V2 sign-in; access that came back repaints like a rise.
+    /// Never throws.</summary>
+    internal static void OfferPatreonReading(ConditioningControlPanel.Models.AppSettings s, V2AuthService.V2User user, string source)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(s.UnifiedId) || string.IsNullOrEmpty(s.AuthToken)) return;   // WPF SignedInWithV2
+            var before = EffectiveTierNow();
+            if (!PatreonActiveRule.RestampProfile(s, user, DateTime.UtcNow)) return;
+            Log.Information("[Entitlement] {Source}: Patreon confirmed active, grace now {Until:u}", source, s.PatreonPremiumValidUntil);
+            CoreSettings.Save();
+            var after = EffectiveTierNow();
+            if (after <= before) return;
+            CheckoutWatch.Disarm();
+            Patreon?.NotifyEntitlementRaised(after >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
+        }
+        catch (Exception ex) { Log.Warning(ex, "[Entitlement] Patreon reading failed ({Source})", source); }
+    }
+
     // A pending migration owns its ledger until the sync ack, also across login/reload.
     internal static void ApplyLoginUserData(ConditioningControlPanel.Models.AppSettings s, V2AuthService.V2User user, string? token, DateTime now)
     {
@@ -240,8 +260,11 @@ internal static class AccountSeed
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
+        // The request may finish after logout or an account/settings switch.
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id) return false;
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
+        OfferPatreonReading(s, user, "profile");
         if (!ConditioningControlPanel.Services.Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))
             ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();

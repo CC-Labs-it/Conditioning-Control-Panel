@@ -127,8 +127,12 @@ public class ChasterLinkTests : IDisposable
     {
         var (flow, state) = Start();
 
-        await _browser.GetStringAsync(Callback + "?error=denied&state=" + state);
+        using var response = await _browser.GetAsync(Callback + "?error=denied&state=" + state);
+        response.EnsureSuccessStatusCode();
+        var page = await response.Content.ReadAsStringAsync();
 
+        Assert.True(response.Headers.ConnectionClose, "The one-shot callback must close the browser connection gracefully.");
+        Assert.Contains("Not linked", page);
         Assert.Equal(LinkOutcome.Denied, await flow);
         Assert.False(_service.IsLinked);
         Assert.Empty(_broker.Bodies);

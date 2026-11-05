@@ -122,6 +122,9 @@ public sealed partial class ChasterService
         try
         {
             var bytes = Encoding.UTF8.GetBytes(html);
+            // This one-shot listener is disposed next. HTTP.sys must finish the response and
+            // disconnect gracefully, rather than aborting a pooled keep-alive connection.
+            context.Response.KeepAlive = false;
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.ContentLength64 = bytes.Length;
             // A refusal returns straight into listener disposal. Finish the response first,
