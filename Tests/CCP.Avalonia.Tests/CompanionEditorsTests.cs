@@ -4,10 +4,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -189,7 +191,10 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        var shell = new MainShellWindow();
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
@@ -197,16 +202,29 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.NotNull(shell.EnteringTab);
+            // Dispatcher jobs do not advance animation time. Settle the entrance before sampling hit geometry.
+            shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                // BringIntoView needs current bounds; a pending page layout can scroll the wrong
+                // rectangle on Windows. Settle layout and rendering before injecting real input.
+                shell.UpdateLayout();
                 button.BringIntoView();
+                shell.UpdateLayout();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
+                shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
+                shell.UpdateLayout();
+                HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();

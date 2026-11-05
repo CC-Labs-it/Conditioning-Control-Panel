@@ -5,7 +5,7 @@
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
 // ponytail: not ported (docs/avalonia-parity.html win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
-// perimeter comets, wordmark sheen, wordmark drift, title tint, embers layer.
+// wordmark sheen, wordmark drift, title tint, embers layer.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -115,6 +115,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             HookSheens();
             HookBadgeMotion();
+            AmbientFxCanvas.Env.MotionGateChanged += RefreshCometGate;
+            Closed += (_, _) => AmbientFxCanvas.Env.MotionGateChanged -= RefreshCometGate;
             _fxClock.Tick += (_, _) =>
             {
                 long now = Stopwatch.GetTimestamp();
@@ -148,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (e.Property == IsVisibleProperty) { if (IsVisible) FxOnShown(); else FxPark(); }
                 else if (e.Property == WindowStateProperty)
                 {
-                    if (FxLive) EnsureFxClock(); else FxPark();
+                    if (FxLive) { EnsureFxClock(); QueuePanelComet(); } else FxPark();
                     // The DWM squares a maximised window's corners; the frame's clip follows.
                     WindowFrame.CornerRadius = new CornerRadius(WindowState == WindowState.Normal ? 8 : 0);
                 }
@@ -198,6 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     BurstAt(Wordmark, Env.GlowColor, OpenBurstCount);
                     if (!first) WelcomeBack();
+                    RefreshPanelComet();
                 }, DispatcherPriority.Loaded);
                 StartSheens();
                 EnsureFxClock();
@@ -209,6 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// pending exit runs at once (WPF Crossfade: RootGrid never stays under 1, the hide still happens).</summary>
         private void FxPark()
         {
+            ParkComets();
             _fxClock.Stop();
             StopSheens();
             SettleStats();
@@ -267,6 +271,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_exitIn >= 0) { busy = true; if ((_exitIn -= dt) < 0) BeginFadeOut(); }
                 busy |= StepStats(dt);
                 busy |= StepBadgeMotion(dt);
+                busy |= StepPanelRim(dt);
                 StepTile(_cardFx, dt);
                 busy |= _cardFx.Busy;
                 foreach (var t in _tileFx) { StepTile(t, dt); busy |= t.Busy; }
@@ -326,6 +331,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnFxActivated(bool active)
         {
             _fxActive = active;
+            if (!active) ClearHoverComet();
+            RefreshPanelComet();
             if (active) StartSheens(); else StopSheens();
             if (active) { EnsureFxClock(); OnEdgeActivated(); }
         }
@@ -401,6 +408,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                HoverComet(t.Tile, on);
                 if (on) LauncherSfx.Hover();
                 bool anim = Env.AllowTransitions;
                 t.Lift.Go(t.Scale.ScaleX, on ? HoverLiftScale : 1, anim ? HoverLiftSeconds : 0);
