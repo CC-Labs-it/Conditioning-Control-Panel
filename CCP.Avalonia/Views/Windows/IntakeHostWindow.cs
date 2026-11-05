@@ -29,8 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// IntakeHostWindow.Lifecycle.cs.
     /// ponytail: not ported yet - relaunch on a web-process crash (WebHost raises no process-failed),
     /// the EmiDesk intakeRunning hold (this head's
-    /// EmiDeskService has no Fire/ReleaseHold director), the punch card. Next slices in
-    /// ~/ccp-port/briefs/intake-plan.md.
+    /// EmiDeskService has no Fire/ReleaseHold director).
     /// </summary>
     internal sealed partial class IntakeHostWindow : Window
     {
@@ -165,7 +164,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var (session, path) = IntakeRun.Complete(run, SessionsFolder,
                 () => App.IntakePass.ConsumeForCompletedIntake(),
                 (_, passed, perfect, category) => App.Achievements?.TrackQuizCompleted(passed, perfect, category));
-            if (session != null && path != null) Drafted?.Invoke(session, path);
+            if (session != null && path != null)
+            {
+                App.IntakePunchCard?.NotifyIntakeCompleted(session.Id);
+                Drafted?.Invoke(session, path);
+            }
             Post(new { type = "session-drafted", ok = session != null, name = session?.Name, path });
         }
 
