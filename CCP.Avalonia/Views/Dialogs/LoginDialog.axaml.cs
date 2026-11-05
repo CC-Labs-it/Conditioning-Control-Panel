@@ -139,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             public bool ShouldShowOgWelcome { get; set; }
             public string? UnifiedId { get; set; }
             public string? DisplayName { get; set; }
+            public bool? ServerNeedsDisplayName { get; set; }
             public string? Provider { get; set; }
             public string? LinkedProvider { get; set; }
             public bool? ServerNeedsDisplayName { get; set; }
