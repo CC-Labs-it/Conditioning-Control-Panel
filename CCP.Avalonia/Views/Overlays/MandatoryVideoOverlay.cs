@@ -112,7 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>This clip arms the attention checks (never on a floating window).</summary>
         internal bool AttentionArmed => _attention;
         /// <summary>Milliseconds from Show to the first frame on screen; -1 until then.</summary>
-        internal long FirstFrameMs { get; private set; } = -1;
+        internal long FirstFrameMs { get; set; } = -1;
         /// <summary>Total ms spent downscaling blur fills, and how many (CCP perf check).</summary>
         internal double FillMs { get; private set; }
         internal int FillCount { get; private set; }
@@ -206,7 +206,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (OnPlayerPlaying(_player == live))
+            {
+                LibVlcAudio.ApplyPreferredDevice(live);
+                live.SetRate(ConditioningControlPanel.Services.Video.MandatoryVideoPlaybackRules.PlaybackRate(
+                    s.GentleVisuals, s.GentleSpeed));
+            } });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {
@@ -214,9 +219,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (len > 0) Interlocked.Exchange(ref _watchedMs, len);
                 Dispatcher.UIThread.Post(() =>   // never tear down on LibVLC's own thread
                 {
+                    if (_player != live) return;
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
-                    Scheduler.Ended();
+                    OnNaturalVideoEnd();
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
@@ -310,6 +316,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Background = Brushes.Black,
                 Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
             };
+            CoverGentleEntrance((Panel)w.Content!);
             var floating = Floating;
             if (floating)
             {
@@ -932,6 +939,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
             _closing = true;
+            DropEntrance();
+            if (!Scheduler.SoftExit) DropExitCurtains();
             try
             {
                 PrimaryPaused = false;
@@ -954,7 +963,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
-                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; x.Window.Close(); }
+                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; CloseGentleSurface(x.Window, Scheduler.SoftExit); }
                 _surfaces.Clear();
                 _sink?.Free();
                 _sink = null;

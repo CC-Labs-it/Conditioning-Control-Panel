@@ -399,6 +399,9 @@ namespace ConditioningControlPanel.Services
             if (_running) ScheduleNext();
         }
 
+        /// <summary>True only during a rendered clip's successful natural-end teardown, never a verdict retry.</summary>
+        public bool SoftExit { get; private set; }
+
         /// <summary>WPF EndCurrentVideo: the clip played to its end. Scores the attention checks
         /// (pass XP and achievements); a fail or a troll closes the clip, shows the verdict and plays
         /// a fresh clip with the same strictness, until the MercyAfterFails-th replay earns mercy
@@ -406,7 +409,7 @@ namespace ConditioningControlPanel.Services
         /// Pass/fail reach achievements (and the head's Chaster "attention" note) through
         /// <see cref="CoreProgression.TrackAttentionCheck"/> (the head's provider also takes the
         /// Trainer's -25 XP); the Chaster "video" note is the head's, it knows whether a frame showed.</summary>
-        public void Ended()
+        public void Ended(bool renderedFrame = false)
         {
             if (!_playing) return;
             var s = CoreSettings.Current;
@@ -419,7 +422,13 @@ namespace ConditioningControlPanel.Services
                 CoreProgression.TrackAttentionCheck(true);
             }
             else if (verdict == AttentionVerdict.Fail) CoreProgression.TrackAttentionCheck(false);
-            if (verdict is not (AttentionVerdict.Troll or AttentionVerdict.Fail)) { End(); return; }
+            if (verdict is not (AttentionVerdict.Troll or AttentionVerdict.Fail))
+            {
+                SoftExit = renderedFrame;
+                try { End(); }
+                finally { SoftExit = false; }
+                return;
+            }
 
             // WPF VideoService.cs:5883-5917: score first; off ends an ordinary video without a retry card.
             if (!Video.MandatoryVideoPresentation.ReplaysAfterCheck(
@@ -453,7 +462,13 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (!Finish()) return;
+            if (!Finish())
+            {
+                // Also drop a fading curtain while idle; a host failure must not interrupt panic.
+                try { _host.CloseAll(); }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
+                return;
+            }
             // Deviation: WPF ForceCleanup leaves the presence on "Watching"; a closed clip is not watched.
             CoreDiscord.Service?.SetIdleActivity();
             if (_running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
