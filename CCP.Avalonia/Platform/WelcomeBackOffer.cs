@@ -8,6 +8,8 @@ using Avalonia.Controls.ApplicationLifetimes;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Serilog;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
@@ -19,8 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <para>The backup half is not on this head (decision 2026-10-09, rows-cloud-remember), so the
     /// rule runs with <c>backupExists: false</c>: no restore or flavour row, and the sheet greets a
     /// returning account from level 2 (<see cref="WelcomeBackDecision.GreetWithoutBackupFromLevel"/>).
-    /// ponytail: patch notes (WPF UpdateService.CurrentPatchNotes) and the season line
-    /// (SeasonRecapService) are not on this head either, so those rows stay hidden.</para>
+    /// Release notes and the confirmed season rotation share the same sheet.</para>
     /// </summary>
     internal static class WelcomeBackOffer
     {
@@ -76,9 +77,27 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     Level = s.PlayerLevel,
                     Plan = plan,
                     VersionLabel = CoreReleaseContent.AppVersion,
+                    PatchNotes = CoreReleaseContent.PatchNotes,
+                    SeasonLine = BuildSeasonLine(),
                 });
             }
             catch (Exception ex) { Log.Warning(ex, "Welcome-back sheet failed to show"); }
+        }
+
+        // WPF App.xaml.cs:5028-5053, without a backup. The stored current month is
+        // server-confirmed (SeasonRecapService); the clock and local recap snapshots are not.
+        private static string? BuildSeasonLine()
+        {
+            var settings = CoreSettings.Current;
+            var current = settings.CurrentSeason;
+            var confirmed = !string.IsNullOrWhiteSpace(current) && ProfileAdopt.LooksLikeMonthKey(current);
+            if (!WelcomeBackDecision.ShouldShowSeasonLine(current, settings.LastSeasonResetSeen, confirmed))
+                return null;
+            var template = Loc.Get("wb_season_line");
+            if (string.IsNullOrWhiteSpace(template) || template == "wb_season_line")
+                template = "The monthly board rolled over to {0} while you were away. Your level, XP and everything you unlocked stayed.";
+            try { return string.Format(template, current); }
+            catch (FormatException) { return template; }
         }
 
         private static async Task PresentOnShellAsync(WelcomeBackSheetContent content)
