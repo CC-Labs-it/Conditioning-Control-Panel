@@ -270,6 +270,7 @@ public sealed class PanicSurfacesTests
         ["SettingsTabView"] = "the Home browser card's webcam pill: the 'camera' surface stops WebcamTracker",
         ["PlayTabView"] = "Focus Gaze switch's camera pre-warm: the 'camera' surface stops WebcamTracker, and GazeFocus follows it down",
         ["BlinkTrainerTabView"] = "camera: the 'camera' and 'blink-trainer' surfaces",
+        ["VideoThumbnail"] = "WPF MainWindow.Assets.cs:799-807,910-948: off-screen poster extraction, no sound or window; 5 s deadline, joined Stop and disposal (VideoThumbnailTests pins silence, no opened windows and cleanup)",
         ["LibVlcAudio"] = "the CoreAudio sink: Core services stop their clips on the 'engine' surface",
         ["MandatoryVideoOverlay"] = "Core video sink: the 'engine' surface (CoreEngine.Stop) closes it",
         ["BubbleCountWindow"] = "Core bubble-count sink: the 'engine' surface closes it",
