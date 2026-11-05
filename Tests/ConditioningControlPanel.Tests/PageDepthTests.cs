@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Tests;
 /// a hue-tinted drop band, the lit pill is pressed in; the leaderboard list is a well of floating
 /// rows with the player's own row pressed in; the lobby rows carry the card / plank paint.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class PageDepthTests
 {
     private static SectionTabStrip Laid(string section, string tab, double width = 1480)
