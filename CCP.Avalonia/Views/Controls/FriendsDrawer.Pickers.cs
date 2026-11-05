@@ -2,7 +2,7 @@
 // BuildCard/ActionButton/ShowResult): the card's Invite / Poke / Send a watch buttons and the picker
 // each opens inline in the card, over IFriendsService.
 // The action buttons carry WPF's MDL2 glyphs as Fluent icons (E8A7/E7C9/E714, fluent-icons 2026-10-10).
-// ponytail: no Pop() juice and no FriendsSfx sounds (.Juice.cs / FriendsSfx are not on this head). The Goon
+// ponytail: no Pop() juice (.Juice.cs is not on this head). The Goon
 // and chess tiles stay shut here: GoonHostService and PieceByPieceHostService are WPF-only, so this head
 // can neither open a room nor a board (FriendsInviteCodes is the seam that lights them when they move).
 using System;
@@ -48,7 +48,7 @@ public sealed partial class FriendsDrawer
             var b = Pill(GlyphContent(kind, Loc.Get("friends_action_" + act), glyphFg: Lilac), lit ? ButtonHover : ButtonBg, Text, "friends-action:" + act, lit ? Lilac : Line2);
             (b.CornerRadius, b.Padding, b.HorizontalAlignment) = (new CornerRadius(10), new Thickness(10, 8, 10, 8), HorizontalAlignment.Stretch);
             b.Margin = grid.Children.Count % 2 == 0 ? new Thickness(0, 0, 3, 6) : new Thickness(3, 0, 0, 6);
-            b.Click += (_, _) => { _picker = _picker == act ? null : act; Render(); };
+            b.Click += (_, _) => { Platform.FriendsSfx.Click(); _picker = _picker == act ? null : act; Render(); };
             grid.Children.Add(b);
         }
         return grid;
@@ -273,6 +273,8 @@ public sealed partial class FriendsDrawer
     /// <summary>WPF ShowResult: worded in the row; a drawer that folded while the send was out says it outside.</summary>
     private void ShowResult(string friendId, SendResult r)
     {
+        // WPF FriendsDrawer.cs:1144: cheer only after a successful send.
+        if (FriendsDrawerRules.IsGood(r)) Platform.FriendsSfx.Sent(); else Platform.FriendsSfx.Denied();
         var text = Loc.Get(FriendsDrawerRules.SendResultKey(r));
         ShowTimed(friendId, text, FriendsDrawerRules.IsGood(r));
         if (!_isOpen) Say(text, FriendsDrawerRules.IsGood(r));

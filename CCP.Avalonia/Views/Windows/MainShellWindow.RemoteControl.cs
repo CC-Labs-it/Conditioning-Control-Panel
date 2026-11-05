@@ -90,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             HideRemoteControlOverlay();
             UpdateStartButtonForRemoteControl(false);
+            Platform.FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Remote);   // WPF RemoteControlService.cs:410
         }
 
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
