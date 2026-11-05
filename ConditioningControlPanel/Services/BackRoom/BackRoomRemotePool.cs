@@ -374,7 +374,7 @@ internal sealed class BackRoomRemotePool : IBackRoomRemotePool
                     }
                     finally
                     {
-                        lock (_gate) { _inFlight--; _inFlightIds.Remove(entry.Id); }
+                        lock (_gate) { if (_inFlightIds.Remove(entry.Id)) _inFlight--; }
                         lane.Release();
                     }
                 }));
@@ -427,6 +427,8 @@ internal sealed class BackRoomRemotePool : IBackRoomRemotePool
         bool added;
         lock (_gate)
         {
+            // Transfer this reservation to ready under the same lock so capacity never counts it twice.
+            if (_inFlightIds.Remove(entry.Id)) _inFlight--;
             // Re-checked under the gate: another lane may have landed the same id, or filled the set,
             // while this download was on the wire.
             added = !_byId.ContainsKey(entry.Id) && _order.Count < ReadyMax;
