@@ -410,6 +410,65 @@ public sealed class SpiralFinishTests
             }
         });
 
+    [Theory]
+    [InlineData(false, 1f)]
+    [InlineData(true, 0.5f)]
+    public Task Native_video_applies_gentle_rate_after_start_and_loop(bool gentle, float expected)
+        => Run(async () =>
+        {
+            if (LibVlcAudio.Shared == null) _ = new LibVlcAudio("--aout=dummy");
+            var oldProvider = CoreSettings.ServiceProvider;
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var s = service.Current;
+            var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed);
+            var engine = CoreSession.IsEngineRunningProvider;
+            var checks = SpiralOverlay.SkipPlatformChecksForTests;
+            var host = new Window();
+            try
+            {
+                host.Show();
+                CoreSession.IsEngineRunningProvider = null;
+                SpiralOverlay.SkipPlatformChecksForTests = true;
+                if (SpiralOverlay.Decoding is { } pending) await pending;
+                SpiralOverlay.CloseAll();
+                (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed) =
+                    (true, Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), false, gentle, 0.5);
+                SpiralOverlay.Refresh(host);
+                var deadline = DateTime.UtcNow.AddSeconds(20);
+                long previousTime = -1;
+                var sawStart = false;
+                var framesAtLoop = -1;
+                while (DateTime.UtcNow < deadline && (framesAtLoop < 0 || SpiralOverlay.VideoFrames <= framesAtLoop))
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    await Task.Yield();
+                    var time = SpiralOverlay.VideoTime;
+                    if (!sawStart && time >= 500 && SpiralOverlay.VideoFrames > 0)
+                    {
+                        Assert.Equal(expected, SpiralOverlay.VideoRate, 2);
+                        sawStart = true;
+                    }
+                    // A reset alone is insufficient: an ended player can also return to zero.
+                    if (sawStart && framesAtLoop < 0 && previousTime >= 1000 && time >= 0 && time < previousTime - 500)
+                        framesAtLoop = SpiralOverlay.VideoFrames;
+                    previousTime = time;
+                }
+                Assert.True(sawStart, "video did not start");
+                Assert.True(framesAtLoop >= 0, "video position did not reset");
+                Assert.True(SpiralOverlay.VideoFrames > framesAtLoop, "no frames arrived after the reset");
+                Assert.Equal(expected, SpiralOverlay.VideoRate, 2);
+            }
+            finally
+            {
+                SpiralOverlay.CloseAll(); host.Close();
+                (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed) = saved;
+                CoreSession.IsEngineRunningProvider = engine;
+                SpiralOverlay.SkipPlatformChecksForTests = checks;
+                CoreSettings.ServiceProvider = oldProvider;
+            }
+        });
+
     private sealed class OnDispose(Action dispose) : IDisposable
     {
         public void Dispose() => dispose();
