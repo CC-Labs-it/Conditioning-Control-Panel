@@ -311,6 +311,20 @@
                                   Style="{StaticResource EmiPanelSwitch}"/>
                     </Grid>
 
+                    <!-- 2b. HER THINGS. The Prize Counter's desk hats and toys. Owned ones pick, the rest
+                             stay visible and greyed with where to find them. EmiOptionsWindow.DeskItems.cs. -->
+                    <TextBlock x:Name="TxtHeadThings" Text="Her things"
+                               Style="{StaticResource EmiPanelSectionHeader}"/>
+                    <TextBlock x:Name="LblDeskHat" Text="Hat" Style="{StaticResource EmiPanelLabel}"/>
+                    <WrapPanel x:Name="DeskHatPicks" Margin="0,5,0,0"/>
+                    <TextBlock x:Name="LblDeskToy" Text="In her hand" Style="{StaticResource EmiPanelLabel}"
+                               Margin="0,9,0,0"/>
+                    <WrapPanel x:Name="DeskToyPicks" Margin="0,5,0,0"/>
+                    <Button x:Name="BtnDeskCounter"
+                            Style="{StaticResource EmiPanelButton}"
+                            HorizontalAlignment="Left" Margin="0,9,0,0"
+                            Content="Prize Counter"/>
+
                     <!-- 3. HER RING. The same control the settings tab hosts, writing the same
                             EmiState.Pins through the same EmiSuggester. Header shown here: this
                             panel has no other place to put the count or the reset. -->
