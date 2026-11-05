@@ -15,6 +15,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
@@ -23,6 +24,74 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class PresetsFocalFxTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ModRefreshKeepsSessionSelectionAndUpdatesCards(bool hidden) => WithPresets((host, view) =>
+    {
+        var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
+        var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
+        var row = rack.Children.OfType<Border>().First();
+        row.Focus(); host.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, ""); Settle();
+        var title = view.FindControl<TextBlock>("TxtDetailTitle")!.Text;
+        var custom = Preset.FromSettings(CoreSettings.Current, "Test preset", "Test description");
+        CoreSettings.Current.UserPresets.Add(custom);
+        view.RefreshPresetsList();
+        var first = panel.Children.OfType<Border>().Single(b => Equals(b.Tag, custom.Id));
+        CoreMods.MakeModAwareProvider = text => "changed " + text;
+        view.IsVisible = !hidden;
+        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle();
+        view.IsVisible = true; Settle();
+        var refreshed = panel.Children.OfType<Border>().Single(b => Equals(b.Tag, custom.Id));
+        Assert.NotSame(first, refreshed);
+        Assert.StartsWith("changed ", ((StackPanel)refreshed.Child!).Children.OfType<TextBlock>().Single().Text);
+        Assert.True(view.FindControl<ScrollViewer>("SessionDetailScroller")!.IsVisible);
+        Assert.False(view.FindControl<ScrollViewer>("PresetDetailScroller")!.IsVisible);
+        Assert.Equal(title, view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
+        Assert.NotSame(row, rack.Children.OfType<Border>().First());
+    });
+
+    [Fact]
+    public Task LanguageAndModRefreshSelectedPresetDetails() => WithPresets((host, view) =>
+    {
+        var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
+        var preset = Preset.FromSettings(CoreSettings.Current, "Custom name", "Custom description");
+        CoreSettings.Current.UserPresets.Add(preset);
+        view.RefreshPresetsList();
+        typeof(PresetsTabView).GetMethod("SelectPreset", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(view, new object[] { preset }); Settle();
+        CoreMods.MakeModAwareProvider = text => "changed " + text;
+        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle();
+        Assert.Equal("changed Custom name", view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
+        Assert.Equal("changed Custom description", view.FindControl<TextBlock>("TxtDetailSubtitle")!.Text);
+        var chip = panel.Children.OfType<Border>().Single(b => Equals(b.Tag, preset.Id));
+        var name = ((StackPanel)chip.Child!).Children.OfType<TextBlock>().Single();
+        Assert.Equal("changed Custom name", name.Text);
+        Assert.Equal("changed Custom description", ToolTip.GetTip(name));
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("de"); Settle();
+            Assert.NotSame(chip, panel.Children.OfType<Border>().Single(b => Equals(b.Tag, preset.Id)));
+            Assert.Equal("changed Custom name", view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
+            Assert.True(view.FindControl<ScrollViewer>("PresetDetailScroller")!.IsVisible);
+        }
+        finally { LocalizationManager.Instance.SetLanguage(oldLanguage); Settle(); }
+    });
+
+    [Fact]
+    public Task LanguageRefreshesUnselectedPresetCards() => WithPresets((host, view) =>
+    {
+        var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
+        var chip = panel.Children.OfType<Border>().First(b => b.Tag is string);
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("de"); Settle();
+            Assert.NotSame(chip, panel.Children.OfType<Border>().First(b => b.Tag is string));
+        }
+        finally { LocalizationManager.Instance.SetLanguage(oldLanguage); Settle(); }
+    });
+
     [Fact]
     public Task SelectedCardOwnsOneSheenAndItFollowsSelectionAndGates() => WithPresets((host, view) =>
     {
