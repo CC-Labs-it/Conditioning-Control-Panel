@@ -11,6 +11,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Audio;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -49,6 +50,7 @@ public sealed class BubbleCountGameTests
             var real = host.Scheduler;
             var prevEngine = CoreEngine.BubbleCount;
             var listener = BubbleCountWindow.PanicListenerLive;
+            var prevSession = CoreSession.IsSessionRunningProvider;
             host.Scheduler = b;
             CoreEngine.BubbleCount = b;
             try
@@ -56,7 +58,7 @@ public sealed class BubbleCountGameTests
                 await AvaloniaTestDispatcher.RunAsync(async () =>
                 {
                     if (Application.Current is null)
-                        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                             .UseSkia()
                             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                             .SetupWithoutStarting();
@@ -81,7 +83,13 @@ public sealed class BubbleCountGameTests
                     }
 
                     // Non-strict: the 2 s clip ends, the answer window asks, the right count wins.
+                    // A session with the engine stopped (paused) is running, not engine-off (WPF EngineOffAudioLog.cs:29).
+                    Assert.False(CoreEngine.IsRunning);
+                    CoreSession.IsSessionRunningProvider = () => true;
                     await Open(strict: false);
+                    var noted = RecentSounds.Shared.Snapshot().Last(e => e.Player == "bubblecount-video");
+                    Assert.Equal(("clip.mp4", true), (noted.File, noted.EngineRunning));
+                    CoreSession.IsSessionRunningProvider = prevSession;
                     for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
                     Assert.All(BubbleCountWindow.OpenWindows, w => Assert.False(w.IsVisible));
@@ -98,6 +106,8 @@ public sealed class BubbleCountGameTests
                     // Strict with a live listener: the panic key and Esc are swallowed; engine stop closes it.
                     BubbleCountWindow.PanicListenerLive = () => true;
                     var w = await Open(strict: true);
+                    noted = RecentSounds.Shared.Snapshot().Last(e => e.Player == "bubblecount-video");
+                    Assert.Equal(("clip.mp4", false), (noted.File, noted.EngineRunning));   // no engine, no session
                     w.KeyPress(Key.F12, RawInputModifiers.None, PhysicalKey.F12, "");
                     w.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
                     Assert.True(b.IsBusy && w.IsVisible, "strict game survives the panic key and Esc");
@@ -121,6 +131,7 @@ public sealed class BubbleCountGameTests
                 host.Scheduler = real;
                 CoreEngine.BubbleCount = prevEngine;
                 BubbleCountWindow.PanicListenerLive = listener;
+                CoreSession.IsSessionRunningProvider = prevSession;
                 CoreProgression.AddXPProvider = prevXp;
                 (s.PanicKeyEnabled, s.PanicKey, s.BubbleCountStrictLock, s.DualMonitorEnabled) = saved;
             }

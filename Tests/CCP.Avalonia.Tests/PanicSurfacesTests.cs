@@ -24,11 +24,6 @@ public sealed class PanicSurfacesTests
             // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
             // decides process-wide fonts, including the subliminal card closed by panic.
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .With(new global::Avalonia.Media.FontManagerOptions {
-                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
-                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
-                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
-                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -88,16 +83,21 @@ public sealed class PanicSurfacesTests
     /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
+        "emergency-exit",
+        "event-fx",
         "intake",
         "leash-task",
+        "deeper-tutorial",
         "tour",
         "games",
-        "first-show",
+        "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
         "mantra-chant",
+        "companion-conversation",
         "ai-followups",
         "blink-trainer",
         "camera",
+        "help-tooltips",
         "chaster-hold",
         "chaos",
         "chaos-flash",
@@ -114,13 +114,15 @@ public sealed class PanicSurfacesTests
         "keyword-triggers",
         "haptics",
         "intake",
-        "knock-cards",
+        "friend-notices", "knock-cards",
         "leash-task",
         "lock-cards",
         "mantra",
+        "quiz",
         "panic-quiet",
         "pink-rush",
         "possession",
+        "programs-fx",
         "program-session",
         "remote-haptics",
         "takeover",
@@ -133,12 +135,17 @@ public sealed class PanicSurfacesTests
         "tube-speech",
         "lock-cards",
         "speak-cue",
+        "roster-personality",
         "companion-transcript",
         "possession",
+        "chaster-booked-pop",
+        "video-test-error",
         "attention-test",
+        "audio-duck",
         "descent-fuse",
+        "deeper-player-fullscreen",
         "deeper-editor-audio",
-        "knock-cards",
+        "friend-notices", "knock-cards",
         "quick-recal",
         "asset-preview",
         "camera",
@@ -221,6 +228,7 @@ public sealed class PanicSurfacesTests
         "blink-trainer>engine",
         "chaos>engine",
         "corner-gif>tube-speech",
+        "engine>audio-duck",
         "engine>corner-gif",
         "engine>lock-cards",
         "engine>pink-rush",

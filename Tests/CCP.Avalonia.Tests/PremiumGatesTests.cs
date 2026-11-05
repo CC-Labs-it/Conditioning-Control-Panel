@@ -32,15 +32,10 @@ public sealed class PremiumGatesTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
+            var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .With(new global::Avalonia.Media.FontManagerOptions {
-                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
-                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
-                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
-                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            else builder.AfterSetupCallback(builder); // Register shipped fonts regardless of test order.
             var oldSeam = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreSettings.ServiceProvider);
             // The shell is built on the suite's settings first: built under the private service below it
             // would carry that profile's mod into later tests.
@@ -95,15 +90,10 @@ public sealed class PremiumGatesTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
+            var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .With(new global::Avalonia.Media.FontManagerOptions {
-                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
-                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
-                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
-                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            else builder.AfterSetupCallback(builder); // Register shipped fonts regardless of test order.
             var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider);
             var s = CoreSettings.Current;
             var oldFlags = (s.AutonomyModeEnabled, s.KeywordTriggersEnabled);
@@ -193,15 +183,10 @@ public sealed class PremiumGatesTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
+            var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .With(new global::Avalonia.Media.FontManagerOptions {
-                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
-                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
-                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
-                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            else builder.AfterSetupCallback(builder); // Register shipped fonts regardless of test order.
             var chant = global::ConditioningControlPanel.Avalonia.App.MantraChant;
             var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
                 CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider,
