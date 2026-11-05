@@ -50,7 +50,7 @@ internal static class Win32Overlay
     // Subliminal opt-in: keep TRANSPARENT but clear NOACTIVATE, including on Avalonia rebuilds.
     private static readonly ConditionalWeakTable<TopLevel, object> FocusAllowed = new();
     private static bool AllowsFocus(TopLevel window) => FocusAllowed.TryGetValue(window, out _);
-    private static bool IsPassive(TopLevel window) => Passive.TryGetValue(window, out _);
+    internal static bool IsPassive(TopLevel window) => Passive.TryGetValue(window, out _);
 
     internal static uint Style(uint exStyle, bool clickThrough, bool passive = false, bool allowFocus = false)
         => (exStyle | OverlayBits) & ~ClickThroughBits
@@ -73,6 +73,14 @@ internal static class Win32Overlay
             && SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
+    // WPF ChaosUnlockCardOverlay.cs:388-396: take clicks without activating or changing z-order.
+    internal static bool SetPassive(TopLevel window, IntPtr hwnd)
+    {
+        Passive.AddOrUpdate(window, Passive);
+        if (!OperatingSystem.IsWindows()) return false;
+        return Apply(hwnd, Track(window).Value, true, AllowsFocus(window));
+    }
+
     /// <summary>WPF ApplyWindowStyles(stealsFocus): activation and mouse pass-through are independent.</summary>
     internal static bool AllowFocus(TopLevel window, IntPtr hwnd)
     {
@@ -92,6 +100,10 @@ internal static class Win32Overlay
     [StructLayout(LayoutKind.Sequential)] private struct RectI { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out PointI p);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RectI r);
+
+    /// <summary>WPF MainWindow.Chaster.CursorPx: desktop pointer in physical pixels.</summary>
+    internal static global::Avalonia.PixelPoint? CursorPosition() =>
+        OperatingSystem.IsWindows() && GetCursorPos(out var p) ? new(p.X, p.Y) : null;
 
     /// <summary>Is the window-relative px point inside any of the first <paramref name="count"/> rects?</summary>
     internal static bool Hits(global::Avalonia.PixelRect[] rects, int count, int x, int y)

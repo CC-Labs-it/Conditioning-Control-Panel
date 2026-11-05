@@ -25,8 +25,7 @@
 //   private void InitializePatreonTab(…)
 //   internal void BtnDetachCompanion_Click(…)
 //   internal void BtnCustomizeCompanion_Click(…)
-//   internal void BtnManagePhrases_Click(…)
-//   private void UpdatePhraseCountDisplay(…)
+//   (Manage Phrases and its closing count refresh are wired below via WorkshopAccordion.)
 //   (RestoreCompanionSectionStates / PersistCompanionDrawerStates and the two drawer keys are
 //    ported: CompanionRoomView.Restore/PersistDrawerStates, called from MainShellWindow.CompanionFx.cs)
 //   internal void SliderIdleInterval_ValueChanged(…)
@@ -82,10 +81,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // WPF MainWindow.Patreon.cs:1312. ponytail: UpdatePhraseCountDisplay skipped - the
-        // Companion tab's TxtPhraseCount needs CompanionPhraseService, still head-side.
-        internal void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => _ = new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+        // WPF MainWindow.Patreon.cs:1396-1406: refresh the count only after the editor closes.
+        internal async void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            await new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+            Named<Tabs.CompanionTabView>("CompanionTab")?.Room.WorkshopZone.RefreshPhrasePresets();
+        }
 
         /// <summary>WPF MainWindow.Patreon.cs RefreshEntitlementVeils. Called on every navigation, on
         /// sign-in/out (UpdateQuickLoginUI), on either provider's TierChanged and on the ? box's
@@ -120,8 +121,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.Patreon.cs:92, over the shared Core flag pass. Skipped while the seam is
         /// unseeded: WPF never runs it before App.Patreon exists, and a head that cannot read the account
-        /// must not wipe a patron's settings. ponytail: this head runs none of the lapsed engines (no
-        /// keyword hook, OCR, autonomy, mantra chant or haptics mixer), so there is nothing to stop yet.</summary>
+        /// must not wipe a patron's settings. Keyword and window awareness reconcile below;
+        /// OCR, autonomy, mantra chant and the haptics mixer remain follow-ups here.</summary>
         private bool _lapseUnsaved;   // cleared in memory, not yet written by an entitlement event
 
         private void EnforceEntitlementLapse(bool persist)
@@ -145,6 +146,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (s.AwarenessModeEnabled && s.AwarenessConsentGiven && ConditioningControlPanel.Services.WindowAwarenessService.HasEntitlement
                     && !App.WindowAwareness.IsRunning)
                     App.WindowAwareness.Start();
+                // WPF MainWindow.Patreon.cs:187-189,452-456: stop on lapse, re-arm saved master on access.
+                // Do not re-attach a user-disabled keyboard source on ordinary tab refreshes.
+                if (!Platform.KeywordTriggerHead.Engine.IsActive || !Platform.KeywordAudioRuntime.HasAccess)
+                    Platform.KeywordTriggerHead.Sync();
                 if (cleared.Count == 0) return;
                 Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab")?.SyncFromSettings();
                 Named<Tabs.AwarenessTabView>("AwarenessTab")?.SyncAwarenessTabUi();
@@ -236,6 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Opened += (_, _) => MaybeShowInviteEnding();
             Activated += (_, _) => MaybeShowInviteEnding();
+            Activated += (_, _) => Platform.FunnelPageMessage.OnAppActivated();   // WPF MainWindow.Patreon.cs:1275
         }
 
         private string? _inviteEndingPosted;

@@ -2,6 +2,7 @@ import { readDragLook, saveDragLook } from './look-preference.js';
 import { intro } from './intro.js';
 import { createWelcome, shouldShow } from './welcome.js';
 import { createRacePortal, consumeRoomPose } from './race-portal.js';
+import { createCounterDoor, createStampQueue } from './counter-door.js';
 import { sliceText } from '../stations/wheel/rewards.js';
 import { setWheelFace } from './wheel-face.js';
 /* ============================================================================
@@ -93,12 +94,24 @@ const racePortal = createRacePortal({
   beforeNavigate: () => { leaving = true; hud?.stop(); doubleCharm?.dispose(); scene?.halt(); kit.dispose(); window.__fxCancelAll?.(); },
   onRefused: m => { raceOpening = false; scene?.release(); if (m.reason === 'locked') visit(window.__backroom.stations.find(r => r.id === 'counter')); },
 });
+let prizesSeen = false;   // a counter reply has painted the shelf once: only then can a refresh say what was bought
 function applyPrizes(body, bought) {
   const snapshot = prizeState(body);
   if (!snapshot) return;
+  stampQueue.cancel();
+  prizesSeen = true;
   racingOwnership = snapshot;
   scene?.setPrizes(snapshot, bought);
 }
+/* THE 3D PRIZE COUNTER (7.2): the counter + E opens the counter window over the held room (room/counter-door.js);
+ * its close re-reads the counter and stamps every row bought meanwhile, one after another. */
+const stampQueue = createStampQueue({ still: () => still(),
+  apply: (snapshot, bought) => { if (leaving) return; prizesSeen = true; racingOwnership = snapshot; scene?.setPrizes(snapshot, bought); } });
+const counterDoor = createCounterDoor({
+  send: bridge.send, on: bridge.on, enabled: () => state.prizeCounter === true && !previewHost,
+  onOpen: () => scene?.hold(),
+  onReturn: () => { if (leaving || visiting || loader?.current) return; scene?.release(); refreshPrizes(true); },
+});
 async function openRace() {
   if (leaving || visiting || raceOpening || !scene || scene.seated || scene.transitioning || loader?.current) return false;
   raceOpening = true;
@@ -328,8 +341,10 @@ function setSp(sp) {
 }
 
 async function visit(row) {
-  if (leaving || visiting || !scene || !loader || scene.transitioning || scene.seated) return;
+  if (leaving || visiting || counterDoor.isOpen || !scene || !loader || scene.transitioning || scene.seated) return;
   scene.freeLook();   // a station, card or panel is taking the screen: the mouse is the player's again
+  // 7.2: the counter is the 3D Prize Counter window on a host that has it (init.prizeCounter), never the 2D cards.
+  if (row?.id === 'counter' && counterDoor.available()) { if (!raceOpening) counterDoor.open(); return; }
   // The annex doors (room/annex.js): the race door is the same door as the cabinet, the locked ones only rattle.
   if(row?.key==='race'||row?.portal==='race'){await openRace();return;}
   if(row?.portal==='locked'){scene.annex?.refuse(row.key);return;}
@@ -352,7 +367,7 @@ async function returnToRoom() {
 
 /** Back, from anywhere. A station closes first, then the room view; an empty room is left. */
 async function back(reason) {
-  if (leaving) return;
+  if (leaving || counterDoor.isOpen) return;   // the counter window owns Back until it closes
   if (scene?.documents.close()) return;
   if (loader?.canLeave?.() === false) return;
   if(scene?.customization?.dismiss())return;
@@ -535,13 +550,17 @@ async function requestDecorations(op, body = {}) {
   return { ok: false, reason: res?.reason || 'offline' };
 }
 
-async function refreshPrizes() {
+/** `stamp`: back from the 3D counter, so every row bought there lands on the shelf one by one. */
+async function refreshPrizes(stamp = false) {
   const reqId = bridge.mintId();
   const res = await bridge.request({type:'station-request', reqId, station:'counter', op:'state', body:{}},
     'station-result', m => m.reqId === reqId, BELL_TIMEOUT_MS);
   // applyPrizes, not scene.setPrizes: the counter's reply is also where the racing cabinet learns
   // whether to stand up, so the snapshot has to reach racingOwnership and not only the display.
-  if (!leaving && !seated() && res?.ok) applyPrizes(res.body);
+  if (leaving || seated() || !res?.ok) return;
+  const fresh = stamp && prizesSeen ? prizeState(res.body) : null;
+  if (fresh) stampQueue.play(racingOwnership, fresh);
+  else applyPrizes(res.body);
 }
 
 async function start(init) {
@@ -561,6 +580,7 @@ async function start(init) {
     open: typeof init.open === 'boolean' ? init.open : null,
     welcomeSeen: init.welcomeSeen === true,
     breakout: init.breakout,
+    prizeCounter: init.prizeCounter === true,
   });
   state.levels = readLevels(init.audio);
   state.media = readMedia(init.media);
