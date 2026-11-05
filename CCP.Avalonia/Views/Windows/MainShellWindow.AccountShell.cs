@@ -93,9 +93,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var (code, displayName, shortName) = LocalizationManager.AvailableLanguages[i];
                     var item = new ComboBoxItem
                     {
-                        Content = shortLabels ? $"🌐 {shortName}" : displayName,
                         Tag = code,
                     };
+                    Controls.LanguageFlag.Dress(combo, item, code, shortLabels ? shortName : displayName);
                     ToolTip.SetTip(item, displayName);
                     combo.Items.Add(item);
                     if (code == current) selectedIndex = i;

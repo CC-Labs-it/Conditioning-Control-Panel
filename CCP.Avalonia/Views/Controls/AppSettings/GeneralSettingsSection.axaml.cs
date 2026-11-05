@@ -39,7 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             for (int i = 0; i < LocalizationManager.AvailableLanguages.Length; i++)
             {
                 var (code, displayName, _) = LocalizationManager.AvailableLanguages[i];
-                var item = new ComboBoxItem { Content = displayName, Tag = code };
+                var item = new ComboBoxItem { Tag = code };
+                LanguageFlag.Dress(CmbLanguageSetting, item, code, displayName);
                 ToolTip.SetTip(item, displayName);
                 CmbLanguageSetting.Items.Add(item);
                 if (code == current) CmbLanguageSetting.SelectedIndex = i;
