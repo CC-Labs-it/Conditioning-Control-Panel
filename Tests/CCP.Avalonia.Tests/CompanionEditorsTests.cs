@@ -5,9 +5,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -191,7 +193,10 @@ public sealed class CompanionEditorsTests
         service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
         service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         CoreSettings.ServiceProvider = () => service;
+        // Freeze entrance motion so the pointer probes a stationary target.
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
         var shell = new MainShellWindow();
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
@@ -207,11 +212,20 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                // BringIntoView needs current bounds; a pending page layout can scroll the wrong
+                // rectangle on Windows. Settle layout and rendering before injecting real input.
+                shell.UpdateLayout();
                 button.BringIntoView();
-                ContentHitTestTests.RenderLiveTree(shell);
+                shell.UpdateLayout();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
+                shell.UpdateLayout();
+                HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseMove(at);
-                ContentHitTestTests.RenderLiveTree(shell);
+                HeadlessRendering.RenderLiveTree(shell);
                 at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
