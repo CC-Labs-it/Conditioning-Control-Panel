@@ -6,8 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section, no lock-day chip, no juice (.Juice.cs), no bell
-// (the corner notices are not on this head). A word WPF throws outside the drawer
+// ponytail: no leash section, juice (.Juice.cs) or FriendsSfx. A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Linq;
@@ -218,7 +217,10 @@ public sealed partial class FriendsDrawer : Border
         var avatar = Avatar(name, 40, _svc?.Available == true ? Shared() : null);
         avatar.Margin = new Thickness(0, 0, 10, 0);
         var who = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        who.Children.Add(Label(name, 16, Text, Display, FontWeight.SemiBold));
+        var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
+        nameLine.Children.Add(Label(name, 16, Text, Display, FontWeight.SemiBold));
+        if (TierPlate(MeTier(), 15) is { } plate) nameLine.Children.Add(plate);
+        who.Children.Add(nameLine);
         if (_svc?.Available != true)
             who.Children.Add(Tagged(Label(Loc.Get("friends_me_signed_out"), 12, Muted), "friends-me-status"));
         else
@@ -359,6 +361,7 @@ public sealed partial class FriendsDrawer : Border
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         nameLine.Children.Add(Label(f.Name, 14, f.Online ? Text : Muted, Display, FontWeight.Medium));
+        if (TierPlate(f.Tier, 12) is { } plate) nameLine.Children.Add(plate);
         if (f.Squelched)
         {
             var sq = Tagged(Label(Loc.Get("friends_squelched_tag"), 9, Dim, Mono), "friends-squelched");
@@ -390,10 +393,12 @@ public sealed partial class FriendsDrawer : Border
         Grid.SetColumn(mid, 1);
         top.Children.Add(avatar);
         top.Children.Add(mid);
+        if (LockChip(f) is { } chip) { Grid.SetColumn(chip, 2); top.Children.Add(chip); }
         if (table != null)
         {
+            top.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             var join = TableJoinButton(f, table);
-            Grid.SetColumn(join, 2);
+            Grid.SetColumn(join, 3);
             top.Children.Add(join);
         }
         var outer = new StackPanel { Children = { top } };
@@ -734,6 +739,7 @@ public sealed partial class FriendsDrawer : Border
     {
         var settings = Pill(GlyphContent(IconKind.Settings, Loc.Get("friends_settings"), glyphFg: null), Brushes.Transparent, Muted, "friends-settings");   // WPF E713
         settings.Click += (_, _) => { SettingsRequested?.Invoke(); CloseRequested?.Invoke(); };
+        var bell = NoticesButton();
         var blocked = Pill(new IconGlyph { Kind = IconKind.PersonProhibited, Size = 13 }, Brushes.Transparent, _showBlocked ? Lilac : Dim, "friends-blocked-toggle");   // WPF E8F8
         ToolTip.SetTip(blocked, Loc.Get("friends_blocked_title"));
         AutomationProperties.SetName(blocked, Loc.Get("friends_blocked_title"));
@@ -747,7 +753,7 @@ public sealed partial class FriendsDrawer : Border
         var buttons = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Children = { new StackPanel { Orientation = Orientation.Horizontal, Children = { settings, blocked } }, add },
+            Children = { new StackPanel { Orientation = Orientation.Horizontal, Children = { settings, bell, blocked } }, add },
         };
         var foot = new StackPanel();
         if (!string.IsNullOrEmpty(snap.MyCode))
