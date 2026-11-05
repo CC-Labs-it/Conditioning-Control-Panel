@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia
         public static SettingsService? Settings { get; private set; }
 
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
-        public static Helpers.NotificationService Notifications { get; } = new();
+        public static Helpers.NotificationService Notifications { get; internal set; } = new();
 
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
@@ -69,6 +69,24 @@ namespace ConditioningControlPanel.Avalonia
         internal static SessionRunner? Sessions { get; set; }
         /// <summary>The app-lifetime media recap (WPF App.MediaHistory), or null on the headless render path.</summary>
         internal static MediaHistoryService? MediaHistory { get; set; }
+        /// <summary>The tube the countdown speaks through. Test seam: a headless app cannot swap its lifetime after init.</summary>
+        internal static Func<Views.AvatarTube.AvatarTubeWindow?> DescentTube = () => Views.AvatarTube.AvatarTubeWindow.Live;
+
+        /// <summary>WPF App.xaml.cs:3196-3206: arm before the shell; a missing tube leaves the line retryable.</summary>
+        internal static void StartDescentCountdown()
+        {
+            DescentCountdown = new Services.Descent.DescentCountdownService
+            {
+                Speaker = line =>
+                {
+                    if (DescentTube() is not { } avatar) return false;
+                    avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+                    return true;
+                },
+            };
+            DescentCountdown.Start();
+        }
+
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
         internal static Services.Descent.DescentService? Descent { get; set; }
@@ -632,6 +650,7 @@ namespace ConditioningControlPanel.Avalonia
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
+                CoreEntitlement.DailyFreeKeyProvider = () => dailyFree.TodayKey;
                 // WPF App.xaml.cs:494: the weekly Graded Intake pass. Its TierChanged hooks are
                 // attached by AccountSeed.Seed() below, once the providers exist.
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
@@ -648,9 +667,7 @@ namespace ConditioningControlPanel.Avalonia
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
-                // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
-                DescentCountdown = new Services.Descent.DescentCountdownService();
-                DescentCountdown.Start();
+                StartDescentCountdown();
                 Descent = new Services.Descent.DescentService
                 {
                     // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
@@ -1093,6 +1110,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static void StopDesktopOverlays(bool final = true)
         {
             CoreFlash.Stop();
+            Services.Flash.FlashCelebrationVoice.Stop();
             CoreSubliminal.Stop();
             Views.Overlays.FlashOverlay.CloseAll(final);
             Views.Overlays.SubliminalWhisperShow.StopAll();
@@ -1299,6 +1317,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
+            try { Platform.ScreenMirrorHead.Shutdown(); } catch { /* WPF App.OnExit:6505 */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
