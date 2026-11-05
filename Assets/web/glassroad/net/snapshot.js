@@ -28,7 +28,7 @@ export function createUplink({ phone = false, track = null } = {}) {
   let lastAt = -Infinity;
   const of = (seat) => {
     let e = per.get(seat);
-    if (!e) per.set(seat, (e = { seq: 0, pulses: 0, pose: 0, poseUntil: 0, pops: 0, k: createKart() }));
+    if (!e) per.set(seat, (e = { seq: 0, moved: false, pulses: 0, pose: 0, poseUntil: 0, pops: 0, k: createKart() }));
     return e;
   };
 
@@ -50,8 +50,10 @@ export function createUplink({ phone = false, track = null } = {}) {
       e.pops = Math.max(e.pops, Math.min(65535, Math.max(0, Math.floor(n))));
     },
     /** Continue a seat's seq after a record (the keeper takes a bot over). */
-    seqFrom(seat, seq) { of(seat).seq = (seq + 1) & 0xffff; },
+    seqFrom(seat, seq) { const e = of(seat); e.seq = (seq + 1) & 0xffff; e.moved = true; },
     seqOf: (seat) => of(seat).seq,
+    /** True once this session uploaded the seat or continued its seq (its seq is no longer the fresh 0). */
+    seqMoved: (seat) => { const e = per.get(seat); return !!(e && e.moved); },
     /**
      * One wire kart per uploaded seat. rows: [{ seat, r, bot, paused, assist }] where r is a racer.
      * @returns wire karts (pooled per seat: send them before the next build)
@@ -67,7 +69,7 @@ export function createUplink({ phone = false, track = null } = {}) {
           echo: fxv.echo || 0, pose: e.pose, pulses: e.pulses, pops: e.pops,
         });
         e.k.fork = track ? racerFork(track, r.st) : 0;
-        e.seq = (e.seq + 1) & 0xffff; e.pulses = 0;
+        e.seq = (e.seq + 1) & 0xffff; e.moved = true; e.pulses = 0;
         out.push(e.k);
       }
       return out;
