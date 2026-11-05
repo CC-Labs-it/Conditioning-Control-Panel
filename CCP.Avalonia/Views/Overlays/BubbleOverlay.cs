@@ -71,6 +71,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static long _statRects;
 
         /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
+        internal static void RaiseAll(Action<Window> raise)
+        {
+            foreach (var window in Windows) if (window.IsVisible) raise(window);
+        }
+
         public static bool IsRunning => _running && !_chaosOpenedWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
 

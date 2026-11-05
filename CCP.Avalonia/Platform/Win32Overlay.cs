@@ -88,6 +88,10 @@ internal static class Win32Overlay
         return Apply(hwnd, Track(window).Value, true, AllowsFocus(window));
     }
 
+    // Raise only: keep existing extended styles, including NOACTIVATE on interactive chrome.
+    internal static bool Raise(IntPtr hwnd, Func<IntPtr, IntPtr, int, int, int, int, uint, bool>? setPosition = null)
+        => (setPosition ?? SetWindowPos)(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
     /// <summary>WPF ApplyWindowStyles(stealsFocus): activation and mouse pass-through are independent.</summary>
     internal static bool AllowFocus(TopLevel window, IntPtr hwnd)
     {
