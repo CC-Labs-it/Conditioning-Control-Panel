@@ -134,7 +134,8 @@ public sealed class FlashFinishTests
             (s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel) =
                 (style, rounded, true, FlashExitStyle.None, false, MotionLevel.Full);
             var w = ShowOne();
-            var image = ((Panel)((Panel)w.Content!).Children[0]).Children.OfType<Image>().Single();
+            var card = (Panel)((Panel)w.Content!).Children[0];   // the base wraps picture + whiten in a clip panel
+            var image = card.Children.OfType<Image>().Concat(card.Children.OfType<Panel>().SelectMany(p => p.Children.OfType<Image>())).Single();
             if (!rounded) { w.ApplyGlow(new FlashGlowLook(0xFF69B4, 24, 0.5, false, false), 1); w.ApplyCorners(false, true, true, 400, 300); }
             Assert.Equal(FlashCorners.Resolve(rounded, true, !rounded, 300, 1), ((RectangleGeometry)image.Clip!).RadiusX);
             var radius = ((RectangleGeometry)image.Clip!).RadiusX;

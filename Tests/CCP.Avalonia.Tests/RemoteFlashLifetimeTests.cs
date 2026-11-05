@@ -74,6 +74,7 @@ public sealed class RemoteFlashLifetimeTests
             registration.Dispose();
             window.Close();
             RemoteFlashSource.CleanupCache();
+            typeof(FlashOverlay).GetField("_closed", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, false); // CloseAll() is the shell-closing latch: later tests in this testhost must still spawn
         }
         return Task.CompletedTask;
     });
@@ -95,7 +96,7 @@ public sealed class RemoteFlashLifetimeTests
             FlashOverlay.CloseAll();
             Assert.Equal(0, RemoteFlashSource.ReadyCount);
         }
-        finally { RemoteFlashSource.CleanupCache(); }
+        finally { RemoteFlashSource.CleanupCache(); typeof(FlashOverlay).GetField("_closed", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, false); }
         return Task.CompletedTask;
     });
 }
