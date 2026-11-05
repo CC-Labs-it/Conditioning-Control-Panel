@@ -274,8 +274,12 @@ namespace ConditioningControlPanel.Services
         /// What a restore keeps from this machine: WPF's manual-restore identity/progression list
         /// (MainWindow.CloudBackup.cs:138-157), <see cref="PreserveLocalOnlyFields"/>, then every
         /// <see cref="AbsolutePathFields"/> value and matched list-item paths.
+        /// <para>The manual restore runs this a second time after its awaited download (#3294): that pass has no
+        /// backup JSON and skips the list-item paths, which <see cref="DownloadAsync"/> already matched.</para>
         /// </summary>
-        internal static void KeepLocal(AppSettings current, AppSettings restored, JObject backup)
+        internal static void KeepLocal(AppSettings current, AppSettings restored) => KeepLocal(current, restored, null);
+
+        internal static void KeepLocal(AppSettings current, AppSettings restored, JObject? backup)
         {
             restored.UnifiedId = current.UnifiedId;
             restored.PlayerLevel = current.PlayerLevel;
@@ -300,7 +304,7 @@ namespace ConditioningControlPanel.Services
                 if (v is List<string> list) v = new List<string>(list);
                 p.SetValue(restored, v);
             }
-            KeepListPaths(current, restored, backup);
+            if (backup != null) KeepListPaths(current, restored, backup);
         }
 
         private static void KeepListPaths(AppSettings current, AppSettings restored, JObject backup)
