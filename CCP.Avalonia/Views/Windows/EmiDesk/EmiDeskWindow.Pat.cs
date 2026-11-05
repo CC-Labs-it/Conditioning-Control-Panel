@@ -14,8 +14,21 @@ public partial class EmiDeskWindow
     private DateTimeOffset _patFeedbackFrom;
     private string? _patFaceDrawn;
 
-    // ponytail: wordless pat faces are live here; the full chain player, particle bursts,
-    // body art/moves and its speech priority/summon-cut are wire-win-emi-desk-b.
+    private Action? _wakeFeedbackDone;
+
+    // WPF EmiChainPlayer.cs:77-133: hold every frame, including the last, before Done.
+    // Reuse the existing wordless face clock and the shared canon instead of another player.
+    private void StartWakeFeedback(Action? done)
+    {
+        var seq = EmiChains.Chains["wake"].Seq;
+        var frames = new EmiPatFrame[seq.Count];
+        for (int i = 0; i < seq.Count; i++) frames[i] = new(seq[i].Text, seq[i].Ms);
+        StartPatFeedback(frames);
+        _wakeFeedbackDone = done;
+    }
+
+    // Part B: full chain player, particle bursts, body art/moves and speech priority.
+    // The wordless wake and pat faces share this clock; only wake may be cut for a pat.
     private void StartPatFeedback(IReadOnlyList<EmiPatFrame> frames)
     {
         StopPatFeedback();
@@ -34,11 +47,17 @@ public partial class EmiDeskWindow
     {
         if (_patFeedback is null) return;
         var face = EmiPatFeedback.FaceAt(_patFeedback, (PatClock.GetUtcNow() - _patFeedbackFrom).TotalMilliseconds);
-        if (face is null) StopPatFeedback();
+        if (face is null)
+        {
+            var done = _wakeFeedbackDone;
+            bool wake = _summonChainLive;
+            StopPatFeedback(restoreFace: !wake);
+            done?.Invoke();
+        }
         else if (face != _patFaceDrawn) { _patFaceDrawn = face; DrawFace(face); }   // P07
     }
 
-    private void StopPatFeedback()
+    private void StopPatFeedback(bool restoreFace = true)
     {
         if (_patFeedbackTimer is not null)
         {
@@ -46,7 +65,8 @@ public partial class EmiDeskWindow
             _patFeedbackTimer.Tick -= OnPatFeedbackTick;
             _patFeedbackTimer = null;
         }
-        if (_patFeedback is not null) DrawFace(EmiChains.RestFace);
+        _wakeFeedbackDone = null; // cancellation never completes the entrance
+        if (restoreFace && _patFeedback is not null) DrawFace(EmiChains.RestFace);
         _patFeedback = null;
     }
 }
