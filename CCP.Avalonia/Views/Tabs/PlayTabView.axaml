@@ -257,8 +257,8 @@
                   </Border>
                   <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_breakout_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
                   <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_breakout_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
-                  <Button Grid.Row="3" x:Name="BtnPlayBreakout" IsEnabled="False" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
-                          ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True">
+                  <Button Grid.Row="3" x:Name="BtnPlayBreakout" Cursor="Hand" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
+                          Click="BtnPlayBreakout_Click">
                     <TextBlock Text="{loc:Str launcher_play}"/>
                   </Button>
                 </Grid>
