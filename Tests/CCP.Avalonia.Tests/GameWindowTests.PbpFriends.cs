@@ -17,6 +17,8 @@ public sealed partial class GameWindowTests
     {
         var answer = new TaskCompletionSource<bool>();
         var w = GameWindow.Launch(GameWindow.PbpId)!;
+        Assert.True(w.PbpLocalProbe.Wait(TimeSpan.FromSeconds(10)));
+        Dispatcher.UIThread.RunJobs();
         w.PbpOsAnimations = () => answer.Task;
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
@@ -25,7 +27,7 @@ public sealed partial class GameWindowTests
         Assert.Empty(sent);
         answer.SetResult(true);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "pbp:friend", "pbp:online-media" }, sent.Select(o => (string?)o["type"]));
         w.Close();
         Assert.True(pending.IsCompletedSuccessfully);
         Assert.Null(pending.Result);
