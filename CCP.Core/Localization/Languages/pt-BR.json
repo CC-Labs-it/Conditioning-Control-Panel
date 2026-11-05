@@ -8212,5 +8212,6 @@
   "shop_item_bubbles_v2_name": "Bolhas v2",
   "shop_item_rt_bundle_1_name": "Pacote Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pacote Racing Thoughts 2",
-  "shop_item_rt_bundle_3_name": "Pacote Racing Thoughts 3"
+  "shop_item_rt_bundle_3_name": "Pacote Racing Thoughts 3",
+  "session_settings_recovery_failed": "Não foi possível restaurar as configurações da sessão. Reinicie o aplicativo para recuperá-las."
 }

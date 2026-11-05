@@ -8212,5 +8212,6 @@
   "shop_item_bubbles_v2_name": "버블 v2",
   "shop_item_rt_bundle_1_name": "Racing Thoughts 번들 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts 번들 2",
-  "shop_item_rt_bundle_3_name": "Racing Thoughts 번들 3"
+  "shop_item_rt_bundle_3_name": "Racing Thoughts 번들 3",
+  "session_settings_recovery_failed": "세션 설정을 복원하지 못했습니다. 앱을 다시 시작하여 복원하세요."
 }

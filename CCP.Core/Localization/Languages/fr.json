@@ -8212,5 +8212,6 @@
   "shop_item_bubbles_v2_name": "Bulles v2",
   "shop_item_rt_bundle_1_name": "Pack Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pack Racing Thoughts 2",
-  "shop_item_rt_bundle_3_name": "Pack Racing Thoughts 3"
+  "shop_item_rt_bundle_3_name": "Pack Racing Thoughts 3",
+  "session_settings_recovery_failed": "Les paramètres de la session n'ont pas pu être restaurés. Redémarre l'application pour les récupérer."
 }

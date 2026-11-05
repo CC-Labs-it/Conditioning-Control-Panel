@@ -8962,5 +8962,6 @@
   "shop_item_bubbles_v2_name": "Bolle v2",
   "shop_item_rt_bundle_1_name": "Pacchetto Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pacchetto Racing Thoughts 2",
-  "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3"
+  "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3",
+  "session_settings_recovery_failed": "Impossibile ripristinare le impostazioni della sessione. Riavvia l'app per recuperarle."
 }
