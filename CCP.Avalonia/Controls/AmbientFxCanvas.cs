@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Warm motes rising from the bottom edge on a slow sine sway, budgeted by the tier.</summary>
         Embers = 1 << 5,
         EdgeDrift = 1 << 6,
+        VaultMotes = 1 << 8,   // WPF AmbientFxCanvas.cs:54 (EdgeFog holds 1 << 7)
     }
 
     /// <summary>Per-surface tuning for <see cref="AmbientFxCanvas.StartLayers(AmbientFxConfig)"/>.</summary>
@@ -122,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// SkiaSharp into this project and of only working on the Skia backend; not worth it until the
     /// owner says the bloom is missed.</para>
     /// </summary>
-    public class AmbientFxCanvas : Decorator
+    public partial class AmbientFxCanvas : Decorator
     {
         private const int MaxBurstParticles = 150;
         private const int FaultLimit = 5;
@@ -284,6 +285,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         /// <summary>True while the frame clock runs. Tests read it; nothing else needs to.</summary>
         internal bool IsTicking => _timer.IsEnabled;
+        // Hosts flush geometry invalidated while this clock was parked.
+        internal event Action? ClockStarted;
 
         /// <summary>The layers this canvas was last asked to run.</summary>
         public AmbientFxLayers Layers => _config.Layers;
@@ -301,10 +304,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// performance budget and reseeds the sim. Never starts a clock the tier or the
         /// reduced-motion setting has ruled out.
         /// </summary>
-        public void StartLayers(AmbientFxConfig config)
+        public void StartLayers(AmbientFxConfig config) => StartLayers(config, preservePause: false);
+
+        // Keep a tab registry pause when refreshing a tab's motion gates.
+        internal void StartLayers(AmbientFxConfig config, bool preservePause)
         {
             _config = config ?? new AmbientFxConfig();
-            _paused = false;
+            _paused = preservePause && _paused;
             _faults = 0;
             _running = _config.Layers != AmbientFxLayers.None;
             ReadEnvironment();
@@ -345,6 +351,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _dustN = 0;
             _emberN = 0;
             _edgeN = 0;
+            _vaultN = 0;
             InvalidateVisual();
         }
 
@@ -658,6 +665,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 : Array.Empty<EdgeMote>();
             _edgeN = 0;
             _edgeT = 0f;
+            _vaultN = 0;
+            _vaultT = 0;
             _fogT = _dustT = _sheenT = _breathT = _auroraT = 0f;
             _sheenDone = false;
             _burstN = 0;
@@ -763,7 +772,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (!oneShotLive)
             {
                 if (_targetFps <= 0) return false;
-                if (!Env.AllowAmbientLoops) return false;
+                if (!Env.AllowAmbientLoops && !ReducedVaultMayRun()) return false;
             }
             var w = _window;
             if (w != null)
@@ -780,6 +789,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (!_clock.IsRunning) _clock.Start();
             _lastTickMs = _clock.Elapsed.TotalMilliseconds;
             _timer.Start();
+            ClockStarted?.Invoke();
         }
 
         private void StopClock()
@@ -809,6 +819,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 StepDust(dt);
                 StepEmbers(dt);
                 StepEdge(dt);
+                StepVault(dt);
                 StepBurst(dt);
                 StepTokens(dt);
 
@@ -1110,6 +1121,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_fogOnly && (layers & AmbientFxLayers.Embers) != 0) DrawEmbers(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.SheenSweep) != 0) DrawSheen(context, w, h, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.EdgeDrift) != 0) DrawEdge(context, w, h, intensity);
+                DrawVault(context, w, h);
                 DrawBurst(context, w, h, min);
                 DrawTokens(context, w, h, min);
             }
