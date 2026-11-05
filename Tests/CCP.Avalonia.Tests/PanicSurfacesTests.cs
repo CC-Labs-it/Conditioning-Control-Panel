@@ -94,6 +94,7 @@ public sealed class PanicSurfacesTests
         "leash-task",
         "deeper-tutorial",
         "workshop-trigger-editor",
+        "awareness-companion",
         "tour",
         "games",
         "first-show", "quest-stamps", "quest-voice",
