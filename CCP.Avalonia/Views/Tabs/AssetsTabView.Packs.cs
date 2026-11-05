@@ -34,6 +34,7 @@ public partial class AssetsTabView
         PackThumbs[PackThumbKey(item)] = (bmp, ++_packThumbClock);
     }
 
+
     private static bool IsPackLeaf(AssetTreeItem folder) =>
         folder.IsPackFolder && !string.IsNullOrEmpty(folder.PackId) && !string.IsNullOrEmpty(folder.PackFileType);
 

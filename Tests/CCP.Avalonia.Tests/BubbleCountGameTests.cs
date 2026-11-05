@@ -85,9 +85,10 @@ public sealed class BubbleCountGameTests
                         var ready = new TaskCompletionSource<BubbleCountWindow>();
                         using var opened = Window.WindowOpenedEvent.AddClassHandler<BubbleCountWindow>((w, _) =>
                         {
-                            // WindowOpened precedes Show/Opened. Subscribe after the game's own
-                            // Opened handler has installed its decoder, then observe presented frames.
-                            w.Opened += (_, _) =>
+                            // WindowOpened precedes Show/Opened. The game's own Opened handler defers the
+                            // decoder to Loaded (StartWhenLoaded, as WPF OnLoaded), so observe presented
+                            // frames from a Loaded handler subscribed after it.
+                            w.Opened += (_, _) => w.Loaded += (_, _) =>
                             {
                                 var sink = BubbleCountWindow.Sink!;
                                 void Presented()

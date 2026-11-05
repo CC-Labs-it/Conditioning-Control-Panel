@@ -616,6 +616,49 @@ public sealed class SessionRunnerTests : IDisposable
     }
 
     [Fact]
+    public void MindWipe_StartsInSessionModeAtItsMinute_StopsOnPause_ResumesPlain_StopsAtTheEnd()
+    {
+        // WPF SessionEngine.cs:207-228 (StartSession, deferred), :528 (pause), :575-576 (plain resume), :368 (stop).
+        var old = (CoreMindWipe.StartSessionProvider, CoreMindWipe.StartProvider, CoreMindWipe.StopProvider);
+        var calls = new System.Collections.Generic.List<string>();
+        CoreMindWipe.StartSessionProvider = (b, v) => calls.Add($"session {b} {v * 100:0}");
+        CoreMindWipe.StartProvider = (f, v) => calls.Add($"start {f} {v * 100:0}");
+        CoreMindWipe.StopProvider = () => calls.Add("stop");
+        try
+        {
+            var session = OneMinute();
+            session.DurationMinutes = 3;
+            session.Settings.MindWipeEnabled = true;
+            session.Settings.MindWipeStartMinute = 1;
+            session.Settings.MindWipeBaseMultiplier = 2;
+            session.Settings.MindWipeVolume = 60;
+            _runner.Start(session);
+            Assert.DoesNotContain(calls, c => c.StartsWith("session"));   // deferred to minute 1
+            _runner.Pause();
+            _runner.Resume();
+            Assert.DoesNotContain(calls, c => c.StartsWith("session") || c.StartsWith("start"));
+            _runner.Tick(TimeSpan.FromSeconds(61));
+            Assert.Equal("session 2 60", calls.Last());
+
+            calls.Clear();
+            _runner.Pause();
+            Assert.Equal(new[] { "stop" }, calls);
+            _runner.Resume();
+            Assert.Equal(new[] { "stop", "start 2 60" }, calls);
+
+            calls.Clear();
+            _runner.Stop();
+            Assert.Equal("stop", calls.First());
+
+            calls.Clear();
+            session.Settings.MindWipeStartMinute = 0;
+            _runner.Start(session);
+            Assert.Equal("session 2 60", calls.Last());
+        }
+        finally { (CoreMindWipe.StartSessionProvider, CoreMindWipe.StartProvider, CoreMindWipe.StopProvider) = old; }
+    }
+
+    [Fact]
     public void Resume_RestartsOnlyFeaturesWhoseStartMinuteHasPassed()
     {
         int btStarts = 0;
@@ -758,6 +801,100 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Equal(20, s.SpiralOpacity);   // the ramp never writes the persisted value
         _runner.Stop();
         Assert.Null(_runner.SpiralOpacity);
+    }
+
+    private sealed class NoVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+    }
+
+    /// <summary>WPF SessionEngine.cs:1400 (duck level), :1528-1547 (videos), :531 (pause stops them)
+    /// and :580 (resume restarts them).</summary>
+    [Fact]
+    public void VideosAndDucking_FollowTheSession_ThroughPauseAndResume()
+    {
+        var previousVideo = CoreEngine.Video;
+        var video = new MandatoryVideoScheduler(new NoVideoHost());
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel);
+        try
+        {
+            CoreEngine.Video = video;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = (false, 3, false, 10);
+            var session = OneMinute();
+            session.DurationMinutes = 3;
+            var ss = session.Settings;
+            (ss.MandatoryVideosEnabled, ss.VideosPerHour, ss.MandatoryVideosStartMinute) = (true, 9, 1);
+            ss.AudioDuckLevel = 55;
+
+            _runner.Start(session);
+            Assert.Equal((true, 9, true, 55), (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+            Assert.False(video.IsRunning);                              // minute 1: deferred
+
+            _runner.Tick(TimeSpan.FromSeconds(60));
+            Assert.True(video.IsRunning);
+
+            _runner.Pause();
+            Assert.False(video.IsRunning);
+
+            _runner.Resume();
+            Assert.True(video.IsRunning);
+
+            _runner.Stop();
+            Assert.False(video.IsRunning);
+            Assert.Equal((false, 3, false, 10), (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+        }
+        finally
+        {
+            _runner.Stop();
+            video.Stop();
+            CoreEngine.Video = previousVideo;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = saved;
+        }
+    }
+
+    [Theory]
+    [InlineData(true, 0, true)]
+    [InlineData(true, 1, false)]
+    [InlineData(false, 0, false)]
+    public void VideoAdmissionAndPendingResumeRespectPreset(bool enabled, int minute, bool running)
+    {
+        var previous = CoreEngine.Video;
+        var video = new MandatoryVideoScheduler(new NoVideoHost());
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel);
+        try
+        {
+            CoreEngine.Video = video;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = (true, 7, true, 35);
+            var session = OneMinute();
+            session.DurationMinutes = 3;
+            session.Settings.MandatoryVideosEnabled = enabled;
+            session.Settings.MandatoryVideosStartMinute = minute;
+            session.Settings.VideosPerHour = null;
+            session.Settings.AudioDuckLevel = 0;
+            _runner.Start(session);
+            Assert.Equal(enabled, s.MandatoryVideosEnabled);
+            Assert.Equal(running, video.IsRunning);
+            Assert.Equal((7, true, 35), (s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+            _runner.Pause();
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            Assert.False(video.IsRunning);
+            _runner.Resume();
+            Assert.Equal(running, video.IsRunning);
+            _runner.Stop();
+            Assert.False(video.IsRunning);
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            Assert.False(video.IsRunning);
+            Assert.Equal((true, 7, true, 35), (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+        }
+        finally
+        {
+            _runner.Stop(); video.Stop(); CoreEngine.Video = previous;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = saved;
+        }
     }
 
     private static string Fixture([CallerFilePath] string here = "") =>

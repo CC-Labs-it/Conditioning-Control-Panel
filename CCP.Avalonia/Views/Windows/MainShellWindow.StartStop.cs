@@ -2,9 +2,7 @@
 // BtnStartMenu_Click, MenuStartNormal_Click, StartEngine (:294), StopEngine (:444) and
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
-// ponytail: still missing, each with no service on this head: the remote-control gate,
-// Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler and the Presets "running" label.
+// Remaining lifecycle gaps are listed in docs/avalonia-r72-start-stop-recut.md.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -37,10 +35,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body",
                     "btn_stop_session_yes", "btn_stop_session_no");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning)
+                {
+                    // WPF StartStop.cs:101-111: a stop by hand inside the window holds the scheduler off.
+                    Scheduler.NoteManualStop(CoreSettings.Current, SchedulerNow());
+                    StopEngine();
+                }
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
+            if (CoreEngine.IsRunning)
+            {
+                Serilog.Log.Information("Start button: stopping the engine");
+                Scheduler.NoteManualStop(CoreSettings.Current, SchedulerNow());
+                App.Achievements?.TrackPanicPressed();
+                StopEngine();
+            }
             else StartEngineFromUser();
         }
 
@@ -48,8 +57,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (Core PanicAftermath); the scheduler, programs, a remote or the Lockdown keeper never do.</summary>
         internal void StartEngineFromUser()
         {
+            Scheduler.NoteManualStart();
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-            StartEngine(resumeSession: true);
+            StartEngine(systemInitiated: false, resumeSession: true);
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -79,14 +89,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine(bool resumeSession = false)
+        internal void StartEngine(bool systemInitiated = true, bool resumeSession = false)
         {
             var gen = ++_engineGen;
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
+                // WPF StartStop.cs:345-350: no notice for audio-only or system starts.
+                if (!systemInitiated && !CoreSettings.Current.AudioOnlySession) WarnIfFlashLibraryEmpty();
+                if (!systemInitiated) App.Achievements?.CheckRelapse();
+                // WPF StartEngineFromUser: a resume is not a new run; the parked session comes back after the start.
                 var resuming = resumeSession && App.Sessions is { IsRunning: true, IsPaused: true };
                 CoreEngine.Start(resumingSession: resuming);
+                StartEngineRamp();
                 if (resuming) App.Sessions?.ResumeAfterEngineStart();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
@@ -95,6 +110,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
             });
+        }
+
+        /// <summary>WPF MainWindow.StartStop.cs:365-367: Audio Only forces the existing layered bed.</summary>
+        internal void OnEngineStarted()
+        {
+            if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
         }
 
         /// <summary>WPF StopEngine. Saved flags are left alone; <see cref="OnEngineStopped"/> clears the screen.
@@ -114,6 +135,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
             Deeper.ScreenShake.Stop();
+            // WPF MainWindow.StartStop.cs:533-547: preserve only the standalone bed, release ducking.
+            if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
+            Platform.LibVlcAudio.Instance?.ForceUnduck();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);
@@ -121,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             LockCardWindow.ForceCloseAll();
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
+            StopEngineRamp();
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).
             if (App.Sessions?.IsRunning == true) { SetPauseButton(App.Sessions.IsPaused); OnSessionTick(); return; }
             // WPF OnSessionStopped: the session button and the dials come back on every exit path.
@@ -142,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = running ? "■" : "▶";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new StrExtension(running ? "label_stop" : "label_start").ProvideValue(null!));
+            RefreshBarStatus();
             if (App.Sessions?.IsRunning == true) OnSessionTick();
             ApplyStartHeroState();
         }

@@ -33,6 +33,8 @@
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\ChasterLinkTests.cs" Link="ChasterLinkTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\InviteClaimNoticeTests.cs" Link="InviteClaimNoticeTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\SourceRoots.cs" Link="SourceRoots.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\LockdownDoseRecoverySharingTests.cs" Link="LockdownDoseRecoverySharingTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -52,6 +54,7 @@
     <Compile Include="..\ConditioningControlPanel.Tests\BankAccumulatorTests.cs" Link="BankAccumulatorTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\BankFlightPlanTests.cs" Link="BankFlightPlanTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\BankFxDisplayHoldTests.cs" Link="BankFxDisplayHoldTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\IntakePunchCardTests.cs" Link="IntakePunchCardTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\HostNetPathRuleTests.cs" Link="HostNetPathRuleTests.cs" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AchievementSharePromptRuleTests.cs" Link="AchievementSharePromptRuleTests.cs" />

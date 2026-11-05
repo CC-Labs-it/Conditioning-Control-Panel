@@ -35,9 +35,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF HandlePanicKeyPress / TriggerPanicFromRemote (main 7e14c2870): Circe's Tab opens its ten-minute
             // safety hold on EVERY panic (key, tray, voice, leash gate); the way out is never priced.
             new("chaster-hold", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("panic")),
-            // WPF HandlePanicKeyPress :1662 / TriggerPanicFromRemote: the five-minute post-panic quiet (AI effects refused,
-            // follow-ups overtaken). The key arms it earlier too (lock-card and grace-pause rungs); arming twice is harmless.
-            new("panic-quiet", _ => ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet()),
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
@@ -51,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("nav-window-confirm", sh => sh?.PageStrip?.CloseConfirm()),
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => { Platform.RaceEngineDownload.Cancel(); Games.GameWindow.CloseAllForPanic(); }, Games.GameWindow.IsAnyOpen),
+            new("upgrade-intro", MainShellWindow.StopUpgradeIntroForPanic),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
             new("quest-stamps", sh => sh?.StopQuestStampsForPanic()),   // #3235 HideStampPopup, then the stamped pop (flash, scale) resets
@@ -111,9 +109,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // (App.xaml.cs:1780 Mantra.Dispose), :1797 remote haptics, :2003 haptics PanicStop and :1822 Autonomy.CancelActivePulses
             // all precede StopEngine. WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does,
             // so the leash task parks before StopEngine and before its lock card closes.
+            // WPF MainWindow.xaml.cs:1900-1902: panic is a manual stop for this schedule.
+            new("scheduler", sh => sh?.Scheduler.NoteManualStop(CoreSettings.Current, sh.SchedulerNow())),
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
-                After: ["companion-audio", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player"]),
+                After: ["companion-audio", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
             new("flash", _ => { Overlays.FlashOverlay.CloseAll(final: false); ConditioningControlPanel.Services.Flash.RemoteFlashSource.CleanupCache(); }), // Includes standalone pops and mid-Shatter exits.
@@ -159,7 +159,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("help-tooltips", _ => global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.CloseAll()), // WPF help lifetime :750; stricter panic cleanup
             new("launcher-notes", _ => LauncherWindow.CloseNotesForPanic()),
             new("launcher-friends", _ => LauncherWindow.CloseFriendsForPanic()),
-            new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame"]),   // decision C: last, fire-and-forget; gaze reads it
+            // Stricter than WPF MainWindow.xaml.cs:1934-2013: retire calibration before camera teardown.
+            new("webcam-calibration", _ => WebcamCalibrationWindow.CloseAllForPanic()),
+            new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame", "webcam-calibration"]),   // decision C: last, fire-and-forget; gaze reads it
         };
 
         /// <summary>WPF AnyGameSurfaceOwnsTheScreen. Sample BEFORE <see cref="StopAll"/>.</summary>
@@ -174,8 +176,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>Stops every surface in order. One failing stop never skips the rest. Never throws.</summary>
-        internal static void StopAll(string reason, MainShellWindow? shell = null)
+        internal static void StopAll(string reason, MainShellWindow? shell = null, bool aftermathArmed = false)
         {
+            // WPF MainWindow.xaml.cs:1670: quiet precedes teardown. The key already armed it.
+            if (!aftermathArmed) ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
             Serilog.Log.Information("Panic: stopping every surface ({Reason})", reason);
             shell ??= MainShellWindow.Current;
             foreach (var s in All)

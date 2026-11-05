@@ -104,6 +104,7 @@ public sealed class PanicSurfacesTests
         "awareness-companion",
         "tour",
         "games",
+        "upgrade-intro",
         "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
         "companion-conversation",
@@ -138,7 +139,7 @@ public sealed class PanicSurfacesTests
         "companion-audio",
         "mantra",
         "quiz",
-        "panic-quiet",
+        // Quiet is armed before this registry; PanicAftermathPortTests pins its single arm.
         "pink-rush",
         "possession",
         "programs-fx",
@@ -147,6 +148,7 @@ public sealed class PanicSurfacesTests
         "remote-haptics",
         "takeover",
         "program-session",
+        "scheduler",
         "engine",
         "flash",
         "pink-rush",
@@ -272,6 +274,7 @@ public sealed class PanicSurfacesTests
         "leash-task>lock-cards",
         "mantra>engine",
         "remote-haptics>engine",
+        "scheduler>engine",
         "takeover>engine",
         "voice-capture>ai-followups",
     };

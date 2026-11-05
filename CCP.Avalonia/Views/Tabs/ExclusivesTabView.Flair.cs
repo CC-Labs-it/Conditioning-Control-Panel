@@ -46,11 +46,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (scale != null)
             {
                 var duration = TimeSpan.FromMilliseconds(InteractionPressMotion.DurationMs);
-                scale.Transitions ??= new Transitions
+                // The hover lift (CardHover) leaves its own 150 ms transitions on the same transform;
+                // the press runs at the WPF press time (MotionFx.cs:88, 80 ms), so it sets its own.
+                scale.Transitions = AmbientFxCanvas.Env.AllowTransitions ? new Transitions
                 {
                     new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = duration, Easing = new QuadraticEaseOut() },
                     new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = duration, Easing = new QuadraticEaseOut() },
-                };
+                } : null;
                 scale.ScaleX = scale.ScaleY = InteractionPressMotion.ScaleFor(true);
             }
             VaultClickDelay(TimeSpan.FromMilliseconds(140), () =>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Threading;
+using Avalonia.Controls;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -41,8 +42,8 @@ public sealed partial class GameWindowTests
     /// <summary>Signed in as Prime, no Racing Thoughts track, the relay on a fake transport.</summary>
     private static void RunGlassroad(Action<MainShellWindow, LauncherWindow, GrHttp> body) => RunGlassroad("1", body);
 
-    /// <summary>Signed in, no Racing Thoughts track, Prime when <paramref name="door"/> is "1", the relay on a fake transport.</summary>
-    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body) => Run((shell, launcher) =>
+    /// <summary>Signed in, no Racing Thoughts track, the door at <paramref name="door"/>, the relay on a fake transport.</summary>
+    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body, bool? lab = null) => Run((shell, launcher) =>
     {
         var (oldDoor, oldOwns, oldHttp, oldBase) = (CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
@@ -52,7 +53,7 @@ public sealed partial class GameWindowTests
         try
         {
             GameWindow.UseLinuxRaceCard = () => false; // exercise the existing WebKit host explicitly
-            CoreEntitlement.HasLabProvider = () => door == "1";
+            CoreEntitlement.HasLabProvider = () => lab ?? door == "1"; // an explicit lab wins (Play door tests), else the door string
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
             GameWindow.PbpServerBase = () => GrBase;
@@ -70,6 +71,41 @@ public sealed partial class GameWindowTests
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
     });
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(false, "1")]
+    [InlineData(true, null)]
+    [InlineData(true, "1")]
+    public void PlayRaceOpensGlassroadAndRequiresLab(bool lab, string? preview)
+        => RunGlassroad(preview, (shell, _, _) =>
+        {
+            CoreEntitlement.HasPremiumProvider = () => true; // Tier 1 alone must still be refused.
+            var denied = new List<TierVerdict>();
+            var oldDenied = CoreEntitlement.ShowDeniedHandler;
+            CoreEntitlement.ShowDeniedHandler = v => denied.Add(v);
+            try
+            {
+                shell.ShowTab("play");
+                shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
+                    .FindControl<global::Avalonia.Controls.Button>("BtnPlayRacingThoughts")!
+                    .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                if (!lab)
+                {
+                    Assert.Empty(GameWindow.OpenWindowsForTests());
+                    Assert.False(Assert.Single(denied).Allowed);
+                    return;
+                }
+                Assert.Empty(denied);
+                var w = Assert.Single(GameWindow.OpenWindowsForTests());
+                Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
+                Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
+                PanicSurfaces.All.Single(p => p.Id == "games").Stop(shell);
+                Assert.False(GameWindow.IsAnyOpen());
+            }
+            finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+        }, lab);
 
     // ---- pure rules ----
 

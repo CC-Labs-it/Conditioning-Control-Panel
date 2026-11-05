@@ -182,8 +182,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (overlay != null) overlay.IsVisible = open;
             // WPF hides the browser first because WebView2 ignores WPF z-order. This head has no
             // WebView2 yet, but it is the same control and the panel behaves identically.
+            if (!open)
+            {
+                RestoreBrowser();
+                return;
+            }
             var browser = Named<Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
-            if (browser != null) browser.IsVisible = !open;
+            if (browser != null) browser.IsVisible = false;
         }
 
         private void StartHelpTutorial(string tour)

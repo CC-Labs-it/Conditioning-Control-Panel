@@ -113,6 +113,9 @@ public sealed class MakeHerYoursCommunityTests
             Assert.True(link.IsEnabled);
             void ClickLink()
             {
+                // As CompanionEditorsTests: settle layout and the tab entrance, then render, because hit
+                // testing reads the last rendered frame, not layout.
+                shell.UpdateLayout();
                 link.BringIntoView();
                 RenderLiveTree(shell);
                 var at = link.TranslatePoint(new Point(link.Bounds.Width / 2, link.Bounds.Height / 2), shell)!.Value;

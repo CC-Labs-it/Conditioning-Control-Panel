@@ -3,7 +3,8 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Windows.Threading;
+using System.Threading;
+using Serilog;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services;
@@ -68,7 +69,7 @@ public class IntakePunchCardService : IDisposable
     private static readonly TimeSpan PendingDraftMaxAge = TimeSpan.FromDays(90);
 
     private readonly string _statePath;
-    private readonly DispatcherTimer _saveTimer;
+    private readonly Timer? _saveTimer;
     private bool _isDirty;
 
     public IntakePunchCardState State { get; private set; }
@@ -82,26 +83,24 @@ public class IntakePunchCardService : IDisposable
 
     /// <param name="statePathOverride">Test seam. Production passes nothing and gets the real
     /// per-user file; tests pass a temp path so a test run can never touch - or wipe - a real
-    /// user's card. Supplying it also skips the autosave timer, which needs a Dispatcher that a
-    /// headless test host does not have.</param>
+    /// user's card. Supplying it also skips the autosave timer, which is unnecessary in a deterministic test host.</param>
     public IntakePunchCardService(string? statePathOverride = null)
     {
         _statePath = statePathOverride ?? Path.Combine(
-            App.UserDataPath,
+            CorePaths.UserData,
             IntakePunchCardState.FileName);
 
         State = LoadState();
         EnsureCardStarted();
 
         // Same 30s dirty-flush cadence as QuestService: serialize on the UI thread, write off it.
-        _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        _saveTimer.Tick += (_, _) =>
-        {
-            if (!_isDirty) return;
-            _isDirty = false;
-            SaveAsync();
-        };
-        if (statePathOverride == null) _saveTimer.Start();
+        if (statePathOverride == null)
+            _saveTimer = new Timer(_ => CoreDispatch.Post(() =>
+            {
+                if (!_isDirty) return;
+                _isDirty = false;
+                SaveAsync();
+            }), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
     // ============================ read-only view ============================
@@ -144,7 +143,7 @@ public class IntakePunchCardService : IDisposable
         State.PunchedCount = 1;
         State.PunchedUtc.Add(now);
         _isDirty = true;
-        App.Logger?.Information("IntakePunchCard: new card opened, first hole on the house");
+        Log.Information("IntakePunchCard: new card opened, first hole on the house");
     }
 
     /// <summary>
@@ -172,10 +171,10 @@ public class IntakePunchCardService : IDisposable
                 State.PendingDrafts.RemoveAt(0);
 
             _isDirty = true;
-            App.Logger?.Information("IntakePunchCard: intake completed, stamp pending on session {Id}", sessionId);
+            Log.Information("IntakePunchCard: intake completed, stamp pending on session {Id}", sessionId);
             RaiseChanged();
         }
-        catch (Exception ex) { App.Logger?.Warning("IntakePunchCard.NotifyIntakeCompleted: {E}", ex.Message); }
+        catch (Exception ex) { Log.Warning("IntakePunchCard.NotifyIntakeCompleted: {E}", ex.Message); }
     }
 
     /// <summary>Session progress tick. Redeems the pending stamp once the session passes
@@ -209,7 +208,7 @@ public class IntakePunchCardService : IDisposable
             State.PendingDrafts.Remove(draft);
             Punch(via);
         }
-        catch (Exception ex) { App.Logger?.Warning("IntakePunchCard.TryRedeem: {E}", ex.Message); }
+        catch (Exception ex) { Log.Warning("IntakePunchCard.TryRedeem: {E}", ex.Message); }
     }
 
     private void Punch(string via)
@@ -222,7 +221,7 @@ public class IntakePunchCardService : IDisposable
         var completedNow = State.PunchedCount >= TotalHoles && !State.CompletedUtc.HasValue;
         if (completedNow) State.CompletedUtc = now;
 
-        App.Logger?.Information("IntakePunchCard: hole {N}/{Total} punched (via {Via})",
+        Log.Information("IntakePunchCard: hole {N}/{Total} punched (via {Via})",
             State.PunchedCount, TotalHoles, via);
 
         // Persist immediately rather than waiting on the dirty timer. A punch is the payoff for
@@ -232,9 +231,9 @@ public class IntakePunchCardService : IDisposable
 
         if (completedNow)
         {
-            App.Logger?.Information("IntakePunchCard: card COMPLETE - prize awaiting claim");
+            Log.Information("IntakePunchCard: card COMPLETE - prize awaiting claim");
             try { PunchCardCompleted?.Invoke(this, EventArgs.Empty); }
-            catch (Exception ex) { App.Logger?.Warning("IntakePunchCard: completion handler threw: {E}", ex.Message); }
+            catch (Exception ex) { Log.Warning("IntakePunchCard: completion handler threw: {E}", ex.Message); }
         }
     }
 
@@ -251,7 +250,7 @@ public class IntakePunchCardService : IDisposable
     private void RaiseChanged()
     {
         try { PunchCardChanged?.Invoke(this, EventArgs.Empty); }
-        catch (Exception ex) { App.Logger?.Debug("IntakePunchCard.RaiseChanged: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("IntakePunchCard.RaiseChanged: {E}", ex.Message); }
     }
 
     // ============================ persistence ============================
@@ -275,7 +274,7 @@ public class IntakePunchCardService : IDisposable
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "IntakePunchCard: state file corrupted, attempting .tmp recovery");
+                Log.Warning(ex, "IntakePunchCard: state file corrupted, attempting .tmp recovery");
             }
         }
 
@@ -287,14 +286,14 @@ public class IntakePunchCardService : IDisposable
                 var recovered = JsonSerializer.Deserialize<IntakePunchCardState>(json);
                 if (recovered != null)
                 {
-                    App.Logger?.Warning("IntakePunchCard: recovered state from .tmp");
+                    Log.Warning("IntakePunchCard: recovered state from .tmp");
                     try { File.Move(tmpPath, _statePath, overwrite: true); } catch { }
                     return Sanitize(recovered);
                 }
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "IntakePunchCard: .tmp recovery failed");
+                Log.Error(ex, "IntakePunchCard: .tmp recovery failed");
             }
         }
 
@@ -349,7 +348,7 @@ public class IntakePunchCardService : IDisposable
         }
         catch (Exception ex)
         {
-            App.Logger?.Error(ex, "IntakePunchCard: failed to save state");
+            Log.Error(ex, "IntakePunchCard: failed to save state");
         }
     }
 
@@ -358,7 +357,7 @@ public class IntakePunchCardService : IDisposable
     {
         string json;
         try { json = JsonSerializer.Serialize(State, WriteOptions); }
-        catch (Exception ex) { App.Logger?.Error(ex, "IntakePunchCard: serialize failed"); return; }
+        catch (Exception ex) { Log.Error(ex, "IntakePunchCard: serialize failed"); return; }
 
         var path = _statePath;
         var tmpPath = path + ".tmp";
@@ -373,14 +372,14 @@ public class IntakePunchCardService : IDisposable
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "IntakePunchCard: failed to save state");
+                Log.Error(ex, "IntakePunchCard: failed to save state");
             }
         });
     }
 
     public void Dispose()
     {
-        try { _saveTimer.Stop(); } catch { }
+        _saveTimer?.Dispose();
         if (_isDirty) Save();
     }
 }
