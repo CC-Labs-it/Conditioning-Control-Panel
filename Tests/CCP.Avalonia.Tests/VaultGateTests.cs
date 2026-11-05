@@ -290,12 +290,7 @@ public sealed class VaultGateTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static void EnsureAvalonia()
-    {
-        if (global::Avalonia.Application.Current is not null) return;
-        global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-            .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-    }
+    private static void EnsureAvalonia() => ShellTestPlatform.Ensure();
 
     private static string?[] Texts(Window w) => w.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
 

@@ -94,6 +94,47 @@ public sealed class FlashWireTests
         return FlashOverlay.Active[^1].Window;
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task A_lowered_cap_skips_one_frame_but_platform_refusal_stops_the_burst(bool platformRefused) => OnUi((s, _, xp, _) =>
+    {
+        FlashOverlay.CloseAll(final: false);
+        s.HydraLimit = 20;
+        var prior = ShowOne();
+        var screen = prior.SpawnScreen!;
+        var rect = new PixelRect(100, 100, 400, 300);
+        var flashes = new List<(Bitmap, PixelRect, string, Screen)> {
+            (Picture(), rect, "b.png", screen), (Picture(), rect, "c.png", screen) };
+        var ticks = new List<Action>();
+        var schedule = FlashOverlay.RunSpawnLater;
+        try
+        {
+            FlashOverlay.RunSpawnLater = (tick, _) => ticks.Add(tick);
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            var generation = (int)typeof(FlashOverlay).GetField("_generation", flags)!.GetValue(null)!;
+            var completed = 0;
+            typeof(FlashOverlay).GetMethod("Schedule", flags)!.Invoke(null, new object?[] {
+                flashes, 0, 100, generation, 20, 1d, TimeSpan.Zero, TimeSpan.FromSeconds(6),
+                true, false, 0, (Action)(() => completed++), null });
+            Assert.Equal(2, ticks.Count);
+            s.HydraLimit = 1;
+            if (platformRefused)
+            {
+                prior.Close();
+                FlashOverlay.Present = (_, _, _) => false;
+            }
+            ticks[0]();
+            if (!platformRefused) { Assert.Single(FlashOverlay.Active); prior.Close(); }
+            FlashOverlay.Present = (_, _, _) => true;
+            ticks[1]();
+            Assert.Equal(platformRefused ? 0 : 1, FlashOverlay.Active.Count);
+            Assert.Equal(platformRefused ? 1 : 2, xp.Count);
+            Assert.Equal(1, completed);
+        }
+        finally { FlashOverlay.RunSpawnLater = schedule; }
+    });
+
     [Fact]
     public Task A_shown_flash_pays_4_xp_and_ticks_the_flash_achievement_counter() => OnUi((s, _, xp, engine) =>
     {

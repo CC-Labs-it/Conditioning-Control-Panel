@@ -18,6 +18,10 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// </summary>
     public static class IconMap
     {
+        // Stable keys for the shared InboxItem string hint, resolved by IconGlyph in the flyout.
+        public const string InviteClaimedKey = "invite.claimed";
+        public const string InviteSubscribedKey = "invite.subscribed";
+
         public const string FriendRequest = "💌"; // WPF Services/Friends/FriendsLanding.cs:320,365: Inbox row data, rendered as Mail.
         private const IconVariant R = IconVariant.Regular, F = IconVariant.Filled;
         private static readonly Dictionary<string, IconEntry> ByGlyph = new();
@@ -101,10 +105,10 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Star, R, Gold, "☆");
             M(IconKind.Trophy, F, Gold, "🏆");
             M(IconKind.Crown, F, Gold, "👑");
-            M(IconKind.Gift, R, null, "🎁"); M(IconKind.TicketDiagonal, R, null, "🎟");
+            M(IconKind.Gift, R, null, "🎁"); M(IconKind.TicketDiagonal, R, null, "🎟", InviteClaimedKey);
             M(IconKind.Sparkle, F, null, "✨", "✦", "🎉", "🔮"); // Confetti missing -> listed fallback
             M(IconKind.Sparkle, R, null, "✧", "💫");
-            M(IconKind.Heart, F, Heart, "💗", "💖", "💕", "💞", "🩷", "💜", "♥", "❤");
+            M(IconKind.Heart, F, Heart, "💗", "💖", "💕", "💞", "🩷", "💜", "♥", "❤", InviteSubscribedKey);
             M(IconKind.HatGraduation, R, null, "🎓");
 
             M(IconKind.Mail, R, null, FriendRequest);
