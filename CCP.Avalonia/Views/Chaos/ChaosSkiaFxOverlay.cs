@@ -47,6 +47,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static IFrameSource? FramesForTests;
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
         private static bool _refused;
+        /// <summary>Test isolation only: a headless test that reaches <see cref="Create"/> without
+        /// <see cref="SkipPlatformChecksForTests"/> (the ChaosRunHost prewarm, a BubbleOverlay burst) latches
+        /// <c>_refused</c> for the whole testhost, so every later test would get no window.</summary>
+        internal static void ResetForTests() => _refused = false;
 
         /// <summary>WPF HideGrace: the window stays up this long after the field empties, so the next pop
         /// reuses the presented surface instead of re-mapping a stage-wide window.</summary>
@@ -68,6 +72,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             OnFx(w => w.Fx.EmitRipple(w.Local(centerPx), radiusPx / w._scale, lifeMs, strong));
 
         public static void ArmCursorGlow() => OnFx(w => w.Fx.ArmCursor());
+
+        /// <summary>WPF run-start prewarm: realize the idle surface without drawing or starting frames.</summary>
+        public static void EnsureCreated() => OnFx(_ => { });
 
         public static void DisarmCursorGlow() => OnUi(() => Active?.Fx.DisarmCursor());
 
