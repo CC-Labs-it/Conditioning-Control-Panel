@@ -234,6 +234,20 @@
           <Border Grid.Column="1" Theme="{StaticResource PlayZoneRule}"/>
         </Grid>
         <UniformGrid Columns="2">
+          <Grid x:Name="SlotWebApp">
+            <Border Theme="{StaticResource PlayCard}">
+              <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
+                  <Border x:Name="PlayWebAppHeroPlate" CornerRadius="16,16,0,0"/>
+                </Border>
+                <TextBlock Grid.Row="1" x:Name="TxtNavWebAppLabel" Text="{loc:Str nav_door_webapp}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
+                <TextBlock Grid.Row="2" x:Name="TxtPlayWebAppBlurb" Text="{loc:Str play_card_webapp_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
+                <Button Grid.Row="3" x:Name="BtnPlayWebApp" Cursor="Hand" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13" Click="BtnPlayWebApp_Click">
+                  <TextBlock Text="{loc:Str btn_open}"/>
+                </Button>
+              </Grid>
+            </Border>
+          </Grid>
           <Grid x:Name="SlotBreakoutDemo">
             <Border Theme="{StaticResource PlayCard}">
               <Grid>
