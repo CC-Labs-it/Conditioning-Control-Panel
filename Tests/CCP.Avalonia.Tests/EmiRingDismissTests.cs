@@ -166,9 +166,8 @@ public sealed class EmiRingDismissTests
         }
     }
 
-    // WPF Services/EmiDesk/EmiTargets.cs:295-296: both locked doors ask for Lab.
+    // WPF Services/EmiDesk/EmiTargets.cs:296: the locked intake door asks for Lab (dtrh is a Premium daily door since sync11-dtrh-basic).
     [Theory]
-    [InlineData("dtrh")]
     [InlineData("intake")]
     public void LockedDoorAsksForLabWithoutScoring(string id)
     {

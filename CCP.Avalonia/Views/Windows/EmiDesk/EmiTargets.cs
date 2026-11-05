@@ -64,11 +64,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 open);
         }
 
-        // WPF Services/EmiDesk/EmiTargets.cs:179,182,204 and ShowGate:295-296.
+        // WPF Services/EmiDesk/EmiTargets.cs:182,204 and ShowGate:296 (dtrh is a Premium door below).
         private static (Func<bool> Available, Func<bool> Locked, Action Open)? Door(string id) => id switch
         {
-            "dtrh" => (Always, Views.Games.GameWindow.DtrhLocked,
-                () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.DtrhId)),
             "intake" => (Always, () => !App.IntakePass.CanStartIntake,
                 () => Views.Tabs.GradedIntakeTabView.OpenIntake(Shell, duckMain: true)),
             "justdrop" => (() => Services.JustDrop.JustDropService.DoorAvailable, Never, () => Nav("justdrop")),
@@ -88,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             "lockdown" => Premium(id, null, () => Nav("lockdown")),
             // WPF :215 opens the feed directly (Mw.OpenFypFeed), not the panel; the feed's gate demands premium.
             "fyp" => Premium(id, "fyp", () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.FypId)),
+            "dtrh" => Premium(id, "dtrh", () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.DtrhId)),
             "vault" => Free(() => Nav("premium")),
             "companion" => Free(() => Nav("companion")),
             "progression" => Free(() => Nav("progression")),
@@ -128,13 +127,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (locked)
                 {
                     var name = Loc.Get("emi_desk_target_" + id);
-                    // WPF ShowGate: these two refusals are Lab prompts, never Premium.
-                    if (id is "dtrh" or "intake")
+                    // WPF ShowGate: the intake refusal is a Lab prompt, never Premium.
+                    if (id == "intake")
                     {
-                        TierGate.DemandLab(name, id == "dtrh" ? id : null);
+                        TierGate.DemandLab(name);
                         return;
                     }
-                    string? daily = id is "awareness" or "remote" or "takeover" ? id : null;
+                    string? daily = id is "awareness" or "remote" or "takeover" or "dtrh" ? id : null;
                     if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
                     return;
                 }
