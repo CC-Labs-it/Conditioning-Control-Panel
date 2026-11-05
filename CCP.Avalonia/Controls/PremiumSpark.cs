@@ -392,6 +392,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (_window != null) _window.PropertyChanged += OnWindowProperty;
             _visibilityWatch = EffectiveVisibility.Watch(this, UpdateParking);
             AmbientFxCanvas.Env.MotionGateChanged += OnGate;
+            Platform.AccountSeed.TierRaised += OnTierRaised;
             if (Platform.AccountSeed.Patreon is { } p) p.TierChanged += OnTierChanged;
             if (Platform.AccountSeed.SubscribeStar is { } s) s.TierChanged += OnTierChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
@@ -408,6 +409,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _window = null;
             _visibilityWatch?.Dispose(); _visibilityWatch = null;
             AmbientFxCanvas.Env.MotionGateChanged -= OnGate;
+            Platform.AccountSeed.TierRaised -= OnTierRaised;
             if (Platform.AccountSeed.Patreon is { } p) p.TierChanged -= OnTierChanged;
             if (Platform.AccountSeed.SubscribeStar is { } s) s.TierChanged -= OnTierChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
@@ -425,6 +427,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             if (e.Property == Window.WindowStateProperty) UpdateParking();
         }
+
+        private void OnTierRaised(int tier) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_attached) return;
+            Refresh();
+            Burst();
+        });
 
         private void OnGate() => Dispatcher.UIThread.Post(Refresh);
         private void OnTierChanged(object? sender, PatreonTier tier) => Dispatcher.UIThread.Post(Refresh);
