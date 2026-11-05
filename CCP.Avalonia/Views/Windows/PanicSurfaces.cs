@@ -5,6 +5,7 @@
 // window restore and the double-press exit ladder stay in the routes. Guarded by PanicSurfacesTests.
 
 using System;
+using Avalonia.Controls;
 using System.Collections.Generic;
 using ConditioningControlPanel.Services;
 
@@ -50,6 +51,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("quest-voice", _ => ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop()),
             new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
             // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
+            // WPF ConversationPage.xaml.cs:42 cancels on unload; keep the old lane's stricter explicit panic stop.
+            new("companion-conversation", sh => sh?.Named<Tabs.CompanionTabView>("CompanionTab")
+                ?.FindControl<Controls.Companion.V2.ConversationPage>("Conversation")?.StopForPanic()),
             new("ai-followups", _ => MainShellWindow.CancelPendingAi(), After: ["voice-capture", "first-show"]),
             // WPF MainWindow.xaml.cs:1732: standalone Lab minigames first; the engine stop never reaches them.
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
@@ -73,7 +77,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("settings-palette", _ => SettingsPaletteWindow.CloseIfOpen()),
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("keyword-triggers", _ => Platform.KeywordTriggerHead.StopAudio()),   // the clip only; the switch stays armed
-            new("haptics", _ => CoreHaptics.Service?.PanicStop()),
+            // The funscript first: its RenderTick writes positions through SetPositionAsync, which the
+            // 400 ms panic mute does not cover, and it would otherwise run until "engine" closes the video.
+            new("haptics", _ => { try { CoreHaptics.Service?.FunScript.OnVideoStopped(); } finally { CoreHaptics.Service?.PanicStop(); } }),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
             // WPF RunPanicStopTail StopEngine/StopAdHocEffects: pauses a running session; OnEngineStopped
@@ -88,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // (App.xaml.cs:1780 Mantra.Dispose), :1797 remote haptics, :2003 haptics PanicStop and :1822 Autonomy.CancelActivePulses
             // all precede StopEngine. WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does,
             // so the leash task parks before StopEngine and before its lock card closes.
+            new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
@@ -105,8 +112,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("lock-cards", _ => MainShellWindow.StopLockCards(), After: ["engine", "leash-task"]),
             new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
             new("discord-share-prompt", sh => sh?.CloseAchievementSharingForPanic()),
+            new("roster-personality", _ => Controls.Companion.WorkshopAccordion.CloseRosterMessagesForPanic()),
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
+            new("chaster-booked-pop", _ => Overlays.ChasterBookedPop.CloseAll()),
             // WPF Features/VideoFeatureControl.xaml.cs:533 error box; also close it on panic.
             new("video-test-error", _ => Features.VideoFeatureControl.CloseTestErrorsForPanic()),
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
