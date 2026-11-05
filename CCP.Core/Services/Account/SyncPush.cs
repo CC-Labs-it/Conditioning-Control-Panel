@@ -330,6 +330,10 @@ namespace ConditioningControlPanel.Services
             }, TaskScheduler.Default);
         }
 
+        /// <summary>A heartbeat reply's body, off the UI thread. It carries the server's effective_tier
+        /// (WPF ProfileSyncService hands the same body to EntitlementTierSync.Offer).</summary>
+        public Action<string>? HeartbeatBody;
+
         /// <summary>WPF StartHeartbeat: one now, then every 120 s.</summary>
         public void StartHeartbeat()
         {
@@ -351,7 +355,7 @@ namespace ConditioningControlPanel.Services
         {
             var s = CoreSettings.Current;
             if (!SignedIn(s)) return Task.FromResult(false);
-            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession());
+            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession(), HeartbeatBody);
         }
     }
 }
