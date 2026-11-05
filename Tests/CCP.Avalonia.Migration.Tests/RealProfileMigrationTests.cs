@@ -15,6 +15,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Haptics.Core;
 using ConditioningControlPanel.Avalonia.Platform;
 using System.Text;
 using Newtonsoft.Json;
@@ -432,12 +433,43 @@ public sealed class RealProfileMigrationTests
                 // user signs in again on Linux. Precisely: the tier, and only to 0.
                 if (allowMissingTokens && key == "PatreonTier" && now.Type == JTokenType.Integer && (int)now == 0)
                     expect("patreon-tier-cleared-without-tokens");
+                // Expected: the haptics schema seeds a row for every layer and event it knows on load, so
+                // a profile from an older release gains the newer rows on its first save. WPF 7.2.2 does the
+                // same (HapticSettingsV2.EnsureRows; the Race row dates from 2026-10-31, after this fixture).
+                else if (key == "Haptics" && OnlyNewHapticRows(value, now))
+                    expect("haptics-new-schema-rows");
+                // Expected: the first effective-tier reading is recorded at launch, exactly as WPF 7.2.2
+                // does (MainWindow.Patreon.cs TierOnNoticePass records the first reading and saves).
+                else if (key == "last_known_effective_tier" && value.Type == JTokenType.Null && now.Type == JTokenType.Integer)
+                    expect("first-tier-reading-recorded");
                 else yield return "value changed: " + key;
                 continue;
             }
             var fallback = property.ValueProvider!.GetValue(defaults);
             var defaultToken = fallback is null ? JValue.CreateNull() : JToken.FromObject(fallback);
             if (!JToken.DeepEquals(value, defaultToken)) yield return "key dropped with a non-default value: " + key;
+        }
+    }
+
+    /// <summary>True when the saved haptics block differs from the original only by v2 layer or event
+    /// rows the schema seeds for a key the original did not have, each holding exactly the seeded row.
+    /// Anything else (a changed value, a dropped row, a row with other numbers) is a failure.</summary>
+    private static bool OnlyNewHapticRows(JToken original, JToken saved)
+    {
+        if (original is not JObject was || saved.DeepClone() is not JObject now) return false;
+        if (was["v2"] is not JObject wasV2 || now["v2"] is not JObject nowV2) return false;
+        var fresh = new HapticSettingsV2();
+        StripSeededRows(wasV2["layers"], nowV2["layers"],
+            key => Enum.TryParse<HapticLayer>(key, out var layer) ? JToken.FromObject(fresh.Rule(layer)) : null);
+        StripSeededRows(wasV2["events"], nowV2["events"],
+            key => Enum.TryParse<HapticEventKind>(key, out var kind) ? JToken.FromObject(fresh.Rule(kind)) : null);
+        return JToken.DeepEquals(was, now);
+
+        static void StripSeededRows(JToken? wasRows, JToken? nowRows, Func<string, JToken?> seeded)
+        {
+            if (wasRows is not JObject before || nowRows is not JObject after) return;
+            foreach (var row in after.Properties().ToList())
+                if (before[row.Name] is null && seeded(row.Name) is { } seed && JToken.DeepEquals(seed, row.Value)) row.Remove();
         }
     }
 }
