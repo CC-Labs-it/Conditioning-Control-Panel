@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private Action? _refreshFloating;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
-        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture);
+        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture, FloatingVideoReveal? Reveal = null);
 
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private DateTime Now => Time.GetUtcNow().UtcDateTime;
         private DispatcherTimer? _graceTimer, _guard;
         private readonly Stopwatch _sinceShow = new();
+        private readonly Stopwatch _sinceReady = new();
 
         internal MandatoryVideoOverlay(Func<IMandatoryPlayback>? playbackFactory = null)
         {
@@ -165,9 +166,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
+            _sinceReady.Reset();
             _sinceFrame.Reset();
             PlayedSkew = 0;
             FirstFrameMs = -1;
+            _floatingOnScreen = false;
             _watchedMs = 0;
             _cutClock = CoreSettings.Current.VideoMaxDurationSeconds > 0 ? new VideoPlaybackClock() : null;
             _cutStartChosen = false;
@@ -187,6 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
             Floating = Floats(strict);
             _videoFadeSeconds = Floating ? Services.Safety.GentleVisuals.FadeSeconds : 0;
+            _revealAudioHeld = false;
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
@@ -236,12 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
                     // WPF player.js:915 and VideoService.FloatingInstances.cs:603:
                     // animate independently of decoded frames, then reveal the controls.
-                    var window = _surfaces[0].Window;
-                    _videoReveal = new Services.Video.VideoReveal(_videoFadeSeconds,
-                        tick => window.RequestAnimationFrame(_ => tick()),
-                        opacity => { foreach (var x in _surfaces) x.Picture.Opacity = opacity; },
-                        ShowVideoControls);
-                    _videoReveal.Start();
+                    RevealVideoSurfaces();
                 }
                 var fill = _surfaces.Any(x => x.Fill.IsVisible);
                 if (fill && _sink?.Bitmap is { } src && _fill != null)
@@ -284,6 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _media = new Media(vlc, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
+            _sinceReady.Restart();
             _guard = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
@@ -311,6 +311,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
         internal bool Floating { get; private set; }
+        private volatile bool _floatingOnScreen;   // read by the global keyboard hook
 
         /// <summary>WPF DecidePresentation: floating is for an ordinary video only - never a strict one,
         /// a Lockdown or a Chaos run (DtRH is n/a on this head).</summary>
@@ -443,13 +444,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
             WireChaosTimerStacking(w);
-            w.Show();
+            var reveal = floating ? new FloatingVideoReveal(w, HoldRevealAudio) : null;
             if (!floating)
             {
+                w.Show();
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture);
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal);
         }
 
         /// <summary>WPF ChaosModeService.cs:816-828 and VideoService.cs:5810-5822:
@@ -542,7 +544,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF VideoService.WantsGlobalEscape (:6361): a NON-strict clip is on screen, so a plain Esc
         /// from the global hook may reach it when its window lost focus (Platform/Win32Input.EscapeDoor).</summary>
-        internal bool WantsGlobalEscape => Scheduler.IsPlaying && _surfaces.Count > 0 && !_closing && !_strict;
+        internal bool OnScreen => !Floating || _floatingOnScreen;
+        internal bool WantsGlobalEscape => Scheduler.IsPlaying && _surfaces.Count > 0 && OnScreen && !_closing && !_strict;
 
         /// <summary>WPF TryEscapeFromGlobalKey (:6386), UI thread: the window handler's Esc, re-checked here
         /// because a focused window may already have taken the same keystroke.</summary>
@@ -564,21 +567,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             catch (Exception ex) { Log.Warning(ex, "VideoService: grace pause failed; panic proceeds"); return false; }
         }
 
+        internal GraceDecision EvaluateGraceRequest(bool playerExists, double since) =>
+            MandatoryVideoScheduler.EvaluateGrace(Scheduler.IsPlaying && playerExists && OnScreen,
+                _closing, _gracePaused, _graceConsumed, since);
+
         private bool GracePause(bool fromPanicKey)
         {
+            if (!OnScreen) return false;
             if (!ConditioningControlPanel.Services.Safety.PanicPolicy.AllowGracePause(fromPanicKey,
                     ConditioningControlPanel.Services.Safety.PanicPolicy.OverrideEnabled(CoreSettings.Current))) return false;
             var now = Now;
             var since = _lastGraceUtc == default ? double.MaxValue : (now - _lastGraceUtc).TotalMilliseconds;
-            var d = MandatoryVideoScheduler.EvaluateGrace(Scheduler.IsPlaying && _playback != null, _closing, _gracePaused, _graceConsumed, since);
+            var d = EvaluateGraceRequest(_playback != null, since);
             if (d == GraceDecision.ConsumedDedup) return true;
             if (d != GraceDecision.Pause) return false;
             SampleCutPlayback();
             _gracePaused = true;
             _lastGraceUtc = _gracePausedAt = now;
             _playback?.SetPause(true);
-            _sinceShow.Stop();
-            _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
+            PausePlaybackClocks();   // freezes the ready budget as well as the show and frame clocks
+
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
             SetCountdown(MandatoryVideoScheduler.GraceWindowSeconds);
             _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -602,6 +610,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var x in _surfaces) x.Countdown.Text = Loc.GetF("video_grace_auto_resume_in", left);
         }
 
+        internal void PausePlaybackClocks()
+        {
+            _sinceShow.Stop();
+            _sinceReady.Stop();
+            _sinceFrame.Stop();
+        }
+
+        internal void ResumePlaybackClocks()
+        {
+            _sinceShow.Start();
+            _sinceReady.Start();
+            if (FirstFrameMs >= 0) _sinceFrame.Start();
+        }
+
         internal void ResumeFromGrace(string reason)
         {
             if (!_gracePaused) return;
@@ -611,8 +633,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceTimer = null;
             foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; }
             PrimaryPaused = false; // WPF ResumeFromGrace -> PlayPrimary releases the paused player
-            _sinceShow.Start();
-            if (FirstFrameMs >= 0) _sinceFrame.Start();
+            ResumePlaybackClocks();
             FrameTs = Stopwatch.GetTimestamp();
             _cutClock?.ResetPosition();
             _playback?.SetPause(false);
@@ -626,6 +647,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_gracePaused || PrimaryPaused || _surfaces.Count == 0 || _playback == null || !Scheduler.IsPlaying) return;
             SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
+            // A playing clip with no frame is revealed at the budget, as WPF FloatingFirstFrame.
+            if (UpdateFloatingReveal(_sinceReady.Elapsed.TotalSeconds, _player?.IsPlaying == true)
+                    == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Skip) return;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
                 _playback.HasVideo, _playback.Length / 1000.0,
@@ -650,6 +674,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, Elapsed);
             Scheduler.End();
+        }
+
+        /// <summary>WPF FloatingFirstFrame then player.js:915: present the floating windows (a copied frame or the
+        /// playing budget), then the picture fades on its own clock and the controls follow it.</summary>
+        private void RevealVideoSurfaces()
+        {
+            foreach (var surface in _surfaces) surface.Reveal?.Present();
+            _floatingOnScreen = _surfaces.Count > 0;
+            if (_videoReveal != null || _surfaces.Count == 0) return;
+            var window = _surfaces[0].Window;
+            _videoReveal = new Services.Video.VideoReveal(_videoFadeSeconds,
+                tick => window.RequestAnimationFrame(_ => tick()),
+                opacity => { foreach (var x in _surfaces) x.Picture.Opacity = opacity; },
+                ShowVideoControls);
+            _videoReveal.Start();
+        }
+
+        internal ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict UpdateFloatingReveal(double readySeconds, bool playing)
+        {
+            var verdict = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Wait;
+            if (!Floating || OnScreen) return verdict;
+            verdict = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.DecideFirstFrame(readySeconds, FirstFrameMs >= 0, playing);
+            if (verdict == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Reveal)
+                RevealVideoSurfaces();
+            else if (verdict == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Skip)
+            {
+                Log.Warning("VideoService: floating clip skipped: playback never started after 4 s");
+                Scheduler.End();
+            }
+            return verdict;
         }
 
         private static void Place(Window w, global::Avalonia.Platform.Screen? screen)
@@ -1029,6 +1083,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            _floatingOnScreen = false;
             SampleCutPlayback();
             var watched = _cutClock?.PlayedMs;
             _closing = true;
@@ -1059,7 +1114,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
-                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; CloseGentleSurface(x.Window, Scheduler.SoftExit); }
+                foreach (var x in _surfaces)
+                {
+                    x.Video.Source = x.Fill.Source = null;
+                    x.Reveal?.Cancel();   // a window never presented stays hidden; its audio stays held
+                    CloseGentleSurface(x.Window, Scheduler.SoftExit);
+                }
                 _surfaces.Clear();
                 _sink?.Free();
                 _sink = null;

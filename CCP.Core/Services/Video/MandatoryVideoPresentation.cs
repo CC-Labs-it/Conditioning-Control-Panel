@@ -32,6 +32,14 @@ namespace ConditioningControlPanel.Services.Video
         /// One trigger opens ONE window; this is only the limit.</summary>
         public const int MaxWindows = 4;
 
+        public enum FirstFrameVerdict { Wait, Reveal, Skip }
+
+        /// <summary>WPF FloatingFirstFrame: reveal a playing clip at the four-second budget even
+        /// without a frame; skip only a clip that never started playing.</summary>
+        public static FirstFrameVerdict DecideFirstFrame(double readySeconds, bool frameSeen, bool playing) =>
+            frameSeen ? FirstFrameVerdict.Reveal : readySeconds < 4 ? FirstFrameVerdict.Wait :
+            playing ? FirstFrameVerdict.Reveal : FirstFrameVerdict.Skip;
+
         public const int MinSizePercent = 15, MaxSizePercent = 60, DefaultSizePercent = 33;
         public const int MinSpeedPercent = 10, MaxSpeedPercent = 100, DefaultSpeedPercent = 35;
 
