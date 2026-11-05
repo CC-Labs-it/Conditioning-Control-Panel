@@ -21,16 +21,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// (TriggerSubliminalWithHapticPattern :563).</para>
     /// <para>A new whisper cuts the previous one, and <see cref="StopAll"/> (Stop, tray Stop everything)
     /// silences one mid-play and drops a card still waiting behind it (WPF StopAudio + the
-    /// ShowSubliminalVisuals arrival guard). Whisper playback reserves the bark voice floor.</para>
-    /// <para>Mandatory video defers Reset until teardown.</para>
+    /// ShowSubliminalVisuals arrival guard). Whisper playback reserves the bark voice floor.
+    /// Video Freeze defers Reset until playback ends.</para>
     /// </summary>
     internal static class SubliminalWhisperShow
     {
         internal static WhisperActivity Activity = new();
         private static readonly Random Rng = new();
         private static Action? _stopWhisper;
-        private static int _deferredResetPending;
-        private static int _resetGen;
+        private static bool _deferredReset;
         private static int _gen;   // bumped by StopAll: anything scheduled before it is stale
 
         /// <summary>WPF <c>_audioPath</c>: BaseDirectory/Resources/sub_audio.</summary>
@@ -42,25 +41,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static string SubAudioDir => Path.Combine(AppContext.BaseDirectory, "Resources", "sub_audio");
 
         /// <summary>Test seams: the card, and the clock every delay runs on.</summary>
+        internal static Action<string> DrawNow = text => Present(text, null);
         internal static Action<string> Draw = text => DrawWithOpacity(text, null);
+        /// <summary>The AI command's card (WPF FlashSubliminalCustom) may carry its own opacity.</summary>
         internal static Action<string, int?> DrawWithOpacity = (text, opacity) =>
         {
-            var generation = Volatile.Read(ref _gen);
+            var gen = Volatile.Read(ref _gen);
             Dispatcher.UIThread.Post(() =>
             {
-                if (generation != Volatile.Read(ref _gen)) return;
-                if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
-                    SubliminalOverlay.Show(host, text, opacity);
+                // WPF SubliminalService.cs:612-620: Stop retires arrivals waiting on the UI queue too.
+                if (Volatile.Read(ref _gen) != gen) return;
+                if (opacity == null) DrawNow(text);
+                else Present(text, opacity);
             });
         };
+
+        private static void Present(string text, int? opacity)
+        {
+            if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
+                SubliminalOverlay.Show(host, text, opacity);
+        }
+
         internal static Action<int, Action> After = (ms, then) => Task.Delay(ms).ContinueWith(_ => then());
         internal static Func<double> Roll = () => { lock (Rng) return Rng.NextDouble(); };
 
         /// <summary>WPF TearDownSurfaces: silence the whisper and retire every pending card/Reset.</summary>
         internal static void StopAll()
         {
+            _deferredReset = false;
             Interlocked.Increment(ref _gen);
-            Interlocked.Exchange(ref _deferredResetPending, 0);
             Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();
         }
 
@@ -101,14 +110,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF TriggerBambiFreeze(deferReset: false): the mod's Freeze text, even with subliminals off.</summary>
         public static void Freeze() => Freeze(false);
-
-        internal static void Freeze(bool deferReset)
+        internal static void FreezeForVideo() => Freeze(true);
+        private static void Freeze(bool deferReset)
         {
             var text = App.Mods?.GetFreezeTriggerText() ?? "Freeze";
             if (Whisper(text))
             {
-                if (deferReset) Interlocked.Exchange(ref _deferredResetPending, 1);
-                else ScheduleReset();
+                if (deferReset) _deferredReset = true; else ScheduleReset();
                 Log.Information("Bambi Freeze triggered with audio");
             }
             else
@@ -118,14 +126,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
-        internal static void DeferredReset(bool completed = true)
+        // WPF SubliminalService.cs:388-406; cancellation also retires pending audio/cards.
+        internal static void FinishVideoFreeze(bool cancelled)
         {
-            var resetGen = Volatile.Read(ref _resetGen);
-            if (!completed) Interlocked.Increment(ref _resetGen);
-            if (Interlocked.Exchange(ref _deferredResetPending, 0) == 1 && completed) ScheduleReset(true, resetGen);
+            if (cancelled) { StopAll(); return; }
+            if (!_deferredReset) return;
+            _deferredReset = false;
+            ScheduleReset(deferred: true);
         }
 
-        private static void ScheduleReset(bool deferred = false, int resetGen = 0)
+        private static void ScheduleReset(bool deferred = false)
         {
             if (!SubliminalWhisper.ResetFollows(Roll()))
             {
@@ -136,7 +146,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             lock (Rng) delay = deferred ? SubliminalWhisper.DeferredResetDelayMs(Rng) : SubliminalWhisper.ResetDelayMs(Rng);
             Later(delay, () =>
             {
-                if (deferred && Volatile.Read(ref _resetGen) != resetGen) return;
                 var text = App.Mods?.GetResetTriggerText() ?? "Reset";
                 if (!Whisper(text)) HapticThenDraw(text);
                 Log.Debug("Bambi Reset triggered after Bambi Freeze");

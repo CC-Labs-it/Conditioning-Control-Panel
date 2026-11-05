@@ -101,7 +101,8 @@ public class FlashGapTests
         var s = CoreSettings.Current;
         s.FlashClickable = s.FlashStayUntilPopped = true;
         var ticks = new List<Action>();
-        FlashOverlay.RunLater = (a, _) => ticks.Add(a);
+        var after = FlashOverlay.After;
+        FlashOverlay.After = (a, _) => ticks.Add(a);
         int shown = 0;
         FlashOverlay.Present = (_, _, _) => { shown++; return true; };
         CoreProgression.AddXPProvider = (_, _) => { };
@@ -130,6 +131,7 @@ public class FlashGapTests
         finally
         {
             FlashOverlay.Active.RemoveAll(e => e.Window == placeholder);
+            FlashOverlay.After = after;
             placeholder.Close();
             host.Close();
         }

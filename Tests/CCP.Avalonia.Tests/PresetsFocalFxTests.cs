@@ -203,9 +203,14 @@ public sealed class PresetsFocalFxTests
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
+            // Reproduce a loaded runner: wall time must not choose the frame being asserted.
+            System.Threading.Thread.Sleep(600); Settle(animation);
+            animation.Step(0); animation.Step(100);
             Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
+            animation.Step(1000);
+            Assert.All(rack.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
         }
         finally
         {

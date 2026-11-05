@@ -234,6 +234,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch { if (!owned) { media?.Dispose(); input.Dispose(); } throw; }
         }
 
+        // Preparation never starts playback. Brain Drain arbitrates Play with Stop under its gate,
+        // as WPF Services/LockCard/BrainDrainService.cs:377-388 does after decoder creation.
+        internal interface IPreparedVoice : MindWipePlayer.IVoice { bool Play(); }
+        internal IPreparedVoice? PrepareVoice(string path, Action onEnded) =>
+            string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : NewVoice(path, onEnded);
+
         private Voice NewVoice(string path, Action onEnded)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
@@ -243,7 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static Action<MediaPlayer> RouteVoice = ApplyPreferredDevice;
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : IPreparedVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>

@@ -75,6 +75,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static long _statRects;
 
         /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
+        internal static void RaiseAll(Action<Window> raise)
+        {
+            foreach (var window in Windows) if (window.IsVisible) raise(window);
+        }
+
         public static bool IsRunning => _running && !_chaosOpenedWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
 
@@ -234,6 +239,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         private static Action<AmbientBubble>? _chaosPopped;
+        private static int _hoverScreen = -1;
+        private static double _hoverX, _hoverY;
+
+        internal static void SetHover(int screen, double x, double y)
+        {
+            _hoverScreen = screen;
+            _hoverX = x;
+            _hoverY = y;
+        }
+
+        internal static void ClearHover(int screen)
+        {
+            if (_hoverScreen == screen) _hoverScreen = -1;
+        }
+
+        // WPF BubbleService.IsCursorOverLiveChaosBubble: scan all armed lives, even behind a treat.
+        internal static bool CursorOnLive
+        {
+            get
+            {
+                if (_chaosPopped == null || _hoverScreen < 0) return false;
+                foreach (var b in Field.Bubbles)
+                    if (b.Screen == _hoverScreen && b.Spec is { IsLive: true } && !b.Popping
+                        && b.Contains(_hoverX, _hoverY)) return true;
+                return false;
+            }
+        }
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
@@ -299,6 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.HoldChaos = false;
             ChaosRipples.Clear();
+            _hoverScreen = -1;
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
@@ -330,6 +363,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void PopChaos(AmbientBubble b)
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
+            // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
+            if (b.Spec.IsTease || b.Spec.IsBrittle) return;
+            if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
+            if (b.IsLiveThreat)
+            {
+                if (!b.Snap()) return;
+                AnchorPop(b);
+                // WPF BubbleService.cs:4686-4688: a live snap is a bigger release, in SnapColor at 1.3,
+                // burst before the defuse callback can clear the field.
+                var snapScale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * snapScale, b.CenterY * snapScale),
+                    Color.FromRgb(0x7A, 0xE0, 0xFF), 1.3);
+                Field.ChaosDefused?.Invoke(b);
+                RequestFrame();
+                return;
+            }
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
@@ -341,6 +390,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
             _chaosPopped?.Invoke(b);
             RequestFrame();
+        }
+
+        /// <summary>WPF BubbleService.cs:325-340: paid DVD sweep, darters/freeze exempt.
+        /// Use the existing pop/snap callbacks so payloads, score and lessons still run.</summary>
+        internal static void PopChaosInRect(Rect rect)
+        {
+            if (Field.HoldChaos) return;
+            for (int i = Field.Bubbles.Count - 1; i >= 0; i--)
+            {
+                if (i >= Field.Bubbles.Count) continue;
+                var b = Field.Bubbles[i];
+                // WPF BubbleService.cs:4652-4660: instant sweeps cannot end Tease or Brittle.
+                if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
+                if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
+                if (b.IsLiveThreat)
+                {
+                    if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
+                }
+                else PopChaos(b);
+            }
         }
 
         private static string ChaosCuePath(string name) =>
@@ -494,7 +563,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Content = new Layer(this);
             FrameCallback = now => { if (BubbleOverlay.IsFrameOwner(this)) BubbleOverlay.OnFrame(now); };
             PointerPressed += OnPressed;
-            PointerMoved += (_, e) => OnHold(e, true);
+            PointerEntered += (_, e) => UpdateHover(e);
+            PointerMoved += (_, e) => { UpdateHover(e); OnHold(e, true); };
+            PointerExited += (_, _) => BubbleOverlay.ClearHover(Index);
             PointerReleased += (_, e) => OnHold(e, false);
             // WPF polls the physical button (BubbleService.cs:545): a release the window never saw
             // (alt-tab, compositor grab) still breaks the hold.
@@ -515,6 +586,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b == null) return;
             BubbleOverlay.Press(b, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
             e.Handled = true;
+        }
+
+        private void UpdateHover(PointerEventArgs e)
+        {
+            var p = e.GetPosition(this);
+            BubbleOverlay.SetHover(Index, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
         }
 
         /// <summary>The press is captured, so the hold's moves and release land here (WPF TickChannel reads them).</summary>

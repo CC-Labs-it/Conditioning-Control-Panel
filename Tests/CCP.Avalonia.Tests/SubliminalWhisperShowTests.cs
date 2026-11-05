@@ -76,41 +76,41 @@ public sealed class SubliminalWhisperShowTests
     {
         With(audible: true, roll: 0.5, run =>
         {
-            SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.FreezeForVideo();
             Assert.DoesNotContain(run.Timers, t => t.Ms >= 1000);
-            SubliminalWhisperShow.DeferredReset();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
             Assert.Single(run.Timers, t => t.Ms >= 1000 && t.Ms < 2000);
-            SubliminalWhisperShow.DeferredReset();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
             Assert.Single(run.Timers, t => t.Ms >= 1000);
             var reset = run.Timers.Find(t => t.Ms >= 1000);
             reset.Then();
             Assert.Equal("play reset.mp3 whisper", run.Log[^1]);
-            SubliminalWhisperShow.Freeze(true);
-            SubliminalWhisperShow.DeferredReset(false);
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: true);
             run.Timers.Clear();
-            SubliminalWhisperShow.DeferredReset();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
             Assert.Empty(run.Timers);
-            SubliminalWhisperShow.Freeze(true);
-            SubliminalWhisperShow.DeferredReset();
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
             var cancelled = run.Timers.FindLast(t => t.Ms >= 1000);
-            SubliminalWhisperShow.DeferredReset(false);
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: true);
             var count = run.Log.Count; cancelled.Then(); Assert.Equal(count, run.Log.Count);
-            SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.FreezeForVideo();
             SubliminalWhisperShow.StopAll();
             run.Timers.Clear();
-            SubliminalWhisperShow.DeferredReset();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
             Assert.Empty(run.Timers);
         });
         With(audible: false, roll: 0.5, run =>
         {
-            SubliminalWhisperShow.Freeze(true);
-            SubliminalWhisperShow.DeferredReset();
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
             Assert.Empty(run.Timers);
         });
         With(audible: true, roll: 0.95, run =>
         {
-            SubliminalWhisperShow.Freeze(true);
-            SubliminalWhisperShow.DeferredReset();
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
             Assert.DoesNotContain(run.Timers, t => t.Ms >= 1000);
         });
     }
@@ -131,6 +131,29 @@ public sealed class SubliminalWhisperShowTests
         Fire(run, 50); Fire(run, 250);
         Assert.Equal("card Reset", run.Log[^1]);
         Assert.Empty(run.Timers);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VideoFreezeDefersResetAndCancellationDropsPendingEffects(bool cancel) => With(true, 0.9, run =>
+    {
+        MandatoryVideoOverlay.Instance.Freeze();
+        Assert.Empty(run.Timers.FindAll(t => t.Ms >= 1000));
+        MandatoryVideoOverlay.Instance.FinishFreeze(cancel);
+        if (cancel)
+        {
+            foreach (var timer in run.Timers.ToArray()) timer.Then();
+            foreach (var timer in run.Timers.ToArray()) timer.Then();
+            Assert.DoesNotContain("card Freeze", run.Log);
+            Assert.Empty(run.Timers.FindAll(t => t.Ms >= 1000));
+        }
+        else
+        {
+            var reset = Assert.Single(run.Timers.FindAll(t => t.Ms >= 1000));
+            Assert.InRange(reset.Ms, 1000, 1999); Fire(run, reset.Ms);
+            Assert.Contains("play reset.mp3 whisper", run.Log);
+        }
     });
 
     [Fact]

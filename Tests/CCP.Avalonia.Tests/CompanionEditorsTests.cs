@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -190,6 +190,8 @@ public sealed class CompanionEditorsTests
     {
         Setup();
         var service = new SettingsService();
+        service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
+        service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         CoreSettings.ServiceProvider = () => service;
         // Freeze entrance motion so the pointer probes a stationary target.
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
@@ -206,9 +208,11 @@ public sealed class CompanionEditorsTests
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             shell.CompleteTabTransition();
-            Assert.Null(shell.EnteringTab);
             Dispatcher.UIThread.RunJobs();
+            // Headless mouse input renders again before delivery; finish the slide/fade before
+            // BringIntoView and TranslatePoint so the captured position stays valid.
             shell.CompleteTabTransition();
+            Assert.Null(shell.EnteringTab); // do not sample a moving pointer target
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
@@ -233,7 +237,7 @@ public sealed class CompanionEditorsTests
                 await Until(() => shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Any());
                 var editor = shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Single();
                 Click(editor.FindControl<Button>("BtnCancel")!);
-                await Until(() => !editor.IsVisible);
+                await Until(() => !editor.IsVisible && shell.IsEnabled);
             }
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = null; }

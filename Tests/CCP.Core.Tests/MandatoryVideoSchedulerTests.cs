@@ -17,7 +17,11 @@ public sealed class MandatoryVideoSchedulerTests
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
         public bool BubbleCountActive { get; set; }
-        public int Closes;
+        public int Closes, Freezes;
+        public bool ThrowOnFreeze;
+        public readonly List<bool> FreezeEnds = new();
+        public void Freeze() { Freezes++; if (ThrowOnFreeze) throw new InvalidOperationException("Freeze probe"); }
+        public void FinishFreeze(bool cancelled) { FreezeEnds.Add(cancelled); if (ThrowOnFreeze) throw new InvalidOperationException("Reset probe"); }
         public double Watched;
         public bool ThrowOnClose;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
@@ -36,35 +40,31 @@ public sealed class MandatoryVideoSchedulerTests
     [InlineData(false, true, true)]
     public void Video_freeze_has_800ms_head_start_and_reset_on_cleanup(bool attention, bool forced, bool throwing)
     {
-        var freeze = CoreSubliminal.VideoFreezeProvider;
-        var reset = CoreSubliminal.DeferredResetProvider;
+        var surface = CoreSubliminal.BambiFreezeProvider;
         var wasAttention = CoreSettings.Current.AttentionChecksEnabled;
-        var calls = new List<string>();
         var clock = new FakeClock();
-        var host = new Host();
+        var host = new Host { ThrowOnFreeze = throwing };
         var video = new MandatoryVideoScheduler(host, clock, () => Clips);
-        CoreSubliminal.VideoFreezeProvider = () => { calls.Add("freeze"); if (throwing) throw new InvalidOperationException("Freeze probe"); };
-        CoreSubliminal.DeferredResetProvider = completed => { calls.Add(completed ? "reset" : "cancel"); if (throwing) throw new InvalidOperationException("Reset probe"); };
+        CoreSubliminal.BambiFreezeProvider = () => { };   // a head with a Freeze surface
         CoreSettings.Current.AttentionChecksEnabled = attention;
         try
         {
             Assert.True(video.Trigger());
-            Assert.Equal(attention ? 0 : 1, calls.Count);
+            Assert.Equal(attention ? 0 : 1, host.Freezes);
             clock.Advance(MandatoryVideoScheduler.PreRoll);
             Assert.Equal(attention ? 1 : 0, host.Shown.Count);
-            clock.Advance(TimeSpan.FromMilliseconds(800));
+            clock.Advance(MandatoryVideoScheduler.FreezeLead);
             Assert.Single(host.Shown);
             if (forced) video.ForceCleanup(); else video.End();
-            Assert.Equal(forced ? "cancel" : "reset", calls[^1]);
             video.End();
-            Assert.Equal(forced ? 0 : 1, calls.Count(x => x == "reset"));
+            // The Freeze ends once: its Reset after a natural end, a cancel after a forced one.
+            Assert.Equal(attention ? Array.Empty<bool>() : new[] { forced }, host.FreezeEnds);
         }
         finally
         {
             video.ForceCleanup();
             CoreSettings.Current.AttentionChecksEnabled = wasAttention;
-            CoreSubliminal.VideoFreezeProvider = freeze;
-            CoreSubliminal.DeferredResetProvider = reset;
+            CoreSubliminal.BambiFreezeProvider = surface;
         }
     }
 
@@ -221,6 +221,200 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Fact]
+    public void CascadeHoldsAndCoalescesEarnedClipThenReplaysWithOriginalStrictness() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        Assert.True(v.Trigger(true, Clips[0]));
+        Assert.True(v.Trigger(false, Clips[1]));
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        rain = false;
+        clock.Advance(TimeSpan.FromMilliseconds(250));
+        Assert.True(v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal((Clips[0], true), Assert.Single(host.Shown));
+        v.Stop();
+    });
+
+    [Fact]
+    public void ScheduledCascadeReplayRechecksFeatureEnabled() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        v.Start();
+        v.Trigger(scheduled: true);
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        v.Stop();
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CascadeDeadlineDoesNotExtendAndCleanupCancelsPendingReplay(bool forceCleanup) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(89));
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(1));
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        rain = true;
+        v.Trigger();
+        if (forceCleanup) v.ForceCleanup(); else v.Stop();
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        v.Trigger(); // a stopped deferred request cannot latch future earned triggers
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void EmptyLibraryAfterCascadeRearmsSchedule() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true; var probes = 0;
+        IReadOnlyList<string> clips = Array.Empty<string>();
+        var v = new MandatoryVideoScheduler(host, clock, () => clips) { CascadeIsRaining = () => { probes++; return rain; } };
+        v.Start();
+        for (var second = 0; second < 722 && probes == 0; second++)
+            clock.Advance(TimeSpan.FromSeconds(1)); // wait for the real scheduler tick
+        Assert.True(probes > 0);
+        rain = false;
+        clock.Advance(TimeSpan.FromMilliseconds(250)); // no library yet, must re-arm
+        clips = Clips;
+        clock.Advance(TimeSpan.FromSeconds(722));
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void StartupUsesConfiguredFileOrRandomAndEmptyLibraryStaysSilent() => With(6, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var oldPath = s.StartupVideoPath;
+        var oldAttention = s.AttentionChecksEnabled; s.AttentionChecksEnabled = true;
+        var file = System.IO.Path.GetTempFileName();
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            s.StartupVideoPath = file;
+            Assert.True(v.TriggerStartup());
+            clock.Advance(TimeSpan.FromSeconds(1.3));
+            Assert.Equal((file, true), Assert.Single(host.Shown));
+            v.ForceCleanup();
+            System.IO.File.Delete(file);
+            Assert.True(v.TriggerStartup());
+            clock.Advance(TimeSpan.FromSeconds(1.3));
+            Assert.Contains(host.Shown[1].Path, Clips);
+            v.ForceCleanup();
+            var empty = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>());
+            int warnings = 0;
+            empty.NoVideos += () => warnings++;
+            Assert.False(empty.TriggerStartup());
+            Assert.Equal(0, warnings);
+            Assert.False(empty.Trigger()); // a later user action still gets its explanation
+            Assert.Equal(1, warnings);
+        }
+        finally { v.ForceCleanup(); s.StartupVideoPath = oldPath; s.AttentionChecksEnabled = oldAttention; System.IO.File.Delete(file); }
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    // No (true, false) row: the attention retry picks its clip before the hold (WPF VideoService.cs:5964),
+    // so a held verdict replay never reads the library again; only its probe can throw.
+    [InlineData(true, true)]
+    public void ThrowingCascadeReplayRecoversScheduleAndReleasesVerdictHold(bool verdictReplay, bool throwInProbe) => With(6, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var rain = !verdictReplay; var fail = false; var probes = 0; var resumed = 0;
+        void MaybeThrow(bool probe)
+        {
+            if (!fail || probe != throwInProbe) return;
+            fail = false;
+            throw new System.UnauthorizedAccessException("unreadable video folder or failed cascade probe");
+        }
+        var v = new MandatoryVideoScheduler(host, clock, () => { MaybeThrow(false); return new[] { Clips[0] }; })
+        {
+            CascadeIsRaining = () => { probes++; MaybeThrow(true); return rain; }
+        };
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        var pause = CoreBubbles.PauseAction; var resume = CoreBubbles.ResumeAction;
+        CoreSettings.Current.AttentionChecksEnabled = true;
+        CoreBubbles.PauseAction = () => { };
+        CoreBubbles.ResumeAction = () => resumed++;
+        try
+        {
+            v.Start();
+            if (verdictReplay)
+            {
+                v.Trigger(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+                v.NoteSpawn(); v.Ended(); // failed attention check, with its bubbles still held
+                rain = true;
+                host.Then!();
+            }
+            else
+            {
+                // Consume the actual scheduled tick so an older timer cannot mask a lost re-arm.
+                for (var second = 0; second < 722 && probes == 0; second++) clock.Advance(TimeSpan.FromSeconds(1));
+                Assert.True(probes > 0);
+            }
+            Assert.Equal(0, resumed);
+            fail = true;
+            rain = false;
+            Assert.Null(Record.Exception(() => clock.Advance(TimeSpan.FromMilliseconds(250))));
+            Assert.False(v.IsPlaying);
+            Assert.False(v.IsStrict);
+            Assert.Equal(verdictReplay ? 1 : 0, resumed);
+            clock.Advance(TimeSpan.FromSeconds(722));
+            Assert.Equal(verdictReplay ? 2 : 1, host.Shown.Count);
+        }
+        finally
+        {
+            v.Stop();
+            CoreSettings.Current.AttentionChecksEnabled = attention;
+            CoreBubbles.PauseAction = pause; CoreBubbles.ResumeAction = resume;
+        }
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void StartupFreezeTimingAndCancellation(bool attention, bool cancel) => With(6, false, () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AttentionChecksEnabled, s.StartupVideoPath);
+        s.AttentionChecksEnabled = attention; s.StartupVideoPath = null;
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            Assert.True(v.TriggerStartup());
+            Assert.Equal(attention ? 0 : 1, host.Freezes);
+            clock.Advance(TimeSpan.FromMilliseconds(cancel ? 400 : (attention ? 0 : 800) + 1299));
+            Assert.Empty(host.Shown);
+            if (cancel) v.ForceCleanup();
+            else { clock.Advance(TimeSpan.FromMilliseconds(1)); Assert.Single(host.Shown); v.End(); }
+            clock.Advance(TimeSpan.FromMinutes(1));
+            Assert.Equal(cancel ? 0 : 1, host.Shown.Count);
+            Assert.Equal(attention ? Array.Empty<bool>() : new[] { cancel }, host.FreezeEnds);
+        }
+        finally { v.ForceCleanup(); (s.AttentionChecksEnabled, s.StartupVideoPath) = saved; }
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();
@@ -270,37 +464,37 @@ public sealed class MandatoryVideoSchedulerTests
     public void Freeze_leads_the_video_and_its_reset_waits_for_the_end() => With(20, false, () =>
     {
         var s = CoreSettings.Current;
-        var (att, fp, rp) = (s.AttentionChecksEnabled, CoreSubliminal.VideoFreezeProvider, CoreSubliminal.DeferredResetProvider);
-        var log = new List<string>();
-        CoreSubliminal.VideoFreezeProvider = () => log.Add("freeze");
-        CoreSubliminal.DeferredResetProvider = completed => { if (completed) log.Add("reset"); };
+        var (att, surface) = (s.AttentionChecksEnabled, CoreSubliminal.BambiFreezeProvider);
+        CoreSubliminal.BambiFreezeProvider = () => { };   // a head with a Freeze surface
         s.AttentionChecksEnabled = false;
         try
         {
             var clock = new FakeClock(); var host = new Host();
             var v = new MandatoryVideoScheduler(host, clock, () => Clips);
             Assert.True(v.Trigger());
-            Assert.Equal(new[] { "freeze" }, log);
+            Assert.Equal(1, host.Freezes);
             clock.Advance(MandatoryVideoScheduler.PreRoll);
             Assert.Empty(host.Shown);                        // the Freeze's 800 ms come first
             clock.Advance(MandatoryVideoScheduler.FreezeLead);
             Assert.Single(host.Shown);
             v.End();
-            Assert.Equal(new[] { "freeze", "reset" }, log);  // natural end / Esc: the held Reset
+            Assert.Equal(new[] { false }, host.FreezeEnds);  // natural end / Esc: the held Reset
             Assert.True(v.Trigger());
-            v.ForceCleanup();                                // panic: no Reset (WPF ForceCleanup)
-            Assert.Equal(new[] { "freeze", "reset", "freeze" }, log);
+            v.ForceCleanup();                                // panic: the Reset is cancelled
+            Assert.Equal(2, host.Freezes);
+            Assert.Equal(new[] { false, true }, host.FreezeEnds);
             s.AttentionChecksEnabled = true;                 // targets to click: no Freeze, plain pre-roll
             Assert.True(v.Trigger());
             clock.Advance(MandatoryVideoScheduler.PreRoll);
             Assert.Equal(2, host.Shown.Count);
-            Assert.Equal(3, log.Count);
+            Assert.Equal(2, host.Freezes);
             v.ForceCleanup();
+            Assert.Equal(2, host.FreezeEnds.Count);
         }
         finally
         {
             s.AttentionChecksEnabled = att;
-            (CoreSubliminal.VideoFreezeProvider, CoreSubliminal.DeferredResetProvider) = (fp, rp);
+            CoreSubliminal.BambiFreezeProvider = surface;
         }
     });
 
@@ -477,6 +671,40 @@ public sealed class MandatoryVideoSchedulerTests
             hold.Deactivate();
             LockdownService.Current = priorLockdown;
             CoreProgression.TrackAttentionCheckProvider = priorTracker;
+        }
+    });
+
+    [Theory]   // review P2: a verdict replay held behind GIF rain must still run AfterEnd when dropped
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_verdict_replay_dropped_behind_the_cascade_resumes_bubbles(bool forceCleanup) => With(60, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var a = s.AttentionChecksEnabled;
+        s.AttentionChecksEnabled = true;
+        var bubbles = new List<string>();
+        CoreBubbles.PauseAction = () => bubbles.Add("pause");
+        CoreBubbles.ResumeAction = () => bubbles.Add("resume");
+        try
+        {
+            var clock = new FakeClock(); var host = new Host(); var rain = false;
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+            v.Start();
+            v.Trigger(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            v.NoteSpawn(); v.Ended();                        // missed: verdict message up
+            rain = true;
+            host.Then!();                                    // the replay is held behind the rain
+            Assert.DoesNotContain("resume", bubbles);
+            if (forceCleanup) v.ForceCleanup();
+            else clock.Advance(TimeSpan.FromSeconds(91));   // the 90 s hold expires
+            Assert.Equal("resume", bubbles[^1]);
+            Assert.Single(host.Shown);
+            v.Stop();
+        }
+        finally
+        {
+            s.AttentionChecksEnabled = a;
+            CoreBubbles.PauseAction = CoreBubbles.ResumeAction = null;
         }
     });
 

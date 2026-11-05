@@ -24,6 +24,22 @@ namespace CCP.Avalonia.Tests;
 public sealed class BubbleCountGameTests
 {
     [Fact]
+    public Task PlaybackWaitsForLoadedLayout() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var clip = Path.GetTempFileName();
+        var w = new BubbleCountWindow(clip, BubbleCountScheduler.Difficulty.Medium, false, _ => { });
+        try
+        {
+            w.Opened += (_, _) => { Assert.True(w.IsVisible); Assert.Null(BubbleCountWindow.Sink); };
+            w.Show(); Assert.True(w.IsVisible); Assert.Null(BubbleCountWindow.Sink);
+        }
+        finally { BubbleCountWindow.ForceCloseAll(); File.Delete(clip); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public async Task PlaysAnswersAndHonoursStrictAndPanic()
     {
         var dir = Directory.CreateTempSubdirectory("ccp-bcount-").FullName;
