@@ -374,14 +374,17 @@ namespace ConditioningControlPanel
         /// <param name="panicRuns">False when the panic itself will not run (switched off, or
         /// Lockdown holding the keys): nothing else takes the task's lock card down then, so a lines
         /// task closes its own card here. A card the leash did not open is left alone.</param>
-        private void LeashOnPanicPress(bool panicRuns)
+        /// <param name="fromKey">True only for a physical panic-key press, which may be the Escape that
+        /// closes the Ctrl+K palette. The voice panic ("red", Lockdown or not), the blink stop and the
+        /// Stop buttons never stand aside for the palette.</param>
+        private void LeashOnPanicPress(bool panicRuns, bool fromKey = false)
         {
             var running = _leashRunner?.IsRunning == true;
             var gateUp = !panicRuns && _leashGate?.Visibility == Visibility.Visible;
             if (!running && LeashPunishWindow.Current == null && !gateUp) return;
-            // An Escape aimed at closing the Ctrl+K palette is not a panic (the ladder's rung 2).
-            if (SettingsPaletteWindow.IsOpen && !LockCardWindow.IsAnyOpen()
-                && string.Equals(App.Settings?.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)) return;
+            // An Escape KEY aimed at closing the Ctrl+K palette is not a panic (the ladder's rung 2).
+            if (LeashUiRules.PaletteTakesPanicPress(fromKey, SettingsPaletteWindow.IsOpen, LockCardWindow.IsAnyOpen(),
+                    App.Settings?.Current?.PanicKey)) return;
             App.Logger?.Information("Leash: panic press stops the running task (kept pending, gate back in {M} min, panic runs={Runs})",
                 LeashUiRules.PanicSnooze.TotalMinutes, panicRuns);
             _leashSnoozeUntilUtc = DateTime.UtcNow + LeashUiRules.PanicSnooze;
@@ -413,7 +416,7 @@ namespace ConditioningControlPanel
             VideoDiag.Log("PANIC", "panic key while leashed with the panic off - leash safety only");
             Dispatcher.BeginInvoke(() =>
             {
-                try { LeashOnPanicPress(panicRuns: false); }
+                try { LeashOnPanicPress(panicRuns: false, fromKey: true); }
                 catch (Exception ex) { App.Logger?.Warning("Leash: panic-off stop failed: {E}", ex.Message); }
             });
             return true;
