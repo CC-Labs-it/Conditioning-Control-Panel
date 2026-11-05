@@ -24,6 +24,9 @@ public partial class SparkleWallet : UserControl
     private bool _dismissedByWalletPress;
     private bool _dismissedByHelpPress;
     public event EventHandler? VisitRequested;
+    /// <summary>The pill itself was pressed: the 7.2 Prize Counter opens (B3 decisions section 7).
+    /// With no listener the pill falls back to the Back Room invite it showed before.</summary>
+    public event EventHandler? CounterRequested;
 
     public SparkleWallet()
     {
@@ -50,6 +53,7 @@ public partial class SparkleWallet : UserControl
         {
             // StaysOpen=false closes on mouse-down outside the popup, before this Click arrives.
             if (_dismissedByWalletPress) { _dismissedByWalletPress = false; return; }
+            if (CounterRequested is { } counter) { ClosePopup(); counter(this, EventArgs.Empty); return; }
             RefreshText(); HelpPopup.IsOpen = false; InvitePopup.IsOpen = !InvitePopup.IsOpen;
         };
         InvitePopup.Closed += (_, _) =>
