@@ -132,4 +132,113 @@ public sealed class PremiumCelebrationTests
         Assert.Null(Celebration(opened, TierCelebration.KeyT2));
         Assert.DoesNotContain(TierCelebration.KeyT2, CoreSettings.Current.SeenFeatureIntros);
     });
+    [Fact]
+    public void ServerRiseOpensImmediatelyEvenDuringLaunchQuiet() => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.UnifiedId = "live-rise-idle";
+        s.AuthToken = "test-token";
+        s.PatreonTier = 0;
+        s.SeenFeatureIntros.Add(TierCelebration.LegacyKey);
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        grant(true, false);
+        AccountSeed.ApplyTierReading(1, "test");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(opened, w => w is FeatureIntroPopup);
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "intro:" + TierCelebration.KeyT1);
+    });
+
+    [Fact]
+    public void ServerRiseWhileBusyFilesOneCard() => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.UnifiedId = "live-rise-busy";
+        s.AuthToken = "test-token";
+        s.PatreonTier = 0;
+        grant(true, false);
+        var old = CoreSession.IsSessionRunningProvider;
+        try
+        {
+            CoreSession.IsSessionRunningProvider = () => true;
+            AccountSeed.ApplyTierReading(1, "test");
+            AccountSeed.ApplyTierReading(1, "test");
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(opened, w => w is FeatureIntroPopup);
+            Assert.Single(StartupLadder.Inbox.Items.Where(i => i.Key == "intro:" + TierCelebration.KeyT1));
+        }
+        finally { CoreSession.IsSessionRunningProvider = old; }
+    });
+
+    [Fact]
+    public void RenewedGraceRefreshesProviderWithoutLiveRiseCelebration() => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.UnifiedId = "renewed-grace";
+        s.AuthToken = "test-token";
+        s.PatreonTier = 1;
+        s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(-1);
+        s.InviteGrantUntil = null;
+        s.SeenFeatureIntros.Add(TierCelebration.LegacyKey);
+        var previous = CoreAccount.HasPremiumAccessProvider;
+        CoreAccount.HasPremiumAccessProvider = () => s.PatreonPremiumValidUntil is DateTime until && until > DateTime.UtcNow;
+        var notifications = 0;
+        EventHandler<PatreonTier> changed = (_, _) => notifications++;
+        AccountSeed.Patreon!.TierChanged += changed;
+        try
+        {
+            Assert.False(CoreAccount.HasPremiumAccess);
+            AccountSeed.ApplyTierReading(1, "test");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(CoreAccount.HasPremiumAccess);
+            Assert.Equal(1, notifications);
+            Assert.DoesNotContain(opened, w => w is FeatureIntroPopup);
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "intro:" + TierCelebration.KeyT1);
+        }
+        finally
+        {
+            AccountSeed.Patreon!.TierChanged -= changed;
+            CoreAccount.HasPremiumAccessProvider = previous;
+        }
+    });
+
+    [Fact]
+    public void MinimizedRiseUsesPresenterInsteadOfForcingInbox() => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.UnifiedId = "minimized-rise";
+        s.AuthToken = "test-token";
+        s.PatreonTier = 0;
+        s.InviteGrantUntil = null;
+        shell.WindowState = WindowState.Minimized;
+        Assert.Equal(WindowState.Minimized, shell.WindowState);
+        Assert.False(StartupLadder.IsQuiet);
+        grant(true, false);
+        AccountSeed.ApplyTierReading(1, "test");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(opened, w => w is FeatureIntroPopup);
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "intro:" + TierCelebration.KeyT1);
+    });
+
+    [Fact]
+    public void RiseQueuedBeforeCloseDoesNotOfferACard() => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.UnifiedId = "closed-rise";
+        s.AuthToken = "test-token";
+        s.PatreonTier = 0;
+        s.InviteGrantUntil = null;
+        grant(true, false);
+        var old = CoreSession.IsSessionRunningProvider;
+        try
+        {
+            CoreSession.IsSessionRunningProvider = () => true;
+            AccountSeed.ApplyTierReading(1, "test");
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(opened, w => w is FeatureIntroPopup);
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "intro:" + TierCelebration.KeyT1);
+        }
+        finally { CoreSession.IsSessionRunningProvider = old; }
+    });
+
 }
