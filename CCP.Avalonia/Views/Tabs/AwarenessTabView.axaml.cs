@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
+    /// ponytail: ScreenOcr, highlight windows, other response actions remain
     /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
@@ -148,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 UpdateStatusIndicator(masterOn);
                 RefreshAwarenessPresetCards();
+                RefreshAwarenessSeenAppChips();
             }
             catch (Exception ex)
             {
@@ -328,9 +329,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerAppScope");
             }
 
-            // ponytail: WPF also rebuilds the "recently focused" chips from
-            // KeywordTriggerService.GetRecentForegroundApps(). That ring is fed by a foreground-
-            // window poll (Win32) and lives with the service, so the chip row stays empty here.
+            RefreshAwarenessSeenAppChips();
+        }
+
+        // WPF MainWindow.Awareness.cs:575-637. Names come only from the running keyboard source.
+        internal void RefreshAwarenessSeenAppChips()
+        {
+            AwarenessSeenAppsPanel.Children.Clear();
+            var listed = CoreSettings.Current.KeywordTriggerApps;
+            foreach (var app in Platform.KeywordTriggerHead.Engine.GetRecentForegroundApps()
+                .Where(a => !AwarenessAppScopeRules.MatchesAppList(listed, a)))
+            {
+                var chip = new Button
+                {
+                    Content = new TextBlock { Text = "+ " + app }, Tag = app, FontSize = 10,
+                    Padding = new Thickness(7, 3), Margin = new Thickness(0, 0, 5, 5),
+                    Cursor = new Cursor(StandardCursorType.Hand), Foreground = Brushes.White,
+                    Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
+                    BorderBrush = SwatchIdle, BorderThickness = new Thickness(1),
+                };
+                ToolTip.SetTip(chip, ConditioningControlPanel.Localization.Loc.GetF("awareness_add_app_tip", app));
+                chip.Click += (_, _) =>
+                {
+                    var apps = new System.Collections.Generic.List<string>(CoreSettings.Current.KeywordTriggerApps ?? new());
+                    if (!AwarenessAppScopeRules.MatchesAppList(apps, app)) apps.Add(app);
+                    CoreSettings.Current.KeywordTriggerApps = apps;
+                    CoreSettings.Save();
+                    // WPF MainWindow.Awareness.cs:637 refreshes only app-scope controls.
+                    TxtAwarenessAppList.Text = string.Join(", ", apps);
+                    RefreshAwarenessSeenAppChips();
+                };
+                AwarenessSeenAppsPanel.Children.Add(chip);
+            }
+            TxtAwarenessSeenAppsLabel.IsVisible = AwarenessSeenAppsPanel.Children.Count > 0;
         }
 
         private void TxtAwarenessAppList_LostFocus(object? sender, RoutedEventArgs e) => CommitAppList();
@@ -354,6 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 settings.KeywordTriggerApps = parsed;
                 CoreSettings.Save();
                 TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                RefreshAwarenessSeenAppChips();
                 Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
                     parsed.Count, settings.KeywordTriggerAppScope);
             }
