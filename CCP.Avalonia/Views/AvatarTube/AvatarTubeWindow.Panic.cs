@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>Stops the clip PlaySpeechAudio last started (WPF StopSpokenAudio's handle). Never null.</summary>
         private Action _stopSpoken = static () => { };
 
-        /// <summary>WPF ApplyVoiceMute: stop the current voice clip without cancelling the mic turn.</summary>
+        /// <summary>WPF AvatarTube/AvatarTubeWindow.Speech.cs:1911 StopVoiceLineAudio: mute cuts the clip without hiding the text bubble.</summary>
         internal void StopVoiceLineAudio() => RunOnAvatar(() =>
         {
             try { _stopSpoken(); } catch { }

@@ -9,6 +9,7 @@ using Avalonia.Headless;
 using ConditioningControlPanel;
 using Xunit;
 using PanicAftermath = ConditioningControlPanel.Services.Safety.PanicAftermath;
+using static ConditioningControlPanel.Services.Safety.PanicAftermath;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -79,6 +80,22 @@ public class TestIsolationTests
             return System.Threading.Tasks.Task.CompletedTask;
         });
     }
+
+    [Fact]
+    public void EveryTestStartsWithProductionFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+        Assert.Contains("Inter", global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+        var text = new global::Avalonia.Controls.TextBlock
+        {
+            Text = "[ eyes closed ]",
+            FontFamily = new global::Avalonia.Media.FontFamily("Consolas, Courier New"),
+            FontWeight = global::Avalonia.Media.FontWeight.Bold
+        };
+        text.Measure(new global::Avalonia.Size(400, 100));
+        Assert.True(text.DesiredSize.Width > 0);
+        Assert.True(text.DesiredSize.Height > 0);
+    });
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
@@ -167,6 +184,7 @@ public class TestIsolationTests
         var hadFile = File.Exists(settingsFile);
         var before = hadFile ? File.ReadAllText(settingsFile) : null;
         var user = CoreAccount.UnifiedUserId;
+        var panic = (PanicCount, HoldsEngineRestart, TriggersSilenced());
         var provider = CoreSettings.ServiceProvider;
         var notifications = AvApp.Notifications;
         var chat = CoreSettings.Current.AiChatEnabled;
@@ -174,6 +192,7 @@ public class TestIsolationTests
         var snapshot = ProcessStateSnapshot.Take();
         CoreAccount.UnifiedUserId = "leaked-user";
         AvApp.Notifications = new();
+        ArmQuiet();
         CoreSettings.Current.AiChatEnabled = !chat;
         CoreSettings.ServiceProvider = () => null;
         File.WriteAllText(settingsFile, "{\"leaked\":true}");
@@ -182,6 +201,7 @@ public class TestIsolationTests
         leaked.Save();   // armed, as a test that ends inside the debounce leaves it
         snapshot.Restore();
 
+        Assert.Equal(panic, (PanicCount, HoldsEngineRestart, TriggersSilenced()));
         Assert.Equal(user, CoreAccount.UnifiedUserId);
         Assert.Same(provider, CoreSettings.ServiceProvider);
         Assert.Same(notifications, AvApp.Notifications);
@@ -191,6 +211,51 @@ public class TestIsolationTests
         Assert.False(File.Exists(stray));
         Assert.False(leaked.HasPendingSave);
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void SeenAppMethodsRestoreTheirInputsBeforeTheAssemblyHookRuns(int method) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            // Call the test bodies directly: the assembly hook cannot hide missing local cleanup.
+            var snapshot = ProcessStateSnapshot.Take();
+            try
+            {
+                var service = new ConditioningControlPanel.Services.SettingsService();
+                CoreSettings.ServiceProvider = () => service;
+                CoreEntitlement.HasPremiumProvider = () => false;
+                var provider = CoreSettings.ServiceProvider;
+                var premium = CoreEntitlement.HasPremiumProvider;
+                var settings = service.Current;
+                settings.KeywordTriggersEnabled = false;
+                settings.KeywordTriggerAppScope = ConditioningControlPanel.Models.AwarenessAppScope.ExceptListed;
+                settings.KeywordTriggerIgnoreOwnFocus = true;
+                settings.KeywordTriggerApps = new() { "cleanup_sentinel" };
+                var apps = settings.KeywordTriggerApps;
+                service.SaveImmediate();
+                var file = Path.Combine(TestUserDataProfile.Root, "settings.json");
+                var before = File.ReadAllBytes(file);
+                var tests = new AwarenessSeenAppsTests();
+                switch (method)
+                {
+                    case 0: tests.EverywhereSamplesEveryTwoSecondsWhileScopedInputAlwaysResolves(); break;
+                    case 1: tests.RunningSourceRemembersEightDistinctAppsBeforeScopeFilteringButNeverOwnOrUnknown(); break;
+                    case 2: tests.ChipAddsAndSavesWithoutRearmingKeyboardAndUsesLocalizedTooltip("en", "Add 'bg3_dx11' to the list"); break;
+                }
+                Assert.Same(provider, CoreSettings.ServiceProvider);
+                Assert.Same(premium, CoreEntitlement.HasPremiumProvider);
+                Assert.False(settings.KeywordTriggersEnabled); // JsonIgnore: JSON snapshots cannot restore this
+                Assert.Equal(ConditioningControlPanel.Models.AwarenessAppScope.ExceptListed, settings.KeywordTriggerAppScope);
+                Assert.True(settings.KeywordTriggerIgnoreOwnFocus);
+                Assert.Same(apps, settings.KeywordTriggerApps);
+                Assert.Equal(new[] { "cleanup_sentinel" }, settings.KeywordTriggerApps);
+                Assert.Equal(before, File.ReadAllBytes(file));
+                Assert.False(service.HasPendingSave);
+            }
+            finally { snapshot.Restore(); }
+        });
 
     /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore
     /// and became every later test's baseline (Welcomed, no age acceptance: an extra Age Verification

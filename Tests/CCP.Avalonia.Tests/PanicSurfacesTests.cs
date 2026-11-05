@@ -24,6 +24,11 @@ public sealed class PanicSurfacesTests
             // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
             // decides process-wide fonts, including the subliminal card closed by panic.
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -90,14 +95,18 @@ public sealed class PanicSurfacesTests
         "event-fx",
         "perfect-week-bonus",
         "brain-drain-audio",
+        "roster-personality",
         "intake",
         "leash-task",
         "deeper-tutorial",
+        "workshop-trigger-editor",
+        "awareness-companion",
         "tour",
         "games",
         "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
         "companion-conversation",
+        "mantra-chant",
         "ai-followups",
         "blink-trainer",
         "shell-hero",
@@ -123,7 +132,9 @@ public sealed class PanicSurfacesTests
         "intake",
         "friend-notices", "knock-cards",
         "leash-task",
+        "workshop-trigger-editor",
         "lock-cards",
+        "companion-audio",
         "mantra",
         "quiz",
         "panic-quiet",
@@ -144,6 +155,7 @@ public sealed class PanicSurfacesTests
         "lock-cards",
         "speak-cue",
         "companion-knowledge-editor",
+        "companion-community",
         "companion-transcript",
         "possession",
         "video-test-error",
@@ -152,6 +164,7 @@ public sealed class PanicSurfacesTests
         "audio-duck",
         "descent-fuse",
         "deeper-player-fullscreen",
+        "browser-media",
         "deeper-player",
         "deeper-editor-audio",
         "discord-share-prompt",
@@ -167,6 +180,7 @@ public sealed class PanicSurfacesTests
     /// carry an ordering constraint belong here; register anything else with one line in PanicSurfaces.</summary>
     private static readonly (string First, string Then, string Why)[] Before =
     {
+        ("companion-audio", "engine", "App.xaml.cs:1839 stops the Audio action before engine teardown"),
         // Avalonia decision (PanicSurfaces.cs "intake" comment): say-it loops end before the capture abort reads as silence.
         ("intake", "voice-capture", "intake loops end before the mic abort"),
         // decisions "Panic <-> mic": capture and the command chain end before anything can react to them.
@@ -186,6 +200,9 @@ public sealed class PanicSurfacesTests
         ("remote-haptics", "engine", "toys to zero before the engine stop"),
         // WPF :1811 Autonomy.CancelActivePulses before StopEngine (:1827).
         ("takeover", "engine", "takeover pulses cancelled before the engine stop"),
+        // WPF :2045-2046 "web video" / "Deeper player" in the media block, before the tail's StopEngine (b9368d963).
+        ("browser-media", "engine", "page media paused before the engine stop"),
+        ("deeper-player", "engine", "Deeper player paused before the engine stop"),
         // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
         ("engine", "pink-rush", "pink rush ends after the engine"),
         // WPF :1963-1967: session corner GIF (engine-owned) first, standalone slots LAST as the final word.
@@ -237,8 +254,10 @@ public sealed class PanicSurfacesTests
     {
         "ai-followups>engine",
         "blink-trainer>engine",
+        "browser-media>engine",
         "chaos>engine",
         "corner-gif>tube-speech",
+        "deeper-player>engine",
         "engine>audio-duck",
         "engine>corner-gif",
         "engine>lock-cards",

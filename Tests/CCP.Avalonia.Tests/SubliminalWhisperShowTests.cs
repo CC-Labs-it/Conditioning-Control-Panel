@@ -13,6 +13,40 @@ namespace CCP.Avalonia.Tests;
 /// no Reset. Uses the shipped neutral freeze/reset clips linked into the output (no mod layer here).</summary>
 public sealed class SubliminalWhisperShowTests
 {
+    // WPF SubliminalService :543 MarkWhisperAudio: the companion never talks over an audible whisper (from #3272).
+    [Fact]
+    public void AudibleWhisperStartHoldsTheBarkFloor() => With(true, 0.5, _ =>
+    {
+        var saved = (ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine, CoreSettings.Current.AvatarEnabled);
+        try
+        {
+            CoreSettings.Current.AvatarEnabled = true;
+            var rule = new ConditioningControlPanel.Services.Bark.BarkRule
+            {
+                Id = "whisper-floor", Trigger = "AttentionCheckFail",
+                VariantPool = new() { new("look") },
+            };
+            var engine = new ConditioningControlPanel.Services.Bark.BarkEngine(() =>
+                new ConditioningControlPanel.Services.Bark.BarkRuleSet(new[] { rule })) { Speak = _ => { } };
+            engine.Start();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = engine;
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, _) =>
+            {
+                started?.Invoke(TimeSpan.FromSeconds(10));
+                return () => { };
+            };
+            SubliminalWhisperShow.Phrase("reset");
+            Assert.True(engine.IsWhisperAudioPlaying);
+            Assert.False(engine.Raise("AttentionCheckFail"));
+            Assert.True(engine.Raise("AttentionCheckFail", guaranteed: true));
+        }
+        finally
+        {
+            SubliminalWhisperShow.StopAll();
+            (ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine, CoreSettings.Current.AvatarEnabled) = saved;
+        }
+    });
+
     private sealed record Run(List<string> Log, List<(int Ms, Action Then)> Timers);
 
     private static void With(bool audible, double roll, Action<Run> body)
@@ -41,6 +75,26 @@ public sealed class SubliminalWhisperShowTests
             CoreSubliminal.BambiFreezeProvider = freeze;
             CoreAudio.PlayStoppableProvider = stoppable;
         }
+    }
+
+    // WPF SubliminalService.PlayTriggerAudio: voice only, no duplicate haptic/card/reset.
+    [Fact]
+    public void Tube_trigger_audio_uses_linked_clip_without_a_card()
+    {
+        With(audible: true, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.PlayTriggerAudio("freeze");
+            Assert.Equal(new[] { "duck 70", "play freeze.mp3 whisper" }, run.Log);
+            Fire(run, 500);
+            Assert.Empty(run.Timers); // fail-proof: routing through Whisper schedules the card
+            Assert.DoesNotContain(run.Log, l => l.StartsWith("card"));
+        });
+        With(audible: false, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.PlayTriggerAudio("freeze");
+            Assert.Empty(run.Log);
+            Assert.Empty(run.Timers);
+        });
     }
 
     private static void Fire(Run run, int ms)

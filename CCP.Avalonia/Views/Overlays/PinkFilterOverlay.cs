@@ -38,18 +38,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// OverlayService, #1180). MainShellWindow.Autonomy.cs sets and releases it.</summary>
         internal static bool PulseHold;
 
+        // WPF voice "go pink": a 40% floor, without dimming a stronger configured tint.
+        internal static double? VoiceOpacity { get; private set; }
+        internal static void SetVoiceHold(Visual host, bool on)
+        {
+            VoiceOpacity = on ? Math.Clamp(Math.Max(0.4, CoreSettings.Current.PinkFilterOpacity / 100.0), 0, 1) : null;
+            Refresh(host);
+        }
+        // WPF Session/SessionEngine.cs:799,814: a later session tick overwrites the
+        // sustained opacity, while its visibility hold remains owned by the voice action.
+        internal static bool ApplySessionOpacity(double? percent)
+        {
+            if (VoiceOpacity == null || percent == null) return false;
+            var next = Math.Clamp(percent.Value / 100.0, 0, 1);
+            var changed = VoiceOpacity != next;
+            VoiceOpacity = next;
+            return changed;
+        }
+        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+
         private static bool _refused;
         internal static bool SkipPlatformChecksForTests;
         internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
 
-        private static double PaintedOpacity
+        // The voice hold (WPF "go pink" 40% floor) is the steady level while it lasts; a Takeover pulse
+        // still interpolates from its captured endpoints.
+        internal static double PaintedOpacity
         {
             get
             {
                 var s = CoreSettings.Current;
-                var steady = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
+                var steady = VoiceOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
                 return Math.Clamp(_pulseWeight is { } k ? _pulseBase + (_pulsePeak - _pulseBase) * k : steady, 0, 1);
             }
         }
@@ -104,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.PinkFilterEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (VoiceOpacity == null && (!s.PinkFilterEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;

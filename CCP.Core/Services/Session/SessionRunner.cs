@@ -95,6 +95,7 @@ namespace ConditioningControlPanel.Services
         {
             SessionLog = sessionLog;
             CoreSession.IsSessionRunningProvider = () => IsRunning && CurrentSession != null;
+            CoreSession.IsSessionPausedProvider = () => IsPaused;
         }
 
         /// <summary>SessionEngine.RemainingTime.</summary>
@@ -272,6 +273,7 @@ namespace ConditioningControlPanel.Services
             CoreBouncingText.Stop();
             CoreBubbles.Stop(); // WPF SessionEngine.cs:521
             RemoteCommands.StopOverlays();   // WPF SessionEngine.cs:530: pause stops all overlays
+            CoreAudio.StopSound();   // WPF SessionEngine.cs:532, companion Audio action too
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             CoreEngine.StopBrainDrain?.Invoke();   // WPF SessionEngine.cs:529
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);

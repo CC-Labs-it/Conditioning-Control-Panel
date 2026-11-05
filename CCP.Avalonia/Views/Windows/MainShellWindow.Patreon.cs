@@ -13,10 +13,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // WPF MainWindow.Patreon.cs:1312. ponytail: UpdatePhraseCountDisplay skipped - the
-        // Companion tab's TxtPhraseCount needs CompanionPhraseService, still head-side.
-        internal void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => _ = new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+        // WPF MainWindow.Patreon.cs:1396-1406: refresh after the modal editor closes.
+        internal async void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            await new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+            foreach (var cell in this.GetLogicalDescendants().OfType<Controls.Companion.Runtime.WorkshopTriggersCell>())
+                cell.RefreshPhraseCount();
+        }
 
         /// <summary>WPF MainWindow.Patreon.cs RefreshEntitlementVeils. Called on every navigation, on
         /// sign-in/out (UpdateQuickLoginUI), on either provider's TierChanged and on the ? box's
@@ -53,8 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.Patreon.cs:92, over the shared Core flag pass. Skipped while the seam is
         /// unseeded: WPF never runs it before App.Patreon exists, and a head that cannot read the account
-        /// must not wipe a patron's settings. Keyword and window awareness reconcile below;
-        /// OCR, autonomy, mantra chant and the haptics mixer remain follow-ups here.</summary>
+        /// must not wipe a patron's settings. Keyword and window awareness reconcile below and the lapse
+        /// stops the mantra chant; OCR, autonomy and the haptics mixer remain follow-ups here.</summary>
         private bool _lapseUnsaved;   // cleared in memory, not yet written by an entitlement event
 
         private void EnforceEntitlementLapse(bool persist)
@@ -71,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _lapseUnsaved = false;
                 }
                 // WPF MainWindow.Patreon.cs:108 - the lapse stops the engine, not just the flag.
+                if (cleared.Contains("mantra-chant")) App.MantraChant.Stop(); // WPF MainWindow.Patreon.cs:196
                 if (cleared.Contains("awareness-mode")) App.WindowAwareness.Stop();
                 // WPF Patreon.cs:152 - the mirror case: entitlement resolving late re-arms what the
                 // settings (and consent) already ask for. Start() re-checks everything itself.

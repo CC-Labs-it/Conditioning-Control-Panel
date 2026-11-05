@@ -85,7 +85,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var connected = RemoteControllerConnected;
             UpdateStartButtonForRemoteControl(connected);
             if (connected) { ShowRemoteControlOverlay(); NotifyRemoteControllerJoined(); }
-            else HideRemoteControlOverlay();
+            else
+            {
+                HideRemoteControlOverlay();
+                // WPF RemoteControlService.cs:1189: opt-in disconnect stops an idle overlay service.
+                if (CoreSettings.Current.StopEffectsOnRemoteDisconnect && !CoreEngine.IsRunning)
+                {
+                    Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop();
+                }
+            }
         }
 
         /// <summary>WPF OnRemoteControllerIdleChanged (:818): orange "may be idle", else the grey default.</summary>
@@ -101,6 +109,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteSessionEnded (:832), shell half; the tab unticks itself.</summary>
         internal void OnRemoteSessionEnded()
         {
+            // WPF RemoteControlService.cs:1045: session cleanup leaves the wearer's engine running.
+            if (!CoreEngine.IsRunning) { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }
             HideRemoteControlOverlay();
             UpdateStartButtonForRemoteControl(false);
             Platform.FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Remote);   // WPF RemoteControlService.cs:410

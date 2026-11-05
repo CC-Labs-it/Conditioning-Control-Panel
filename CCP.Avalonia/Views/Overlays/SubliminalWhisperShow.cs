@@ -21,8 +21,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// (TriggerSubliminalWithHapticPattern :563).</para>
     /// <para>A new whisper cuts the previous one, and <see cref="StopAll"/> (Stop, tray Stop everything)
     /// silences one mid-play and drops a card still waiting behind it (WPF StopAudio + the
-    /// ShowSubliminalVisuals arrival guard). ponytail: no MarkWhisperAudio (no bark engine on this
-    /// head). Video Freeze defers Reset until playback ends.</para>
+    /// ShowSubliminalVisuals arrival guard). An audible whisper holds the bark floor for its length
+    /// (WPF SubliminalService :543 MarkWhisperAudio). Video Freeze defers Reset until playback ends.</para>
     /// </summary>
     internal static class SubliminalWhisperShow
     {
@@ -135,23 +135,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// there is no clip or whispers are muted: the caller then draws the card straight away.</summary>
         internal static bool Whisper(string text)
         {
-            var s = CoreSettings.Current;
-            var path = FindRecordedVoice(text);
-            if (path == null || !s.SubAudioAudible) return false;
-
             var entry = Volatile.Read(ref _gen);   // a Stop after this drops this whisper and its card
-            if (s.AudioDuckingEnabled) CoreAudio.Duck(s.DuckingLevel);
-            var gen = CoreAudio.DuckGeneration;
-            Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // WPF PlayWhisperAudio: StopAudio first
-            _stopWhisper = CoreAudio.PlayStoppable(path, SubliminalWhisper.Volume(s.MasterVolume, s.SubAudioVolume), "whisper",
-                onFinished: () => After(SubliminalWhisper.UnduckDelayMs, () => CoreAudio.Unduck(gen)));
-            if (Volatile.Read(ref _gen) != entry) Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // Stop raced the start
-            Log.Debug("Playing subliminal audio: {Path}", Path.GetFileName(path));
+            if (!PlayLinkedClip(text)) return false;
             Later(SubliminalWhisper.HapticLeadMs, () =>
             {
                 _ = CoreHaptics.Service?.TriggerSubliminalPatternAsync(text);
                 Later(SubliminalWhisper.VisualAfterHapticMs, () => Draw(text), entry);
             }, entry);
+            return true;
+        }
+
+        /// <summary>WPF SubliminalService.PlayTriggerAudio (:461): the tube's trigger mode voices its
+        /// word with the same ducked whisper, without a card or a haptic of its own.</summary>
+        internal static void PlayTriggerAudio(string trigger) => PlayLinkedClip(trigger);
+
+        /// <summary>Duck and play the phrase's linked clip; false when there is none or whispers are muted.</summary>
+        private static bool PlayLinkedClip(string text)
+        {
+            var s = CoreSettings.Current;
+            var path = FindRecordedVoice(text);
+            if (path == null || !s.SubAudioAudible) return false;
+
+            var entry = Volatile.Read(ref _gen);
+            if (s.AudioDuckingEnabled) CoreAudio.Duck(s.DuckingLevel);
+            var gen = CoreAudio.DuckGeneration;
+            Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // WPF PlayWhisperAudio: StopAudio first
+            _stopWhisper = CoreAudio.PlayStoppable(path, SubliminalWhisper.Volume(s.MasterVolume, s.SubAudioVolume), "whisper",
+                onStarted: duration => Platform.BarkHead.Engine?.MarkWhisperAudio(duration.TotalSeconds),
+                onFinished: () => After(SubliminalWhisper.UnduckDelayMs, () => CoreAudio.Unduck(gen)));
+            if (Volatile.Read(ref _gen) != entry) Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // Stop raced the start
+            Log.Debug("Playing subliminal audio: {Path}", Path.GetFileName(path));
             return true;
         }
 
