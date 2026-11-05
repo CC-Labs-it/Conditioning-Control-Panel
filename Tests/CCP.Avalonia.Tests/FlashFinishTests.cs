@@ -142,7 +142,7 @@ public sealed class FlashFinishTests
             w.MouseDown(new Point(50, 50), MouseButton.Left);
             Assert.Contains(FlashOverlay.Active, x => x.Window == w); // a draggable press grabs rather than pops
             Assert.Equal(radius, ((RectangleGeometry)image.Clip!).RadiusX);
-            Assert.Equal(new Rect(0, 0, ((Panel)image.Parent!).Width, ((Panel)image.Parent!).Height), ((RectangleGeometry)image.Clip!).Rect);
+            Assert.Equal(new Rect(0, 0, card.Width, card.Height), ((RectangleGeometry)image.Clip!).Rect);   // the grab sizes the clip to the card
             clock.Now += TimeSpan.TicksPerSecond / 10;
             w.MouseMove(new Point(100, 80));
             FlashOverlay.DriftTick();
