@@ -106,6 +106,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             else Dispatcher.UIThread.Post(act);
         }
 
+        /// <summary>The host window closed: forget it, or this static keeps the closed shell alive
+        /// (StartEngine refreshes the slots with the shell as host; ShellMemoryTests).</summary>
+        internal static void ReleaseHost(Visual host)
+        {
+            if (ReferenceEquals(_host, host)) _host = null;
+        }
+
         /// <summary>WPF SessionEngine.ShowCornerGif: replaces whatever the session slot shows.</summary>
         internal static void ShowSession(Visual host, CornerGifOverlaySetting setting)
         {

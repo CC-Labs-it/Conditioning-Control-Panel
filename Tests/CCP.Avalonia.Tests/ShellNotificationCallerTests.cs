@@ -36,10 +36,22 @@ public sealed class ShellNotificationCallerTests
     /// and flush into the first host attached; drain them into a throwaway host so this test sees only its own.</summary>
     private static StackPanel FreshToastHost()
     {
-        App.Notifications.AttachHost(new StackPanel());
+        var drain = new StackPanel();
+        App.Notifications.AttachHost(drain);
+        RetireToasts(drain);
         var host = new StackPanel();
         App.Notifications.AttachHost(host);
         return host;
+    }
+
+    /// <summary>A live toast's timer (18 s for the library warnings) roots its "Open media manager" action,
+    /// and that action roots the shell. Stop the timers when the test ends: a shell kept alive past its test
+    /// also keeps the next test's shell reachable through Avalonia's shared Grid scratch definitions
+    /// (ShellMemoryTests.ClosedShellsReleaseMemory failed whenever it ran after this class).</summary>
+    private static void RetireToasts(Panel host)
+    {
+        foreach (var toast in host.Children.OfType<Border>()) (toast.Tag as DispatcherTimer)?.Stop();
+        host.Children.Clear();
     }
 
     [Fact]
@@ -100,6 +112,7 @@ public sealed class ShellNotificationCallerTests
             }
             finally
             {
+                RetireToasts(host);
                 shell.Close();
                 CoreSettings.ServiceProvider = oldSettings;
                 CorePaths.EffectiveAssetsProvider = oldAssets;
@@ -157,6 +170,7 @@ public sealed class ShellNotificationCallerTests
             }
             finally
             {
+                RetireToasts(host);
                 shell.RequestExit();
                 shell.Close();
                 if (Directory.Exists(root)) Directory.Delete(root, true);
@@ -203,6 +217,7 @@ public sealed class ShellNotificationCallerTests
                 shell?.RequestExit();
                 shell?.Close();
                 Dispatcher.UIThread.RunJobs();
+                RetireToasts(host);
                 SettingsService.DisarmAllPendingSaves();
                 OsNotifications.Sink = oldSink;
                 CoreSettings.ServiceProvider = oldSettings;

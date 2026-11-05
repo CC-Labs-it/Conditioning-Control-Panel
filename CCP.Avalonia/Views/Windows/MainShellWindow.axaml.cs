@@ -172,6 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 StopEngineRamp();
                 StopLockdownPulse();
+                Overlays.CornerGifOverlay.ReleaseHost(this);   // StartEngine made this shell the corner GIF host
                 App.CatalogueLookup.ClearOpener(OpenCatalogueEnhancement);
                 if (Platform.X11PanicKey.PushToTalk == OnPushToTalkKey)
                     Platform.X11PanicKey.PushToTalk = null;
