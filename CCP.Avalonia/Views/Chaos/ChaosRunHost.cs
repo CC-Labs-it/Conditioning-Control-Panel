@@ -36,12 +36,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// collar pay first, and a detonation makes the loop unclean (no doubled tip, no silk_touch).
     /// The run-end lessons go through Core ChaosRunLessons.</para>
     ///
-    /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
+    /// <para>ponytail: still NOT here: darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
-    /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
-    /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
+    /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo
+    /// and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
@@ -169,10 +169,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
-                // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
                 IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
-                    .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
-                                 && v.PayloadKind != EffectBubblePayloadKind.BambiFreeze)).ToList();
+                    .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id)).ToList();
                 double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
                 double waveLeft = waveLen - (_state.ElapsedSec % waveLen);
                 double runLeft = _state.RunDurationSec - _state.ElapsedSec;
@@ -188,6 +186,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
                         enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
                         cfg.EffectIntensity, _state.BubbleScale, sideDrift);
+                    // WPF :1150: at most two freeze pickups, with the slot re-picked at the cap.
+                    if (spec.IsFreeze && BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsFreeze == true) >= ChaosTuning.FREEZE_MAX_ON_SCREEN)
+                        spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
+                            enabled.Where(id => id != "bambifreeze").ToList(), cfg.EffectIntensity, _state.BubbleScale, sideDrift);
                 }
                 _ordinarySpawns++;
                 ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
@@ -210,7 +212,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
-            EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
+            EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before the callback
+            if (spec.IsFreeze) // WPF OnFreezeCaught :2382
+            {
+                _state.Score += 140 * _state.TotalMult;
+                _state.Combo++;
+                _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
+                ChaosLessons.Tick("freeze_trigger");   // WPF OnFreezeCaught :2389
+                ActivateFreeze();
+                return;
+            }
             if (spec.IsPrism)
             {
                 FireScaledPayload(spec.Payload);
