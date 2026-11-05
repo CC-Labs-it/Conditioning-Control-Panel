@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Input.Raw;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -165,33 +165,14 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                // Headless helpers render between events. Keep this gesture's timestamps 10ms
-                // apart even when CI takes longer than the system double-click interval to render.
-                var impl = w.PlatformImpl!;
-                // Avalonia 12 hides these raw-input hooks in its reference assembly.
-                const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance
-                    | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
-                var inputProperty = impl.GetType().GetProperty("Input", flags)!;
-                var input = (Action<RawInputEventArgs>)inputProperty.GetValue(impl)!;
-                var timestampProperty = typeof(RawInputEventArgs).GetProperty("Timestamp", flags)!;
-                ulong? firstTimestamp = null;
-                ulong elapsed = 0;
-                inputProperty.SetValue(impl, new Action<RawInputEventArgs>(e =>
-                {
-                    firstTimestamp ??= (ulong)timestampProperty.GetValue(e)!;
-                    timestampProperty.SetValue(e, firstTimestamp.Value + elapsed);
-                    elapsed += 10;
-                    input(e);
-                }));
-                try
-                {
-                    for (var i = 0; i < 2; i++)
-                    {
-                        w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                        w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                    }
-                }
-                finally { inputProperty.SetValue(impl, input); }
+                w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
+                // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
+                var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;
+                hit.RaiseEvent(new PointerPressedEventArgs(hit, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), w, at, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 2));
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
