@@ -16,6 +16,8 @@ namespace ConditioningControlPanel.Services
         /// <see cref="MandatoryVideoScheduler.End"/> at the clip's end or on Esc, and
         /// <see cref="MandatoryVideoScheduler.ForceCleanup"/> on the in-window panic key.</summary>
         void Show(string path, bool strict);
+        /// <summary>Use the host's presentation rule before the pre-roll as well as at Show.</summary>
+        bool IsFloating(bool strict) => false;
         void Freeze() { }
         void FinishFreeze(bool cancelled) { }
         /// <summary>Close every video window; returns the seconds of the clip that were watched.</summary>
@@ -349,7 +351,8 @@ namespace ConditioningControlPanel.Services
                 try { _host.Freeze(); }
                 catch { ForceCleanup(); throw; }
             }
-            else CoreFlash.Stop();
+            // WPF b6ff63fbd: only full-screen playback clears flashes, including a Test press.
+            else if (!_host.IsFloating(IsStrict)) CoreFlash.Stop();
             var strict = IsStrict;
             Dispose(ref _preroll);
             ITimer? created = null;
@@ -360,13 +363,15 @@ namespace ConditioningControlPanel.Services
                 if (freezeBeforePreroll)
                 {
                     freezeBeforePreroll = false;
-                    CoreFlash.Stop();
+                    if (!_host.IsFloating(strict)) CoreFlash.Stop();   // PlayVideo's prologue (b6ff63fbd)
                     mine!.Change(PreRoll, Timeout.InfiniteTimeSpan);
                     return;
                 }
                 Dispose(ref _preroll);
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
+                // WPF StartVideoPlayback: presentation can change during the pre-roll.
+                if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
                 try { _host.Show(path, strict); }
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
                 LastVideoPath = path;

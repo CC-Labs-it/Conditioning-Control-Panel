@@ -35,6 +35,43 @@ namespace CCP.Avalonia.Tests;
 /// fake providers (in-memory secrets, no keyring, no server), Settings door, the card buttons.</summary>
 public sealed class AccountSettingsSectionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Signed_out_account_entries_open_sign_in(bool card) => Run((shell, section, s, _) =>
+    {
+        CoreAccount.IsLoggedInProvider = () => false;
+        if (card)
+            ClickTierCard(shell, section);
+        else
+            shell.FindControl<Button>("BtnAccountChip")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.Single(shell.OwnedWindows.OfType<LoginDialog>());
+        dialog.Close(false);
+    });
+
+    [Fact]
+    public void Signed_in_tier_card_is_information_only() => Run((shell, section, s, _) =>
+    {
+        CoreAccount.IsLoggedInProvider = () => true;
+        ClickTierCard(shell, section);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(shell.OwnedWindows.OfType<LoginDialog>());
+    });
+
+    private static void ClickTierCard(MainShellWindow shell, AccountSettingsSection section)
+    {
+        shell.OpenAppSettingsSection("account");
+        var card = section.FindControl<Border>("AccountTierCard")!;
+        card.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
+        shell.UpdateLayout();
+        var at = card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), shell)!.Value;
+        shell.MouseMove(at);
+        shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+        shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+    }
+
     private static void Run(Action<MainShellWindow, AccountSettingsSection, AppSettings, Dictionary<string, string?>> body) =>
         RunAsync((shell, section, s, secrets) => { body(shell, section, s, secrets); return Task.CompletedTask; }).GetAwaiter().GetResult();
 
