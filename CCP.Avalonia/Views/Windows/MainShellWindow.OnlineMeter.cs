@@ -47,6 +47,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshOnlineMeterPill();
         }
 
+        /// <summary>Entry for the spent hover card's help glyph once that card is ported.</summary>
+        internal void OpenOnlineHelp()
+        {
+            ShowTab("assets");
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Named<Tabs.AssetsTabView>("AssetsTab")?.PinOnlineHelp());
+        }
+
         internal void RefreshOnlineMeterPill()
         {
             try { PaintOnlineMeterPill(OnlineMeterHead.Now()); }

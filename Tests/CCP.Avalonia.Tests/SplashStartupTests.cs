@@ -12,6 +12,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
 
 namespace CCP.Avalonia.Tests;
 
@@ -33,6 +34,8 @@ public sealed class SplashStartupTests
     {
         Setup();
         var splash = SplashScreen.ShowOnOwnThread()!;
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        splash.Closed += (_, _) => closed.TrySetResult();
         var shell = new Window();
         var ran = new List<string>();
         try

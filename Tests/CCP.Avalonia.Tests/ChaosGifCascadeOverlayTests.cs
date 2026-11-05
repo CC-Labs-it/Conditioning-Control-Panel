@@ -13,8 +13,10 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
 
 namespace CCP.Avalonia.Tests;
 
@@ -53,6 +55,7 @@ public sealed class ChaosGifCascadeOverlayTests
             {
                 ChaosGifCascadeOverlay.CloseActive();
                 ChaosGifCascadeOverlay.Clock = clock;
+                CoreSettings.Current.MotionLevel = MotionLevel.Full;
                 Show(gif);                                   // headless: no X11 compositor -> refuse, no window
                 Assert.Null(ChaosGifCascadeOverlay.Active);
                 Assert.True(ChaosGifCascadeOverlay.Refused);
@@ -90,6 +93,11 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.True(w.Cascade.Fallers[0].Animated);   // a small gif inside the animated budget
 
                 var src = first.Source;
+                CoreSettings.Current.MotionLevel = MotionLevel.Off;
+                clock.Advance(0.1);
+                w.Frame();
+                Assert.Same(src, first.Source);
+                CoreSettings.Current.MotionLevel = MotionLevel.Full;
                 clock.Advance(0.6);                          // past the 598.8 ms spawn interval
                 w.Frame();
                 Assert.Equal(2, w.Surface.Children.Count);
@@ -456,6 +464,56 @@ public sealed class ChaosGifCascadeOverlayTests
             }
         });
     }
+
+    [Fact]
+    public Task AFailedAnimatedDecodeGivesItsSlotBack() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var broken = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gif");
+        File.WriteAllText(broken, "not a gif");
+        var oldSkip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+        var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
+        try
+        {
+            ChaosGifCascadeOverlay.CloseActive();
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+            ChaosGifCascadeOverlay.ManualFramesForTests = true;
+            Show(broken);
+            var w = ChaosGifCascadeOverlay.Active!;
+            Assert.Equal(1, w.Cascade.AnimatedAlive);
+            await Decoded();
+            Assert.Equal(0, w.Cascade.AnimatedAlive);
+            Assert.True(w.Cascade.CanAnimate(true, 1));
+        }
+        finally
+        {
+            ChaosGifCascadeOverlay.CloseActive();
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldSkip;
+            ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
+            File.Delete(broken);
+        }
+    });
+
+    [Fact]
+    public Task TestsRestoreOverridesBeforeTheNextTestRuns() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var motion = CoreSettings.Current.MotionLevel;
+        try
+        {
+            await AFailedAnimatedDecodeGivesItsSlotBack();
+            Assert.False(ChaosGifCascadeOverlay.SkipPlatformChecksForTests);
+            Assert.False(ChaosGifCascadeOverlay.ManualFramesForTests);
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            await RainsSpawnsAnimatesDrainsAndPanicClosesIt();
+            Assert.Equal(MotionLevel.Reduced, CoreSettings.Current.MotionLevel);
+            Assert.False(ChaosGifCascadeOverlay.SkipPlatformChecksForTests);
+            Assert.False(ChaosGifCascadeOverlay.ManualFramesForTests);
+        }
+        finally { CoreSettings.Current.MotionLevel = motion; }
+    });
 
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
         GifCascade.PayloadSpawnRatePerSec, GifCascade.PayloadDurationSec, GifCascade.PayloadGifSize,
