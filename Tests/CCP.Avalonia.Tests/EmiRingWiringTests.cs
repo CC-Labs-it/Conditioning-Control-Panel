@@ -40,6 +40,22 @@ public sealed class EmiRingWiringTests
     }
 
     [Fact]
+    public Task JustDropRingDoorFollowsTheLiveServerFlagWithoutAPremiumLock() => WithFreshState(() =>
+    {
+        var door = EmiTargets.Find("justdrop");
+        Assert.NotNull(door);
+        try
+        {
+            ConditioningControlPanel.Services.JustDrop.JustDropService.SetServerEnabledForTests(false);
+            Assert.False(door!.IsAvailable());
+            ConditioningControlPanel.Services.JustDrop.JustDropService.SetServerEnabledForTests(true);
+            Assert.True(door!.IsAvailable());
+            Assert.False(door.IsLocked());
+        }
+        finally { ConditioningControlPanel.Services.JustDrop.JustDropService.SetServerEnabledForTests(false); }
+    });
+
+    [Fact]
     public Task CatalogueHidesDoorsWithNoSurfaceAndComposesInTableOrder() => WithFreshState(() =>
     {
         var ids = EmiTargets.All.Select(t => t.Id).ToList();

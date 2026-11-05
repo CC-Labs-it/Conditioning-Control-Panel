@@ -75,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
             if (live != null)
@@ -85,7 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
                 return live;
             }
-            try { if (spec.Gate != null && !spec.Gate()) return null; }
+            try { if (spec.Id != JustDropId && spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             // WPF PieceByPieceHostService.cs:165-168: refocus is free; failed setup still counts.
             if (spec.Id == PbpId)
