@@ -1,9 +1,10 @@
 /* The pendulum's position is shared by its visible chain and swept collision. */
 import { S, BOOST, RESPAWN } from './state.js';
 import { clamp, wrap } from '../core/math.js';
-import { gateSweep, createKeepGates } from './keepGates.js';
+import { createKeepGates } from './keepGates.js';
 import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
 import { trapSwing } from '../track/trapArrangement.js';
+import { HAZARD_KART, roundReach, firstContact } from './hitShapes.js';
 export const KEEP_CHAIN = Object.freeze({ cycleS: 6.4, pivotM: 15.9, lengthM: 12, angleRad: .72, radiusM: 3.4, stallS: .45 });
 // Arranged swings hold both endpoints; legacy frames retain their four-beat swing.
 export function pendulumBeatPhase(row, cycleS, beat) {
@@ -58,10 +59,14 @@ export function createKeepChains(track, { chains = [] } = {}) {
       const a = local(previous, row.frame), b = local(st, row.frame);
       const pa = keepChainPhase(row, old.timeS, machineryBeatAt(track, old.timeS)), pb = keepChainPhase(row, timeS, machineryBeatAt(track, timeS));
       if (pa.safe || pb.safe) continue;
-      const t = gateSweep([a[0] - pa.x, a[1]], [b[0] - pb.x, b[1]], K.radiusM + .65, K.radiusM + .65);
-      if (t === null) continue;
-      const h = a[2] + (b[2] - a[2]) * t, y = pa.y + (pb.y - pa.y) * t;
-      if (h + 1.6 < y - K.radiusM || h > y + K.radiusM) continue;
+      // The weight is a ball: it reaches a kart only by its slice at kart height, never by a square around it.
+      const solid = f => {
+        const time = old.timeS + (timeS - old.timeS) * f, p = keepChainPhase(row, time, machineryBeatAt(track, time));
+        if (p.safe) return false;
+        const reach = roundReach(K.radiusM, p.y, a[2] + (b[2] - a[2]) * f);
+        return reach >= 0 && Math.hypot(a[0] + (b[0] - a[0]) * f - p.x, a[1] + (b[1] - a[1]) * f) <= reach + HAZARD_KART.radiusM;
+      };
+      if (firstContact(solid, Math.min(32, Math.max(2, Math.ceil((distance + (timeS - old.timeS) * 25) / .25)))) === null) continue;
       // A bounded hit slows the kart without pinning it underneath the swinging weight.
       for (let j = 0; j < 3; j++) st[S.velX + j] *= .22;
       st[S.engineV] *= .22; st[S.stalled] = Math.max(st[S.stalled], K.stallS);
