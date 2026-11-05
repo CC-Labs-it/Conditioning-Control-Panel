@@ -33,12 +33,13 @@ public sealed class CompanionEffectsTests
     [Fact]
     public void ActivitiesOfferOnlyWhatOpensHere()
     {
-        var (provider, signedIn, lab) = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider);
+        var (provider, signedIn, lab, premium) = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider);
         try
         {
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             CoreEntitlement.HasLabProvider = () => true;
+            CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is Basic (owner 2026-10-31); the race stays Prime
             CoreAccount.IsLoggedInProvider = () => true;
             var all = CompanionEffects.Activities();
             Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.race", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
@@ -63,7 +64,7 @@ public sealed class CompanionEffectsTests
         }
         finally
         {
-            (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (provider, signedIn, lab);
+            (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider) = (provider, signedIn, lab, premium);
         }
     }
 
