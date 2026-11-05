@@ -138,7 +138,7 @@ public sealed class PanicSurfacesTests
         "companion-audio",
         "mantra",
         "quiz",
-        "panic-quiet",
+        // Quiet is armed before this registry; PanicAftermathPortTests pins its single arm.
         "pink-rush",
         "possession",
         "programs-fx",

@@ -484,6 +484,8 @@ public sealed class LanguageSelectorTests
         // Versionless startup is separately exercised by FeatureIntroUpgradeTests.
         var version = typeof(App).Assembly.GetName().Version!; // the provider is seeded only by StartApp
         settings.Current.LastSeenVersion = $"{version.Major}.{version.Minor}.{version.Build}";
+        // Returning profile: first-run demo seeding legitimately saves this flag, as WPF does.
+        settings.Current.HasSeededDeeperDemos = true;
         // The Dashboard's launch cards spend their seen-flag (a real save) when they open, like WPF;
         // spent here so the no-startup-save assertion keeps measuring startup itself.
         settings.Current.SeenFeatureIntros.AddRange(new[] { "daily-free", "one-account" });

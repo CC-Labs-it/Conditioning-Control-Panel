@@ -107,4 +107,5 @@ public sealed class ContentHitTestTests
     private static bool Inside(Visual v, Point p, Visual root)
         => v.TranslatePoint(default, root) is { } tl && v.TranslatePoint(new Point(v.Bounds.Width, v.Bounds.Height), root) is { } br
            && new Rect(tl, br).Contains(p);
+
 }

@@ -123,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung == PanicPolicy.Rung.RunLadder && !gameOwnedTheScreen) Platform.BarkHead.Engine?.Raise("Panic");
             bool wasRunning = CoreEngine.IsRunning;
             if (wasRunning) App.Achievements?.TrackPanicPressed(now);
-            PanicSurfaces.StopAll("panic key", this);
+            PanicSurfaces.StopAll("panic key", this, aftermathArmed: true);   // armed above (WPF :1662), before any teardown
             NoteLocalPanicPause();   // WPF RunPanicStopTail :1898; remote/voice panic never marks.
             if (wasRunning) ShowFromTray();   // WPF: Show + Activate the main window after a running stop
 

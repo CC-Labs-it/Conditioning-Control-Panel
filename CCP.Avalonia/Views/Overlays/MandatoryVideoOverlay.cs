@@ -257,6 +257,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _media = new Media(vlc, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
+            // WPF VideoService.cs:3410: discover the companion script only after playback starts.
+            try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
+            catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
@@ -996,6 +999,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 PrimaryPaused = false;
+                // WPF VideoService.cs:7944: stop script output before native player teardown.
+                try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
+                catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
                 _attention = _gracePaused = false;
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;

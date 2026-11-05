@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
+            ["breakout"] = new("breakout", "launcher_game_breakout_title", "backroom/stations/breakout/play.html", BreakoutGate, "desktop=1"),
             [BreakoutDemoId] = new(BreakoutDemoId, "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
             // WPF FypHostService.cs:94 StartUrl, behind OpenFypFeed's premium gate (MainWindow.Lab.cs:246).
             [FypId] = new(FypId, "tab_fyp", "fyp/index.html", FypGate),
@@ -99,13 +100,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private static GameWindow? LaunchWindow(Game spec, bool gated = false)
         {
             GameWindow? live;
-            lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
+            lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase)
+                || ((spec.Id is "breakout" or "breakoutdemo") && w.IsBreakout));
             if (live != null)
             {
+                // WPF BreakoutHostService.LaunchFull gates even a focus of the live game.
+                if (spec.Id == "breakout" && !BreakoutGate()) return null;
                 live.Activate();
                 // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
                 if (live.Spec.Id == PbpId)
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
+                if (live.IsBreakout && live.Spec.Id != spec.Id)
+                {
+                    _ = live.SwitchBreakoutAsync(spec.Id);
+                    return null; // the existing run stays alive until the user answers
+                }
                 return live;
             }
             // JustDrop's door ran in Launch (before any refocus); the race gated before its refocus.
@@ -140,12 +149,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
-            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
+            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
             Closing += (_, _) => { _closing = true; CancelRaceFetch(); };
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
-            if (spec.Id == BreakoutDemoId)
+            if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
             {
                 Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
@@ -266,27 +275,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>The init every one of these pages reads defensively: language + identity, plus the
         /// Breakout access WPF BackRoomHostService.BuildInit (:566) sends.</summary>
-        internal object InitMessage() => new
+        internal object InitMessage()
         {
-            type = "init",
-            protocol = 1,
-            lang = CoreSettings.Current.Language,
-            solo = !CoreAccount.IsLoggedIn,
-            identity = new
+            var init = new
             {
-                unifiedId = CoreAccount.UnifiedUserId ?? "",
-                displayName = CoreAccount.DisplayName ?? "",
-                appVersion = CoreReleaseContent.AppVersion,
-            },
-            breakout = BreakoutEntitlementFor(Spec.Id),
-            breakoutStandalone = Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase),
-        };
+                type = "init",
+                protocol = 1,
+                lang = CoreSettings.Current.Language,
+                solo = !CoreAccount.IsLoggedIn,
+                identity = new
+                {
+                    unifiedId = CoreAccount.UnifiedUserId ?? "",
+                    displayName = CoreAccount.DisplayName ?? "",
+                    appVersion = CoreReleaseContent.AppVersion,
+                },
+                breakout = BreakoutEntitlementFor(Spec.Id),
+                breakoutStandalone = Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase),
+            };
+            if (!IsBreakout) return init;
+            // WPF BackRoomHostService.cs:589-607: the page must know Off before it starts.
+            var frame = JObject.FromObject(init);
+            var motion = CoreSettings.Current.MotionLevel;
+            frame["motion"] = motion.ToString().ToLowerInvariant();
+            frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
+            return frame;
+        }
 
         /// <summary>WPF BreakoutAccess.Current(demo): the demo door is 3 levels, whatever the tier.</summary>
         internal static object? BreakoutEntitlementFor(string id) =>
             id.Equals("breakoutdemo", StringComparison.OrdinalIgnoreCase)
                 ? new { storyLimit = 3, endless = false, demo = true }
-                : null;
+                : id.Equals("breakout", StringComparison.OrdinalIgnoreCase)
+                    ? FullBreakoutEntitlement() : null;
 
         /// <summary>Every host -&gt; page frame, as sent (tests read the bridge from here).</summary>
         internal event Action<string>? Posted;
@@ -314,6 +334,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static void CloseAllForPanic()
         {
+            _dtrhPanicEpoch++; // also cancels a recovery whose Closed callback re-enters panic
             GameWindow[] all;
             lock (Open) all = Open.ToArray();
             foreach (var w in all)

@@ -164,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = running ? "■" : "▶";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new StrExtension(running ? "label_stop" : "label_start").ProvideValue(null!));
+            RefreshBarStatus();
             ApplyStartHeroState();
         }
     }

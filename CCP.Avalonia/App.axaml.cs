@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
+        internal static IntakePunchCardService? IntakePunchCard { get; set; }
 
         /// <summary>HT-URL lookup + download (WPF App.CatalogueLookup). The shell registers the opener.</summary>
         internal static CatalogueLookup CatalogueLookup { get; set; } = new(
@@ -651,6 +652,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
                 LockdownService.RecoverIfNeeded();
+                Services.Haptics.LockdownDoseRecovery.RecoverIfNeeded(); // WPF App.xaml.cs:3479
                 // WPF App.xaml.cs (main 4adc4c476): a Remote Control session the app died in hands the
                 // controller's strict lock (and any held value) back to the wearer's own. After Lockdown's
                 // recovery, which can put a controller's strict lock back first (RemoteHoldings).
@@ -961,6 +963,8 @@ namespace ConditioningControlPanel.Avalonia
                     // Main 8fe2a80a0: a Takeover pulse hands its boosted tint back before the snapshot.
                     SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),
                 };
+                IntakePunchCard = new IntakePunchCardService();
+                WireIntakeSessionCredit(Sessions);
                 // WPF Services/Session/SessionEngine.cs:396: clear session presence on every stop.
                 Platform.FriendsHead.WatchSessionStop(Sessions);
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
@@ -1055,6 +1059,9 @@ namespace ConditioningControlPanel.Avalonia
                 ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 // WPF App.xaml.cs:313: the race charts a track through this head's decoder (LibVLC, not NAudio).
                 ConditioningControlPanel.Services.Race.TrackDecoder.DecodeProvider = Views.Games.RaceTrackPlayer.Decode;
+                // WPF DeeperEditorWindow.xaml.cs:1198 uses the same Core peaks cache.
+                ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder = Views.Games.RaceTrackPlayer.DecodeWaveform;
+                ConditioningControlPanel.Services.Deeper.AudioWaveformCache.DecoderCacheTag = "|source-pcm16-v1";
                 // WPF App.xaml.cs:513 (main 03af6e8bb): a preset that switches the online selection re-deals every channel.
                 ConditioningControlPanel.Services.AssetPresetService.OnlineChannelsReset = ConditioningControlPanel.Services.Fyp.Online.FypOnlineCoordinator.ResetAllChannels;
                 // programs-3a decision: refuse programs whose required tasks this head never raises
@@ -1188,6 +1195,7 @@ namespace ConditioningControlPanel.Avalonia
                     Serilog.Log.Warning(ex, "[Launcher] boot decision failed; booting the panel");
                     Views.Windows.LauncherWindow.Boot = Services.Launcher.BootDecision.PanelFirst;
                 }
+                QueuePendingDeeperFileOpen(shell, desktop.Args);
                 var boot = Views.Windows.LauncherWindow.Boot;
                 bool panelHidden = Services.Launcher.LauncherBoot.PanelStartsHidden(boot, Views.Windows.MainShellWindow.LockdownActive);
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);
@@ -1385,6 +1393,22 @@ namespace ConditioningControlPanel.Avalonia
             return legacy;
         }
 
+        // WPF App.xaml.cs:4016-4031: queue once, independently of the boot surface (:3626-3641).
+        internal static void QueuePendingDeeperFileOpen(Views.Windows.MainShellWindow shell, string[]? args)
+        {
+            var fileOpen = Services.Deeper.DeeperFileOpen.Parse(args);
+            if (fileOpen.Action != null && fileOpen.Path != null)
+            {
+                // WPF App.xaml.cs:4016-4027 consumes the pending request once.
+                void OpenMediaOnce(object? sender, EventArgs e)
+                {
+                    shell.Opened -= OpenMediaOnce;
+                    Dispatcher.UIThread.Post(() => shell.HandlePendingFileOpen(fileOpen.Action, fileOpen.Path), DispatcherPriority.Background);
+                }
+                shell.Opened += OpenMediaOnce;
+            }
+        }
+
         /// <summary>The exit save, after Takeover hands back what a pulse borrowed - else a boosted
         /// pink tint is saved as the user's own (WPF StopEngine cancels pulses before the save).</summary>
         internal static void SaveSettingsOnExit(Views.Windows.MainShellWindow? shell, Action save)
@@ -1449,6 +1473,7 @@ namespace ConditioningControlPanel.Avalonia
 
             // WPF AchievementService.Dispose always saves synchronously, including a queued autosave.
             try { SaveAchievementsOnExit(_achievementSaveTimer, Achievements); } catch { /* the store logs write failures */ }
+            try { IntakePunchCard?.Dispose(); } catch { /* flush pending intake credit */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }

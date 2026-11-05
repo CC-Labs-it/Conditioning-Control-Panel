@@ -71,6 +71,20 @@ public class TestIsolationTests
         });
 
     [Fact]
+    public void SharedPlatformLoadsBundledFontsBeforeAnyTestSetup()
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        Assert.Equal(new global::Avalonia.Media.FontFamily(
+                ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter).Name,
+            global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+        foreach (var family in new[] { ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono })
+            Assert.NotNull(new global::Avalonia.Media.Typeface(family,
+                weight: global::Avalonia.Media.FontWeight.Bold).GlyphTypeface);
+    }
+
+    [Fact]
     public void SharedSetupRegistersBundledFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter), global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
@@ -108,6 +122,8 @@ public class TestIsolationTests
             }
             return System.Threading.Tasks.Task.CompletedTask;
         });
+
+    [Fact]
     public async System.Threading.Tasks.Task BundledFontsAreReadyBeforeAnyFixtureChoosesThePlatform()
     {
         await CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
@@ -143,6 +159,16 @@ public class TestIsolationTests
         Assert.True(text.DesiredSize.Height > 0);
     });
 
+
+    [Theory]
+    [InlineData("fonts:Inter#Inter")]
+    [InlineData("Fredoka")]
+    public void SharedBootstrapRegistersFontsBeforeTheTestBody(string family) => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(family), out var glyphs));
+        Assert.NotNull(glyphs);
+    });
 
     /// <summary>The isolation hook supplies desktop fonts before any fixture, independent of test order.</summary>
     [Fact]

@@ -295,7 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         // WPF LabTab diagnostics: subscriptions belong to this visible section, never the singleton.
         private bool _diagnosticsSubscribed, _gazeSet, _monitorPopulating;
-        private int _blinks, _mouths;
+        private int _blinks, _mouths, _tongues;
         private WebcamTrackingState _debugState;
         private string _face = "—";
         private GazeSide _gaze;
@@ -305,8 +305,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (_diagnosticsSubscribed == subscribe) return;
             _diagnosticsSubscribed = subscribe;
             var t = Platform.WebcamTracker.Instance;
-            if (subscribe) { _debugState = t.State; t.OnFaceFound += DebugFaceFound; t.OnFaceLost += DebugFaceLost; t.OnBlink += DebugBlink; t.OnMouthOpen += DebugMouth; t.OnGazeSide += DebugGaze; t.StateChanged += DebugState; }
-            else { t.OnFaceFound -= DebugFaceFound; t.OnFaceLost -= DebugFaceLost; t.OnBlink -= DebugBlink; t.OnMouthOpen -= DebugMouth; t.OnGazeSide -= DebugGaze; t.StateChanged -= DebugState; }
+            if (subscribe) { _debugState = t.State; t.OnFaceFound += DebugFaceFound; t.OnFaceLost += DebugFaceLost; t.OnBlink += DebugBlink; t.OnMouthOpen += DebugMouth; t.OnTongueOut += DebugTongue; t.OnGazeSide += DebugGaze; t.StateChanged += DebugState; }
+            else { t.OnFaceFound -= DebugFaceFound; t.OnFaceLost -= DebugFaceLost; t.OnBlink -= DebugBlink; t.OnMouthOpen -= DebugMouth; t.OnTongueOut -= DebugTongue; t.OnGazeSide -= DebugGaze; t.StateChanged -= DebugState; }
         }
         private void DebugState()
         {
@@ -317,14 +317,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         }
         private void DebugFaceFound() { _face = "yes"; PaintDebugCounters(); AppendWebcamDebugLog("Face FOUND"); }
         private void DebugFaceLost() { _face = "lost"; PaintDebugCounters(); AppendWebcamDebugLog("Face LOST"); }
+        private void DebugMouth() => AppendWebcamDebugLog(Loc.GetF("webcam_debug_mouth_fmt", ++_mouths));
+        private void DebugTongue() => AppendWebcamDebugLog(Loc.GetF("webcam_debug_tongue_fmt", ++_tongues));
         private void DebugBlink() { _blinks++; PaintDebugCounters(); AppendWebcamDebugLog($"Blink #{_blinks}"); }
         // WPF MainWindow.LabTab.cs:518-523, 691-695.
         internal void ResetDebugCounters()
         {
-            _blinks = _mouths = 0; _face = "—"; _gazeSet = false;
+            _blinks = _mouths = _tongues = 0; _face = "—"; _gazeSet = false;
             PaintDebugCounters();
         }
-        private void DebugMouth() => AppendWebcamDebugLog($"Mouth-open #{++_mouths}");
         private void DebugGaze(GazeSide side)
         {
             if (_gazeSet && _gaze == side) return;

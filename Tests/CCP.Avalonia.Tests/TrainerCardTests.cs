@@ -172,6 +172,8 @@ public sealed partial class AccountSeedTests
                 using var frame = w.CaptureRenderedFrame(); // settle layout and the hit-test tree before taking row coordinates
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                w.UpdateLayout();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 w.CaptureRenderedFrame()?.Dispose();
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
