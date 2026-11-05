@@ -85,13 +85,13 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid>
+    <Grid x:Name="MediaLayout">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto" MaxHeight="340"/>
             <RowDefinition Height="5"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="*" MinHeight="260"/>
         </Grid.RowDefinitions>
 
         <!-- Header with title and actions -->
@@ -244,7 +244,7 @@
                     <Style Selector="^:pointerover /template/ Border#Bd"><Setter Property="Background" Value="#1CFFFFFF"/></Style>
                 </ControlTheme>
             </Border.Resources>
-            <StackPanel>
+            <Grid RowDefinitions="Auto,Auto,Auto,*">
                 <!-- The one-time "official" note (WPF AssetsTabView.xaml:273-310): only once the server says official,
                      only while online media is in the source, gone for good after "Nice" (ScrolllerOfficialNoteSeen).
                      Painted in AssetsTabView.OnlineMeter.cs. -->
@@ -271,7 +271,7 @@
                 </Border>
                 <!-- Row 1, SOURCE: header (the hint rides it as a tooltip), the segmented bar and,
                      in Both only, the share slider. -->
-                <DockPanel LastChildFill="False">
+                <DockPanel Grid.Row="1" LastChildFill="False">
                     <TextBlock Text="{loc:Str section_media_source}" Theme="{StaticResource SectionHeader}"
                                DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,16,0"
                                ToolTip.Tip="{loc:Str label_media_source_hint}"/>
@@ -294,7 +294,7 @@
 
                 <!-- ONLINE MEDIA TODAY (WPF AssetsTabView.xaml:345-390): the day's share as a percent only, never MB.
                      Pink, amber from 80%, grey when used up. Painted in AssetsTabView.OnlineMeter.cs. -->
-                <Border x:Name="OnlineMeterCard" Margin="0,10,0,0" Background="#0FFFFFFF" BorderBrush="#22FFFFFF"
+                <Border Grid.Row="2" x:Name="OnlineMeterCard" Margin="0,10,0,0" Background="#0FFFFFFF" BorderBrush="#22FFFFFF"
                         BorderThickness="1" CornerRadius="10" Padding="12,7,12,7" IsVisible="False">
                     <StackPanel>
                         <DockPanel>
@@ -329,12 +329,12 @@
                 </Border>
 
                 <!-- Everything below only unfolds once remote media is in play. -->
-                <StackPanel x:Name="RemoteMediaDetails" IsVisible="False">
+                <Grid Grid.Row="3" RowDefinitions="Auto,Auto,*" x:Name="RemoteMediaDetails" IsVisible="False">
                     <!-- Row 2, FLAVOUR: five flavours + Mine (Core FlavourPresets). -->
                     <UniformGrid x:Name="RemoteFlavourTiles" Rows="1" Margin="0,10,-8,0"/>
 
                     <!-- Row 3, FINE-TUNE: one row says what is in the pool; a click opens the list. -->
-                    <Button x:Name="BtnRemoteFineTune" Margin="0,8,0,0" Theme="{StaticResource RemoteFineTuneRow}">
+                    <Button Grid.Row="1" x:Name="BtnRemoteFineTune" Margin="0,8,0,0" Theme="{StaticResource RemoteFineTuneRow}">
                         <DockPanel>
                             <fx:IconGlyph x:Name="TxtRemoteFineTuneChevron" DockPanel.Dock="Right" Kind="ChevronDown"
                                           Size="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
@@ -344,8 +344,8 @@
                     </Button>
 
                     <!-- Open, the list borrows the Asset Browser's room (the browser collapses) and
-                         scrolls past 430 px. -->
-                    <ScrollViewer x:Name="RemoteFineTuneScroll" MaxHeight="430" IsVisible="False"
+                         scrolls inside the remaining page height. -->
+                    <ScrollViewer Grid.Row="2" x:Name="RemoteFineTuneScroll" IsVisible="False"
                                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel x:Name="RemoteFineTuneBody" Margin="4,10,12,0">
                             <TextBlock Text="{loc:Str label_remote_niches}" Theme="{StaticResource SettingLabel}"
@@ -378,8 +378,8 @@
                                        FontSize="11.5" Opacity="0.75" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </StackPanel>
                     </ScrollViewer>
-                </StackPanel>
-            </StackPanel>
+                </Grid>
+            </Grid>
         </Border>
 
         <!-- TOP: Content Packs Section (hidden — most packs live outside the app now; use BtnGetPacks instead) -->

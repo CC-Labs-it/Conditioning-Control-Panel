@@ -53,6 +53,35 @@ public sealed class SessionRunnerCornerGifTests : IDisposable
         },
     };
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IdleSessionStartRefreshesStandaloneBeforeSessionAdmission(bool sessionCornerEnabled)
+    {
+        CoreEngine.Stop();
+        var previous = CoreCornerGif.RefreshHandler;
+        var refreshes = 0;
+        CoreCornerGif.RefreshHandler = index =>
+        {
+            Assert.True(CoreEngine.IsRunning);
+            Assert.Equal(-1, index);
+            refreshes++;
+            _standalone = true; // the surface claims a saved standalone slot, including queued shows
+        };
+        try
+        {
+            var session = Gamer();
+            session.Settings.CornerGifEnabled = sessionCornerEnabled;
+            _runner.Start(session);
+            Assert.True(CoreEngine.IsRunning);
+            Assert.Equal(1, refreshes);
+            Assert.True(_standalone);
+            Assert.False(_runner.CornerGifShown);
+            Assert.Empty(_events);
+        }
+        finally { CoreCornerGif.RefreshHandler = previous; }
+    }
+
     [Fact]
     public void ShownAtStart_HiddenByPause_BackOnResume_EndMinuteHandsTheCornerBack()
     {

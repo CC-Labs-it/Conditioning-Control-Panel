@@ -193,5 +193,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>May a STANDALONE slot realize? It yields while a session corner GIF is up.</summary>
         public static bool AllowStandaloneCornerGif(bool slotEnabled, bool sessionCornerGifActive)
             => slotEnabled && !sessionCornerGifActive;
+
+        public static bool AllowStandaloneCornerGif(bool slotEnabled, bool sessionCornerGifActive, bool engineRunning)
+            => engineRunning && AllowStandaloneCornerGif(slotEnabled, sessionCornerGifActive);
     }
 }

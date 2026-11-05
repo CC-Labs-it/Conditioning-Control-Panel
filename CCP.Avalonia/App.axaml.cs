@@ -1145,6 +1145,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SubliminalOverlay.CloseAll();
             Views.Overlays.BouncingTextOverlay.Stop();
             Views.Overlays.ChaosFlashOverlay.CloseActive();
+            Views.Overlays.CornerGifOverlay.StopAll();
             Views.Overlays.SpiralOverlay.CloseAll();   // WPF StopEngine -> App.Overlay.Stop(); panic and exit too
         }
 
