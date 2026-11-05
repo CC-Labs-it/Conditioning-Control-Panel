@@ -4,13 +4,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Interactivity;
 using Avalonia.Input;
-using Avalonia.VisualTree;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
-using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -192,9 +191,10 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        service.Current.MotionLevel = MotionLevel.Full;
-        service.Current.PerformanceMode = false;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
         var shell = new MainShellWindow { TabClock = new SteppedClock() };
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
@@ -202,27 +202,27 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            // Read pointer geometry only after the actual tab entrance has landed (P08/P40).
+            Assert.NotNull(shell.EnteringTab);
+            // Dispatcher jobs do not advance animation time. Settle the entrance before sampling hit geometry.
             shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                // BringIntoView needs current bounds; a pending page layout can scroll the wrong
+                // rectangle on Windows. Settle layout and rendering before injecting real input.
+                shell.UpdateLayout();
                 button.BringIntoView();
+                shell.UpdateLayout();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
-                // Hit testing uses the compositor's last frame, not the just-scrolled layout.
-                var frame = ElementComposition.GetElementVisual(shell)!.Compositor.RequestCompositionBatchCommitAsync();
-                var deadline = DateTime.UtcNow.AddSeconds(10);
-                while (!frame.Rendered.IsCompleted && DateTime.UtcNow < deadline)
-                {
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                    Dispatcher.UIThread.RunJobs();
-                    await Task.Yield();
-                }
-                Assert.True(frame.Rendered.IsCompleted, "the compositor never rendered the prompt link");
+                shell.CompleteTabTransition();                    // the entrance slide moves the button on a real timer
+                shell.UpdateLayout();
+                HeadlessRendering.RenderLiveTree(shell);          // hit testing reads the last rendered frame, not layout
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
