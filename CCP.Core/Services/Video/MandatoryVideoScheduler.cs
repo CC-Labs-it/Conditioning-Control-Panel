@@ -16,6 +16,8 @@ namespace ConditioningControlPanel.Services
         /// <see cref="MandatoryVideoScheduler.End"/> at the clip's end or on Esc, and
         /// <see cref="MandatoryVideoScheduler.ForceCleanup"/> on the in-window panic key.</summary>
         void Show(string path, bool strict);
+        /// <summary>WPF VideoService.cs:2305-2313: wait while bubble count owns the screen.</summary>
+        bool BubbleCountActive => false;
         void Freeze() { }
         void FinishFreeze(bool cancelled) { }
         /// <summary>Close every video window; returns the seconds of the clip that were watched.</summary>
@@ -65,7 +67,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _preroll;
+        private ITimer? _scheduler, _preroll, _bubbleWait;
         private volatile bool _running, _playing;
         private bool _startupFreeze;
         private int _retryGeneration, _noVideosShown;
@@ -317,7 +319,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
-        /// pre-roll. False when nothing was started (no clip, or one is already playing).
+        /// pre-roll. True when playback starts or a request remains queued.
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
         public bool TriggerStartup()
         {
@@ -330,6 +332,14 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null, bool silentIfEmpty = false, bool freezeBeforePreroll = false)
         {
             if (_playing) return false;
+            // WPF InteractionQueueService.cs:108-121: the first queued request owns the handoff too.
+            if (_bubbleWait != null) return true;
+            // WPF VideoService.cs:2305-2313 queues one video before picking or taking effects.
+            if (_host.BubbleCountActive)
+            {
+                WaitForBubbleCount(strictOverride, path, _running, silentIfEmpty, freezeBeforePreroll);
+                return true;
+            }
             path ??= PickNext();
             if (path == null)
             {
@@ -434,9 +444,35 @@ namespace ConditioningControlPanel.Services
             });
         }
 
+        private void WaitForBubbleCount(bool? strict, string? path, bool scheduled, bool silentIfEmpty, bool freezeBeforePreroll)
+        {
+            ITimer? created = null;
+            created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
+            {
+                if (!ReferenceEquals(mine, _bubbleWait)) return;
+                Dispose(ref _bubbleWait);
+                try
+                {
+                    if (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)) return;
+                    if (_host.BubbleCountActive) WaitForBubbleCount(strict, path, scheduled, silentIfEmpty, freezeBeforePreroll);
+                    else if (!Trigger(strict, path, silentIfEmpty, freezeBeforePreroll) && scheduled) ScheduleNext();
+                }
+                catch (Exception ex)
+                {
+                    // WPF VideoService.cs:2356-2363,2990-2998: contain selection/trigger failures.
+                    Log.Error(ex, "VideoService: deferred trigger failed - re-arming scheduled playback");
+                    _playing = false;
+                    if (scheduled) ScheduleNext();
+                }
+            }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _bubbleWait = created;
+            created.Change(BubbleCountScheduler.QueuePoll, Timeout.InfiniteTimeSpan);
+        }
+
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            Dispose(ref _bubbleWait);
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
