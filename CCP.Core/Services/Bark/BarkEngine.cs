@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
-    /// ponytail: the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
+    /// ponytail: the awareness arbiter lands with its host;
     /// the Chaos-narrator gate requires its narrative host (not yet ported).
     /// </summary>
     public sealed class BarkEngine
@@ -43,10 +43,11 @@ namespace ConditioningControlPanel.Services.Bark
         private readonly HashSet<string> _firedOnceSession = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, HashSet<string>> _usedVariantKeys = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _lastVariantKey = new(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
-        private string? _lastIdleRuleId;
         private readonly Queue<string> _recentlySpoken = new();
         private readonly HashSet<string> _recentlySpokenSet = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
+        private string? _lastIdleRuleId;
+        public bool DryRun { get; set; }
         private DateTime _globalLastFireUtc = DateTime.MinValue;
         private DateTime _safetyHoldUntilUtc = DateTime.MinValue;
         private DateTime _whisperBusyUntilUtc = DateTime.MinValue;
@@ -101,6 +102,7 @@ namespace ConditioningControlPanel.Services.Bark
         public void Start()
         {
             var fresh = SafeLoad();
+            DryRun |= Environment.GetEnvironmentVariable("CCP_BARK_DRYRUN") == "1";
             var s = CoreSettings.Current;
             lock (_gate)
             {
@@ -175,60 +177,63 @@ namespace ConditioningControlPanel.Services.Bark
                     if (Speak == null) return false;
                     CommitFire(winner, idx, pool);
                 }
-                return SpeakLine(winner, pool[idx], ctx);
+                return !DryRun && SpeakLine(winner, pool[idx], ctx);
             }
             catch (Exception ex) { Log.Warning(ex, "BarkEngine: Raise('{Trigger}') failed", trigger); return false; }
         }
 
-        /// <summary>WPF DispatchIdle / PickIdleRuleLocked: cadence belongs to the tube.</summary>
+        /// <summary>WPF DispatchIdle: pool-wide rotation with a 0.35 preference for gated rules.</summary>
         public bool DispatchIdle()
         {
-            try
+            try { return DispatchIdleCore(); }
+            catch (Exception ex) { Log.Warning(ex, "BarkEngine: idle dispatch failed"); return false; }
+        }
+
+        private bool DispatchIdleCore()
+        {
+            if (CoreSettings.Current.MasterVolume == 0 || Safe(IsSpeaking)) return false;
+            BarkRule winner;
+            List<BarkVariant> pool;
+            int idx;
+            var ctx = new BarkContext("Idle");
+            lock (_gate)
             {
-                if (CoreSettings.Current.MasterVolume == 0 || Safe(IsSpeaking)) return false;
-                var ctx = new BarkContext("Idle");
-                BarkRule winner;
-                List<BarkVariant> pool;
-                int idx;
-                lock (_gate)
+                var eligible = _rules.ForTrigger("Idle").Where(r => ConditionsPass(r, ctx)).ToList();
+                if (eligible.Count == 0) return false;
+                var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                if (unused.Count == 0)
                 {
-                    var eligible = _rules.ForTrigger("Idle").Where(r => ConditionsPass(r, ctx)).ToList();
-                    if (eligible.Count == 0) return false;
-                    var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
-                    if (unused.Count == 0)
-                    {
-                        _usedIdleRules.Clear();
-                        if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
-                        PersistIdleRotation();
-                        unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
-                        if (unused.Count == 0) unused = eligible;
-                    }
-                    var gated = unused.Where(r => r.Conditions is { Count: > 0 }).ToList();
-                    var pick = gated.Count > 0 && _rng.NextDouble() < 0.35 ? gated : unused;
-                    winner = pick[_rng.Next(pick.Count)];
-                    pool = ResolvePool(winner);
-                    (var fire, idx, var reason) = EvaluateGate(winner, pool, false);
-                    LogDecision("Idle", winner, pool, fire, idx, reason);
-                    if (!fire || Speak == null) return false;
-                    CommitFire(winner, idx, pool);
+                    _usedIdleRules.Clear();
+                    if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
+                    PersistIdleRotation();
+                    unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                    if (unused.Count == 0) unused = eligible;
                 }
-                return SpeakLine(winner, pool[idx], ctx);
+                var gated = unused.Where(r => r.Conditions is { Count: > 0 }).ToList();
+                var picks = gated.Count > 0 && _rng.NextDouble() < 0.35 ? gated : unused;
+                winner = picks[_rng.Next(picks.Count)];
+                pool = ResolvePool(winner);
+                (var fire, idx, var reason) = EvaluateGate(winner, pool, false);
+                LogDecision("Idle", winner, pool, fire, idx, reason);
+                if (!fire || Speak == null) return false;
+                CommitFire(winner, idx, pool);
             }
-            catch (Exception ex) { Log.Warning(ex, "BarkEngine: DispatchIdle failed"); return false; }
+            return !DryRun && SpeakLine(winner, pool[idx], ctx);
         }
 
         private void PersistIdleRotation()
         {
+            if (DryRun) return;
             CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
             CoreSettings.Save(suppressCloudBackup: true);
         }
 
-        private static void LogDecision(string trigger, BarkRule rule, List<BarkVariant> pool, bool fire, int idx, string reason)
+        /// <summary>WPF LogDecision (BarkService.cs:2006): metadata and the line's length, never its text.</summary>
+        private void LogDecision(string trigger, BarkRule rule, List<BarkVariant> pool, bool fire, int idx, string reason)
         {
-            // WPF LogDecision: log length, never companion text.
             if (fire)
-                Log.Information("[BARK] FIRE trigger={Trigger} rule={Rule} class={Class} mood={Mood} priority={Priority} variant#={Idx} lineChars={Chars}",
-                    trigger, rule.Id, rule.Class, rule.Mood, rule.Priority, idx,
+                Log.Information("[BARK] {Decision} trigger={Trigger} rule={Rule} class={Class} mood={Mood} priority={Priority} variant#={Idx} lineChars={Chars}",
+                    DryRun ? "dry-run WOULD FIRE" : "FIRE", trigger, rule.Id, rule.Class, rule.Mood, rule.Priority, idx,
                     idx >= 0 && idx < pool.Count ? pool[idx].Text?.Length ?? 0 : -1);
             else
                 Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
@@ -392,7 +397,7 @@ namespace ConditioningControlPanel.Services.Bark
             if (!rule.Repeatable)
             {
                 _firedOnceSession.Add(rule.Id);
-                if (rule.Scope != BarkScope.Session) CoreSettings.Current.MarkBarkFired(LatchKey(rule));
+                if (rule.Scope != BarkScope.Session && !DryRun) CoreSettings.Current.MarkBarkFired(LatchKey(rule));
             }
             var key = BarkLineId(rule.Id, pool[idx]);
             if (!_usedVariantKeys.TryGetValue(rule.Id, out var set))
@@ -400,7 +405,7 @@ namespace ConditioningControlPanel.Services.Bark
             set.Add(key);
             _lastVariantKey[rule.Id] = key;
             PersistVariantRotation(rule.Id);
-            if (string.Equals(rule.Trigger, "Idle", StringComparison.OrdinalIgnoreCase))
+            if (rule.Trigger.Equals("Idle", StringComparison.OrdinalIgnoreCase))
             {
                 _usedIdleRules.Add(rule.Id);
                 _lastIdleRuleId = rule.Id;
@@ -428,6 +433,7 @@ namespace ConditioningControlPanel.Services.Bark
 
         private void PersistVariantRotation(string ruleId)
         {
+            if (DryRun) return;
             CoreSettings.Current.BarkVariantRotation[ruleId] =
                 _usedVariantKeys.TryGetValue(ruleId, out var set) ? new List<string>(set) : new List<string>();
             CoreSettings.Save(suppressCloudBackup: true);   // local-only, rides the next real change to cloud
