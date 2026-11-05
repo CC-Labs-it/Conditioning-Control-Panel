@@ -3,6 +3,7 @@ using System.Linq;
 using ConditioningControlPanel;
 using Xunit;
 using PanicAftermath = ConditioningControlPanel.Services.Safety.PanicAftermath;
+using static ConditioningControlPanel.Services.Safety.PanicAftermath;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -121,6 +122,7 @@ public class TestIsolationTests
         var hadFile = File.Exists(settingsFile);
         var before = hadFile ? File.ReadAllText(settingsFile) : null;
         var user = CoreAccount.UnifiedUserId;
+        var panic = (PanicCount, HoldsEngineRestart, TriggersSilenced());
         var provider = CoreSettings.ServiceProvider;
         var notifications = AvApp.Notifications;
         var chat = CoreSettings.Current.AiChatEnabled;
@@ -128,6 +130,7 @@ public class TestIsolationTests
         var snapshot = ProcessStateSnapshot.Take();
         CoreAccount.UnifiedUserId = "leaked-user";
         AvApp.Notifications = new();
+        ArmQuiet();
         CoreSettings.Current.AiChatEnabled = !chat;
         CoreSettings.ServiceProvider = () => null;
         File.WriteAllText(settingsFile, "{\"leaked\":true}");
@@ -136,6 +139,7 @@ public class TestIsolationTests
         leaked.Save();   // armed, as a test that ends inside the debounce leaves it
         snapshot.Restore();
 
+        Assert.Equal(panic, (PanicCount, HoldsEngineRestart, TriggersSilenced()));
         Assert.Equal(user, CoreAccount.UnifiedUserId);
         Assert.Same(provider, CoreSettings.ServiceProvider);
         Assert.Same(notifications, AvApp.Notifications);
