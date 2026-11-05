@@ -242,6 +242,12 @@
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
+    <!-- WPF ConditioningControlPanel.csproj:206-214: ship promoted boon art on disk for ChaosBoonArt. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\**\*.png"
+             Exclude="..\ConditioningControlPanel\assets\Chaos\boons\**\_staging*\**"
+             Link="assets\Chaos\boons\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
+             ExcludeFromSingleFile="true" />
     <!-- WPF ChaosAnnouncerOverlay.cs:177-195: shared announce word-art. -->
     <Content Include="..\ConditioningControlPanel\assets\Chaos\announce\*.png" Link="assets\Chaos\announce\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
