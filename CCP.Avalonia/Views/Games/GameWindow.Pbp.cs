@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
+// media-flavour / media-more / online-media), Lobby intents (.Friends.cs),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -105,6 +105,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpOpen = false;
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
+            _pbpFriendsReady = false;
+            _pbpFriendIntent = null;
+            _pbpChallenge?.TrySetResult(null);
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: closed");
         }
@@ -144,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "pbp:media-request":
                         OnPbpMediaRequest(o);
                         return true;
+                    case "pbp:friend-challenge": OnPbpFriendChallenge(o); return true;
                     case "pbp:net":
                         OnPbpNetRequest(o);
                         return true;
@@ -205,7 +209,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
             _pbpIdentityPosted = true;
+            _pbpFriendsReady = true;
             PostLobbyIntent();
+            PostPbpFriendIntent();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>

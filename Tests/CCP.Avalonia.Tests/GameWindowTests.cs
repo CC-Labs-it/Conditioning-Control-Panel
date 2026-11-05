@@ -1027,6 +1027,33 @@ public sealed partial class GameWindowTests
         });
     }
 
+    /// <summary>WPF LauncherCatalogue.cs:243-248: the Play door asks DtRH's gate before Launch, so lapsed access with
+    /// a descent still open is refused instead of refocusing it.</summary>
+    [Fact]
+    public void Dtrh_PlayDoor_LapsedAccessRefusesBeforeFocusingTheLiveHost() => RunDtrh(lab: true, (shell, _, _, denied) =>
+    {
+        var live = GameWindow.Launch("dtrh")!;
+        var oldLaunch = global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame;
+        var launches = new List<string>();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = launches.Add;
+            // DtRH is a Basic door now (DtrhGate demands premium), so a lapse drops Basic too.
+            CoreEntitlement.HasLabProvider = () => false;   // RunDtrh restores it
+            CoreEntitlement.HasPremiumProvider = () => false;   // RunDtrh restores it
+            shell.ShowTab("play");
+            Dispatcher.UIThread.RunJobs();
+            shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
+                .FindControl<global::Avalonia.Controls.Button>("BtnPlayDtrh")!
+                .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(launches);
+            Assert.Single(denied);
+            Assert.Same(live, Assert.Single(GameWindow.OpenWindowsForTests()));
+        }
+        finally { global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = oldLaunch; }
+    });
+
     [Fact]
     public void Dtrh_BasicAndDailyGiftAgreeAcrossDoorsAndPayout() => RunDtrh(lab: false, (shell, _, _, denied) =>
     {
