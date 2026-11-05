@@ -56,7 +56,9 @@ export function createBoudoirHazardView(scene, track, art = null) {
       const rod = mesh(entry.holder, cylinder, gold, [head.x, 12, 0], [.18, 6, .18]);
       const opacity = uniform(.04), material = new MeshBasicNodeMaterial({ color: '#ffd09c', transparent: true, depthWrite: false, side: DoubleSide });
       material.opacityNode = opacity; materials.push(material);
-      const warning = mesh(entry.holder, plane, material, [head.x, .08, 0], [head.w, head.depthM + 2, 1]); warning.rotation.x = -Math.PI / 2;
+      // The warning shows what can hit you: the tip's contact plus a small edge, not the old 4 x 6 lane.
+      const warnW = 2 * (head.contactX ?? head.w / 2) + .5, warnD = 2 * (head.contactZ ?? head.depthM / 2) + .5;
+      const warning = mesh(entry.holder, plane, material, [head.x, .08, 0], [warnW, warnD, 1]); warning.rotation.x = -Math.PI / 2;
       entry.pressHeads.push({ row: head, moving: press, sculpture, visualHeight, rod, opacity, phase: null });
       byId.set(head.id, entry);
     }
