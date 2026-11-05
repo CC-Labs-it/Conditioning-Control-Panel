@@ -91,6 +91,7 @@ public sealed class PanicSurfacesTests
         "games",
         "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
+        "companion-conversation",
         "ai-followups",
         "blink-trainer",
         "camera",
