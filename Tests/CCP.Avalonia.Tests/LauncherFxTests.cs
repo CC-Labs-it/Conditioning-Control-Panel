@@ -47,6 +47,8 @@ public sealed class LauncherFxTests
             var cues = new List<string>();
             var (oldIn, oldLab, oldAudio) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreAudio.PlayOneShotProvider);
             CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => cues.Add(tag);
+            var oldStoppable = CoreAudio.PlayStoppableProvider;
+            CoreAudio.PlayStoppableProvider = (_, _, tag, _, done) => { cues.Add(tag); done?.Invoke(); return () => { }; };
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => true;
             var shell = new MainShellWindow();
@@ -67,6 +69,7 @@ public sealed class LauncherFxTests
                 LockdownService.Current = null;
                 (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, CoreAudio.PlayOneShotProvider) = (oldIn, oldLab, oldAudio);
                 shell.Close();
+                CoreAudio.PlayStoppableProvider = oldStoppable;
                 CoreSettings.ServiceProvider = null;
             }
         });
@@ -79,6 +82,103 @@ public sealed class LauncherFxTests
     {
         for (double t = 0; t < seconds; t += 0.02) w.StepFx(0.02);
     }
+
+    // WPF LauncherWindow.xaml.cs:626-645, MotionFx.cs:151-166/198-214.
+    [Fact]
+    public void Badge_WobblesEveryEightSeconds_PopsAndParks() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        w.OnFxActivated(true);
+        var badge = w.FindControl<Image>("TierBadge")!;
+        badge.Source = w.FindControl<Panel>("PanelArtPlate")!.Children.OfType<Image>().First().Source;
+        badge.IsVisible = true;
+        w.UpdateLayout();
+        bool wobbled = false;
+        for (int i = 0; i < 450; i++) { w.StepFx(0.02); wobbled |= ((RotateTransform)badge.RenderTransform!).Angle != 0; }
+        Assert.True(wobbled);
+        var big = (ScaleTransform)w.FindControl<Image>("TierBadgeBig")!.RenderTransform!;
+        var seen = new List<double>();
+        big.PropertyChanged += (_, e) => { if (e.Property == ScaleTransform.ScaleXProperty) seen.Add(big.ScaleX); };
+        w.MouseMove(badge.TranslatePoint(new Point(badge.Bounds.Width / 2, badge.Bounds.Height / 2), w)!.Value);
+        Step(w, 0.3);
+        Assert.Equal(0.35, seen[0]);
+        Assert.Contains(seen, v => v > 1);
+        Assert.Equal(1, big.ScaleX, 3);
+        w.Hide();
+        Assert.Equal(0, ((RotateTransform)badge.RenderTransform!).Angle);
+        Assert.False(w.FindControl<Popup>("TierBadgePopup")!.IsOpen);
+    });
+
+    [Fact]
+    public void RunningDot_BreathesOnlyWithAmbientMotion_AndIdleDims() => Run(MotionLevel.Full, (shell, w, _) =>
+    {
+        try
+        {
+            CoreSettings.Current.FlashEnabled = true;
+            shell.StartEngine();
+            w.OnFxActivated(true);
+            var dot = w.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("RunningDot")!;
+            Step(w, 0.1);
+            Assert.InRange(dot.Opacity, 0.55, 0.6);
+            Step(w, 2.4);
+            Assert.InRange(dot.Opacity, 0.95, 1);
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            w.StepFx(0.02);
+            Assert.Equal(1, dot.Opacity);
+            CoreEngine.Stop();
+            w.StepFx(0.02);
+            Assert.Equal(0.35, dot.Opacity);
+        }
+        finally { CoreEngine.Stop(); }
+    });
+
+    [Fact]
+    public void Stats_TweenThenRetarget_WithoutRestartOnTheStatusTick() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        Step(w, 2);
+        CoreSettings.Current.PlayerLevel = 80;
+        CoreSettings.Current.SkillPoints = 2000;
+        CoreSettings.Current.PlayerXP = 100;
+        w.RefreshStats();
+        var level = w.FindControl<TextBlock>("StatLevel")!;
+        var points = w.FindControl<TextBlock>("StatSparkles")!;
+        var fill = w.FindControl<Border>("XpFill")!;
+        double before = fill.Width;
+        w.StepFx(0.1);
+        Assert.InRange(int.Parse(level.Text!), 2, 79);
+        Assert.NotEqual(2000.ToString("N0"), points.Text);
+        Assert.True(fill.Width > before);
+        double midway = fill.Width;
+        w.RefreshStats(); // the one-second status tick must not reset the tween
+        Assert.Equal(midway, fill.Width);
+        Step(w, 1.2);
+        Assert.Equal("80", level.Text);
+        Assert.Equal(2000.ToString("N0"), points.Text);
+        double target = fill.Width;
+        CoreSettings.Current.PlayerXP = 0;
+        w.RefreshStats();
+        w.StepFx(0.1);
+        Assert.InRange(fill.Width, 0.001, target - 0.001);
+        w.Hide(); // no animation survives parking
+        Assert.Equal(0, fill.Width);
+    });
+
+    [Fact]
+    public void Stats_MotionOffSnaps_AndChangingTheGateSettlesInFlight() => Run(MotionLevel.Off, (_, w, _) =>
+    {
+        CoreSettings.Current.PlayerLevel = 70;
+        CoreSettings.Current.SkillPoints = 1234;
+        w.RefreshStats();
+        Assert.Equal("70", w.FindControl<TextBlock>("StatLevel")!.Text);
+        Assert.Equal(1234.ToString("N0"), w.FindControl<TextBlock>("StatSparkles")!.Text);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PlayerLevel = 90;
+        w.RefreshStats();
+        w.StepFx(0.1);
+        Assert.NotEqual("90", w.FindControl<TextBlock>("StatLevel")!.Text);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        w.StepFx(0.01);
+        Assert.Equal("90", w.FindControl<TextBlock>("StatLevel")!.Text);
+    });
 
     [Fact]
     public void CtaAndWanderingTileSheensParkOnHideAndMotionGate() => Run(MotionLevel.Full, (_, launcher, _) =>

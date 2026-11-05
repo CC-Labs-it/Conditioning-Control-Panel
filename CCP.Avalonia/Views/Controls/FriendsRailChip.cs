@@ -63,9 +63,23 @@ public sealed class FriendsRailChip : Grid
         _popup.Closed += (_, _) => { _closedAt = DateTime.UtcNow; _face.Background = Brushes.Transparent; Platform.FriendsLanding.DrawerClose(); Drawer.OnClosed(); };
         Drawer.OwnerWindow = () => TopLevel.GetTopLevel(this) as Window;
         Drawer.CloseRequested += () => _popup.IsOpen = false;
-        Drawer.SettingsRequested += () => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("appsettings");
-        Drawer.SignInRequested += () => { _popup.IsOpen = false; _ = (TopLevel.GetTopLevel(this) as MainShellWindow)?.OpenUnifiedLoginDialog(); };
-        Drawer.InvitesRequested += () => { _popup.IsOpen = false; (TopLevel.GetTopLevel(this) as MainShellWindow)?.OpenInvitesCard(); };
+        Drawer.SettingsRequested += () =>
+        {
+            if (TopLevel.GetTopLevel(this) is LauncherWindow launcher) launcher.OpenPanel(p => p.ShowTab("appsettings"));
+            else (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("appsettings");
+        };
+        Drawer.SignInRequested += () =>
+        {
+            _popup.IsOpen = false;
+            if (TopLevel.GetTopLevel(this) is LauncherWindow launcher) launcher.OpenSignIn();
+            else _ = (TopLevel.GetTopLevel(this) as MainShellWindow)?.OpenUnifiedLoginDialog();
+        };
+        Drawer.InvitesRequested += () =>
+        {
+            _popup.IsOpen = false;
+            if (TopLevel.GetTopLevel(this) is LauncherWindow launcher) launcher.OpenPanel(p => p.OpenInvitesCard());
+            else (TopLevel.GetTopLevel(this) as MainShellWindow)?.OpenInvitesCard();
+        };
         // Avalonia routes the popup's input through the Popup to this chip; a click inside the drawer is not a chip click.
         PointerReleased += (_, e) =>
         {
@@ -78,6 +92,7 @@ public sealed class FriendsRailChip : Grid
     }
     internal FriendsDrawer Drawer { get; }
     internal bool IsOpen => _popup.IsOpen;
+    internal void CloseDrawer() => _popup.IsOpen = false;
 
     /// <summary>The rail trims the name, so the tooltip leads with it in full (WPF UpdateTooltip).</summary>
     /// <summary>WPF UpdateTooltip runs on a language switch too: the tooltip is code-set, so rebuild it.</summary>
@@ -172,6 +187,13 @@ public sealed class FriendsRailChip : Grid
     private void OnSnapshot(FriendsSnapshot _) => UpdatePill();
     internal void UpdatePill()
     {
+        if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { global::Avalonia.Threading.Dispatcher.UIThread.Post(UpdatePill); return; }
+        var name = Drawer.MeName();
+        if (_name.Text != name)
+        {
+            _name.Text = name;
+            ((Grid)_face.Child!).Children[0] = FriendsDrawer.Avatar(name, 40, null);
+        }
         int n = 0;
         try { if (_svc?.Available == true) n = _svc.Snapshot?.OnlineCount ?? 0; } catch { }
         _pillText.Text = n.ToString();
