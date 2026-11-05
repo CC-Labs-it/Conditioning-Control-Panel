@@ -499,6 +499,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The far side of the first run (WPF FirstRunWizard.xaml.cs:502): ten minutes in which
             // passive surfaces go to the Inbox instead of popping.
             Platform.StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+            Platform.RemoteMediaOffer.FlushPending();
 
             if (wizard.StartTourRequested)
             {
