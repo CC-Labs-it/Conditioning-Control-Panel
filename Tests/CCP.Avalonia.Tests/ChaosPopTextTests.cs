@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -8,6 +9,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel;
 using Xunit;
 using M = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosPopTextMotion;
@@ -24,6 +27,76 @@ public sealed class ChaosPopTextTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+    }
+
+    // WPF BubbleService :4712/:4910-4918: a treat click delivers its variant word
+    // at the bubble centre. ChaosPopText :54-55: the announcer switch gates delivery.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task Treat_pop_delivers_the_variant_word_through_the_default_host_hook(bool enabled, bool payouts)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var prepare = ChaosPopText.Prepare;
+            var canShow = ChaosPopText.PlatformCanShow;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+            ChaosPopText.PlatformCanShow = () => true;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                ChaosRunHost.State!.Focus = payouts ? 0 : 100;
+                ChaosRunHost.State.ShowPopScores = payouts;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                {
+                    VariantId = "flash", Tint = 0xFF00C8FF, SizePx = 100,
+                    Payload = new FlashPayload()
+                });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(b.Popping);
+                Assert.True(ChaosRunHost.State!.Score > 0);
+                if (enabled)
+                {
+                    Assert.Equal(payouts ? 3 : 1, ChaosPopText.Pool.All.Count);
+                    var w = Assert.Single(ChaosPopText.Pool.All.Where(x => x.LabelText == "FLASH"));
+                    Assert.True(w.IsVisible);
+                    Assert.Equal("FLASH", w.LabelText);
+                    Assert.Equal(Color.FromRgb(71, 215, 255), ((ISolidColorBrush)w.LabelFill).Color);
+                    var k = w.Screens.Primary?.Scaling is > 0 and var scale ? scale : 1.0;
+                    Assert.Equal(new PixelPoint((int)Math.Round((b.CenterX - 140) * k),
+                        (int)Math.Round((b.CenterY - 44) * k)), w.Position);
+                }
+                else Assert.Empty(ChaosPopText.Pool.All);
+                if (enabled && payouts)
+                {
+                    var focus = Assert.Single(ChaosPopText.Pool.All.Where(x => x.LabelText.EndsWith(" FOCUS")));
+                    Assert.Equal($"+{(int)ChaosFieldMath.TreatFocusGain(b.Spec!.PayMult)} FOCUS", focus.LabelText);
+                    var score = Assert.Single(ChaosPopText.Pool.All.Where(x => x != focus && x.LabelText != "FLASH"));
+                    Assert.Equal("+" + ((long)ChaosRunHost.State!.Score).ToString("N0"), score.LabelText);
+                    var k = score.Screens.Primary?.Scaling is > 0 and var scale ? scale : 1.0;
+                    Assert.Equal((int)Math.Round((b.CenterY + 30 - 44) * k), score.Position.Y);
+                    Assert.Equal((int)Math.Round((b.CenterY + 34 - 44) * k), focus.Position.Y);
+                }
+                ChaosRunHost.ForceShutdown();
+                Assert.Empty(ChaosPopText.Pool.All);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosPopText.ShutdownPool();
+                ChaosPopText.Prepare = prepare;
+                ChaosPopText.PlatformCanShow = canShow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+            }
+            return Task.CompletedTask;
+        });
     }
 
     [Fact]
