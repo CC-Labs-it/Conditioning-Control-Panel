@@ -145,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _hud?.SetClockVisible(_state.ShowWaveTimer);
             // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
+            if (ChaosMeta.IsBoonActive("e_stim")) ChaosEStimOverlay.EnsureCreated();   // WPF ChaosModeService.cs:453
             _state.StartShields = _state.Shields;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
