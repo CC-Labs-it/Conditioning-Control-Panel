@@ -384,6 +384,19 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>Read back from the server: <paramref name="window"/>'s <c>_NET_WM_WINDOW_TYPE</c> carries the
+    /// no-shadow type (probes). False when not X11.</summary>
+    internal static bool HasNoFrameShadowHint(TopLevel window)
+    {
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var kde = XInternAtom(_display, "_KDE_NET_WM_WINDOW_TYPE_OVERRIDE", false);
+            return Array.IndexOf(ReadLongs(xid, XInternAtom(_display, "_NET_WM_WINDOW_TYPE", false), (IntPtr)4), kde) >= 0;
+        }
+    }
+
     /// <summary><paramref name="existing"/> with <paramref name="atom"/> appended, or null when it is
     /// already in the list (nothing to write). Pure, so the merge is testable without a server.</summary>
     internal static IntPtr[]? WithAtom(System.Collections.Generic.IReadOnlyList<IntPtr> existing, IntPtr atom)
