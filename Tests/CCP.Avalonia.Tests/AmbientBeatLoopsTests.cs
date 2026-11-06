@@ -43,7 +43,9 @@ public sealed class AmbientBeatLoopsTests
         "Views/Controls/SeasonRecapCard.axaml.cs",
         "Views/Tabs/BlinkTrainerTabView.axaml",
         "Views/Windows/QuizWindow.axaml",
-        "Views/Windows/SplashScreen.axaml",
+        // Moved, not grown: a render-thread composition sweep, the one loop that must run while startup holds the
+        // UI thread (a BeatLoop is UI-thread time and froze with it); the splash closes when startup ends.
+        "Views/Windows/SplashScreen.axaml.cs",
         "Views/Windows/TeaseRevealPopup.axaml.cs",
         "Views/Windows/WebcamLoadingSplash.axaml",
     };
