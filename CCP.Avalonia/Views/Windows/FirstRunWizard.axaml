@@ -60,6 +60,14 @@
             <Setter Property="Margin" Value="0,0,0,10"/>
             <Setter Property="Cursor" Value="Hand"/>
         </ControlTheme>
+        <!-- WPF FirstRunWizard.xaml:62-71: PinkButton has no disabled look of its own, and the Enter
+             button spends most of step 1 disabled, so the gate has to be visible. -->
+        <ControlTheme x:Key="FrPrimaryButton" TargetType="Button" BasedOn="{StaticResource PinkButton}">
+            <Style Selector="^:disabled">
+                <Setter Property="Opacity" Value="0.4"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Style>
+        </ControlTheme>
     </Window.Resources>
 
     <Border Background="{DynamicResource DarkerBgBrush}" CornerRadius="12"
@@ -324,7 +332,7 @@
                     </Button>
 
                     <Button x:Name="BtnNext" Grid.Column="3"
-                            Theme="{StaticResource PinkButton}" Cursor="Hand">
+                            Theme="{StaticResource FrPrimaryButton}" Cursor="Hand">
                         <TextBlock x:Name="TxtNext"/>
                     </Button>
                 </Grid>
