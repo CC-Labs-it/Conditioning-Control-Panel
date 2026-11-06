@@ -131,6 +131,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnEngineStopped()
         {
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
+            // WPF StartStop.cs:480-482: Stop stops everything (owner, 7.1.8): the audio player with a playlist
+            // goes quiet with the engine. The list stays. StartEngine never touches the player.
+            App.StopAudioPlaylist();
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();

@@ -34,6 +34,7 @@
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:vm="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
+             xmlns:ctl="using:ConditioningControlPanel.Avalonia.Views.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.DeeperTabView"
              x:DataType="vm:DeeperTabViewModel">
 
@@ -481,6 +482,10 @@
                             </Grid>
                         </Grid>
                     </Border>
+
+                    <!-- The playlist player: plays the player's own audio files, with or without
+                         the engine. Self-contained (Views/Controls/AudioPlaylistCard). -->
+                    <ctl:AudioPlaylistCard x:Name="DeeperAudioPlaylistCard" x:FieldModifier="internal"/>
 
                     <!-- ONE library card: kicker + count, the filter/sort strip, and the list.
                          Round 4 merged the free-floating filter strip into the card it filters.

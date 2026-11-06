@@ -90,6 +90,7 @@ public sealed class PanicSurfacesTests
     {
         "emergency-exit",
         "companion-audio",
+        "audio-playlist",
         "emi-ring",
         "launcher-notes",
         "launcher-friends",
@@ -185,6 +186,8 @@ public sealed class PanicSurfacesTests
     private static readonly (string First, string Then, string Why)[] Before =
     {
         ("companion-audio", "engine", "App.xaml.cs:1839 stops the Audio action before engine teardown"),
+        // WPF KillAllAudio (App.xaml.cs:1853) stops the audio player with a playlist; the panic tail runs it before StopEngine.
+        ("audio-playlist", "engine", "the player's own files stop before the engine teardown"),
         // Avalonia decision (PanicSurfaces.cs "intake" comment): say-it loops end before the capture abort reads as silence.
         ("intake", "voice-capture", "intake loops end before the mic abort"),
         // decisions "Panic <-> mic": capture and the command chain end before anything can react to them.
@@ -316,6 +319,7 @@ public sealed class PanicSurfacesTests
         ["Program"] = "--speech-check CLI diagnostic: no window, exits when done",
         ["WebHost"] = "a control, not a surface: the window hosting it registers",
         ["LayeredAudio"] = "WPF parity (#668: only stopped when the master switch is off)",
+        ["VlcPlaylistAudio"] = "the Deeper tab's audio player: the 'audio-playlist' surface (App.StopAudioPlaylist -> AudioPlaylistService.StopEmergency) mutes and stops it",
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
         ["ScrolllerAwayHost"] = "no media, no visible window: OS lock / sleep hooks that only set ScrolllerPolicy.Away (WPF ScrolllerAwayWatcher)",
