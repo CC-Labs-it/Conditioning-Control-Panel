@@ -84,7 +84,7 @@
                             </Grid>
 
                             <!-- Duration filter: min -> max on one row. -->
-                            <Grid Height="36" Background="Transparent" ToolTip.Tip="Duration filter: min length &#x2192; max length. Filter videos by length. 0 = no limit.">
+                            <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_duration_filter}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="130"/>
                                     <ColumnDefinition Width="*"/>
@@ -93,7 +93,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Duration filter" FontSize="13" FontWeight="SemiBold"
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_duration_filter}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <Slider Grid.Column="1" x:Name="SliderVideoMinDur" sessionLock:SessionLock.Owned="True" Minimum="0" Maximum="600" Value="0"
                                         VerticalAlignment="Center" Margin="14,0,8,0"/>
@@ -117,40 +117,6 @@
                             </Grid>
                             <TextBlock Text="{loc:Str tooltip_video_cut_random_start}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"/>
-
-                            <!-- Power-user rows, folded (WPF MoreFold, house rule: progressive disclosure). -->
-                            <sessionLock:MoreFold x:Name="FoldMore">
-                                <StackPanel>
-                                <!-- Which monitor the videos play on (ccp-bugs #1154). Default follows the
-                                     global "Show content on" pick, exactly as before. -->
-                                <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_effect_monitor}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_effect_monitor}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Column="1" x:Name="CmbMonitor"
-                                              Width="180" VerticalAlignment="Center"
-                                              Theme="{DynamicResource DarkComboBoxStyle}"/>
-                                </Grid>
-                                    <!-- Mercy (ccp-bugs #1145) for strict videos AND strict Bubble Count, shown once
-                                         here (WPF MercyRow). The picker only shows while Mercy is on. -->
-                                    <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_mercy}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{loc:Str setting_mercy}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                        <ComboBox Grid.Column="1" x:Name="CmbMercyAfter" Width="130" Margin="0,0,10,0"
-                                                  VerticalAlignment="Center" Theme="{DynamicResource DarkComboBoxStyle}"/>
-                                        <CheckBox Grid.Column="2" x:Name="ChkMercy"
-                                                  Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </StackPanel>
-                            </sessionLock:MoreFold>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
@@ -195,6 +161,41 @@
                             <TextBlock x:Name="TxtAppearanceNote" Text="{loc:Str video_appearance_strict_note}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
                                        IsVisible="False"/>
+
+                            <!-- Power-user rows, folded (WPF MoreFold, house rule: progressive disclosure),
+                                 last in the card after "Shows as" (WPF VideoFeatureControl.xaml:238). -->
+                            <sessionLock:MoreFold x:Name="FoldMore">
+                                <StackPanel>
+                                <!-- Which monitor the videos play on (ccp-bugs #1154). Default follows the
+                                     global "Show content on" pick, exactly as before. -->
+                                <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_effect_monitor}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_effect_monitor}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1" x:Name="CmbMonitor"
+                                              Width="180" VerticalAlignment="Center"
+                                              Theme="{DynamicResource DarkComboBoxStyle}"/>
+                                </Grid>
+                                    <!-- Mercy (ccp-bugs #1145) for strict videos AND strict Bubble Count, shown once
+                                         here (WPF MercyRow). The picker only shows while Mercy is on. -->
+                                    <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_mercy}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{loc:Str setting_mercy}" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Column="1" x:Name="CmbMercyAfter" Width="130" Margin="0,0,10,0"
+                                                  VerticalAlignment="Center" Theme="{DynamicResource DarkComboBoxStyle}"/>
+                                        <CheckBox Grid.Column="2" x:Name="ChkMercy"
+                                                  Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </StackPanel>
+                            </sessionLock:MoreFold>
                         </StackPanel>
                     </Grid>
                 </Border>
