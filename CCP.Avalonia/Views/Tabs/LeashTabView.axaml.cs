@@ -25,6 +25,8 @@ public partial class LeashTabView : UserControl
     {
         _resolve = service;
         InitializeComponent();
+        // WPF LeashTabView.xaml.cs:36: LeashLook.Help(LeashExplainRole.Leashed) in the HelpHost.
+        HelpHost.Child = LeashExplainWindow.HelpButton("leashed", () => TopLevel.GetTopLevel(this) as Window);
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
         // WPF Controls/Leash/LeashDrawerSection.cs:37-59: bind when hosted and release when detached.
         AttachedToVisualTree += (_, _) => { LeashHead.ServiceChanged += OnServiceChanged; OnServiceChanged(); };
