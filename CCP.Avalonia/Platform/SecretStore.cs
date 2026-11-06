@@ -57,7 +57,9 @@ internal static class SecretStore
         if (value is null)
         {
             // Memory-only runs (sandbox, no Secret Service) wrote nothing to the OS store: the memory clear is the clear.
-            if (Sandboxed || NotRemembered) return;
+            // So does a run whose Secret Service never answered at all (owner WSLg log: a startup logout said
+            // "logout not complete" over a keyring that was never there): nothing was stored there this session.
+            if (Sandboxed || NotRemembered || Libsecret.Gate.NeverReached) return;
             Log.Warning("Could not clear {Name} from the secret store", name);
             ClearFailed = true;
             return;
@@ -160,7 +162,7 @@ internal static class Libsecret
         var code = Marshal.ReadInt32(err, 4);
         g_error_free(err);
         if (IsUnreachable(domain, code)) Gate.Down(op, name, message, permanent: false);
-        else Log.Warning("Secret {Op} for {Name} failed: {Error}", op, name, message);
+        else { Gate.Answered(); Log.Warning("Secret {Op} for {Name} failed: {Error}", op, name, message); }
         return false;
     }
 
@@ -240,7 +242,7 @@ internal sealed class SecretServiceGate
     private readonly object _lock = new();
     private readonly Func<long> _nowMs;
     private long _retryAtMs = -1;   // -1 = open
-    private bool _permanent, _warned;
+    private bool _permanent, _warned, _answered;
 
     internal SecretServiceGate(Func<long>? nowMs = null) => _nowMs = nowMs ?? (() => Environment.TickCount64);
 
@@ -255,6 +257,22 @@ internal sealed class SecretServiceGate
         {
             lock (_lock) return _permanent || (_retryAtMs >= 0 && _nowMs() < _retryAtMs);
         }
+    }
+
+    /// <summary>True when every attempt this run found no Secret Service: it never answered, not even with
+    /// an error of its own (a locked keyring). A clear that fails then has nothing of this session to remove.</summary>
+    internal bool NeverReached
+    {
+        get
+        {
+            lock (_lock) return Failures > 0 && !_answered;
+        }
+    }
+
+    /// <summary>The service answered with an error of its own (locked, dismissed): it is there.</summary>
+    internal void Answered()
+    {
+        lock (_lock) _answered = true;
     }
 
     internal void Down(string op, string name, string? error, bool permanent)
@@ -281,6 +299,7 @@ internal sealed class SecretServiceGate
         {
             wasDown = _retryAtMs >= 0;
             _retryAtMs = -1;
+            _answered = true;
             _warned = false;   // a service that comes back and goes away again is worth one more line
         }
         if (wasDown) Log.Information("Secret Service reachable again");

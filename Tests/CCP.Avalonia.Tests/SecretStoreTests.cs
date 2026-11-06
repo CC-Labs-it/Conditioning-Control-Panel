@@ -125,6 +125,34 @@ public sealed class SecretStoreTests
         finally { Libsecret.Gate = saved; }
     }
 
+    /// <summary>Owner WSLg log: a startup logout over a keyring that was never there said "logout not complete".
+    /// Nothing reached the store this run, so the memory clear is the clear; a service that answered keeps the notice.</summary>
+    [Fact]
+    public void AClearOverAServiceNeverReachedThisRunIsNotAFailedLogout()
+    {
+        var (gate, sandboxed, write) = (Libsecret.Gate, SecretStore.Sandboxed, SecretStore.OsWriteOverride);
+        try
+        {
+            SecretStore.Sandboxed = false;
+            SecretStore.NotRemembered = SecretStore.ClearFailed = false;
+            SecretStore.OsWriteOverride = (_, _) => false;   // every OS write fails, as with no Secret Service
+            Libsecret.Gate = new SecretServiceGate(() => 0);
+            Libsecret.Gate.Down("lookup", "patreon_auth", "The name org.freedesktop.secrets was not provided", permanent: false);
+
+            SecretStore.Store("patreon_cache", null);
+            Assert.False(SecretStore.ClearFailed);
+
+            Libsecret.Gate.Answered();   // it is there (a locked keyring): a failed clear may have left a token behind
+            SecretStore.Store("patreon_cache", null);
+            Assert.True(SecretStore.ClearFailed);
+        }
+        finally
+        {
+            (Libsecret.Gate, SecretStore.Sandboxed, SecretStore.OsWriteOverride) = (gate, sandboxed, write);
+            SecretStore.NotRemembered = SecretStore.ClearFailed = false;
+        }
+    }
+
     [Fact]
     public void TheGateRetriesAMinuteOnAndReopensWhenTheServiceAnswers()
     {
