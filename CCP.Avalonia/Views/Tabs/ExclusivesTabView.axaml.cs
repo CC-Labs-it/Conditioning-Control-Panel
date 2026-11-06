@@ -174,15 +174,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (art != null) this.FindControl<Image>("VaultBackdrop")!.Source = art;
         }
 
+        /// <summary>WPF MainWindow.Exclusives.cs StartExclusivesMotion: the Premium page is the vault
+        /// (room + motes at 0.75); Account &amp; Plans keeps the plain room at 0.55, no motes.</summary>
         private void StartAmbient()
-            => _ambientFx.StartLayers(new AmbientFxConfig
+        {
+            var room = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash;
+            _ambientFx.StartLayers(new AmbientFxConfig
             {
-                Layers = AmbientFxCanvas.Env.Level == MotionLevel.Full
-                    ? AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash | AmbientFxLayers.VaultMotes
+                Layers = _plansMode ? room
+                    : AmbientFxCanvas.Env.Level == MotionLevel.Full ? room | AmbientFxLayers.VaultMotes
                     : AmbientFxLayers.VaultMotes,
-                Intensity = 0.75,
+                Intensity = _plansMode ? 0.55 : 0.75,
                 FogPuffs = 3,
             }, preservePause: true);
+        }
 
         private void RefreshVaultMotion()
         {
