@@ -190,7 +190,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Hide();
             HideAvatarTube();
             RestoreLauncherPanelOpacity();
-            if (!quiet && !_shownFirstMinimizeNotification && TrayHostPresent()) NotifyFirstMinimize();
+            _trayRecheckStale = true;
+            if (!quiet && !_shownFirstMinimizeNotification && TrayIconConfirmed()) NotifyFirstMinimize();
         }
 
         private void NotifyFirstMinimize()
@@ -261,7 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private bool _trayRechecking;
-        private bool _trayRecheckStale;   // a Show or an Exit came after that X
+        private bool _trayRecheckStale;   // anything the user did after that X outranks it
         private bool _shownSinceStart;
         private bool? _trayXVerdict;
 
@@ -273,12 +274,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _trayRechecking = true;
             _trayRecheckStale = false;
+            var endWatch = WatchInput(() => _trayRecheckStale = true);
             var state = await Task.Run(ProbeTrayItem);
+            endWatch();
             _trayRechecking = false;
-            if (_windowClosed || _exitRequested || _trayRecheckStale) return;
+            // Lockdown here is not a refused X but a fresh Close that would read as an escape attempt.
+            if (_windowClosed || _exitRequested || _trayRecheckStale || LockdownActive) return;
             _trayXVerdict = TrayItemRule.XMayHide(state);
             Close();
             _trayXVerdict = null;   // Lockdown can refuse that Close before it reads the verdict
+        }
+
+        /// <summary>The window stays usable while the tray is asked: any key or click means the user moved on.</summary>
+        private Action WatchInput(Action tookIt)
+        {
+            void Took(object? s, global::Avalonia.Interactivity.RoutedEventArgs e) => tookIt();
+            AddHandler(KeyDownEvent, Took, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            AddHandler(PointerPressedEvent, Took, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            return () =>
+            {
+                RemoveHandler(KeyDownEvent, Took);
+                RemoveHandler(PointerPressedEvent, Took);
+            };
         }
 
         /// <summary>WPF MainWindow.xaml.cs:3594: StartMinimized sends the shown window to the tray, here once
@@ -287,20 +304,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async Task HideToTrayOnceHeld()
         {
             if (!_trayListed) return;
-            void TookIt(object? s, global::Avalonia.Interactivity.RoutedEventArgs e) => _shownSinceStart = true;
-            AddHandler(KeyDownEvent, TookIt, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            AddHandler(PointerPressedEvent, TookIt, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            var endWatch = WatchInput(() => _shownSinceStart = true);
             try
             {
                 var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(6);   // an autostart can beat the bar
                 do
                 {
+                    if (_shownSinceStart || _windowClosed) return;
                     // Windows knows at once, so its window never shows.
                     var state = OperatingSystem.IsWindows() ? ProbeTrayItem() : await Task.Run(ProbeTrayItem);
                     if (state == TrayItemState.Held)
                     {
-                        // An owned dialog is the age gate or a name picker: hiding it would skip the question.
-                        if (IsVisible && !_shownSinceStart && OwnedWindows.Count == 0) HideForLauncher(quiet: true);
+                        // The age gate is only posted at this point on Windows, and it reads a hidden shell as a
+                        // no. Once up, it or a name picker is an owned dialog, and hiding one skips the question.
+                        var asking = !CoreSettings.Current.HasAcceptedAgeVerification || OwnedWindows.Count > 0;
+                        if (IsVisible && !_shownSinceStart && !asking) HideForLauncher(quiet: true);
                         return;
                     }
                     await Task.Delay(TimeSpan.FromSeconds(1));
@@ -310,8 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             finally
             {
-                RemoveHandler(KeyDownEvent, TookIt);
-                RemoveHandler(PointerPressedEvent, TookIt);
+                endWatch();
             }
         }
 
@@ -323,16 +340,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Opened += Run;
         }
 
-        /// <summary>The X answer: hide unless the tray said no. See <see cref="TrayItemRule.XMayHide"/>.</summary>
         /// <summary>For a hide nothing depends on, unlike X: only a confirmed icon counts.</summary>
         internal bool TrayIconConfirmed() => _trayHostSeam?.Invoke() ?? ProbeTrayItem() == TrayItemState.Held;
 
+        /// <summary>The X answer: hide unless the tray said no. See <see cref="TrayItemRule.XMayHide"/>.</summary>
         internal bool ProbeTrayItemRegistered() => TrayItemRule.XMayHide(ProbeTrayItem());
 
         /// <summary>Is this process's icon really in the tray? A watcher can own its name and still refuse the
-        /// item, and Avalonia only logs that, so we ask the watcher rather than trusting that it exists.
-        /// Registration is asynchronous, hence the short retry. Avalonia finishes it on the UI thread, so a
-        /// retry there could never see it, and only freezes the window: that caller gets one attempt.</summary>
+        /// item, and Avalonia only logs that, so we ask the watcher rather than trusting that it exists.</summary>
         internal TrayItemState ProbeTrayItem()
         {
             if (!_trayListed) return TrayItemState.NotHeld;
@@ -343,6 +358,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Test seam: what the watcher says. Tests must not read the desktop's bus.</summary>
         internal static Func<TrayItemState> TrayItemQuery { get; set; } = AskTrayWatcher;
 
+        // Registration is asynchronous, hence the short retry. Avalonia finishes it on the UI thread, so a
+        // retry there could never see it and would only freeze the window: that caller gets one attempt.
         private static TrayItemState AskTrayWatcher()
         {
             var onUiThread = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess();
@@ -358,7 +375,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     {
                         if (attempt > 0) await Task.Delay(250);
                         var (listed, noWatcher) = await TrayItemListedAsync(bus);
-                        if (listed is null) continue;   // no proper answer
+                        if (listed is null)   // no proper answer, which outdates any earlier no
+                        {
+                            Interlocked.Exchange(ref refusals, 0);
+                            continue;
+                        }
                         if (listed.Value) return true;
                         Interlocked.Increment(ref refusals);
                         if (noWatcher) return false;    // no tray: nothing to wait for

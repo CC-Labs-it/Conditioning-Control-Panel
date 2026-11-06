@@ -7,8 +7,10 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -115,8 +117,14 @@ public sealed class ShellTrayTests
     {
         var answers = new Queue<TrayItemState>(States("NotHeld", "Held"));
         MainShellWindow.TrayItemQuery = () => answers.Dequeue();
-        await shell.HideToTrayOnceHeld();
-        Assert.False(shell.IsVisible);
+        var was = CoreSettings.Current.HasAcceptedAgeVerification;
+        CoreSettings.Current.HasAcceptedAgeVerification = true;
+        try
+        {
+            await shell.HideToTrayOnceHeld();
+            Assert.False(shell.IsVisible);
+        }
+        finally { CoreSettings.Current.HasAcceptedAgeVerification = was; }
     });
 
     [Fact]
@@ -144,7 +152,26 @@ public sealed class ShellTrayTests
     });
 
     [Fact]
-    public Task AShowDuringTheRecheckCancelsThatX() => WithListedTray(async shell =>
+    public Task StartMinimizedNeverHidesBeforeTheAgeGateIsAnswered() => WithListedTray(async shell =>
+    {
+        // On Windows the hide runs before the posted gate exists, and the gate reads a hidden shell as a no.
+        MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
+        var was = CoreSettings.Current.HasAcceptedAgeVerification;
+        CoreSettings.Current.HasAcceptedAgeVerification = false;
+        try
+        {
+            await shell.HideToTrayOnceHeld();
+            Assert.True(shell.IsVisible);
+        }
+        finally { CoreSettings.Current.HasAcceptedAgeVerification = was; }
+    });
+
+    [Theory]
+    [InlineData("show")]
+    [InlineData("launcher")]
+    [InlineData("key")]
+    [InlineData("lockdown")]
+    public Task WhatComesAfterAnXDuringTheRecheckCancelsIt(string next) => WithListedTray(async shell =>
     {
         if (OperatingSystem.IsWindows()) return;   // no recheck there
         var release = new System.Threading.ManualResetEventSlim();
@@ -156,12 +183,23 @@ public sealed class ShellTrayTests
         };
         var closed = false;
         shell.Closed += (_, _) => closed = true;
+        var escapes = 0;
+        var oldLock = LockdownService.Current;
+        var lockdown = new LockdownService();
+        lockdown.EscapeAttempted += _ => escapes++;
         shell.Close();
-        shell.ShowFromTray();
-        release.Set();
-        for (var i = 0; i < 30; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
-        Assert.False(closed);
-        Assert.True(shell.IsVisible);
+        try
+        {
+            if (next == "show") shell.ShowFromTray();
+            if (next == "launcher") shell.HideForLauncher(quiet: true);
+            if (next == "key") shell.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.A });
+            if (next == "lockdown") { LockdownService.Current = lockdown; lockdown.Activate(TimeSpan.FromMinutes(30)); }
+            release.Set();
+            for (var i = 0; i < 30; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+            Assert.False(closed);
+            Assert.Equal(0, escapes);
+        }
+        finally { lockdown.Dispose(); LockdownService.Current = oldLock; }
     });
 
     [Fact]
