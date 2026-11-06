@@ -149,6 +149,40 @@ public sealed class ShellTrayTests
     });
 
     [Fact]
+    public Task StartMinimizedOutwaitsADialogThatCloses() => WithListedTray(async shell =>
+    {
+        MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
+        var splash = new Window();
+        splash.Show(shell);
+        var hiding = shell.HideToTrayOnceHeld();
+        await Task.Delay(200);
+        splash.Close();
+        await hiding;
+        Assert.False(shell.IsVisible);
+    });
+
+    [Fact]
+    public Task ASecondXDuringTheRecheckIsStillAnX() => WithListedTray(async shell =>
+    {
+        if (OperatingSystem.IsWindows()) return;   // no recheck there
+        var release = new System.Threading.ManualResetEventSlim();
+        var calls = 0;
+        MainShellWindow.TrayItemQuery = () =>
+        {
+            if (Interlocked.Increment(ref calls) == 2) release.Wait(TimeSpan.FromSeconds(5));
+            return TrayItemState.NotHeld;
+        };
+        var closed = false;
+        shell.Closed += (_, _) => closed = true;
+        shell.Close();
+        shell.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F4 });
+        shell.Close();
+        release.Set();
+        for (var i = 0; i < 300 && !closed; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+        Assert.True(closed);
+    });
+
+    [Fact]
     public Task StartMinimizedNeverHidesBeforeTheAgeGateIsAnswered() => WithListedTray(async shell =>
     {
         // On Windows the hide runs before the posted gate exists, and the gate reads a hidden shell as a no.

@@ -232,14 +232,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 e.Cancel = true;
                 return;
             }
-            // WPF WindowChrome.cs:140: closing (real exit OR minimize-to-tray) always ends a Chaos run.
-            try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { }
             var byUser = Tray is not null && !_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing;
-            if (byUser && _trayRechecking) { e.Cancel = true; return; }
+            if (byUser && _trayRechecking)
+            {
+                _trayRecheckStale = false;   // the press behind this repeat X was no change of mind
+                e.Cancel = true;
+                return;
+            }
             var verdict = _trayXVerdict;
             _trayXVerdict = null;
             var mayHide = byUser && (verdict ?? TrayHostPresent());
             if (byUser && !mayHide && verdict is null && TrayAnswerMayChange) { e.Cancel = true; RecheckTrayThenClose(); return; }
+            // WPF WindowChrome.cs:140: closing (real exit OR minimize-to-tray) always ends a Chaos run.
+            try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { }
             if (mayHide)
             {
                 e.Cancel = true;
@@ -313,13 +318,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (_shownSinceStart || _windowClosed) return;
                     // Windows knows at once, so its window never shows.
                     var state = OperatingSystem.IsWindows() ? ProbeTrayItem() : await Task.Run(ProbeTrayItem);
-                    if (state == TrayItemState.Held)
+                    if (state == TrayItemState.Held && !_shownSinceStart)
                     {
                         // The age gate is only posted at this point on Windows, and it reads a hidden shell as a
                         // no. Once up, it or a name picker is an owned dialog, and hiding one skips the question.
+                        // A splash is owned too and soon gone, so this waits rather than gives up.
                         var asking = !CoreSettings.Current.HasAcceptedAgeVerification || OwnedWindows.Count > 0;
-                        if (IsVisible && !_shownSinceStart && !asking) HideForLauncher(quiet: true);
-                        return;
+                        if (!asking)
+                        {
+                            if (IsVisible) HideForLauncher(quiet: true);
+                            return;
+                        }
                     }
                     await Task.Delay(TimeSpan.FromSeconds(1));
                 }
