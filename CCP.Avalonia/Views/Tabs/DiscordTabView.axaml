@@ -29,7 +29,7 @@
                                             equivalent and needs none)
        MouseLeftButtonUp="…"            ->  PointerReleased="…"
        hover:HoverPop.IsEnabled         ->  unchanged (Controls/HoverPop.cs)
-       FontFamily="/Fonts/#Fredoka, …"  ->  dropped; this head ships Inter
+       FontFamily="/Fonts/#Fredoka, …"  ->  "Fredoka, Segoe UI" (bundled, AppFonts)
        pack:// Image Source             ->  dropped; this head ships no Resources/ and the six stat
                                             badges are repainted by the mod resolver anyway
        x:FieldModifier="internal"       ->  dropped; x:Names kept and reached with FindControl -->
@@ -399,7 +399,7 @@
                                     <StackPanel Grid.Column="1" Margin="16,0,14,0" VerticalAlignment="Top">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock x:Name="TxtProfileViewerName"
-                                                       FontWeight="SemiBold"
+                                                       FontFamily="Fredoka, Segoe UI" FontWeight="SemiBold"
                                                        Foreground="White" FontSize="23" TextTrimming="CharacterEllipsis"
                                                        VerticalAlignment="Center"/>
                                             <Button x:Name="BtnChangeDisplayName" IsVisible="False"

@@ -75,9 +75,10 @@ public class TestIsolationTests
     {
         Assert.NotNull(global::Avalonia.Application.Current);
         Assert.Equal(new global::Avalonia.Media.FontFamily(
-                ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter).Name,
+                ConditioningControlPanel.Avalonia.Platform.AppFonts.Default).Name,
             global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
         foreach (var family in new[] { ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.Selawik,
                      ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka,
                      ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono })
             Assert.NotNull(new global::Avalonia.Media.Typeface(family,
@@ -87,7 +88,7 @@ public class TestIsolationTests
     [Fact]
     public void SharedSetupRegistersBundledFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
-        Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter), global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+        Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default), global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
         Assert.Equal(new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka)).GlyphTypeface.FamilyName, new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily("Fredoka")).GlyphTypeface.FamilyName);
     });
 
@@ -96,7 +97,7 @@ public class TestIsolationTests
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
             Assert.IsType<AvApp>(global::Avalonia.Application.Current);
-            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default),
                 global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
             var face = new global::Avalonia.Media.Typeface(
                 new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
@@ -165,7 +166,7 @@ public class TestIsolationTests
     public void EveryTestStartsWithProductionFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         Assert.IsType<AvApp>(global::Avalonia.Application.Current);
-        Assert.Contains("Inter", global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+        Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default).Name, global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
         var text = new global::Avalonia.Controls.TextBlock
         {
             Text = "[ eyes closed ]",
@@ -213,7 +214,7 @@ public class TestIsolationTests
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
             Assert.NotNull(global::Avalonia.Application.Current);
-            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default),
                 global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
             // Shell construction measures this label before any test can repair a missing font setup.
             Assert.NotNull(new ConditioningControlPanel.Avalonia.Controls.PremiumSpark());
@@ -225,7 +226,7 @@ public class TestIsolationTests
         {
             Assert.NotNull(global::Avalonia.Application.Current);
             var fonts = global::Avalonia.Media.FontManager.Current;
-            Assert.Contains("Inter", fonts.DefaultFontFamily.Name);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default).Name, fonts.DefaultFontFamily.Name);
             Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(
                 new global::Avalonia.Media.FontFamily("Fredoka")), out var display));
             Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(

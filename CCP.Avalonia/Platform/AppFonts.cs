@@ -18,9 +18,20 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public const string Fredoka = "avares://CCP.Avalonia/Resources/fonts#Fredoka";
         public const string NotoEmoji = "avares://CCP.Avalonia/Resources/fonts#Noto Emoji";
         public const string Mono = "avares://CCP.Avalonia/Resources/emi/fonts#Noto Sans Mono";
+        // Off-Windows stand-ins for the Windows faces WPF names (2026-11-06, owner: "bundle free look-alikes").
+        public const string Selawik = "avares://CCP.Avalonia/Resources/fonts/selawik#Selawik";     // Segoe UI
+        public const string Anton = "avares://CCP.Avalonia/Resources/fonts/display#Anton";          // Impact
+        public const string ComicNeue = "avares://CCP.Avalonia/Resources/fonts/display#Comic Neue"; // Comic Sans MS
+
+        /// <summary>The never-empty default face: bundled Inter on Windows (2026-10-10), bundled Selawik elsewhere
+        /// (WPF draws unstyled text in Segoe UI, which Linux lacks; 2026-11-06).</summary>
+        public static string Default => System.OperatingSystem.IsWindows() ? Inter : Selawik;
 
         // Emoji blocks only, so text symbols Inter lacks (arrows, CJK, ...) still go to the system.
         private static readonly UnicodeRange EmojiRange = UnicodeRange.Parse("2300-23FF, 2600-27BF, 2B00-2BFF, 1F000-1FAFF");
+        // Selawik is Latin-only; Segoe UI (what WPF draws) covers Greek and Cyrillic, so does the bundled Inter,
+        // instead of whatever fontconfig picks (the ru.json UI).
+        private static readonly UnicodeRange GreekCyrillicRange = UnicodeRange.Parse("0370-03FF, 0400-052F, 1C80-1C8F, 1F00-1FFF");
 
         /// <summary>Registers the system emoji collection the default <see cref="Options"/> falls back to.</summary>
         public static void Register(FontManager fonts) =>
@@ -39,12 +50,25 @@ namespace ConditioningControlPanel.Avalonia.Platform
             // Every link in WPF's Font.Mono chain (App.xaml) needs a portable mapping. Avalonia
             // cannot resolve generic "monospace" inside a composite family (the returned family's
             // name must contain the requested one). Bundled Noto Sans Mono serves both cases.
-            if (!System.OperatingSystem.IsWindows())
+            var windows = System.OperatingSystem.IsWindows();
+            if (!windows)
+            {
                 mappings["Cascadia Mono"] = mappings["Consolas"] = mappings["Courier New"] =
                     mappings["monospace"] = new FontFamily(Mono);
+                // WPF's display faces, none of which Linux has: without these "Impact, Arial Black, Segoe UI"
+                // (marquee, bubble count, video overlay) and every "Segoe UI" site drew Inter or a fontconfig pick.
+                mappings["Segoe UI"] = mappings["Segoe UI Semibold"] = mappings["Segoe UI Light"] = new FontFamily(Selawik);
+                mappings["Impact"] = new FontFamily(Anton);
+                mappings["Comic Sans MS"] = mappings["Comic Sans"] = new FontFamily(ComicNeue);
+                // Heavy grotesques: Inter has the 900 weight Selawik lacks.
+                mappings["Segoe UI Black"] = mappings["Arial Black"] = new FontFamily(Inter);
+                fallbacks.Add(new FontFallback { FontFamily = new FontFamily(Inter), UnicodeRange = GreekCyrillicRange });
+            }
             return new FontManagerOptions
             {
-                DefaultFamilyName = Inter,
+                // WPF draws unstyled text in the system UI face (Segoe UI); off Windows that is Selawik. Windows keeps
+                // the 2026-10-10 Inter default. Both are bundled, so a font-less system still starts (distro-check F1).
+                DefaultFamilyName = Default,
                 FontFamilyMappings = mappings,
                 FontFallbacks = fallbacks,
             };

@@ -266,7 +266,12 @@
     <Content Include="..\ConditioningControlPanel\assets\Chaos\portraits\neutral.png" Link="assets\Chaos\portraits\neutral.png"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
-    <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
+    <!-- Off-Windows look-alikes for WPF's Windows faces (AppFonts.Options, 2026-11-06): Selawik (Microsoft's
+         OFL Segoe UI fallback, metric-compatible), Anton for Impact, Comic Neue for Comic Sans MS. Own folders,
+         so each avares family source only scans its own faces. -->
+    <AvaloniaResource Include="..\Assets\fonts\selawik\*.ttf" Link="Resources\fonts\selawik\%(Filename)%(Extension)" />
+    <AvaloniaResource Include="..\Assets\fonts\display\*.ttf" Link="Resources\fonts\display\%(Filename)%(Extension)" />
+    <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt;..\Assets\fonts\OFL-Selawik.txt;..\Assets\fonts\OFL-Anton.txt;..\Assets\fonts\OFL-ComicNeue.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\Assets\avatar0_emotes\idle.gif" Link="Resources\avatar0_emotes\idle.gif" />
     <AvaloniaResource Include="..\Assets\circe_emotes\idle.gif" Link="Resources\circe_emotes\idle.gif" />

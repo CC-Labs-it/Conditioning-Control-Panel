@@ -67,8 +67,8 @@ public sealed class AppFontsTests
         // chain's FIRST link must be mapped or an installed face could win before the bundled one.
         var mappings = AppFonts.Options(systemEmoji: false).FontFamilyMappings!;
         // Other suites in the same testhost build the app without AppFonts.Options; only resolve the
-        // raw names through the live FontManager when it carries our options (Inter default).
-        var live = FontManager.Current.DefaultFontFamily.Name.Contains("Inter");
+        // raw names through the live FontManager when it carries our options (Selawik default off Windows).
+        var live = FontManager.Current.DefaultFontFamily.Name == new FontFamily(AppFonts.Default).Name;
         foreach (var name in new[] { "Cascadia Mono, Consolas, Courier New", "Cascadia Mono", "Consolas", "Courier New", "monospace" })
         {
             var first = new FontFamily(name).FamilyNames[0];
@@ -82,6 +82,42 @@ public sealed class AppFontsTests
             Assert.True(glyphs.TryGetHorizontalGlyphAdvance(wide, out var wideAdvance));
             Assert.True(narrowAdvance > 0);
             Assert.Equal(narrowAdvance, wideAdvance);
+        }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>2026-11-06: off Windows every WPF display face draws its bundled look-alike, at the asked weight
+    /// (the marquee's "Impact, Arial Black, Segoe UI" drew a fallback face on the Linux beta).</summary>
+    [Fact]
+    public Task EveryWpfDisplayFamilyResolvesToBundledLookAlikeOffWindows() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApplication();
+        if (OperatingSystem.IsWindows()) return Task.CompletedTask;
+        var fonts = FontManager.Current;
+        if (fonts.DefaultFontFamily.Name != new FontFamily(AppFonts.Default).Name) return Task.CompletedTask; // foreign font setup
+        foreach (var (chain, weight, family, minWeight) in new[]
+        {
+            ("Impact, Arial Black, Segoe UI", FontWeight.Bold, "Anton", 400),
+            ("Segoe UI", FontWeight.Normal, "Selawik", 400),
+            ("Segoe UI", FontWeight.SemiBold, "Selawik", 600),
+            ("Segoe UI", FontWeight.Bold, "Selawik", 700),
+            ("Comic Sans MS, Segoe UI", FontWeight.Normal, "Comic Neue", 400),
+            ("Comic Sans MS", FontWeight.Bold, "Comic Neue", 700),
+            // The bundled Inter package tops out at Bold (as before this mapping); Selawik's own max is Bold too.
+            ("Segoe UI Black, Segoe UI", FontWeight.Black, "Inter", 700),
+            ("$Default", FontWeight.Normal, "Selawik", 400),
+        })
+        {
+            Assert.True(fonts.TryGetGlyphTypeface(new Typeface(new FontFamily(chain), FontStyle.Normal, weight), out var face), chain);
+            Assert.True(face!.FamilyName.StartsWith(family, StringComparison.Ordinal), $"{chain} {weight} -> {face.FamilyName}");
+            Assert.True((int)face.Weight >= minWeight, $"{chain} {weight} -> {face.FamilyName} weight {face.Weight}");
+        }
+        // Selawik is Latin-only: Cyrillic (ru UI) and Greek go to the bundled Inter, not a fontconfig pick.
+        foreach (var cp in new[] { 0x0416, 0x03A9 })
+        {
+            Assert.True(fonts.TryMatchCharacter(cp, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
+                new FontFamily(AppFonts.Selawik), null, out var match), $"U+{cp:X4}");
+            Assert.Contains("Inter", match.FontFamily.Name);
         }
         return Task.CompletedTask;
     });

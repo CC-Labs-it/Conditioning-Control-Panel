@@ -5,7 +5,7 @@
        MouseMove / MouseLeftButtonUp / MouseWheel / Click / Checked / ValueChanged
                                       -> wired in the constructor by x:Name
        Content="{loc:Str …}" on Button and CheckBox -> a TextBlock child (trap 1)
-       FontFamily="/Fonts/#Fredoka, Segoe UI" -> dropped; the font is a WPF-head resource
+       FontFamily="/Fonts/#Fredoka, Segoe UI" -> "Fredoka, Segoe UI" (AppFonts maps both to bundled faces)
        DropShadowEffect on the title  -> dropped; Avalonia has no DropShadowEffect on a TextBlock
        LinearGradientBrush StartPoint/EndPoint -> RelativePoint syntax "0%,0%" / "100%,100%" -->
 <Window xmlns="https://github.com/avaloniaui"
@@ -44,7 +44,7 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="{loc:Str wardrobe_editor_title}"
-                       FontWeight="SemiBold"
+                       FontFamily="Fredoka, Segoe UI" FontWeight="SemiBold"
                        FontSize="22" Foreground="White"/>
             <TextBlock Text="{loc:Str wardrobe_editor_sub}" Foreground="#9A93B8" FontSize="12"
                        TextWrapping="Wrap" Margin="0,4,0,0"/>
