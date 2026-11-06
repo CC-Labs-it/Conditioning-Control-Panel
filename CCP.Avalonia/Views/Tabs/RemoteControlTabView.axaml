@@ -18,8 +18,9 @@
        x:FieldModifier="internal"        -> dropped; no host on this head reads the fields
        helpers:EmoteHelper watermark     -> TextBox.Watermark (native), so the attached
                                             properties and HintOrPlaceholderConverter go away
-       feat:AdaptiveSideArt.CollapseBelow-> dropped with the art column, see below -->
+       feat:AdaptiveSideArt.CollapseBelow-> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold -->
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -109,9 +110,7 @@
                 <!-- ============================ HERO ============================
                      HeroArtPlate is painted in code (ApplyFeatureArt: ModArt.TryLoad, a mod's
                      features/remote_control.png first), which replaces WPF's ImgRemoteControlFeature
-                     mirror. ponytail: the side-art column stays out - WPF's
-                     AdaptiveSideArt.CollapseBelow=1000 collapses it at the width this head renders
-                     at, and that behaviour is its own row (feat-adaptive-side-art). -->
+                     mirror; it paints SideArtPlate too. -->
                 <Border Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
                         BorderBrush="{StaticResource TabHueBorderBrush}" BorderThickness="2" Margin="0,0,0,10">
                     <Grid ColumnDefinitions="*,Auto">
@@ -155,7 +154,16 @@
                     </Grid>
                 </Border>
 
-                <StackPanel x:Name="RemoteControlControls">
+                <!-- ROUND 3 LAYOUT (WPF RemoteControlTabView.xaml:108-116): settings capped at 780
+                     so the pairing console stops being a 1200px runway, and the width that buys back
+                     becomes one art plate. Below 1000px the art column goes to zero (AdaptiveSideArt). -->
+                <Grid sideart:AdaptiveSideArt.CollapseBelow="1000">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" MaxWidth="780"/>
+                        <ColumnDefinition Width="2*"/>
+                    </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" x:Name="RemoteControlControls">
 
                     <!-- Tier comparison cards (3 across). BorderBrush/BorderThickness on these
                          three are WRITTEN from MainWindow.RemoteControl.cs (RefreshTierCardHighlight);
@@ -629,6 +637,36 @@
                     <StackPanel x:Name="RemoteControlPanel" IsVisible="False"/>
 
                 </StackPanel>
+
+                    <!-- SIDE ART (WPF :636-675). The art is the Border's BACKGROUND, not a child Image
+                         (a Border clips its Background to CornerRadius, not its children).
+                         remote_control.png is LANDSCAPE, so the Border takes its height from an
+                         invisible Uniform child Image of the same source and UniformToFill then paints
+                         an exact fit with zero crop. ApplyFeatureArt swaps both for a mod's art. -->
+                    <Border x:Name="SideArtPlate"
+                            Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
+                            BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
+                            VerticalAlignment="Top">
+                        <Border.Background>
+                            <ImageBrush Source="avares://CCP.Avalonia/Resources/features/remote_control.png"
+                                        Stretch="UniformToFill"/>
+                        </Border.Background>
+                        <Grid>
+                            <!-- Sizing-only child: never drawn, never hit-tested. -->
+                            <Image x:Name="SideArtSizer" Stretch="Uniform" Opacity="0" IsHitTestVisible="False"
+                                   Source="avares://CCP.Avalonia/Resources/features/remote_control.png"/>
+                            <!-- Scrim so the plate sits under the page instead of fighting it. -->
+                            <Border CornerRadius="12">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0%,100%" EndPoint="0%,0%">
+                                        <GradientStop Color="#66000000" Offset="0"/>
+                                        <GradientStop Color="#00000000" Offset="0.45"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
 
             </StackPanel>
 
