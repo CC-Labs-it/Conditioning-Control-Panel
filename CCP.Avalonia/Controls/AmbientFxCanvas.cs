@@ -1476,6 +1476,15 @@ namespace ConditioningControlPanel.Avalonia.Controls
             public static bool AllowMarqueeScroll =>
                 Level == MotionLevel.Full && AllowAmbientMotion(SettingsTier);
 
+            /// <summary>
+            /// True while the software-render floor (not the user's own Performance mode) is what put this
+            /// machine on the Performance tier. A few endless loops that WPF gates only on transitions (the
+            /// launcher's edge breath and idle glint) dirty a whole window per frame, which the CPU path
+            /// cannot afford; they hold at rest under this, and their one-shot flares still play.
+            /// </summary>
+            public static bool SoftwareFloorHoldsIdleLoops =>
+                Platform.SoftwareRender.Active == true && SettingsTier != PerformanceTier.Performance;
+
             /// <summary>MotionFx.AllowParticles.</summary>
             public static bool AllowParticles => AllowAmbientLoops && MaxAmbientParticles(CurrentTier) > 0;
 
