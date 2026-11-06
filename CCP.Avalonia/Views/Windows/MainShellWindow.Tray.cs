@@ -49,6 +49,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Menu = BuildTrayMenu(),
                 IsVisible = true,
             };
+            // Avalonia publishes only a TrayIcon listed on the Application: unlisted, the tray menu
+            // objects exist on the bus but no StatusNotifierItem does, so no bar ever shows it.
+            if (Application.Current is { } app) TrayIcon.SetIcons(app, new TrayIcons { Tray });
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
             AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);

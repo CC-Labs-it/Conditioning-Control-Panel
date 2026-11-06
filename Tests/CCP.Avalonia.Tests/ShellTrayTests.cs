@@ -32,6 +32,9 @@ public sealed class ShellTrayTests
             var shell = new MainShellWindow();
             shell.Show();
             shell.CreateTray();   // also proves the avares app.ico resource loads
+            // Unlisted on the Application, Avalonia never publishes the icon: no bar shows it, and
+            // the tray is the panic control a desktop without a global hotkey relies on.
+            Assert.Contains(shell.Tray!, TrayIcon.GetIcons(Application.Current!)!);
             shell.TrayHostPresent = () => true;
             var items = shell.Tray!.Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
             Assert.Equal(
