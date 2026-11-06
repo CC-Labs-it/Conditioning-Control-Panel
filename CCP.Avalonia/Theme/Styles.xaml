@@ -179,6 +179,20 @@
     <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.08"/>
   </Transitions>
 
+  <!-- The default Button: Fluent's, but with WPF's content alignment. WPF's stock Button style sets
+       Horizontal/VerticalContentAlignment Center, so a fixed-Width button (InputDialog Cancel/OK,
+       KnowledgeLinkEditor Cancel/Add, New Enhancement Cancel) centres its label; Fluent leaves it
+       Stretch and the label sat at the left. WPF also leaves the button itself Stretch, so a fixed-Width
+       button centres in its slot (HapticsSetup cards) and an unsized one fills it (Chaos FALL IN);
+       Fluent pins it Left. Keyed as the type's own theme so `BasedOn {x:Type Button}`
+       sites inherit it too; the BasedOn here still resolves to Fluent's (this key is not added yet). -->
+  <ControlTheme x:Key="{x:Type Button}" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="VerticalAlignment" Value="Stretch"/>
+  </ControlTheme>
+
   <!-- Controls.xaml:36. The press-feedback Storyboards (scale 0.97 in, BackEase out) become a
        :pressed RenderTransform plus the direction-specific Transitions above.
        WPF's bare <ContentPresenter/> also has to name what it presents on Avalonia. -->
