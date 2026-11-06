@@ -122,6 +122,31 @@ public sealed class AppFontsTests
         return Task.CompletedTask;
     });
 
+    /// <summary>The default face must reach controls, not only FontManager: a theme resource
+    /// (Fluent ContentControlThemeFontFamily) naming Inter would keep every unstyled label in Inter.</summary>
+    [Fact]
+    public Task UnstyledTextDrawsTheDefaultFaceOffWindows() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApplication();
+        if (OperatingSystem.IsWindows()) return Task.CompletedTask;
+        if (FontManager.Current.DefaultFontFamily.Name != new FontFamily(AppFonts.Default).Name) return Task.CompletedTask;
+        var text = new TextBlock { Text = "Settings" };
+        var button = new Button { Content = "Start" };
+        var host = new Window { Content = new StackPanel { Children = { text, button } } };
+        host.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            foreach (var family in new[] { text.FontFamily, button.FontFamily })
+            {
+                Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(family), out var face), family.ToString());
+                Assert.True(face!.FamilyName.StartsWith("Selawik", StringComparison.Ordinal), $"{family} -> {face.FamilyName}");
+            }
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
     // Deliberately bypass Program.BuildAvaloniaApp, as the headless hosts and designer do.
     [Fact]
     public Task HeadlessSystemFallbackBuildsTextGeometry() => AvaloniaTestDispatcher.RunAsync(() =>

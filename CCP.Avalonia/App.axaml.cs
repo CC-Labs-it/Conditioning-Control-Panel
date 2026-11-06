@@ -526,6 +526,10 @@ namespace ConditioningControlPanel.Avalonia
             AvaloniaXamlLoader.Load(this);
             ConditioningControlPanel.Services.Chaos.ChaosRunState.IconResolver = Views.Chaos.ChaosBoonBarArt.Resolve;
             Platform.FontGuard.Startup.Verify(Resources, OperatingSystem.IsWindows()); // before any window, including the splash
+            // Fluent names Inter for every control (ContentControlThemeFontFamily "fonts:Inter#Inter, $Default"), so the
+            // FontManager default alone never reached the UI. Off Windows, unstyled text draws WPF's Segoe UI stand-in.
+            if (!OperatingSystem.IsWindows())
+                Resources["ContentControlThemeFontFamily"] = new global::Avalonia.Media.FontFamily(Platform.AppFonts.Default);
             ConditioningControlPanel.Services.PlayerLook.KnownIdsProvider = () =>
                 (ConditioningControlPanel.Services.ShopCosmeticsRegistry.AllAvatarIds(), ConditioningControlPanel.Services.ShopCosmeticsRegistry.FrameIds());
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
