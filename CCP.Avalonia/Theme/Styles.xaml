@@ -1316,9 +1316,11 @@
                 <ContentPresenter Grid.Column="2" Content="{TemplateBinding Header}"
                                   ContentTemplate="{TemplateBinding HeaderTemplate}"
                                   VerticalAlignment="Center"/>
-                <TextBlock x:Name="Chevron" Grid.Column="3" Text="&#x25B8;" Foreground="{DynamicResource PinkBrush}"
-                           FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,4,0"
-                           RenderTransformOrigin="50%,50%"/>
+                <!-- WPF draws "&#x25B8;" (14 Bold). Not every Linux face has U+25B8, and the fallback
+                     glyph came out about twice the size; the filled caret is the same small triangle. -->
+                <fx:IconGlyph x:Name="Chevron" Grid.Column="3" Kind="CaretRight" Variant="Filled" Size="8"
+                              Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center" Margin="8,0,4,0"
+                              RenderTransformOrigin="50%,50%"/>
               </Grid>
             </ToggleButton>
             <ContentPresenter x:Name="PART_ContentPresenter" Grid.Row="1" Margin="15,0,15,15"
@@ -1329,7 +1331,7 @@
         </Border>
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:expanded /template/ TextBlock#Chevron">
+    <Style Selector="^:expanded /template/ fx|IconGlyph#Chevron">
       <Setter Property="RenderTransform" Value="rotate(90deg)"/>
     </Style>
   </ControlTheme>
