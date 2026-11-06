@@ -101,7 +101,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _parentWindow.RemoveHandler(PointerPressedEvent, OnParentPointerPressedForFollow);
         }
 
-        private void OnParentPositionChanged(object? s, PixelPointEventArgs e) => UpdatePosition();
+        private void OnParentPositionChanged(object? s, PixelPointEventArgs e)
+        {
+            NoteParentPositionReported();
+            UpdatePosition();
+        }
 
         private void OnParentPropertyChanged(object? s, AvaloniaPropertyChangedEventArgs e)
         {

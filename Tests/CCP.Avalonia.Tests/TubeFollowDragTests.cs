@@ -36,7 +36,7 @@ public sealed class TubeFollowDragTests
         var followed = tube.Position;
         Assert.NotEqual(before, followed);
 
-        // Exactly where the ordinary dock puts her once main's move is reported.
+        // Exactly where the ordinary dock puts her once main's move is reported (this also reports it).
         main.Position = new PixelPoint(2150, 280);
         tube.UpdatePosition();
         Assert.Equal(tube.Position, followed);
@@ -46,7 +46,7 @@ public sealed class TubeFollowDragTests
 
         button = false;
         for (int i = 0; i < AvatarTubeWindow.FollowStillTicks; i++) tube.FollowTick();
-        Assert.False(tube.FollowPollRunning);    // released and still: done
+        Assert.False(tube.FollowPollRunning);    // released, still and reported by the WM: done
         main.MouseUp(new Point(20, 10), MouseButton.Left);
     });
 
@@ -55,17 +55,31 @@ public sealed class TubeFollowDragTests
     {
         // A quick press-drag-release can end before the WM's grab starts; the WM's move then runs on.
         var live = new PixelPoint(2000, 200);
+        var now = new DateTime(2026, 11, 6, 22, 0, 0, DateTimeKind.Utc);
         tube.ReadRootOrigin = _ => live;
         tube.ReadButtonDown = () => false;
+        tube.FollowClock = () => now;
         tube.StartFollowPoll();
+        // Button already up and nothing moved yet: not over, the WM has not reported - look slowly.
+        for (int i = 0; i < AvatarTubeWindow.FollowStillTicks; i++) tube.FollowTick();
+        Assert.True(tube.FollowPollIdle);
+        now = now.AddSeconds(5);                  // the user moves the mouse later: main follows it
         for (int i = 0; i < 5; i++)
         {
             live = new PixelPoint(live.X - 40, live.Y + 10);
             tube.FollowTick();
-            Assert.True(tube.FollowPollRunning);  // still moving: keep following
+            Assert.True(tube.FollowPollRunning);  // still moving: keep following, at full rate
+            Assert.False(tube.FollowPollIdle);
         }
-        main.Position = live;
         var expected = tube.Position;
+        // The quiet limit ends a poll whose move never reports and never moves again.
+        for (int i = 0; i < AvatarTubeWindow.FollowStillTicks; i++) tube.FollowTick();
+        Assert.True(tube.FollowPollIdle);
+        now = now.AddSeconds(16);
+        tube.FollowTick();
+        Assert.False(tube.FollowPollRunning);
+
+        main.Position = live;                     // the WM's final report: same dock
         tube.UpdatePosition();
         Assert.Equal(expected, tube.Position);
     });
