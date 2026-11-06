@@ -1723,7 +1723,7 @@
   },
   Background: Transparent,
   Width: 860.0,
-  Height: 679.0,
+  Height: 698.0,
   MinHeight: 580.0,
   IsVisible: true
 }
