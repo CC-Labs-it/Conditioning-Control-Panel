@@ -23,14 +23,40 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <summary>
     /// Detects Skia's CPU backend: a <see cref="CompositionCustomVisual"/> asks the render thread for the
     /// Skia lease of the frame it draws, and a lease without a <c>GRContext</c> is a raster (CPU) surface.
-    /// <c>CCP_SOFTWARE_RENDER=1|0</c> forces the answer (A/B on a GPU machine, or opting out).
+    /// Whether the lighter tier applies is <see cref="FloorActive"/>: Settings ▸ Performance ▸ Lighter effects
+    /// (Auto = this probe, On, Off). <c>CCP_SOFTWARE_RENDER=1|0</c> is a dev override above the setting.
     /// <c>CCP_FRAME_STATS=1</c> keeps the visual on every window it probed and logs the render thread's
     /// frame rate, the shared beat's tick rate and the running frame clocks every five seconds ([FRAMESTATS]).
     /// </summary>
     internal static class SoftwareRender
     {
-        /// <summary>Null until a frame answered (or the override did); then fixed for the process.</summary>
-        internal static bool? Active { get; private set; } = ParseOverride(Environment.GetEnvironmentVariable("CCP_SOFTWARE_RENDER"));
+        /// <summary>What the probe found: null until it answered, then fixed for the process.</summary>
+        internal static bool? Active { get; private set; }
+
+        /// <summary>CCP_SOFTWARE_RENDER=1|0: a developer override that beats the setting (A/B runs).</summary>
+        internal static bool? DevOverride { get; private set; } = ParseOverride(Environment.GetEnvironmentVariable("CCP_SOFTWARE_RENDER"));
+
+        /// <summary>
+        /// Does the lighter FX tier apply? The dev override, else Settings ▸ Performance ▸ Lighter effects:
+        /// On and Off decide; Auto (the default) follows the probe.
+        /// </summary>
+        internal static bool FloorActive => DevOverride ?? Decide(Setting, Active);
+
+        internal static bool Decide(global::ConditioningControlPanel.Models.LighterEffectsMode mode, bool? detected) => mode switch
+        {
+            global::ConditioningControlPanel.Models.LighterEffectsMode.On => true,
+            global::ConditioningControlPanel.Models.LighterEffectsMode.Off => false,
+            _ => detected == true,
+        };
+
+        private static global::ConditioningControlPanel.Models.LighterEffectsMode Setting
+        {
+            get
+            {
+                try { return CoreSettings.Current.LighterEffects; }
+                catch { return global::ConditioningControlPanel.Models.LighterEffectsMode.Auto; }
+            }
+        }
 
         /// <summary>Raised once on the UI thread when <see cref="Active"/> becomes known from a frame.</summary>
         internal static event Action<bool>? Detected;
@@ -91,17 +117,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (Active != null) return;
             Active = software;
             Serilog.Log.Information(software
-                ? "[FXPERF] Skia is drawing on the CPU (no GPU): FX take WPF's Performance mode tier (ambient loops and glows off, the marquee keeps scrolling); CCP_SOFTWARE_RENDER=0 opts out"
-                : "[FXPERF] Skia is drawing on the GPU");
+                ? "[FXPERF] Skia is drawing on the CPU (no GPU); lighter effects {Mode}, applied {Applied} (WPF's Performance mode tier)"
+                : "[FXPERF] Skia is drawing on the GPU (lighter effects {Mode}, applied {Applied})", Setting, DevOverride ?? Decide(Setting, software));
             Detected?.Invoke(software);
             // Every running loop re-reads its gate and budget (FX built before the answer read Quality).
-            if (software) Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            if (FloorActive) Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
         }
 
         /// <summary>Tests: back to the unanswered, disarmed state a test process starts in.</summary>
         internal static void ResetForTests()
         {
-            Active = ParseOverride(Environment.GetEnvironmentVariable("CCP_SOFTWARE_RENDER"));
+            Active = null;
+            DevOverride = ParseOverride(Environment.GetEnvironmentVariable("CCP_SOFTWARE_RENDER"));
             Armed = false;
             Interlocked.Exchange(ref _probeAt, 0);
         }

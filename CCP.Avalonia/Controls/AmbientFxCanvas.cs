@@ -1406,7 +1406,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             {
                 get
                 {
-                    return WithSoftwareFloor(SettingsTier, Platform.SoftwareRender.Active);
+                    return WithSoftwareFloor(SettingsTier, Platform.SoftwareRender.FloorActive);
                 }
             }
 
@@ -1477,13 +1477,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 Level == MotionLevel.Full && AllowAmbientMotion(SettingsTier);
 
             /// <summary>
-            /// True while the software-render floor (not the user's own Performance mode) is what put this
-            /// machine on the Performance tier. A few endless loops that WPF gates only on transitions (the
-            /// launcher's edge breath and idle glint) dirty a whole window per frame, which the CPU path
-            /// cannot afford; they hold at rest under this, and their one-shot flares still play.
+            /// True while the lighter tier for the CPU path applies (<see cref="Platform.SoftwareRender.FloorActive"/>).
+            /// A few endless loops WPF never gates on the tier (the launcher's edge breath and idle glint, the
+            /// avatar tube's idle bob) repaint a whole window per frame, which the CPU path cannot afford: they
+            /// hold at rest under this, and one-shot flares and animation states still play.
             /// </summary>
-            public static bool SoftwareFloorHoldsIdleLoops =>
-                Platform.SoftwareRender.Active == true && SettingsTier != PerformanceTier.Performance;
+            public static bool SoftwareFloorHoldsIdleLoops => Platform.SoftwareRender.FloorActive;
 
             /// <summary>MotionFx.AllowParticles.</summary>
             public static bool AllowParticles => AllowAmbientLoops && MaxAmbientParticles(CurrentTier) > 0;

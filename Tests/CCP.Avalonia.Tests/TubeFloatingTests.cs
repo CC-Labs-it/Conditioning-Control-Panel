@@ -72,6 +72,32 @@ public sealed class TubeFloatingTests
         Assert.Equal(Math.Sin(127 * 0.05) * 4, bob.Y, 8);
     });
 
+    /// <summary>Owner decision (lane perf): on the CPU path the idle bob holds still; with a GPU (or Lighter
+    /// effects Off) it is WPF's ungated bob, and a live change of the setting resumes or holds it.</summary>
+    [Fact]
+    public Task IdleBobHoldsStillOnTheCpuPath() => Run(tube =>
+    {
+        var s = CoreSettings.Current;
+        var bob = Assert.IsType<TranslateTransform>(Assert.IsType<TransformGroup>(
+            tube.FindControl<Image>("ImgAvatar")!.RenderTransform).Children[1]);
+        try
+        {
+            Assert.True(tube.IsFloating);                              // GPU / unknown: WPF's bob
+            s.LighterEffects = LighterEffectsMode.On;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(tube.IsFloating);
+            Assert.Null(tube.FloatingFrame);
+            Assert.Equal(0, bob.Y);
+            tube.Hide();
+            tube.Show();                                               // a re-show does not restart it
+            Assert.False(tube.IsFloating);
+            s.LighterEffects = LighterEffectsMode.Off;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(tube.IsFloating);
+        }
+        finally { s.LighterEffects = LighterEffectsMode.Auto; }
+    });
+
     [Fact]
     public Task ClosingStopsTheBobAndLateTicksCannotMoveTheAvatar() => Run(tube =>
     {

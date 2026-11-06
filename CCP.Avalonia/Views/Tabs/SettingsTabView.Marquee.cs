@@ -57,6 +57,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF: "Speed: 80 pixels per second".</summary>
         internal const double PixelsPerSecond = 80;
 
+        /// <summary>Owner decision (lane perf, 2026-11-06): on the CPU path (the lighter-effects tier) the
+        /// strip steps at 20 fps; every frame there costs a whole-window present.</summary>
+        internal static readonly TimeSpan CpuPathInterval = TimeSpan.FromSeconds(1.0 / 20);
+        internal static readonly TimeSpan BeatInterval = TimeSpan.FromSeconds(1.0 / 30);
+
         /// <summary>WPF: 10 spaces between repetitions.</summary>
         internal const string Separator = "          ";
 
@@ -81,6 +86,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The beat's clock is subscribed: false while Home is hidden (P01).</summary>
         internal bool IsTicking => _loop.IsTicking;
+
+        /// <summary>The beat the strip steps on (tests).</summary>
+        internal TimeSpan Interval => _loop.Interval;
 
         /// <summary>The upper-cased message the strip was last built from.</summary>
         internal string CurrentMessage { get; private set; } = "";
@@ -150,6 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     return;
                 }
                 _text.Text = string.Concat(Enumerable.Repeat(segment, (int)Math.Ceiling(canvasWidth / SegmentWidth) + 2));
+                _loop.Interval = AmbientFxCanvas.Env.SoftwareFloorHoldsIdleLoops ? CpuPathInterval : BeatInterval;
                 _loop.Start();
                 Reads?.Arm(SegmentWidth / PixelsPerSecond);
             }

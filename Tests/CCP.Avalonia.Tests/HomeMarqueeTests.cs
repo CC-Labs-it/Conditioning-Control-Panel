@@ -172,6 +172,13 @@ public sealed class HomeMarqueeTests
             Assert.False(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops);
             dash.StartMarqueeAnimation();
             Assert.True(dash.Marquee.IsScrolling);
+            Assert.Equal(MarqueeScroller.CpuPathInterval, dash.Marquee.Interval);   // owner: 20 fps on the CPU path
+            s.LighterEffects = LighterEffectsMode.Off;                            // the user's Off beats the probe
+            dash.StartMarqueeAnimation();
+            Assert.Equal(MarqueeScroller.BeatInterval, dash.Marquee.Interval);
+            s.LighterEffects = LighterEffectsMode.On;
+            dash.StartMarqueeAnimation();
+            Assert.Equal(MarqueeScroller.CpuPathInterval, dash.Marquee.Interval);
             s.PerformanceMode = true;
             dash.StartMarqueeAnimation();
             Assert.False(dash.Marquee.IsScrolling);
@@ -180,6 +187,7 @@ public sealed class HomeMarqueeTests
         {
             global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests();
             s.PerformanceMode = false;
+            s.LighterEffects = LighterEffectsMode.Auto;
         }
         return Task.CompletedTask;
     });
