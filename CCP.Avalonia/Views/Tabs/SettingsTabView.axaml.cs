@@ -67,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             InitFavoritesDrawer();
             InitProgramTodayCard();   // the Training Programs "Today" card (SettingsTabView.ProgramToday.cs)
             InitializeMarqueeStrip(); // SettingsTabView.Marquee.cs
+            InitTileTitles();         // SettingsTabView.TileTitles.cs (WPF ApplyModFeatureNames)
         }
 
         // ------------------------------------------------------------------------------
