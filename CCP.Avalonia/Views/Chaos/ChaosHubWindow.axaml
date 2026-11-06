@@ -757,7 +757,7 @@
                         </Button>
                         <Button x:Name="BtnMenuStory" Theme="{StaticResource MenuBtn}"
                                 Click="Menu_Story_Click" ToolTip.Tip="the Madam's narrated descent — coming soon.">
-                            <StackPanel Orientation="Horizontal" Spacing="12"><fx:IconGlyph Kind="BookOpen" VerticalAlignment="Center"/><TextBlock Text="STORY MODE" VerticalAlignment="Center"/><fx:IconGlyph Kind="LockClosed" VerticalAlignment="Center"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="12"><fx:IconGlyph Kind="BookOpen" Size="19" VerticalAlignment="Center"/><TextBlock Text="STORY MODE" VerticalAlignment="Center"/><fx:IconGlyph Kind="LockClosed" Size="19" VerticalAlignment="Center"/></StackPanel>
                         </Button>
                         <Button x:Name="BtnMenuOptions" Theme="{StaticResource MenuBtn}" Click="Menu_Options_Click">
                             <fx:IconLabel Text="OPTIONS" Kind="Settings" Spacing="12"/>
