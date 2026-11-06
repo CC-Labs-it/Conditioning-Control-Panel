@@ -77,7 +77,37 @@ public class BillboardArtParityShotsTests
             }
             view.Release();
         }
+
+        // The living poster (PosterArtView): still, landing, rest and hover after fixed steps, the
+        // same steps CCP.Avalonia.Tests BillboardLivingPosterTests takes.
+        if (!string.IsNullOrEmpty(only) && Array.IndexOf(only.Split(','), "poster") < 0) return;
+        var poster = new PosterArtView("features/deeper.png") { Accent = Color.FromRgb(0x9b, 0x7b, 0xff) };
+        var frame = new Grid { Background = new SolidColorBrush(Color.FromRgb(0x12, 0x10, 0x1F)), Width = 1000, Height = 420 };
+        frame.Children.Add(poster);
+        frame.Measure(new Size(1000, 420));
+        frame.Arrange(new Rect(0, 0, 1000, 420));
+        frame.UpdateLayout();
+        Save(frame, Path.Combine(dir, "wpf-poster-still.png"));
+        poster.Play();
+        poster.Step(0.05, false, default);
+        Save(frame, Path.Combine(dir, "wpf-poster-land.png"));
+        for (int i = 0; i < 20; i++) poster.Step(0.033, false, default);
+        Save(frame, Path.Combine(dir, "wpf-poster-rest.png"));
+        for (int i = 0; i < 30; i++) poster.Step(0.033, true, new Point(0.85, 0.25));
+        Save(frame, Path.Combine(dir, "wpf-poster-hover.png"));
+        poster.Release();
     });
+
+    private static void Save(FrameworkElement e, string path)
+    {
+        e.UpdateLayout();
+        var bmp = new RenderTargetBitmap(1000, 420, 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(e);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(bmp));
+        using var f = File.Create(path);
+        enc.Save(f);
+    }
 }
 
 internal static class BuiltInArtTestData

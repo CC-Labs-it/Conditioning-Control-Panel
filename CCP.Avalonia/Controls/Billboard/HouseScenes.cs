@@ -6,8 +6,7 @@ using Avalonia.Controls;
 
 namespace ConditioningControlPanel.Avalonia.Controls.Billboard
 {
-    /// <summary>WPF HouseScenes. A stem with no scene on this head yet returns null, and the card
-    /// keeps its poster picture (WPF PosterArtView).</summary>
+    /// <summary>WPF HouseScenes: any other poster keeps the living <see cref="PosterArtView"/>.</summary>
     public static class HouseScenes
     {
         public static Control? Create(string? posterPath) =>
@@ -19,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 "loom" => new LoomHouseArt(),
                 "support" => new SupportHouseArt(),
                 "backroom" => new WheelArtView(),
-                _ => null,
+                _ => new PosterArtView(posterPath),
             };
 
         /// <summary>Stems that only ever existed as a drawn scene: their poster path is a scene key with no
