@@ -1110,18 +1110,9 @@ namespace ConditioningControlPanel.Avalonia
                 try
                 {
                     shell.CreateTray();
-                    // WPF MainWindow.xaml.cs:3594: StartMinimized sends the shown window to the tray.
-                    // Only with a tray host to come back through; without one the window stays up.
                     if (!panelHidden && Settings.Current.StartMinimized)
                     {
-                        // Off the UI thread: the icon registers after CreateTray returns, on that thread.
-                        // Only a confirmed icon hides it: staying visible is harmless, unlike vanishing.
-                        async void ToTray(object? s, EventArgs e)
-                        {
-                            shell.Opened -= ToTray;
-                            var state = await System.Threading.Tasks.Task.Run(Views.Windows.MainShellWindow.ProbeTrayItem);
-                            if (state == ConditioningControlPanel.Services.Notifications.TrayItemState.Held) shell.Hide();
-                        }
+                        void ToTray(object? s, EventArgs e) { shell.Opened -= ToTray; _ = shell.HideToTrayOnceHeld(); }
                         shell.Opened += ToTray;
                     }
                 }

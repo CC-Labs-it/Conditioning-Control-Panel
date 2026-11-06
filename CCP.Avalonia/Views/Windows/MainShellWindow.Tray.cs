@@ -39,6 +39,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>`--tray-check`: a deliberate live probe, the one sandboxed run that may publish.</summary>
         internal static bool TrayCheck { get; set; }
 
+        /// <summary>A failure until a verdict lands, so a signal or a closed window cannot pass the check.</summary>
+        internal static int TrayCheckExit { get; private set; } = 1;
+
         /// <summary>Test seam for the sandbox check.</summary>
         internal static Func<bool> TraySandboxed { get; set; } = () => global::ConditioningControlPanel.Services.SandboxNet.Active;
 
@@ -70,14 +73,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Tray = tray;
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
-            // Avalonia's Linux exporter raises no Opening, so WPF's refresh on open never runs there.
-            if (publish && !OperatingSystem.IsWindows())
+            // Avalonia raises Opening only on macOS, so WPF's refresh on open never runs on Linux or Windows.
+            if (publish)
             {
                 var refresh = new global::Avalonia.Threading.DispatcherTimer(TimeSpan.FromSeconds(2),
                     global::Avalonia.Threading.DispatcherPriority.Background, (_, _) => RefreshTrayMenu());
                 refresh.Start();
                 Closed += (_, _) => refresh.Stop();
             }
+            Closed += (_, _) => _trayListed = false;
             AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
             return Tray;
         }
@@ -221,8 +225,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF WindowChrome.cs:140: closing (real exit OR minimize-to-tray) always ends a Chaos run.
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { }
-            if (Tray is not null && !_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing
-                && TrayHostPresent())
+            var byUser = Tray is not null && !_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing;
+            if (byUser && _trayRechecking) { e.Cancel = true; return; }
+            var verdict = _trayXVerdict;
+            _trayXVerdict = null;
+            var mayHide = byUser && (verdict ?? TrayHostPresent());
+            if (byUser && !mayHide && verdict is null && TrayAnswerMayChange) { e.Cancel = true; RecheckTrayThenClose(); return; }
+            if (mayHide)
             {
                 e.Cancel = true;
                 // WPF WindowChrome.cs:345: quizzes are unowned topmost windows that would stay on screen.
@@ -241,6 +250,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF WindowChrome.cs:176: the Companion drawers' state, when quitting from that tab.
             try { PersistCompanionDrawerStatesOnExit(); } catch { }
             base.OnClosing(e);
+        }
+
+        private bool _trayRechecking;
+        private bool? _trayXVerdict;
+
+        private bool TrayAnswerMayChange => _trayListed && !OperatingSystem.IsWindows()
+            && TrayHostPresent == (Func<bool>)ProbeTrayItemRegistered;
+
+        // Unlisted, as seen from the UI thread, can just mean registration is still queued on this thread or
+        // a new watcher took over. X ends the session only if that is still so with this thread free.
+        private async void RecheckTrayThenClose()
+        {
+            _trayRechecking = true;
+            var state = await Task.Run(ProbeTrayItem);
+            _trayRechecking = false;
+            if (_windowClosed || _exitRequested) return;
+            _trayXVerdict = TrayItemRule.XMayHide(state);
+            Close();
+        }
+
+        /// <summary>WPF MainWindow.xaml.cs:3594: StartMinimized sends the shown window to the tray, here once
+        /// the icon is confirmed, because staying visible is harmless and vanishing is not. The icon registers
+        /// after CreateTray returns, on the UI thread, which a busy startup can hold for a while.</summary>
+        internal async Task HideToTrayOnceHeld()
+        {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(1));
+                if (await Task.Run(ProbeTrayItem) != TrayItemState.Held) continue;
+                if (IsVisible) HideForLauncher(quiet: true);
+                return;
+            }
         }
 
         /// <summary>The X answer: hide unless the tray said no. See <see cref="TrayItemRule.XMayHide"/>.</summary>
@@ -263,7 +304,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static TrayItemState AskTrayWatcher()
         {
             var attempts = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess() ? 1 : 5;
-            var answers = 0;
+            var refusals = 0;
             try
             {
                 var probe = Task.Run(async () =>
@@ -273,26 +314,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     for (var attempt = 0; attempt < attempts; attempt++)
                     {
                         if (attempt > 0) await Task.Delay(250);
-                        if (await TrayItemListedAsync(bus)) return true;
-                        Interlocked.Increment(ref answers);
+                        if (await TrayItemListedAsync(bus) is not { } listed) continue;   // no proper answer
+                        if (listed) return true;
+                        Interlocked.Increment(ref refusals);
                     }
                     return false;
                 });
-                if (probe.Wait(TimeSpan.FromSeconds(2))) return probe.Result ? TrayItemState.Held : TrayItemState.NotHeld;
-                if (Volatile.Read(ref answers) > 0) return TrayItemState.NotHeld;   // slow, but it did say no
-                Serilog.Log.Warning("Tray item probe timed out with no answer from the watcher");
+                var finished = probe.Wait(TimeSpan.FromSeconds(2));
+                if (finished && probe.Result) return TrayItemState.Held;
+                if (Volatile.Read(ref refusals) > 0) return TrayItemState.NotHeld;   // slow, but it did say no
+                Serilog.Log.Warning("Tray item probe got no proper answer from the watcher");
                 return TrayItemState.Unknown;
             }
             catch (Exception ex)
             {
-                Serilog.Log.Warning(ex, "Tray item probe failed; X will exit instead of hiding");
+                Serilog.Log.Warning(ex, "No session bus, so no tray; X will exit instead of hiding");
                 return TrayItemState.NotHeld;
             }
         }
 
         // Names, not PIDs: in a Flatpak the bus and the app do not agree on PIDs. Avalonia owns the name on a
         // private connection, so only the name's PID part ties it to us, and two Flatpaks can share one.
-        private static async Task<bool> TrayItemListedAsync(DBusConnection bus)
+        private static async Task<bool?> TrayItemListedAsync(DBusConnection bus)
         {
             try
             {
@@ -303,7 +346,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var name in mine.ToArray()) mine.Add(await BusNameOwnerAsync(bus, name));
                 return TrayItemRule.Holds(items, mine);
             }
-            catch (DBusErrorReplyException) { return false; }   // the watcher or the name went away mid-probe
+            catch (Exception ex)   // the watcher went away mid-probe, or errored: that is not a refusal
+            {
+                Serilog.Log.Debug(ex, "Tray item probe: no proper answer");
+                return null;
+            }
         }
 
         private static async Task<bool> TrayWatcherOwnedAsync(DBusConnection bus)
@@ -350,9 +397,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             await Task.Delay(TimeSpan.FromSeconds(2));
             var state = ProbeTrayItem();
             Console.WriteLine($"tray item registered: {state}");
+            TrayCheckExit = state == TrayItemState.Held ? 0 : 1;
             // Through the lifetime: Environment.Exit from here segfaults in native teardown (exit 139).
             global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown(state == TrayItemState.Held ? 0 : 1));
+                (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown(TrayCheckExit));
         });
 
         /// <summary>Linux has a tray host only while a StatusNotifierWatcher owns its name.</summary>

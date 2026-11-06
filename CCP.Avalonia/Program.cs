@@ -247,9 +247,9 @@ namespace ConditioningControlPanel.Avalonia
                             as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
                 });
             App.SplashOnStartup = true;
-            var exitCode = app.StartWithClassicDesktopLifetime(args);
+            app.StartWithClassicDesktopLifetime(args);
             App.StartupFailure?.Throw();   // a failed startup crashes non-zero, as it did before the splash
-            return Views.Windows.MainShellWindow.TrayCheck ? exitCode : 0;
+            return Views.Windows.MainShellWindow.TrayCheck ? Views.Windows.MainShellWindow.TrayCheckExit : 0;
         }
 
         public static AppBuilder BuildAvaloniaApp()

@@ -1,4 +1,6 @@
 using System;
+using ConditioningControlPanel.Services.Notifications;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -50,6 +52,73 @@ public sealed class ShellTrayTests
             return Task.CompletedTask;
         });
     }
+
+    private static Task WithListedTray(Func<MainShellWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var realQuery = MainShellWindow.TrayItemQuery;
+        MainShellWindow.TraySandboxed = () => false;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.CreateTray();
+            await body(shell);
+        }
+        finally
+        {
+            MainShellWindow.TrayItemQuery = realQuery;
+            MainShellWindow.TraySandboxed = () => global::ConditioningControlPanel.Services.SandboxNet.Active;
+            shell.TrayHostPresent = () => false;
+            shell.Close();
+            shell.Tray?.Dispose();
+            TrayIcon.SetIcons(Application.Current!, null!);
+        }
+    });
+
+    private static TrayItemState[] States(params string[] names) => names.Select(Enum.Parse<TrayItemState>).ToArray();
+
+    [Theory]
+    [InlineData("Held", false)]
+    [InlineData("Unknown", false)]
+    [InlineData("NotHeld", true)]
+    public Task XExitsOnlyIfTheIconIsStillUnlistedWithTheUiThreadFree(string second, bool exits) => WithListedTray(async shell =>
+    {
+        // Registration finishes on the UI thread, so its first answer can be a false no.
+        var answers = new Queue<TrayItemState>(States("NotHeld", second));
+        MainShellWindow.TrayItemQuery = () => answers.Dequeue();
+        var closed = false;
+        shell.Closed += (_, _) => closed = true;
+        shell.Close();
+        Assert.True(shell.IsVisible);
+        Assert.False(closed);
+        for (var i = 0; i < 300 && shell.IsVisible; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+        Assert.False(shell.IsVisible);
+        Assert.Equal(exits, closed);
+        if (!exits) return;
+        MainShellWindow.TrayItemQuery = () => throw new InvalidOperationException("a closed shell has no icon to ask about");
+        Assert.Equal(TrayItemState.NotHeld, MainShellWindow.ProbeTrayItem());
+    });
+
+    [Fact]
+    public Task StartMinimizedWaitsOutASlowRegistration() => WithListedTray(async shell =>
+    {
+        var answers = new Queue<TrayItemState>(States("NotHeld", "Held"));
+        MainShellWindow.TrayItemQuery = () => answers.Dequeue();
+        await shell.HideToTrayOnceHeld();
+        Assert.False(shell.IsVisible);
+    });
+
+    [Fact]
+    public Task StartMinimizedStaysUpWithoutAConfirmedIcon() => WithListedTray(async shell =>
+    {
+        MainShellWindow.TrayItemQuery = () => TrayItemState.Unknown;
+        await shell.HideToTrayOnceHeld();
+        Assert.True(shell.IsVisible);
+    });
 
     [Fact]
     public async Task TrayMenuStopsOverlaysHidesOnCloseAndExits()

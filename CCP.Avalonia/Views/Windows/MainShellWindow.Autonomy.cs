@@ -308,10 +308,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CancelVoicePrompt();   // decisions "Panic ↔ mic": the capture in flight ends, the loop stays armed
         }
 
+        private bool _autonomyResumeDecided;
+
         /// <summary>WPF App.xaml.cs:4284: re-arm only on the resume-on-startup opt-in; otherwise the
         /// stale enabled flag is cleared so the switch reads OFF on a fresh launch.</summary>
         private void ResumeAutonomyOnStartup()
         {
+            // Opened fires on every Hide/Show, and a restore from the tray is no startup: it would stop a live Takeover.
+            if (_autonomyResumeDecided) return;
+            _autonomyResumeDecided = true;
             var s = CoreSettings.Current;
             if (s.AutonomyResumeOnStartup && s.AutonomyModeEnabled && s.AutonomyConsentGiven)
             {
