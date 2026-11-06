@@ -76,6 +76,12 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
     [DllImport(LibX11)] private static extern int XSetTransientForHint(IntPtr display, IntPtr window, IntPtr owner);
     [DllImport(LibX11)] private static extern int XDeleteProperty(IntPtr display, IntPtr window, IntPtr property);
+    [DllImport(LibX11)] private static extern int XMapWindow(IntPtr display, IntPtr window);
+    [DllImport(LibX11)] private static extern int XUnmapWindow(IntPtr display, IntPtr window);
+    [DllImport(LibX11)] private static extern int XFree(IntPtr data);
+    [DllImport(LibX11)] private static extern int XGetWindowProperty(IntPtr display, IntPtr window, IntPtr property,
+        long offset, long length, bool delete, IntPtr reqType, out IntPtr actualType, out int actualFormat,
+        out ulong nItems, out ulong bytesAfter, out IntPtr prop);
 
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
     [DllImport(LibXfixes)] private static extern IntPtr XFixesCreateRegion(IntPtr display, IntPtr rectangles, int count);
@@ -325,6 +331,74 @@ internal static class X11Overlay
     }
 
     internal static Action<TopLevel>? RaiseRequestedForTests; // Headless call-order observation only.
+
+    /// <summary>Test seam: stands in for <see cref="WmCannotKeepAbove"/> (headless has no window manager).</summary>
+    internal static Func<bool>? WmCannotKeepAboveForTests;
+    /// <summary>Headless call-order observation of <see cref="Remap"/>.</summary>
+    internal static Action<TopLevel>? RemapRequestedForTests;
+    private static bool? _wmCannotKeepAbove;
+
+    /// <summary>
+    /// The running window manager publishes <c>_NET_SUPPORTED</c> WITHOUT <c>_NET_WM_STATE_ABOVE</c>,
+    /// so <c>Window.Topmost</c> holds nothing: any click on a normal window brings it over a "topmost"
+    /// one. That is WSLg's Weston (measured 11-06: MOVERESIZE, STATE with FULLSCREEN/MAXIMIZED only,
+    /// ACTIVE_WINDOW, FRAME_EXTENTS), where each X window is a Windows RAIL window whose z-order
+    /// Windows decides; there XRaiseWindow, _NET_RESTACK_WINDOW, _NET_ACTIVE_WINDOW and
+    /// WM_TRANSIENT_FOR all leave the Windows z-order alone and only a fresh map lands on top
+    /// (scratchpad showquiet/xprobe.py). False with no WM at all, on a WM that keeps the layer
+    /// (openbox, xfwm4, KWin, Mutter), on Windows and headless. Read once per process.
+    /// </summary>
+    internal static bool WmCannotKeepAbove
+    {
+        get
+        {
+            if (WmCannotKeepAboveForTests is { } seam) return seam();
+            if (OperatingSystem.IsWindows()) return false;
+            lock (Gate)
+            {
+                if (_wmCannotKeepAbove is bool known) return known;
+                if (!EnsureDisplay()) return false;   // not cached: no display yet is not an answer
+                var supported = XInternAtom(_display, "_NET_SUPPORTED", false);
+                var above = XInternAtom(_display, "_NET_WM_STATE_ABOVE", false);
+                bool listed = false, any = false;
+                if (XGetWindowProperty(_display, XDefaultRootWindow(_display), supported, 0, 4096, false, (IntPtr)4 /* XA_ATOM */,
+                        out _, out var format, out var n, out _, out var prop) == 0 && prop != IntPtr.Zero)
+                {
+                    try
+                    {
+                        any = format == 32 && n > 0;
+                        for (ulong i = 0; any && i < n && !listed; i++)
+                            listed = Marshal.ReadIntPtr(prop, (int)i * IntPtr.Size) == above;   // format-32 items are longs
+                    }
+                    finally { XFree(prop); }
+                }
+                _wmCannotKeepAbove = any && !listed;
+                if (_wmCannotKeepAbove == true)
+                    Log.Information("X11: the window manager does not keep windows above others (no _NET_WM_STATE_ABOVE); topmost windows are re-mapped to stay on top");
+                return _wmCannotKeepAbove.Value;
+            }
+        }
+    }
+
+    /// <summary>Unmap and map <paramref name="window"/> again, so it lands on top of the stack where
+    /// the window manager cannot keep a window above (<see cref="WmCannotKeepAbove"/>). The window's
+    /// attributes, override-redirect, input shape and properties survive; nothing is activated.
+    /// False on Windows, headless and native Wayland.</summary>
+    internal static bool Remap(TopLevel window)
+    {
+        RemapRequestedForTests?.Invoke(window);
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            XUnmapWindow(_display, xid);
+            XSync(_display, false);   // the unmap lands (and reaches the WM) before the new map
+            XMapWindow(_display, xid);
+            XFlush(_display);
+            return !_xErrored;
+        }
+    }
 
     /// <summary>Back on top of everything (WPF ReassertTopmost: SetWindowPos HWND_TOPMOST). An
     /// override-redirect window is outside the WM, so the plain XRaiseWindow is the one that holds.</summary>

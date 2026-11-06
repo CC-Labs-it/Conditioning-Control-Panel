@@ -8,7 +8,11 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using S = ConditioningControlPanel.Services.FirstShow.FirstShowScript;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -68,6 +72,74 @@ public sealed partial class FirstShowStageTests
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
             StartupLadder.ResetForTests();
             FeatureIntroPopup.ResetForTests();
+        }
+    });
+
+    /// <summary>Owner fix3: EMI ended up behind the main window. WPF's ownership chain (stage owned by main,
+    /// EMI by the stage) keeps the show above the shell however it is activated. Where the window manager
+    /// cannot keep the Topmost layer (WSLg), the show is mapped again on top, in WPF's order, each time the
+    /// shell comes forward - and EMI once as the show opens, since she was mapped long before it.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task TheShellComingForwardPutsTheShowBackOnTopWhereTheWmCannotKeepIt(bool wmCannotKeepAbove) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var service = new SettingsService();
+        var old = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        MainShellWindow? shell = null;
+        var remapped = new System.Collections.Generic.List<TopLevel>();
+        try
+        {
+            CoreSettings.Current.Welcomed = true;
+            CoreSettings.Current.HasAcceptedAgeVerification = true;
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            CoreSettings.Current.MasterVolume = 0;
+            FirstShowService.RequireClickThrough = false;
+            X11Overlay.WmCannotKeepAboveForTests = () => wmCannotKeepAbove;
+            X11Overlay.RemapRequestedForTests = w => remapped.Add(w);
+            shell = new MainShellWindow { OpenWelcomeShow = _ => false };
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(FirstShowService.Open(shell));
+            var stage = FirstShowService.Window!;
+            var emi = EmiDeskService.Instance.Window!;
+            Assert.Equal(wmCannotKeepAbove ? new TopLevel[] { emi } : Array.Empty<TopLevel>(), remapped);   // EMI lifted as the show opens
+
+            double t = S.GreetAfter + .1; stage.Clock = () => t;
+            await Until(() => { t += .05; stage.Frame(); return stage.SpeechShown; });
+            remapped.Clear();
+            shell.Activate(); shell.Activate();   // a burst of activations: one pass
+            Dispatcher.UIThread.RunJobs();
+            if (wmCannotKeepAbove)
+            {
+                Assert.Equal(3, remapped.Count);
+                Assert.Same(stage, remapped[0]);   // WPF's order, bottom to top: stage, EMI, her speech card
+                Assert.Same(emi, remapped[1]);
+                Assert.Equal("CCP - Emi speech", ((Window)remapped[2]).Title);
+            }
+            else Assert.Empty(remapped);   // a window manager that keeps the layer needs nothing
+
+            FirstShowService.Stop();
+            Dispatcher.UIThread.RunJobs();
+            remapped.Clear();
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(remapped);   // the show is over: the shell is left alone
+        }
+        finally
+        {
+            X11Overlay.WmCannotKeepAboveForTests = null;
+            X11Overlay.RemapRequestedForTests = null;
+            FirstShowService.Stop();
+            FirstShowService.RequireClickThrough = true;
+            EmiDeskService.Instance.Window?.ShutDown();
+            foreach (var o in shell?.OwnedWindows.ToList() ?? new()) o.Close();
+            shell?.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
     });
 }
