@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia
         public static int Run(string outPath, string[]? tabs)
         {
             tabs ??= NavCheck.TabPanels;
+            Platform.SoftwareRender.Armed = true;   // measure what a real launch on this machine draws
             Program.BuildAvaloniaApp().SetupWithoutStarting();
             using var cts = new CancellationTokenSource();
             var code = 1;

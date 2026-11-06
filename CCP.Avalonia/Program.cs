@@ -54,6 +54,20 @@ namespace ConditioningControlPanel.Avalonia
                 return PerfBench.Run(args[pb + 1], pbt >= 0 && pbt + 1 < args.Length ? args[pbt + 1].Split(',') : null);
             }
 
+            // --fx-bench <out.json> [--fx-bench-size WxH] times one CPU-Skia frame of each Home effect,
+            // headless (FxBench.cs): the render cost a machine without a GPU pays, with no window shown.
+            var fb = Array.IndexOf(args, "--fx-bench");
+            if (fb >= 0)
+            {
+                if (fb + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("usage: --fx-bench <out.json> [--fx-bench-size WxH]");
+                    return 2;
+                }
+                var fbs = Array.IndexOf(args, "--fx-bench-size");
+                return FxBench.Run(args[fb + 1], fbs >= 0 && fbs + 1 < args.Length ? args[fbs + 1] : null);
+            }
+
             // --click-through <dir> dispatches REAL pointer clicks at real controls and saves a
             // frame per step. The only proof here that can see a button which draws but does not
             // take a click - which is what the nav doors were doing.
@@ -253,6 +267,7 @@ namespace ConditioningControlPanel.Avalonia
                             as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
                 });
             App.SplashOnStartup = true;
+            Platform.SoftwareRender.Armed = true;   // a CPU-only Skia backend takes WPF's Performance-mode FX tier
             app.StartWithClassicDesktopLifetime(args);
             App.StartupFailure?.Throw();   // a failed startup crashes non-zero, as it did before the splash
             return 0;
