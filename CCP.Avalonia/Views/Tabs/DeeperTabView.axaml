@@ -543,12 +543,12 @@
                                         </Button>
                                     </Grid>
 
-                                    <!-- Row B: filter pills + sort dropdown. WPF put the pills in a
-                                         horizontal StackPanel because AdaptiveSideArt gave the hub
-                                         the full width below 1000px. Kept as a WrapPanel here so the
-                                         pills still fit when the art column is shown (~540px hub). -->
+                                    <!-- Row B: filter pills + sort dropdown. One row, a horizontal StackPanel as on WPF
+                                         (DeeperTabView.xaml:596); a WrapPanel broke Haptics/Webcam onto
+                                         lines 2-3 behind a dangling separator (parity VA). ClipToBounds = WPF's layout
+                                         clip: a narrow hub cuts the pills off instead of drawing under the CTA. -->
                                     <Grid ColumnDefinitions="*,Auto">
-                                        <WrapPanel Grid.Column="0" Orientation="Horizontal">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" ClipToBounds="True">
                                             <ToggleButton x:Name="BtnDeeperPillAll" x:FieldModifier="internal"
                                                           Theme="{StaticResource DeeperPillStyle}"
                                                           Click="DeeperPillAll_Click" IsChecked="True"
@@ -613,7 +613,7 @@
                                                                Margin="6,0,0,0"/>
                                                 </StackPanel>
                                             </ToggleButton>
-                                        </WrapPanel>
+                                        </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                             <!-- Bright CTA pointing at the web catalogue. Solid
                                                  accent fill so it reads as the loud "go shop"
