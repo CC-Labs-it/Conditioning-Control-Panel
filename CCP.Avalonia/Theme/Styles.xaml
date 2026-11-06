@@ -774,6 +774,61 @@
     </Style>
   </ControlTheme>
 
+  <!-- The default RadioButton. WPF has no house RadioButton chrome: every radio without a keyed
+       template (Workshop awareness intensity, Deeper sort/media type, perk picker, Goon test modes)
+       draws the stock Aero2 one - a 12px white circle, grey rim, dark dot, text 4px to the right.
+       Fluent's is a 20px circle, MinHeight 32 and a Windows-blue dot. Keyed here as the type's own
+       theme so `BasedOn {x:Type RadioButton}` call sites (CmpIntensityRadioStyle) inherit it, like
+       their WPF styles inherit Aero2. Colours are Aero2's RadioButton.* resources. -->
+  <ControlTheme x:Key="{x:Type RadioButton}" TargetType="RadioButton">
+    <Setter Property="Background" Value="#FFFFFFFF"/>
+    <Setter Property="BorderBrush" Value="#FF707070"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Padding" Value="4,-1,0,0"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="RadioButton">
+        <Grid ColumnDefinitions="Auto,*" Background="Transparent">
+          <Border x:Name="radioButtonBorder" CornerRadius="100" Margin="1,1,2,1"
+                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                  Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}">
+            <Panel Margin="2">
+              <Ellipse x:Name="optionMark" Fill="#FF212121" MinWidth="6" MinHeight="6" Opacity="0"/>
+            </Panel>
+          </Border>
+          <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1"
+                            Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"
+                            Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#radioButtonBorder">
+      <Setter Property="Background" Value="#FFF3F9FF"/>
+      <Setter Property="BorderBrush" Value="#FF5593FF"/>
+    </Style>
+    <Style Selector="^:pressed /template/ Border#radioButtonBorder">
+      <Setter Property="Background" Value="#FFD9ECFF"/>
+      <Setter Property="BorderBrush" Value="#FF3C77DD"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Border#radioButtonBorder">
+      <Setter Property="Background" Value="#FFE6E6E6"/>
+      <Setter Property="BorderBrush" Value="#FFBCBCBC"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Ellipse#optionMark">
+      <Setter Property="Fill" Value="#FF707070"/>
+    </Style>
+    <Style Selector="^:checked /template/ Ellipse#optionMark">
+      <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="^:indeterminate /template/ Ellipse#optionMark">
+      <Setter Property="Opacity" Value="0.56"/>
+    </Style>
+  </ControlTheme>
+
   <!-- Inputs.xaml:394-431 ListBoxItem: kills the stock accent selection. Handed over by the implicit
        ListBox style (App.axaml) as ItemContainerTheme, so a list's own ItemContainerTheme wins. -->
   <ControlTheme x:Key="InputListBoxItemTheme" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
@@ -968,57 +1023,161 @@
     <Style Selector="^:disabled /template/ Border#TrackBg"><Setter Property="Opacity" Value="0.1"/></Style>
   </ControlTheme>
 
-  <!-- MainWindow.xaml:1234. Restyles the Fluent ComboBox parts rather than replacing the
-       template: the popup, item presenter and toggle are a part contract worth keeping. Visual
-       contract kept: 8px radius, dark surface, pink border on hover/open, 24px min height. The
-       WPF ItemContainerStyle becomes a selector on the items. -->
-  <!-- The WPF ItemContainerStyle. A ControlTheme may not contain a descendant selector, so the
-       rows get their own theme, handed over through ItemContainerTheme. Declared first: a
-       same-dictionary StaticResource resolves at parse time. -->
-  <ControlTheme x:Key="DarkComboBoxItem" TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+  <!-- Inputs.xaml:152-208, the implicit ComboBoxItem every WPF dropdown row wears (DarkComboBoxStyle
+       sets no ItemContainerStyle, so its rows are these too): r6 row, 5px accent dot on the
+       selected row, pink 20% hover / 40% selected. Own template: Fluent's item theme repaints its
+       presenter for every state. Declared first: a same-dictionary StaticResource resolves at parse time. -->
+  <ControlTheme x:Key="DarkComboBoxItem" TargetType="ComboBoxItem">
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-    <Setter Property="Padding" Value="8,5"/>
-    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="8,6"/>
     <Setter Property="Cursor" Value="Hand"/>
-    <!-- Fluent's item theme sets Background/Foreground on the presenter for these states, so a
-         control-level setter is overridden; target the presenter as Fluent does. -->
-    <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBoxItem">
+        <Border x:Name="Bd" CornerRadius="6" Margin="0,1"
+                Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="5,*">
+            <Ellipse x:Name="SelDot" Width="5" Height="5" HorizontalAlignment="Left" VerticalAlignment="Center"
+                     Fill="{DynamicResource PinkBrush}" Opacity="0"/>
+            <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="7,0,0,0"
+                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     </Style>
-    <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    <Style Selector="^:pointerover /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:selected">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ Ellipse#SelDot">
+      <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
     </Style>
   </ControlTheme>
 
-  <ControlTheme x:Key="DarkComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+  <!-- Inputs.xaml:42-150, the implicit ComboBox (applied app-wide in App.axaml; a local Theme wins):
+       r8 dark field, 22px arrow column holding a hand-drawn chevron, text in column 0 only so long
+       text stops at the arrow, 10,0 padding, MinHeight 28, accent border on hover and while open,
+       r10 elevated popup. The template is our own because Fluent's reserves a 32px glyph column and
+       its own 14px chrome; the parts kept are the ones ComboBox needs (PART_Popup + an ItemsPresenter).
+       No ToggleButton: Avalonia's ComboBox opens itself on click. HorizontalAlignment stays Stretch
+       like WPF (Fluent's theme sets Left, which collapsed unsized combos to a chevron stub). -->
+  <ControlTheme x:Key="InputComboBoxTheme" TargetType="ComboBox">
     <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentHoverBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="FontSize" Value="11"/>
-    <Setter Property="MinHeight" Value="24"/>
     <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="Padding" Value="10,0"/>
     <Setter Property="Cursor" Value="Hand"/>
-    <Setter Property="Padding" Value="8,2,2,2"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="MaxDropDownHeight" Value="504"/>
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource TextMutedBrush}"/>
+    <Setter Property="ItemContainerTheme" Value="{StaticResource DarkComboBoxItem}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBox">
+        <Grid ColumnDefinitions="*,Auto">
+          <Border x:Name="Background" Grid.ColumnSpan="2" CornerRadius="{TemplateBinding CornerRadius}"
+                  Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"/>
+          <Panel x:Name="ArrowHost" Grid.Column="1">
+            <Path x:Name="Arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
+                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeLineCap="Round" StrokeJoin="Round"/>
+          </Panel>
+          <TextBlock x:Name="PlaceholderTextBlock" Grid.Column="0" Margin="{TemplateBinding Padding}"
+                     Text="{TemplateBinding PlaceholderText}" Foreground="{TemplateBinding PlaceholderForeground}"
+                     HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                     VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                     IsVisible="{TemplateBinding SelectionBoxItem, Converter={x:Static ObjectConverters.IsNull}}"/>
+          <ContentPresenter x:Name="ContentPresenter" Grid.Column="0" IsHitTestVisible="False" ClipToBounds="True"
+                            Margin="{TemplateBinding Padding}"
+                            Content="{TemplateBinding SelectionBoxItem}"
+                            ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          <Popup x:Name="PART_Popup" WindowManagerAddShadowHint="False"
+                 IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                 MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                 PlacementTarget="Background" IsLightDismissEnabled="True" InheritsTransform="True">
+            <Border x:Name="PopupBorder" Margin="0,4,0,0" CornerRadius="10" Padding="4"
+                    Background="{DynamicResource ElevatedSurfaceBrush}"
+                    BorderBrush="{DynamicResource TransparentPink20Brush}" BorderThickness="1">
+              <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                            HorizontalScrollBarVisibility="{TemplateBinding (ScrollViewer.HorizontalScrollBarVisibility)}"
+                            VerticalScrollBarVisibility="{TemplateBinding (ScrollViewer.VerticalScrollBarVisibility)}">
+                <ItemsPresenter x:Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+              </ScrollViewer>
+            </Border>
+          </Popup>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <!-- Arrow geometry lives in plain theme styles, not the template, so DarkComboBoxStyle can
+         restate it (a value written in the template outranks a non-trigger style). -->
+    <Style Selector="^ /template/ Panel#ArrowHost">
+      <Setter Property="Width" Value="22"/>
+    </Style>
+    <Style Selector="^ /template/ Path#Arrow">
+      <Setter Property="Margin" Value="0,0,9,0"/>
+      <Setter Property="Data" Value="M 0 0 L 4 4 L 8 0"/>
+      <Setter Property="StrokeThickness" Value="1.6"/>
+    </Style>
     <Style Selector="^:pointerover /template/ Border#Background">
       <Setter Property="BorderBrush" Value="{DynamicResource InputHoverBorderBrush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Path#Arrow">
+      <Setter Property="Stroke" Value="{DynamicResource PinkBrush}"/>
     </Style>
     <Style Selector="^:dropdownopen /template/ Border#Background">
       <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
     </Style>
+    <Style Selector="^:dropdownopen /template/ Path#Arrow">
+      <Setter Property="Stroke" Value="{DynamicResource PinkBrush}"/>
+    </Style>
     <Style Selector="^:disabled">
       <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
     </Style>
-    <Style Selector="^ /template/ Border#PopupBorder">
-      <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="10"/>
-      <Setter Property="Padding" Value="4"/>
+  </ControlTheme>
+
+  <!-- MainWindow.xaml:1234, the COMPACT variant of the implicit ComboBox above for dense rows: 11px,
+       MinHeight 24, an 18px arrow column with a smaller chevron, text at 8,2,2,2 and a popup capped
+       at 240px. Same template; the old 32px Fluent glyph column cut "Default (follow multi-monitor)"
+       at Width 180 (Pink Filter, Spiral). Several code-behind sites resolve this key by name. -->
+  <ControlTheme x:Key="DarkComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource InputComboBoxTheme}">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="MinHeight" Value="24"/>
+    <Setter Property="Padding" Value="8,2,2,2"/>
+    <Setter Property="MaxDropDownHeight" Value="240"/>
+    <Style Selector="^ /template/ Panel#ArrowHost">
+      <Setter Property="Width" Value="18"/>
     </Style>
-    <Setter Property="ItemContainerTheme" Value="{StaticResource DarkComboBoxItem}"/>
+    <Style Selector="^ /template/ Path#Arrow">
+      <Setter Property="Margin" Value="0,0,7,0"/>
+      <Setter Property="Data" Value="M 0 0 L 3.5 3.5 L 7 0"/>
+      <Setter Property="StrokeThickness" Value="1.5"/>
+    </Style>
   </ControlTheme>
 
   <!-- MainWindow.xaml:1366. Gradient-border card with a left accent strip and a chevron that
