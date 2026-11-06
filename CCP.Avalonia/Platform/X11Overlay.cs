@@ -74,6 +74,8 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XSetInputFocus(IntPtr display, IntPtr window, int revertTo, nuint time);
     [DllImport(LibX11)] private static extern int XRaiseWindow(IntPtr display, IntPtr window);
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
+    [DllImport(LibX11)] private static extern int XSetTransientForHint(IntPtr display, IntPtr window, IntPtr owner);
+    [DllImport(LibX11)] private static extern int XDeleteProperty(IntPtr display, IntPtr window, IntPtr property);
 
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
     [DllImport(LibXfixes)] private static extern IntPtr XFixesCreateRegion(IntPtr display, IntPtr rectangles, int count);
@@ -285,6 +287,41 @@ internal static class X11Overlay
             }
             finally { Marshal.FreeHGlobal(attrs); }
         }
+    }
+
+    /// <summary>X11 ownership, the form of Win32 GWL_HWNDPARENT that window managers keep: a
+    /// window with WM_TRANSIENT_FOR set is stacked directly above its owner, raised and lowered
+    /// with it, and goes behind other applications with it (ICCCM 4.1.2.6). Null clears it.
+    /// X11-only: false on Windows, headless and native Wayland, where nothing is changed.</summary>
+    internal static bool SetTransientFor(TopLevel window, TopLevel? owner)
+    {
+        if (!TryGetXid(window, out var xid)) return false;
+        var ownerXid = IntPtr.Zero;
+        if (owner != null && !TryGetXid(owner, out ownerXid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            if (ownerXid != IntPtr.Zero) XSetTransientForHint(_display, xid, ownerXid);
+            else XDeleteProperty(_display, xid, (IntPtr)68 /* XA_WM_TRANSIENT_FOR, X11/Xatom.h */);
+            XSync(_display, false);   // a different connection from Avalonia's: land before its XMapWindow
+            return !_xErrored;
+        }
+    }
+
+    /// <summary>Native ownership on either backend: WM_TRANSIENT_FOR on X11, GWL_HWNDPARENT on
+    /// Windows (<see cref="Win32Overlay.SetOwner"/>). Null clears it. For a window whose Windows
+    /// behaviour is meant to match WPF's raw-owner windows (the tube's speech bubble); the tube itself
+    /// keeps the X11-only <see cref="SetTransientFor"/>. False headless and before either has a handle.</summary>
+    internal static bool SetOwner(TopLevel window, TopLevel? owner)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+        {
+            var ownerHwnd = IntPtr.Zero;
+            if (owner != null && !TryGet(owner, OverlayBackend.Win32, out ownerHwnd)) return false;
+            return Win32Overlay.SetOwner(hwnd, ownerHwnd);
+        }
+        return SetTransientFor(window, owner);
     }
 
     internal static Action<TopLevel>? RaiseRequestedForTests; // Headless call-order observation only.

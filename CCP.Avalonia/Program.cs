@@ -142,6 +142,12 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--x11-probe") >= 0)
                 return X11OverlayProbe.Run();
 
+            // --tube-shape-probe [holdSeconds]: a real avatar tube beside a stand-in shell; reads the
+            // tube's input shape and WM_TRANSIENT_FOR back from the X server (TubeShapeProbe.cs).
+            var tsp = Array.IndexOf(args, "--tube-shape-probe");
+            if (tsp >= 0)
+                return TubeShapeProbe.Run(tsp + 1 < args.Length && int.TryParse(args[tsp + 1], out var hold) ? hold : 0);
+
             // Private native KWin regression: opens a real fullscreen video surface and watch.
             if (Array.IndexOf(args, "--wave-timer-check") >= 0)
                 return OverlayCheck.RunWaveTimer();
