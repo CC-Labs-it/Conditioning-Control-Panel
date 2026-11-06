@@ -151,7 +151,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         private Border BuildBannerTile(string key, string label, IBrush? art)
         {
-            var content = new Grid { Width = 128, Height = 52 };
+            // WPF sizes this Grid 128x52 too, but WPF clips a child to the border's inner rect;
+            // Avalonia lets a fixed-size child paint over the 2px border (no selection outline).
+            // Unsized, it stretches into the 124x48 inside the border.
+            var content = new Grid();
 
             if (art != null)
             {
