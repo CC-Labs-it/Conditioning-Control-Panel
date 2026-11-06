@@ -17,10 +17,13 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Shapes;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -95,6 +98,18 @@ public sealed partial class FriendsDrawer : Border
             GradientStops = { new GradientStop(Color.FromRgb(0x24, 0x17, 0x42), 0), new GradientStop(Color.FromRgb(0x1C, 0x12, 0x33), 1) },
         };
         (BorderBrush, BorderThickness, Focusable) = (Line2, new Thickness(1), true);
+        // WPF FriendsLook.Pill: a disabled pill keeps its own (usually transparent) face and fades to 0.4.
+        // Fluent's disabled state would paint the grey ButtonBackgroundDisabled plate instead.
+        Styles.Add(new Style(x => x.OfType<Button>().Class(PillClass).Class(":disabled")) { Setters = { new Setter(OpacityProperty, 0.4) } });
+        Styles.Add(new Style(x => x.OfType<Button>().Class(PillClass).Class(":disabled").Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters =
+            {
+                new Setter(ContentPresenter.BackgroundProperty, new TemplateBinding(Button.BackgroundProperty)),
+                new Setter(ContentPresenter.BorderBrushProperty, new TemplateBinding(Button.BorderBrushProperty)),
+                new Setter(ContentPresenter.ForegroundProperty, new TemplateBinding(Button.ForegroundProperty)),
+            },
+        });
         var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
         var (scroll, top, line) = (new ScrollViewer { Content = _list, Padding = new Thickness(6, 4, 6, 8), MinHeight = 120 }, new Thickness(0, 1, 0, 0), Line);
         (_head.Background, _head.CornerRadius, _head.BorderBrush, _head.BorderThickness, _head.Padding) = (Raised, new CornerRadius(15, 15, 0, 0), line, new Thickness(0, 0, 0, 1), new Thickness(12, 12, 12, 10));
@@ -298,8 +313,10 @@ public sealed partial class FriendsDrawer : Border
             var box = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(18, 28, 18, 28) };
             var line = EmptyLine(Loc.Get("friends_signed_out"));
             line.Margin = new Thickness(0, 0, 0, 12);
-            var btn = Pill(Loc.Get("friends_sign_in"), Mint, MintInk, "friends-sign-in");
-            btn.HorizontalAlignment = HorizontalAlignment.Center;
+            // WPF SignInBlock: mint border, radius 10, padding 16,6, 13pt.
+            var btn = Pill(Loc.Get("friends_sign_in"), Mint, MintInk, "friends-sign-in", Mint);
+            (btn.Padding, btn.CornerRadius, btn.HorizontalAlignment) = (new Thickness(16, 6, 16, 6), new CornerRadius(10), HorizontalAlignment.Center);
+            if (btn.Content is TextBlock t) t.FontSize = 13;
             btn.Click += (_, _) => SignInRequested?.Invoke();
             box.Children.Add(line);
             box.Children.Add(btn);
@@ -877,9 +894,13 @@ public sealed partial class FriendsDrawer : Border
         return t;
     }
 
+    /// <summary>The class every <see cref="Pill"/> carries (the drawer's disabled-pill style keys on it).</summary>
+    internal const string PillClass = "friends-pill";
+
     /// <summary>A pill button. Text goes in a TextBlock: Avalonia reads "_" in a Button's Content as an access key.</summary>
     internal static Button Pill(object content, IBrush bg, IBrush fg, string tag, IBrush? border = null) => new()
     {
+        Classes = { PillClass },
         Content = content is string s ? new TextBlock { Text = s, FontFamily = Display, FontSize = 12 } : content,
         Background = bg, Foreground = fg, BorderBrush = border ?? Brushes.Transparent, BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 3), Tag = tag, VerticalAlignment = VerticalAlignment.Center,
@@ -903,13 +924,14 @@ public sealed partial class FriendsDrawer : Border
         return sp;
     }
 
-    /// <summary>Initials on a lilac disc, with a presence dot (mint on, grey off, none for null).</summary>
+    /// <summary>Initials on the roster's per-name gradient (WPF FriendsLook.Avatar), with a presence dot
+    /// (mint on, grey off, none for null).</summary>
     internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null)
     {
         var g = new Grid { Width = size, Height = size };
         g.Children.Add(new Border
         {
-            CornerRadius = new CornerRadius(size / 2), Background = Lilac,
+            CornerRadius = new CornerRadius(size / 2), Background = SafeAvatarBrush(name),
             Child = new TextBlock
             {
                 Text = FriendsDrawerRules.Initials(name), FontFamily = Display, FontWeight = FontWeight.SemiBold, FontSize = size * 0.4,
@@ -937,6 +959,13 @@ public sealed partial class FriendsDrawer : Border
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
             });
         return g;
+    }
+
+    /// <summary>WPF FriendsLook.SafeAvatarBrush: the leaderboard's deterministic gradient, lilac if it throws.</summary>
+    private static IBrush SafeAvatarBrush(string name)
+    {
+        try { return Tabs.LeaderboardRow.BuildAvatarBrush(name); }
+        catch { return Lilac; }
     }
 }
 
