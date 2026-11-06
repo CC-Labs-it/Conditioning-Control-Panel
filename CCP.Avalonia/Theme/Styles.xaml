@@ -672,6 +672,13 @@
     <Setter Property="DragDrop.AllowDrop" Value="True"/>
     <Setter Property="fx:InputFx.IsEnabled" Value="True"/>
     <Setter Property="fx:InputFx.GlowColor" Value="{DynamicResource PinkColor}"/>
+    <!-- WPF insets the text by Padding twice: Inputs.xaml:347 puts Margin="{TemplateBinding Padding}"
+         on PART_ContentHost, and the TextBox applies its Padding inside that host again. Fluent's
+         template applies it once (PART_InnerDockPanel), so every box was 2 x Padding shorter than
+         WPF's (KnowledgeLink 33 vs 49px, DisplayName 40 vs 60px). -->
+    <Style Selector="^ /template/ ScrollViewer#PART_ScrollViewer">
+      <Setter Property="Margin" Value="{Binding Padding, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
     <Style Selector="^:pointerover">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     </Style>
