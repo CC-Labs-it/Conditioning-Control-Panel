@@ -174,6 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public void ShowFromTray()
         {
             _shownSinceStart = true;   // asked for: a late StartMinimized must not undo it
+            _trayRecheckStale = true;
             if (_windowClosed) return;
             RestoreLauncherPanelOpacity();
             Show();
@@ -205,6 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public void RequestExit()
         {
             if (LockdownActive) { Serilog.Log.Information("Lockdown: Exit refused"); return; }   // WPF Launcher.cs:184
+            _trayRecheckStale = true;
             if (CoreEngine.IsRunning) StopEngine();                  // WPF Launcher.cs:187
             // Circe's bill holds the exit for a few seconds, then calls back in here (Launcher.cs:188).
             if (TryShowExitBill(RequestExit)) return;
@@ -259,6 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private bool _trayRechecking;
+        private bool _trayRecheckStale;   // a Show or an Exit came after that X
         private bool _shownSinceStart;
         private bool? _trayXVerdict;
 
@@ -269,9 +272,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async void RecheckTrayThenClose()
         {
             _trayRechecking = true;
+            _trayRecheckStale = false;
             var state = await Task.Run(ProbeTrayItem);
             _trayRechecking = false;
-            if (_windowClosed || _exitRequested) return;
+            if (_windowClosed || _exitRequested || _trayRecheckStale) return;
             _trayXVerdict = TrayItemRule.XMayHide(state);
             Close();
             _trayXVerdict = null;   // Lockdown can refuse that Close before it reads the verdict
@@ -282,20 +286,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// after CreateTray returns, on the UI thread, which a busy startup can hold for a while.</summary>
         internal async Task HideToTrayOnceHeld()
         {
+            if (!_trayListed) return;
             void TookIt(object? s, global::Avalonia.Interactivity.RoutedEventArgs e) => _shownSinceStart = true;
             AddHandler(KeyDownEvent, TookIt, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             AddHandler(PointerPressedEvent, TookIt, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             try
             {
-                for (var attempt = 0; attempt < 6; attempt++)   // an autostart can beat the bar by a few seconds
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(6);   // an autostart can beat the bar
+                do
                 {
-                    if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(1));
                     // Windows knows at once, so its window never shows.
                     var state = OperatingSystem.IsWindows() ? ProbeTrayItem() : await Task.Run(ProbeTrayItem);
-                    if (state != TrayItemState.Held) continue;
-                    if (IsVisible && !_shownSinceStart) HideForLauncher(quiet: true);
-                    return;
+                    if (state == TrayItemState.Held)
+                    {
+                        // An owned dialog is the age gate or a name picker: hiding it would skip the question.
+                        if (IsVisible && !_shownSinceStart && OwnedWindows.Count == 0) HideForLauncher(quiet: true);
+                        return;
+                    }
+                    await Task.Delay(TimeSpan.FromSeconds(1));
                 }
+                while (DateTime.UtcNow < deadline);
                 Serilog.Log.Information("StartMinimized: no tray icon confirmed, leaving the window up");
             }
             finally
@@ -314,6 +324,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>The X answer: hide unless the tray said no. See <see cref="TrayItemRule.XMayHide"/>.</summary>
+        /// <summary>For a hide nothing depends on, unlike X: only a confirmed icon counts.</summary>
+        internal bool TrayIconConfirmed() => _trayHostSeam?.Invoke() ?? ProbeTrayItem() == TrayItemState.Held;
+
         internal bool ProbeTrayItemRegistered() => TrayItemRule.XMayHide(ProbeTrayItem());
 
         /// <summary>Is this process's icon really in the tray? A watcher can own its name and still refuse the
@@ -375,7 +388,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!await TrayWatcherOwnedAsync(bus)) return (false, true);
                 var items = await RegisteredTrayItemsAsync(bus);
                 var prefix = TrayItemRule.ItemNamePrefix(Environment.ProcessId);
-                var mine = (await BusNamesAsync(bus)).Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+                var mine = (await bus.ListServicesAsync()).Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).ToList();
                 foreach (var name in mine.ToArray()) mine.Add(await BusNameOwnerAsync(bus, name));
                 return (TrayItemRule.Holds(items, mine) && await TrayHostRegisteredAsync(bus), false);
             }
@@ -409,14 +422,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             w.WriteString("org.kde.StatusNotifierWatcher");
             w.WriteString(name);
             return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => read(m.GetBodyReader().ReadVariantValue()), null);
-        }
-
-        private static async Task<string[]> BusNamesAsync(DBusConnection bus)
-        {
-            var w = bus.GetMessageWriter();
-            w.WriteMethodCallHeader(destination: "org.freedesktop.DBus", path: "/org/freedesktop/DBus",
-                @interface: "org.freedesktop.DBus", member: "ListNames");
-            return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => m.GetBodyReader().ReadArrayOfString(), null);
         }
 
         private static async Task<string> BusNameOwnerAsync(DBusConnection bus, string name)

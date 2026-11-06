@@ -2,6 +2,7 @@ using System;
 using ConditioningControlPanel.Services.Notifications;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -124,6 +125,42 @@ public sealed class ShellTrayTests
         MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
         shell.ShowFromTray();
         await shell.HideToTrayOnceHeld();
+        Assert.True(shell.IsVisible);
+    });
+
+    [Fact]
+    public Task StartMinimizedNeverHidesAnOpenDialog() => WithListedTray(async shell =>
+    {
+        // The age gate and the name picker are owned dialogs, and a hidden gate is a skipped gate.
+        MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
+        var dialog = new Window();
+        dialog.Show(shell);
+        try
+        {
+            await shell.HideToTrayOnceHeld();
+            Assert.True(shell.IsVisible);
+        }
+        finally { dialog.Close(); }
+    });
+
+    [Fact]
+    public Task AShowDuringTheRecheckCancelsThatX() => WithListedTray(async shell =>
+    {
+        if (OperatingSystem.IsWindows()) return;   // no recheck there
+        var release = new System.Threading.ManualResetEventSlim();
+        var calls = 0;
+        MainShellWindow.TrayItemQuery = () =>
+        {
+            if (Interlocked.Increment(ref calls) == 2) release.Wait(TimeSpan.FromSeconds(5));
+            return TrayItemState.NotHeld;
+        };
+        var closed = false;
+        shell.Closed += (_, _) => closed = true;
+        shell.Close();
+        shell.ShowFromTray();
+        release.Set();
+        for (var i = 0; i < 30; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+        Assert.False(closed);
         Assert.True(shell.IsVisible);
     });
 
