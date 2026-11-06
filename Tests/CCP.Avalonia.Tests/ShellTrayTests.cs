@@ -63,6 +63,8 @@ public sealed class ShellTrayTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var realQuery = MainShellWindow.TrayItemQuery;
+        var accepted = CoreSettings.Current.HasAcceptedAgeVerification;
+        CoreSettings.Current.HasAcceptedAgeVerification = true;   // an open gate keeps the window up
         MainShellWindow.TraySandboxed = () => false;
         var shell = new MainShellWindow();
         try
@@ -74,6 +76,7 @@ public sealed class ShellTrayTests
         finally
         {
             MainShellWindow.TrayItemQuery = realQuery;
+            CoreSettings.Current.HasAcceptedAgeVerification = accepted;
             MainShellWindow.TraySandboxed = () => global::ConditioningControlPanel.Services.SandboxNet.Active;
             shell.TrayHostPresent = () => false;
             shell.Close();
@@ -117,14 +120,8 @@ public sealed class ShellTrayTests
     {
         var answers = new Queue<TrayItemState>(States("NotHeld", "Held"));
         MainShellWindow.TrayItemQuery = () => answers.Dequeue();
-        var was = CoreSettings.Current.HasAcceptedAgeVerification;
-        CoreSettings.Current.HasAcceptedAgeVerification = true;
-        try
-        {
-            await shell.HideToTrayOnceHeld();
-            Assert.False(shell.IsVisible);
-        }
-        finally { CoreSettings.Current.HasAcceptedAgeVerification = was; }
+        await shell.HideToTrayOnceHeld();
+        Assert.False(shell.IsVisible);
     });
 
     [Fact]
@@ -156,14 +153,9 @@ public sealed class ShellTrayTests
     {
         // On Windows the hide runs before the posted gate exists, and the gate reads a hidden shell as a no.
         MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
-        var was = CoreSettings.Current.HasAcceptedAgeVerification;
         CoreSettings.Current.HasAcceptedAgeVerification = false;
-        try
-        {
-            await shell.HideToTrayOnceHeld();
-            Assert.True(shell.IsVisible);
-        }
-        finally { CoreSettings.Current.HasAcceptedAgeVerification = was; }
+        await shell.HideToTrayOnceHeld();
+        Assert.True(shell.IsVisible);
     });
 
     [Theory]
