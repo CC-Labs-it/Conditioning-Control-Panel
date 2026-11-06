@@ -27,6 +27,25 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The playlist player, null until a service is installed.</summary>
         public static Services.AudioPlayer.IAudioPlaylistService? AudioPlaylist { get; private set; }
 
+        /// <summary>
+        /// WPF App.StopAudioPlaylist (App.xaml.cs:1324): stops the audio player with a playlist, from any
+        /// thread (panic, Stop, exit). The playlist itself stays; nothing here writes a setting.
+        /// </summary>
+        public static void StopAudioPlaylist()
+        {
+            try
+            {
+                var playlist = AudioPlaylist;
+                if (playlist is Platform.AudioPlaylistService service) service.StopEmergency();
+                else if (playlist != null)
+                {
+                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) playlist.Stop();
+                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(playlist.Stop);
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Debug("StopAudioPlaylist error: {Error}", ex.Message); }
+        }
+
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
         public static Helpers.NotificationService Notifications { get; internal set; } = new();
 
@@ -958,6 +977,10 @@ namespace ConditioningControlPanel.Avalonia
                     Console.WriteLine($"[Audio] LibVLC unavailable, audio disabled: {ex.Message}");
                     Serilog.Log.Warning(ex, "[Audio] LibVLC unavailable; audio disabled on this head");
                 }
+                // WPF App.xaml.cs:3469: the audio player with a playlist, its own player, list and level from the
+                // settings. Cheap; nothing opens until the first Play (no libvlc = no track opens).
+                try { AudioPlaylist = new Platform.AudioPlaylistService(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Audio playlist player failed to start"); }
                 // Speech: Core Vosk engine over parec, seeding CoreSpeech (model is a drop-in, no download).
                 try { Platform.PulseMicSource.Seed(); }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Speech] engine unavailable on this head"); }
@@ -1463,6 +1486,8 @@ namespace ConditioningControlPanel.Avalonia
             // Release pack players before libvlc shuts down, then retry retained temp deletes.
             try { CoreEngine.BubbleCount?.Dispose(); } catch { }
             try { CoreEngine.Video?.Dispose(); } catch { }
+            // WPF App.xaml.cs:6609: the audio player's own libvlc player goes before libvlc does.
+            try { (AudioPlaylist as IDisposable)?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug("AudioPlaylist dispose error: {Error}", ex.Message); }
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.KeywordTriggerHead.Stop(); } catch { }

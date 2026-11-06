@@ -67,6 +67,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow/MainWindow.xaml.cs:2104 KillAllAudio: stop level-up audio, plus interaction flashes.
             new("shell-hero", sh => sh?.StopHeroForPanic()),   // also the companion milestone sound: one WPF PlayLevelUpSound handle
             new("mantra-chant", _ => Platform.MantraChantHost.StopForPanic()), // WPF App.xaml.cs:1880: stop and clear opt-in
+            // WPF KillAllAudio (App.xaml.cs:1853) stops the audio player with a playlist first, and the panic tail
+            // repeats it on its own (MainWindow.xaml.cs:2121). The list stays.
+            new("audio-playlist", _ => App.StopAudioPlaylist()),
             new("companion-audio", _ => CompanionEffects.StopAudio()),     // WPF b1a39bc77 KillAllAudio -> Audio.StopSound
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
@@ -116,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("scheduler", sh => sh?.Scheduler.NoteManualStop(CoreSettings.Current, sh.SchedulerNow())),
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
-                After: ["companion-audio", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
+                After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
             new("flash", _ => { Overlays.FlashOverlay.CloseAll(final: false); ConditioningControlPanel.Services.Flash.RemoteFlashSource.CleanupCache(); }), // Includes standalone pops and mid-Shatter exits.
