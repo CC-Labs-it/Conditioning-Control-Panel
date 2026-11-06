@@ -222,9 +222,16 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             return null;
         }
 
-        /// <summary>WPF's DecodePixelWidth: decode straight to the width a surface shows, never larger.</summary>
+        /// <summary>WPF's DecodePixelWidth: decode straight to the width a surface shows, never larger.
+        /// MediumQuality, not DecodeToWidth's HighQuality default (owner 11-06, startup decode cost under CPU
+        /// rendering). Measured on the shipped features/ and achievements/ art: a downscale comes out
+        /// pixel-identical or within 13/255 (PSNR 47.6 dB at worst); an upscale (art smaller than its width,
+        /// e.g. quests/ at 512) is about half the cost, worst PSNR 43 dB. LowQuality was 2.5-6x cheaper to
+        /// resize but visibly aliased (achievement icons at 128), so not that.</summary>
+        internal const BitmapInterpolationMode DecodeQuality = BitmapInterpolationMode.MediumQuality;
+
         private static Bitmap Decode(Stream stream, int? width)
-            => width is int w ? Bitmap.DecodeToWidth(stream, w) : new Bitmap(stream);
+            => width is int w ? Bitmap.DecodeToWidth(stream, w, DecodeQuality) : new Bitmap(stream);
 
         /// <summary>
         /// A feature card's hero strip and side plate, painted from one feature PNG the way the WPF
