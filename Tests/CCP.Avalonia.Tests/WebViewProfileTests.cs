@@ -43,6 +43,7 @@ public sealed class WebViewProfileTests
         Assert.True(at > 0);
         var handler = source.Substring(at, source.IndexOf("};", at, StringComparison.Ordinal) - at);
         Assert.Contains("WebViewProfile.Apply(e)", handler);
+        Assert.Contains("ApplyWindowsOptions(e)", handler);
         Assert.DoesNotContain("if (LinuxChoice", source.Substring(Math.Max(0, at - 200), 200));   // not behind the Linux switch
     }
 }

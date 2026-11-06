@@ -82,8 +82,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ = ChasterHead.Service?.RefreshLockAsync();
         }
 
-        private void Subscribe(bool on)
+        internal void Subscribe(bool on)
         {
+            // Back on screen: a RaffleChanged missed while hidden may have dropped the card (another
+            // account), so it repaints from PageRaffleCard, as WPF's OpenLadder does before it opens.
+            if (on) PaintLadder();
             if (!on) HeroTitle.Stop(); // WPF Fx.cs:262 on hide, linked or not
             if (on && _subscribed == null && ChasterHead.Service is { } c)
             {
@@ -91,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 c.LinkChanged += OnLinkChanged;
                 c.LockChanged += OnLockChanged;
                 c.Booked += OnBooked;
+                c.RaffleChanged += OnRaffleChanged;
                 _tick.Start();
                 SlowTick.Start();
             }
@@ -99,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 s.LinkChanged -= OnLinkChanged;
                 s.LockChanged -= OnLockChanged;
                 s.Booked -= OnBooked;
+                s.RaffleChanged -= OnRaffleChanged;
                 _subscribed = null;
                 _tick.Stop();
                 SlowTick.Stop();
@@ -106,6 +111,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         // All three arrive on whatever thread found out.
+        private void OnRaffleChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_raffleCard != null && PageRaffleCard == null)
+            {
+                _raffleCard = null;
+                PaintLadder();
+            }
+            RefreshCalendarRaffle();
+        });
         private void OnLinkChanged() => Dispatcher.UIThread.Post(OnTabShown);
         private void OnLockChanged() => Dispatcher.UIThread.Post(RepaintForLock);
 

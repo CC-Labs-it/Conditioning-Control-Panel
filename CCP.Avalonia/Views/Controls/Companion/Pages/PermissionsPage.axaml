@@ -27,7 +27,7 @@
                 <TextBlock Text="{loc:Str companion_asks_toggle}" Foreground="{DynamicResource TextLightBrush}"/>
             </CheckBox>
             <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,14,0,0">
-                <Run Text="{loc:Str companion_page_permissions_takeover}"/><InlineUIContainer BaselineAlignment="Baseline"><Button x:Name="LinkOpenTakeover" Theme="{StaticResource InlineLink}" Click="OpenTakeover_Click"><TextBlock FontSize="12" Text="{loc:Str companion_page_open_takeover}"/></Button></InlineUIContainer>
+                <Run Text="{loc:Str companion_page_permissions_takeover}"/><InlineUIContainer BaselineAlignment="TextBottom"><Button x:Name="LinkOpenTakeover" Theme="{StaticResource InlineLink}" Click="OpenTakeover_Click"><TextBlock FontSize="12" Text="{loc:Str companion_page_open_takeover}"/></Button></InlineUIContainer>
             </TextBlock>
         </StackPanel>
     </ScrollViewer>

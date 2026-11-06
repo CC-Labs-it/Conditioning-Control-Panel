@@ -7,7 +7,7 @@ using Serilog;
 namespace ConditioningControlPanel.Services.Bark
 {
     /// <summary>A line for the mouth: text, clip or null, preempting (WPF GigglePriority), mood, muted easter egg.</summary>
-    public readonly record struct BarkSpeech(string Text, string? AudioPath, bool Priority, string? Mood, bool SilentEgg);
+    public readonly record struct BarkSpeech(string Text, string? AudioPath, bool Priority, string? Mood, bool SilentEgg, bool Unprompted = false);
 
     /// <summary>
     /// The matcher, gate and rotation of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>, so every head
@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: the awareness arbiter lands with its host;
-    /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
+    /// the Chaos-narrator gate with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
     {
@@ -34,6 +34,39 @@ namespace ConditioningControlPanel.Services.Bark
             "AttentionCheckFail", "PossessionEffect", "PossessionTripwire", "PossessionWarden", "PossessionRungChanged",
             "PossessionTimerRestarted", "PossessionRemember", "LockdownConscript", "EmergencyExitOpened", "EmergencyExitVerdict",
         };
+
+        /// <summary>WPF IsPossessionAttribution / IsEmergencyExitAttribution (BarkService.cs:107,120): text-only
+        /// attributions, never a second voice, so they may speak over a whisper.</summary>
+        public static readonly HashSet<string> WhisperExemptTriggers = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "PossessionEffect", "PossessionTripwire", "PossessionWarden", "PossessionRungChanged",
+            "PossessionTimerRestarted", "PossessionRemember", "EmergencyExitOpened", "EmergencyExitVerdict",
+        };
+
+        // WPF AudioService._whisperBusyUntilTicks (:933-955): an audible whisper holds the floor.
+        private long _whisperBusyUntilTicks;
+
+        /// <summary>WPF AudioService.MarkWhisperAudio (:948): a whisper clip of this length just started, busy
+        /// until it ends plus a 0.25 s tail. Only ever extends; non-positive or NaN lengths do nothing.</summary>
+        public void MarkWhisperAudio(double durationSeconds)
+        {
+            if (double.IsNaN(durationSeconds) || durationSeconds <= 0) return;
+            var until = Now.AddSeconds(durationSeconds + 0.25).Ticks;
+            long prev;
+            do { prev = System.Threading.Interlocked.Read(ref _whisperBusyUntilTicks); }
+            while (until > prev
+                   && System.Threading.Interlocked.CompareExchange(ref _whisperBusyUntilTicks, until, prev) != prev);
+        }
+
+        /// <summary>WPF AudioService.IsWhisperAudioPlaying (:933).</summary>
+        public bool IsWhisperAudioPlaying
+        {
+            get
+            {
+                var until = System.Threading.Interlocked.Read(ref _whisperBusyUntilTicks);
+                return until > 0 && Now.Ticks < until;
+            }
+        }
 
         private readonly object _gate = new();
         private readonly Func<BarkRuleSet> _loadRules;
@@ -319,6 +352,10 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
+                // WPF :1668: never talk over an audible whisper (two voices at once); safety and guaranteed
+                // barks bypass it above, and the text-only attributions may name the haunt or the exit.
+                if (IsWhisperAudioPlaying && !WhisperExemptTriggers.Contains(rule.Trigger))
+                    return (false, -1, "whisper-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))
@@ -416,10 +453,10 @@ namespace ConditioningControlPanel.Services.Bark
             if (mouth == null || string.IsNullOrWhiteSpace(line)) return false;
             var mood = string.IsNullOrEmpty(rule.Mood) ? null : rule.Mood;
             if (rule.Class == BarkClass.EasterEgg && CoreSettings.Current.MasterVolume == 0)
-                mouth(new BarkSpeech(line, null, false, mood, SilentEgg: true));
+                mouth(new BarkSpeech(line, null, false, mood, SilentEgg: true, Unprompted: Companion.CompanionVoicePolicy.IsUnprompted(rule.Trigger)));
             else
                 mouth(new BarkSpeech(line, SafeResolveAudio(variant.Audio),
-                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false));
+                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false, Unprompted: Companion.CompanionVoicePolicy.IsUnprompted(rule.Trigger)));
             try { BarkSpoken?.Invoke(rule, line); }
             catch (Exception ex) { Log.Debug("[BARK] BarkSpoken subscriber error: {Error}", ex.Message); }
             return true;

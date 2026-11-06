@@ -131,11 +131,13 @@ public sealed class BlinkTrainerSessionTests
                 Assert.Equal(1, Math.Max(a.Opacity, b.Opacity));
                 Assert.NotNull((a.Opacity == 1 ? a : b).Source);
 
-                // Stop closes the overlay; revoke of a running session ends it and the tracker.
-                BlinkTrainerSession.Stop();
+                // A tier loss must still allow Stop through the real handler (WPF BlinkTrainer.cs:183).
+                CoreEntitlement.HasPremiumProvider = () => false;
+                tab.BtnBlinkTrainerStartSession_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs());
                 Assert.False(BlinkTrainerSession.IsRunning);
                 Assert.Empty(BlinkTrainerSession.Windows);
                 Assert.Equal(BlinkTrainerStatusState.IdleReady, tab.StatusState);
+                CoreEntitlement.HasPremiumProvider = () => true;
                 Assert.True(BlinkTrainerSession.Start(tab));
                 tab.RevokeConsent();
                 Assert.False(BlinkTrainerSession.IsRunning);
@@ -658,6 +660,8 @@ public sealed class BlinkTrainerSessionTests
         {
             var slow = new SlowOpen();
             WebcamTracker.SourceFactory = () => slow;
+            var oldPremium = CoreEntitlement.HasPremiumProvider;
+            CoreEntitlement.HasPremiumProvider = () => true;   // WPF f3f7288bf: the Start handler demands premium
             var tab = new BlinkTrainerTabView();
             var host = new Window { Content = tab };
             host.Show();
@@ -674,7 +678,7 @@ public sealed class BlinkTrainerSessionTests
                 Assert.False(BlinkTrainerSession.IsRunning);
                 Assert.Empty(made);
             }
-            finally { host.Close(); }
+            finally { host.Close(); CoreEntitlement.HasPremiumProvider = oldPremium; }
         });
     }
 }

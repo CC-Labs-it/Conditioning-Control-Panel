@@ -447,7 +447,7 @@ namespace ConditioningControlPanel.Services
         /// master toggle is waived for the length of the pattern, premium is not. False means
         /// nothing played.
         /// </summary>
-        public async Task<bool> TestPatternAsync(double intensity, int durationMs, VibrationMode mode)
+        public async Task<bool> TestPatternAsync(double intensity, int durationMs, VibrationMode mode, CancellationToken token = default)
         {
             if (_disposed) return false;
             durationMs = Math.Clamp(durationMs, 100, 8000);
@@ -456,8 +456,10 @@ namespace ConditioningControlPanel.Services
 
             var steps = HapticPatterns.Render(mode, Math.Clamp(intensity, MinPerceptibleIntensity, 1.0),
                                               durationMs, priority: 5);
-            await _mixer.Play(steps, isTest: true).Completion;
-            return true;
+            var seq = _mixer.Play(steps, isTest: true);
+            using var reg = token.Register(seq.Cancel);
+            try { await seq.Completion.ConfigureAwait(false); } catch (OperationCanceledException) { return false; }
+            return !token.IsCancellationRequested;
         }
 
         /// <summary>True when only the Test buttons can reach a toy: the master toggle is off.</summary>

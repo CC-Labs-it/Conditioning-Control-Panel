@@ -22,7 +22,9 @@ public partial class WorkshopAccordion
                 .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(t => t, _ => true);
             var dialog = new TextEditorDialog(Loc.Get("title_trigger_phrases"), before);
-            // ponytail: recorded-voice markers need the unported HasRecordedVoice audio lookup.
+            // WPF :1557: trigger lines speak through the subliminal trigger audio lookup, so the same lookup marks
+            // the lines that will stay silent (no recorded clip, never a synthetic voice).
+            dialog.MarkSilentLines(Overlays.SubliminalWhisperShow.HasRecordedVoice);
             TriggerEditors.Add(dialog);
             try
             {

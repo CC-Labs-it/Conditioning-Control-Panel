@@ -3,17 +3,18 @@
 // motionLevel + runSetup, then the manifest :83), request-run -> run-config (:523, rules in Core
 // DtrhRunWire), run-started / run-progress / run-ended with the one-payout latch (:360, :583) and the
 // close-mid-run booking (:1002 DtrhRunCloseRule). The kept Escape (:119) is posted by the panic key's pause
-// claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh); a full panic closes it with
-// every other game (PanicSurfaces "games"). Shell frames (boot-error, exit's 1200 ms close, exit-done)
-// stay in GameWindow.HandleMessage.
+// claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh). Panic requests end-run
+// and gives the page 1200 ms to settle before forcing close (WPF DtrhHostService.cs:250-266,1017-1028).
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
-// ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
+// Slice C: heartbeat recovery (one relaunch per app session).
+// ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
-// loom-*, favorites + asset-stats, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
+// loom-*, favorites + asset-stats, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
-// tucking the panel to the tray, and SeasonRecap TrackFeature.
+// tucking the panel to the tray, and SeasonRecap TrackFeature. WebHost has no process-failed signal;
+// the heartbeat watch recovers silent ready pages only, not failures before ready.
 using System;
 using System.IO;
 using System.Linq;
@@ -46,8 +47,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
+        private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
+
+        private DispatcherTimer? _dtrhHeartbeatWatch;
+        private DateTime _dtrhLastHeartbeatUtc;
+        private bool _dtrhRecoveryQueued;
+        private static int _dtrhPanicEpoch;
+        // WPF's _relaunchedOnce is application-wide: closing/reopening the hub does not replenish it.
+        internal static bool DtrhRelaunchedOnce;
+        internal bool DtrhWatchRunning => _dtrhHeartbeatWatch?.IsEnabled == true;
 
         internal bool DtrhRunActive => _dtrhRunActive;
 
@@ -65,10 +75,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleDtrh(JObject o)
         {
-            switch ((string?)o["type"])
+            var type = (string?)o["type"];
+            // A dead carrier cannot start another run; a funnel event is still counted (Handle refuses checkout).
+            if (_closing && type != "funnel") return true;
+            switch (type)
             {
+                case "boot-error":
+                    // WPF DtrhHostService.cs:925-954: close the failed web host, then fall back.
+                    if (_closing) return true;
+                    Log.Warning("DtrhHost: page boot-error: {Msg}; opening classic game", (string?)o["msg"]);
+                    Close();
+                    try { LaunchDtrhLegacy(); }
+                    catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
+                    return true;
                 case "ready":
                     IsReady = true;
+                    _dtrhLastHeartbeatUtc = DtrhUtcNow(); // WPF OnPageReady :275: loading does not spend the deadline
                     OnDtrhPageReady();
                     return true;
                 case "funnel":
@@ -76,7 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     return true;
                 case "heartbeat":
                 case "pong":
-                    return true;   // the watchdog lands with game-dtrh-host-b
+                    _dtrhLastHeartbeatUtc = DtrhUtcNow(); // WPF DtrhHostService.cs:397-398,451-452
+                    return true;
                 case "request-run":
                     OnDtrhRequestRun(o);
                     return true;
@@ -94,11 +117,60 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     OnDtrhRunEnded(o, fromTeardown: false);
                     return true;
                 case "exit":
-                    _dtrhExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
-                    return false;
+                    _dtrhExiting = true;
+                    ArmDtrhExitWatchdog();
+                    return true;
                 default:
                     return false;
             }
+        }
+
+        /// <summary>WPF DtrhHostService.cs:250-266: panic asks a ready page to settle its run.
+        /// A booting page, or a second close while exiting, closes immediately.</summary>
+        private void CloseDtrhForPanic()
+        {
+            try
+            {
+                if (DtrhReady)
+                {
+                    _dtrhExiting = true;
+                    Post(new { type = "end-run", reason = "host" });
+                    ArmDtrhExitWatchdog();
+                }
+                else Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("DtrhHost: end-run post failed: {E}", ex.Message);
+                Close(); // WPF :266: a broken bridge must not prevent panic closing the window.
+            }
+        }
+
+        /// <summary>WPF DtrhHostService.cs:1017-1028: replace the deadline on each exit;
+        /// exit-done closes sooner, teardown cancels the outstanding callback.</summary>
+        private void ArmDtrhExitWatchdog()
+        {
+            _dtrhExitWatchdog?.Dispose();
+            _dtrhExitWatchdog = DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
+        }
+
+        /// <summary>WPF DtrhHostService.cs:939-954. The existing Core first-run deal is shared
+        /// with ChaosHappyPath; repeat players enter the hub and use its FALL IN button.</summary>
+        private static void LaunchDtrhLegacy()
+        {
+            if (Chaos.ChaosRunHost.IsActive) return;
+            if (ChaosMeta.State.RunsCompleted == 0)
+            {
+                Chaos.ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                return;
+            }
+            var desktop = global::Avalonia.Application.Current?.ApplicationLifetime
+                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var hub = desktop?.Windows.OfType<Chaos.ChaosHubWindow>().FirstOrDefault();
+            if (hub != null) { hub.Activate(); return; }
+            hub = new Chaos.ChaosHubWindow();
+            if (desktop?.MainWindow is { IsVisible: true } owner) hub.Show(owner);
+            else hub.Show();
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>
@@ -205,11 +277,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Log.Warning("DtrhHost.OnRunEnded: {E}", ex.Message); }
         }
 
+        /// <summary>WPF DtrhHostService.cs:959-981 StartHeartbeatWatch: the page beats only after ready, every ~2 s.</summary>
+        private void StartDtrh()
+        {
+            _dtrhLastHeartbeatUtc = DtrhUtcNow();
+            _dtrhHeartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(DtrhHeartbeatRule.PollSeconds) };
+            _dtrhHeartbeatWatch.Tick += (_, _) => CheckDtrhHeartbeat(DtrhUtcNow());
+            _dtrhHeartbeatWatch.Start();
+        }
+
+        /// <summary>One production timer tick; tests step the same clock without sleeping.</summary>
+        internal string CheckDtrhHeartbeat(DateTime nowUtc)
+        {
+            if (_closing || _dtrhExiting || !IsReady) return "idle";
+            if (_dtrhRecoveryQueued) return "recovering";
+            if (!DtrhHeartbeatRule.ShouldRecover(IsReady, _dtrhExiting, _dtrhRunActive, nowUtc - _dtrhLastHeartbeatUtc))
+                return "ok";
+            _dtrhRecoveryQueued = true;
+            int panicEpoch = _dtrhPanicEpoch;
+            // WPF DtrhHostService.cs:997-1013 Recover dispatches before disposing. A panic/close queued ahead of this wins.
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_closing || _dtrhExiting || panicEpoch != _dtrhPanicEpoch) return;
+                bool retry = !DtrhRelaunchedOnce;
+                if (retry) DtrhRelaunchedOnce = true;
+                Log.Warning("DtrhHost: heartbeat silent - {Action}", retry ? "relaunching once" : "giving up");
+                Close(); // stops the timer and banks the last snapshot
+                if (retry && panicEpoch == _dtrhPanicEpoch)
+                {
+                    try { Launch(DtrhId); }
+                    catch (Exception ex) { Log.Warning(ex, "DtrhHost: recovery launch failed; giving up"); }
+                }
+            });
+            return "recovering";
+        }
+
         /// <summary>WPF DisposeAll (:1002): the window died with a descent still falling (frame X, Alt+F4, panic),
         /// so bank the last snapshot as an abandoned booking rather than dropping the run.</summary>
         private void DisposeDtrh()
         {
             if (!IsDtrh) return;
+            _dtrhExitWatchdog?.Dispose();
+            _dtrhExitWatchdog = null;
+            _dtrhHeartbeatWatch?.Stop();
+            _dtrhHeartbeatWatch = null;
             DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
             if (DtrhRunCloseRule.ShouldBookOnClose(_dtrhRunActive, _dtrhLastProgress != null))
             {

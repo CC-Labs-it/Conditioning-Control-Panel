@@ -32,7 +32,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the tube's voice); Autonomy.CancelActivePulses; the session PAUSE + StopEngine (StartStop.cs:443-516:
         /// SkillTree, LockCardWindow.ForceCloseAll). Run in registry order.</summary>
         internal static readonly HashSet<string> BlinkStopIds = new()
-            { "blink-trainer", "mantra", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
+            { "blink-trainer", "audio-playlist", "mantra-chant", "companion-audio", "mantra", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
+        // mantra-chant + companion-audio: WPF KillAllAudio stops (and opts out of) the chant and Audio.StopSound;
+        // the chant runs on its own timer, so the engine stop never reaches it (review 2026-11-06).
+        // audio-playlist: WPF KillAllAudio (App.xaml.cs:1853) stops the audio player with a playlist first.
 
         /// <summary>Test seam: replaces the restart-camera + "Recalibrate?" offer after the stop pass.</summary>
         internal Func<Task>? BlinkRecalOfferForTests;

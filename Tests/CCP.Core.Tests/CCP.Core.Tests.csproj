@@ -17,14 +17,29 @@
     <IsPublishable>false</IsPublishable>
     <AssemblyName>CCP.Core.Tests</AssemblyName>
     <RootNamespace>CCP.Core.Tests</RootNamespace>
+    <DefineConstants>$(DefineConstants);CCP_PRIZE_FEED_CORE_TESTS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\ConditioningControlPanel.Tests\PatreonActivationTests.cs" Link="PatreonActivationTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\OnlineMeterRulesTests.cs" Link="OnlineMeterRulesTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\ConversionMomentRowsTests.cs" Link="ConversionMomentRowsTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\FloatingVideoFrameTests.cs" Link="FloatingVideoFrameTests.cs" />
+    <!-- This exit helper has no WPF dependency: execute its existing safety tests on Linux too. -->
+    <Compile Include="..\..\ConditioningControlPanel\Services\Diagnostics\UiThreadExit.cs" Link="UiThreadExit.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\UiThreadExitTests.cs" Link="UiThreadExitTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\ProfileSyncPrizesFeedTests.cs" Link="PrizesFeedTests.cs" />
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
+    <Compile Include="..\ConditioningControlPanel.Tests\RemoteFlashPoolTests.cs" Link="RemoteFlashPoolTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\ChasterLinkTests.cs" Link="ChasterLinkTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\InviteClaimNoticeTests.cs" Link="InviteClaimNoticeTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\SourceRoots.cs" Link="SourceRoots.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\LockdownDoseRecoverySharingTests.cs" Link="LockdownDoseRecoverySharingTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Include="xunit.v3" Version="3.2.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
@@ -40,6 +55,7 @@
     <Compile Include="..\ConditioningControlPanel.Tests\BankAccumulatorTests.cs" Link="BankAccumulatorTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\BankFlightPlanTests.cs" Link="BankFlightPlanTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\BankFxDisplayHoldTests.cs" Link="BankFxDisplayHoldTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\IntakePunchCardTests.cs" Link="IntakePunchCardTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\HostNetPathRuleTests.cs" Link="HostNetPathRuleTests.cs" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AchievementSharePromptRuleTests.cs" Link="AchievementSharePromptRuleTests.cs" />

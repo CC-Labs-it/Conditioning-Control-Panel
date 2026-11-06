@@ -149,7 +149,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         },
                     });
                 }
-                var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, MaxWidth = 380 };
+                // LineHeight: Segoe UI's own 14px line (1.33 em) in WPF; Inter/Selawik set tighter and the block rode ~10px high.
+                var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, MaxWidth = 380, LineHeight = 18.6 };
                 text.Inlines!.Add(new Run(head) { Foreground = Brushes.White, FontWeight = FontWeight.Bold });
                 text.Inlines.Add(new Run(rest) { Foreground = new SolidColorBrush(Color.FromArgb(0xCC, 0xC8, 0xC8, 0xDE)) });
                 col.Children.Add(text);

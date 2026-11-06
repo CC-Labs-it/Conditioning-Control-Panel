@@ -168,6 +168,9 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public class V2User
         {
+            [JsonProperty("prizes")]
+            public PrizesBlock? Prizes { get; set; }
+
             [JsonProperty("unified_id")]
             public string? UnifiedId { get; set; }
 
@@ -761,6 +764,17 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        // WPF Services/Settings/ProfileSyncService.cs:4130-4144.
+        public async Task<bool?> IsDisplayNameAvailableAsync(string name)
+        {
+            try
+            {
+                var json = await _http.GetStringAsync($"{SERVER_URL}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
+                return (bool?)JObject.Parse(json)["available"];
+            }
+            catch { return null; }
+        }
+
         /// <summary>
         /// Rename the account (WPF ProfileSyncService.ChangeDisplayNameAsync): the server checks uniqueness
         /// and answers with the name it settled on. Errors carry the server's own text, as WPF showed it.
@@ -832,6 +846,37 @@ namespace ConditioningControlPanel.Services
             {
                 Log.Error(ex, "[V2Auth] Delete account failed");
                 return (false, "Account deletion requires an internet connection");
+            }
+        }
+
+        /// <summary>WPF ProfileSyncService.RecordEasterEggReadAsync (:4758): counts this reader on the server
+        /// and returns how many have read the note, or -1 on any failure (signed out still counts, anonymously).</summary>
+        public async Task<int> RecordEasterEggReadAsync()
+        {
+            try
+            {
+                var unifiedId = _settings()?.UnifiedId;
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/easter-egg");
+                string body = "{}";
+                if (!string.IsNullOrEmpty(unifiedId))
+                {
+                    AddAuthHeader(request);
+                    body = new JObject { ["unified_id"] = unifiedId }.ToString(Formatting.None);
+                }
+                request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                using var response = await _http.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (await TryHandleMergedAsync(response)) return -1;
+                    Log.Warning("Easter egg endpoint returned {Status}", response.StatusCode);
+                    return -1;
+                }
+                return (int?)JObject.Parse(await response.Content.ReadAsStringAsync())["count"] ?? 0;   // WPF: missing count deserializes to 0
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Easter egg request failed");
+                return -1;
             }
         }
 

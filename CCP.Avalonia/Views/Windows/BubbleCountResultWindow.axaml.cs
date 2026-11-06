@@ -24,12 +24,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    the window out of Alt+Tab. That is <c>ShowInTaskbar="False"</c> in the .axaml, so nothing
     ///    is lost and no <c>user32</c> reference reaches this net10.0 head.
     ///  - <b>Screens.</b> <c>System.Windows.Forms.Screen</c> + <c>BubbleCountWindow.GetDpiForScreen</c>
-    ///    become <see cref="Screen"/> from <c>Window.Screens</c>. The DPI division drops out with
-    ///    them: WPF's Left/Top are DIPs, Avalonia's <c>Position</c> is physical pixels, which is
-    ///    what <c>Screen.Bounds</c> is already in.
-    ///  - <b>Width=400/Height=300 in the ctor are dropped.</b> They were dead in WPF too - the XAML
-    ///    already carries <c>WindowState="Maximized"</c> and Loaded re-asserts it, so the 400x300
-    ///    box was never on screen.
+    ///    become <see cref="Screen"/> from <c>Window.Screens</c>. Avalonia's <c>Position</c> and
+    ///    <c>Screen.Bounds</c> use physical pixels; Width/Height still use DIPs.
+    ///  - <b>Width=400/Height=300 in the ctor are dropped.</b> WPF maximizes on Loaded
+    ///    (ConditioningControlPanel/Windows/BubbleCountResultWindow.xaml.cs:85-87). Here the full
+    ///    target bounds are set before Show, including on WMs that refuse to maximize fixed windows.
     ///  - <b>The monitor set and the mercy card are real.</b> <c>DualMonitorEnabled</c> is in Core
     ///    and the screens come from <c>ScreenList.Enumerate</c> (the same helper the pink-filter
     ///    control uses); the mercy phrase comes from <c>CoreMods.GetPhrases("BubbleCountMercy")</c>
@@ -53,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Action<bool> _onComplete;
         private readonly Screen? _screen;
         private readonly bool _isPrimary;
+        private bool _covered;
 
         private int _attemptsRemaining = 3;
         private bool _isCompleted = false;
@@ -117,20 +117,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Register window
             _allWindows.Add(this);
 
-            // Position on screen. WPF divided by the per-screen DPI because Left/Top are DIPs;
-            // Avalonia's Position is in the same physical pixels Screen.Bounds reports, so the
-            // conversion - and BubbleCountWindow.GetDpiForScreen with it - disappears. Screens is
-            // only populated once the window has a platform impl, hence Opened rather than the ctor.
-            // The primary is placed by ShowOnAllMonitors after Show (same primary/fallback choice).
+            // Screens exist once the TopLevel is constructed, before Show. Only direct callers
+            // or a backend without early topology need this fallback; never re-place a mapped cover.
             Opened += (_, _) =>
             {
-                if (!_isPrimary) PositionOnScreen(_screen);
+                if (!_covered) PositionOnScreen(_screen ?? Screens.ScreenFromWindow(this) ?? Screens.Primary);
             };
 
             // Focus input on primary
             Loaded += (_, _) =>
             {
-                WindowState = WindowState.Maximized;
                 if (_isPrimary)
                 {
                     _txtAnswer.Focus();
@@ -166,8 +162,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         ///
         /// <para>Avalonia has no screen list without a TopLevel, so the primary window is built
         /// first and its <c>Screens</c> is what the set is drawn from - the reverse of WPF's
-        /// secondaries-first order, which nothing depends on. An empty enumeration (headless, or a
-        /// window with no platform impl yet) is the single-screen path rather than WPF's
+        /// secondaries-first order, which nothing depends on. If topology is unavailable before
+        /// mapping, retry once after Show. A still-empty enumeration is the single-screen path rather than WPF's
         /// <c>onComplete(false)</c>: on this head empty means "no topology reported", not "no
         /// display".</para>
         /// </summary>
@@ -177,18 +173,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _sharedInput = "";
 
             var primaryWindow = new BubbleCountResultWindow(correctAnswer, strictMode, onComplete, null, true);
-            // Some backends report topology only after mapping a TopLevel. Open the typist first,
-            // then place it using the same primary/fallback chosen for the mirror set.
-            primaryWindow.Show();
+            // WPF selects the typist screen before Show (BubbleCountResultWindow.xaml.cs:121-146).
+            // KWin can clamp moves after mapping, so every window must already cover its target.
             var all = Features.ScreenList.Enumerate(primaryWindow);
             var primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
             primaryWindow.PositionOnScreen(primary);
+            primaryWindow.Show();
+
+            if (all.Count == 0)
+            {
+                // Some backends expose topology only after mapping. WPF mirrors the complete set
+                // (ConditioningControlPanel/Windows/BubbleCountResultWindow.xaml.cs:121-145).
+                all = Features.ScreenList.Enumerate(primaryWindow);
+                primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
+                if (primary is not null)
+                {
+                    // Unmap before correcting the provisional typist; never move it while mapped.
+                    primaryWindow.Hide();
+                    primaryWindow.PositionOnScreen(primary);
+                    primaryWindow.Show();
+                }
+            }
 
             if (CoreSettings.Current.DualMonitorEnabled)
             {
                 foreach (var screen in all.Where(s => s != primary))
                 {
                     var window = new BubbleCountResultWindow(correctAnswer, strictMode, onComplete, screen, false);
+                    window.PositionOnScreen(screen);
                     window.Show();
                 }
             }
@@ -199,13 +211,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void PositionOnScreen(Screen? target)
         {
             if (target is null) return;
-            // Position is physical pixels (WPF divided these coordinates by per-screen DPI).
-            // Reposition while normal: maximized windows may ignore a monitor move on X11.
-            var state = WindowState;
+            _covered = true;
+            // WPF positions before Show (:48-54), then maximizes (:85-87). Explicit full bounds
+            // also cover CanResize=False windows on WMs which refuse to maximize them (#3701).
+            var bounds = target.Bounds;
             WindowState = WindowState.Normal;
             WindowStartupLocation = WindowStartupLocation.Manual;
-            Position = new PixelPoint(target.Bounds.X + 100, target.Bounds.Y + 100);
-            WindowState = state;
+            Position = bounds.Position;
+            Width = bounds.Width / target.Scaling;
+            Height = bounds.Height / target.Scaling;
         }
 
         private void OnTextChanged(object? sender, TextChangedEventArgs e)

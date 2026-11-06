@@ -35,6 +35,9 @@ public sealed partial class FriendsDrawerTests
     public Task RailOpenAndClosePlayTheDrawerSounds() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChipApp();
+        // FriendsLanding.Sfx stays silent while EMI holds, tails or sits in a panic silence (FriendsSfx.cs:66-69), and an
+        // earlier test in the shard can leave one behind: start from a clean engine so the cues below are about the drawer.
+        ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
         var (svc, _) = Service();
         var chip = new FriendsRailChip(svc);
         var owner = new Window { Content = chip, Width = 400, Height = 400 };

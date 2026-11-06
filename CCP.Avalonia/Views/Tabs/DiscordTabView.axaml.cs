@@ -6,8 +6,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Input.Platform;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -69,20 +71,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             InitializeComponent();
             PrivacyPanel = new ProfilePrivacyPanel();
+            PrivacyPanel.PrivacyChanged += RefreshPrivacyActions;
+            AttachedToVisualTree += (_, _) => RefreshPrivacyActions();
         }
 
         // ------------------------------------------------------------------
         // The card (read-only): WPF MainWindow.Browser.cs BtnViewMyProfile_Click, SearchAndDisplayProfile,
         // DisplayOwnProfile, DisplayProfileEntry and RefreshProfileViewerAsync, on the tab itself.
         // ponytail: no avatar picture (no Discord avatar URL or remote image load on this head), no Patreon
-        // badge/banner art, no edit-name/delete/Discord-DM buttons (writes, unit 7), no cosmetics, no staff
-        // flag for your own card (no Discord service): each stays hidden rather than drawn wrong.
+        // badge/banner art, no staff
+        // flag for your own card: each stays hidden rather than drawn wrong.
         // ------------------------------------------------------------------
 
         private LeaderboardPage<LeaderboardRow>? _board;
         private Task<LeaderboardPage<LeaderboardRow>?>? _boardFetch;
         private DateTime _boardAt;
         private int _cardRequest;   // newest request wins; an older one finishing late draws nothing
+        internal void InvalidateProfileRequests() => _cardRequest++;
         private bool _meFirstDone;
 
         /// <summary>WPF MainWindow.ProfileCard.cs:61: the first show opens on your own card, never over one already up.</summary>
@@ -164,7 +169,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var progress = App.Achievements?.Progress;
             ShowCard(s.IsSeason0Og);
             ApplyIdentityBadges(false, null, CoreAccount.IsWhitelisted);
-            TxtProfileViewerName.Text = s.UserDisplayName ?? "You";
+            // WPF MainWindow.Browser.cs:2014-2017: the signed-in no-name placeholder.
+            TxtProfileViewerName.Text = NeedsDisplayNameRule.FirstName(s.UserDisplayName, AccountSeed.Discord?.CustomDisplayName, AccountSeed.Patreon?.DisplayName)
+                ?? (string.IsNullOrEmpty(s.UnifiedId) ? "You" : Loc.Get("account_name_not_set"));
             ShowOwnActions(true);
             SetOnline(true, Loc.Get("label_online"));
             TxtProfileViewerLevel.Text = s.PlayerLevel.ToString();
@@ -200,7 +207,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var isOwn = string.Equals(entry.DisplayName, s.UserDisplayName, StringComparison.OrdinalIgnoreCase);
             ApplyIdentityBadges(false, null, isOwn && CoreAccount.IsWhitelisted);
             TxtProfileViewerName.Text = entry.DisplayName;
-            ShowOwnActions(isOwn);
+            ShowOwnActions(isOwn, entry);
+            // WPF MainWindow.Browser.cs:2263 uses the server identity for every leaderboard card.
+            ShowDiscordAction(entry.DiscordId, entry.DisplayName);
             SetOnline(entry.IsOnline, entry.IsOnline ? "Online" : "Offline"); // WPF's literals
             TxtProfileViewerLevel.Text = entry.Level.ToString();
             TxtProfileViewerRank.Text = TrainerCardText.Rank(entry.Rank);
@@ -227,10 +236,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshProfileViewerAsync: GET /user/lookup, drawn only while the same user is still on screen.</summary>
         private async Task RefreshProfileViewerAsync(string name)
         {
+            var req = _cardRequest;
             UserLookupResult? lookup = null;
             try { lookup = await LeaderboardTabView.NewClient().LookupUserAsync(name); }
             catch (Exception ex) { Log.Warning(ex, "Failed to refresh profile viewer for {Name}", name); }
-            if (TxtProfileViewerName.Text != name) return;
+            // A logout or a newer card request since the lookup started owns the card now.
+            if (req != _cardRequest || TxtProfileViewerName.Text != name) return;
             // WPF ResolveProfilePictureUnavailable: a failed lookup must not leave the slot Pending forever.
             if (lookup == null) { Host?.ResolveProfilePictureUnavailable(); return; }
             SetOnline(lookup.IsOnline, lookup.IsOnline ? "Online" : "Offline");
@@ -344,7 +355,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF forwards to MainWindow.Browser.cs:ClearProfileViewer; a search still in flight is dropped.</summary>
         private void BtnClearProfile_Click(object? sender, RoutedEventArgs e)
         {
-            _cardRequest++;
             Host?.BtnClearProfile_Click(sender, e);
         }
 
@@ -352,20 +362,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF Browser.cs:1934-1942 / 2215-2223: rename and delete show on your own card only, and only
         /// with a unified id to act on.</summary>
-        private void ShowOwnActions(bool own)
+        private void ShowOwnActions(bool own, LeaderboardRow? entry = null)
         {
+            _viewingOwn = own;
+            _profileEntry = entry;
+            ShowDiscordAction(null, null);
+            RefreshPrivacyActions();
             var show = own && !string.IsNullOrEmpty(CoreSettings.Current.UnifiedId);
             BtnChangeDisplayName.IsVisible = show;
             BtnDeleteProfile.IsVisible = show;
         }
-        private void BtnProfileDiscord_Click(object? sender, RoutedEventArgs e) { }
+        private async void BtnProfileDiscord_Click(object? sender, RoutedEventArgs e) => await OpenProfileDiscordAsync();
+
+        // WPF MainWindow.Browser.cs:1709,1735: failed launch copies the id, then restores the label after 1500 ms.
+        internal async Task OpenProfileDiscordAsync()
+        {
+            if (BtnProfileDiscord.Tag is not string { Length: > 0 } id) return;
+            try
+            {
+                if (await OpenDiscordProfile($"https://discord.com/users/{id}")) return;
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to open Discord profile"); }
+            try
+            {
+                if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+                await clipboard.SetTextAsync(id);
+                var original = TxtProfileDiscordId.Text;
+                TxtProfileDiscordId.Text = Loc.Get("label_id_copied");
+                await Task.Delay(1500);
+                // A different card or a consent repaint must keep its own label.
+                if (Equals(BtnProfileDiscord.Tag, id) && TxtProfileDiscordId.Text == Loc.Get("label_id_copied"))
+                    TxtProfileDiscordId.Text = original;
+            }
+            catch (Exception ex) { Log.Debug(ex, "Discord id clipboard fallback failed"); }
+        }
+
+        internal Func<string, Task<bool>> OpenDiscordProfile = url => Platform.ExternalOpener.OpenAsync(null, url);
+        private bool _viewingOwn;
+        private LeaderboardRow? _profileEntry;
+
+        // WPF MainWindow.Browser.cs:1552,2041 and MainWindow.Patreon.cs:935.
+        internal void RefreshPrivacyActions()
+        {
+            ProfileLinkNotice.IsVisible = !CoreSettings.Current.HasLinkedDiscord;
+            if (_viewingOwn)
+                ShowDiscordAction(CoreSettings.Current.AllowDiscordDm
+                    ? (_profileEntry != null ? _profileEntry.DiscordId : Platform.AccountSeed.Discord?.UserId) : null,
+                    _profileEntry != null ? _profileEntry.DisplayName
+                        : CoreSettings.Current.UserDisplayName ?? Platform.AccountSeed.Discord?.CustomDisplayName);
+        }
+
+        private void ShowDiscordAction(string? id, string? label)
+        {
+            BtnProfileDiscord.IsVisible = !string.IsNullOrEmpty(id);
+            BtnProfileDiscord.Tag = id;
+            // WPF MainWindow.Browser.cs:2268: a card without a display name says "Message on Discord", never the raw id.
+            TxtProfileDiscordId.Text = string.IsNullOrEmpty(label) ? ConditioningControlPanel.Localization.Loc.Get("label_message_on_discord") : label;
+        }
 
         private void BtnProfileSearch_Click(object? sender, RoutedEventArgs e) => _ = SearchAsync(TxtProfileSearch.Text);
         private void BtnViewMyProfile_Click(object? sender, RoutedEventArgs e) => _ = ViewMyProfileAsync();
 
         /// <summary>The link-notice button reuses the Privacy panel's login/link flow verbatim on
         /// WPF — that handler drives BtnDiscordTabLogin on the long-lived panel instance.</summary>
-        private void BtnDiscordTabLogin_Click(object? sender, RoutedEventArgs e) { }
+        private async void BtnDiscordTabLogin_Click(object? sender, RoutedEventArgs e) => await PrivacyPanel.LoginAsync(Host);
 
         /// <summary>Opens the relocated sharing controls, exactly as the WPF handler does
         /// (<c>mw.OpenProfilePrivacyDialog()</c>). The dialog borrows <see cref="PrivacyPanel"/>,

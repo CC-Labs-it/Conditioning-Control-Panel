@@ -32,6 +32,8 @@ public sealed partial class FriendsDrawerTests
         var video = new MandatoryVideoScheduler(new RailQuietVideoHost(), new RailStillTime());
         try
         {
+            // A hold, tail or panic silence left by an earlier test in the shard would mute every cue below.
+            engine.ResetForTests();
             Assert.False(engine.HoldActive);
             CoreSettings.Current.MasterVolume = 80;
             CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
@@ -56,6 +58,7 @@ public sealed partial class FriendsDrawerTests
         finally
         {
             if (state == "hold") engine.ReleaseHold("intakeRunning");
+            engine.ResetForTests();   // the hold's tail must not mute the next case
             video.ForceCleanup();
             (CoreAudio.PlayOneShotProvider, CoreAudio.IsOutputSuppressedProvider, CoreEngine.Video) = old;
         }

@@ -6,6 +6,8 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using Serilog;
+using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.UI.EdgeEffects;
 using ModPackage = ConditioningControlPanel.Models.ModPackage;
 using MotionLevel = ConditioningControlPanel.Models.MotionLevel;
 using PerformanceTier = ConditioningControlPanel.Models.PerformanceTier;
@@ -29,6 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         GlowBreath = 1 << 4,
         /// <summary>Warm motes rising from the bottom edge on a slow sine sway, budgeted by the tier.</summary>
         Embers = 1 << 5,
+        EdgeDrift = 1 << 6,
+        VaultMotes = 1 << 8,   // WPF AmbientFxCanvas.cs:54 (EdgeFog holds 1 << 7)
     }
 
     /// <summary>Per-surface tuning for <see cref="AmbientFxCanvas.StartLayers(AmbientFxConfig)"/>.</summary>
@@ -72,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// panel is already painted in.
         /// </summary>
         public Color? Tint { get; set; }
+        public EdgeSide EdgeSide { get; set; }
 
         /// <summary>
         /// Keep ticking while the host window is NOT the active window (WPF polish wave 13). Only for
@@ -118,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// SkiaSharp into this project and of only working on the Skia backend; not worth it until the
     /// owner says the bloom is missed.</para>
     /// </summary>
-    public class AmbientFxCanvas : Decorator
+    public partial class AmbientFxCanvas : Decorator
     {
         private const int MaxBurstParticles = 150;
         private const int FaultLimit = 5;
@@ -195,9 +200,15 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Live ember count. Tests read it.</summary>
         internal int EmberCount => _emberN;
 
+        private struct EdgeMote { public float Along, Depth, Speed, Life, Max, SizePx, Phase, PhaseSpd; }
+        private EdgeMote[] _edge = Array.Empty<EdgeMote>();
+        private int _edgeN;
+        private float _edgeT;
+
         private struct Spark { public float X, Y, VX, VY, Life, Max, Size; }
         private Spark[]? _burst;
         private int _burstN;
+        internal int BurstCount => _burstN;
 
         /// <summary>
         /// One banked token. It carries its whole bezier rather than a velocity because the flight
@@ -274,6 +285,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         /// <summary>True while the frame clock runs. Tests read it; nothing else needs to.</summary>
         internal bool IsTicking => _timer.IsEnabled;
+        // Hosts flush geometry invalidated while this clock was parked.
+        internal event Action? ClockStarted;
 
         /// <summary>The layers this canvas was last asked to run.</summary>
         public AmbientFxLayers Layers => _config.Layers;
@@ -291,10 +304,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// performance budget and reseeds the sim. Never starts a clock the tier or the
         /// reduced-motion setting has ruled out.
         /// </summary>
-        public void StartLayers(AmbientFxConfig config)
+        public void StartLayers(AmbientFxConfig config) => StartLayers(config, preservePause: false);
+
+        // Keep a tab registry pause when refreshing a tab's motion gates.
+        internal void StartLayers(AmbientFxConfig config, bool preservePause)
         {
             _config = config ?? new AmbientFxConfig();
-            _paused = false;
+            _paused = preservePause && _paused;
             _faults = 0;
             _running = _config.Layers != AmbientFxLayers.None;
             ReadEnvironment();
@@ -334,8 +350,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _burstN = 0;
             _dustN = 0;
             _emberN = 0;
+            _edgeN = 0;
+            _vaultN = 0;
             InvalidateVisual();
         }
+
+        public Color? Tint => _config.Tint;
+        public EdgeSide EdgeSide => _config.EdgeSide;
+        internal int EdgeMoteCount => _edgeN;
 
         /// <summary>
         /// Swap the tint override without reseeding: live particles take the new colour on the next
@@ -638,6 +660,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 : Array.Empty<Ember>();
             _emberN = 0;
             _emberT = 0f;
+            _edge = _particleBudget > 0 && (_config.Layers & AmbientFxLayers.EdgeDrift) != 0
+                ? new EdgeMote[Math.Min(EdgeDriftMath.MaxPerStrip, _particleBudget)]
+                : Array.Empty<EdgeMote>();
+            _edgeN = 0;
+            _edgeT = 0f;
+            _vaultN = 0;
+            _vaultT = 0;
             _fogT = _dustT = _sheenT = _breathT = _auroraT = 0f;
             _sheenDone = false;
             _burstN = 0;
@@ -743,7 +772,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (!oneShotLive)
             {
                 if (_targetFps <= 0) return false;
-                if (!Env.AllowAmbientLoops) return false;
+                if (!Env.AllowAmbientLoops && !ReducedVaultMayRun()) return false;
             }
             var w = _window;
             if (w != null)
@@ -760,6 +789,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (!_clock.IsRunning) _clock.Start();
             _lastTickMs = _clock.Elapsed.TotalMilliseconds;
             _timer.Start();
+            ClockStarted?.Invoke();
         }
 
         private void StopClock()
@@ -788,6 +818,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_sheenDone) _sheenT += dt;
                 StepDust(dt);
                 StepEmbers(dt);
+                StepEdge(dt);
+                StepVault(dt);
                 StepBurst(dt);
                 StepTokens(dt);
 
@@ -919,6 +951,61 @@ namespace ConditioningControlPanel.Avalonia.Controls
             }
         }
 
+        internal void StepEdge(float dt)
+        {
+            if (_edge.Length == 0) return;
+            for (int i = _edgeN - 1; i >= 0; i--)
+            {
+                var m = _edge[i];
+                m.Along = (float)EdgeDriftMath.Advance(m.Along, m.Speed, dt);
+                m.Phase += m.PhaseSpd * dt;
+                m.Life -= dt;
+                if (EdgeDriftMath.IsSpent(m.Along, m.Life))
+                    _edge[i] = _edge[--_edgeN];
+                else
+                    _edge[i] = m;
+            }
+
+            if ((_config.Layers & AmbientFxLayers.EdgeDrift) == 0 || _fogOnly) return;
+
+            int target = Math.Min(_edge.Length, EdgeDriftMath.Target(_liveBudget));
+            if (_edgeN > target) _edgeN = Math.Max(0, target);
+
+            _edgeT = _edgeN >= target
+                ? Math.Min(_edgeT + dt, (float)EdgeDriftMath.SpawnEverySeconds)
+                : _edgeT + dt;
+            while (_edgeN < target && _edgeT > EdgeDriftMath.SpawnEverySeconds)
+            {
+                _edgeT -= (float)EdgeDriftMath.SpawnEverySeconds;
+                float life = (float)(EdgeDriftMath.LifeMin + _rng.NextDouble() * (EdgeDriftMath.LifeMax - EdgeDriftMath.LifeMin));
+                _edge[_edgeN++] = new EdgeMote
+                {
+                    Along = (float)_rng.NextDouble() * 0.9f,
+                    Depth = (float)(EdgeDriftMath.DepthMin + _rng.NextDouble() * (EdgeDriftMath.DepthMax - EdgeDriftMath.DepthMin)),
+                    Speed = (float)(EdgeDriftMath.SpeedMin + _rng.NextDouble() * (EdgeDriftMath.SpeedMax - EdgeDriftMath.SpeedMin)),
+                    Life = life, Max = life,
+                    SizePx = (float)(EdgeDriftMath.SizeMinPx + _rng.NextDouble() * (EdgeDriftMath.SizeMaxPx - EdgeDriftMath.SizeMinPx)),
+                    Phase = (float)(_rng.NextDouble() * Math.PI * 2),
+                    PhaseSpd = 1.5f + (float)_rng.NextDouble() * 1.5f,
+                };
+            }
+        }
+
+        internal (float Along, float Depth)[] EdgeMotesForTests()
+        {
+            var r = new (float, float)[_edgeN];
+            for (int i = 0; i < _edgeN; i++) r[i] = (_edge[i].Along, _edge[i].Depth);
+            return r;
+        }
+
+        internal void PrimeEdgeForTests(int budget)
+        {
+            _particleBudget = budget;
+            _liveBudget = budget;
+            _fogOnly = false;
+            Reseed();
+        }
+
         private void StepBurst(float dt)
         {
             if (_burst == null || _burstN == 0) return;
@@ -1033,6 +1120,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_fogOnly && (layers & AmbientFxLayers.DustField) != 0) DrawDust(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.Embers) != 0) DrawEmbers(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.SheenSweep) != 0) DrawSheen(context, w, h, intensity);
+                if (!_fogOnly && (layers & AmbientFxLayers.EdgeDrift) != 0) DrawEdge(context, w, h, intensity);
+                DrawVault(context, w, h);
                 DrawBurst(context, w, h, min);
                 DrawTokens(context, w, h, min);
             }
@@ -1111,6 +1200,23 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 float x = m.X0 + m.Amp * (float)Math.Sin(m.Phase);
                 float size = m.Size * min * 2f;
                 DrawSprite(ctx, _emberDot, x * w, m.Y * h, size, size, a);
+            }
+        }
+
+        private void DrawEdge(DrawingContext ctx, float w, float h, float intensity)
+        {
+            if (_edgeN == 0) return;
+            double aw = Bounds.Width;
+            float px = aw > 1 ? (float)(w / aw) : 1f;
+            var side = _config.EdgeSide;
+            for (int i = 0; i < _edgeN; i++)
+            {
+                var m = _edge[i];
+                float a = (float)EdgeDriftMath.Alpha(m.Along, m.Life, m.Max, m.Phase, intensity);
+                if (a <= 0.004f) continue;
+                var (x, y) = EdgeDriftMath.Position(side, m.Along, m.Depth);
+                float size = m.SizePx * px;
+                DrawSprite(ctx, _particleDot, (float)x * w, (float)y * h, size, size, a);
             }
         }
 
@@ -1314,23 +1420,35 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 _ => 24,
             };
 
-            // FxTheme's colours are read, not computed: it writes four Color keys into the app
-            // resources from the mod palette and every consumer reads them back. Theme/Colors.xaml
-            // already carries the keys, so this is that same read path - and nothing on this head
-            // writes them yet, which means the CCP default accent until an FxTheme twin lands.
+            // Publish before CoreMods forwards ModChanged, so attached consumers see the new palette.
+            internal static void ApplyPalette(ModService? mods)
+            {
+                var resources = Application.Current?.Resources;
+                if (resources == null) return;
+                try
+                {
+                    Set("FxMist", mods?.GetMistColorRgb());
+                    Set("FxParticle", mods?.GetParticleColorRgb());
+                    Set("FxGlow", mods?.GetGlowColorRgb());
+                    Set("FxFlashTint", mods?.GetFlashTintRgb());
+                }
+                catch (Exception ex) { Log.Debug("ApplyPalette: {E}", ex.Message); }
+                void Set(string key, (byte R, byte G, byte B)? rgb)
+                {
+                    var color = rgb is { } v ? Color.FromRgb(v.R, v.G, v.B) : Fallback;
+                    resources[key + "Color"] = color;
+                    resources[key + "Brush"] = new SolidColorBrush(color);
+                }
+            }
+
             public static Color MistColor => ThemeColor("FxMistColor");
             public static Color ParticleColor => ThemeColor("FxParticleColor");
             public static Color GlowColor => ThemeColor("FxGlowColor");
             public static Color FlashTintColor => ThemeColor("FxFlashTintColor");
-
-            /// <summary>
-            /// FxTheme.MistOpacity. ponytail: the WPF original reads
-            /// <c>App.Mods.GetMistOpacity()</c>; <see cref="CoreMods"/> exposes no mist-opacity
-            /// provider, so there is nothing to call here yet - adding one is a Core change.
-            /// 1.0 is what the WPF call answers with no mod loaded, so this is the no-mod value
-            /// rather than an invented default.
-            /// </summary>
-            public static double MistOpacity => 1.0;
+            public static double MistOpacity
+            {
+                get { try { return App.Mods?.GetMistOpacity() ?? 1.0; } catch { return 1.0; } }
+            }
 
             /// <summary>FxTheme.Read's Avalonia twin: the same key out of the app resources.</summary>
             private static Color ThemeColor(string key)

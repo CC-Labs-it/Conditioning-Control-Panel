@@ -48,14 +48,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderTriggerChance.ValueChanged += SliderTriggerChance_Changed;
             foreach (var box in TriggerTypeBoxes()) box.IsCheckedChanged += TriggerType_Changed;
             CmbMotion.SelectionChanged += CmbMotion_Changed;
+            ChkBubbleGazePop.IsCheckedChanged += ChkBubbleGazePop_Changed;
+
+            // WPF ApplyFeatureArt: the hero strip and side plate, repainted on a mod switch.
+            Helpers.ModArt.BindFeaturePlates(this, "features/Bubble_pop.png", HeroArt, SideArt);
 
             LoadFromSettings();
-
-            // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt).
-            // The mod-override half of ResolveImageDecoded is portable now
-            // (CoreModArt.OverridePath), but the plate still needs a named ImageBrush in the
-            // .axaml, which Avalonia rejects (x:Name on a brush is AVLN2000); the port draws a
-            // static wash instead, so there is nothing here to repaint.
         }
 
         /// <summary>The seven effect boxes, each carrying its variant id in <c>Tag</c>.</summary>
@@ -84,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _ownershipAttached = true;
             Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
+            Platform.WebcamTracker.Instance.StateChanged += OnWebcamStateChanged;
             RebindToCurrentSettings();
             RebuildMotionPicker();   // grants may have changed while detached (WPF OnLoaded:30)
         }
@@ -96,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _ownershipAttached = false;
             Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
             CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
+            Platform.WebcamTracker.Instance.StateChanged -= OnWebcamStateChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -140,6 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 SliderSpeed.Value = s.BubbleSpeedBoost;
                 TxtSpeed.Text = $"+{s.BubbleSpeedBoost}%";
                 ChkSolidMode.IsChecked = s.BubbleSharedHost;
+                ChkBubbleGazePop.IsChecked = s.BubbleGazePopEnabled;
+                UpdateGazeHint();
 
                 // Easter-egg hint (companion auto-pops a lingering effect bubble) — name the active persona.
                 var persona = CoreMods.ActiveModId switch
@@ -149,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                     "builtin-locked" => "Circe",
                     _ => "your companion"
                 };
-                TxtTriggerEggHint.Text = $"careful — {persona} loves these…";
+                TxtTriggerEggHint.Text = Loc.GetF("label_trigger_bubbles_egg_hint", persona);
 
                 ChkTriggers.IsChecked = s.BubbleTriggersEnabled;
                 TriggerOptionsPanel.IsVisible = s.BubbleTriggersEnabled;
@@ -364,10 +366,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CoreSettings.Save();
         }
 
-        // ponytail: WPF also carries the "stare to pop" row here - ChkBubbleGazePop_Changed
-        // (BubbleGazePopEnabled, which is in Core) plus TxtBubbleGazeHint, whose visibility asks
-        // App.Webcam.IsRunning / .Calibration and Services.WebcamTrackingService.IsConsentCurrent()
-        // in the WPF head. Neither control exists in this port's .axaml, so there is nothing to
-        // wire until that card is ported.
+        /// <summary>
+        /// WPF ChkBubbleGazePop_Changed: the bubble twin of the Flash page's gaze pop. GazeFocus
+        /// follows the setting itself, so there is nothing to start or stop here.
+        /// </summary>
+        private void ChkBubbleGazePop_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            var want = ChkBubbleGazePop.IsChecked ?? false;
+            if (s.BubbleGazePopEnabled == want) return;   // an echo of the seed must not save
+            s.BubbleGazePopEnabled = want;
+            CoreSettings.Save();
+            UpdateGazeHint();
+        }
+
+        /// <summary>The camera reports state off the UI thread; the repaint is marshalled.</summary>
+        private void OnWebcamStateChanged() => Dispatcher.UIThread.Post(UpdateGazeHint);
+
+        /// <summary>
+        /// WPF UpdateGazeHint: "Stare to pop" is a stored preference that does nothing until the
+        /// shared camera runs on a stored calibration with current consent - the conditions
+        /// GazeFocus checks before it starts the dwell engine. Without the line the toggle reads
+        /// as broken, so the row stays live and gains a hint.
+        /// </summary>
+        private void UpdateGazeHint()
+        {
+            try
+            {
+                var cam = Platform.WebcamTracker.Instance;
+                TxtBubbleGazeHint.IsVisible = !(cam.IsRunning && cam.Calibration != null
+                    && Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current));
+            }
+            catch (Exception ex) { Serilog.Log.Debug("BubblePop gaze hint: {E}", ex.Message); }
+        }
     }
 }

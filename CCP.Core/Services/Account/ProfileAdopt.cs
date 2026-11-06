@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Descent;
 using Newtonsoft.Json.Linq;
@@ -157,8 +159,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// The <c>/v2/user/sync</c> response: conditioning minutes take-higher, then user level/xp/season
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
-        /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Other fields are ignored.
-        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), no skills union, recap or
+        /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
+        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), recap or
         /// SeasonResetPending on level_reset - add each with its feature. Does not save.
         /// </summary>
         public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
@@ -186,6 +188,8 @@ namespace ConditioningControlPanel.Services
                     settings.PlayerLevel = user.Level;
                     settings.PlayerXP = XpCurve.GetCurrentLevelXP(user.Level, user.Xp, Epoch(settings));
                     settings.HighestLevelEver = user.HighestLevelEver;
+                    settings.UnlockedSkills = ((response["unlocked_skills"] as JArray)?.Values<string>().OfType<string>() ?? Enumerable.Empty<string>())
+                        .Union(settings.UnlockedSkills ?? new List<string>()).ToList();
                 }
             }
             else if (user.Level > 0)
@@ -242,13 +246,14 @@ namespace ConditioningControlPanel.Services
         /// to today (the "1,000-minute day" bug).</summary>
         public static event Action<AppSettings>? ConditioningMinutesLifted;
 
-        // WPF ProfileSyncService: cloud minutes can lift the local total, never reduce it.
-        private static void AdoptConditioningMinutes(AppSettings settings, double? cloudMinutes)
+        // WPF ProfileSyncService: cloud minutes can lift the local total, never reduce it. True when it lifted.
+        internal static bool AdoptConditioningMinutes(AppSettings settings, double? cloudMinutes)
         {
             if (cloudMinutes is not { } minutes || !double.IsFinite(minutes)
-                || minutes <= settings.TotalConditioningMinutes) return;
+                || minutes <= settings.TotalConditioningMinutes) return false;
             settings.TotalConditioningMinutes = minutes;
             ConditioningMinutesLifted?.Invoke(settings);
+            return true;
         }
     }
 }

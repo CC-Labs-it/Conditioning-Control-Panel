@@ -10,11 +10,8 @@
 //
 // Pause browser (MenuItemPauseBrowser_Click :1383, SetBrowserPaused :1569) goes through the shell's
 // Home browser, the same channel the Workshop's Behavior cell uses, and the two mirror each other.
-//
-// ponytail: not ported - the
-// remote-controller emote swap (RefreshEmoteMenuItemsForRemoteState :878; the five items are greyed
-// as UpdateQuickMenuState does, the emote items stay hidden), and the tube's trigger-phrase timer
-// (Speech.cs:1594 StartTriggerTimer): Trigger mode flips and saves the setting WPF's timer reads.
+// The five emote items send the remote controller's presets (RefreshEmoteMenuItemsForRemoteState :878).
+// Trigger settings are observed by Triggers.cs, which restarts the live loop.
 
 using System;
 using Avalonia.Controls;
@@ -62,6 +59,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             Wire("MenuItemGrow", () => StepScale(+ScaleStep));
             Wire("MenuItemDismiss", OnMenuDismiss);
             Wire("MenuItemPauseBrowser", OnMenuPauseBrowser);
+            for (var i = 1; i <= 5; i++)
+                if (QuickItem($"MenuItemEmote{i}") is { } emote)
+                    emote.Click += async (_, _) =>
+                    {
+                        if (emote.Tag is not Models.EmotePreset preset || string.IsNullOrWhiteSpace(preset.Text)) return;
+                        await RemoteControlTabView.SendEmoteAndReportAsync(preset.Text, preset.Icon ?? "", "preset", null);
+                    };
             // WPF Window_PreviewMouseDown: tunnel, so a child that handles the press still closes the box.
             AddHandler(PointerPressedEvent, OnTubePreviewPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
@@ -256,7 +260,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 pauseBrowser.Foreground = _isBrowserPaused ? MenuGreen : Brushes.White;
             }
 
-            if (RemoteControllerConnected)
+            // WPF RefreshEmoteMenuItemsForRemoteState: swap on each menu opening so edits appear live.
+            var remote = RemoteControllerConnected;
+            foreach (var name in new[] { "MenuItemEngine", "MenuItemTriggerMode", "MenuItemBambiTakeover", "MenuItemPersonality", "MenuItemMute" })
+                if (QuickItem(name) is { } original) original.IsVisible = !remote;
+            var presets = s.RemoteEmotePresets;
+            for (var i = 0; i < 5; i++)
+            {
+                if (QuickItem($"MenuItemEmote{i + 1}") is not { } item) continue;
+                item.IsVisible = remote;
+                item.Tag = remote && i < presets.Count ? presets[i] : null;
+                if (item.Tag is Models.EmotePreset preset)
+                    item.Header = (string.IsNullOrEmpty(preset.Icon) ? "" : preset.Icon + "  ") + (preset.Text ?? "");
+            }
+
+            if (remote)
             {
                 if (engine != null) engine.Header = MenuLabel("label_start_engine");
                 foreach (var item in new[] { engine, trigger, takeover, mute, whispers, pauseBrowser })
