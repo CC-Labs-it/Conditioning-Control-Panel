@@ -84,31 +84,59 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (combo is null) return;
 
             _syncingLanguageSelectors = true;
-            try
-            {
-                combo.Items.Clear();
-                var current = CoreSettings.Current.Language;
-                var selectedIndex = 0;
-
-                for (var i = 0; i < LocalizationManager.AvailableLanguages.Length; i++)
-                {
-                    var (code, displayName, shortName) = LocalizationManager.AvailableLanguages[i];
-                    var item = new ComboBoxItem
-                    {
-                        Tag = code,
-                    };
-                    LanguageFlag.Dress(combo, item, code, shortLabels ? shortName : displayName);
-                    ToolTip.SetTip(item, displayName);
-                    combo.Items.Add(item);
-                    if (code == current) selectedIndex = i;
-                }
-
-                combo.SelectedIndex = selectedIndex;
-            }
+            try { FillLanguageCombo(combo, shortLabels); }
             finally
             {
                 _syncingLanguageSelectors = false;
             }
+        }
+
+        /// <summary>
+        /// WPF MainWindow.FillLanguageCombo: the language list itself, and the only copy of it.
+        /// Shared with the first-run wizard's Welcome step, which offers the same languages in the
+        /// same order before the shell has a Settings page to offer them from. Static and unguarded
+        /// on purpose: the re-entrancy flag belongs to the shell's surfaces, not to the list.
+        /// </summary>
+        internal static void FillLanguageCombo(ComboBox? combo, bool shortLabels)
+        {
+            if (combo is null) return;
+
+            combo.Items.Clear();
+            var current = CoreSettings.Current.Language;
+            var selectedIndex = 0;
+
+            for (var i = 0; i < LocalizationManager.AvailableLanguages.Length; i++)
+            {
+                var (code, displayName, shortName) = LocalizationManager.AvailableLanguages[i];
+                var item = new ComboBoxItem
+                {
+                    Tag = code,
+                };
+                LanguageFlag.Dress(combo, item, code, shortLabels ? shortName : displayName);
+                ToolTip.SetTip(item, displayName);
+                combo.Items.Add(item);
+                if (code == current) selectedIndex = i;
+            }
+
+            combo.SelectedIndex = selectedIndex;
+        }
+
+        /// <summary>
+        /// WPF MainWindow.SetApplicationLanguage: the language write with no shell chrome attached -
+        /// the setting, the live LocalizationManager switch and the save. True when it changed.
+        /// The first-run wizard takes this path before it has an owner; everything else goes
+        /// through <see cref="ApplyLanguageSelection"/>, which wraps it.
+        /// </summary>
+        internal static bool SetApplicationLanguage(string? langCode)
+        {
+            var code = string.IsNullOrWhiteSpace(langCode) ? "en" : langCode!;
+            var settings = CoreSettings.Current;
+            if (settings.Language == code) return false;
+
+            settings.Language = code;
+            LocalizationManager.Instance.SetLanguage(code);
+            CoreSettings.Save();
+            return true;
         }
 
         private void CmbLanguagePill_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -126,14 +154,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_syncingLanguageSelectors) return;
             var code = string.IsNullOrWhiteSpace(langCode) ? "en" : langCode!;
-            var settings = CoreSettings.Current;
 
-            if (settings.Language != code)
+            if (SetApplicationLanguage(code))
             {
-                settings.Language = code;
-                LocalizationManager.Instance.SetLanguage(code);
-                CoreSettings.Save();
-
                 // Match WPF: the live bindings update now, while code-behind strings finish on a
                 // restart. This control is absent on the headless view paths, so the notification
                 // remains safe before a Window has been shown.

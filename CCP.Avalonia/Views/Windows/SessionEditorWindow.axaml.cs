@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
@@ -190,13 +191,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             foreach (var feature in features)
             {
-                // Brain Drain is a dead feature in sessions — its runtime apply path in
-                // SessionEngine is fully commented out (it never did anything when a session
-                // ran), so hide it from the creator palette to stop users adding a no-op block
-                // (bug #430). The definition itself stays so any legacy session that already
-                // has a brain_drain item still resolves/loads without a null lookup.
-                if (feature.Id == "brain_drain") continue;
-
+                // Brain Drain used to be skipped here: its SessionEngine apply path was fully
+                // commented out, so a block dropped on the timeline did nothing at all (#430).
+                // The engine now honours BrainDrainEnabled / start minute / intensity ramp again
+                // and the visual half's rework has shipped, so the palette offers it once more
+                // (WPF SessionEditorWindow.xaml.cs:158-162, #1147).
                 var panel = GetCategoryPanel(feature.Category);
                 if (panel == null) continue;
 
@@ -561,8 +560,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private Control CreateFeatureIconContent(FeatureDefinition feature, double size)
         {
-            // Try to load PNG image with rounded corners. WPF also tried a pack:// resource when
-            // the file was missing; that URI scheme is WPF-only, so only the file path remains.
+            // Try to load PNG image with rounded corners: the file next to the exe first, then the
+            // compiled copy. WPF's second try was a pack:// resource; here Resources/features/*.png
+            // ship as AvaloniaResources (CCP.Avalonia.csproj, ..\Assets\features), so it is avares://.
             if (!string.IsNullOrEmpty(feature.ImagePath))
             {
                 try
@@ -570,7 +570,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // System.IO.Path spelled out: Avalonia.Controls.Shapes.Path is also in scope.
                     var normalizedPath = feature.ImagePath.Replace('/', System.IO.Path.DirectorySeparatorChar);
                     var filePath = System.IO.Path.Combine(AppContext.BaseDirectory, normalizedPath);
+                    Bitmap? bitmap = null;
                     if (File.Exists(filePath))
+                        bitmap = new Bitmap(filePath);
+                    else
+                    {
+                        var uri = new Uri("avares://CCP.Avalonia/" + feature.ImagePath.TrimStart('/'));
+                        if (AssetLoader.Exists(uri))
+                            using (var stream = AssetLoader.Open(uri)) bitmap = new Bitmap(stream);
+                    }
+
+                    if (bitmap != null)
                     {
                         // Rectangle with an ImageBrush, for the rounded corners
                         return new Rectangle
@@ -583,7 +593,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                             VerticalAlignment = VerticalAlignment.Center,
                             Fill = new ImageBrush
                             {
-                                Source = new Bitmap(filePath),
+                                Source = bitmap,
                                 Stretch = Stretch.UniformToFill
                             }
                         };

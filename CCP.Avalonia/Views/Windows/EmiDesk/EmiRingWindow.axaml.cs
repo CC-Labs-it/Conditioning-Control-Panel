@@ -891,6 +891,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 var bmp = Helpers.ModArt.TryLoad(slot.ThumbPath, decodeWidth);
+                // The Arcademy's plate is web/arcademy/art/vn/*.png, which ships as Content under
+                // Resources/web (CCP.Avalonia.csproj), not as an AvaloniaResource, so avares://
+                // never finds it. WPF's pack:// URI resolves loose Content files; the file on disk
+                // next to the exe is this head's equivalent.
+                if (bmp == null && slot.ThumbPath != null)
+                {
+                    var onDisk = System.IO.Path.Combine(AppContext.BaseDirectory, "Resources",
+                        slot.ThumbPath.Replace('/', System.IO.Path.DirectorySeparatorChar));
+                    if (System.IO.File.Exists(onDisk))
+                    {
+                        using var file = System.IO.File.OpenRead(onDisk);
+                        bmp = global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(file, decodeWidth);
+                    }
+                }
                 if (bmp == null && slot.ThumbPath != null) Log.Debug("[EmiDesk] ring art missing for {Target}", slot.Id);
                 return bmp;
             }
