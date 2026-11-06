@@ -202,6 +202,22 @@ public sealed class BillboardMotionTests
         Assert.Equal(0.5, host.ToastPill.Opacity, 3);
     });
 
+    /// <summary>Owner decision 1b (fix3 pop): a press is the user's own action, so the CPU path's lighter tier keeps
+    /// its sparks; the user's own Performance mode drops them, as WPF.</summary>
+    [Theory]
+    [InlineData(false, 26)]
+    [InlineData(true, 0)]
+    public Task PressSparksOnTheCpuPath(bool userPerformance, int sparks) => WithHost(MotionLevel.Full, (host, step) =>
+    {
+        try
+        {
+            CpuTier.On(userPerformance);
+            host.Cta.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(sparks, host.SparkCount);
+        }
+        finally { CpuTier.Off(); }
+    });
+
     [Fact]
     public Task PressThrowsSparksThenActsAfterTheDelay() => WithHost(MotionLevel.Full, (host, step) =>
     {

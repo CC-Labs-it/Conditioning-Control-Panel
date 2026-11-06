@@ -537,6 +537,23 @@ public sealed class LauncherFxTests
         }
     });
 
+    /// <summary>Owner decision 1b (fix3 pop): the play button's burst is the user's own action, so the CPU path's
+    /// lighter tier keeps it; the user's own Performance mode drops it, as WPF Fx.cs:316.</summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void Play_BurstsOnTheCpuPath(bool userPerformance, bool present) => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        try
+        {
+            Step(launcher, 0.4);
+            CpuTier.On(userPerformance);
+            Tile(launcher).GetVisualDescendants().OfType<Button>().First(b => !Equals(b.Tag, "tile-shortcut")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(present, launcher.BurstLayer.BurstCount > 0);
+        }
+        finally { CpuTier.Off(); }
+    });
+
     [Fact]
     public void Play_HoldsTheHideForTheBeat_ShakesDimsAndFades() => Run(MotionLevel.Full, (shell, launcher, cues) =>
     {

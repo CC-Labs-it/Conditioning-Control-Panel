@@ -4103,7 +4103,7 @@
   "label_motion_reduced": "控えめ",
   "label_motion_off": "オフ",
   "setting_lighter_effects": "軽量エフェクト",
-  "tooltip_lighter_effects": "グラフィックアクセラレーションのないPC（仮想マシン、古いノートPC、一部のLinux）向け。毎フレームをプロセッサが描画します。\n自動 = GPUがアプリを描画していないとき、自動で軽い表示に切り替えます。\nオン = 常に使用：アンビエントのループ、パーティクル、グローなし。バナーはそのまま流れます。\nオフ = GPUがなくても使いません。",
+  "tooltip_lighter_effects": "グラフィックアクセラレーションのないPC（仮想マシン、古いノートPC、一部のLinux）向け。毎フレームをプロセッサが描画します。\n自動 = GPUがアプリを描画していないとき、自動で軽い表示に切り替えます。\nオン = 常に使用：アンビエントのループ、グロー、背景のパーティクルを減らします。バナーはそのまま流れ、あなたが起こしたポップやバーストは再生されます。\nオフ = GPUがなくても使いません。",
   "label_lighter_effects_auto": "自動",
   "label_lighter_effects_on": "オン",
   "label_lighter_effects_off": "オフ",

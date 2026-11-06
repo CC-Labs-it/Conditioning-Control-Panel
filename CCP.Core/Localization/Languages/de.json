@@ -4103,7 +4103,7 @@
   "label_motion_reduced": "Reduziert",
   "label_motion_off": "Aus",
   "setting_lighter_effects": "Leichtere Effekte",
-  "tooltip_lighter_effects": "Für PCs ohne Grafikbeschleunigung (virtuelle Maschinen, ältere Laptops, manche Linux-Systeme), auf denen der Prozessor jedes Bild zeichnet.\nAuto = schaltet von selbst auf die leichtere Darstellung, wenn keine GPU die App zeichnet.\nAn = immer: keine Ambient-Schleifen, Partikel oder Leuchten; das Banner läuft weiter.\nAus = nie, auch ohne GPU.",
+  "tooltip_lighter_effects": "Für PCs ohne Grafikbeschleunigung (virtuelle Maschinen, ältere Laptops, manche Linux-Systeme), auf denen der Prozessor jedes Bild zeichnet.\nAuto = schaltet von selbst auf die leichtere Darstellung, wenn keine GPU die App zeichnet.\nAn = immer: weniger Ambient-Schleifen, Leuchten und Hintergrund-Partikel; das Banner läuft weiter, und Pops und Bursts, die du selbst auslöst, spielen trotzdem.\nAus = nie, auch ohne GPU.",
   "label_lighter_effects_auto": "Auto",
   "label_lighter_effects_on": "An",
   "label_lighter_effects_off": "Aus",

@@ -5384,7 +5384,7 @@
   "label_motion_reduced": "Ridotto",
   "label_motion_off": "Disattivo",
   "setting_lighter_effects": "Effetti più leggeri",
-  "tooltip_lighter_effects": "Per i PC senza accelerazione grafica (macchine virtuali, portatili datati, alcuni Linux), dove ogni fotogramma lo disegna il processore.\nAuto = passa da solo alla grafica leggera quando nessuna GPU disegna l'app.\nAttivo = sempre: niente animazioni d'ambiente in loop, particelle o bagliori; il banner scorre comunque.\nDisattivo = mai, anche senza GPU.",
+  "tooltip_lighter_effects": "Per i PC senza accelerazione grafica (macchine virtuali, portatili datati, alcuni Linux), dove ogni fotogramma lo disegna il processore.\nAuto = passa da solo alla grafica leggera quando nessuna GPU disegna l'app.\nAttivo = sempre: meno animazioni d'ambiente in loop, bagliori e particelle di sfondo; il banner scorre comunque, e i pop e le esplosioni che fai partire tu si vedono lo stesso.\nDisattivo = mai, anche senza GPU.",
   "label_lighter_effects_auto": "Auto",
   "label_lighter_effects_on": "Attivo",
   "label_lighter_effects_off": "Disattivo",
