@@ -4103,7 +4103,7 @@
   "label_motion_reduced": "Réduit",
   "label_motion_off": "Désactivé",
   "setting_lighter_effects": "Effets allégés",
-  "tooltip_lighter_effects": "Pour les PC sans accélération graphique (machines virtuelles, vieux portables, certains Linux), où le processeur dessine chaque image.\nAuto = passe tout seul au rendu allégé quand aucun GPU ne dessine l'appli.\nActivé = toujours : pas de boucles d'ambiance, de particules ni de lueurs ; la bannière défile toujours.\nDésactivé = jamais, même sans GPU.",
+  "tooltip_lighter_effects": "Pour les PC sans accélération graphique (machines virtuelles, vieux portables, certains Linux), où le processeur dessine chaque image.\nAuto = passe tout seul au rendu allégé quand aucun GPU ne dessine l'appli.\nActivé = toujours : moins de boucles d'ambiance, de lueurs et de particules d'arrière-plan ; la bannière défile toujours, et les pops et explosions que tu déclenches restent visibles.\nDésactivé = jamais, même sans GPU.",
   "label_lighter_effects_auto": "Auto",
   "label_lighter_effects_on": "Activé",
   "label_lighter_effects_off": "Désactivé",

@@ -4103,7 +4103,7 @@
   "label_motion_reduced": "Reduzido",
   "label_motion_off": "Desligado",
   "setting_lighter_effects": "Efeitos mais leves",
-  "tooltip_lighter_effects": "Para PCs sem aceleração gráfica (máquinas virtuais, notebooks antigos, alguns Linux), onde o processador desenha cada quadro.\nAuto = muda sozinho para o visual leve quando nenhuma GPU desenha o app.\nLigado = sempre: sem loops de ambiente, partículas ou brilhos; o banner continua rolando.\nDesligado = nunca, mesmo sem GPU.",
+  "tooltip_lighter_effects": "Para PCs sem aceleração gráfica (máquinas virtuais, notebooks antigos, alguns Linux), onde o processador desenha cada quadro.\nAuto = muda sozinho para o visual leve quando nenhuma GPU desenha o app.\nLigado = sempre: menos loops de ambiente, brilhos e partículas de fundo; o banner continua rolando, e os pops e explosões que você dispara continuam aparecendo.\nDesligado = nunca, mesmo sem GPU.",
   "label_lighter_effects_auto": "Auto",
   "label_lighter_effects_on": "Ligado",
   "label_lighter_effects_off": "Desligado",

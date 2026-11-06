@@ -5574,7 +5574,7 @@
   "label_motion_reduced": "Reduced",
   "label_motion_off": "Off",
   "setting_lighter_effects": "Lighter effects",
-  "tooltip_lighter_effects": "For PCs without graphics acceleration (virtual machines, older laptops, some Linux setups), where every frame is drawn by the processor.\nAuto = switch to the lighter look by itself when no GPU is drawing the app.\nOn = always use it: no ambient loops, particles or glows; the banner still scrolls.\nOff = never, even without a GPU.",
+  "tooltip_lighter_effects": "For PCs without graphics acceleration (virtual machines, older laptops, some Linux setups), where every frame is drawn by the processor.\nAuto = switch to the lighter look by itself when no GPU is drawing the app.\nOn = always use it: fewer ambient loops, glows and background particles; the banner still scrolls, and pops and bursts you trigger still play.\nOff = never, even without a GPU.",
   "label_lighter_effects_auto": "Auto",
   "label_lighter_effects_on": "On",
   "label_lighter_effects_off": "Off",

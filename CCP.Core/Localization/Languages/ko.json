@@ -4103,7 +4103,7 @@
   "label_motion_reduced": "줄임",
   "label_motion_off": "끔",
   "setting_lighter_effects": "가벼운 효과",
-  "tooltip_lighter_effects": "그래픽 가속이 없는 PC(가상 머신, 오래된 노트북, 일부 Linux)용입니다. 모든 프레임을 프로세서가 그립니다.\n자동 = GPU가 앱을 그리지 않으면 알아서 가벼운 화면으로 바꿉니다.\n켬 = 항상 사용: 앰비언트 루프, 파티클, 글로우 없음. 배너는 계속 흐릅니다.\n끔 = GPU가 없어도 사용하지 않습니다.",
+  "tooltip_lighter_effects": "그래픽 가속이 없는 PC(가상 머신, 오래된 노트북, 일부 Linux)용입니다. 모든 프레임을 프로세서가 그립니다.\n자동 = GPU가 앱을 그리지 않으면 알아서 가벼운 화면으로 바꿉니다.\n켬 = 항상 사용: 앰비언트 루프, 글로우, 배경 파티클을 줄입니다. 배너는 계속 흐르고, 직접 일으킨 팝과 버스트는 그대로 재생됩니다.\n끔 = GPU가 없어도 사용하지 않습니다.",
   "label_lighter_effects_auto": "자동",
   "label_lighter_effects_on": "켬",
   "label_lighter_effects_off": "끔",

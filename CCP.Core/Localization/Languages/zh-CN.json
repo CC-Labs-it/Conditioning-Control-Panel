@@ -5002,7 +5002,7 @@
   "label_motion_reduced": "简化",
   "label_motion_off": "关闭",
   "setting_lighter_effects": "轻量效果",
-  "tooltip_lighter_effects": "适用于没有图形加速的电脑（虚拟机、旧笔记本、部分 Linux），每一帧都由处理器绘制。\n自动 = 没有 GPU 绘制应用时自动切换为轻量画面。\n开启 = 始终使用：没有环境循环、粒子和光晕；横幅照常滚动。\n关闭 = 从不使用，即使没有 GPU。",
+  "tooltip_lighter_effects": "适用于没有图形加速的电脑（虚拟机、旧笔记本、部分 Linux），每一帧都由处理器绘制。\n自动 = 没有 GPU 绘制应用时自动切换为轻量画面。\n开启 = 始终使用：减少环境循环、光晕和背景粒子；横幅照常滚动，你自己触发的气泡破裂和爆发效果照常播放。\n关闭 = 从不使用，即使没有 GPU。",
   "label_lighter_effects_auto": "自动",
   "label_lighter_effects_on": "开启",
   "label_lighter_effects_off": "关闭",
