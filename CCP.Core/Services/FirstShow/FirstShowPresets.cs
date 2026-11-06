@@ -12,8 +12,9 @@ internal static class FirstShowPresets
         ? FypOnlineCoordinator.Catalog.First(n => n.Id == "censored").Subs
         : new[] { preset };
 
-    /// <summary>The source a yes turns on when it is still "local" (WPF MainWindow.Assets.cs MediaSrcOnline).</summary>
-    internal const string OnlineSource = "online";
+    /// <summary>The source a yes turns on when it is still "local" (WPF MainWindow.Assets.cs MediaSrcMixed). Owner
+    /// decision 2026-11-06: mixed, not online, so a library the user already has keeps playing beside the feed.</summary>
+    internal const string MixedSource = "mixed";
 
     /// <summary>
     /// Owner decision 2026-11-06 (option B): every preset's pictures come from Scrolller, and the device cache refuses
@@ -33,10 +34,11 @@ internal static class FirstShowPresets
 
     /// <summary>A yes to the consent card: what the Assets page's source chip records after its ask (WPF
     /// MainWindow.Assets.cs RemoteSourceChip_Changed: RemoteMediaConsented, then the source). A source that already
-    /// fetches (online / mixed) stays as it is. The caller saves and resets the channels.</summary>
+    /// fetches (online / mixed) stays as it is; "local" becomes <see cref="MixedSource"/>. The caller saves and resets
+    /// the channels.</summary>
     internal static void AcceptRemoteMedia(AppSettings s)
     {
         s.RemoteMediaConsented = true;
-        if (string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) s.MediaSource = OnlineSource;
+        if (string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) s.MediaSource = MixedSource;
     }
 }

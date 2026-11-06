@@ -161,7 +161,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
     /// pictures are Scrolller's, and ScrolllerDiskCache refuses every one until remote media is consented and the
     /// source is not "local". When that is all that stands in the way (FirstShowPresets.AsksForRemoteMedia), the
     /// preset first asks the Assets page's one-time consent card, word for word (MainWindow.Assets.cs
-    /// AskRemoteMediaConsent). Yes records the consent and the online source, then loads the preset; no plays the
+    /// AskRemoteMediaConsent). Yes records the consent and the mixed source, then loads the preset; no plays the
     /// built-in pictures. The licence switch, a spent share and Offline mode fall back as before.
     /// </summary>
     internal async Task Pick(string preset)
