@@ -134,7 +134,7 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--overlay-check") >= 0)
                 return OverlayCheck.Run();
 
-            // --tray-probe: prints whether a StatusNotifierWatcher owns its name (X hides to tray only then).
+            // --tray-probe: prints whether a StatusNotifierWatcher owns its name. --tray-check asks whether it took the item.
             if (Array.IndexOf(args, "--tray-probe") >= 0)
             {
                 var present = Views.Windows.MainShellWindow.ProbeTrayHost();
@@ -227,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia
             if (instance is null)
             {
                 Serilog.Log.Information("Another instance is running; asked it to show its window");
-                return 0;
+                return Views.Windows.MainShellWindow.TrayCheck ? 2 : 0;   // the check proved nothing
             }
 
             var app = BuildAvaloniaApp();

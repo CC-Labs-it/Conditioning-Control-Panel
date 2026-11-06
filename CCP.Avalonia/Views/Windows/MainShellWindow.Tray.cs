@@ -8,11 +8,12 @@
 //     reachable.
 //   - "Stop everything" is an extra item for that reason: it is StopEngine - overlays down, saved
 //     flags untouched, so the next Start brings them back. The app stays up.
-//   - With no tray host (Linux desktop without a StatusNotifierWatcher) Avalonia's tray falls back
-//     silently, so X would hide the window behind nothing. X is gated on a host probe: no host, X exits.
+//   - With no tray host, or a watcher that refused the item, Avalonia's tray fails silently, so X
+//     would hide the window behind nothing. X is gated on the watcher holding this item, else X exits.
 // The first-minimize balloon (TrayIconService.cs:165-171) goes through Platform/OsNotifications.
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -30,11 +31,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Set by App on the desktop path; null in renders and tests, where X closes.</summary>
         internal TrayIcon? Tray { get; private set; }
 
-        /// <summary>Is there a tray host to hide behind? Re-probed on every X; tests inject it.</summary>
+        /// <summary>Is this app's icon in a tray, to hide behind? Re-probed on every X; tests inject it.</summary>
         internal Func<bool> TrayHostPresent { get; set; } = ProbeTrayItemRegistered;
 
         /// <summary>`--tray-check`: a deliberate live probe, the one sandboxed run that may publish.</summary>
         internal static bool TrayCheck { get; set; }
+
+        /// <summary>Test seam for the sandbox check.</summary>
+        internal static Func<bool> TraySandboxed { get; set; } = () => global::ConditioningControlPanel.Services.SandboxNet.Active;
+
+        private static volatile bool _trayListed;
 
         // Every desktop side effect checks the sandbox (repo CLAUDE.md, test hygiene): a sandboxed icon
         // would sit beside the real one, and its Stop everything would leave the real engine running.
@@ -60,16 +66,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Avalonia publishes only a TrayIcon listed on the Application: unlisted, the tray menu
             // objects exist on the bus but no StatusNotifierItem does, so no bar ever shows it.
             // Tray is set last: publishing throws here on a bad platform, and X must not hide to nothing.
-            if (ShouldPublishTray(global::ConditioningControlPanel.Services.SandboxNet.Active, TrayCheck))
-                TrayIcon.SetIcons(Application.Current!, new TrayIcons { tray });
+            var publish = ShouldPublishTray(TraySandboxed(), TrayCheck);
+            if (publish) TrayIcon.SetIcons(Application.Current!, new TrayIcons { tray });
+            _trayListed = publish;
             Tray = tray;
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
             // Avalonia's Linux exporter raises no Opening, so WPF's refresh on open never runs there.
-            var refresh = new global::Avalonia.Threading.DispatcherTimer(TimeSpan.FromSeconds(2),
-                global::Avalonia.Threading.DispatcherPriority.Background, (_, _) => RefreshTrayMenu());
-            refresh.Start();
-            Closed += (_, _) => refresh.Stop();
+            if (publish && !OperatingSystem.IsWindows())
+            {
+                var refresh = new global::Avalonia.Threading.DispatcherTimer(TimeSpan.FromSeconds(2),
+                    global::Avalonia.Threading.DispatcherPriority.Background, (_, _) => RefreshTrayMenu());
+                refresh.Start();
+                Closed += (_, _) => refresh.Stop();
+            }
             AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
             return Tray;
         }
@@ -236,33 +246,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>Is this process's icon really in the tray? A watcher can own its name and still refuse the
-        /// item, and Avalonia only logs that, so X asks the watcher rather than trusting that it exists. Watchers
-        /// store a well-known name or a unique one, so each item is matched by the process that owns it.
-        /// Registration is asynchronous, hence the short retry. Windows always has a tray.</summary>
+        /// item, and Avalonia only logs that, so X asks the watcher rather than trusting that it exists.
+        /// Registration is asynchronous, hence the short retry. Avalonia finishes it on the UI thread, so a
+        /// caller that may be racing it must not call this from there. A watcher too slow to answer
+        /// counts as holding the item: X must not end a running session because the panel is busy.</summary>
         internal static bool ProbeTrayItemRegistered()
         {
-            if (OperatingSystem.IsWindows()) return true;
+            if (OperatingSystem.IsWindows()) return _trayListed;
+            if (!ProbeTrayHost()) return false;
             try
             {
                 var probe = Task.Run(async () =>
                 {
                     var bus = DBusConnection.Session;
                     await bus.ConnectAsync();
-                    for (var attempt = 0; attempt < 3; attempt++)
+                    for (var attempt = 0; attempt < 5; attempt++)
                     {
                         if (attempt > 0) await Task.Delay(250);
-                        foreach (var item in await RegisteredTrayItemsAsync(bus))
-                            if (await TrayItemOwnerAsync(bus, item.Split('/')[0]) == (uint)Environment.ProcessId) return true;
+                        if (await TrayItemListedAsync(bus)) return true;
                     }
                     return false;
                 });
-                return probe.Wait(TimeSpan.FromSeconds(2)) && probe.Result;
+                if (probe.Wait(TimeSpan.FromSeconds(2))) return probe.Result;
+                Serilog.Log.Warning("Tray item probe timed out; assuming the icon is there");
+                return true;
             }
             catch (Exception ex)
             {
                 Serilog.Log.Warning(ex, "Tray item probe failed; X will exit instead of hiding");
                 return false;
             }
+        }
+
+        // Watchers store a well-known name or a unique one, so compare both forms. Names, not PIDs: in a
+        // Flatpak the bus and the app do not agree on PIDs, and Avalonia names the item with the app's own.
+        private static async Task<bool> TrayItemListedAsync(DBusConnection bus)
+        {
+            string[] items;
+            try { items = await RegisteredTrayItemsAsync(bus); }
+            catch (DBusErrorReplyException) { return false; }   // the watcher is restarting
+            var prefix = $"org.kde.StatusNotifierItem-{Environment.ProcessId}-";
+            var mine = (await BusNamesAsync(bus)).Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+            foreach (var name in mine.ToArray()) mine.Add(await BusNameOwnerAsync(bus, name));
+            return items.Any(item => mine.Contains(item.Split('/')[0]));
         }
 
         private static async Task<string[]> RegisteredTrayItemsAsync(DBusConnection bus)
@@ -276,17 +302,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 (Message m, object? _) => m.GetBodyReader().ReadVariantValue().GetArray<string>(), null);
         }
 
-        private static async Task<uint> TrayItemOwnerAsync(DBusConnection bus, string name)
+        private static async Task<string[]> BusNamesAsync(DBusConnection bus)
         {
-            try
-            {
-                var w = bus.GetMessageWriter();
-                w.WriteMethodCallHeader(destination: "org.freedesktop.DBus", path: "/org/freedesktop/DBus",
-                    @interface: "org.freedesktop.DBus", member: "GetConnectionUnixProcessID", signature: "s");
-                w.WriteString(name);
-                return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => m.GetBodyReader().ReadUInt32(), null);
-            }
-            catch (DBusErrorReplyException) { return 0; }   // an item whose owner has gone
+            var w = bus.GetMessageWriter();
+            w.WriteMethodCallHeader(destination: "org.freedesktop.DBus", path: "/org/freedesktop/DBus",
+                @interface: "org.freedesktop.DBus", member: "ListNames");
+            return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => m.GetBodyReader().ReadArrayOfString(), null);
+        }
+
+        private static async Task<string> BusNameOwnerAsync(DBusConnection bus, string name)
+        {
+            var w = bus.GetMessageWriter();
+            w.WriteMethodCallHeader(destination: "org.freedesktop.DBus", path: "/org/freedesktop/DBus",
+                @interface: "org.freedesktop.DBus", member: "GetNameOwner", signature: "s");
+            w.WriteString(name);
+            return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => m.GetBodyReader().ReadString(), null);
         }
 
         /// <summary>`--tray-check`: exit 0 only if the watcher really holds this process's item.</summary>

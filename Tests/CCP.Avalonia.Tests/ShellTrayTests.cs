@@ -23,8 +23,36 @@ public sealed class ShellTrayTests
     [InlineData(false, false, true)]    // the real app
     [InlineData(true, false, false)]    // a sandbox never reaches the user's bar
     [InlineData(true, true, true)]      // --tray-check opts in
+    [InlineData(false, true, true)]
     public void OnlyTheRealAppOrTheLiveProbePublishes(bool sandboxed, bool liveProbe, bool published) =>
         Assert.Equal(published, MainShellWindow.ShouldPublishTray(sandboxed, liveProbe));
+
+    [Fact]
+    public async Task ASandboxedShellLeavesItsIconUnlisted()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            TrayIcon.SetIcons(Application.Current!, null!);
+            MainShellWindow.TraySandboxed = () => true;
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.CreateTray();
+                Assert.DoesNotContain(shell.Tray!, TrayIcon.GetIcons(Application.Current!) ?? new TrayIcons());
+            }
+            finally
+            {
+                MainShellWindow.TraySandboxed = () => global::ConditioningControlPanel.Services.SandboxNet.Active;
+                shell.Tray?.Dispose();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
 
     [Fact]
     public async Task TrayMenuStopsOverlaysHidesOnCloseAndExits()
@@ -38,9 +66,9 @@ public sealed class ShellTrayTests
 
             var shell = new MainShellWindow();
             shell.Show();
-            MainShellWindow.TrayCheck = true;     // publishes whatever a previous test did to the sandbox flag
-            try { shell.CreateTray(); }           // also proves the avares app.ico resource loads
-            finally { MainShellWindow.TrayCheck = false; }
+            MainShellWindow.TraySandboxed = () => false;   // whatever a previous test did to the sandbox flag
+            try { shell.CreateTray(); }                    // also proves the avares app.ico resource loads
+            finally { MainShellWindow.TraySandboxed = () => global::ConditioningControlPanel.Services.SandboxNet.Active; }
             // Unlisted on the Application, Avalonia never publishes the icon: no bar shows it, and
             // the tray is the panic control a desktop without a global hotkey relies on.
             Assert.Contains(shell.Tray!, TrayIcon.GetIcons(Application.Current!)!);

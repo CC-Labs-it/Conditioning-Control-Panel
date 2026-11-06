@@ -1114,13 +1114,21 @@ namespace ConditioningControlPanel.Avalonia
                     // Only with a tray host to come back through; without one the window stays up.
                     if (!panelHidden && Settings.Current.StartMinimized)
                     {
-                        // Asked once the window opens: the icon registers after CreateTray returns.
-                        void ToTray(object? s, EventArgs e) { shell.Opened -= ToTray; if (shell.TrayHostPresent()) shell.Hide(); }
+                        // Off the UI thread: the icon registers after CreateTray returns, on that thread.
+                        void ToTray(object? s, EventArgs e)
+                        {
+                            shell.Opened -= ToTray;
+                            System.Threading.Tasks.Task.Run(shell.TrayHostPresent).ContinueWith(host =>
+                                global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                {
+                                    if (host.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && host.Result) shell.Hide();
+                                }));
+                        }
                         shell.Opened += ToTray;
                     }
-                    if (Views.Windows.MainShellWindow.TrayCheck) Views.Windows.MainShellWindow.RunTrayCheck();
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Tray icon unavailable; X closes the app"); }
+                if (Views.Windows.MainShellWindow.TrayCheck) Views.Windows.MainShellWindow.RunTrayCheck();
                 // The panic key (WPF MainWindow.xaml.cs:363 installs its hook at startup the same way).
                 shell.StartPanicKey();
                 shell.Opened += (_, _) => shell.StartQuickRecalHotkey();
