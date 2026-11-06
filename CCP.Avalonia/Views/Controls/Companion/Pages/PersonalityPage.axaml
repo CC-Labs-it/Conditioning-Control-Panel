@@ -3,6 +3,27 @@
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.PersonalityPage">
     <!-- WPF Pages/PersonalityPage.xaml: picker, presets, Advanced and community. -->
+    <UserControl.Resources>
+        <!-- WPF PersonalityPage.xaml PageButton: the page's own pink-tinted button (as KnowledgeLinksEditor's KbButton). -->
+        <ControlTheme x:Key="PageButton" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#33FF69B4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="FontSize" Value="12"/>   <!-- WPF's default; Fluent's is 14 -->
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#Bd"><Setter Property="Background" Value="#55FF69B4"/></Style>
+            <Style Selector="^:pressed /template/ Border#Bd"><Setter Property="Background" Value="#77FF69B4"/></Style>
+        </ControlTheme>
+    </UserControl.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
         <StackPanel Margin="24,16,24,24" MaxWidth="1100" HorizontalAlignment="Stretch">
             <TextBlock Text="{loc:Str nav_tab_personality}" Theme="{StaticResource Type.PageTitle}"/>
@@ -22,7 +43,7 @@
                         <TextBlock Text="{loc:Str companion_page_personality_advanced}" Theme="{StaticResource Type.CardTitle}"/>
                         <TextBlock Text="{loc:Str companion_page_personality_advanced_note}" Theme="{StaticResource Type.Body}" TextWrapping="Wrap" Margin="0,2,12,0"/>
                     </StackPanel>
-                    <Button x:Name="BtnOpenPromptEditor" Grid.Column="1" Theme="{StaticResource SecondaryButton}" VerticalAlignment="Center"
+                    <Button x:Name="BtnOpenPromptEditor" Grid.Column="1" Theme="{StaticResource PageButton}" VerticalAlignment="Center"
                             Click="OpenPromptEditor_Click"><TextBlock Text="{loc:Str companion_page_personality_open_editor}"/></Button>
                 </Grid>
             </Border>
