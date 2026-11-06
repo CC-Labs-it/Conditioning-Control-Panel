@@ -117,33 +117,47 @@ public sealed class AvatarTubeWindowingTests
     [Fact]
     public Task InputShapeIsThePaintedPartsAndTheBubbleLeavesIt() => Run(detached: false, (main, tube) =>
     {
-        PixelRect[]? sent = null;
-        int writes = 0;
-        tube.InputShapeWriter = r => { sent = r; writes++; };
-        tube.ApplyInputShape();
-        var rects = tube.InputRects!;
-        Assert.Same(rects, sent);
-        int w = (int)Math.Round(tube.Width), h = (int)Math.Round(tube.Height);
-        // The canvas corners and the clear band above the glass are empty: clicks fall through.
-        Assert.False(TubeInputShape.Hits(rects, 2, 2));
-        Assert.False(TubeInputShape.Hits(rects, w - 3, h - 3));
-        Assert.False(TubeInputShape.Hits(rects, w / 2, 40));
-        // ...while her, her plate and the glass take them.
-        Assert.True(TubeInputShape.Hits(rects, Center(tube, "ImgAvatar").X, Center(tube, "ImgAvatar").Y));
-        Assert.True(TubeInputShape.Hits(rects, Center(tube, "TitleBox").X, Center(tube, "TitleBox").Y));
-        long area = 0;
-        foreach (var r in rects) area += (long)r.Width * r.Height;
-        Assert.True(area < (long)w * h / 2, $"{area} of {w * h} px take input");
+        // Hold the idle bob (the CPU-path tier): it moves her on the real clock between the reads, which
+        // is not what this test is about (it flaked on CI at c1a1ef199f, linux shard 0).
+        var settings = CoreSettings.Current;
+        settings.LighterEffects = ConditioningControlPanel.Models.LighterEffectsMode.On;
+        global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        try
+        {
+            Assert.False(tube.IsFloating);
+            PixelRect[]? sent = null;
+            int writes = 0;
+            tube.InputShapeWriter = r => { sent = r; writes++; };
+            tube.ApplyInputShape();
+            var rects = tube.InputRects!;
+            Assert.Same(rects, sent);
+            int w = (int)Math.Round(tube.Width), h = (int)Math.Round(tube.Height);
+            // The canvas corners and the clear band above the glass are empty: clicks fall through.
+            Assert.False(TubeInputShape.Hits(rects, 2, 2));
+            Assert.False(TubeInputShape.Hits(rects, w - 3, h - 3));
+            Assert.False(TubeInputShape.Hits(rects, w / 2, 40));
+            // ...while her, her plate and the glass take them.
+            Assert.True(TubeInputShape.Hits(rects, Center(tube, "ImgAvatar").X, Center(tube, "ImgAvatar").Y));
+            Assert.True(TubeInputShape.Hits(rects, Center(tube, "TitleBox").X, Center(tube, "TitleBox").Y));
+            long area = 0;
+            foreach (var r in rects) area += (long)r.Width * r.Height;
+            Assert.True(area < (long)w * h / 2, $"{area} of {w * h} px take input");
 
-        tube.ApplyInputShape();
-        Assert.Equal(1, writes);   // unchanged: the server is not asked again
+            tube.ApplyInputShape();
+            Assert.Equal(1, writes);   // unchanged: the server is not asked again
 
-        tube.GigglePriority("I'm right here, sweetie. Just say the word.", playSound: false, aiGenerated: false);
-        Dispatcher.UIThread.RunJobs();
-        Assert.True(tube.BubbleWindow!.IsVisible);
-        tube.ApplyInputShape();
-        Assert.True(TubeInputShape.SameRects(rects, tube.InputRects));   // not a pixel more over the desktop
-        Assert.Equal(1, writes);
+            tube.GigglePriority("I'm right here, sweetie. Just say the word.", playSound: false, aiGenerated: false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tube.BubbleWindow!.IsVisible);
+            tube.ApplyInputShape();
+            Assert.True(TubeInputShape.SameRects(rects, tube.InputRects));   // not a pixel more over the desktop
+            Assert.Equal(1, writes);
+        }
+        finally
+        {
+            settings.LighterEffects = ConditioningControlPanel.Models.LighterEffectsMode.Auto;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
     });
 
     /// <summary>Owner decision 11-06: WPF's bubble window (Speech.cs:1060-1140) on Linux too - its own
