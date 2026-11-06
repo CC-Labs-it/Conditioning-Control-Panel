@@ -64,10 +64,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (AdmitPanicRoute(PanicRouteGate.Route.Portal)) QueuePanic(OnPortalPanicPressed);
                 else Dispatcher.UIThread.Post(OnPortalEchoPressed);
             }
-            catch (Exception ex)   // a throw here would land in the D-Bus reader, and the press must still count
+            catch (Exception ex)   // as the X11 listener does: nothing may throw into the D-Bus reader
             {
-                Serilog.Log.Error(ex, "Panic: portal report failed before it was queued");
-                Dispatcher.UIThread.Post(OnPortalPanicPressed);
+                Serilog.Log.Error(ex, "Panic: portal report failed");
             }
         }
 
