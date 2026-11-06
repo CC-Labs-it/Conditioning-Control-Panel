@@ -90,8 +90,8 @@ public sealed class LeashExplainWindow : Window
         };
     }
 
-    /// <summary>WPF LeashExplainer.Show + Present: over the owner when it is up, else centred on screen.</summary>
-    internal static LeashExplainWindow? Show(Window? owner)
+    /// <summary>WPF LeashExplainer.Show + Present (Open: Window already owns Show): over the owner when it is up, else centred on screen.</summary>
+    internal static LeashExplainWindow? Open(Window? owner)
     {
         try
         {
@@ -122,7 +122,7 @@ public sealed class LeashExplainWindow : Window
         b.HorizontalContentAlignment = HorizontalAlignment.Center;
         b.VerticalContentAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(b, Loc.Get("leash_help"));
-        b.Click += (_, e) => { e.Handled = true; Show(owner()); };
+        b.Click += (_, e) => { e.Handled = true; Open(owner()); };
         return b;
     }
 }
