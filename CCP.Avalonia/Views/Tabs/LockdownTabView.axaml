@@ -581,8 +581,11 @@
                                             </Button>
 
                                             <!-- No exit games on this head (docs/avalonia-decisions.html,
-                                                 Lockdown / Emergency Exit): the slab says how the phrase works. -->
+                                                 Lockdown / Emergency Exit): the slab says how the phrase works.
+                                                 It wraps at the slab's width: unbounded, the line widened the whole
+                                                 auto-width card and slid the button out from under the cursor. -->
                                             <TextBlock x:Name="TxtEmergencyExitNotice" IsVisible="False" TextWrapping="Wrap"
+                                                       MaxWidth="{Binding #BtnEmergencyExit.Bounds.Width}"
                                                        Foreground="#FFB0A0" FontSize="12.5" Margin="0,8,0,0"/>
 
                                             <TextBox x:Name="TxtLockdownExit" IsVisible="False"

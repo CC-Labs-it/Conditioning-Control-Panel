@@ -192,6 +192,12 @@ public sealed class LockdownTests
                 Step(1140);
                 ScaleIs(1.0);
 
+                // The click showed the notice; it must not reflow the card under the cursor
+                // (an unbounded wrap line widened the card 119 px on Linux, 2026-11-06).
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(tab.TxtEmergencyExitNotice.IsVisible);
+                Assert.Equal(p, tab.BtnEmergencyExit.TranslatePoint(new Point(40, 40), win)!.Value);
+
                 // WPF BeginAnimation (LockdownTabView.xaml.cs:330-342) starts a reversal
                 // from the current animated scale, including release before the press settles.
                 win.MouseDown(p, MouseButton.Left);
