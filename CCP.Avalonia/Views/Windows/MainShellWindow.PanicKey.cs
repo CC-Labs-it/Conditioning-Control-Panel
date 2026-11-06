@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnX11PanicPress()
         {
             Serilog.Log.Information("Panic trigger: XInput2 key press");
+            if (!AdmitPanicRoute(PanicRouteGate.Route.X11)) return;
             var s = CoreSettings.Current;
             if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
                 Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
@@ -56,6 +57,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
             Dispatcher.UIThread.Post(LeashHoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
         }
+
+        /// <summary>One portal Activated (D-Bus thread): the same press as an XInput2 report, or a press of its own.</summary>
+        internal void OnPortalPanicActivated()
+        {
+            Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
+            if (AdmitPanicRoute(PanicRouteGate.Route.Portal)) Dispatcher.UIThread.Post(OnPortalPanicPressed);
+        }
+
+        // Asked on the listener threads, where a report arrives: the first press's stop pass holds the UI
+        // thread for longer than the echo window, so a check after the post would miss the echo.
+        private bool AdmitPanicRoute(PanicRouteGate.Route route)
+        {
+            if (_panicRoutes.Admit(route, PanicRouteClock())) return true;
+            Serilog.Log.Information("Panic: {Route} report dropped, the other route already took this press", route);
+            return false;
+        }
+
+        private readonly PanicRouteGate _panicRoutes = new();
+        internal Func<long> PanicRouteClock = () => Environment.TickCount64;
+        internal int PanicPressCountForTest => _panicPressCount;
 
         /// <summary>One press of the configured key (UI thread). A foreground board or DTRH may keep the first
         /// Escape as pause; unclaimed presses stop everything. A second
@@ -339,11 +360,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static async Task BindPortalAsync()
         {
             var trigger = await PortalPanicShortcut.BindAsync(CoreSettings.Current.PanicKey, Loc.Get("panic_portal_description"),
-                () =>
-                {
-                    Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
-                    Dispatcher.UIThread.Post(() => Current?.OnPortalPanicPressed());
-                },
+                () => Current?.OnPortalPanicActivated(),
                 () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
             Dispatcher.UIThread.Post(() =>
             {
