@@ -372,8 +372,19 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             if (_card == null || _folding || !e.GetCurrentPoint(_stage).Properties.IsLeftButtonPressed) return;
             for (var v = e.Source as Visual; v != null && !ReferenceEquals(v, _stage); v = v.GetVisualParent())
                 if (v is Button) return;
-            // A board card's touch ripples its art (no board art on this head); anywhere else on a card is the button.
-            if (DashboardBillboard.IsFullBleed(_card.Spec)) return;
+            if (DashboardBillboard.IsFullBleed(_card.Spec))
+            {
+                // WPF :366-380 a touch on the board: the art ripples from that tile (even hover-paused).
+                // WPF's two ripple notes (LauncherSfx.BoardTouch) have no player on this head yet.
+                if (_current?.Tag is BoardTileView board && board.Bounds.Width > 0 && board.Bounds.Height > 0)
+                {
+                    var p = e.GetPosition(board);
+                    try { board.Touch(new Point(Math.Clamp(p.X / board.Bounds.Width, 0, 1), Math.Clamp(p.Y / board.Bounds.Height, 0, 1))); }
+                    catch (Exception ex) { Log.Debug("Billboard touch failed: {E}", ex.Message); }
+                }
+                return;
+            }
+            // Anywhere else on a card with a button is the button.
             if (_card.Action.Kind != BillboardActionKind.None) Press(e.GetPosition(_stageRoot));
         }
 

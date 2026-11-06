@@ -96,7 +96,37 @@ public class BillboardArtParityShotsTests
         for (int i = 0; i < 30; i++) poster.Step(0.033, true, new Point(0.85, 0.25));
         Save(frame, Path.Combine(dir, "wpf-poster-hover.png"));
         poster.Release();
+
+        // The board tiles (BoardTileView): never played, and played then held (every tile landed).
+        var board = new BoardTileView(BoardPicture());
+        var boardFrame = new Grid { Background = new SolidColorBrush(Color.FromRgb(0x12, 0x10, 0x1F)), Width = 1000, Height = 420 };
+        boardFrame.Children.Add(board);
+        boardFrame.Measure(new Size(1000, 420));
+        boardFrame.Arrange(new Rect(0, 0, 1000, 420));
+        boardFrame.UpdateLayout();
+        Save(boardFrame, Path.Combine(dir, "wpf-board-still.png"));
+        board.Play();
+        board.Pause();
+        Save(boardFrame, Path.Combine(dir, "wpf-board-landed.png"));
+        board.Release();
     });
+
+    /// <summary>The same 64 x 36 picture as CCP.Avalonia.Tests BillboardBoardTileTests.Picture.</summary>
+    private static ConditioningControlPanel.Services.Billboard.Board.BoardPicture BoardPicture()
+    {
+        const int w = 64, h = 36;
+        var px = new int[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                bool frame = x >= 12 && x < 52 && y >= 8 && y < 28;
+                bool inner = x >= 14 && x < 50 && y >= 10 && y < 26;
+                px[y * w + x] = unchecked(inner ? (int)0xFFFF4FA8 : frame ? (int)0xFF5FE3FF : (int)0xFF120A20);
+            }
+        return ConditioningControlPanel.Services.Billboard.Board.BoardPicture.FromPixels(px, w, h,
+            new ConditioningControlPanel.Services.Billboard.BoardPost(4, Array.Empty<string>(), null, "lobby",
+                ConditioningControlPanel.Services.Billboard.BoardAudience.Everyone, 1, 6, w, h));
+    }
 
     private static void Save(FrameworkElement e, string path)
     {
