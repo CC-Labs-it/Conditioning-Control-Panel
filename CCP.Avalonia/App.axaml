@@ -22,6 +22,10 @@
       </ResourceDictionary.MergedDictionaries>
       <!-- WPF App.xaml: one shared monospace chain for DynamicResource consumers. -->
       <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
+      <!-- WPF's default text size is SystemFonts.MessageFontSize: 9pt Segoe UI = 12px, inherited
+           from every Window. Fluent's Window, Button, CheckBox, ComboBox, TextBox, RadioButton and
+           friends all read this key (default 14), so unsized controls and text drew 2px larger. -->
+      <x:Double x:Key="ControlContentThemeFontSize">12</x:Double>
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>
