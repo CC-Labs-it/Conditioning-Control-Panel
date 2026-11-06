@@ -72,6 +72,26 @@
                       BasedOn="{StaticResource {x:Type ListBoxItem}}">
             <Setter Property="Padding" Value="12,7"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <!-- That WPF style has no BasedOn, so the rows wear the stock Aero2 ListBoxItem: a 1px
+                 frame, a faint blue wash under the pointer, and a neutral grey selection that turns
+                 blue only while the list has focus. Fluent painted the selected row solid accent blue. -->
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#1F26A0DA"/>
+                <Setter Property="BorderBrush" Value="#A826A0DA"/>
+            </Style>
+            <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#3DDADADA"/>
+                <Setter Property="BorderBrush" Value="#FFDADADA"/>
+            </Style>
+            <Style Selector="^:selected:focus /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#3D26A0DA"/>
+                <Setter Property="BorderBrush" Value="#FF26A0DA"/>
+            </Style>
+            <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+            </Style>
         </ControlTheme>
     </Window.Resources>
 
