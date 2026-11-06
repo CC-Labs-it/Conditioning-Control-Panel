@@ -1115,14 +1115,12 @@ namespace ConditioningControlPanel.Avalonia
                     if (!panelHidden && Settings.Current.StartMinimized)
                     {
                         // Off the UI thread: the icon registers after CreateTray returns, on that thread.
-                        void ToTray(object? s, EventArgs e)
+                        // Only a confirmed icon hides it: staying visible is harmless, unlike vanishing.
+                        async void ToTray(object? s, EventArgs e)
                         {
                             shell.Opened -= ToTray;
-                            System.Threading.Tasks.Task.Run(shell.TrayHostPresent).ContinueWith(host =>
-                                global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                {
-                                    if (host.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && host.Result) shell.Hide();
-                                }));
+                            var state = await System.Threading.Tasks.Task.Run(Views.Windows.MainShellWindow.ProbeTrayItem);
+                            if (state == ConditioningControlPanel.Services.Notifications.TrayItemState.Held) shell.Hide();
                         }
                         shell.Opened += ToTray;
                     }

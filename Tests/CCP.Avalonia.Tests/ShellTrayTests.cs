@@ -19,14 +19,6 @@ namespace CCP.Avalonia.Tests;
 /// <summary>The shell tray: WPF's menu order, Stop everything, X-to-tray, Show and the real Exit.</summary>
 public sealed class ShellTrayTests
 {
-    [Theory]
-    [InlineData(false, false, true)]    // the real app
-    [InlineData(true, false, false)]    // a sandbox never reaches the user's bar
-    [InlineData(true, true, true)]      // --tray-check opts in
-    [InlineData(false, true, true)]
-    public void OnlyTheRealAppOrTheLiveProbePublishes(bool sandboxed, bool liveProbe, bool published) =>
-        Assert.Equal(published, MainShellWindow.ShouldPublishTray(sandboxed, liveProbe));
-
     [Fact]
     public async Task ASandboxedShellLeavesItsIconUnlisted()
     {
@@ -38,15 +30,20 @@ public sealed class ShellTrayTests
                     .SetupWithoutStarting();
             TrayIcon.SetIcons(Application.Current!, null!);
             MainShellWindow.TraySandboxed = () => true;
+            var realQuery = MainShellWindow.TrayItemQuery;
             var shell = new MainShellWindow();
             try
             {
                 shell.CreateTray();
                 Assert.DoesNotContain(shell.Tray!, TrayIcon.GetIcons(Application.Current!) ?? new TrayIcons());
+                // An icon never published has nothing to hide behind, whatever the bus would say.
+                MainShellWindow.TrayItemQuery = () => global::ConditioningControlPanel.Services.Notifications.TrayItemState.Held;
+                Assert.Equal(global::ConditioningControlPanel.Services.Notifications.TrayItemState.NotHeld, MainShellWindow.ProbeTrayItem());
             }
             finally
             {
                 MainShellWindow.TraySandboxed = () => global::ConditioningControlPanel.Services.SandboxNet.Active;
+                MainShellWindow.TrayItemQuery = realQuery;
                 shell.Tray?.Dispose();
                 shell.Close();
             }
