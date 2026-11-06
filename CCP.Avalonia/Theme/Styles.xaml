@@ -695,6 +695,8 @@
        the three-state middle value, 140ms check-pop. A Grid, not a StackPanel, so wrapping content wraps.
        Keyed switches (ToggleStyle etc.) set Theme locally and never reach this. -->
   <ControlTheme x:Key="InputCheckBoxTheme" TargetType="CheckBox">
+    <!-- The checked dot's glow (WPF DropShadowEffect) falls outside the 18px box; clipped, it drew a square. -->
+    <Setter Property="ClipToBounds" Value="False"/>
     <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     <Setter Property="Background" Value="{DynamicResource PanelAccentBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
