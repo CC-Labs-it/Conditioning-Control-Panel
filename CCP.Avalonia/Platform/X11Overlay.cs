@@ -76,6 +76,9 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
     [DllImport(LibX11)] private static extern int XSetTransientForHint(IntPtr display, IntPtr window, IntPtr owner);
     [DllImport(LibX11)] private static extern int XDeleteProperty(IntPtr display, IntPtr window, IntPtr property);
+    [DllImport(LibX11)] private static extern int XGetWindowProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr longOffset, IntPtr longLength,
+        bool delete, IntPtr reqType, out IntPtr actualType, out int actualFormat, out IntPtr nItems, out IntPtr bytesAfter, out IntPtr prop);
+    [DllImport(LibX11)] private static extern int XFree(IntPtr data);
 
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
     [DllImport(LibXfixes)] private static extern IntPtr XFixesCreateRegion(IntPtr display, IntPtr rectangles, int count);
@@ -322,6 +325,98 @@ internal static class X11Overlay
             return Win32Overlay.SetOwner(hwnd, ownerHwnd);
         }
         return SetTransientFor(window, owner);
+    }
+
+    /// <summary>The name the running EWMH window manager gives itself (<c>_NET_SUPPORTING_WM_CHECK</c> →
+    /// <c>_NET_WM_NAME</c>), e.g. "Weston WM" under WSLg, "Openbox", "Xfwm4". Null when there is no X
+    /// display or no EWMH manager yet; a found name is cached, a miss is asked again next time.</summary>
+    internal static string? WindowManagerName
+    {
+        get
+        {
+            if (OperatingSystem.IsWindows()) return null;
+            lock (Gate)
+            {
+                if (_wmName != null) return _wmName;
+                if (!EnsureDisplay()) return null;
+                var root = XDefaultRootWindow(_display);
+                var check = ReadLongs(root, XInternAtom(_display, "_NET_SUPPORTING_WM_CHECK", false), (IntPtr)33 /* XA_WINDOW */);
+                if (check.Length == 0 || check[0] == IntPtr.Zero) return null;
+                var name = ReadString(check[0], XInternAtom(_display, "_NET_WM_NAME", false), XInternAtom(_display, "UTF8_STRING", false));
+                return _wmName = string.IsNullOrEmpty(name) ? null : name;
+            }
+        }
+    }
+    private static string? _wmName;
+
+    /// <summary>Asks a Weston-family X window manager (WSLg's, plain Weston's) to draw NO shadow around
+    /// <paramref name="window"/>: appends <c>_KDE_NET_WM_WINDOW_TYPE_OVERRIDE</c> to its
+    /// <c>_NET_WM_WINDOW_TYPE</c>, keeping any type already there first.
+    ///
+    /// <para><b>Why.</b> Weston's xwm (xwayland/window-manager.c, weston_wm_window_draw_decoration)
+    /// reparents every managed window into a frame 32 px larger on each side and, for an
+    /// undecorated window, paints a blurred shadow tile across that frame. Under a per-pixel
+    /// transparent client the tile shows through: the dim "ghost" rectangle with a shadow around the
+    /// tube, EMI and every transparent card. The only per-window switch in that code is this KDE
+    /// type (read_properties sets <c>no_shadow</c> and the frame is then left fully transparent).
+    /// A bounding shape does not help: it clips the client, not the frame, and exposes more of the
+    /// tile (measured on WSLg 1.0.79, 11-06).</para>
+    ///
+    /// <para><b>Before <c>Show()</c>.</b> xwm reads the type when the window maps and draws the
+    /// frame then; set later, the shadow already painted stays. XSync so it lands before Avalonia's
+    /// XMapWindow on its own connection. Weston takes the FIRST atom as the window's type, and no
+    /// type and an unknown type behave the same there, so map, focus and transient handling are
+    /// unchanged. X11-only: false on Windows, headless and native Wayland.</para></summary>
+    internal static bool SetNoFrameShadow(TopLevel window)
+    {
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var typeAtom = XInternAtom(_display, "_NET_WM_WINDOW_TYPE", false);
+            var kde = XInternAtom(_display, "_KDE_NET_WM_WINDOW_TYPE_OVERRIDE", false);
+            _xErrored = false;
+            var types = WithAtom(ReadLongs(xid, typeAtom, (IntPtr)4 /* XA_ATOM */), kde);
+            if (types == null) return true;   // already there
+            XChangeProperty(_display, xid, typeAtom, (IntPtr)4, 32, 0 /* PropModeReplace */, types, types.Length);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
+
+    /// <summary><paramref name="existing"/> with <paramref name="atom"/> appended, or null when it is
+    /// already in the list (nothing to write). Pure, so the merge is testable without a server.</summary>
+    internal static IntPtr[]? WithAtom(System.Collections.Generic.IReadOnlyList<IntPtr> existing, IntPtr atom)
+    {
+        foreach (var a in existing) if (a == atom) return null;
+        var list = new IntPtr[existing.Count + 1];
+        for (var i = 0; i < existing.Count; i++) list[i] = existing[i];
+        list[existing.Count] = atom;
+        return list;
+    }
+
+    /// <summary>A format-32 property as C longs (Xlib hands 32-bit items back in longs). Empty when
+    /// unset. Caller holds <see cref="Gate"/>.</summary>
+    private static IntPtr[] ReadLongs(IntPtr xid, IntPtr property, IntPtr type)
+    {
+        if (XGetWindowProperty(_display, xid, property, IntPtr.Zero, (IntPtr)64, false, type,
+                out _, out var format, out var n, out _, out var data) != 0) return Array.Empty<IntPtr>();
+        try
+        {
+            if (format != 32 || data == IntPtr.Zero) return Array.Empty<IntPtr>();
+            var items = new IntPtr[(int)n];
+            for (var i = 0; i < items.Length; i++) items[i] = Marshal.ReadIntPtr(data, i * IntPtr.Size);
+            return items;
+        }
+        finally { if (data != IntPtr.Zero) XFree(data); }
+    }
+
+    private static string? ReadString(IntPtr xid, IntPtr property, IntPtr type)
+    {
+        if (XGetWindowProperty(_display, xid, property, IntPtr.Zero, (IntPtr)256, false, type,
+                out _, out var format, out var n, out _, out var data) != 0) return null;
+        try { return format == 8 && data != IntPtr.Zero ? Marshal.PtrToStringUTF8(data, (int)n) : null; }
+        finally { if (data != IntPtr.Zero) XFree(data); }
     }
 
     internal static Action<TopLevel>? RaiseRequestedForTests; // Headless call-order observation only.
