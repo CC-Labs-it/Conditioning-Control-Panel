@@ -1488,6 +1488,17 @@ namespace ConditioningControlPanel.Avalonia.Controls
             public static bool AllowParticles => AllowAmbientLoops && MaxAmbientParticles(CurrentTier) > 0;
 
             /// <summary>
+            /// MotionFx.AllowParticles for a burst the user's own action fires (a popped bubble's spray): WPF's gate
+            /// at the user's own settings, without the CPU path's lighter tier (<see cref="Platform.SoftwareRender.FloorActive"/>).
+            /// That tier stands in for WPF's Performance mode to stop ENDLESS loops repainting a window every frame;
+            /// a one-shot burst under the cursor is a few dozen sprites for half a second, and without it a click
+            /// reads as nothing happening (owner, 2026-11-06: "the bubble just disappeared when popped"). Reduced or
+            /// Off motion, Gentle visuals and a user's own Performance mode still drop it, exactly as in WPF.
+            /// </summary>
+            public static bool AllowFeedbackParticles =>
+                Level == MotionLevel.Full && AllowAmbientMotion(SettingsTier) && MaxAmbientParticles(SettingsTier) > 0;
+
+            /// <summary>
             /// MotionFx.AllowTransitions. Interaction motion - hover, press, entrances, a stamp
             /// landing - is 80-400ms and runs at every level except Off, which is a different
             /// question from <see cref="AllowAmbientLoops"/> and must not be answered with it.
