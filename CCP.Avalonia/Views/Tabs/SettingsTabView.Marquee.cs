@@ -143,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 SegmentWidth = probe.DesiredSize.Width;
 
                 Transform.X = 0;
-                if (!AmbientFxCanvas.Env.AllowAmbientLoops)
+                if (!AmbientFxCanvas.Env.AllowMarqueeScroll)   // lane perf: not parked by the CPU-render floor
                 {
                     _text.Text = segment;   // parked: one segment at the origin
                     Reads?.Arm(0);

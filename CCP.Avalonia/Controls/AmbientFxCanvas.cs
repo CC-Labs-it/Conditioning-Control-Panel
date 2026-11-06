@@ -181,6 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private double _hitchScore;
         private int _liveBudget;
         private bool _fogOnly;
+        private double _fogOnlySince;   // _clock seconds when _fogOnly last flipped
 
         // ---- sim ----
         private struct Puff { public float X, Y, R, VX, VY, Phase, PhaseSpd, BaseA; }
@@ -199,6 +200,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private float _emberT;
         /// <summary>Live ember count. Tests read it.</summary>
         internal int EmberCount => _emberN;
+
+        /// <summary>The tier the budget was last read at (tests).</summary>
+        internal PerformanceTier Tier => _tier;
 
         private struct EdgeMote { public float Along, Depth, Speed, Life, Max, SizePx, Phase, PhaseSpd; }
         private EdgeMote[] _edge = Array.Empty<EdgeMote>();
@@ -680,7 +684,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             try
             {
                 HookWindow(TopLevel.GetTopLevel(this) as Window);
-                if (!_modHooked) { CoreMods.ModChanged += OnModChanged; Env.MotionGateChanged += Evaluate; _modHooked = true; }
+                if (!_modHooked) { CoreMods.ModChanged += OnModChanged; Env.MotionGateChanged += OnMotionGate; _modHooked = true; }
                 Evaluate();
             }
             catch (Exception ex) { Log.Debug("AmbientFxCanvas.OnAttachedToVisualTree: {E}", ex.Message); }
@@ -692,7 +696,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             {
                 StopClock();
                 UnhookWindow();
-                if (_modHooked) { CoreMods.ModChanged -= OnModChanged; Env.MotionGateChanged -= Evaluate; _modHooked = false; }
+                if (_modHooked) { CoreMods.ModChanged -= OnModChanged; Env.MotionGateChanged -= OnMotionGate; _modHooked = false; }
             }
             catch (Exception ex) { Log.Debug("AmbientFxCanvas.OnDetachedFromVisualTree: {E}", ex.Message); }
             base.OnDetachedFromVisualTree(e);
@@ -746,6 +750,26 @@ namespace ConditioningControlPanel.Avalonia.Controls
             public void OnError(Exception error) { }
             public void OnNext(bool value) => _owner.Evaluate();
             public void OnNext(WindowState value) => _owner.Evaluate();
+        }
+
+        /// <summary>
+        /// A gate change (Settings ▸ Performance, or the software-render probe answering after this
+        /// canvas read its budget in the constructor): a tier that moved re-reads the budget and the
+        /// frame rate and reseeds, as a fresh StartLayers would; then the gate runs as before.
+        /// </summary>
+        private void OnMotionGate()
+        {
+            try
+            {
+                if (_tier != Env.CurrentTier)
+                {
+                    ReadEnvironment();
+                    Reseed();
+                    InvalidateVisual();
+                }
+            }
+            catch (Exception ex) { Log.Debug("AmbientFxCanvas.OnMotionGate: {E}", ex.Message); }
+            Evaluate();
         }
 
         /// <summary>The single gate: start the clock only when everything says it may run.</summary>
@@ -841,6 +865,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// Mini perf governor: a frame gap well over budget builds pressure, which first halves the
         /// particle budget and then drops the canvas to fog only. The score decays ~7% a frame, so
         /// a clean run recovers over about 5s; one stray hitch changes nothing.
+        ///
+        /// <para>Hysteresis (lane perf, owner log 2026-11-06): WPF AmbientFxCanvas.cs:927 drops AND
+        /// recovers at the same score of 12, and a render thread that stays slow holds the score right
+        /// on that line (a point a frame against the 7% decay settles near 14), so the canvas flipped
+        /// several times a second and logged every flip. It now drops at <see cref="FogOnlyDropScore"/>,
+        /// stays down for at least <see cref="FogOnlyHoldSeconds"/>, and comes back only once the score
+        /// is under <see cref="FogOnlyRecoverScore"/>. The log names the canvas: several canvases see
+        /// one long UI stall on the same tick, which is why five identical lines landed together.</para>
         /// </summary>
         private void Governor(double gapMs)
         {
@@ -848,19 +880,32 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _hitchScore = Math.Max(0, _hitchScore * 0.93);
             if (gapMs > budgetMs * 2.5) _hitchScore += gapMs > budgetMs * 6 ? 3.0 : 1.0;
 
-            bool fogOnly = _hitchScore >= 12;
+            double nowS = _clock.Elapsed.TotalSeconds;
+            bool fogOnly = NextFogOnly(_fogOnly, _hitchScore, nowS - _fogOnlySince);
             int budget = fogOnly ? 0 : _hitchScore >= 5 ? _particleBudget / 2 : _particleBudget;
 
             if (fogOnly != _fogOnly)
             {
                 _fogOnly = fogOnly;
-                if (fogOnly) Log.Information("[FXPERF] ambient canvas dropped to fog-only (hitch score {S:F1})", _hitchScore);
-                else Log.Information("[FXPERF] ambient canvas recovered");
+                _fogOnlySince = nowS;
+                var who = Name ?? Parent?.GetType().Name ?? "?";
+                if (fogOnly) Log.Information("[FXPERF] ambient canvas {Who} dropped to fog-only (hitch score {S:F1})", who, _hitchScore);
+                else Log.Information("[FXPERF] ambient canvas {Who} recovered", who);
             }
             if (budget < _liveBudget) _liveBudget = budget;
             else if (budget > _liveBudget) _liveBudget = Math.Min(budget, _liveBudget + 1);
             if (_liveBudget < _dustN) _dustN = Math.Max(0, _liveBudget);
         }
+
+        internal const double FogOnlyDropScore = 12;
+        internal const double FogOnlyRecoverScore = 4;
+        internal const double FogOnlyHoldSeconds = 5;
+
+        /// <summary>The governor's fog-only decision with hysteresis (pure, for tests).</summary>
+        internal static bool NextFogOnly(bool fogOnly, double score, double secondsInState) =>
+            fogOnly
+                ? score >= FogOnlyRecoverScore || secondsInState < FogOnlyHoldSeconds
+                : score >= FogOnlyDropScore;
 
         private void StepDust(float dt)
         {
@@ -1361,11 +1406,34 @@ namespace ConditioningControlPanel.Avalonia.Controls
             {
                 get
                 {
+                    return WithSoftwareFloor(SettingsTier, Platform.SoftwareRender.Active);
+                }
+            }
+
+            /// <summary>The tier the settings and the live load ask for, before the software-render floor.</summary>
+            private static PerformanceTier SettingsTier
+            {
+                get
+                {
                     var s = CoreSettings.Current;
                     return global::ConditioningControlPanel.Services.UI.PerformanceTierRule.Resolve(s.PerformanceMode, s.AutoPerformanceMode,
                         s.PerformanceMode || !s.AutoPerformanceMode ? 0 : HeavyElementCount);
                 }
             }
+
+            /// <summary>
+            /// The tier a machine drawing with Skia on the CPU runs at (lane perf, 2026-11-06): WPF's
+            /// Performance mode (Settings ▸ Performance, PerformanceProfile.cs), the lighter mode WPF
+            /// already ships, so every budget it implies is WPF's own. WPF has no backend probe (its tier
+            /// is a setting plus load); this one exists because measured on the CPU path a Home frame
+            /// that repaints the mosaic costs ~75 ms, and the Balanced tier (24 fps fog) still held the
+            /// render thread at ~96% of a core. The marquee is the one ambient loop kept running here
+            /// (<see cref="AllowMarqueeScroll"/>).
+            /// </summary>
+            internal const PerformanceTier SoftwareTier = PerformanceTier.Performance;
+
+            internal static PerformanceTier WithSoftwareFloor(PerformanceTier tier, bool? software) =>
+                software == true && tier < SoftwareTier ? SoftwareTier : tier;
 
             /// <summary>WPF PerformanceProfile.HeavyElementCount: live flash windows + ambient bubbles.</summary>
             public static int HeavyElementCount =>
@@ -1398,6 +1466,24 @@ namespace ConditioningControlPanel.Avalonia.Controls
             /// <summary>MotionFx.AllowAmbientLoops, now the real gate.</summary>
             public static bool AllowAmbientLoops =>
                 Level == MotionLevel.Full && AllowAmbientMotion(CurrentTier);
+
+            /// <summary>
+            /// The marquee's own gate: <see cref="AllowAmbientLoops"/> without the software-render floor.
+            /// On a CPU-only machine its strip is a 48 px band, the one ambient loop cheap enough to keep
+            /// (and the owner's report named it); Reduced motion and a user's Performance mode still park
+            /// it exactly as WPF's MainWindow.Marquee.cs does.
+            /// </summary>
+            public static bool AllowMarqueeScroll =>
+                Level == MotionLevel.Full && AllowAmbientMotion(SettingsTier);
+
+            /// <summary>
+            /// True while the software-render floor (not the user's own Performance mode) is what put this
+            /// machine on the Performance tier. A few endless loops that WPF gates only on transitions (the
+            /// launcher's edge breath and idle glint) dirty a whole window per frame, which the CPU path
+            /// cannot afford; they hold at rest under this, and their one-shot flares still play.
+            /// </summary>
+            public static bool SoftwareFloorHoldsIdleLoops =>
+                Platform.SoftwareRender.Active == true && SettingsTier != PerformanceTier.Performance;
 
             /// <summary>MotionFx.AllowParticles.</summary>
             public static bool AllowParticles => AllowAmbientLoops && MaxAmbientParticles(CurrentTier) > 0;

@@ -725,6 +725,27 @@ public sealed class LauncherFxTests
         Assert.True(glint.Opacity > 0.5, $"idle glint {glint.Opacity}");
     });
 
+    /// <summary>Lane perf (WSLg on the CPU): the edge breath repainted the whole launcher every frame. On the
+    /// software-render floor the open flare and glint still play, then the edge holds at rest and the clock stops.</summary>
+    [Fact]
+    public void Edge_HoldsAtRestBetweenFlaresOnTheCpuPath() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.Report(true);
+            var (glow, glint) = Reopen(launcher);
+            Frames(launcher, 7);
+            Assert.Equal(0.85, glow.Opacity, 2);              // the open flare still plays
+            Frames(launcher, 80);                             // 1.74 s: flare and glint are done
+            Assert.Equal(0.3, glow.Opacity, 2);
+            Assert.Equal(0, glint.Opacity);
+            Frames(launcher, 130);                            // no breath: still at rest
+            Assert.Equal(0.3, glow.Opacity, 2);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests(); }
+    });
+
     [Fact]
     public void Edge_FocusBack_GlintsAtMostEveryFourSeconds() => Run(MotionLevel.Full, (_, launcher, cues) =>
     {
